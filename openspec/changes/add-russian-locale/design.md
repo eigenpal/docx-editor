@@ -146,6 +146,10 @@ The glossary fixes the canonical core; case-specific wording inside long sentenc
 ## Risks
 
 - **Environment** — bun/node_modules missing on this machine; step 0 of tasks covers install. Low risk, blocks everything if skipped.
-- **Longer Russian strings** (~15–30% growth) may overflow tight toolbar/menu areas. Out of scope to fix; the manual QA task records findings for a follow-up decision.
+- **Longer Russian strings** (~15–30% growth) may overflow tight toolbar/menu areas. Out of scope to fix; the manual QA task records findings for a follow-up decision (blocked pre-merge by the contract-only core stub; see tasks.md).
 - **False positives in the new rule** would block unrelated PRs. Mitigated by the regression test over all shipped locale files and by the Form-B tolerance (Decision 2).
 - **Terminology drift** within 718 strings. Mitigated by the frozen glossary and the per-batch feature-area grouping.
+
+## Post-merge update (2026-10-10)
+
+The numbers above (718 keys, 10 locales) describe the pre-merge branch state. During integration, `main` (686 commits, `48f4ee68`) brought a restructured 822-key `en.json` plus `es`/`ja` locales. `ru` was resynced to the new catalog: 91 translations ported by exact English-text match against the pre-merge pair, 2 stale surviving translations corrected, 446 strings newly translated — still under the frozen glossary and the same integrity rule. Upstream had already solved the generated-union/prettier tension with `// prettier-ignore` (adopted, replacing the wrap-emulation from the pre-merge branch). The strict upstream gate `catalogs.test.ts` (every shipped catalog: full non-null coverage, placeholder-set equality, brace-free plural rendering for counts 0…21) passes for all 13 locales, as does `placeholder-syntax.test.ts`.

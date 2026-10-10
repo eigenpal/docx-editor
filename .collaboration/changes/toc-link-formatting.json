@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "TOC results inherit the Hyperlink character style during layout.",
+  "after": "TOC results suppress that character style while retaining paragraph formatting, direct formatting, and link targets.",
+  "reason": "Only local layout changes. Document styles, shared state, operations, and protocol messages remain unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/toc-link-formatting.test.ts"],
+  "changeset": "toc-link-formatting",
+  "migration": null
+}

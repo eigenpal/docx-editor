@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Repeated saves serialize unchanged packages, unformatted paragraph marks inflate smaller text, and nested-table insertion controls can move before a click.",
+  "after": "Unchanged saves reuse bounded output, smaller text determines its line height, and nested-table insertion targets remain stable during pointer entry.",
+  "reason": "Hash output, canonical trees, document operations, and replication formats are unchanged. Save caching uses immutable package identity; layout and pointer changes affect local presentation and existing insertion operations.",
+  "tests": [
+    "packages/core/src/store/__tests__/sha256.test.ts",
+    "packages/core/src/binding/__tests__/tree-session.test.ts",
+    "packages/core/src/layout/__tests__/paragraph-mark-line-height.test.ts",
+    "e2e/table-editing.interaction.spec.ts"
+  ],
+  "changeset": "fix-editor-pagination-and-table-insertion",
+  "migration": null
+}

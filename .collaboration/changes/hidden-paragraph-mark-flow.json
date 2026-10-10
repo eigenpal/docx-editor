@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Empty paragraphs whose mark was hidden were laid out as blank lines. The body paragraph section index covered only paragraphs placed in the flow.",
+  "after": "Such paragraphs leave the flow. Backspace, Delete, and range deletion at the visible break absorb them with ordinary joinParagraphs ops before joining the paragraphs on either side. A caret left in such a paragraph shows, and moves with the arrow keys, from the start of the paragraph that takes the join. Backspace and Delete from it first join that paragraph into the paragraph before it with one ordinary joinParagraphs op. Paragraph and character formatting from such a caret targets the paragraph where it shows, with the existing formatting ops. The section index also covers them.",
+  "reason": "The edits are sequences of the existing joinParagraphs operation, which released participants already apply, and suggesting mode attributes them as ordinary tracked paragraph-mark deletions. No stored field, operation kind, or identity rule changes. The section index is a local, derived lookup rebuilt from the canonical tree.",
+  "tests": [
+    "packages/core/src/editor/__tests__/hidden-mark-joins.test.ts",
+    "packages/core/src/editor/__tests__/body-paragraph-section-index.test.ts",
+    "packages/core/src/layout/__tests__/hidden-paragraph-mark.test.ts"
+  ],
+  "changeset": "hidden-paragraph-mark-flow",
+  "migration": null
+}

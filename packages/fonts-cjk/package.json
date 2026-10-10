@@ -1,0 +1,61 @@
+{
+  "name": "@docx-editor.dev/fonts-cjk",
+  "version": "2.27.0",
+  "description": "Noto Sans CJK JP fallback font for Chinese, Japanese, and Korean text in @docx-editor.dev/docx-to-pdf.",
+  "sideEffects": false,
+  "type": "module",
+  "engines": {
+    "node": "^20.16.0 || >=22.3.0"
+  },
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/metafile-*.json",
+    "assets",
+    "licenses",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/fonts-cjk --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/fonts-cjk"
+  },
+  "devDependencies": {
+    "typescript7": "npm:typescript@^7.0.2"
+  },
+  "keywords": [
+    "docx",
+    "pdf",
+    "fonts",
+    "cjk",
+    "noto"
+  ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0 AND OFL-1.1",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/fonts-cjk"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

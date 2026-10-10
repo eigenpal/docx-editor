@@ -18,7 +18,7 @@ import {
 import { cn } from '../../lib/utils';
 import { IconLineSpacing } from './Icons';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@docx-editor.dev/i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES

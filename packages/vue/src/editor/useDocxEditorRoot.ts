@@ -1,0 +1,425 @@
+import type {
+  RevisionMarkupOptions,
+  ResolvedRevisionMarkup,
+  ReviewDisplayMode,
+  FieldResultsMode,
+} from '@docx-editor.dev/core/editor';
+import { formControlTranslateKey } from './form-control-translate';
+import { warnFieldResultsChanged } from './field-results-warning';
+import {
+  computed,
+  inject,
+  onMounted,
+  onUnmounted,
+  provide,
+  shallowRef,
+  watch,
+  type ComputedRef,
+  type InjectionKey,
+  toValue,
+  type MaybeRefOrGetter,
+  type ShallowRef,
+} from 'vue';
+import type {
+  DocumentChange,
+  DocumentSource,
+  Editor,
+  EditorFontError,
+  ZoomMode,
+} from '@docx-editor.dev/core/contracts/editor';
+import {
+  createDocxEditor,
+  defaultTableLabel,
+  resolveZoomMode,
+  resolveRevisionMarkup,
+  sameZoomMode,
+  type DocxEditorInstance,
+  type EditorModule,
+  type FontConfigurationFragment,
+  type FontResolver,
+  type ImageDecodePort,
+} from '@docx-editor.dev/core/editor';
+import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
+import { useTranslation, type TranslationKey } from '../i18n';
+import {
+  docxEditorKey,
+  editorStateTickKey,
+  ReviewRailContext,
+  type ReviewRailRegistry,
+} from './context';
+import { deferredTick } from './deferred-notifier';
+import type { DocxEditorChildren } from '../docx-editor-children';
+import { createNavigationLayoutStore, navigationLayoutKey } from './navigation/navigation-layout';
+import {
+  createRevisionStyleRegistry,
+  RevisionStyleRegistryContext,
+} from './revision-style-registry';
+
+/** @public */
+export interface DocxEditorRootProps {
+  popups?: import('./popup-config').DocxEditorPopups;
+  document?: DocumentSource;
+  fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
+  author?: string;
+  /**
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * For UI translations, wrap Root and its chrome in LocaleProvider with an i18n catalog.
+   */
+  locale?: string;
+  /** Live drawing and form-control labels. Defaults to the active catalogue. */
+  translate?: (key: string, params?: Record<string, string | number>) => string;
+  /** Construction-time capability modules. Later array changes need a remount. */
+  modules?: readonly EditorModule[];
+  /** Live host mode. Omit it to let document tracking settings select the mode. */
+  mode?: 'edit' | 'view' | 'suggesting';
+  zoom?: number;
+  zoomMode?: ZoomMode | 'auto';
+  /**
+   * Controlled viewer markup settings. Omitted fields use defaults.
+   * Save callback values into this prop to accept API and dialog changes.
+   * Omit this prop for uncontrolled settings. Use one configuration source.
+   */
+  revisionMarkup?: RevisionMarkupOptions;
+  /** Receives proposed settings from API or dialog changes, excluding prop reconciliation. */
+  onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+  /** Initial revision display mode. */
+  reviewDisplayMode?: ReviewDisplayMode;
+  /**
+   * How the reader edits saved field results. `'atomic'` (the default) keeps every field one
+   * unit. `'editable'` allows typing, deletion, and selection inside the saved result of a
+   * DATE, MERGEFIELD, HYPERLINK, or similar field. Read once, when the editor is created: a later change is ignored, with a development warning. Refused
+   * with a collaboration module.
+   */
+  fieldResults?: FieldResultsMode;
+
+  tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+  imageDecodePort?: ImageDecodePort;
+  onReady?: (editor: Editor) => void;
+  onChange?: (change: DocumentChange) => void;
+  onFontError?: (error: EditorFontError) => void;
+  children?: DocxEditorChildren;
+}
+
+/** @internal Root ownership already established by {@link provideDocxEditor}. */
+export const docxEditorRootOwnerKey: InjectionKey<boolean> = Symbol('docxEditorRootOwner');
+
+/** @internal Bridges {@link provideDocxEditor} host emits to {@link DocxEditorRoot}. */
+export const docxEditorRootHostEmitKey: InjectionKey<ShallowRef<DocxEditorRootEmit>> =
+  Symbol('docxEditorRootHostEmit');
+
+export interface DocxEditorRootEmit {
+  ready: (editor: Editor) => void;
+  change: (change: DocumentChange) => void;
+  fontError: (error: EditorFontError) => void;
+  revisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+}
+
+function sameZoomProp(a: ZoomMode | 'auto', b: ZoomMode | 'auto'): boolean {
+  if (a === b) return true;
+  const left = resolveZoomMode(a);
+  const right = resolveZoomMode(b);
+  return left !== null && right !== null && sameZoomMode(left, right);
+}
+
+let facadeListenerCount = 0;
+
+/** @internal */
+export function docxEditorFacadeListenerCount(): number {
+  return facadeListenerCount;
+}
+
+/** @internal */
+export function useDocxEditorRootOwner(
+  props: MaybeRefOrGetter<DocxEditorRootProps>,
+  emit: DocxEditorRootEmit
+): {
+  editorRef: ShallowRef<DocxEditorInstance | null>;
+  translateResolver: ComputedRef<(key: string, params?: Record<string, string | number>) => string>;
+} {
+  const editorRef = shallowRef<DocxEditorInstance | null>(null);
+  /** The `fieldResults` the current instance was created with. */
+  let createdFieldResults: DocxEditorRootProps['fieldResults'];
+  const markupRevision = shallowRef(0);
+  let applyingMarkup = false;
+  const tick = shallowRef(0);
+  provide(docxEditorKey, editorRef);
+  provide(editorStateTickKey, tick);
+  provide(navigationLayoutKey, createNavigationLayoutStore());
+  provide(docxEditorRootOwnerKey, true);
+  const revisionStyleRegistry = createRevisionStyleRegistry();
+  provide(RevisionStyleRegistryContext, revisionStyleRegistry);
+
+  const translation = useTranslation();
+  const translateResolver = computed(() => {
+    translation.catalogue.value;
+    const custom = toValue(props).translate;
+    return (key: string, params?: Record<string, string | number>) =>
+      custom ? custom(key, params) : translation.t(key as TranslationKey, params);
+  });
+
+  provide(formControlTranslateKey, translateResolver);
+
+  const railCount = shallowRef(0);
+  const commentDraftHandlers: Array<() => void> = [];
+  const registerCommentDraft = (handler: () => void) => {
+    commentDraftHandlers.push(handler);
+    return () => {
+      const index = commentDraftHandlers.indexOf(handler);
+      if (index !== -1) commentDraftHandlers.splice(index, 1);
+    };
+  };
+  const requestCommentDraft = () => {
+    const handler = commentDraftHandlers.at(-1);
+    if (!handler) return false;
+    handler();
+    return true;
+  };
+  const railRegistry = shallowRef<ReviewRailRegistry>({
+    mounted: 0,
+    register: () => () => {},
+    registerCommentDraft,
+    requestCommentDraft,
+  });
+  watch(
+    railCount,
+    (mounted) => {
+      railRegistry.value = {
+        mounted,
+        register: () => {
+          railCount.value++;
+          return () => {
+            railCount.value = Math.max(0, railCount.value - 1);
+          };
+        },
+        registerCommentDraft,
+        requestCommentDraft,
+      };
+    },
+    { immediate: true }
+  );
+  provide(ReviewRailContext, railRegistry);
+
+  const cleanups: Array<() => void> = [];
+  let readyFired = false;
+
+  const destroyEditor = () => {
+    if (cleanups.length >= 4) facadeListenerCount = Math.max(0, facadeListenerCount - 4);
+    for (const off of cleanups.splice(0)) off();
+    const instance = editorRef.value;
+    if (instance) {
+      revisionStyleRegistry.connect(null);
+      instance.destroy();
+      editorRef.value = null;
+    }
+    readyFired = false;
+  };
+
+  const fireReady = (instance: DocxEditorInstance) => {
+    if (readyFired) return;
+    readyFired = true;
+    emit.ready(instance);
+  };
+
+  const fireChange = (change: DocumentChange) => {
+    emit.change(change);
+  };
+
+  const fireFontError = (error: EditorFontError) => {
+    emit.fontError(error);
+  };
+
+  const createEditor = () => {
+    if (typeof window === 'undefined') return;
+    destroyEditor();
+    const p = toValue(props);
+    createdFieldResults = p.fieldResults;
+    const instance = createDocxEditor({
+      ...(p.document !== undefined ? { document: p.document } : {}),
+      ...(p.fonts ? { fonts: p.fonts } : {}),
+      ...(p.author !== undefined ? { author: p.author } : {}),
+      ...(p.locale !== undefined ? { locale: p.locale } : {}),
+      translate: translateResolver.value,
+      ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
+      ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
+      ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.mode !== undefined ? { mode: p.mode } : {}),
+      ...(revisionStyleRegistry.current() !== undefined
+        ? { revisionStyles: revisionStyleRegistry.current() }
+        : {}),
+      ...(p.modules !== undefined ? { modules: p.modules } : {}),
+      ...(p.zoom !== undefined ? { zoom: p.zoom } : {}),
+      ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
+      ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
+      ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
+      onFontError: fireFontError,
+    });
+    const notify = deferredTick(() => {
+      tick.value++;
+    });
+    facadeListenerCount += 4;
+    cleanups.push(
+      instance.on('change', (change) => {
+        fireChange(change);
+        notify();
+      })
+    );
+    cleanups.push(
+      instance.on('revisionMarkupChange', (settings) => {
+        if (applyingMarkup) return;
+        emit.revisionMarkupChange?.(settings);
+        markupRevision.value++;
+        notify();
+      })
+    );
+    cleanups.push(instance.on('selectionChange', notify));
+    cleanups.push(instance.on('error', notify));
+    revisionStyleRegistry.connect(instance);
+    editorRef.value = instance;
+  };
+
+  onMounted(() => {
+    watch(
+      editorRef,
+      (instance) => {
+        if (!instance) return;
+        if (!instance.snapshot().isOpening) {
+          fireReady(instance);
+          return;
+        }
+        const off = instance.on('change', () => {
+          off();
+          fireReady(instance);
+        });
+        cleanups.push(off);
+      },
+      { flush: 'post', immediate: true }
+    );
+  });
+
+  if (typeof window !== 'undefined') {
+    watch(
+      () =>
+        [toValue(props).document, toValue(props).fonts, toValue(props).imageDecodePort] as const,
+      createEditor,
+      { immediate: true, flush: 'post' }
+    );
+  }
+
+  onUnmounted(destroyEditor);
+
+  const applied = {
+    zoom: undefined as number | undefined,
+    mode: undefined as ZoomMode | 'auto' | undefined,
+  };
+  watch(
+    () => [editorRef.value, toValue(props).zoom, toValue(props).zoomMode] as const,
+    ([, zoom, zoomMode]) => {
+      if (!editorRef.value) return;
+      const editor = editorRef.value;
+      if (zoom !== undefined && zoom !== applied.zoom) {
+        applied.zoom = zoom;
+        editor.setZoom(zoom);
+      }
+      const modeMoved =
+        zoomMode !== undefined &&
+        (applied.mode === undefined || !sameZoomProp(applied.mode, zoomMode));
+      const resolved = zoomMode === undefined ? null : resolveZoomMode(zoomMode);
+      const reassertDeclaredFit =
+        zoom !== undefined &&
+        zoomMode !== undefined &&
+        resolved !== null &&
+        resolved.type === 'fit';
+      if (modeMoved || reassertDeclaredFit) {
+        applied.mode = zoomMode!;
+        editor.setZoomMode(zoomMode!);
+      }
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).author] as const,
+    ([editor, author]) => {
+      if (editor) editor.setAuthor(author);
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).revisionMarkup, markupRevision.value] as const,
+    ([editor, settings]) => {
+      if (!editor || settings === undefined) return;
+      const resolved = resolveRevisionMarkup(settings);
+      if (JSON.stringify(resolved) === JSON.stringify(editor.snapshot().revisionMarkup)) return;
+      applyingMarkup = true;
+      try {
+        editor.setRevisionMarkup(resolved);
+      } finally {
+        applyingMarkup = false;
+      }
+    },
+    { deep: true, flush: 'post' }
+  );
+
+  const appliedHostMode = {
+    editor: null as DocxEditorInstance | null,
+    value: undefined as 'edit' | 'view' | 'suggesting' | undefined,
+  };
+  watch(
+    () => [editorRef.value, toValue(props).mode] as const,
+    ([editor, mode]) => {
+      if (!editor) return;
+      if (appliedHostMode.editor !== editor) {
+        appliedHostMode.editor = editor;
+        appliedHostMode.value = mode;
+        return;
+      }
+      if (appliedHostMode.value === mode) return;
+      appliedHostMode.value = mode;
+      editor.setMode(mode);
+    },
+    { flush: 'post', immediate: true }
+  );
+
+  watch(
+    () => [editorRef.value, translateResolver.value] as const,
+    ([editor, translate]) => {
+      if (editor) editor.setTranslate(translate);
+    },
+    { flush: 'post' }
+  );
+
+  // Read once at creation; a later change is ignored and reported in development.
+  watch(
+    () => [editorRef.value, toValue(props).fieldResults] as const,
+    ([editor, fieldResults]) => {
+      if (editor) warnFieldResultsChanged(createdFieldResults, fieldResults);
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).locale] as const,
+    ([editor, locale]) => {
+      if (editor) editor.setLocale(locale);
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).tableInteractionLabel] as const,
+    ([editor, label]) => {
+      if (editor) editor.setTableInteractionLabel(label ?? defaultTableLabel);
+    },
+    { flush: 'post' }
+  );
+
+  return { editorRef, translateResolver };
+}
+
+/** @internal Returns true when a parent setup already owns the root. */
+export function useDocxEditorRootOwned(): boolean {
+  return inject(docxEditorRootOwnerKey, false);
+}

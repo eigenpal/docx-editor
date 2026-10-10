@@ -1,75 +1,125 @@
-# `@docx-editor.dev/core-contract`
+<p align="center">
+  <a href="https://www.docx-editor.dev/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-dark.svg" />
+      <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" />
+      <img src="https://raw.githubusercontent.com/eigenpal/docx-editor/main/.github/assets/readme-logo-light.svg" alt="DOCX Editor by EigenPal" width="320" height="90" />
+    </picture>
+  </a>
+</p>
 
-**This package contains no implementation.** It declares the public API that
-`@docx-editor.dev/core` must satisfy. The published package is installed from
-npm.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@docx-editor.dev/core"><img src="https://img.shields.io/npm/v/@docx-editor.dev/core.svg?style=flat-square&color=3B5BDB" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@docx-editor.dev/core"><img src="https://img.shields.io/npm/dm/@docx-editor.dev/core.svg?style=flat-square&color=3B5BDB" alt="npm downloads" /></a>
+  <a href="https://github.com/eigenpal/docx-editor/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square&color=3B5BDB" alt="license" /></a>
+  <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
+</p>
 
-It is deliberately named `@docx-editor.dev/core-contract`, not
-`@docx-editor.dev/core`. Sharing the name would make the workspace resolve every
-consumer to this package instead of the published one, silently, since a
-workspace member outranks the registry. It is also `"private": true`, and every
-entry is types-only: there is no `default` condition, so a runtime import fails
-loudly rather than resolving to functions that throw.
+# @docx-editor.dev/core
 
-## Why it exists
+Use the [docx-editor.dev](https://docx-editor.dev) engine to read, edit, render, and save DOCX files. The engine stores document content in a canonical tree. It has no framework dependency.
 
-A published API needs a written contract: something that says what core owes its
-consumers, distinguishes an intentional export from an incidental one, and can be
-typechecked before an implementation exists. This package is that contract.
+Install this package alongside the React or Vue adapter. Both adapters require it as a peer dependency. You can also use its public contracts to build your own adapter.
 
-## Shape
+```bash
+npm install @docx-editor.dev/core
+```
 
-| Entry                            | For                      | Status                         |
-| -------------------------------- | ------------------------ | ------------------------------ |
-| `@docx-editor.dev/core`          | agents, headless, server | stable                         |
-| `@docx-editor.dev/core/editor`   | React / Vue adapters     | stable                         |
-| `@docx-editor.dev/core/geometry` | adapter internals        | `@experimental`, semver-exempt |
-| `@docx-editor.dev/core/plugin`   | extension authors        | stable                         |
-| `@docx-editor.dev/core/mcp`      | MCP hosts                | stable                         |
-| `@docx-editor.dev/core/types`    | everyone                 | type-only, zero runtime        |
+Node.js requires `^20.16.0 || >=22.3.0`.
 
-Entries are split by audience. A headless consumer wants a document and never a
-DOM type; an adapter wants an editor; an extension author wants neither, only a
-stable way to contribute commands.
+## Features
 
-### Decisions worth knowing
+- [Read and save DOCX files](https://www.docx-editor.dev/docs/2.x/guides/loading-and-saving).
+- [Lay out and render document pages](https://www.docx-editor.dev/docs/2.x/word-fidelity).
+- [Build an editor with shared commands and controls](https://www.docx-editor.dev/docs/2.x/guides/chrome-slots).
+- [Configure fonts for text measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 
-**Addressing is `{ paraId, search }`, not a character offset.** An agent can
-quote text it has seen but cannot compute an offset for text it has not, and
-offsets do not survive a concurrent edit. `search` must match exactly once;
-ambiguity is an error rather than first-match-wins, because silently editing the
-wrong occurrence of a phrase is worse than refusing.
+## Entry points
 
-**Commands are open, not a sealed union.** `DocEdits` and `EditorCommands` are
-interfaces widened by declaration merging, so an extension can contribute a
-command without a core release. Runtime JSON Schemas ship alongside, since types
-do not exist at runtime and MCP tool enumeration needs real schemas.
+Import editor creation, font helpers, and contract types from the package root:
 
-**Writes return `ExecResult`, not `boolean`.** A boolean cannot separate
-"applied, nothing changed" from "target not found" from "target is locked", and
-callers need that distinction for undo grouping, error reporting, and retries.
+```ts
+import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
+```
 
-**`EditorSnapshot`, not `EditorState`.** `EditorState` is already a widely used
-export in `prosemirror-state`, which adapters import alongside this package.
+`DEFAULT_FONT` provides the default font configuration: Calibri at 11 points. `WORD_DEFAULT_FONT` is its deprecated alias. Document formatting and document-default rules determine the text size used for layout. Missing defaults and explicitly empty defaults can produce different results.
 
-**`EditorHost` carries DOM handles, two-phase scheduling, and measurement.** The
-engine paints the document and the adapter renders chrome around it, so the
-engine needs handles. They are getters because they are null until first render
-and can change identity afterwards. Scheduling is two-phase because the engine
-coalescing its work and the adapter flushing its render are different moments.
+The root exports editor creation, contracts, font helpers, control definitions, and document types. Use subpaths to access storage, layout, and rendering.
 
-**Scopes are explicit.** The editor manages one editing surface per header and
-footer alongside the body, so an unscoped command would apply to the body while
-a header has focus.
+| Subpath | Exports |
+| --- | --- |
+| `.` | Create an editor, the contract, fonts, the chrome registry, the document model. |
+| `./editor` | Everything the root re-exports, plus the paginated surface and ruler geometry. |
+| `./contracts/editor` | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`. |
+| `./contracts/document` | The document-level edit and query vocabulary. |
+| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
+| `./contracts/types` | Document model types. |
+| `./contracts/modules` | `EditorModule` — the shape `@docx-editor.dev/pro` implements. |
+| `./store` | The canonical tree and its transactional store. |
+| `./layout` | The DOM-free layout pass. |
+| `./output` | Paint layouts and selection overlays into the DOM. |
+| `./export` | Document layout sessions for exporters. No DOM required. |
+| `./automation` | The object model behind `@docx-editor.dev/editor-api`. |
+| `./collaboration` | Provider-neutral collaboration session contracts. |
+| `./collaboration/replication` | Replication helpers for collaboration providers. |
+| `./styles/editor.css` | The one editor stylesheet, shared by packaged and custom chrome. |
 
-**`core/geometry` is a compatibility shelf, not a design.** It is marked
-semver-exempt and is a retirement target as the shared engine absorbs its
-members. Cache-invalidation functions are deliberately absent: they mutate
-shared state, which breaks multiple editors on one page. Callers use
-`editor.relayout({ sync: true })`.
+## Architecture
 
-## Status
+The engine reads DOCX bytes into a canonical OOXML tree. Layout reads the tree and produces painted pages. Saving serializes the tree back into a DOCX package.
 
-The adapters do not compile against this contract yet. Adding this package does
-not by itself make the repository typecheck; pointing the adapters at it is
-separate work, tracked in `openspec/changes/core-api-contract/tasks.md`.
+The document tree holds all editing state. The engine displays editable pages and converts browser input into tree operations.
+
+Typed nodes supply layout properties. Generic nodes preserve other element structures, including unsupported extensions.
+
+Export sessions default to `all-markup`, which shows inserted and deleted text. Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
+
+### Build a paginated exporter
+
+For exports that need font-based page breaks, use `openFontBackedDocumentForExport`. It resolves the fonts used throughout the document before layout. Without a measurer, `openDocumentForExport(bytes)` uses a fixed-width approximation.
+
+Install `@docx-editor.dev/fonts` to use packaged substitutes in this example:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { openFontBackedDocumentForExport } from '@docx-editor.dev/core/export';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+const bytes = new Uint8Array(await readFile('contract.docx'));
+const opened = await openFontBackedDocumentForExport(bytes, {
+  fonts: packagedFonts(),
+  fontPolicy: 'strict',
+  onFontResolution: (report) => console.info(report),
+});
+
+if (!opened.ok) throw new Error(`DOCX rejected: ${opened.reason}`);
+try {
+  const layout = await opened.session.layout();
+  console.log(layout); // Replace this with your exporter.
+} finally {
+  opened.session.dispose(); // releases document-owned shaping bytes
+}
+```
+
+Let the engine manage fonts, resources, and layout. Build your output from the returned pages. For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
+
+## Fidelity
+
+Untouched content, unsupported OOXML, and package payloads survive editing and save. The canonical tree preserves document structure while embedded fonts, macros, media, and other payloads pass through untouched. Two oracles gate this in CI: a canonical fingerprint over the tree, and a save-and-reopen semantic digest.
+
+## Untrusted input
+
+Treat DOCX files as untrusted input. The engine validates URLs and limits XML entities, archive expansion, nesting, and element counts. It does not automatically fetch external document relationships. Serialization escapes document text.
+
+Anything you render from document data (a font name, a hyperlink target, a comment body) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
+
+## Documentation
+
+- [Core overview](https://www.docx-editor.dev/docs/2.x/core)
+- [Architecture](https://www.docx-editor.dev/docs/2.x/core/architecture)
+- [Feature support and fidelity](https://www.docx-editor.dev/docs/2.x/word-fidelity)
+
+## License
+
+Apache-2.0

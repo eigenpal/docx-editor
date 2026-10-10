@@ -1,16 +1,16 @@
 ---
 title: 'Vite'
-description: 'Build a Vite DOCX editor with React. Install the package, mount the component, open a .docx, edit it, and download the result.'
+description: 'Build a Vite DOCX editor with React. Install the package, mount the component, open a .docx from disk, edit it, and download the edited result.'
 category: 'Frameworks'
 seoTitle: 'Vite DOCX editor setup'
 ---
 
-This page builds the open-edit-download flow in a Vite + React app. Vite is client-rendered, so there is no SSR boundary to set up.
+This guide shows an open-edit-download flow in a Vite + React app. Vite is client-rendered, so there is no SSR boundary to set up.
 
 ## Install
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 ## Mount the editor
@@ -32,7 +32,7 @@ if (container) {
 // src/App.tsx
 import { useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -66,15 +66,17 @@ export function App() {
         <input type="file" accept=".docx" onChange={onFileSelect} />
         <button onClick={onSave}>Save .docx</button>
       </div>
-      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
+      </div>
     </div>
   );
 }
 ```
 
-`documentBuffer` and `save()` work as described in the [Quickstart](/docs/1.x/quickstart); the only Vite-specific fact is that there is no SSR boundary to manage.
+`document` and `save()` work as described in the [Quickstart](/docs/2.x/quickstart); the only Vite-specific fact is that there is no SSR boundary to manage.
 
-The full example also wires `createEmptyDocument()` for a New button and an agent panel; see [`src/App.tsx`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) in the repo.
+The full example also includes composed chrome, the review sidebar, and a custom node. See [`examples/vite`](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) in the repo. For agent-driven editing, see [`examples/agent`](https://github.com/eigenpal/docx-editor/tree/main/examples/agent).
 
 ## Run the example
 
@@ -89,7 +91,7 @@ bun run dev:react   # http://localhost:5173
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Vite DOCX editor guide](/blog/vite-docx-editor): the long-form walkthrough
+- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Vite DOCX editor guide](/blog/vite-docx-editor): the detailed walkthrough
 - [Vite example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)

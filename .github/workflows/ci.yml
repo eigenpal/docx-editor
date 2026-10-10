@@ -1,7 +1,8 @@
 name: CI
 
-# `lint` and `test` run in parallel; `build needs: [lint, test]` so a
-# package can never build before lint has passed (OpenSpec §4.3).
+# Source checks, browser checks, and package verification run concurrently.
+# Each matrix entry is one named check. A failure cancels its siblings;
+# the stable test gate requires every verification lane to pass.
 #
 # Dependabot PRs are handled by dependabot-lockfile.yml (which refreshes
 # bun.lock first and then runs the same checks inline), so we skip them
@@ -18,93 +19,421 @@ on:
 permissions:
   contents: read
 
+# New commits supersede older verification runs for the same PR/ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint:
-    if: github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+  checks:
+    if: "github.actor != 'dependabot[bot]'"
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Setup-bound checks finish in under a minute on the smaller runner.
+          - check: shipped-advisories
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - check: api-changeset
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - check: lint
+          - check: typecheck
+          - check: browser
+          - check: build
+          - check: unit
+            shard: 1/4
+          - check: unit
+            shard: 2/4
+          - check: unit
+            shard: 3/4
+          - check: unit
+            shard: 4/4
+    name: "${{ matrix.check == 'unit' && format('unit ({0})', matrix.shard) || matrix.check }}"
+    runs-on: ${{ matrix.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.3
-
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: "${{ (matrix.check == 'api-changeset' || matrix.check == 'build') && '0' || '1' }}"
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
       - name: Setup Bun
+        if: "matrix.check != 'api-changeset'"
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Install dependencies
+        if: "matrix.check != 'api-changeset' && matrix.check != 'shipped-advisories'"
         run: bun install --frozen-lockfile
-
       - name: Lint
         run: bun run lint
-
+        if: "matrix.check == 'lint'"
+      - name: Lane boundary compile check
+        run: bun run check:lane-boundaries
+        if: "matrix.check == 'lint'"
+      - name: Example README shape check
+        run: bun run check:example-readmes
+        if: "matrix.check == 'lint'"
+      - name: tsconfig lib floor check
+        run: bun run check:tsconfig-lib-floor
+        if: "matrix.check == 'lint'"
       - name: Format check
         run: bun run format:check
-
-  test:
-    if: github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.3
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
+        if: "matrix.check == 'lint'"
+      # Also a prepublish check. Running it here finds a missing header before the release PR.
+      - name: License header check
+        run: bun run check:license-headers
+        if: "matrix.check == 'lint'"
       - name: Type check
+        if: "matrix.check == 'typecheck'"
         run: bun run typecheck
-
       - name: i18n locale + typed-exports sync check
+        if: "matrix.check == 'typecheck'"
         run: bun run i18n:validate
-
-      - name: Run tests
-        run: bun test
-
       - name: CLA logic tests
+        if: "matrix.check == 'typecheck'"
         run: bash .github/cla/cla.test.sh
-
-  build:
-    if: github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6.0.3
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Run unit test shard
+        if: "matrix.check == 'unit'"
+        env:
+          TEST_SHARD: '${{ matrix.shard }}'
+        run: 'bun run test --shard "$TEST_SHARD" --fail-fast'
+      # Exercise the deployed source build without prebuilding the demo packages.
+      # Package artifacts and declarations are verified separately in the build lane.
+      - name: Demo deployment build
+        if: "matrix.check == 'browser'"
+        run: bun run build:preview
+        env:
+          # The same budget as the package build: the Vercel deployment runs this command
+          # with Node's default heap.
+          NODE_OPTIONS: '--max-old-space-size=2048'
+      # Skips the slow apt step unless Chromium cannot start; see the script header.
+      - name: Install Chromium for Markdown preview checks
+        if: "matrix.check == 'browser'"
+        run: bash scripts/install-ci-chromium.sh
+      - name: Build the PDF server package for export checks
+        if: "matrix.check == 'browser'"
+        run: bun run build:pdf
+      - name: Check table revision grouping and file exports in the editor
+        if: "matrix.check == 'browser'"
+        run: bunx playwright test --config e2e/editor-smoke.config.ts e2e/table-review-grouping.interaction.spec.ts e2e/file-export.interaction.spec.ts
+      - name: Check Markdown page layout and review controls
+        if: "matrix.check == 'browser'"
+        run: "bun run --filter './examples/docx-to-markdown' check:preview"
+      # Pixels, not styles: a dashed rule whose gradient sits on a solid ink fill has the
+      # right `backgroundImage` and still paints as a solid line.
+      - name: Check dashed and dotted borders paint with gaps
+        if: "matrix.check == 'browser'"
+        run: bun run check:border-patterns
+      - name: Editor acceptance tests (React and Vue)
+        if: "matrix.check == 'browser'"
+        run: bun run test:e2e:acceptance
+      - name: Save editor browser failure evidence
+        if: "failure() && matrix.check == 'browser'"
+        uses: actions/upload-artifact@v7
         with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
+          name: editor-browser-failures
+          path: test-results/
+          retention-days: 7
       - name: Build packages
         run: bun run build:packages
         env:
-          NODE_OPTIONS: --max-old-space-size=8192
-
+          # A budget, not a workaround. Anyone who builds these packages gets Node's
+          # default heap, which is 2 GiB on an 8 GiB machine. Every package build peaks
+          # near 1.2 GiB. If one outgrows this budget, it fails here instead of in a
+          # caller that does not raise the heap.
+          NODE_OPTIONS: '--max-old-space-size=2048'
+        if: "matrix.check == 'build'"
+      - name: Root and example type check
+        run: bun run typecheck:root
+        if: "matrix.check == 'build'"
+      - name: Example regression tests
+        run: bun test ./examples/shared/example-text.test.ts ./examples/vite/src/CollaborationDemo.test.tsx
+        if: "matrix.check == 'build'"
+      - name: Check editor API consumers against published declarations
+        run: "bun run --filter '@docx-editor-examples/editor-api-consumers' typecheck:published"
+        if: "matrix.check == 'build'"
+      - name: Server agent lifecycle integration
+        run: "bun run --filter './examples/server-agent-review' test:lifecycle"
+        if: "matrix.check == 'build'"
+      # The PDF demo worker imports the built package, so its integration test can only run
+      # where `dist/` exists. In the unit shards it skips itself with a message.
+      - name: PDF demo worker integration
+        run: node --test examples/docx-to-pdf/server.node.test.mjs
+        if: "matrix.check == 'build'"
+      - name: PDF conversion function contract
+        run: node --test api/convert.node.test.mjs
+        if: "matrix.check == 'build'"
+      - name: Editor API public consumer workflows
+        run: "bun run --filter '@docx-editor-examples/editor-api-consumers' test:published"
+        if: "matrix.check == 'build'"
+      - name: Package size report
+        run: bun run check:package-size --out package-sizes.json
+        if: "matrix.check == 'build'"
+      - name: Upload package size report
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-sizes
+          path: package-sizes.json
+          overwrite: true
+        if: "matrix.check == 'build'"
       - name: API report check
         run: bun run api:check
-
+        if: "matrix.check == 'build'"
+      - name: Parity gates
+        run: bun run check:parity
+        if: "matrix.check == 'build'"
+      - name: Third-party notices generate (gate)
+        run: bun run notices:generate
+        if: "matrix.check == 'build'"
+      - name: Collaboration policy
+        if: "matrix.check == 'build'"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RELEASE_BRANCH: ${{ startsWith(github.head_ref, 'changeset-release/') }}
+        run: |
+          if [ "$RELEASE_BRANCH" = true ]; then
+            bun run collaboration:check --release
+          else
+            bun run collaboration:check --base "$BASE_SHA"
+          fi
+      - name: Pack collaboration candidate
+        if: "matrix.check == 'build'"
+        run: node scripts/collaboration/cli.mjs pack
+      - name: Upload collaboration candidate and build
+        if: "matrix.check == 'build'"
+        uses: actions/upload-artifact@v7
+        with:
+          name: collaboration-build
+          include-hidden-files: true
+          path: |
+            .cache/collaboration/publish/
+            packages/*/dist/
+            packages/*/THIRD_PARTY_NOTICES.md
+          # Only downstream jobs of this run download it. Three days keeps
+          # "Re-run failed jobs" working over a weekend.
+          retention-days: 3
       - name: Published-package artifact check
         run: bun run check:package-artifacts
-
+        if: "matrix.check == 'build'"
+      - name: Shipped text-shaper check
+        run: bun run check:shipped-shaper
+        if: "matrix.check == 'build'"
       - name: Published-package consumer check
         run: SKIP_CONSUMER_INSTALL_BUILD=1 bun run check:consumer-install
-
-      - name: Parity contract check
-        run: bun run check:parity-contract
-
+        if: "matrix.check == 'build'"
+      - name: PDF packed consumer check
+        run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
+        if: "matrix.check == 'build'"
       - name: i18n per-locale bundle size check
         run: bun run check:i18n-bundle-size
-
+        if: "matrix.check == 'build'"
+      - name: Fonts package manifest check
+        run: bun run check:fonts-manifest
+        if: "matrix.check == 'build'"
+      - name: Fonts package Google catalog check
+        run: bun run check:google-catalog
+        if: "matrix.check == 'build'"
+      - name: Word font width fidelity
+        timeout-minutes: 5
+        run: bun run check:font-width-fidelity
+        if: "matrix.check == 'build'"
       - name: Docs JSON generation (smoke test)
-        # Not committed — `docs/json/` is gitignored. Run as a smoke test
-        # so any breakage in the generator surfaces here instead of when
-        # the docs site (`docx-editor-page`) tries to consume it.
         run: bun run docs:json
+        if: "matrix.check == 'build'"
+      - name: Documentation checks
+        run: bun run check:docs
+        if: "matrix.check == 'build'"
+      - name: Shipped dependency advisories
+        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
+        if: "matrix.check == 'shipped-advisories'"
+        id: advisories
+      - name: Require a changeset when docs/api changed
+        run: 'node scripts/check-api-changeset.mjs --base "origin/${{ github.base_ref }}"'
+        if:
+          "matrix.check == 'api-changeset' && github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' && !(startsWith(github.head_ref, 'changeset-release/') &&\n  github.event.pull_request.head.repo.full_name == github.repository)"
+      - name: Save advisory report
+        if: "${{ !cancelled() && matrix.check == 'shipped-advisories' && (steps.advisories.outcome == 'success' || steps.advisories.outcome == 'failure') }}"
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: shipped-advisories-sarif
+          path: shipped-advisories.sarif
+          if-no-files-found: ignore
+          overwrite: true
+
+  collaboration:
+    if: github.actor != 'dependabot[bot]'
+    needs: checks
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v8
+        with:
+          name: collaboration-build
+          path: .
+      - name: Test published collaboration releases
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: node scripts/collaboration/test.mjs --all --shard "$SHARD" --candidate .cache/collaboration/publish
+      - name: Save compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: collaboration-evidence-${{ strategy.job-index }}
+          include-hidden-files: true
+          path: |
+            .cache/collaboration/report-*.json
+            .cache/collaboration/failure.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  office-js-compatibility:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Office.js editing report (informational)
+        id: report
+        run: bun run --filter '@docx-editor.dev/editor-api' compat:report
+      - name: Report unavailable
+        if: failure()
+        run: echo 'Office.js compatibility report unavailable. See job logs; no percentage was calculated.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload full compatibility report
+        if: steps.report.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: office-js-compatibility
+          path: packages/editor-api/compat/reports/
+          retention-days: 30
+
+  test:
+    if: ${{ !cancelled() && github.actor != 'dependabot[bot]' }}
+    needs: [checks, collaboration]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    steps:
+      - name: Require all verification lanes to pass
+        env:
+          RESULT: ${{ needs.checks.result }}
+          COLLABORATION_RESULT: ${{ needs.collaboration.result }}
+        run: test "$RESULT" = success && test "$COLLABORATION_RESULT" = success
+
+  package-size:
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    needs: checks
+    permissions:
+      contents: read
+      actions: read # download the baseline artifact from a main run
+      pull-requests: write # sticky size comment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Download current size report
+        uses: actions/download-artifact@v8
+        with:
+          name: package-sizes
+
+      # Compare against the PR's base commit, never an unrelated older main run.
+      - name: Download size report for the PR base commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/package-size-baseline.mjs
+
+      # The allow-label is read LIVE from the API, not from
+      # `github.event.pull_request.labels`: a re-run reuses the frozen event
+      # payload, so a label added after the gate failed would be invisible and
+      # "label + re-run" could never pass. An API blip leaves `allow` empty,
+      # which only makes the gate strict, never lax.
+      - name: Compare against baseline (gate)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          allow=""
+          if gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" --jq '.[].name' \
+            | grep -qx 'size-increase-expected'; then
+            allow=1
+          fi
+          PACKAGE_SIZE_ALLOW_GROWTH="$allow" node scripts/check-package-size.mjs \
+            --compare package-sizes.json \
+            --baseline baseline/package-sizes.json --comment size-comment.md
+
+      # `always()` so the comment still lands when the gate above fails — the
+      # comment is where the failure explains itself. Fork PRs get a read-only
+      # token and are skipped; they still see the table in the job summary.
+      - name: Post sticky PR comment
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Author-filtered so a user comment that starts with the marker can
+          # never be adopted (and overwritten) as the bot's sticky comment.
+          comment_id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+            --jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("<!-- package-size-report -->"))][0].id // empty')
+          if [ -n "$comment_id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -F body=@size-comment.md
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -F body=@size-comment.md
+          fi
+
+  # Publishing SARIF needs a write token; all verification jobs stay read-only.
+  # This informational upload cannot change the advisory gate result.
+  security-report:
+    name: Security report
+    if: "${{ !cancelled() && github.actor != 'dependabot[bot]' }}"
+    needs: checks
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Download advisory report
+        uses: actions/download-artifact@v8
+        with:
+          name: shipped-advisories-sarif
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories

@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Empty paragraph composition inherited a zero font size and had no visible preedit text or native caret height.",
+  "after": "Empty paragraphs and drawing-only lines paint a real composition font. Populated lines retain their zero strut.",
+  "reason": "The layout retains paragraph-mark typography for textless fragments, and the painter applies it to native composition. Document operations, shared identities, synchronization, and the collaboration format remain unchanged.",
+  "tests": [
+    "packages/core/src/output/__tests__/empty-line-composition-font.test.ts",
+    "packages/core/src/editor/__tests__/composition-readback.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-empty-line-composition.test.ts",
+    "e2e/empty-line-composition.interaction.spec.ts"
+  ],
+  "changeset": "empty-line-composition-font",
+  "migration": null
+}

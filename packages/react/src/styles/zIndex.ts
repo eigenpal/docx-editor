@@ -14,9 +14,15 @@
  */
 export const Z_INDEX = {
   hfInlineEditor: 10,
+  /** Notes / transient chrome banners above the page, below dropdowns. */
+  chrome: 50,
   ruler: 30,
   outline: 40,
   dropdown: 100,
+  /** Alias for tooltip / hover preview surfaces. */
+  popover: 100,
   toolbar: 100,
   contextMenu: 10000,
+  /** Alias for dialogs that sit with context menus. */
+  modal: 10000,
 } as const;

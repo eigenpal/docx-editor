@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "TOC boundary paragraphs lock neighbouring text, and insertion at a cross-paragraph closing marker can extend the cached result.",
+  "after": "Text outside TOC boundaries remains editable. Text insertions and paragraph splits preserve the closing marker before the new content.",
+  "reason": "Corrected writes use existing canonical runs, paragraph operations, and primitive journal updates. Released readers retain the same node identities and content meaning. No shared schema, repair, or protocol changes occur.",
+  "tests": ["packages/core/src/editor/__tests__/toc-boundary-editing.test.ts"],
+  "changeset": "toc-heading-boundaries",
+  "migration": null
+}

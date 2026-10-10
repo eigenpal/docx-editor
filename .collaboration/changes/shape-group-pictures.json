@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A wpg:wgp drawing group with a pic:pic member projected no picture and no vector shape, so it painted nothing.",
+  "after": "The drawing projection reads one supported, bounded picture member of a group as groupPicture, and layout and paint render it under the group's vector members. A group whose picture cannot render follows the unsupported-group rule in every output.",
+  "reason": "The change is read-only projection, layout, and paint. It adds no tree operation, keeps the canonical tree and the saved OOXML unchanged, and does not touch shared nodes, identities, synchronization messages, or repair.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-group-picture.test.ts",
+    "packages/core/src/editor/__tests__/group-picture-paint.test.ts",
+    "packages/docx-to-pdf/test/group-picture.test.ts",
+    "packages/docx-to-markdown/test/markdown-shape-group.test.ts"
+  ],
+  "changeset": "shape-group-pictures",
+  "migration": null
+}

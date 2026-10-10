@@ -1,0 +1,236 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import {
+  computed,
+  getCurrentInstance,
+  readonly,
+  shallowRef,
+  toValue,
+  watch,
+  type MaybeRefOrGetter,
+  type Ref,
+} from 'vue';
+import type * as Y from 'yjs';
+import type { WebrtcProvider } from 'y-webrtc';
+import type {
+  CollaborationFailure,
+  CollaborationIdentity,
+} from '@docx-editor.dev/core/collaboration';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
+import type { CollaborationBootstrap, CollaborationSession } from '../collaboration/types.ts';
+import {
+  EMPTY_MODULES,
+  useCollaborationRoom,
+  type CollaborationRoomHandle,
+} from './collaboration-room.ts';
+
+export type { CollaborationSession };
+
+/** Bootstrap for one WebRTC room. @public */
+export type UseWebrtcCollaborationBootstrap = CollaborationBootstrap;
+
+/** Arguments for {@link UseWebrtcCollaborationReturn.connect}. @public */
+export interface UseWebrtcCollaborationConnectOptions {
+  /** Room id shared by every peer. Make one with `createCollaborationRoomId`. */
+  readonly roomId: string;
+  /** The local participant. Recorded as the author of this replica's changes. */
+  readonly identity: CollaborationIdentity;
+  /** Whether to seed the room, join it, or let the peers decide. */
+  readonly bootstrap: UseWebrtcCollaborationBootstrap;
+  /**
+   * Admit local edits while the transport is `disconnected`. Buffered updates merge on
+   * reconnect. On by default; pass `false` to pause editing while disconnected. See
+   * {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   */
+  readonly offlineEditing?: boolean;
+  /** Signaling server URLs. Omitted, the room uses the public demo endpoints and warns once. */
+  readonly signaling?: readonly string[];
+  /** STUN and TURN servers for the peer connections. Pass TURN servers in production. */
+  readonly iceServers?: readonly RTCIceServer[];
+  /** Signaling encryption key. Every peer passes the same value. */
+  readonly password?: string;
+}
+
+interface WebrtcRoomHandle extends CollaborationRoomHandle {
+  readonly ydoc?: Y.Doc;
+  readonly provider?: WebrtcProvider;
+  unsyncedChanges?(): number;
+  subscribeUnsyncedChanges?(listener: () => void): () => void;
+}
+
+type WebrtcCreateRoom = (
+  options: UseWebrtcCollaborationConnectOptions
+) => Promise<WebrtcRoomHandle>;
+
+/**
+ * Test-only room factory. Not re-exported from `@docx-editor.dev/pro/vue/webrtc`.
+ *
+ * @internal
+ */
+export const WEBRTC_CREATE_ROOM_FOR_TESTS: unique symbol = Symbol(
+  'useWebrtcCollaboration.createRoom'
+);
+
+interface InjectedWebrtcCollaborationOptions extends UseWebrtcCollaborationOptions {
+  readonly [WEBRTC_CREATE_ROOM_FOR_TESTS]?: WebrtcCreateRoom;
+}
+
+/** Input for {@link useWebrtcCollaboration}. @public */
+export interface UseWebrtcCollaborationOptions {
+  /**
+   * Host modules. The hook adds `collaborationModule` when a room is ready.
+   * A host collaboration contribution is a configuration error and throws.
+   */
+  readonly modules?: readonly EditorModule[];
+  /**
+   * Connect this room when the composable starts. Omit it and call
+   * {@link UseWebrtcCollaborationReturn.connect} after the user chooses a room.
+   * A different room, server, bootstrap kind, or `actorId` leaves the old room and
+   * connects the new one, and `null` leaves. A room opened with `connect` stays.
+   */
+  readonly room?: UseWebrtcCollaborationConnectOptions | null;
+}
+
+/** Values {@link useWebrtcCollaboration} returns. @public */
+export interface UseWebrtcCollaborationReturn {
+  /** The room's document as `.docx` bytes to mount. Null until the room is ready. */
+  readonly document: Readonly<Ref<Uint8Array | null>>;
+  /** Modules to pass to the editor. They include the collaboration module once ready. */
+  readonly modules: Readonly<Ref<readonly EditorModule[]>>;
+  /** The live session for status and presence. Null while no room is connected. */
+  readonly session: Readonly<Ref<CollaborationSession | null>>;
+  /**
+   * The room's shared Yjs document, owned by the composable. Null while no room is
+   * connected.
+   *
+   * Read-only escape hatch: observe it or wire additional providers, but leave teardown to
+   * the composable.
+   */
+  readonly ydoc: Readonly<Ref<Y.Doc | null>>;
+  /**
+   * The owned `y-webrtc` provider. Null while no room is connected.
+   *
+   * Read-only escape hatch for transport-level access (`disconnect()`/`connect()`, peer
+   * introspection). The composable destroys it on leave and unmount.
+   */
+  readonly provider: Readonly<Ref<WebrtcProvider | null>>;
+  /** True while a connect is in progress. */
+  readonly pending: Readonly<Ref<boolean>>;
+  /**
+   * Local changes no peer has received: made while no peer was connected, and not synced
+   * since. A WebRTC room has no server, so these changes exist only in this browser, and
+   * closing the page loses them. Warn before the page closes while it is above zero.
+   */
+  readonly unsyncedChanges: Readonly<Ref<number>>;
+  /** The connect failure or session failure, or null. Check it before `document`. */
+  readonly error: Readonly<Ref<CollaborationFailure | null>>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `onClick={() => connect(options)}` produced an unhandled rejection
+   * on every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (
+    options: UseWebrtcCollaborationConnectOptions
+  ) => Promise<CollaborationFailure | null>;
+  /**
+   * Destroy the room and carry on editing locally.
+   *
+   * The current bytes live in the editor, not in this composable, so the argument is
+   * required: pass the bytes `editor.save()` resolves with, as `new Uint8Array(saved)` after
+   * a `null` check, to keep what the room typed. The host remounts the editor from exactly
+   * these bytes.
+   */
+  readonly leave: (nextDocument: Uint8Array) => void;
+  /**
+   * Recover a session that reached status `error`: leave with `nextDocument`, then connect
+   * again to the same room with the same identity, signaling, and password.
+   *
+   * The reconnect always uses bootstrap `{ kind: 'join' }`, because an active room still
+   * exists on the other peers. When no peer holds the room any more, the rejoin resolves with
+   * `initialization-timeout` — nothing is lost, because `nextDocument` (your saved bytes)
+   * stays mounted locally. A connect that failed also counts as the prior attempt, so
+   * rejoin retries it as a joiner.
+   */
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
+}
+
+function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined): string {
+  if (!room) return '';
+  const signaling = room.signaling ? room.signaling.join(',') : '';
+  return `${signaling}:${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
+}
+
+async function defaultCreateRoom(
+  options: UseWebrtcCollaborationConnectOptions
+): Promise<WebrtcRoomHandle> {
+  const { createWebrtcCollaboration } = await import('../collaboration/webrtc.ts');
+  return createWebrtcCollaboration(options);
+}
+
+function createRoomOf(options: UseWebrtcCollaborationOptions | null | undefined): WebrtcCreateRoom {
+  return (
+    (options as InjectedWebrtcCollaborationOptions | null | undefined)?.[
+      WEBRTC_CREATE_ROOM_FOR_TESTS
+    ] ?? defaultCreateRoom
+  );
+}
+
+/**
+ * Own a WebRTC collaboration room for a Vue host.
+ *
+ * The default Pro Vue entry does not import this composable. Import it from
+ * `@docx-editor.dev/pro/vue/webrtc` so a review-only bundle does not load
+ * a network provider.
+ *
+ * @public
+ */
+export function useWebrtcCollaboration(
+  options?: MaybeRefOrGetter<UseWebrtcCollaborationOptions | null>
+): UseWebrtcCollaborationReturn {
+  const instance = getCurrentInstance();
+  const state = useCollaborationRoom<UseWebrtcCollaborationConnectOptions, WebrtcRoomHandle>({
+    // The composable name is part of the key: one component instance can own a WebRTC room
+    // and a Hocuspocus room at once, and a shared `vue:${uid}` key would make each adopt
+    // destroy the other's room.
+    ownerKey: `vue-webrtc:${String(instance?.uid ?? 'anonymous')}`,
+    hookName: 'useWebrtcCollaboration',
+    createRoomOf: () => createRoomOf(toValue(options)),
+    hostModulesOf: () => toValue(options)?.modules ?? EMPTY_MODULES,
+    autoRoomOf: () => toValue(options)?.room ?? null,
+    autoKeyOf: () => roomKeyOf(toValue(options)?.room),
+    rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
+    identityOf: (room) => room.identity,
+  });
+
+  const unsyncedChanges = shallowRef(0);
+  watch(
+    () => state.room.value,
+    (room, _previous, onCleanup) => {
+      unsyncedChanges.value = room?.unsyncedChanges?.() ?? 0;
+      const unsubscribe = room?.subscribeUnsyncedChanges?.(() => {
+        unsyncedChanges.value = room.unsyncedChanges?.() ?? 0;
+      });
+      if (unsubscribe) onCleanup(unsubscribe);
+    },
+    { immediate: true }
+  );
+
+  return {
+    document: readonly(state.document),
+    modules: readonly(state.modules),
+    session: readonly(state.session),
+    ydoc: computed(() => state.room.value?.ydoc ?? null),
+    provider: computed(() => state.room.value?.provider ?? null),
+    pending: readonly(state.pending),
+    unsyncedChanges: readonly(unsyncedChanges),
+    error: readonly(state.error),
+    connect: state.connect,
+    leave: state.leave,
+    rejoin: state.rejoin,
+  };
+}

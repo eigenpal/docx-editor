@@ -1,0 +1,5 @@
+# Built by `bun run build:runtime`; one executable per platform plus packaged fonts.
+src/docx_to_markdown/_vendor/
+dist/
+.venv/
+__pycache__/

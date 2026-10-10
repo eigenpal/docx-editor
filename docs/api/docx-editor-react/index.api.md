@@ -4,254 +4,3211 @@
 
 ```ts
 
-import { Comment as Comment_2 } from '@docx-editor.dev/core/types/content';
-import { ContentControlFilter } from '@docx-editor.dev/core/agent';
-import { ContentControlValue } from '@docx-editor.dev/core/agent';
-import { createDocumentWithText } from '@docx-editor.dev/core';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-import { CreateEmptyDocumentOptions } from '@docx-editor.dev/core';
+import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
+import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { CalendarDay } from '@docx-editor.dev/core/editor';
+import { CalendarMonth } from '@docx-editor.dev/core/editor';
+import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
+import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
+import { ChromeExportFormat } from '@docx-editor.dev/core/editor';
+import { ChromeExportHandlers } from '@docx-editor.dev/core/editor';
+import { ChromeGroupId } from '@docx-editor.dev/core/editor';
+import { ChromeMenu } from '@docx-editor.dev/core/editor';
+import { ChromeMenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromeMenuId } from '@docx-editor.dev/core/editor';
+import { ChromeMenuItemEntry } from '@docx-editor.dev/core/editor';
+import { ChromeMenuSeparatorEntry } from '@docx-editor.dev/core/editor';
+import { chromeMenuSlots } from '@docx-editor.dev/core/editor';
+import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
+import { ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { ClearAnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { ClearRefreshHighlightsOptions } from '@docx-editor.dev/core/editor';
+import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
+import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { ComponentType } from 'react';
+import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
+import { composeFontOrigins } from '@docx-editor.dev/core/editor';
+import { ContentControlListNavigation } from '@docx-editor.dev/core/editor';
+import { ContentControlSummary } from '@docx-editor.dev/core';
+import { ContentControlType } from '@docx-editor.dev/core';
+import { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
+import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
+import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'react';
-import { Document as Document_2 } from '@docx-editor.dev/core/types/document';
-import { DocumentAgent } from '@docx-editor.dev/core/agent';
-import { DocxInput } from '@docx-editor.dev/core/utils';
-import { EditorHandle } from '@docx-editor.dev/core';
-import { EditorState } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
-import { FontDefinition } from '@docx-editor.dev/core/utils';
-import { FontOption } from '@docx-editor.dev/core/utils/fontOptions';
-import { HeaderFooter } from '@docx-editor.dev/core/types/document';
-import { PMContentControl } from '@docx-editor.dev/core/prosemirror';
-import { PrintOptions } from '@docx-editor.dev/core';
-import * as prosemirror_state from 'prosemirror-state';
-import * as prosemirror_view from 'prosemirror-view';
-import * as React_2 from 'react';
+import { DEFAULT_FONT } from '@docx-editor.dev/core/editor';
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
+import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentRefresh } from '@docx-editor.dev/core/editor';
+import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
+import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
+import { DocumentSearchFindOptions } from '@docx-editor.dev/core/editor';
+import { DocumentSearchHighlight } from '@docx-editor.dev/core/editor';
+import { DocumentSearchNavigateOptions } from '@docx-editor.dev/core/editor';
+import { DocumentSearchOptions } from '@docx-editor.dev/core/editor';
+import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
+import { DocxDocument } from '@docx-editor.dev/core/contracts/types';
+import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { Editor } from '@docx-editor.dev/core/contracts/editor';
+import { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
+import { EditorCommandExecute } from '@docx-editor.dev/core/editor';
+import { EditorEvents } from '@docx-editor.dev/core/contracts/editor';
+import { EditorExecOptions } from '@docx-editor.dev/core/contracts/editor';
+import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
+import { EditorFontErrorCode } from '@docx-editor.dev/core/contracts/editor';
+import { EditorModule } from '@docx-editor.dev/core/editor';
+import { EditorQuery } from '@docx-editor.dev/core/contracts/editor';
+import { EditorScope } from '@docx-editor.dev/core/contracts/editor';
+import { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import { FieldResultsMode } from '@docx-editor.dev/core/editor';
+import { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
+import { FontConfigurationBase } from '@docx-editor.dev/core/editor';
+import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
+import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
+import { FontLoadFailure } from '@docx-editor.dev/core/editor';
+import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
+import { FontOrigin } from '@docx-editor.dev/core/editor';
+import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
+import { FontResolver } from '@docx-editor.dev/core/editor';
+import { FontResolverMark } from '@docx-editor.dev/core/editor';
+import { FontSource } from '@docx-editor.dev/core/contracts/editor';
+import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
+import { FontUrlSource } from '@docx-editor.dev/core/editor';
+import { ForwardRefExoticComponent } from 'react';
+import { generateRulerTicks } from '@docx-editor.dev/core/editor';
+import { HIGHLIGHT_REFRESH_MS } from '@docx-editor.dev/core/editor';
+import { HighlightHit } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightRange } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightRect } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightResult } from '@docx-editor.dev/core/contracts/editor';
+import { HighlightSource } from '@docx-editor.dev/core/editor';
+import { HistoryGroupBindingOptions } from '@docx-editor.dev/core/editor';
+import { HTMLAttributes } from 'react';
+import { ImageDecodePort } from '@docx-editor.dev/core/editor';
+import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
+import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
+import { InvalidTextFormFieldSession } from '@docx-editor.dev/core/editor';
+import { isFontResolver } from '@docx-editor.dev/core/editor';
+import { loadFonts } from '@docx-editor.dev/core/editor';
+import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
+import { LoadFontsResult } from '@docx-editor.dev/core/editor';
+import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
+import { LocaleStrings } from '@docx-editor.dev/i18n';
+import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
+import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
+import { NavigateToChangeOptions } from '@docx-editor.dev/core/editor';
+import { NavigationCommand } from '@docx-editor.dev/core/editor';
+import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
+import { PaginatedSurfaceState } from '@docx-editor.dev/core/editor';
+import { ParagraphDialogFields } from '@docx-editor.dev/core/editor';
+import { ParagraphDialogMixed } from '@docx-editor.dev/core/editor';
+import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
+import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
+import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
+import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
+import { PX_PER_CM } from '@docx-editor.dev/core/editor';
+import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
+import * as react from 'react';
+import react__default from 'react';
+import { ReactElement } from 'react';
 import { ReactNode } from 'react';
-import { RenderedDomContext } from '@docx-editor.dev/core/plugin-api';
-import { ScrollToParaIdOptions } from '@docx-editor.dev/core/utils';
-import { SelectionState } from '@docx-editor.dev/core/prosemirror';
-import { SidebarItem } from '@docx-editor.dev/core/plugin-api';
+import { Ref } from 'react';
+import { RefAttributes } from 'react';
+import { RefreshChange } from '@docx-editor.dev/core/editor';
+import { RefreshChangeInput } from '@docx-editor.dev/core/editor';
+import { RefreshFailureCode } from '@docx-editor.dev/core/editor';
+import { RefreshHighlightAnimation } from '@docx-editor.dev/core/editor';
+import { RefreshHighlightOptions } from '@docx-editor.dev/core/editor';
+import { RefreshLocation } from '@docx-editor.dev/core/editor';
+import { RefreshResult } from '@docx-editor.dev/core/editor';
+import { RefreshSubmission } from '@docx-editor.dev/core/editor';
+import { RefreshUpdate } from '@docx-editor.dev/core/editor';
+import { ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+import { ReviewAuthorInfo } from '@docx-editor.dev/core/editor';
+import { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
+import { RevisionAuthorAssignments } from '@docx-editor.dev/core/editor';
+import { RevisionAuthorStyle } from '@docx-editor.dev/core/editor';
+import { RevisionChangedLinesMark } from '@docx-editor.dev/core/editor';
+import { RevisionDeletionMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupChromeHandlers } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupDialogSession } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupMark } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupNamedColor } from '@docx-editor.dev/core/editor';
+import { RevisionMarkupOptions } from '@docx-editor.dev/core/editor';
+import { RevisionStyles } from '@docx-editor.dev/core/editor';
+import { RulerIndent } from '@docx-editor.dev/core/editor';
+import { rulerPageBox } from '@docx-editor.dev/core/editor';
+import { RulerTick } from '@docx-editor.dev/core/editor';
+import { RulerUnit } from '@docx-editor.dev/core/editor';
+import { runToolbarCommand } from '@docx-editor.dev/core/editor';
+import { ScrollToAnchorOptions } from '@docx-editor.dev/core/contracts/editor';
+import { SEARCH_DEBOUNCE_MS } from '@docx-editor.dev/core/editor';
+import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
+import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
+import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
+import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SupportedImageMime } from '@docx-editor.dev/core/editor';
+import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
+import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
+import { TableChromeSlotId } from '@docx-editor.dev/core/editor';
+import { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
+import { TextMatch } from '@docx-editor.dev/core/contracts/editor';
+import { TextMeasurer } from '@docx-editor.dev/core/editor';
 import { TFunction } from '@docx-editor.dev/i18n';
-import { Theme } from '@docx-editor.dev/core/types/document';
-import { Transaction } from 'prosemirror-state';
+import { Theme } from '@docx-editor.dev/core/contracts/editor';
+import { ToolbarCommandState } from '@docx-editor.dev/core/editor';
+import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { ToolbarValueMap } from '@docx-editor.dev/core/editor';
+import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
+import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
+import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
+import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
-export { createDocumentWithText }
+export { AnchorHighlightAnimation }
 
-export { createEmptyDocument }
+export { AnchorHighlightOptions }
 
-export { CreateEmptyDocumentOptions }
+export { CHROME_GROUPS }
+
+export { CHROME_MENUS }
+
+export { ChromeExportFormat }
+
+export { ChromeExportHandlers }
+
+export { ChromeMenu }
+
+export { ChromeMenuEntry }
+
+export { ChromeMenuId }
+
+export { ChromeMenuItemEntry }
+
+export { ChromeMenuSeparatorEntry }
+
+export { chromeMenuSlots }
+
+export { ChromeMenuSubmenuEntry }
+
+export { ChromeSlotId }
 
 // @public
-export const DocxEditor: React_2.ForwardRefExoticComponent<DocxEditorProps & React_2.RefAttributes<DocxEditorRef>>;
+export type ChromeTranslate = (key: string, params?: Record<string, string | number>) => string;
+
+export { ClearAnchorHighlightOptions }
+
+export { ClearRefreshHighlightsOptions }
+
+export { commandForSlot }
+
+export { composeFontConfiguration }
+
+export { composeFontOrigins }
 
 // @public
-export interface DocxEditorHandle extends EditorHandle {
-    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
-    scrollToPosition: (pmPos: number) => void;
-    setZoom: (zoom: number) => void;
+export const CONTENT_CONTROL_SLOTS: {
+    readonly formFill: 'contentControl.formFill';
+    readonly inspector: 'contentControl.inspector';
+    readonly remove: 'contentControl.remove';
+    readonly showAll: 'contentControl.showAll';
+};
+
+// @public
+export interface ContentControlActionProps extends ContentControlPartProps {
+    // (undocumented)
+    icon?: DocxEditorChildren;
+}
+
+// @public
+export interface ContentControlInspectorState {
+    // (undocumented)
+    readonly alias: string | null;
+    // (undocumented)
+    readonly bound: boolean;
+    // (undocumented)
+    readonly controlType: ContentControlType;
+    // (undocumented)
+    readonly effectiveLock: ContentControlLock | null;
+    // (undocumented)
+    readonly id: string;
+    readonly locked: boolean;
+    // (undocumented)
+    readonly placeholder: boolean;
+    readonly removalLocked: boolean;
+    // (undocumented)
+    readonly tag: string | null;
+}
+
+// @public
+export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
+
+// @public
+export interface ContentControlPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public
+export interface ContentControlProps extends ContentControlPartProps {
+    preset?: boolean;
+}
+
+// @public (undocumented)
+export type ContentControlSlotId = (typeof CONTENT_CONTROL_SLOTS)[keyof typeof CONTENT_CONTROL_SLOTS];
+
+// @public
+export interface ContentControlWidgetDayProps extends DocxEditorContentControlWidgetPartProps {
+    // (undocumented)
+    day: CalendarDay;
+}
+
+// @public
+export interface ContentControlWidgetEntry {
+    // (undocumented)
+    readonly displayText: string;
+    // (undocumented)
+    readonly value: string;
+}
+
+// @public
+export interface ContentControlWidgetItemProps extends DocxEditorContentControlWidgetPartProps {
+    // (undocumented)
+    item: ContentControlWidgetEntry;
+}
+
+// @public
+export interface ContentControlWidgetPictureProps extends DocxEditorContentControlWidgetPartProps {
+    autoOpen?: boolean;
+}
+
+// @public
+export interface ContextMenuAnchor {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export function ContextMenuCellVerticalAlignment(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuCellVerticalAlignment {
+    var // (undocumented)
+    docxRow: "table.cellVerticalAlignment";
+}
+
+// @public
+export interface ContextMenuCommandProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: DocxEditorChildren;
+    labelKey?: string;
+    shortcutKey?: string;
+}
+
+// @public (undocumented)
+export interface ContextMenuContextValue {
+    readonly anchor: ContextMenuAnchor | null;
+    readonly clipboardRefusal: string | null;
+    readonly close: (restoreFocus?: boolean) => void;
+    // (undocumented)
+    readonly reportClipboardRefusal: (reason: string) => void;
+    readonly target: HTMLElement | null;
+    readonly tocId: string | null;
+}
+
+// @public
+export const ContextMenuCopy: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuCopyFormatting: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuCut: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDelete: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDeleteTable: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDeleteTableColumn: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuDeleteTableRow: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertColumnLeft: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertColumnRight: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertRowAbove: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuInsertRowBelow: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export function ContextMenuItem(input: ContextMenuItemProps): react.JSX.Element;
+
+// @public
+export interface ContextMenuItemProps {
+    active?: boolean;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    disabledReason?: string;
+    // (undocumented)
+    icon?: DocxEditorChildren;
+    label: string;
+    // (undocumented)
+    onSelect?: () => void;
+    shortcut?: string;
+}
+
+// @public
+export function ContextMenuPaste(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuPaste {
+    var // (undocumented)
+    docxRow: "edit.paste";
+}
+
+// @public
+export const ContextMenuPasteFormatting: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export function ContextMenuPasteWithoutFormatting(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuPasteWithoutFormatting {
+    var // (undocumented)
+    docxRow: "edit.pasteWithoutFormatting";
+}
+
+// @public
+export const ContextMenuRefreshToc: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuRefreshTocPageNumbers: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
+    destructive?: boolean;
+}
+
+export { createDocumentRefresh }
+
+export { createFontSource }
+
+export { DEFAULT_FONT }
+
+export { defineFontResolver }
+
+// @public
+export function definePopup<Props extends object>(component: ComponentType<Props>): (props: Props) => DocxEditorChildren;
+
+// @public
+export interface DialogCustomizationProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    preset?: boolean;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export interface DialogPartProps {
+    // (undocumented)
+    'aria-label'?: string;
+    // (undocumented)
+    [attribute: `data-${string}`]: unknown;
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+    // (undocumented)
+    id?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    // (undocumented)
+    title?: string;
+}
+
+// @public @deprecated (undocumented)
+export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
+
+// @public (undocumented)
+export const DocumentOutline: react__default.MemoExoticComponent<(input: DocumentOutlineProps) => react__default.JSX.Element>;
+
+export { DocumentRefresh }
+
+export { DocumentRefreshError }
+
+export { DocumentRefreshState }
+
+export { DocumentSearchFindOptions }
+
+export { DocumentSearchHighlight }
+
+export { DocumentSearchNavigateOptions }
+
+export { DocumentSearchOptions }
+
+export { DocxDocument }
+
+// @public (undocumented)
+export const DocxEditor: DocxEditorNamespace;
+
+// @public
+export function DocxEditorAuthorStyle(props: DocxEditorAuthorStyleProps): null;
+
+// @public
+export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
+    author: string;
+}
+
+// @public
+export type DocxEditorChildren = ReactNode;
+
+// @public
+export function DocxEditorColorByChangeType(): null;
+
+// @public
+export function DocxEditorContent(input: DocxEditorContentProps): react.JSX.Element;
+
+// @public (undocumented)
+export const DocxEditorContentControl: DocxEditorContentControlNamespace;
+
+// @public
+export interface DocxEditorContentControlNamespace {
+    // (undocumented)
+    (props: ContentControlProps): ReturnType<typeof ContentControlRoot>;
+    // (undocumented)
+    readonly Fields: typeof ContentControlFields;
+    // (undocumented)
+    readonly Header: typeof ContentControlHeader;
+    // (undocumented)
+    readonly Remove: typeof ContentControlRemove;
+}
+
+// @public
+export const DocxEditorContentControlWidget: DocxEditorContentControlWidgetNamespace;
+
+// @public
+export interface DocxEditorContentControlWidgetNamespace {
+    // (undocumented)
+    (props: DocxEditorContentControlWidgetProps): ReactNode;
+    // (undocumented)
+    readonly Apply: typeof ContentControlWidgetApply;
+    // (undocumented)
+    readonly Calendar: typeof ContentControlWidgetCalendar;
+    // (undocumented)
+    readonly Cancel: typeof ContentControlWidgetCancel;
+    // (undocumented)
+    readonly Day: typeof ContentControlWidgetDay;
+    // (undocumented)
+    readonly Error: typeof ContentControlWidgetError;
+    // (undocumented)
+    readonly Footer: typeof ContentControlWidgetFooter;
+    // (undocumented)
+    readonly Grid: typeof ContentControlWidgetGrid;
+    // (undocumented)
+    readonly Header: typeof ContentControlWidgetHeader;
+    // (undocumented)
+    readonly Input: typeof ContentControlWidgetInput;
+    // (undocumented)
+    readonly Item: typeof ContentControlWidgetItem;
+    // (undocumented)
+    readonly List: typeof ContentControlWidgetList;
+    // (undocumented)
+    readonly Month: typeof ContentControlWidgetMonth;
+    // (undocumented)
+    readonly Navigation: typeof ContentControlWidgetNavigation;
+    // (undocumented)
+    readonly NextMonth: typeof ContentControlWidgetNextMonth;
+    // (undocumented)
+    readonly Picture: typeof ContentControlWidgetPicture;
+    // (undocumented)
+    readonly PreviousMonth: typeof ContentControlWidgetPreviousMonth;
+    // (undocumented)
+    readonly Title: typeof ContentControlWidgetTitle;
+    // (undocumented)
+    readonly Today: typeof ContentControlWidgetToday;
+    // (undocumented)
+    readonly Weekdays: typeof ContentControlWidgetWeekdays;
+    // (undocumented)
+    readonly Year: typeof ContentControlWidgetYear;
+}
+
+// @public
+export interface DocxEditorContentControlWidgetPartProps {
+    // (undocumented)
+    'aria-label'?: string;
+    // (undocumented)
+    [attribute: `data-${string}`]: unknown;
+    // (undocumented)
+    [attribute: `aria-${string}`]: unknown;
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+    // (undocumented)
+    id?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    // (undocumented)
+    title?: string;
+}
+
+// @public
+export interface DocxEditorContentControlWidgetProps {
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    session: ContentControlWidgetSession;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export interface DocxEditorContentProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    className?: string;
+}
+
+// @public
+export function DocxEditorContextMenu(input: DocxEditorContextMenuProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorContextMenuNamespace {
+    // (undocumented)
+    (props: DocxEditorContextMenuProps): ReactElement;
+    // (undocumented)
+    readonly CellVerticalAlignment: typeof ContextMenuCellVerticalAlignment;
+    // (undocumented)
+    readonly Copy: typeof ContextMenuCopy;
+    // (undocumented)
+    readonly Cut: typeof ContextMenuCut;
+    // (undocumented)
+    readonly Delete: typeof ContextMenuDelete;
+    // (undocumented)
+    readonly DeleteTable: typeof ContextMenuDeleteTable;
+    // (undocumented)
+    readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
+    // (undocumented)
+    readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
+    readonly Group: typeof MenuGroup;
+    // (undocumented)
+    readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
+    // (undocumented)
+    readonly InsertColumnRight: typeof ContextMenuInsertColumnRight;
+    // (undocumented)
+    readonly InsertRowAbove: typeof ContextMenuInsertRowAbove;
+    // (undocumented)
+    readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
+    readonly Item: typeof ContextMenuItem;
+    // (undocumented)
+    readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
+    // (undocumented)
+    readonly RefreshToc: typeof ContextMenuRefreshToc;
+    // (undocumented)
+    readonly RefreshTocPageNumbers: typeof ContextMenuRefreshTocPageNumbers;
+    readonly Row: typeof MenuRow;
+    // (undocumented)
+    readonly SelectAll: typeof ContextMenuSelectAll;
+    // (undocumented)
+    readonly Separator: typeof MenuSeparator;
+    readonly Slot: typeof MenuItem;
+    // (undocumented)
+    readonly Submenu: typeof MenuSubmenu;
+}
+
+// @public
+export interface DocxEditorContextMenuProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    className?: string;
+    disabled?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    preset?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
+export function DocxEditorDocumentOutline(props: DocxEditorDocumentOutlineProps): ReactElement | null;
+
+// @public
+export interface DocxEditorDocumentOutlineProps {
+    leftOffset?: number;
+    onClose?: () => void;
+    topOffset?: number;
+}
+
+// @public
+export function DocxEditorEquation(): react.JSX.Element | null;
+
+// @public
+export function DocxEditorExportDialog(input: DocxEditorExportDialogProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorExportDialogProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    error: string;
+    format: ChromeExportFormat;
+    onClose(): void;
+    open: boolean;
+    pending: boolean;
+    style?: CSSProperties;
+}
+
+// @public
+export function DocxEditorFontNotice(input: DocxEditorFontNoticeProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorFontNoticeProps {
+    className?: string;
+    style?: CSSProperties;
+    t?: TFunction;
+}
+
+// @public
+export function DocxEditorHeaderFooterChrome(input: DocxEditorHeaderFooterChromeProps): ReactElement | null;
+
+// @public
+export interface DocxEditorHeaderFooterChromeProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export function DocxEditorHorizontalRuler(props: DocxEditorRulerProps): ReactElement | null;
+
+// @public (undocumented)
+export const DocxEditorHyperLink: DocxEditorHyperLinkNamespace;
+
+// @public
+export interface DocxEditorHyperLinkNamespace {
+    // (undocumented)
+    (props: HyperLinkProps): ReturnType<typeof HyperLinkRoot>;
+    // (undocumented)
+    readonly Apply: typeof HyperLinkApply;
+    // (undocumented)
+    readonly Cancel: typeof HyperLinkCancel;
+    // (undocumented)
+    readonly Copy: typeof HyperLinkCopy;
+    // (undocumented)
+    readonly Edit: typeof HyperLinkEdit;
+    // (undocumented)
+    readonly Error: typeof HyperLinkError;
+    // (undocumented)
+    readonly Fields: typeof HyperLinkFields;
+    // (undocumented)
+    readonly Unlink: typeof HyperLinkUnlink;
+    // (undocumented)
+    readonly Url: typeof HyperLinkUrl;
+}
+
+// @public
+export function DocxEditorImageAltTextPopup(input: DocxEditorImageAltTextPopupProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorImageAltTextPopupProps {
+    // (undocumented)
+    anchorRef?: RefObject<HTMLElement | null>;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    isEnabled: boolean;
+    // (undocumented)
+    onApply(): void;
+    // (undocumented)
+    onClose(): void;
+    // (undocumented)
+    onValueChange(value: string): void;
+    // (undocumented)
+    value: string;
+}
+
+// @public
+export function DocxEditorImagePropertiesDialog(input: DocxEditorImagePropertiesDialogProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorImagePropertiesDialogProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    onClose: () => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    triggerRef?: RefObject<HTMLElement | null>;
+}
+
+// @public
+export function DocxEditorInvalidTextFormFieldDialog(props: DocxEditorInvalidTextFormFieldDialogProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorInvalidTextFormFieldDialogProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    session: InvalidTextFormFieldSession;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export const DocxEditorLoading: DocxEditorLoadingComponent;
+
+// @public
+export interface DocxEditorLoadingComponent {
+    (props: DocxEditorLoadingProps): ReactNode;
+    readonly Spinner: typeof DocxEditorLoadingSpinner;
+}
+
+// @public
+export interface DocxEditorLoadingProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    overlay?: boolean;
+    style?: CSSProperties;
+    when?: boolean;
+}
+
+// @public
+export function DocxEditorLoadingSpinner(input: DocxEditorLoadingSpinnerProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorLoadingSpinnerProps {
+    className?: string;
+}
+
+// @public
+export const DocxEditorMenu: DocxEditorMenuNamespace;
+
+// @public
+export interface DocxEditorMenuNamespace {
+    // (undocumented)
+    (props: DocxEditorMenuProps): ReactNode;
+    readonly Entry: typeof MenuEntry;
+    // (undocumented)
+    readonly ExportMarkdown: typeof MenuExportMarkdown;
+    // (undocumented)
+    readonly ExportPdf: typeof MenuExportPdf;
+    // (undocumented)
+    readonly File: MenuPartComponent;
+    // (undocumented)
+    readonly Format: MenuPartComponent;
+    readonly Group: typeof MenuGroup;
+    // (undocumented)
+    readonly Help: MenuPartComponent;
+    readonly ImageInsert: typeof MenuImageInsert;
+    // (undocumented)
+    readonly Insert: MenuPartComponent;
+    readonly Item: typeof MenuItem;
+    readonly Menu: typeof Menu;
+    // (undocumented)
+    readonly Open: typeof MenuOpen;
+    // (undocumented)
+    readonly PageSetup: typeof MenuPageSetup;
+    // (undocumented)
+    readonly Print: typeof MenuPrint;
+    readonly ReportIssue: typeof MenuReportIssue;
+    // (undocumented)
+    readonly Review: typeof MenuReview;
+    readonly Reviewers: typeof MenuReviewers;
+    readonly Row: typeof MenuRow;
+    // (undocumented)
+    readonly Save: typeof MenuSave;
+    // (undocumented)
+    readonly Separator: typeof MenuSeparator;
+    // (undocumented)
+    readonly Submenu: typeof MenuSubmenu;
+    readonly TableGrid: typeof MenuTableGrid;
+}
+
+// @public
+export interface DocxEditorMenuProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    className?: string;
+    exporters?: ChromeExportHandlers;
+    fileName?: string;
+    onOpen?: () => void;
+    onOpenFile?: (file: File) => void;
+    onPageSetup?: () => void;
+    onReportIssue?: () => void;
+    onSave?: () => void;
+    overflow?: boolean;
+    preset?: boolean;
+    reportIssue?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
+export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
+    // (undocumented)
+    readonly AuthorStyle: typeof DocxEditorAuthorStyle;
+    // (undocumented)
+    readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
+    // (undocumented)
+    readonly Content: typeof DocxEditorContent;
+    // (undocumented)
+    readonly ContentControl: typeof DocxEditorContentControl;
+    readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
+    readonly ContextMenu: typeof ContextMenu;
+    readonly DocumentOutline: typeof DocxEditorDocumentOutline;
+    readonly Equation: typeof DocxEditorEquation;
+    readonly ExportDialog: typeof DocxEditorExportDialog;
+    readonly FontNotice: typeof DocxEditorFontNotice;
+    readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
+    readonly HorizontalRuler: typeof DocxEditorHorizontalRuler;
+    readonly HyperLink: typeof DocxEditorHyperLink;
+    // (undocumented)
+    readonly ImageAltTextPopup: typeof DocxEditorImageAltTextPopup;
+    // (undocumented)
+    readonly ImagePropertiesDialog: typeof DocxEditorImagePropertiesDialog;
+    // (undocumented)
+    readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
+    readonly Loading: typeof DocxEditorLoading;
+    readonly Menu: typeof DocxEditorMenu;
+    readonly Navigation: typeof Navigation;
+    // (undocumented)
+    readonly NotePreview: typeof DocxEditorNotePreview;
+    // (undocumented)
+    readonly NotePropertiesDialog: typeof DocxEditorNotePropertiesDialog;
+    // (undocumented)
+    readonly NotesChrome: typeof DocxEditorNotesChrome;
+    // (undocumented)
+    readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
+    readonly PageNumber: typeof DocxEditorPageNumber;
+    readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+    // (undocumented)
+    readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
+    readonly PrintDialog: typeof DocxEditorPrintDialog;
+    // (undocumented)
+    readonly RevisionMarkup: typeof DocxEditorRevisionMarkup;
+    // (undocumented)
+    readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
+    // (undocumented)
+    readonly Root: typeof DocxEditorRoot;
+    readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
+    // (undocumented)
+    readonly Toolbar: typeof DocxEditorToolbar;
+    readonly VerticalRuler: typeof DocxEditorVerticalRuler;
+    // (undocumented)
+    readonly Viewport: typeof DocxEditorViewport;
+}
+
+// @public
+export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactElement;
+
+// @public
+export interface DocxEditorNavigationNamespace {
+    // (undocumented)
+    (props: DocxEditorNavigationProps): ReactElement;
+    // (undocumented)
+    readonly Close: typeof NavigationClose;
+    // (undocumented)
+    readonly Find: typeof NavigationFind;
+    // (undocumented)
+    readonly Header: typeof NavigationHeader;
+    // (undocumented)
+    readonly Headings: typeof NavigationHeadings;
+    // (undocumented)
+    readonly Tab: typeof NavigationTab;
+    // (undocumented)
+    readonly Tabs: typeof NavigationTabs;
+    // (undocumented)
+    readonly Title: typeof NavigationTitle;
+    // (undocumented)
+    readonly Toggle: typeof NavigationToggle;
+}
+
+// @public
+export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    findShortcut?: boolean;
+    searchHighlight?: DocumentSearchHighlight;
+    // (undocumented)
+    style?: CSSProperties;
+    t?: (key: string, params?: Record<string, string | number>) => string;
+    toggle?: boolean | NavigationPartProps;
+}
+
+// @public
+export function DocxEditorNotePreview(input: DocxEditorNotePreviewProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorNotePreviewProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    scopeId: string;
+    // (undocumented)
+    text: string;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public
+export function DocxEditorNotePropertiesDialog(props: DocxEditorNotePropertiesDialogProps): ReactElement;
+
+// @public
+export interface DocxEditorNotePropertiesDialogProps {
+    // (undocumented)
+    readonly onApply: (command: EditorCommand) => void;
+    // (undocumented)
+    readonly onClose: () => void;
+}
+
+// @public (undocumented)
+export function DocxEditorNotesChrome(input: DocxEditorNotesChromeProps): ReactElement | null;
+
+// @public
+export interface DocxEditorNotesChromeProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export function DocxEditorNotesContextMenu(input: DocxEditorNotesContextMenuProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorNotesContextMenuProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    convertAllDisabledReason?: string;
+    // (undocumented)
+    convertAllEnabled: boolean;
+    // (undocumented)
+    convertDisabledReason?: string;
+    // (undocumented)
+    convertEnabled: boolean;
+    // (undocumented)
+    deleteDisabledReason?: string;
+    // (undocumented)
+    deleteEnabled: boolean;
+    // (undocumented)
+    noteId: number;
+    // (undocumented)
+    noteKind: 'footnote' | 'endnote';
+    // (undocumented)
+    onClose(): void;
+    // (undocumented)
+    onConvert(): void;
+    // (undocumented)
+    onConvertAll(): void;
+    // (undocumented)
+    onDelete(): void;
+    // (undocumented)
+    onOpenProperties(): void;
+    // (undocumented)
+    scopeId: string;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public
+export function DocxEditorPageNumber(input: DocxEditorPageNumberProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorPageNumberProps {
+    className?: string;
+    style?: CSSProperties;
+}
+
+// @public
+export const DocxEditorPageSetupDialog: typeof PageSetupDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope";
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Title: (props: DialogPartProps & {
+        name?: "marginBottom" | "marginLeft" | "marginRight" | "marginTop" | "orientation" | "pageSize" | "scope" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
+export const DocxEditorParagraphDialog: typeof ParagraphDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl";
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Title: (props: DialogPartProps & {
+        name?: "alignment" | "contextualSpacing" | "direction" | "indentLeft" | "indentRight" | "keepLines" | "keepNext" | "lineRule" | "lineValue" | "pageBreakBefore" | "spaceAfter" | "spaceBefore" | "special" | "specialBy" | "tabStops" | "widowControl" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorParagraphDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
+export type DocxEditorPopup<Props extends object> = false | ((props: Props) => DocxEditorChildren | null);
+
+// @public
+export interface DocxEditorPopups {
+    // (undocumented)
+    contentControl?: DocxEditorPopup<ContentControlProps>;
+    contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+    contentControlPicture?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+    // (undocumented)
+    contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+    // (undocumented)
+    contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
+    // (undocumented)
+    equation?: DocxEditorPopup<Record<string, never>>;
+    export?: DocxEditorPopup<DocxEditorExportDialogProps>;
+    // (undocumented)
+    hyperlink?: DocxEditorPopup<HyperLinkProps>;
+    // (undocumented)
+    imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
+    // (undocumented)
+    imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
+    // (undocumented)
+    invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
+    // (undocumented)
+    notePreview?: DocxEditorPopup<DocxEditorNotePreviewProps>;
+    // (undocumented)
+    noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
+    // (undocumented)
+    notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
+    // (undocumented)
+    pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
+    // (undocumented)
+    paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+    print?: DocxEditorPopup<DocxEditorPrintDialogProps>;
+    // (undocumented)
+    revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
+    // (undocumented)
+    textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+}
+
+// @public
+export function DocxEditorPrintDialog(input: DocxEditorPrintDialogProps): react.JSX.Element | null;
+
+// @public
+export interface DocxEditorPrintDialogProps {
+    children?: DocxEditorChildren;
+    className?: string;
+    error: string;
+    onClose(): void;
+    open: boolean;
+    pending: boolean;
+    style?: CSSProperties;
+    url: string;
 }
 
 // @public
 export interface DocxEditorProps {
-    agentPanel?: AgentPanelOptions;
+    // (undocumented)
     author?: string;
+    children?: DocxEditorChildren;
+    chrome?: boolean;
+    // (undocumented)
     className?: string;
-    colorMode?: 'light' | 'dark' | 'system';
-    comments?: Comment_2[];
-    commentsSidebarOpen?: boolean;
-    disableFindReplaceShortcuts?: boolean;
-    document?: Document_2 | null;
-    documentBuffer?: DocxInput | null;
-    documentName?: string;
-    documentNameEditable?: boolean;
-    externalContent?: boolean;
-    externalPlugins?: prosemirror_state.Plugin[];
-    fontFamilies?: ReadonlyArray<string | FontOption>;
-    fonts?: ReadonlyArray<FontDefinition>;
+    readonly colorMode?: 'light' | 'dark' | 'system';
+    contextMenu?: boolean | DocxEditorContextMenuProps;
+    document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    hyperlinkPopup?: boolean;
     i18n?: Translations;
-    initialZoom?: number;
-    loadingIndicator?: ReactNode;
-    marginGuideColor?: string;
+    locale?: string;
+    menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
-    onChange?: (document: Document_2) => void;
-    onCommentAdd?: (comment: Comment_2) => void;
-    onCommentDelete?: (comment: Comment_2) => void;
-    onCommentReply?: (reply: Comment_2, parent: Comment_2) => void;
-    onCommentResolve?: (comment: Comment_2) => void;
-    onCommentsChange?: (comments: Comment_2[]) => void;
-    onCommentsSidebarOpenChange?: (open: boolean) => void;
-    onCopy?: () => void;
-    onCut?: () => void;
-    onDocumentNameChange?: (name: string) => void;
-    onEditorViewReady?: (view: prosemirror_view.EditorView) => void;
-    onError?: (error: Error) => void;
-    onFontsLoaded?: () => void;
-    onModeChange?: (mode: EditorMode) => void;
-    onOpen?: (file: File) => void | Promise<void>;
-    onPaste?: () => void;
-    onPrint?: () => void;
-    onRenderedDomContextReady?: (context: RenderedDomContext) => void;
-    onSave?: (buffer: ArrayBuffer) => void;
-    onSelectionChange?: (state: SelectionState | null) => void;
-    placeholder?: ReactNode;
-    pluginOverlays?: ReactNode;
-    pluginRenderedDomContext?: RenderedDomContext | null;
-    pluginSidebarItems?: ReactSidebarItem[];
-    printOptions?: PrintOptions;
-    readOnly?: boolean;
-    renderLogo?: () => ReactNode;
-    renderTitleBarRight?: () => ReactNode;
-    rulerUnit?: 'inch' | 'cm';
-    showFileOpen?: boolean;
-    showHelpMenu?: boolean;
-    showMarginGuides?: boolean;
-    showOutline?: boolean;
-    showOutlineButton?: boolean;
-    showRuler?: boolean;
-    showToolbar?: boolean;
-    showZoomControl?: boolean;
-    style?: CSSProperties;
-    theme?: Theme | null;
-    toolbarExtra?: ReactNode;
-    watermarkPresets?: readonly string[];
+    modules?: readonly EditorModule[];
+    navigation?: boolean | DocxEditorNavigationProps;
+    onChange?: (change: DocumentChange) => void;
+    onFontError?: (error: EditorFontError) => void;
+    onOpen?: () => void;
+    onReady?: (editor: Editor) => void;
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+    onSave?: () => void;
+    onTitleChange?: (title: string) => void;
+    popups?: DocxEditorPopups;
+    readonly renderTitleBarLeft?: () => DocxEditorChildren;
+    // (undocumented)
+    readonly renderTitleBarRight?: () => DocxEditorChildren;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
+    rulers?: boolean;
+    t?: (key: string, params?: Record<string, string | number>) => string;
+    title?: string;
+    zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
 }
 
 // @public
 export interface DocxEditorRef {
-    addComment: (options: {
-        paraId: string;
-        text: string;
-        author: string;
-        search?: string;
-    }) => number | null;
-    applyFormatting: (options: {
-        paraId: string;
-        search?: string;
-        marks: {
-            bold?: boolean;
-            italic?: boolean;
-            underline?: boolean | {
-                style?: string;
-            };
-            strike?: boolean;
-            color?: {
-                rgb?: string;
-                themeColor?: string;
-            };
-            highlight?: string;
-            fontSize?: number;
-            fontFamily?: {
-                ascii?: string;
-                hAnsi?: string;
-            };
-        };
-    }) => boolean;
-    findInDocument: (query: string, options?: {
-        caseSensitive?: boolean;
-        limit?: number;
-    }) => Array<{
-        paraId: string;
-        match: string;
-        before: string;
-        after: string;
-    }>;
-    focus: () => void;
-    getAgent: () => DocumentAgent | null;
-    getComments: () => Comment_2[];
-    getContentControls: (filter?: ContentControlFilter) => PMContentControl[];
-    getCurrentPage: () => number;
-    getDocument: () => Document_2 | null;
-    getEditorRef: () => PagedEditorRef | null;
-    getPageContent: (pageNumber: number) => {
-        pageNumber: number;
-        text: string;
-        paragraphs: Array<{
-            paraId: string;
-            text: string;
-            styleId?: string;
-        }>;
-    } | null;
-    getSelectionInfo: () => {
-        paraId: string | null;
-        selectedText: string;
-        paragraphText: string;
-        before: string;
-        after: string;
-    } | null;
-    getTotalPages: () => number;
-    getZoom: () => number;
-    highlightRange: (from: number, to: number) => void;
-    insertBreak: (options: {
-        paraId: string;
-        type: 'page' | 'sectionNextPage' | 'sectionContinuous';
-    }) => boolean;
-    loadDocument: (doc: Document_2) => void;
-    loadDocumentBuffer: (buffer: DocxInput) => Promise<void>;
-    onContentChange: (listener: (document: Document_2) => void) => () => void;
-    onSelectionChange: (listener: (selection: SelectionState | null) => void) => () => void;
-    openPrintPreview: () => void;
-    print: () => void;
-    proposeChange: (options: {
-        paraId: string;
-        search: string;
-        replaceWith: string;
-        author: string;
-    }) => boolean;
-    removeContentControl: (filter: ContentControlFilter, options?: {
-        force?: boolean;
-        keepContent?: boolean;
-    }) => boolean;
-    replyToComment: (commentId: number, text: string, author: string) => number | null;
-    resolveComment: (commentId: number) => void;
-    save: (options?: {
-        selective?: boolean;
-    }) => Promise<ArrayBuffer | null>;
-    scrollToChangeId: (revisionId: number) => boolean;
-    scrollToCommentId: (commentId: number) => boolean;
-    scrollToContentControl: (filter: ContentControlFilter) => boolean;
-    scrollToPage: (pageNumber: number) => void;
-    scrollToParaId: (paraId: string, options?: ScrollToParaIdOptions) => boolean;
-    scrollToPosition: (pmPos: number) => void;
-    setContentControlContent: (filter: ContentControlFilter, text: string, options?: {
-        force?: boolean;
-    }) => boolean;
-    setContentControlValue: (filter: ContentControlFilter, value: ContentControlValue, options?: {
-        force?: boolean;
-    }) => boolean;
-    setParagraphStyle: (options: {
-        paraId: string;
-        styleId: string;
-    }) => boolean;
-    setZoom: (zoom: number) => void;
-    updateTableOfContents: () => boolean;
+    exec(command: EditorCommand, options?: EditorExecOptions): ExecResult;
+    // (undocumented)
+    focus(): void;
+    getDocumentHandle(): DocumentHandle | null;
+    getEditor(): Editor | null;
+    load(document: DocumentSource): void;
+    save(): Promise<ArrayBuffer | null>;
+    snapshot(options?: {
+        scope?: EditorScope;
+    }): EditorSnapshot;
 }
 
 // @public
-export type EditorMode = 'editing' | 'suggesting' | 'viewing';
+export function DocxEditorRevisionMarkup(props: DocxEditorRevisionMarkupProps): null;
+
+// @public
+export const DocxEditorRevisionMarkupDialog: typeof RevisionMarkupDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: keyof ResolvedRevisionMarkup;
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Reset: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Title: (props: DialogPartProps & {
+        name?: keyof ResolvedRevisionMarkup | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorRevisionMarkupDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: RevisionMarkupDialogSession | null;
+}
+
+// @public
+export interface DocxEditorRevisionMarkupProps extends RevisionMarkupOptions {
+    // (undocumented)
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+}
+
+// @public
+export function DocxEditorRoot(props: DocxEditorRootProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorRootListeners {
+    // (undocumented)
+    onChange?: (change: DocumentChange) => void;
+    // (undocumented)
+    onFontError?: (error: EditorFontError) => void;
+    // (undocumented)
+    onReady?: (editor: Editor) => void;
+    // (undocumented)
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+}
+
+// @public
+export interface DocxEditorRootProps {
+    author?: string;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    document?: DocumentSource;
+    fieldResults?: FieldResultsMode;
+    fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    imageDecodePort?: ImageDecodePort;
+    locale?: string;
+    mode?: 'edit' | 'view' | 'suggesting';
+    modules?: readonly EditorModule[];
+    onChange?: (change: DocumentChange) => void;
+    onFontError?: (error: EditorFontError) => void;
+    onReady?: (editor: Editor) => void;
+    onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
+    popups?: DocxEditorPopups;
+    reviewDisplayMode?: ReviewDisplayMode;
+    revisionMarkup?: RevisionMarkupOptions;
+    tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
+    translate?: (key: string, params?: Record<string, string | number>) => string;
+    zoom?: number;
+    zoomMode?: ZoomMode | 'auto';
+}
+
+// @public
+export interface DocxEditorRulerProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+    unit?: 'inch' | 'cm';
+}
+
+// @public @deprecated
+export function DocxEditorShell(input: {
+    className: string | undefined;
+    containerRef: React.Ref<HTMLDivElement>;
+    containerStyle: CSSProperties;
+    dialogs: ReactNode;
+    editorContainerStyle: CSSProperties;
+    editorContentRef: React.Ref<HTMLDivElement>;
+    editorScrollLeft: number;
+    expandedSidebarItem?: string | null;
+    fileInputs: ReactNode;
+    horizontalRulerProps: HorizontalRulerProps_2;
+    i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
+    isDark?: boolean;
+    mainContentStyle: CSSProperties;
+    minLayoutWidth: number;
+    onEditorBgMouseDown: (e: React.MouseEvent) => void;
+    onEditorContextMenu: (e: React.MouseEvent) => void;
+    onEditorError: (error: Error) => void;
+    onScrollContainerMouseDown: (e: React.MouseEvent) => void;
+    onToggleOutline: () => void;
+    outlineProps: OutlineProps;
+    overlays: ReactNode;
+    pagedArea: ReactNode;
+    readOnlyProp: boolean | undefined;
+    scrollContainerRef: React.Ref<HTMLDivElement>;
+    scrollPageInfo: ScrollPageInfo;
+    showOutline: boolean;
+    showOutlineButton: boolean;
+    showRuler: boolean;
+    sidebarOpen: boolean;
+    toolbar: ReactNode;
+    toolbarHeight: number;
+    trackedChanges?: readonly TrackedChangeSummary[];
+    verticalRulerProps: VerticalRulerProps$1;
+}): react.JSX.Element;
+
+// @public
+export const DocxEditorTextFormFieldDialog: typeof TextFormFieldDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: keyof TextFormFieldDialogFields;
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Title: (props: DialogPartProps & {
+        name?: keyof TextFormFieldDialogFields | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | react.ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorTextFormFieldDialogProps extends DialogCustomizationProps {
+    // (undocumented)
+    session: TextFormFieldDialogSession | null;
+}
+
+// @public
+export const DocxEditorToolbar: DocxEditorToolbarNamespace;
+
+// @public
+export interface DocxEditorToolbarGroupProps {
+    after?: ChromeGroupId | (string & {});
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    id: ChromeGroupId | (string & {});
+    label?: string;
+    labelKey?: string;
+    overflowContent?: () => DocxEditorChildren;
+    pinned?: boolean;
+    priority?: number;
+}
+
+// @public
+export interface DocxEditorToolbarNamespace {
+    // (undocumented)
+    (props: DocxEditorToolbarProps): ReactNode;
+    readonly Action: typeof ToolbarAction;
+    readonly AddComment: typeof ToolbarAddComment;
+    // (undocumented)
+    readonly AlignCenter: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignJustify: ToolbarPartComponent;
+    // (undocumented)
+    readonly AlignLeft: ToolbarPartComponent;
+    // (undocumented)
+    readonly Alignment: ToolbarAlignmentComponent;
+    // (undocumented)
+    readonly AlignRight: ToolbarPartComponent;
+    // (undocumented)
+    readonly Bold: ToolbarPartComponent;
+    // (undocumented)
+    readonly BulletList: ToolbarPartComponent;
+    // (undocumented)
+    readonly Button: typeof ToolbarButton$1;
+    // (undocumented)
+    readonly ClearFormatting: ToolbarPartComponent;
+    // (undocumented)
+    readonly Comments: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlFormFill: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlInspector: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlRemove: ToolbarPartComponent;
+    // (undocumented)
+    readonly ContentControlShowAll: ToolbarPartComponent;
+    // (undocumented)
+    readonly EditingMode: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly FontColor: ToolbarColorSplitComponent;
+    // (undocumented)
+    readonly FontFamily: typeof FontFamily;
+    // (undocumented)
+    readonly FontSize: ToolbarSlotPartComponent;
+    readonly Group: typeof ToolbarHostGroup;
+    // (undocumented)
+    readonly Highlight: ToolbarColorSplitComponent;
+    // (undocumented)
+    readonly ImageAltText: ImageAltTextPartComponent;
+    // (undocumented)
+    readonly ImageInsert: ToolbarPartComponent;
+    // (undocumented)
+    readonly ImageProperties: ToolbarPartComponent;
+    // (undocumented)
+    readonly ImageWrap: ImageWrapPartComponent;
+    // (undocumented)
+    readonly Indent: ToolbarPartComponent;
+    // (undocumented)
+    readonly Italic: ToolbarPartComponent;
+    // (undocumented)
+    readonly LeftToRight: ToolbarPartComponent;
+    // (undocumented)
+    readonly LineSpacing: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Link: ToolbarPartComponent;
+    // (undocumented)
+    readonly NumberedList: ToolbarPartComponent;
+    // (undocumented)
+    readonly Outdent: ToolbarPartComponent;
+    // (undocumented)
+    readonly Redo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Reviewers: typeof ToolbarReviewers;
+    // (undocumented)
+    readonly RightToLeft: ToolbarPartComponent;
+    // (undocumented)
+    readonly Save: ToolbarSlotPartComponent;
+    // (undocumented)
+    readonly Separator: typeof ToolbarSeparator;
+    readonly Slot: typeof ToolbarSlot;
+    // (undocumented)
+    readonly Strike: ToolbarPartComponent;
+    // (undocumented)
+    readonly StylePicker: typeof ParagraphStyle;
+    // (undocumented)
+    readonly Subscript: ToolbarPartComponent;
+    // (undocumented)
+    readonly Superscript: ToolbarPartComponent;
+    readonly TableBorderColor: TableBorderColorNamespace;
+    readonly TableBorderStyle: TableBorderStyleNamespace;
+    readonly TableBorderTarget: TableBorderTargetNamespace;
+    readonly TableBorderWidth: TableBorderWidthNamespace;
+    readonly TableCellFill: TableCellFillNamespace;
+    // (undocumented)
+    readonly TableInsert: ToolbarPartComponent;
+    // (undocumented)
+    readonly Underline: ToolbarPartComponent;
+    // (undocumented)
+    readonly Undo: ToolbarPartComponent;
+    // (undocumented)
+    readonly Zoom: ToolbarSlotPartComponent;
+}
+
+// @public
+export interface DocxEditorToolbarProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    className?: string;
+    onSave?: () => void;
+    overflow?: boolean;
+    preset?: boolean;
+    t?: ToolbarTranslate;
+}
+
+// @public
+export interface DocxEditorToolbarSlotProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    hidden?: boolean;
+    overflowContent?: () => DocxEditorChildren;
+    slotId: ChromeSlotId;
+}
+
+// @public
+export function DocxEditorVerticalRuler(props: DocxEditorRulerProps): ReactElement | null;
+
+// @public
+export function DocxEditorViewport(input: DocxEditorViewportProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorViewportProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export type DocxFontOrigin = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>);
+
+// @public
+export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
+
+// @public
+export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
+
+// @public
+export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
+
+export { Editor }
+
+// @public
+export interface EditorCaret {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+export { EditorCommand }
+
+// @public
+export interface EditorCommandState {
+    readonly disabledReason: string | null;
+    readonly execute: EditorCommandExecute;
+    readonly isActive: boolean;
+    readonly isEnabled: boolean;
+    readonly value: string | null;
+}
+
+export { EditorFontError }
+
+export { EditorFontErrorCode }
 
 // @public (undocumented)
-export function LocaleProvider(input: LocaleProviderProps): React_2.JSX.Element;
+export type EditorMode = 'edit' | 'view' | 'suggesting';
+
+export { EditorQuery }
+
+export { EditorScope }
+
+export { EditorSnapshot }
+
+// @internal
+export function editorStateActiveSubscriptionCount(): number;
+
+// @public
+export interface EditorValueCommandState<T extends string | number> {
+    // (undocumented)
+    readonly disabledReason: string | null;
+    // (undocumented)
+    readonly execute: (value: T, options?: EditorExecOptions) => ExecResult;
+    // (undocumented)
+    readonly isEnabled: boolean;
+    // (undocumented)
+    readonly options: readonly T[];
+    readonly value: T | null;
+}
+
+export { FontConfiguration }
+
+export { FontConfigurationBase }
+
+export { FontConfigurationFragment }
+
+export { FontFaceRequest }
+
+// @public
+export interface FontFamilyItemProps extends FontFamilyPartProps {
+    value: string;
+}
+
+// @public
+export interface FontFamilyNamespace {
+    // (undocumented)
+    (props: FontFamilyProps): ReactNode;
+    // (undocumented)
+    readonly Content: typeof FontFamilyContent;
+    // (undocumented)
+    readonly docxSlot: 'font.family';
+    // (undocumented)
+    readonly Item: typeof FontFamilyItem;
+    // (undocumented)
+    readonly Trigger: typeof FontFamilyTrigger;
+}
+
+// @public
+export interface FontFamilyPartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface FontFamilyProps extends FontFamilyPartProps {
+    hidden?: boolean;
+}
+
+export { FontLoadFailure }
+
+export { FontLoadFailureReason }
+
+export { FontOrigin }
+
+export { FontResolutionRequest }
+
+export { FontResolver }
+
+export { FontResolverMark }
+
+// @public
+export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+
+export { FontSource }
+
+export { FontSourceSubstitution }
+
+export { FontUrlSource }
+
+export { generateRulerTicks }
+
+// @public
+export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
+
+export { HIGHLIGHT_REFRESH_MS }
+
+export { HighlightHit }
+
+export { HighlightOptions }
+
+export { HighlightRange }
+
+export { HighlightRect }
+
+export { HighlightResult }
+
+export { HighlightSource }
+
+// @public (undocumented)
+export function HorizontalRuler(input: HorizontalRulerProps): react__default.ReactElement;
+
+// @public (undocumented)
+export interface HorizontalRulerProps {
+    // (undocumented)
+    className?: string;
+    editable?: boolean;
+    indent?: RulerIndent | null;
+    indentEditable?: boolean;
+    onIndentChange?: (indent: RulerIndent) => void;
+    onIndentDragEnd?: () => void;
+    // (undocumented)
+    onLeftMarginChange?: (marginTwips: number) => void;
+    onMarginDragEnd?: () => void;
+    // (undocumented)
+    onRightMarginChange?: (marginTwips: number) => void;
+    // (undocumented)
+    onTabMarkRemove?: (positionTwips: number) => void;
+    // (undocumented)
+    pageSetup?: RulerPageSetup | null;
+    showIndentHandles?: boolean;
+    // (undocumented)
+    style?: CSSProperties;
+    // (undocumented)
+    tabMarks?: RulerTabStop[] | null;
+    // (undocumented)
+    unit?: 'inch' | 'cm';
+    // (undocumented)
+    zoom?: number;
+}
+
+// @public
+export interface HyperLinkActionProps extends HyperLinkPartProps {
+    icon?: DocxEditorChildren;
+}
+
+// @public
+export interface HyperLinkPartProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface HyperlinkPopupAnchor {
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public
+export type HyperlinkPopupMode =
+/** Not shown. */
+'closed'
+/** An existing link: its target, plus copy / edit / unlink. */
+| 'reading'
+/** Text + URL fields, for a new link or a change to an existing one. */
+| 'editing';
+
+// @public
+export interface HyperlinkPopupState {
+    readonly anchor: HyperlinkPopupAnchor | null;
+    readonly canEdit: boolean;
+    readonly copied: boolean;
+    readonly error: boolean;
+    readonly link: SurfaceHyperlink | null;
+    // (undocumented)
+    readonly mode: HyperlinkPopupMode;
+    readonly text: string;
+    readonly url: string;
+}
+
+// @public
+export interface HyperLinkProps extends HyperLinkPartProps {
+    preset?: boolean;
+}
+
+// @public
+export function ImageAltText(input: ImageAltTextProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImageAltText {
+    var // (undocumented)
+    docxSlot: "image.altText";
+}
+
+// @public (undocumented)
+export function ImageInsertProvider(input: ImageInsertProviderProps): react.JSX.Element;
+
+// @public
+export function ImageInsertTrigger(input: ImageInsertTriggerProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImageInsertTrigger {
+    var // (undocumented)
+    docxSlot: "image.insert";
+}
+
+// @public
+export function ImagePropertiesTrigger(input: ImagePropertiesTriggerProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImagePropertiesTrigger {
+    var // (undocumented)
+    docxSlot: "image.properties";
+}
+
+// @public
+export interface ImagePropertiesTriggerProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public
+export function ImageWrap(input: ImageWrapProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ImageWrap {
+    var // (undocumented)
+    docxSlot: "image.wrap";
+}
+
+export { ImageWrapTarget }
+
+// @public
+export interface IndentUpdate {
+    // (undocumented)
+    readonly firstLine?: number | null;
+    // (undocumented)
+    readonly left?: number | null;
+    // (undocumented)
+    readonly right?: number | null;
+}
+
+// @public
+export function isFieldLink(link: SurfaceHyperlink): boolean;
+
+export { isFontResolver }
+
+export { loadFonts }
+
+export { LoadFontsRequest }
+
+export { LoadFontsResult }
+
+export { LOADING_SNAPSHOT }
+
+// @public (undocumented)
+export function LocaleProvider(input: LocaleProviderProps): react.JSX.Element;
 
 // @public (undocumented)
 export interface LocaleProviderProps {
     // (undocumented)
-    children: ReactNode;
+    children: DocxEditorChildren;
     // (undocumented)
     i18n?: Translations;
 }
 
-// @public
-export function renderAsync(input: DocxInput, container: HTMLElement, options?: RenderAsyncOptions): Promise<DocxEditorHandle>;
+// @public @deprecated (undocumented)
+export function Logo(input: LogoProps): react__default.JSX.Element;
+
+export { MarkedFontResolver }
+
+export { MAX_RESOLVER_FAMILIES }
 
 // @public
-export type RenderAsyncOptions = Omit<DocxEditorProps, 'documentBuffer' | 'document'>;
+export type MaybeRefOrGetter<T> = T;
+
+// @public
+export interface MenuActionProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+}
+
+// @public @deprecated (undocumented)
+export function MenuBar(): react__default.JSX.Element;
+
+// @public
+export interface MenuGroupProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    hidden?: boolean;
+    label?: string;
+    labelKey?: string;
+}
+
+// @public
+export type MenuId = ChromeMenuId | (string & {});
+
+// @public
+export interface MenuItemBaseProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    labelKey?: string;
+    shortcutKey?: string;
+}
+
+// @public
+export interface MenuItemProps extends MenuItemBaseProps {
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
+}
+
+// @public
+export interface MenuPartComponent {
+    // (undocumented)
+    (props: Omit<MenuProps, 'id'>): ReactNode;
+    // (undocumented)
+    readonly docxMenu: ChromeMenuId;
+}
+
+// @public
+export interface MenuProps {
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: DocxEditorChildren;
+    id: MenuId;
+    label?: string;
+    labelKey?: string;
+    preset?: boolean;
+}
+
+// @public
+export interface MenuReportIssueProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    onSelect?: () => void;
+}
+
+// @public (undocumented)
+export type MenuReviewersProps = {
+    className?: string;
+    hidden?: boolean;
+};
+
+// @public
+export interface MenuRowProps {
+    'data-value'?: string;
+    active?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    icon?: DocxEditorChildren;
+    // (undocumented)
+    onSelect?: () => void;
+    rowSlot?: string;
+    selected?: true;
+    selectHandler?: () => void;
+    shortcut?: string;
+    slot?: string;
+    title?: string;
+}
+
+// @public
+export interface MenuSeparatorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface MenuSubmenuBaseProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    paths?: readonly string[] | null;
+}
+
+// @public
+export interface MenuSubmenuProps extends MenuSubmenuBaseProps {
+    label?: string;
+    labelKey?: string;
+}
+
+// @public
+export interface MenuTableGridProps {
+    // (undocumented)
+    className?: string;
+    slot?: ChromeSlotId;
+}
+
+export { NavigateToChangeOptions }
+
+// @public
+export const NAVIGATION_PANE_GAP = 16;
+
+// @public
+export const NAVIGATION_PANE_INSET = 32;
+
+// @public
+export const NAVIGATION_PANE_MIN_PAGE_ROOM = 320;
+
+// @public
+export const NAVIGATION_PANE_WIDTH = 280;
+
+// @public
+export function NavigationClose(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationFind(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationHeader(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationHeadings(input: NavigationPartProps): ReactElement;
+
+// @public
+export function navigationPaneOverlays(viewportWidth: number, reservation: number): boolean;
+
+// @public
+export function navigationPaneReservation(paneWidth?: number): number;
+
+// @public
+export interface NavigationPartProps {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export function navigationShift(input: NavigationShiftInput): number;
+
+// @public (undocumented)
+export interface NavigationShiftInput {
+    readonly docked?: boolean;
+    readonly inlineEndReservation?: number;
+    readonly inlineStartReservation?: number;
+    readonly pageWidthPx: number;
+    readonly reservation: number;
+    readonly viewportWidth: number;
+}
+
+// @public
+export function NavigationTab(input: NavigationTabProps): ReactElement;
+
+// @public
+export interface NavigationTabProps extends NavigationPartProps {
+    // (undocumented)
+    value: NavigationTabValue;
+}
+
+// @public
+export function NavigationTabs(input: NavigationPartProps): ReactElement;
+
+// @public
+export type NavigationTabValue = 'headings' | 'find';
+
+// @public
+export function NavigationTitle(input: NavigationPartProps): ReactElement;
+
+// @public
+export function NavigationToggle(input: NavigationPartProps): ReactElement;
+
+// @public (undocumented)
+export type NormalizedImagePayload = {
+    readonly bytes: Uint8Array;
+    readonly heightPoints: number;
+    readonly mime: SupportedImageMime;
+    readonly ok: true;
+    readonly widthPoints: number;
+} | {
+    readonly ok: false;
+    readonly reasonKey: string;
+};
+
+// @public
+export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload;
+
+// @public (undocumented)
+export type NotePropertiesState = Exclude<ReturnType<Editor['getNotePropertiesState']>, null>;
+
+// @internal
+export function notificationYieldsToTask(): boolean;
+
+// @public (undocumented)
+export const OUTLINE_BUTTON_LEFT_OFFSET = 12;
+
+// @public (undocumented)
+export const OUTLINE_BUTTON_RESERVED_SPACE: number;
+
+// @public (undocumented)
+export const OUTLINE_LEFT_OFFSET = 12;
+
+// @public (undocumented)
+export const OUTLINE_RESERVED_SPACE: number;
+
+// @public
+export type OutlineHeading = ReturnType<Editor['getOutline']>[number];
+
+// @public
+export interface OutlineHeadingItem {
+    readonly depth: number;
+    // (undocumented)
+    readonly heading: OutlineHeading;
+}
+
+// @public
+export function PageIndicator(input: PageIndicatorProps): react.JSX.Element;
+
+// @public (undocumented)
+export interface PageIndicatorProps {
+    // (undocumented)
+    currentPage: number;
+    // (undocumented)
+    totalPages: number;
+    // (undocumented)
+    visible: boolean;
+}
+
+// @public
+export const PageNumberTranslationContext: react.Context<((key: string) => string) | null>;
+
+export { PageSetup }
+
+// @public
+export interface PageSetupDialogFields {
+    // (undocumented)
+    marginBottom: number;
+    // (undocumented)
+    marginLeft: number;
+    // (undocumented)
+    marginRight: number;
+    // (undocumented)
+    marginTop: number;
+    // (undocumented)
+    orientation: 'portrait' | 'landscape';
+    // (undocumented)
+    pageHeight: number;
+    // (undocumented)
+    pageWidth: number;
+    // (undocumented)
+    scope: 'document' | 'section';
+}
+
+// @public
+export interface PageSetupUpdate {
+    // (undocumented)
+    readonly marginBottomTwips?: number;
+    // (undocumented)
+    readonly marginLeftTwips?: number;
+    // (undocumented)
+    readonly marginRightTwips?: number;
+    // (undocumented)
+    readonly marginTopTwips?: number;
+    // (undocumented)
+    readonly orientation?: 'portrait' | 'landscape';
+    // (undocumented)
+    readonly pageHeightTwips?: number;
+    // (undocumented)
+    readonly pageWidthTwips?: number;
+    // (undocumented)
+    readonly scope?: 'document' | 'section';
+}
+
+// @public (undocumented)
+export function PaginatedDocxEditor(input: PaginatedDocxEditorProps): react.JSX.Element;
+
+// @public
+export type PaginatedDocxEditorExpose = PaginatedDocxEditorHandle;
+
+// @public
+export interface PaginatedDocxEditorHandle {
+    // (undocumented)
+    focus(): void;
+    formatting(): SurfaceFormatting | null;
+    // (undocumented)
+    navigate(command: NavigationCommand, extend?: boolean): void;
+    // (undocumented)
+    redo(): void;
+    save(): Uint8Array | null;
+    sectionProperties(): SectionProperties | null;
+    // (undocumented)
+    selectAll(): void;
+    setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
+        readonly mergeAttributes?: boolean;
+        readonly paragraphDirection?: 'ltr' | 'rtl';
+        readonly physicalAlignment?: boolean;
+    }): void;
+    // (undocumented)
+    setRunProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+    // (undocumented)
+    type(text: string): void;
+    // (undocumented)
+    undo(): void;
+}
+
+// @public (undocumented)
+export interface PaginatedDocxEditorProps {
+    // (undocumented)
+    readonly className?: string;
+    readonly documentFontFamily?: string;
+    readonly measurer?: TextMeasurer;
+    readonly onError?: (reason: string, detail?: string) => void;
+    readonly onStateChange?: (state: PaginatedSurfaceState) => void;
+    // (undocumented)
+    readonly ref?: Ref<PaginatedDocxEditorHandle>;
+    readonly scale?: number;
+    readonly source: Uint8Array;
+}
+
+// @public @deprecated (undocumented)
+export function PaginatedDocxEditorShell(input: PaginatedDocxEditorShellProps): react.JSX.Element;
+
+// @public (undocumented)
+export interface PaginatedDocxEditorShellProps {
+    // (undocumented)
+    readonly className?: string;
+    readonly colorMode?: 'light' | 'dark';
+    readonly documentFontFamily?: string;
+    readonly documentName?: string;
+    // (undocumented)
+    readonly measurer?: TextMeasurer;
+    // (undocumented)
+    readonly onError?: (reason: string, detail?: string) => void;
+    readonly onSave?: (bytes: Uint8Array) => void;
+    // (undocumented)
+    readonly onStateChange?: (state: PaginatedSurfaceState) => void;
+    readonly onZoomChange?: (zoom: number) => void;
+    readonly ref?: Ref<PaginatedDocxEditorHandle>;
+    readonly renderTitleBarLeft?: () => DocxEditorChildren;
+    // (undocumented)
+    readonly renderTitleBarRight?: () => DocxEditorChildren;
+    // (undocumented)
+    readonly scale?: number;
+    // (undocumented)
+    readonly source: Uint8Array;
+}
+
+export { ParagraphFlagState }
+
+export { ParagraphFormatRead }
+
+export { ParagraphFormatUpdate }
+
+// @public
+export interface ParagraphStyleItemProps extends ParagraphStylePartProps {
+    value: string;
+}
+
+// @public
+export interface ParagraphStyleNamespace {
+    // (undocumented)
+    (props: ParagraphStyleProps): ReactNode;
+    // (undocumented)
+    readonly Content: typeof ParagraphStyleContent;
+    // (undocumented)
+    readonly docxSlot: 'styles.style';
+    // (undocumented)
+    readonly Item: typeof ParagraphStyleItem;
+    // (undocumented)
+    readonly Trigger: typeof ParagraphStyleTrigger;
+}
+
+// @public
+export interface ParagraphStyleOption {
+    // (undocumented)
+    readonly name: string;
+    readonly preview: {
+        readonly bold: boolean;
+        readonly color: string | null;
+        readonly fontFamily: string | null;
+        readonly fontSizePt: number | null;
+        readonly italic: boolean;
+    };
+    // (undocumented)
+    readonly styleId: string;
+}
+
+// @public
+export interface ParagraphStylePartProps {
+    // (undocumented)
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface ParagraphStyleProps extends ParagraphStylePartProps {
+    hidden?: boolean;
+}
+
+export { ParagraphTabStop }
+
+// @public
+export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEditorResult;
+
+// @public
+export interface ProvideDocxEditorResult {
+    // (undocumented)
+    readonly DocxEditorRoot: typeof DocxEditorRoot;
+    // (undocumented)
+    readonly editorRef: ReturnType<typeof useDocxEditor>;
+    // (undocumented)
+    readonly rootListeners: DocxEditorRootListeners;
+    // (undocumented)
+    readonly rootProps: Omit<DocxEditorRootProps, keyof DocxEditorRootListeners>;
+}
+
+export { PX_PER_CM }
+
+export { PX_PER_INCH }
+
+export { RefreshChange }
+
+export { RefreshChangeInput }
+
+export { RefreshFailureCode }
+
+export { RefreshHighlightAnimation }
+
+export { RefreshHighlightOptions }
+
+export { RefreshLocation }
+
+export { RefreshResult }
+
+export { RefreshSubmission }
+
+export { RefreshUpdate }
+
+export { ResolvedRevisionMarkup }
+
+// @public
+export const REVIEW_MARKERS_GUTTER = 44;
+
+// @public
+export const REVIEW_PANE_GUTTER = 316;
+
+export { ReviewAuthorInfo }
+
+export { ReviewDisplayMode }
+
+// @public
+export interface ReviewGutter {
+    // (undocumented)
+    readonly inlineEnd: number;
+    // (undocumented)
+    readonly inlineStart: number;
+}
+
+// @public
+export function reviewGutter(input: ReviewGutterInput): ReviewGutter;
+
+// @public (undocumented)
+export interface ReviewGutterInput {
+    readonly docked?: boolean;
+    readonly inlineStartReservation?: number;
+    readonly open: boolean;
+    readonly pageWidthPx: number;
+    readonly scroll?: boolean;
+    readonly viewportWidth: number;
+}
+
+// @public (undocumented)
+export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
+
+// @public
+export interface ReviewRailRegistry {
+    // (undocumented)
+    readonly mounted: number;
+    // (undocumented)
+    readonly register: () => () => void;
+    // (undocumented)
+    readonly registerCommentDraft: (handler: () => void) => () => void;
+    // (undocumented)
+    readonly requestCommentDraft: () => boolean;
+}
+
+export { RevisionAuthorAssignments }
+
+export { RevisionAuthorStyle }
+
+export { RevisionChangedLinesMark }
+
+export { RevisionDeletionMark }
+
+export { RevisionMarkupChromeHandlers }
+
+export { RevisionMarkupColor }
+
+export { RevisionMarkupDialogSession }
+
+export { RevisionMarkupMark }
+
+export { RevisionMarkupNamedColor }
+
+export { RevisionMarkupOptions }
+
+export { RevisionStyles }
+
+// @public (undocumented)
+export const RULER_WIDTH = 20;
+
+export { rulerPageBox }
+
+export { RulerTick }
+
+export { RulerUnit }
+
+export { runToolbarCommand }
+
+// @public (undocumented)
+export interface ScopedChromeAnchor {
+    // (undocumented)
+    readonly ref: DocxEditorRefCallback<HTMLDivElement>;
+    // (undocumented)
+    readonly style: CSSProperties;
+}
+
+export { ScrollToAnchorOptions }
+
+export { SEARCH_DEBOUNCE_MS }
+
+export { SEARCH_HIGHLIGHT_PRIORITY }
+
+export { SEARCH_HIGHLIGHT_SET }
+
+export { SEARCH_MATCH_LIMIT }
+
+// @public
+export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
+
+// @public (undocumented)
+export interface SlotProps extends HTMLAttributes<HTMLElement> {
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    ref?: Ref<unknown>;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
+export interface TableBorderColorNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderColor';
+}
+
+// @public
+export interface TableBorderStyleNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderStyle';
+}
+
+// @public
+export interface TableBorderTargetNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderTarget';
+}
+
+// @public
+export interface TableBorderWidthNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.borderWidth';
+}
+
+// @public
+export interface TableCellFillNamespace extends TableChromePartComponent {
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Main: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: 'table.cellFill';
+}
+
+// @public
+export interface TableChromeItemProps extends TableChromePartProps {
+    value: string;
+}
+
+// @public
+export interface TableChromePartComponent extends ToolbarSlotPartComponent {
+    readonly Content: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly Item: (props: TableChromeItemProps) => DocxEditorChildren;
+    readonly Trigger: (props: TableChromePartProps) => DocxEditorChildren;
+    readonly docxSlot: TableChromeSlotId;
+}
+
+// @public
+export interface TableChromePartProps {
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export interface TextFormFieldDialogFields {
+    // (undocumented)
+    defaultText: string;
+    // (undocumented)
+    enabled: boolean;
+    // (undocumented)
+    format: string;
+    // (undocumented)
+    maxLength: number;
+    // (undocumented)
+    type: string;
+}
+
+export { TextMatch }
+
+// @public @deprecated (undocumented)
+export function TitleBar(input: TitleBarProps): react__default.JSX.Element;
+
+// @public @deprecated (undocumented)
+export function TitleBarRight(input: TitleBarRightProps): react__default.JSX.Element;
+
+// @public @deprecated (undocumented)
+export function Toolbar(explicitProps: ToolbarProps): react__default.JSX.Element;
+
+// @public
+export interface ToolbarActionProps {
+    active?: boolean;
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    disabledReason?: string;
+    icon?: DocxEditorChildren;
+    label: string;
+    // (undocumented)
+    onSelect?: () => void;
+}
+
+// @public
+export interface ToolbarAlignmentComponent {
+    // (undocumented)
+    (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarAlignmentImpl>;
+    // (undocumented)
+    readonly docxSlot: 'alignment';
+}
+
+// @public @deprecated (undocumented)
+export function ToolbarButton(input: ToolbarButtonProps_2): react__default.JSX.Element;
+
+// @public
+export interface ToolbarButtonProps {
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+    icon?: DocxEditorChildren;
+    // @deprecated (undocumented)
+    slot?: ChromeSlotId;
+    slotId?: ChromeSlotId;
+}
+
+export { ToolbarCommandState }
+
+export { toolbarCommandState }
+
+// @public (undocumented)
+export const ToolbarContext: react.Context<ToolbarContextValue>;
+
+// @public (undocumented)
+export interface ToolbarContextValue {
+    readonly onSave: (() => void) | undefined;
+    // (undocumented)
+    readonly t: ToolbarTranslate | undefined;
+}
+
+// @public @deprecated (undocumented)
+export function ToolbarGroup(input: ToolbarGroupProps): react__default.JSX.Element;
+
+// @public (undocumented)
+export const ToolbarImageProperties: typeof ImagePropertiesTrigger & {
+    docxSlot: 'image.properties';
+};
+
+// @public (undocumented)
+export interface ToolbarPartComponent {
+    // (undocumented)
+    (props: ToolbarPartProps): ReturnType<typeof ToolbarButton$1>;
+    // (undocumented)
+    readonly docxSlot: ChromeSlotId;
+}
+
+// @public
+export type ToolbarPartProps = Omit<ToolbarButtonProps, 'slot'>;
+
+// @public @deprecated
+export interface ToolbarProps {
+    canRedo?: boolean;
+    canUndo?: boolean;
+    children?: DocxEditorChildren;
+    className?: string;
+    currentFormatting?: SelectionFormatting;
+    disabled?: boolean;
+    documentFonts?: readonly FontOption[];
+    documentStyles?: readonly DocumentStyleSummary[];
+    editorRef?: RefObject<HTMLElement>;
+    enableShortcuts?: boolean;
+    fontFamilies?: ReadonlyArray<string | FontOption>;
+    imageContext?: {
+        cssFloat: string | null;
+        displayMode: string;
+        wrapType: string;
+    } | null;
+    inline?: boolean;
+    onFormat?: (action: FormattingAction) => void;
+    onImageTransform?: (action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV') => void;
+    onImageWrapType?: (wrapType: string) => void;
+    onInsertImage?: () => void;
+    onInsertPageBreak?: () => void;
+    onInsertSectionBreakContinuous?: () => void;
+    onInsertSectionBreakNextPage?: () => void;
+    onInsertShape?: (data: {
+        fillColor?: string;
+        fillType?: string;
+        height: number;
+        outlineColor?: string;
+        outlineWidth?: number;
+        shapeType: string;
+        width: number;
+    }) => void;
+    onInsertTOC?: () => void;
+    onInsertTable?: (rows: number, columns: number) => void;
+    onOpen?: () => void;
+    onOpenImageProperties?: () => void;
+    onPageSetup?: () => void;
+    onPrint?: () => void;
+    onRedo?: () => void;
+    onRefocusEditor?: () => void;
+    onSave?: () => void;
+    onTableAction?: (action: TableAction) => void;
+    onUndo?: () => void;
+    onWatermark?: () => void;
+    onZoomChange?: (zoom: number) => void;
+    showAlignmentButtons?: boolean;
+    showFontPicker?: boolean;
+    showFontSizePicker?: boolean;
+    showHelpMenu?: boolean;
+    showHighlightColorPicker?: boolean;
+    showLineSpacingPicker?: boolean;
+    showListButtons?: boolean;
+    showStylePicker?: boolean;
+    showTableInsert?: boolean;
+    showTextColorPicker?: boolean;
+    showZoomControl?: boolean;
+    style?: CSSProperties;
+    tableContext?: {
+        canSplitCell?: boolean;
+        cellBackgroundColor?: string;
+        cellBorderColor?: ColorValue;
+        columnCount?: number;
+        hasMultiCellSelection?: boolean;
+        isInTable: boolean;
+        rowCount?: number;
+    } | null;
+    theme?: Theme | null;
+    zoom?: number;
+}
+
+// @public
+export type ToolbarReviewersProps = {
+    className?: string;
+    hidden?: boolean;
+    icon?: DocxEditorChildren;
+};
+
+// @public
+export interface ToolbarSeparatorProps {
+    // (undocumented)
+    className?: string;
+}
+
+// @public
+export interface ToolbarSlotPartComponent {
+    // (undocumented)
+    (props: ToolbarSlotPartProps): ReturnType<typeof ToolbarButton$1>;
+    // (undocumented)
+    readonly docxSlot: ChromeSlotId;
+}
+
+// @public
+export interface ToolbarSlotPartProps {
+    // (undocumented)
+    className?: string;
+    hidden?: boolean;
+}
+
+// @public
+export type ToolbarTranslate = (key: string) => string;
+
+export { TranslationKey }
+
+// @public
+export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
+
+// @public
+export function useContentControl(): UseContentControlResult;
+
+// @public
+export function useContentControlInstance(): UseContentControlResult;
+
+// @public
+export interface UseContentControlResult {
+    readonly canRemove: boolean;
+    readonly canSetValue: boolean;
+    // (undocumented)
+    readonly closeInspector: () => void;
+    readonly control: ContentControlInspectorState | null;
+    readonly controls: readonly ContentControlSummary[];
+    readonly formFill: boolean;
+    readonly inspectorOpen: boolean;
+    // (undocumented)
+    readonly openInspector: () => void;
+    readonly remove: () => ExecResult;
+    readonly removeDisabledReason: string | null;
+    // (undocumented)
+    readonly setFormFill: (on: boolean) => void;
+    // (undocumented)
+    readonly setShowAll: (show: boolean) => void;
+    readonly setValue: (value: string) => ExecResult;
+    readonly setValueDisabledReason: string | null;
+    readonly showAll: boolean;
+    // (undocumented)
+    readonly toggleFormFill: () => void;
+    // (undocumented)
+    readonly toggleInspector: () => void;
+    // (undocumented)
+    readonly toggleShowAll: () => void;
+}
+
+// @public
+export function useContentControlWidget(): UseContentControlWidgetResult;
+
+// @public
+export interface UseContentControlWidgetResult {
+    readonly accept: string;
+    apply(value?: string): boolean;
+    // (undocumented)
+    applyDateText(): boolean;
+    // (undocumented)
+    readonly calendar: CalendarMonth;
+    // (undocumented)
+    cancel(): void;
+    readonly dateText: string;
+    focusDay(iso: string): void;
+    readonly focusIso: string | null;
+    readonly isEnabled: boolean;
+    // (undocumented)
+    readonly items: readonly ContentControlWidgetEntry[];
+    // (undocumented)
+    readonly kind: ContentControlWidgetSession['kind'];
+    readonly listId: string;
+    readonly listNavigation: ContentControlListNavigation;
+    // (undocumented)
+    nextMonth(): void;
+    // (undocumented)
+    previousMonth(): void;
+    readonly refused: boolean;
+    replaceImage(source: Blob | Uint8Array): Promise<boolean>;
+    selectDay(iso: string): boolean;
+    selectToday(): boolean;
+    // (undocumented)
+    readonly session: ContentControlWidgetSession;
+    // (undocumented)
+    setDateText(text: string): void;
+    // (undocumented)
+    setValue(value: string): void;
+    showMonth(year: number, month: number): void;
+    // (undocumented)
+    readonly value: string;
+}
+
+// @public
+export function useContextMenuTarget(): HTMLElement | null;
+
+// @public
+export interface UseDialogReturn<Fields extends object> {
+    // (undocumented)
+    apply(): void;
+    // (undocumented)
+    cancel(): void;
+    // (undocumented)
+    readonly errors: Readonly<Partial<Record<keyof Fields | 'form', string>>>;
+    // (undocumented)
+    readonly isEnabled: boolean;
+    // (undocumented)
+    setValue<K extends keyof Fields>(name: K, value: Fields[K]): void;
+    // (undocumented)
+    readonly values: Fields;
+}
+
+// @public
+export function useDocumentOutline(): UseDocumentOutlineResult;
+
+// @public
+export interface UseDocumentOutlineResult {
+    readonly goTo: (blockId: string) => void;
+    readonly headings: readonly OutlineHeading[];
+    // (undocumented)
+    readonly isEmpty: boolean;
+    readonly items: readonly OutlineHeadingItem[];
+    readonly selectedBlockId: string | null;
+}
+
+// @public
+export function useDocumentSearch(options?: UseDocumentSearchOptions): UseDocumentSearchResult;
+
+// @public
+export interface UseDocumentSearchOptions {
+    readonly highlight?: DocumentSearchHighlight;
+}
+
+// @public
+export interface UseDocumentSearchResult {
+    readonly activeIndex: number;
+    readonly activeMatch: TextMatch | null;
+    readonly clear: () => void;
+    readonly find: (query: string, options?: DocumentSearchFindOptions) => readonly TextMatch[];
+    readonly goTo: (index: number) => boolean;
+    readonly isPending: boolean;
+    // (undocumented)
+    readonly matchCase: boolean;
+    readonly matches: readonly TextMatch[];
+    readonly next: () => boolean;
+    // (undocumented)
+    readonly previous: () => boolean;
+    readonly query: string;
+    // (undocumented)
+    readonly setMatchCase: (value: boolean) => void;
+    readonly setQuery: (query: string) => void;
+    // (undocumented)
+    readonly setWholeWord: (value: boolean) => void;
+    readonly truncated: boolean;
+    // (undocumented)
+    readonly wholeWord: boolean;
+}
+
+// @public
+export function useDocxEditor(): DocxEditorInstance | null;
+
+// @public
+export function useDocxSource(source: DocxSource | null | undefined, options?: UseDocxSourceOptions): UseDocxSourceResult;
+
+// @public
+export interface UseDocxSourceOptions {
+    fetchOptions?: RequestInit;
+    // (undocumented)
+    fonts?: DocxFontsSource;
+}
+
+// @public
+export interface UseDocxSourceResult {
+    readonly document: Uint8Array | undefined;
+    readonly error: Error | null;
+    readonly fonts: FontConfiguration | FontResolver | undefined;
+    readonly isLoading: boolean;
+}
+
+// @public
+export function useEditorCaret(): EditorCaret | null;
+
+// @public
+export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCommandState;
+
+// @public
+export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
+
+// @public
+export function useEditorSnapshot(editor: Editor | null): number;
+
+// @public
+export function useEditorState<T>(selector: (snapshot: EditorSnapshot) => T, isEqual?: (a: T, b: T) => boolean, options?: UseEditorStateOptions): T;
+
+// @public
+export function useEditorValueCommand<K extends keyof ToolbarValueMap>(slotId: K): EditorValueCommandState<ToolbarValueMap[K]>;
+
+// @public
+export function useFontFamily(): UseFontFamilyResult;
+
+// @public
+export interface UseFontFamilyResult {
+    readonly isEnabled: boolean;
+    readonly options: readonly string[];
+    readonly setValue: (family: string) => void;
+    readonly value: string | null;
+}
+
+// @public
+export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): MarkedFontResolver;
+
+// @public
+export function useFonts(...origins: readonly FontOrigin[]): MarkedFontResolver;
+
+// @public
+export function useHeaderFooterState(): HeaderFooterState | null;
+
+// @public
+export function useHighlightAt<R extends HighlightRange = HighlightRange>(name?: string): HighlightHit<R> | null;
+
+// @public
+export function useHighlights(name: string, source: HighlightSource, options?: HighlightOptions): HighlightResult;
+
+// @public
+export function useHistoryGroup(input: HistoryGroupBindingOptions): UseHistoryGroupReturn;
+
+// @public (undocumented)
+export interface UseHistoryGroupReturn {
+    // (undocumented)
+    readonly options: () => EditorExecOptions;
+    // (undocumented)
+    readonly ref: (element: HTMLElement | null) => void;
+}
+
+// @public
+export function useHyperlinkPopup(): UseHyperlinkPopupResult;
+
+// @public
+export function useHyperlinkPopupInstance(active?: boolean): UseHyperlinkPopupResult;
+
+// @public
+export interface UseHyperlinkPopupResult {
+    beginEdit: () => void;
+    // (undocumented)
+    close: () => void;
+    commitEdit: () => boolean;
+    copy: () => Promise<boolean>;
+    open: (link?: SurfaceHyperlink | null, anchor?: HyperlinkPopupAnchor | null) => void;
+    openAtCaret: () => void;
+    openTarget: () => boolean;
+    // (undocumented)
+    setText: (text: string) => void;
+    // (undocumented)
+    setUrl: (url: string) => void;
+    // (undocumented)
+    readonly state: HyperlinkPopupState;
+    unlink: () => boolean;
+}
+
+// @public
+export function useNavigationPane(options?: UseNavigationPaneOptions): UseNavigationPaneResult;
+
+// @public
+export interface UseNavigationPaneOptions {
+    defaultOpen?: boolean;
+    defaultTab?: NavigationTabValue;
+    // (undocumented)
+    onOpenChange?: (open: boolean) => void;
+    // (undocumented)
+    onTabChange?: (tab: NavigationTabValue) => void;
+    open?: boolean;
+    paneWidth?: number;
+    tab?: NavigationTabValue;
+}
+
+// @public
+export interface UseNavigationPaneResult {
+    // (undocumented)
+    readonly open: boolean;
+    readonly overlay: boolean;
+    // (undocumented)
+    readonly paneWidth: number;
+    // (undocumented)
+    readonly setOpen: (open: boolean) => void;
+    // (undocumented)
+    readonly setTab: (tab: NavigationTabValue) => void;
+    readonly shift: number;
+    // (undocumented)
+    readonly tab: NavigationTabValue;
+    // (undocumented)
+    readonly toggle: () => void;
+}
+
+// @public
+export function useNavigationShift(): number;
+
+// @public
+export function useNotePropertiesState(): NotePropertiesState | null;
+
+// @public
+export function useNoteScopeState(): Extract<ViewScope, {
+    kind: 'note';
+}> | null;
+
+// @public
+export function usePageSetup(): UsePageSetupReturn;
+
+// @public
+export function usePageSetupDialog(): UsePageSetupDialogReturn;
+
+// @public
+export interface UsePageSetupDialogReturn extends UseDialogReturn<PageSetupDialogFields> {
+}
+
+// @public
+export interface UsePageSetupReturn {
+    readonly apply: (update: PageSetupUpdate) => boolean;
+    readonly isEnabled: boolean;
+    readonly pageSetup: PageSetup | null;
+}
+
+// @public
+export function useParagraphDialog(): UseParagraphDialogReturn;
+
+// @public
+export interface UseParagraphDialogReturn extends UseDialogReturn<ParagraphDialogFields> {
+    // (undocumented)
+    readonly mixed: ParagraphDialogMixed;
+}
+
+// @public
+export function useParagraphFormat(): UseParagraphFormatReturn;
+
+// @public
+export interface UseParagraphFormatReturn {
+    readonly apply: (update: ParagraphFormatUpdate) => boolean;
+    readonly format: ParagraphFormatRead | null;
+    readonly isEnabled: boolean;
+}
+
+// @public
+export function useParagraphIndent(): UseParagraphIndentReturn;
+
+// @public
+export interface UseParagraphIndentReturn {
+    readonly apply: (update: IndentUpdate) => boolean;
+    readonly indent: IndentFormatting | null;
+    readonly isEnabled: boolean;
+}
+
+// @public
+export function useParagraphStyle(): UseParagraphStyleResult;
+
+// @public
+export interface UseParagraphStyleResult {
+    readonly isEnabled: boolean;
+    readonly options: readonly ParagraphStyleOption[];
+    readonly setValue: (styleId: string) => void;
+    readonly value: string | null;
+}
+
+// @public
+export function useReviewAuthors(): readonly ReviewAuthorInfo[];
+
+// @public
+export function useReviewGutter(): ReviewGutter;
+
+// @public
+export function useRevisionMarkupDialog(): UseRevisionMarkupDialogReturn;
+
+// @public
+export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedRevisionMarkup> {
+    // (undocumented)
+    reset(): void;
+}
+
+// @public
+export function useScopeClassName(): '' | 'docx-editor ';
+
+// @public
+export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: AnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useTableBorderTargetLabel(): string;
+
+// @public
+export function useTextFormFieldDialog(): UseTextFormFieldDialogReturn;
+
+// @public
+export interface UseTextFormFieldDialogReturn extends UseDialogReturn<TextFormFieldDialogFields> {
+}
+
+// @public
+export function useToolbarContext(): ToolbarContextValue;
+
+// @public
+export function useToolbarLabel(): (key: string) => string;
+
+// @public
+export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string;
 
 // @public (undocumented)
 export function useTranslation(): {
+    catalogue: LocaleStrings;
     t: TFunction;
 };
 
 // @public
-export const VERSION = "0.0.2";
+export function useZoom(): UseZoomResult;
+
+// @public
+export interface UseZoomResult {
+    readonly auto: () => void;
+    // (undocumented)
+    readonly canZoomIn: boolean;
+    // (undocumented)
+    readonly canZoomOut: boolean;
+    readonly fitToWidth: () => void;
+    readonly isFit: boolean;
+    readonly levels: readonly number[];
+    readonly mode: ZoomMode;
+    readonly reset: () => void;
+    // (undocumented)
+    readonly setMode: (mode: ZoomMode | 'auto') => void;
+    readonly setZoom: (zoom: number) => void;
+    readonly zoom: number;
+    // (undocumented)
+    readonly zoomIn: () => void;
+    // (undocumented)
+    readonly zoomOut: () => void;
+}
+
+// @public (undocumented)
+export const VERSION: string;
+
+// @public (undocumented)
+export function VerticalRuler(input: VerticalRulerProps): react__default.ReactElement;
+
+// @public
+export interface VerticalRulerProps {
+    className?: string;
+    editable?: boolean;
+    onBottomMarginChange?: (marginTwips: number) => void;
+    onMarginDragEnd?: () => void;
+    onTopMarginChange?: (marginTwips: number) => void;
+    pageSetup?: RulerPageSetup | null;
+    style?: CSSProperties;
+    unit?: 'inch' | 'cm';
+    zoom?: number;
+}
+
+export { WORD_DEFAULT_FONT }
 
 ```

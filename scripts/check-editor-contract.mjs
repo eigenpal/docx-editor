@@ -3,39 +3,39 @@ import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
-const reactSource = readFileSync(
-  resolve(root, 'packages/react/src/components/DocxEditor.tsx'),
-  'utf8'
-);
-const vueSource = readFileSync(
-  resolve(root, 'packages/vue/src/components/DocxEditor/types.ts'),
-  'utf8'
-);
+// Greenfield type locations. The pre-rebuild paths
+// (`packages/react/src/components/DocxEditor.tsx`,
+// `packages/vue/src/components/DocxEditor/types.ts`) were deleted by the strip
+// at 701c1a9f, which left this gate throwing ENOENT on every run — a check that
+// cannot pass reads as coverage while measuring nothing.
+const reactSource = readFileSync(resolve(root, 'packages/react/src/types.ts'), 'utf8');
+const vueSource = readFileSync(resolve(root, 'packages/vue/src/types.ts'), 'utf8');
 
 const VUE_ONLY_PROPS = new Set([
-  // Vue chrome split that does not exist as a React prop.
-  'showMenuBar',
+  // Vue sugar host declares `class`; React names the same surface `className`.
+  'class',
 ]);
 
-const REACT_PROPS_NOT_YET_IN_VUE = new Set([
+// React props with framework-native Vue equivalents. check-parity-contract.mjs
+// verifies each callback against an emit, each render prop against a slot, and
+// className against class. This set does not exclude a capability from parity.
+const REACT_FRAMEWORK_EQUIVALENTS = new Set([
+  // Vue applies `class` as a declared prop; React names it `className`.
+  'className',
+  // Vue exposes these as EMITS (`@ready`, `@change`, `@fontError`), which never
+  // appear in DocxEditorProps.
+  'onReady',
+  'onChange',
+  'onFontError',
+  'onRevisionMarkupChange',
   'onSave',
-  'onFontsLoaded',
-  'externalContent',
-  'showMarginGuides',
-  'marginGuideColor',
-  'rulerUnit',
-  'placeholder',
-  'loadingIndicator',
-  'printOptions',
-  'onCopy',
-  'onCut',
-  'onPaste',
-  'comments',
-  'onRenderedDomContextReady',
-  'pluginOverlays',
-  'pluginSidebarItems',
-  'pluginRenderedDomContext',
-  'agentPanel',
+  'onOpen',
+  'onTitleChange',
+  // React renders viewport-extras as children; Vue's equivalent is the default slot.
+  'children',
+  // Title-bar render props; Vue uses named slots with the same names.
+  'renderTitleBarLeft',
+  'renderTitleBarRight',
 ]);
 
 function extractInterfaceBody(source, name) {
@@ -55,7 +55,7 @@ function extractInterfaceBody(source, name) {
 function extractPropKeys(source, name) {
   const body = extractInterfaceBody(source, name);
   const keys = new Set();
-  const propRegex = /^\s{2}([A-Za-z_$][\w$]*)\??\s*:/gm;
+  const propRegex = /^\s+(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*:/gm;
   for (const match of body.matchAll(propRegex)) keys.add(match[1]);
   return keys;
 }
@@ -65,10 +65,10 @@ const vueProps = extractPropKeys(vueSource, 'DocxEditorProps');
 
 const undocumentedMissing = [...reactProps]
   .filter((key) => !vueProps.has(key))
-  .filter((key) => !REACT_PROPS_NOT_YET_IN_VUE.has(key))
+  .filter((key) => !REACT_FRAMEWORK_EQUIVALENTS.has(key))
   .sort();
 
-const staleMissingAllowlist = [...REACT_PROPS_NOT_YET_IN_VUE]
+const staleFrameworkEquivalents = [...REACT_FRAMEWORK_EQUIVALENTS]
   .filter((key) => vueProps.has(key))
   .sort();
 
@@ -79,7 +79,7 @@ const undocumentedVueOnly = [...vueProps]
 
 if (
   undocumentedMissing.length > 0 ||
-  staleMissingAllowlist.length > 0 ||
+  staleFrameworkEquivalents.length > 0 ||
   undocumentedVueOnly.length > 0
 ) {
   console.error('DocxEditor public prop contract drift detected.');
@@ -87,9 +87,9 @@ if (
     console.error(`\nReact props missing from Vue without an explicit staged divergence:`);
     for (const key of undocumentedMissing) console.error(`  - ${key}`);
   }
-  if (staleMissingAllowlist.length > 0) {
-    console.error(`\nProps now present in Vue but still listed as missing:`);
-    for (const key of staleMissingAllowlist) console.error(`  - ${key}`);
+  if (staleFrameworkEquivalents.length > 0) {
+    console.error(`\nProps now present in Vue but still mapped to framework equivalents:`);
+    for (const key of staleFrameworkEquivalents) console.error(`  - ${key}`);
   }
   if (undocumentedVueOnly.length > 0) {
     console.error(`\nVue-only props without an explicit divergence:`);
@@ -100,5 +100,5 @@ if (
 
 console.log(
   `✓ DocxEditor prop contract: ${vueProps.size} Vue props checked, ` +
-    `${REACT_PROPS_NOT_YET_IN_VUE.size} staged React props remain explicit divergences`
+    `${REACT_FRAMEWORK_EQUIVALENTS.size} React props have checked Vue framework equivalents`
 );

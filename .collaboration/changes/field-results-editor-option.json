@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The editor keeps every closed field one unit.",
+  "after": "The editor keeps every field one unit by default. A new fieldResults option lets a reader edit saved field results. The option is refused when a collaboration module is registered, so collaboration sessions keep every field one unit.",
+  "reason": "A collaboration session never runs in the editable mode: createDocxEditor and the paginated surface throw a TypeError for that combination, and the default mode is unchanged. Shared paragraph text and the replicated operations therefore stay the same. Store edits in the editable mode change ordinary result runs, and a default-mode peer converges on them (the two-peer store test).",
+  "tests": [
+    "packages/core/src/editor/__tests__/editable-field-results.test.ts",
+    "packages/core/src/editor/__tests__/editable-field-results-editor.test.ts",
+    "packages/pro/src/collaboration/__tests__/field-result-mode-sync.test.ts"
+  ],
+  "changeset": "editable-field-results-editor",
+  "migration": null
+}

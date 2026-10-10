@@ -1,0 +1,288 @@
+name: Performance benchmark
+
+# Runs two benchmarks for PRs and main pushes (docs-only changes skip it). PRs receive one
+# sticky comment with the before/after tables. Main runs retain artifacts:
+#   - the browser typing-latency bench (e2e/edit-browser.bench.spec.ts) — the
+#     UX number: keystroke handler and frame latency through the real editor;
+#   - the deterministic edit benchmark (scripts/bench/edit-bench.ts) — the
+#     engine layout pipeline with exact work counters.
+#
+# The two sides run INTERLEAVED (head, base, base, head): a whole benchmark
+# run inherits the machine's momentary state, so back-to-back one-shot runs
+# systematically favor one side. A/B/B/A cancels that drift to first order,
+# and the comment renders any delta smaller than the observed same-side
+# spread as neutral.
+#
+# Wall-clock numbers from a shared runner are informational only — this job
+# never fails on a head-vs-base timing delta, and single-sample timing tails
+# are warn-only here (EDIT_BROWSER_BENCH_TIMING_TAILS=warn). Deterministic
+# gates still apply: the pinned work-counter test
+# (scripts/bench/edit-bench-gates.test.ts) inside `bun run test` in ci.yml,
+# and the browser spec's structural and median-based gates, which fail the
+# HEAD browser runs (this is the only CI execution of that spec). A failing
+# BASELINE run only degrades the comment.
+
+# Documentation, changesets, and specs cannot change editing speed, so a change
+# that touches only those files skips the benchmark.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'openspec/**'
+      - '.changeset/**'
+      - '**/*.md'
+      - '**/*.mdx'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'openspec/**'
+      - '.changeset/**'
+      - '**/*.md'
+      - '**/*.mdx'
+
+# Least-privilege default; the bench job escalates pull-requests itself.
+permissions:
+  contents: read
+
+# PR pushes supersede their previous run. Each main commit keeps its own run.
+concurrency:
+  group: bench-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  bench:
+    if: github.event_name == 'push' || github.actor != 'dependabot[bot]'
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Sized for the three-fixture browser pass (plain + tracked + the generated
+    # ~1,000-page stress document) on both sides.
+    timeout-minutes: ${{ github.event_name == 'push' && 45 || 35 }}
+    permissions:
+      contents: read # checkout + merge-base worktree
+      pull-requests: write # upsert the single sticky benchmark comment
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history so the baseline commit is reachable for the worktree.
+          fetch-depth: 0
+          # The bench steps run PR-branch code; keep the token out of .git/config.
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: bash scripts/install-ci-chromium.sh
+
+      - name: Prepare baseline worktree
+        id: baseline
+        env:
+          BENCH_EVENT: ${{ github.event_name }}
+          BENCH_BASE_REF: ${{ github.base_ref }}
+          BENCH_PREVIOUS_SHA: ${{ github.event.before }}
+        run: |
+          mkdir -p bench-out
+          # HEAD is the PR merge ref, so this resolves to the main tip the merge
+          # ref was built against — the delta isolates exactly what merging this
+          # PR changes. Do not "fix" this to the branch fork point.
+          if [ "$BENCH_EVENT" = "push" ]; then
+            # Compare the merged main state with the main state before this push.
+            BASE="$BENCH_PREVIOUS_SHA"
+            if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+              echo "Previous main commit is unavailable; report head measurements only."
+              exit 0
+            fi
+          else
+            BASE=$(git merge-base HEAD "origin/$BENCH_BASE_REF")
+          fi
+          echo "baseline commit: $BASE"
+          git worktree add "$RUNNER_TEMP/base" "$BASE"
+          if [ -f "$RUNNER_TEMP/base/scripts/bench/edit-bench.ts" ] && \
+             [ -f "$RUNNER_TEMP/base/e2e/fixtures/synthetic-long-edit.docx" ]; then
+            cd "$RUNNER_TEMP/base"
+            bun install --frozen-lockfile
+            # Browser binaries live in the shared Playwright cache; install still
+            # runs in case the baseline pins a different Playwright build.
+            # ux only when the baseline spec understands the RUNS env var, or its
+            # default sample count would silently differ from the head rounds'.
+            if [ -f "$RUNNER_TEMP/base/e2e/edit-browser-bench.config.ts" ] && \
+               grep -q EDIT_BROWSER_BENCH_RUNS "$RUNNER_TEMP/base/e2e/edit-browser.bench.spec.ts"; then
+              bash "$GITHUB_WORKSPACE/scripts/install-ci-chromium.sh" || true
+              echo "ux=true" >> "$GITHUB_OUTPUT"
+            fi
+            echo "engine=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "merge-base has no edit benchmark; head-only comment"
+          fi
+
+      # ---- Interleaved rounds: head, base, base, head. Sample counts are
+      # halved per round (two rounds per side aggregate back to full size) and
+      # MUST stay identical across all rounds, or the medians stop being
+      # comparable. Head browser rounds fail the job on the spec's structural
+      # gates; baseline rounds only degrade the comment.
+
+      - name: Round 1 — PR head
+        run: |
+          bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-1.json
+          EDIT_BROWSER_BENCH_RUNS=5 \
+            EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+            EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+            EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux-1.json" \
+            bunx playwright test --config e2e/edit-browser-bench.config.ts \
+            --grep "browser editing latency"
+
+      - name: Round 1 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-1.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-1.json"; echo "baseline engine round 1 failed; continuing"; }
+          if [ "${{ steps.baseline.outputs.ux }}" = "true" ]; then
+            EDIT_BROWSER_BENCH_RUNS=5 \
+              EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+              EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+              EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux-1.json" \
+              bunx playwright test --config e2e/edit-browser-bench.config.ts \
+              --grep "browser editing latency" || echo "baseline browser round 1 failed; continuing"
+          fi
+
+      - name: Round 2 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-2.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-2.json"; echo "baseline engine round 2 failed; continuing"; }
+          if [ "${{ steps.baseline.outputs.ux }}" = "true" ]; then
+            EDIT_BROWSER_BENCH_RUNS=5 \
+              EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+              EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+              EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/base-ux-2.json" \
+              bunx playwright test --config e2e/edit-browser-bench.config.ts \
+              --grep "browser editing latency" || echo "baseline browser round 2 failed; continuing"
+          fi
+
+      - name: Round 2 — PR head
+        run: |
+          # A tolerated baseline crash can orphan its dev server; head must not
+          # inherit a red job from an infrastructure leftover on the port.
+          (lsof -ti tcp:5275 | xargs -r kill -9) 2>/dev/null || true
+          bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-2.json
+          EDIT_BROWSER_BENCH_RUNS=5 \
+            EDIT_BROWSER_BENCH_SUSTAINED_EDITS=120 \
+            EDIT_BROWSER_BENCH_TIMING_TAILS=warn \
+            EDIT_BROWSER_BENCH_OUTPUT="$GITHUB_WORKSPACE/bench-out/head-ux-2.json" \
+            bunx playwright test --config e2e/edit-browser-bench.config.ts \
+            --grep "browser editing latency"
+
+      # Engine-only rounds 3-4: headless runs are ~20s, so the engine table gets
+      # four interleaved rounds per side (H B B H · H B B H — balanced under
+      # linear drift) where the browser, which pays a full dev-server boot per
+      # round, stays at two.
+
+      - name: Engine round 3 — PR head
+        run: bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-3.json
+
+      - name: Engine round 3 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-3.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-3.json"; echo "baseline engine round 3 failed; continuing"; }
+
+      - name: Engine round 4 — baseline
+        if: steps.baseline.outputs.engine == 'true'
+        run: |
+          cd "$RUNNER_TEMP/base"
+          bun scripts/bench/edit-bench.ts --runs 3 --json > "$GITHUB_WORKSPACE/bench-out/base-4.json" \
+            || { rm -f "$GITHUB_WORKSPACE/bench-out/base-4.json"; echo "baseline engine round 4 failed; continuing"; }
+
+      - name: Engine round 4 — PR head
+        run: bun scripts/bench/edit-bench.ts --runs 3 --json > bench-out/head-4.json
+
+      - name: Additional engine rounds on main
+        if: github.event_name == 'push' && steps.baseline.outputs.engine == 'true'
+        run: |
+          # Twelve paired engine rounds support uncertainty estimates without
+          # multiplying the expensive browser passes. Preserve ABBA ordering.
+          engine_round() {
+            side="$1"
+            round="$2"
+            if [ "$side" = "head" ]; then
+              bun scripts/bench/edit-bench.ts --runs 3 --json > "bench-out/head-$round.json"
+            else
+              (cd "$RUNNER_TEMP/base" && bun scripts/bench/edit-bench.ts --runs 3 --json) \
+                > "bench-out/base-$round.json" \
+                || { rm -f "bench-out/base-$round.json"; echo "Baseline round $round failed"; }
+            fi
+          }
+          for first in 5 7 9 11; do
+            second=$((first + 1))
+            engine_round head "$first"
+            engine_round base "$first"
+            engine_round base "$second"
+            engine_round head "$second"
+          done
+
+      - name: Render comment
+        run: |
+          ARGS=(--out bench-out/comment.md)
+          for f in bench-out/head-[0-9]*.json; do
+            [ -f "$f" ] && ARGS+=(--head "$f")
+          done
+          for f in bench-out/base-[0-9]*.json; do
+            [ -f "$f" ] && ARGS+=(--base "$f")
+          done
+          for f in bench-out/head-ux-1.json bench-out/head-ux-2.json; do
+            [ -f "$f" ] && ARGS+=(--head-ux "$f")
+          done
+          for f in bench-out/base-ux-1.json bench-out/base-ux-2.json; do
+            [ -f "$f" ] && ARGS+=(--base-ux "$f")
+          done
+          node scripts/bench/edit-bench-comment.mjs "${ARGS[@]}"
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: edit-bench-report
+          path: bench-out/
+          if-no-files-found: ignore
+
+      - name: Upsert PR comment
+        # Fork PRs get a read-only token; their numbers live in the artifact.
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('bench-out/comment.md', 'utf8');
+            // Must equal COMMENT_MARKER in scripts/bench/edit-bench-comment.mjs,
+            // which puts it on the first line of every rendered comment. If they
+            // drift, every push appends a new comment instead of updating one.
+            const marker = '<!-- edit-bench-report -->';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

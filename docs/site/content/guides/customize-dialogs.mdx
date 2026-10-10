@@ -1,0 +1,672 @@
+---
+title: 'Customize popups'
+description: 'Use your components to customize editor popups in React and Vue.'
+category: 'Guides'
+---
+
+Pass `popups` to the editor or `Root`. Use `definePopup(MyPopup)` to register a React component or Vue single-file component. The editor opens the popup and supplies typed props. Forward those props to the default component to retain its state, validation, and commands.
+
+## Replace a button
+
+These examples replace **Apply** in the **Page Setup** dialog. The editor manages the opening state and session.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorPageSetupDialogProps, DocxEditorPopups } from '@docx-editor.dev/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+function PageSetup(props: DocxEditorPageSetupDialogProps) {
+  return (
+    <DocxEditor.PageSetupDialog {...props}>
+      <DocxEditor.PageSetupDialog.Apply asChild>
+        <button className="app-apply">Apply changes</button>
+      </DocxEditor.PageSetupDialog.Apply>
+    </DocxEditor.PageSetupDialog>
+  );
+}
+
+const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
+
+export function Editor({ document }: { document: ArrayBuffer }) {
+  return <DocxEditor document={document} popups={popups} />;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+Create `PageSetup.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorPageSetupDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorPageSetupDialogProps } from '@docx-editor.dev/vue';
+
+const props = withDefaults(defineProps<DocxEditorPageSetupDialogProps>(), {
+  preset: true,
+});
+const Apply = Dialog.Apply;
+</script>
+
+<template>
+  <Dialog v-bind="props">
+    <Apply as-child>
+      <button class="app-apply">Apply changes</button>
+    </Apply>
+  </Dialog>
+</template>
+```
+
+Keep `preset: true` when forwarding Vue props. Otherwise, omitted Boolean props become `false`. Register the component in your editor:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, definePopup } from '@docx-editor.dev/vue';
+import type { DocxEditorPopups } from '@docx-editor.dev/vue';
+import PageSetup from './PageSetup.vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ document: ArrayBuffer }>();
+const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
+</script>
+
+<template>
+  <DocxEditor :document="document" :popups="popups" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Custom button components must forward refs, attributes, and listeners to their native button. Preserve the supplied handler and disabled state.
+
+`asChild` forwards behavior, positioning, data attributes, and your `className` to the child element. It omits the packaged decorative classes. To adjust the default appearance, pass `className` to the part without `asChild`.
+
+The hyperlink popup's `Root` keeps its packaged class for positioning and stacking. Use a scoped `.docx-hyperlink-popup` rule to override its appearance.
+
+You can also use render callbacks. In React, use `pageSetup: (props) => <PageSetup {...props} />`. In Vue, import `h` and use `pageSetup: (props) => h(PageSetup, props)`. Call hooks inside components.
+
+## Choose a popup
+
+Each entry accepts a `definePopup()` result, render callback, or `false`. Each popup receives the props listed here.
+
+| Entry                    | Supplied props                             |
+| ------------------------ | ------------------------------------------ |
+| `export`                 | `DocxEditorExportDialogProps`              |
+| `print`                  | `DocxEditorPrintDialogProps`               |
+| `pageSetup`, `paragraph` | Controlled dialog props: `open`, `onClose` |
+| `textFormField`          | `{ session: TextFormFieldDialogSession }`  |
+| `revisionMarkup`         | `{ session: RevisionMarkupDialogSession }` |
+| `hyperlink`              | `HyperLinkProps`                           |
+| `contentControl`         | `ContentControlProps`                      |
+| `equation`               | No state props                             |
+| `contextMenu`            | `DocxEditorContextMenuProps`               |
+| `imageProperties`        | `DocxEditorImagePropertiesDialogProps`     |
+| `imageAltText`           | `DocxEditorImageAltTextPopupProps`         |
+| `noteProperties`         | `DocxEditorNotePropertiesDialogProps`      |
+| `notesContextMenu`       | `DocxEditorNotesContextMenuProps`          |
+| `notePreview`            | `DocxEditorNotePreviewProps`               |
+| `contentControlWidget`   | `{ session: ContentControlWidgetSession }` |
+| `contentControlCheckbox` | `{ session: ContentControlWidgetSession }` |
+| `contentControlPicture`  | `{ session: ContentControlWidgetSession }` |
+| `invalidTextFormField`   | `{ session: InvalidTextFormFieldSession }` |
+
+Omitted entries retain default behavior, including native widget and invalid-field dialogs. The packaged editor supplies defaults. `Root` mounts configured popups. Image and note overrides use their existing triggers. Explicit entries override `menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
+
+To manage opening and closing yourself, set the entry to `false` and mount the popup. Use `definePopup()` to customize components while the editor manages opening. Toolbar menus and pickers use their compound `.Content` parts, outside this map.
+
+<a id="customize-change-tracking-options" />
+
+## Customize track changes options
+
+The Pro review module opens **Track changes options** through `popups.revisionMarkup`. Register your component with `definePopup()` to keep the toolbar trigger and editor session.
+
+In React, wrap the packaged dialog and replace its parts:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorPopups, DocxEditorRevisionMarkupDialogProps } from '@docx-editor.dev/react';
+
+function ReviewOptions(props: DocxEditorRevisionMarkupDialogProps) {
+  return (
+    <DocxEditor.RevisionMarkupDialog {...props} className="review-options">
+      <DocxEditor.RevisionMarkupDialog.Field name="cells" hidden />
+      <DocxEditor.RevisionMarkupDialog.Apply asChild>
+        <button type="button" className="primary-button">
+          Save preferences
+        </button>
+      </DocxEditor.RevisionMarkupDialog.Apply>
+    </DocxEditor.RevisionMarkupDialog>
+  );
+}
+
+const popups: DocxEditorPopups = {
+  revisionMarkup: definePopup(ReviewOptions),
+};
+```
+
+In Vue, create a wrapper named `ReviewOptions.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorRevisionMarkupDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorRevisionMarkupDialogProps } from '@docx-editor.dev/vue';
+
+const props = withDefaults(defineProps<DocxEditorRevisionMarkupDialogProps>(), { preset: true });
+const Apply = Dialog.Apply;
+const Field = Dialog.Field;
+</script>
+
+<template>
+  <Dialog v-bind="props" class-name="review-options">
+    <Field name="cells" hidden />
+    <Apply as-child>
+      <button type="button" class="primary-button">Save preferences</button>
+    </Apply>
+  </Dialog>
+</template>
+```
+
+Register the wrapper with `revisionMarkup: definePopup(ReviewOptions)`. Keep `preset: true` when forwarding Boolean props.
+
+The dialog exposes `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, `Field`, and `Reset`. `Field` names match the top-level `ResolvedRevisionMarkup` keys. Each style field contains its mark and color controls. The `changedLines` field also contains the position preview. The `cells` field contains all four cell colors.
+
+Use `useRevisionMarkupDialog()` inside the dialog to read its draft. It provides the shared dialog actions and `reset()`. `setValue()` replaces one top-level value. Spread the existing value when changing a nested property:
+
+```tsx
+import { useRevisionMarkupDialog } from '@docx-editor.dev/react';
+
+function RedInsertions() {
+  const draft = useRevisionMarkupDialog();
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        draft.setValue('insertions', {
+          ...draft.values.insertions,
+          color: 'red',
+        })
+      }
+    >
+      Use red insertions
+    </button>
+  );
+}
+```
+
+In Vue, read `draft.values.value`. To arrange named parts yourself, set `preset={false}` in JSX or `:preset="false"` in a Vue template. Keep an accessible title and dismissal control. Hidden fields retain their draft values.
+
+**Reset to defaults** changes the draft. **OK** applies it once through the editor settings. **Cancel** discards it. An external API update refreshes the open draft.
+
+Set `popups.revisionMarkup` to `false` to cancel automatic dialog requests. To supply your own renderer outside React or Vue, register `setRevisionMarkupChrome({ onRequest })`. The request supplies the same draft session. Call `session.cancel()` when you dismiss it. Unregister the renderer when your host unmounts.
+
+The session provides these methods and properties:
+
+| Member | Behavior |
+| --- | --- |
+| `get()` | Returns the immutable resolved draft. |
+| `set(partial)` | Validates and merges draft preferences without applying them. |
+| `reset()` | Restores the default draft without applying it. |
+| `subscribe(listener)` | Observes draft changes and returns an unsubscribe function. Read `get()` for the initial draft. |
+| `canApply()` | Reports whether the session can apply its draft. |
+| `apply()` | Applies the draft and closes the session. Returns `false` if the session cannot apply. |
+| `cancel()` | Discards the draft and closes the session. |
+| `signal` | Aborts when the session ends. |
+
+The Pro review module and an attached editor are required to open a session. These renderer methods belong to host infrastructure. They do not extend the Office-shaped document automation model.
+
+Manual registrations take priority over adapter fallbacks. Pass `null` to select native rendering until you dispose that registration. The session signal aborts on dismissal, replacement, document load, detach, destroy, or renderer disposal. Stop using the session after it aborts.
+
+## Customize export feedback
+
+Use `popups.export` to customize progress and errors for **File > Export**. Register your component with `definePopup()` and pass the map to the editor or `Root`.
+
+The editor supplies these properties to your component:
+
+| Property | Meaning |
+| --- | --- |
+| `open` | `true` while the popup is mounted. |
+| `format` | `markdown` or `pdf`. |
+| `pending` | `true` while conversion runs; `false` after a failure. |
+| `error` | Localized failure text, including missing converter instructions. Empty while conversion runs. |
+| `onClose()` | Dismisses feedback without stopping conversion. |
+
+Forward the properties to `DocxEditorExportDialog` to retain the default dialog, keyboard handling, and focus restoration. Use `className` and `style` to change its appearance. Replace its contents with React children or the Vue default slot. Provide an accessible title, error text, and dismissal control when replacing contents.
+
+In React, register a component with `definePopup()`:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorExportDialogProps, DocxEditorPopups } from '@docx-editor.dev/react';
+
+function ExportDialog(props: DocxEditorExportDialogProps) {
+  return <DocxEditor.ExportDialog {...props} className="app-export" />;
+}
+
+const popups: DocxEditorPopups = {
+  export: definePopup(ExportDialog),
+};
+```
+
+In Vue, create `ExportDialog.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorExportDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorExportDialogProps } from '@docx-editor.dev/vue';
+
+const props = defineProps<DocxEditorExportDialogProps>();
+</script>
+
+<template>
+  <Dialog v-bind="props" class-name="app-export" />
+</template>
+```
+
+Register the Vue component in your popup map:
+
+```ts
+import { definePopup } from '@docx-editor.dev/vue';
+import type { DocxEditorPopups } from '@docx-editor.dev/vue';
+import ExportDialog from './ExportDialog.vue';
+
+const popups: DocxEditorPopups = {
+  export: definePopup(ExportDialog),
+};
+```
+
+The editor updates the same component when progress changes to an error. A later export starts a separate component instance.
+
+The popup uses the shared dialog mount outside the menu. Hiding responsive menu controls does not hide an active popup. Successful downloads close the popup automatically.
+
+Dismissing feedback leaves conversion running and keeps export actions disabled until it finishes. If that conversion fails, the error opens the popup again.
+
+Set `popups.export` to `false` to suppress export feedback. Conversion still runs. Your conversion handlers must provide any progress and error feedback your application needs.
+
+Popup customization does not install converters. For installation and handler setup, see [Export Markdown and PDF](/docs/2.x/guides/export).
+
+## Customize print feedback
+
+Use `popups.print` to customize progress and errors for **File > Print**. The editor closes this popup before opening the browser print dialog. Register your component with `definePopup()` and pass the map to the editor or `Root`.
+
+The editor supplies these properties to your component:
+
+| Property | Meaning |
+| --- | --- |
+| `open` | `true` while the popup is mounted. |
+| `pending` | `true` while the editor saves, converts, and loads the PDF for printing. |
+| `error` | Localized failure text, including missing converter instructions. Empty during preparation. |
+| `url` | Object URL for the PDF when printing fails after conversion. Otherwise empty. |
+| `onClose()` | Closes the popup and cancels pending printing. An ongoing conversion can finish, but its result is discarded. |
+
+Forward the properties to `DocxEditorPrintDialog` to retain the default dialog, keyboard handling, and focus restoration. Use `className` and `style` to change its appearance. Replace its contents with React children or the Vue default slot. Provide an accessible title, error text, and a close control when you replace contents.
+
+Use a nonempty `url` for an **Open PDF** link. It stays valid until the next print or until the menu unmounts. Closing the popup does not revoke it.
+
+In React, register a component with `definePopup()`:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorPopups, DocxEditorPrintDialogProps } from '@docx-editor.dev/react';
+
+function PrintDialog(props: DocxEditorPrintDialogProps) {
+  return <DocxEditor.PrintDialog {...props} className="app-print" />;
+}
+
+const popups: DocxEditorPopups = {
+  print: definePopup(PrintDialog),
+};
+```
+
+In Vue, create `PrintDialog.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorPrintDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorPrintDialogProps } from '@docx-editor.dev/vue';
+
+const props = defineProps<DocxEditorPrintDialogProps>();
+</script>
+
+<template>
+  <Dialog v-bind="props" class-name="app-print" />
+</template>
+```
+
+Register the Vue component in your popup map:
+
+```ts
+import { definePopup } from '@docx-editor.dev/vue';
+import type { DocxEditorPopups } from '@docx-editor.dev/vue';
+import PrintDialog from './PrintDialog.vue';
+
+const popups: DocxEditorPopups = {
+  print: definePopup(PrintDialog),
+};
+```
+
+The editor updates the same component when progress changes to an error. A later print starts a separate component instance.
+
+**File > Print** stays unavailable during preparation and while error feedback remains open.
+
+Set `popups.print` to `false` to suppress feedback while retaining PDF conversion and browser printing. Failures go to the browser console. Your PDF handler must report conversion failures to users. For control over browser print failures, use a [custom print flow](/docs/2.x/guides/print#build-a-custom-print-flow).
+
+For handler setup and browser requirements, see [Print documents](/docs/2.x/guides/print).
+
+## Arrange parts and custom fields
+
+Page Setup, Paragraph Options, Field Options, and Track changes options expose compound parts. These include `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
+
+Parts forward attributes such as `id`, `aria-*`, and `data-*` to the rendered element. Built-in behavior takes precedence: passing `onClick` to `Apply` does not replace its handler. Use `asChild` for a custom element, and preserve the supplied behavior.
+
+Named children replace default parts. Use `hidden` to remove a part or `preset={false}` to supply the complete arrangement. Include a title, error region, and accessible Apply and Cancel controls. Omitted fields retain their draft values.
+
+Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part contains the collection control; `specialBy` appears when relevant.
+
+Paragraph's `direction` field selects left-to-right or right-to-left paragraph direction. Include it when you build a custom paragraph dialog. For direction behavior and limits, see [Right-to-left text](/docs/2.x/guides/right-to-left).
+
+Call `usePageSetupDialog()`, `useParagraphDialog()`, `useTextFormFieldDialog()`, or `useRevisionMarkupDialog()` inside a child of the matching dialog. Each supplies `values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`. Vue exposes state as refs. Use these draft APIs to keep the editor's form session.
+
+A `Field` represents the labeled row; `asChild` does not adapt input value events. Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state. See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or [Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
+
+## Compose the value popup
+
+Use `DocxEditorContentControlWidget` to customize content-control popups. Omit children to keep the default UI, or pass parts to replace its contents. The root handles placement, Escape, outside clicks, focus return, and Tab wrapping.
+
+Choose an entry in the editor's `popups` prop:
+
+| Entry | Controls | Default when omitted |
+| --- | --- | --- |
+| `contentControlWidget` | Dropdown, combo box, date, and building block gallery | List or calendar |
+| `contentControlCheckbox` | Checkbox | Toggle immediately |
+| `contentControlPicture` | Picture | Open a file dialog |
+
+### Arrange parts
+
+Check `session.kind` before rendering date-specific parts. Keep the default root for other kinds. This example styles the grid and replaces the **Today** button with `asChild`. The button retains its behavior.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+Create `BrandedWidget.tsx`:
+
+```tsx
+import {
+  DocxEditorContentControlWidget as Widget,
+  type DocxEditorContentControlWidgetProps,
+} from '@docx-editor.dev/react';
+
+export function BrandedWidget({ session }: DocxEditorContentControlWidgetProps) {
+  if (session.kind !== 'date') return <Widget session={session} />;
+
+  return (
+    <Widget session={session} className="brand-popup">
+      <Widget.Header />
+      <Widget.Weekdays />
+      <Widget.Grid className="brand-grid" />
+      <Widget.Today asChild>
+        <button type="button" className="brand-button">
+          Pick today
+        </button>
+      </Widget.Today>
+      <Widget.Input />
+      <Widget.Error />
+      <Widget.Footer />
+    </Widget>
+  );
+}
+```
+
+Register `BrandedWidget` with `definePopup()`:
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import { BrandedWidget } from './BrandedWidget';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const popups = { contentControlWidget: definePopup(BrandedWidget) };
+
+export function Editor({ source }: { source: Uint8Array }) {
+  return <DocxEditor document={source} popups={popups} />;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+Create `BrandedWidget.vue`:
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorContentControlWidget as Widget,
+  type DocxEditorContentControlWidgetProps,
+} from '@docx-editor.dev/vue';
+
+defineProps<DocxEditorContentControlWidgetProps>();
+</script>
+
+<template>
+  <Widget v-if="session.kind === 'date'" :session="session" class-name="brand-popup">
+    <Widget.Header />
+    <Widget.Weekdays />
+    <Widget.Grid class-name="brand-grid" />
+    <Widget.Today as-child>
+      <button type="button" class="brand-button">Pick today</button>
+    </Widget.Today>
+    <Widget.Input />
+    <Widget.Error />
+    <Widget.Footer />
+  </Widget>
+  <Widget v-else :session="session" />
+</template>
+```
+
+Register `BrandedWidget` with `definePopup()`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, definePopup } from '@docx-editor.dev/vue';
+import BrandedWidget from './BrandedWidget.vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ source: Uint8Array }>();
+const popups = { contentControlWidget: definePopup(BrandedWidget) };
+</script>
+
+<template>
+  <DocxEditor :document="source" :popups="popups" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`source` is your existing editor document. Parts accept `className`, `style`, `hidden`, and `asChild`. They forward `id`, `aria-*`, and `data-*`. With `asChild`, provide one element. Custom components must forward its props, events, and ref.
+
+| Task | Parts |
+| --- | --- |
+| Render a complete date picker | `Calendar` |
+| Arrange calendar navigation | `Header`, `PreviousMonth`, `Title`, `NextMonth`, `Navigation`, `Month`, `Year` |
+| Arrange dates and entry | `Weekdays`, `Grid`, `Day`, `Today`, `Input` |
+| Render choices or a picture picker | `List`, `Item`, `Picture` |
+| Show errors and actions | `Error`, `Footer`, `Apply`, `Cancel` |
+
+`Header` includes month and year selectors. `Footer` includes Cancel and Apply. Keep `Error` in custom arrangements so users can see rejected writes.
+
+### Add a custom action
+
+Call `useContentControlWidget()` in a child of `Widget`. This React button commits a date through the same validation as the packaged picker:
+
+```tsx
+import { useContentControlWidget } from '@docx-editor.dev/react';
+
+function UseDepartureDate() {
+  const { isEnabled, apply } = useContentControlWidget();
+  return (
+    <button type="button" disabled={!isEnabled} onClick={() => apply('2026-12-01')}>
+      Depart December 1
+    </button>
+  );
+}
+```
+
+Place `<UseDepartureDate />` inside the date arrangement in [Arrange parts](#arrange-parts). In Vue, import the composable from `@docx-editor.dev/vue`; reactive state uses refs, which templates unwrap automatically.
+
+- `setValue(value)` updates the draft. `apply()` commits it; `apply(value)` commits an explicit value. A refused write returns `false`, keeps the popup open, and sets `refused`. `cancel()` closes without applying the draft.
+- Dates use `YYYY-MM-DD`. `dateText`, `setDateText`, and `applyDateText` handle regional numeric entry using `session.locale`.
+- Lists expose `items`. Pass an entry to `Item`, or call `apply(item.value)`. Gallery values name blocks in the document's glossary.
+- Pictures expose `accept` and `replaceImage(fileOrBytes)`. Replacement returns `Promise<boolean>` and preserves the drawing's size.
+- Checkbox values are `'true'` and `'false'`. A checkbox root without children toggles immediately; custom children must call `apply`.
+
+### Style without replacing a renderer
+
+Use `--doc-*` tokens for colors and `data-docx-part` attributes for individual parts. These hooks work with the engine, React, and Vue renderers. Load your stylesheet after the editor stylesheet.
+
+```css
+.docx-editor [data-docx-part='day'] {
+  border-radius: 50%;
+}
+.docx-editor [data-docx-part='item'][aria-selected='true'] {
+  font-weight: 600;
+}
+```
+
+Calendar cells expose `data-selected`, `data-today`, and `data-other-month`. Popup roots expose `data-placement="top"` or `"bottom"`.
+
+### Build a custom grid or root
+
+Prefer packaged parts to retain keyboard behavior. For a custom grid, read `calendar.days` and use `focusDay` from the widget context. Import `calendarDateForKey` from `@docx-editor.dev/core/editor`. Preserve grid roles, selected states, and one focusable day. For a custom list, use `listId` and `listNavigation` to preserve listbox relationships, typeahead, and roving focus.
+
+For a separate popup root, call `observeContentControlPopup(panel, session.anchor)` and run its returned cleanup on close. Use `contentControlPopupKeyDown` for Escape and Tab wrapping. You must also handle outside clicks, focus return, and `session.signal` cancellation. The packaged root handles these requirements.
+
+## Connect a custom input
+
+Put the input inside a named `Field`. Call the draft hook in the input component, which renders under the dialog's provider. This example edits the top margin in inches.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { usePageSetupDialog } from '@docx-editor.dev/react';
+
+function TopMargin() {
+  const { values, setValue, isEnabled } = usePageSetupDialog();
+  return (
+    <label>
+      Top margin (inches)
+      <input
+        type="number"
+        step="0.1"
+        value={values.marginTop / 1440}
+        disabled={!isEnabled}
+        onChange={(event) => setValue('marginTop', Math.round(Number(event.target.value) * 1440))}
+      />
+    </label>
+  );
+}
+```
+
+Add this named child inside your `PageSetupDialog`:
+
+```tsx
+<DocxEditor.PageSetupDialog.Field name="marginTop">
+  <TopMargin />
+</DocxEditor.PageSetupDialog.Field>
+```
+
+</Framework>
+<Framework value="vue">
+
+Create `TopMargin.vue`:
+
+```vue
+<script setup lang="ts">
+import { usePageSetupDialog } from '@docx-editor.dev/vue';
+
+const { values, setValue, isEnabled } = usePageSetupDialog();
+function update(event: Event) {
+  const input = event.target as HTMLInputElement;
+  setValue('marginTop', Math.round(Number(input.value) * 1440));
+}
+</script>
+
+<template>
+  <label>
+    Top margin (inches)
+    <input
+      type="number"
+      step="0.1"
+      :value="values.marginTop / 1440"
+      :disabled="!isEnabled"
+      @input="update"
+    />
+  </label>
+</template>
+```
+
+Import `TopMargin` in `PageSetup.vue` and declare `const Field = Dialog.Field`. Add this named child inside `Dialog`:
+
+```vue
+<Field name="marginTop"><TopMargin /></Field>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Keep the default `Apply` and `Error` parts. Invalid margins keep the dialog open and show an error. **Cancel** discards the draft.
+
+## Style popups
+
+Import your stylesheet after the core stylesheet. Default dialogs have a plain panel, bordered inputs, a filled primary button, and an outlined secondary button. Dialogs inherit `--doc-*` colors, so a dark editor gets a dark dialog.
+
+Optional tokens adjust the panel without replacing any part:
+
+| Token                         | Controls                                                       |
+| ----------------------------- | -------------------------------------------------------------- |
+| `--doc-dialog-font-family`    | The panel font stack.                                          |
+| `--doc-dialog-font-size`      | The base size. Titles, labels, and hints scale from it.        |
+| `--doc-dialog-radius`         | The panel corner radius.                                       |
+| `--doc-dialog-control-radius` | The corner radius of inputs, text areas, selects, and buttons. |
+| `--doc-dialog-padding`        | One length: the side inset of the header, body, and footer.    |
+| `--doc-dialog-gap`            | The vertical distance between rows and sections.               |
+
+Use `data-docx-dialog` values `pageSetup`, `paragraph`, `textFormField`, or `revisionMarkup`. `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
+
+There are two ways to change how a part looks:
+
+- To adjust the packaged part, pass `className` to the part. Every default rule uses at least two classes, such as `.docx-editor .docx-dialog__button`, so it survives element resets like Tailwind preflight. To override these rules, add a class or attribute the default does not have, and skip `!important`. A selector with one class, such as `.app-rounded`, has lower specificity. Adding `.docx-editor` gives equal specificity, so stylesheet order determines the result.
+- To bring your own element, pass `asChild`. The packaged classes stay off your element, so a single class or utility classes style it as written.
+
+```css
+/* className="app-rounded" on the packaged Apply part. The
+   data-docx-dialog attribute is the extra compound that wins. */
+.docx-editor [data-docx-dialog='pageSetup'] .app-rounded {
+  border-radius: 999px;
+  padding-inline: 1.25rem;
+}
+
+/* asChild with <button class="app-apply">, as in the custom button example */
+.app-apply {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 20px;
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+```
+
+Automatic dialogs inherit their editor's theme. For external portals or Vue `Teleport`, provide the theme at the destination; framework context does not transfer CSS inheritance. Preserve labels, keyboard behavior, and input-method composition on custom controls.
+
+For a complete session renderer, follow its abort signal and use its supplied actions. Widget sessions validate through `apply(value)`. Invalid-field sessions use `acknowledge()` to handle the invalid fill, or `cancel()` to dismiss without clearing it. `locale` controls regional dates; `i18n` controls UI strings.
+
+## Next steps
+
+Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite) or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue) with `?dialogs=1`. Both examples show two themed editors with custom dialog and link controls.
+
+## Customize your editor
+
+Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.

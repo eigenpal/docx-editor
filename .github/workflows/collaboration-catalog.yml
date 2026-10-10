@@ -1,0 +1,170 @@
+name: Capture collaboration release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Stable published version (defaults to the current package version)
+        type: string
+        required: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable published version (defaults to the current package version)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+  checks: read
+  statuses: read
+
+concurrency:
+  group: collaboration-catalog
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture collaboration catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      pr: ${{ steps.capture.outputs.pr }}
+      recorded: ${{ steps.capture.outputs.recorded }}
+      version: ${{ steps.capture.outputs.version }}
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.token.outputs.token }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Capture published artifacts and prepare review
+        id: capture
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          version="$REQUESTED_VERSION"
+          if [ -z "$version" ]; then
+            version=$(node -p "JSON.parse(require('fs').readFileSync('packages/pro/package.json')).version")
+          fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo 'Expected a stable release version'
+            exit 1
+          fi
+          if node --input-type=module -e 'import { readFileSync } from "node:fs"; const data=JSON.parse(readFileSync(".collaboration/releases.json")); process.exit(data.releases.some(entry => entry.version === process.argv[1]) ? 0 : 1)' "$version"; then
+            echo "Baseline $version is already recorded."
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+            echo "recorded=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          branch="automation/collaboration-catalog-$version"
+          pr_state=$(gh pr list --head "$branch" --state all --json state --jq '.[0].state // ""')
+          if [ "$pr_state" = OPEN ]; then
+            echo "A catalog PR already exists for $version. Resume its CI checks."
+            echo "pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$pr_state" ]; then
+            echo "The catalog PR is $pr_state but the baseline is absent from main. Restore or reopen that PR before retrying."
+            exit 1
+          fi
+          remote_branch=$(git ls-remote --heads origin "refs/heads/$branch")
+          if [ -n "$remote_branch" ]; then
+            # Resume after a successful push followed by a failed PR creation.
+            # Reuse the captured bytes; never regenerate or force-push a baseline.
+            git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch"
+            git switch --track -c "$branch" "origin/$branch"
+            node scripts/collaboration/cli.mjs catalog
+          else
+            git switch -c "$branch"
+            node scripts/collaboration/cli.mjs catalog --capture "$version"
+            node scripts/collaboration/cli.mjs catalog
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git config core.hooksPath /dev/null
+            git add .collaboration/releases.json .collaboration/releases/ docs/site/content/pro/collaboration-versions.mdx
+            git commit -m "test: capture collaboration baseline $version"
+            git push origin "$branch"
+          fi
+          cat > /tmp/collaboration-catalog-pr.md <<'BODY'
+          Record the published collaboration packages, frozen installation, and saved-room fixture. CI verifies artifact integrity, compatibility, and the generated release table. The catalog workflow merges this PR after all checks pass; failures leave it open for investigation.
+          BODY
+          gh pr create --base main --head "$branch" --title "test: capture collaboration baseline $version" --body-file /tmp/collaboration-catalog-pr.md
+          echo "pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')" >> "$GITHUB_OUTPUT"
+
+  merge:
+    name: Merge verified catalog
+    needs: capture
+    # Also runs when the catalog already records the version, for example on a rerun, so
+    # the job reports that as a pass rather than a skip.
+    if: needs.capture.outputs.pr != '' || needs.capture.outputs.recorded == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      # Write, to approve the generated PR. main requires one approving review, and
+      # release-pal cannot approve the PR it opened.
+      pull-requests: write
+      actions: read
+      checks: read
+      statuses: read
+    env:
+      PR_NUMBER: ${{ needs.capture.outputs.pr }}
+      RELEASE_VERSION: ${{ needs.capture.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Catalog already records this version
+        if: env.PR_NUMBER == ''
+        run: echo "The collaboration catalog on main already records $RELEASE_VERSION." >> "$GITHUB_STEP_SUMMARY"
+      - name: Wait for the complete CI run and all PR checks
+        if: env.PR_NUMBER != ''
+        id: checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/collaboration/catalog-merge.mjs wait
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        if: steps.checks.outputs.head != ''
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+      - name: Recheck and merge the tested commit
+        if: steps.checks.outputs.head != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_TOKEN: ${{ steps.token.outputs.token }}
+          EXPECTED_HEAD: ${{ steps.checks.outputs.head }}
+        run: |
+          node scripts/collaboration/catalog-merge.mjs check
+          if [ "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json state --jq .state)" = MERGED ]; then
+            echo "Catalog PR #$PR_NUMBER is already merged."
+            exit 0
+          fi
+          # The check above proved this head holds only the generated baseline files and
+          # passed every check, so approve exactly that commit.
+          gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews" \
+            -f event=APPROVE -f commit_id="$EXPECTED_HEAD" \
+            -f body="Generated catalog for $RELEASE_VERSION. Only baseline files changed, and all checks passed." >/dev/null
+          GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" --squash --match-head-commit "$EXPECTED_HEAD" --repo "$GITHUB_REPOSITORY"

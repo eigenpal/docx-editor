@@ -1,0 +1,833 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { collectPageChangeBars } from '@docx-editor.dev/core/output';
+import { DEFAULT_REVISION_MARKUP, type ResolvedRevisionMarkup } from '@docx-editor.dev/core/editor';
+import {
+  indexRowRevisions,
+  markupBackground,
+  markupColor,
+  spanMarkup,
+  type RowRevision,
+} from './revision-markup.ts';
+import { PDFDocument, type PDFPage } from 'pdf-lib';
+import type {
+  ExportSemanticLayout,
+  FontBackedExportCapabilities,
+} from '@docx-editor.dev/core/export';
+import {
+  forEachSemanticSpan,
+  forEachSemanticStory,
+  forEachSemanticDrawing,
+  runBorderStrokesForLine,
+  type BlockFragmentRecord,
+  type LayoutBox,
+  type SemanticSpanVisit,
+  type SemanticDrawingVisit,
+  type TableCellFragmentRecord,
+} from '@docx-editor.dev/core/layout';
+import {
+  color,
+  flateStream,
+  number as n,
+  pageHeight,
+  unicodeHex,
+  Work,
+  Commands,
+  rect,
+} from './context.ts';
+import { TextWriter } from './text.ts';
+import { comments, destinations, linkAnnotation } from './annotations.ts';
+import { ImageWriter } from './images.ts';
+import { paintEquation } from './equations.ts';
+import { groupMemberStoryOf, openMemberClip } from './group-text.ts';
+
+/**
+ * Span text for the PDF text layer, as drawn: an optional hyphen element extracts `-` only
+ * where its line breaks, and a literal U+00AD in the run text always extracts `-`.
+ */
+function extractedText(span: SemanticSpanVisit['span']): string {
+  if (span.optionalHyphenBreak) return '-';
+  const element = span.projected === true && span.range.end - span.range.start === 1;
+  return element ? span.text : span.text.replaceAll('\u00ad', '-');
+}
+
+function rule(
+  box: LayoutBox,
+  colorHex: string | null,
+  style: string,
+  x: number,
+  y: number,
+  height: number
+): string {
+  if (style === 'double') {
+    const horizontal = box.width >= box.height;
+    const third = (horizontal ? box.height : box.width) / 3;
+    return [0, 2 * third]
+      .map((offset) =>
+        rule(
+          {
+            ...box,
+            x: box.x + (horizontal ? 0 : offset),
+            y: box.y + (horizontal ? offset : 0),
+            width: horizontal ? box.width : third,
+            height: horizontal ? third : box.height,
+          },
+          colorHex,
+          'single',
+          x,
+          y,
+          height
+        )
+      )
+      .join('\n');
+  }
+  if (style === 'solid' || style === 'single' || style === 'thick')
+    return `${color(colorHex)} rg ${rect(box, x, y, height, true)} f`;
+  const horizontal = box.width >= box.height;
+  const width = horizontal ? box.height : box.width;
+  const sx = box.x + x + (horizontal ? 0 : width / 2),
+    sy = height - box.y - y - (horizontal ? width / 2 : 0);
+  return `${color(colorHex)} RG ${n(width)} w [${n(style === 'dotted' ? width : width * 3)} ${n(width * 2)}] 0 d ${n(sx)} ${n(sy)} m ${n(sx + (horizontal ? box.width : 0))} ${n(sy - (horizontal ? 0 : box.height))} l S [] 0 d`;
+}
+/**
+ * The transform that turns a `btLr` cell's laid-out plane into its place on the page.
+ *
+ * Layout lays a bottom-to-top cell out upright, in a plane as wide as the cell is tall,
+ * with the plane's origin at the cell's own top-left; the screen painter then turns that
+ * plane a quarter turn counter-clockwise and seats its origin at the cell's bottom-left
+ * (`table-cell-text-direction-paint.ts`). This is the same turn in PDF user space, where
+ * `x`, `y` are the story origin relative to the page and `height` is the page height.
+ */
+function rotatedCellMatrix(cell: LayoutBox, x: number, y: number, height: number): string {
+  const left = x + cell.x;
+  const top = y + cell.y;
+  return `0 1 -1 0 ${n(left - top + height)} ${n(height - top - cell.height - left)} cm`;
+}
+
+function decorations(
+  blocks: readonly BlockFragmentRecord[],
+  x: number,
+  y: number,
+  page: PDFPage,
+  work: Work,
+  pageIndex: number,
+  markup?: ResolvedRevisionMarkup,
+  authorSlots?: ReadonlyMap<string, number>
+): string[] {
+  const out: string[] = [];
+  for (const block of blocks) {
+    work.tick();
+    if (block.kind === 'paragraph') {
+      if (block.shading && block.shadingBox)
+        out.push(
+          `${color(block.shading)} rg ${rect(block.shadingBox, x, y, pageHeight(page), true)} f`
+        );
+      for (const border of block.borders ??
+        (block.bottomBorder ? [{ ...block.bottomBorder, side: 'bottom' }] : [])) {
+        const style = border.edge.val;
+        if (border.edge.shadow)
+          work.report('border-shadow', 'Paragraph border shadow is not encoded', pageIndex);
+        if (!['single', 'thick', 'dashed', 'dotted', 'double'].includes(style))
+          work.report(
+            'paragraph-border-style',
+            `Unsupported paragraph border: ${style}`,
+            pageIndex
+          );
+        out.push(rule(border.box, border.edge.color, style, x, y, pageHeight(page)));
+      }
+    } else {
+      // Complete the backgrounds before drawing shared borders. Later cells and
+      // nested paragraph shading must not erase an earlier cell's owned edge.
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.paintInert || cell.vMergeContinue) continue;
+          if (cell.shading)
+            out.push(`${color(cell.shading)} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`);
+          if (markup && cell.revisionShading) {
+            const shade = markup.cells[cell.revisionShading];
+            if (shade !== 'none')
+              out.push(
+                `${color(markupColor(shade, authorSlots?.get(cell.revisionShadingAuthor ?? '') ?? 0))} rg ${rect(cell.box, x, y, pageHeight(page), true)} f`
+              );
+          }
+          const inner = decorations(cell.blocks, x, y, page, work, pageIndex, markup, authorSlots);
+          if (cell.textDirection && inner.length)
+            out.push('q', rotatedCellMatrix(cell.box, x, y, pageHeight(page)), ...inner, 'Q');
+          else out.push(...inner);
+        }
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.paintInert || cell.vMergeContinue) continue;
+          for (const stroke of cell.borders?.strokes ?? [])
+            out.push(
+              rule(
+                stroke,
+                stroke.color,
+                stroke.cssStyle,
+                x + cell.box.x,
+                y + cell.box.y,
+                pageHeight(page)
+              )
+            );
+          const publishedSides = new Set(
+            (cell.borders?.strokes ?? []).map((stroke) => stroke.side)
+          );
+          for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+            const edge = cell.borders?.[side];
+            if (!edge || publishedSides.has(side)) continue;
+            const b = cell.box,
+              width = edge.widthPt;
+            const box = {
+              x: b.x + (side === 'right' ? b.width - width : 0),
+              y: b.y + (side === 'bottom' ? b.height - width : 0),
+              width: side === 'left' || side === 'right' ? width : b.width,
+              height: side === 'top' || side === 'bottom' ? width : b.height,
+            };
+            out.push(rule(box, edge.color, edge.style, x, y, pageHeight(page)));
+          }
+        }
+    }
+  }
+  return out;
+}
+const HIGHLIGHTS: Record<string, string> = {
+  yellow: 'FFFF00',
+  green: '00FF00',
+  cyan: '00FFFF',
+  magenta: 'FF00FF',
+  blue: '0000FF',
+  red: 'FF0000',
+  darkBlue: '000080',
+  darkCyan: '008080',
+  darkGreen: '008000',
+  darkMagenta: '800080',
+  darkRed: '800000',
+  darkYellow: '808000',
+  darkGray: '808080',
+  lightGray: 'C0C0C0',
+  black: '000000',
+  white: 'FFFFFF',
+};
+/** Device grid the reference paints on: 1/300 inch. */
+const PAGE_GRID_PT = 0.24;
+
+/** Round a page dimension onto the device grid, as the reference writes it. */
+function onDeviceGrid(value: number): number {
+  return Number((Math.round(value / PAGE_GRID_PT) * PAGE_GRID_PT).toFixed(6));
+}
+
+export async function paint(
+  doc: PDFDocument,
+  session: FontBackedExportCapabilities,
+  layout: ExportSemanticLayout,
+  work: Work,
+  includeComments: boolean
+): Promise<void> {
+  // The reference puts the page box on the same 0.24pt device grid it paints on. A4 is
+  // authored as 11906 x 16838 twips, which is 595.30 x 841.90pt, and the reference writes
+  // 595.20 x 841.92 — 2480 and 3508 units. Twenty-three reference documents agree, Letter
+  // included, where the authored size is already on the grid and nothing moves. Leaving the
+  // exact size in shifts every top-down position by the height's own remainder.
+  const pages = layout.pages.map((p) => {
+    if (p.box.width <= 0 || p.box.height <= 0 || p.box.width > 14400 || p.box.height > 14400)
+      throw new RangeError('Invalid PDF page dimensions');
+    return doc.addPage([onDeviceGrid(p.box.width), onDeviceGrid(p.box.height)]);
+  });
+  for (const artifact of layout.reviewArtifacts) {
+    if (
+      layout.displayMode === 'all-markup' &&
+      artifact.kind === 'tracked-change' &&
+      ![
+        'insert',
+        'delete',
+        'replace',
+        ...(layout.revisionMarkup ? ['moveFrom', 'moveTo', 'format'] : []),
+      ].includes(artifact.change) &&
+      // Tracked rows are painted in every All Markup export: their text takes the row's mark.
+      !(
+        artifact.change === 'structural' &&
+        artifact.structuralChanges?.length &&
+        artifact.structuralChanges.every((kind) => kind === 'rowInsert' || kind === 'rowDelete')
+      ) &&
+      !(
+        layout.revisionMarkup &&
+        artifact.change === 'structural' &&
+        artifact.structuralChanges?.length &&
+        artifact.structuralChanges.every((kind) =>
+          ['cellInsert', 'cellDelete', 'cellMerge'].includes(kind)
+        )
+      )
+    )
+      work.report('review-presentation', `Unsupported revision presentation: ${artifact.change}`);
+  }
+  const authorSlots = new Map<string, number>(Object.entries(layout.revisionAuthorSlots ?? {}));
+  let nextAuthorSlot = 0;
+  for (const slot of authorSlots.values()) nextAuthorSlot = Math.max(nextAuthorSlot, slot + 1);
+  const addAuthor = (author: string) => {
+    if (author !== '' && !authorSlots.has(author)) authorSlots.set(author, nextAuthorSlot++);
+  };
+  // Runs in a tracked row carry no revision of their own; the row's applies to all of them.
+  // Only All Markup shows revision marks; the resolved views have no tracked rows to mark.
+  const rowRevisions = new Map<BlockFragmentRecord, RowRevision>();
+  // Every story's blocks: the root stories, then each text box story and group member story,
+  // which hold tables, tracked rows, and tracked cells too.
+  const forEachStoryBlocks = (visit: (blocks: readonly BlockFragmentRecord[]) => void): void => {
+    forEachSemanticStory(layout, (root) => visit(root.host.fragments));
+    forEachSemanticDrawing(layout, ({ drawing }) => {
+      if (drawing.textboxStory) visit(drawing.textboxStory.fragments);
+      for (const member of drawing.groupTextboxStories ?? []) visit(member.story.fragments);
+    });
+  };
+  if (layout.displayMode === 'all-markup')
+    forEachStoryBlocks((blocks) => indexRowRevisions(blocks, rowRevisions, () => work.tick()));
+  // Match the visible document order before adding authors from resolved-away revisions.
+  forEachSemanticSpan(layout, (visit) => {
+    for (const revision of visit.span.revisions ?? []) addAuthor(revision.author);
+    const markup = spanMarkup(
+      visit,
+      layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP,
+      rowRevisions.get(visit.paragraph)
+    );
+    if (markup) addAuthor(markup.author);
+  });
+  const addCellAuthors = (blocks: readonly BlockFragmentRecord[]): void => {
+    for (const block of blocks) {
+      if (block.kind !== 'table') continue;
+      for (const row of block.rows)
+        for (const cell of row.cells) {
+          if (cell.revisionShadingAuthor) addAuthor(cell.revisionShadingAuthor);
+          addCellAuthors(cell.blocks);
+        }
+    }
+  };
+  forEachStoryBlocks(addCellAuthors);
+  for (const artifact of layout.reviewArtifacts) {
+    if (artifact.kind === 'tracked-change') addAuthor(artifact.author);
+  }
+  const text = new TextWriter(
+    doc,
+    session,
+    work,
+    layout.displayMode === 'all-markup',
+    layout.revisionMarkup,
+    authorSlots,
+    rowRevisions
+  );
+  const images = new ImageWriter(doc, session, work);
+  const names = destinations(doc, pages, layout);
+  // Bottom to top: a `back` page border, then the header and footer as one layer under the
+  // main document (their own behind-text drawings, text, and in-front drawings, in that
+  // order), then the body's behind-text drawings, the body, and a `front` page border.
+  // A header or footer drawing set in front of text is in front of the header text only;
+  // it never covers body text or a body drawing.
+  const backBorders = pages.map(() => new Commands(work));
+  const furnitureBehind = pages.map(() => new Commands(work));
+  const furniture = pages.map(() => new Commands(work));
+  const behindStreams = pages.map(() => new Commands(work));
+  const streams = pages.map(() => new Commands(work));
+  const frontBorders = pages.map(() => new Commands(work));
+  const isFurniture = (rootStory: string): boolean =>
+    rootStory === 'header' || rootStory === 'footer';
+  const textStream = (rootStory: string, page: number): Commands =>
+    (isFurniture(rootStory) ? furniture : streams)[page]!;
+  const behindStream = (rootStory: string, page: number): Commands =>
+    (isFurniture(rootStory) ? furnitureBehind : behindStreams)[page]!;
+  for (const record of layout.pages) {
+    const out = streams[record.index]!;
+    const simple = layout.reviewDisplayMode === 'simple-markup';
+    if ((layout.revisionMarkup && layout.displayMode === 'all-markup') || simple) {
+      const markup = layout.revisionMarkup ?? DEFAULT_REVISION_MARKUP;
+      const bars = collectPageChangeBars(
+        record,
+        1,
+        simple ? 'simple-markup' : 'all-markup',
+        false,
+        markup,
+        layout.facingPages
+      );
+      for (const bar of bars.runs) {
+        const ink = markupColor(
+          markup.changedLines.color,
+          authorSlots.get(bar.author ?? '') ?? 0,
+          simple ? 'EA3425' : 'A4A4A4'
+        );
+        out.push(
+          `${color(ink)} rg ${n(bars.left)} ${n(pageHeight(pages[record.index]!) - bar.bottom)} ${simple ? '1.5' : '0.75'} ${n(bar.bottom - bar.top)} re f`
+        );
+      }
+    }
+    // Chrome flips y from the same gridded page height the text uses. `record.box.height` is
+    // the ungridded layout value, and the two differ by up to half a device unit on A4.
+    const height = pageHeight(pages[record.index]!);
+    if (record.pageBorders) {
+      const borderOut = (record.pageBorders.zOrder === 'front' ? frontBorders : backBorders)[
+        record.index
+      ]!;
+      for (const border of record.pageBorders.strokes) {
+        if (
+          !['single', 'thick', 'dashed', 'dotted', 'double'].includes(border.edge.val) ||
+          border.edge.shadow
+        )
+          work.report(
+            'page-border-style',
+            `Unsupported page border: ${border.edge.val}`,
+            record.index
+          );
+        borderOut.push(rule(border.box, border.edge.color, border.edge.val, 0, 0, height));
+      }
+    }
+    for (const separator of record.columnSeparators ?? [])
+      out.push(
+        `0 0 0 rg ${rect(separator, record.contentBox.x - record.box.x, record.contentBox.y - record.box.y, height, true)} f`
+      );
+    for (const area of [record.footnotes, record.endnotes]) {
+      if (area?.fallbackReason === 'note-continuation-notice-height-cap')
+        work.report(
+          area.fallbackReason,
+          'Continuation notice exceeds the available page height',
+          record.index
+        );
+      const sep = area?.separator;
+      if (!sep || !(sep.ruleStyle || sep.synthetic)) continue;
+      for (const offset of sep.ruleStyle === 'double' ? [0, 2] : [0])
+        out.push(
+          `${color(sep.ruleColor)} rg ${rect({ ...sep.box, y: sep.box.y + offset, height: sep.ruleStyle === 'double' ? 0.75 : sep.box.height }, -record.box.x, -record.box.y, height, true)} f`
+        );
+    }
+  }
+  const spans: SemanticSpanVisit[] = [];
+  const drawings: SemanticDrawingVisit[] = [];
+  for (const warning of layout.contentWarnings ?? [])
+    work.report(`core-${warning.code}`, warning.code);
+  forEachSemanticSpan(layout, (visit) => {
+    work.tick();
+    spans.push(visit);
+  });
+  forEachSemanticDrawing(layout, (visit) => {
+    work.tick();
+    drawings.push(visit);
+  });
+  forEachSemanticStory(layout, (root) => {
+    textStream(root.story, root.page.index).push(
+      ...decorations(
+        root.host.fragments,
+        root.origin.x - root.page.box.x,
+        root.origin.y - root.page.box.y,
+        pages[root.page.index]!,
+        work,
+        root.page.index,
+        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+        authorSlots
+      )
+    );
+  });
+  drawings.sort(
+    (a, b) =>
+      (a.drawing.kind === 'anchoredDrawing' ? a.drawing.relativeHeight : 0) -
+      (b.drawing.kind === 'anchoredDrawing' ? b.drawing.relativeHeight : 0)
+  );
+  // A textbox's text is painted WITH the textbox, at the textbox's place in the drawing
+  // order, not in the story order the traversal hands it out in. Each owner collects its
+  // spans, highlights and character borders here; `paintTextbox` clips and emits them when
+  // the drawing is painted, over the fill and under whatever the document stacks on top.
+  //
+  // Keyed by page AND owner: a header or footer is laid out once per variant and attached to
+  // every page that shows it, so one owner record recurs with a different page's text each
+  // time, and a buffer per record alone would paint every page's text into every copy.
+  const textboxBuffers = new Map<number, Map<object, Commands>>();
+  // Text in a `btLr` cell is laid out upright and turned when painted, so it too is
+  // collected, per page and cell, and emitted under `rotatedCellMatrix` after the loop.
+  const rotatedCellOf = new Map<BlockFragmentRecord, TableCellFragmentRecord>();
+  const markRotated = (blocks: readonly BlockFragmentRecord[], cell?: TableCellFragmentRecord) => {
+    for (const block of blocks) {
+      work.tick();
+      if (block.kind === 'paragraph') {
+        if (cell) rotatedCellOf.set(block, cell);
+        continue;
+      }
+      for (const row of block.rows)
+        for (const inner of row.cells)
+          markRotated(inner.blocks, cell ?? (inner.textDirection ? inner : undefined));
+    }
+  };
+  forEachSemanticStory(layout, (root) => markRotated(root.host.fragments));
+  // Text-box stories hold turned cells too: a box's own story and each group member's.
+  forEachSemanticDrawing(layout, ({ drawing }) => {
+    if (drawing.textboxStory) markRotated(drawing.textboxStory.fragments);
+    for (const member of drawing.groupTextboxStories ?? []) markRotated(member.story.fragments);
+  });
+  const rotatedBuffers = new Map<
+    string,
+    {
+      cell: TableCellFragmentRecord;
+      x: number;
+      y: number;
+      page: number;
+      /** Root story of the cell, which picks the page layer its ink joins. */
+      rootStory: string;
+      commands: Commands;
+      /** Behind-text drawings of the cell, turned with it but painted under the page's text. */
+      behind: Commands;
+      /**
+       * The text box or group member buffer the turned cell joins, so that box's own turn
+       * and clips apply over the cell's. Absent for a cell outside a text box story.
+       */
+      member?: Commands;
+    }
+  >();
+  const textboxBuffer = (page: number, key: object): Commands => {
+    let owners = textboxBuffers.get(page);
+    if (!owners) {
+      owners = new Map();
+      textboxBuffers.set(page, owners);
+    }
+    let buffer = owners.get(key);
+    if (!buffer) {
+      buffer = new Commands(work);
+      owners.set(key, buffer);
+    }
+    return buffer;
+  };
+  const outFor = (
+    visit: Pick<SemanticSpanVisit, 'story' | 'rootStory' | 'textboxOwner' | 'page'> & {
+      readonly paragraph?: SemanticSpanVisit['paragraph'] | null;
+      readonly storyOrigin?: SemanticSpanVisit['storyOrigin'];
+    }
+  ): Commands => {
+    const cell = visit.paragraph && rotatedCellOf.get(visit.paragraph);
+    if (cell && visit.storyOrigin) {
+      const key = `${visit.page.index}:${cell.id}`;
+      let entry = rotatedBuffers.get(key);
+      if (!entry) {
+        entry = {
+          cell,
+          x: visit.storyOrigin.x - visit.page.box.x,
+          y: visit.storyOrigin.y - visit.page.box.y,
+          page: visit.page.index,
+          rootStory: visit.rootStory,
+          commands: new Commands(work),
+          behind: new Commands(work),
+        };
+        // A cell inside a text box turns inside that box's (or group member's) clip.
+        if (visit.story === 'textbox' && visit.textboxOwner) {
+          const owner = visit.textboxOwner;
+          const key = groupMemberStoryOf(owner, visit.paragraph) ?? owner;
+          entry.member = textboxBuffer(visit.page.index, key);
+        }
+        rotatedBuffers.set(key, entry);
+      }
+      return entry.commands;
+    }
+    if (visit.story !== 'textbox' || !visit.textboxOwner)
+      return textStream(visit.rootStory, visit.page.index);
+    // A group member's text keys on its member story, so each member clips on its own.
+    const key = groupMemberStoryOf(visit.textboxOwner, visit.paragraph) ?? visit.textboxOwner;
+    return textboxBuffer(visit.page.index, key);
+  };
+  // PDF extractors expect glyphs in visual order within each physical line.
+  // Retain logical Unicode separately in one ActualText region for the complete line.
+  //
+  // Not for a line with right-to-left text. MuPDF and Poppler lay ActualText characters out
+  // over the glyphs as if they were visual and reverse them, so a logical Arabic or Hebrew
+  // line extracted scrambled or backwards. Without it they read each glyph's own ToUnicode
+  // in visual order and reorder the line themselves, as they do for LibreOffice's PDFs.
+  const pageGroups = new Map<number, Map<object, SemanticSpanVisit[]>>();
+  for (const visit of spans) {
+    let lines = pageGroups.get(visit.page.index);
+    if (!lines) {
+      lines = new Map();
+      pageGroups.set(visit.page.index, lines);
+    }
+    let group = lines.get(visit.line);
+    if (!group) {
+      group = [];
+      lines.set(visit.line, group);
+    }
+    group.push(visit);
+  }
+  const lineStarts = new Map<SemanticSpanVisit, string | null>();
+  spans.length = 0;
+  for (const lines of pageGroups.values())
+    for (const group of lines.values()) {
+      const first = group[0]!;
+      const markerText =
+        first.paragraph.lines[0] === first.line ? first.paragraph.marker?.text : undefined;
+      const logical =
+        (markerText ? markerText + ' ' : '') +
+        group.map((v) => v.span.equation?.fallbackText ?? extractedText(v.span)).join('');
+      const rightToLeft = group.some((v) => (v.span.style.shaping?.level ?? 0) % 2 === 1);
+      group.sort((a, b) => a.absoluteBox.x - b.absoluteBox.x);
+      lineStarts.set(group[0]!, rightToLeft ? null : logical);
+      for (const visit of group) spans.push(visit);
+    }
+  let activeOut: string[] | undefined;
+  // The buffer of the line being painted, which receives that line's outline glyphs.
+  let lineOut: string[] | undefined;
+  const placeOutlines = (): void => {
+    const outlines = text.takeOutlines();
+    if (outlines && lineOut) lineOut.push(outlines);
+  };
+  const markersByPage = new Map<number, Set<object>>();
+  for (let i = 0; i < spans.length; i++) {
+    if (i % 128 === 0) await work.yield();
+    const visit = spans[i]!,
+      page = pages[visit.page.index]!,
+      out = outFor(visit);
+    if (lineStarts.has(visit)) {
+      placeOutlines();
+      lineOut = out;
+      if (activeOut) activeOut.push('EMC');
+      const logical = lineStarts.get(visit);
+      activeOut = logical === null ? undefined : out;
+      if (logical !== null)
+        out.push(`/Span << /ActualText <FEFF${unicodeHex(logical ?? '')}> >> BDC`);
+    }
+    let markers = markersByPage.get(visit.page.index);
+    if (!markers) {
+      markers = new Set();
+      markersByPage.set(visit.page.index, markers);
+    }
+    const marker = visit.paragraph.marker;
+    if (marker && !markers.has(visit.paragraph)) {
+      markers.add(visit.paragraph);
+      // A picture bullet replaces the marker glyph. Anything undrawable — missing, external,
+      // still decoding, refused, or a format this writer cannot embed — answers '' and the
+      // level's `w:lvlText` is painted instead, which is the same fall back Word shows.
+      const picture = marker.picture
+        ? await images.paintListMarkerPicture(
+            marker.picture,
+            {
+              ...marker.picture.box,
+              x: marker.picture.box.x + visit.storyOrigin.x - visit.page.box.x,
+              y: marker.picture.box.y + visit.storyOrigin.y - visit.page.box.y,
+            },
+            page,
+            visit.page.index
+          )
+        : '';
+      if (picture) out.push(picture);
+      else
+        // A right-to-left paragraph's marker comes as visual pieces, one per direction run.
+        for (const piece of marker.pieces ?? [marker])
+          out.push(
+            text.paint(
+              {
+                ...visit,
+                span: {
+                  ...visit.span,
+                  text: piece.text,
+                  style: piece.style,
+                  box: piece.box,
+                  link: undefined,
+                  revisions: undefined,
+                },
+                absoluteBox: {
+                  ...piece.box,
+                  x: piece.box.x + visit.storyOrigin.x,
+                  y: piece.box.y + visit.storyOrigin.y,
+                },
+              },
+              page,
+              true
+            )
+          );
+    }
+    const markup =
+      layout.displayMode === 'all-markup' && layout.revisionMarkup
+        ? spanMarkup(visit, layout.revisionMarkup, rowRevisions.get(visit.paragraph))
+        : null;
+    const fill =
+      markup && markup.background !== 'none'
+        ? markupBackground(markup.background, authorSlots.get(markup.author) ?? 0)
+        : (HIGHLIGHTS[visit.span.style.highlight ?? ''] ?? visit.span.style.shading);
+    if (fill)
+      out.push(
+        `${color(fill)} rg ${rect(text.bandBox(visit), -visit.page.box.x, -visit.page.box.y, pageHeight(page), true)} f`
+      );
+    const clipping = visit.paragraph.clipToBox;
+    if (clipping)
+      out.push(
+        `q ${rect(visit.paragraph.box, visit.storyOrigin.x - visit.page.box.x, visit.storyOrigin.y - visit.page.box.y, pageHeight(page))} W n`
+      );
+    out.push(
+      visit.span.equation ? paintEquation(visit, page, text, work) : text.paint(visit, page)
+    );
+    if (clipping) out.push('Q');
+    linkAnnotation(doc, page, visit, names);
+  }
+  placeOutlines();
+  if (activeOut) activeOut.push('EMC');
+  // Draw grouped character borders after highlights, which may otherwise cover an
+  // earlier run's edge. Geometry and grouping are shared with the screen painter.
+  for (const lines of pageGroups.values()) {
+    for (const group of lines.values()) {
+      const visit = group[0]!;
+      const strokes = runBorderStrokesForLine(visit.line);
+      if (strokes.length === 0) continue;
+      work.tick();
+      const out = outFor(visit);
+      const height = pageHeight(pages[visit.page.index]!);
+      const x = visit.storyOrigin.x - visit.page.box.x;
+      const y = visit.storyOrigin.y - visit.page.box.y;
+      if (visit.paragraph.clipToBox) out.push(`q ${rect(visit.paragraph.box, x, y, height)} W n`);
+      for (const { box, edge } of strokes) {
+        if (edge.shadow || !['single', 'thick', 'dashed', 'dotted', 'double'].includes(edge.val))
+          work.report(
+            'run-border-style',
+            `Unsupported character border: ${edge.val}${edge.shadow ? ' with shadow' : ''}`,
+            visit.page.index
+          );
+        out.push(rule(box, edge.color, edge.val, x, y, height));
+      }
+      if (visit.paragraph.clipToBox) out.push('Q');
+    }
+  }
+  // A group's text box members: the group's own picture and shapes, then each member's
+  // decorations and text, clipped to that member's content box and turned with the member,
+  // all inside the group's paint bounds — the same boxes the screen painter clips to.
+  const paintGroupText = async (visit: SemanticDrawingVisit, page: PDFPage): Promise<string> => {
+    const d = visit.drawing;
+    const base = d.groupPicture || d.vectorShape ? await images.paint(visit, page) : '';
+    const bounds = visit.absolutePaintBounds;
+    if (d.accessibility.hidden || bounds.width <= 0 || bounds.height <= 0) return base;
+    const height = pageHeight(page);
+    const buffers = textboxBuffers.get(visit.page.index);
+    const body: string[] = [];
+    for (const member of d.groupTextboxStories ?? []) {
+      const story = member.story;
+      if (story.fallbackReason === 'textbox-height-clip') {
+        work.report(
+          'textbox-clip',
+          'Textbox content taller than its box is clipped',
+          visit.page.index,
+          'information'
+        );
+      } else if (story.fallbackReason) {
+        work.report(
+          'textbox',
+          `Textbox story not laid out: ${story.fallbackReason}`,
+          visit.page.index
+        );
+        continue;
+      }
+      const x = visit.drawingOrigin.x + member.box.x - visit.page.box.x;
+      const y = visit.drawingOrigin.y + member.box.y - visit.page.box.y;
+      const text = [
+        ...decorations(
+          story.fragments,
+          x + story.contentOffset.x,
+          y + story.contentOffset.y,
+          page,
+          work,
+          visit.page.index,
+          layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+          authorSlots
+        ),
+        ...(buffers?.get(story) ?? []),
+      ];
+      if (text.length > 0) body.push(...openMemberClip(member, x, y, height), ...text, 'Q');
+    }
+    // Ink the walk could not tie to one member stays inside the group's bounds.
+    body.push(...(buffers?.get(d) ?? []));
+    if (body.length === 0) return base;
+    const clip = rect(bounds, -visit.page.box.x, -visit.page.box.y, height);
+    return [base, `q ${clip} W n`, ...body, 'Q'].filter(Boolean).join('\n');
+  };
+  const paintDrawing = async (visit: SemanticDrawingVisit): Promise<string> => {
+    const page = pages[visit.page.index]!;
+    const d = visit.drawing;
+    if (d.groupTextboxStories) return paintGroupText(visit, page);
+    if (!d.textboxStory) return images.paint(visit, page);
+    const story = d.textboxStory;
+    const origin = {
+      x: visit.drawingOrigin.x + story.contentOffset.x - visit.page.box.x,
+      y: visit.drawingOrigin.y + story.contentOffset.y - visit.page.box.y,
+    };
+    return images.paintTextbox(visit, page, [
+      ...decorations(
+        story.fragments,
+        origin.x,
+        origin.y,
+        page,
+        work,
+        visit.page.index,
+        layout.displayMode === 'all-markup' ? layout.revisionMarkup : undefined,
+        authorSlots
+      ),
+      ...(textboxBuffers.get(visit.page.index)?.get(d) ?? []),
+    ]);
+  };
+  // Drawings INSIDE a textbox story join their owner's buffer first, so an owner painted
+  // later carries them: behind its text at the front of the buffer, in front of it at the
+  // end. Deepest first, so a nested textbox is composed before the textbox that holds it.
+  const nested = drawings
+    .filter((visit) => visit.story === 'textbox' && visit.textboxOwner)
+    .sort((a, b) => b.textboxDepth - a.textboxDepth);
+  for (const visit of nested) {
+    const commands = await paintDrawing(visit);
+    if (!commands) continue;
+    const buffer = outFor(visit);
+    if (visit.paintLayer === 'behind-text') buffer.unshift(commands);
+    else buffer.push(commands);
+  }
+  // A turned cell inside a text box story joins its box's buffer before the box paints, so
+  // the box's (or group member's) turn and clips enclose the cell's own turn.
+  for (const [key, entry] of rotatedBuffers) {
+    if (!entry.member) continue;
+    const matrix = rotatedCellMatrix(
+      entry.cell.box,
+      entry.x,
+      entry.y,
+      pageHeight(pages[entry.page]!)
+    );
+    if (entry.behind.length) entry.member.unshift('q', matrix, ...entry.behind, 'Q');
+    if (entry.commands.length) entry.member.push('q', matrix, ...entry.commands, 'Q');
+    rotatedBuffers.delete(key);
+  }
+  // Behind-text drawings belong below the owner's text and decoration. A drawing laid out
+  // inside a `btLr` cell sits in that cell's upright plane, so it joins the cell's buffer
+  // and turns with the text; painted at its published origin it would land beside the cell.
+  for (const visit of drawings) {
+    if (visit.story === 'textbox' && visit.textboxOwner) continue;
+    const commands = await paintDrawing(visit);
+    if (visit.paragraph && rotatedCellOf.has(visit.paragraph)) {
+      const cell = rotatedCellOf.get(visit.paragraph)!;
+      outFor(visit);
+      const entry = rotatedBuffers.get(`${visit.page.index}:${cell.id}`)!;
+      (visit.paintLayer === 'behind-text' ? entry.behind : entry.commands).push(commands);
+      continue;
+    }
+    (visit.paintLayer === 'behind-text'
+      ? behindStream(visit.rootStory, visit.page.index)
+      : textStream(visit.rootStory, visit.page.index)
+    ).push(commands);
+  }
+  // Each rotated cell's ink turns as one: behind-text drawings under the page's text, the
+  // text and in-front drawings over it, both under the same matrix.
+  for (const { cell, x, y, page, rootStory, commands, behind } of rotatedBuffers.values()) {
+    const matrix = rotatedCellMatrix(cell.box, x, y, pageHeight(pages[page]!));
+    if (behind.length) behindStream(rootStory, page).push('q', matrix, ...behind, 'Q');
+    if (commands.length) textStream(rootStory, page).push('q', matrix, ...commands, 'Q');
+  }
+  // `w:zOrder="front"` puts the page frame over EVERYTHING on the page, in-front drawings
+  // included, so it goes into the stream after them, not before.
+  for (let i = 0; i < streams.length; i++) streams[i]!.push(...frontBorders[i]!);
+  for (let i = 0; i < pages.length; i++) {
+    work.check();
+    pages[i]!.node.addContentStream(
+      doc.context.register(
+        flateStream(
+          doc.context,
+          [backBorders, furnitureBehind, furniture, behindStreams, streams]
+            .map((layer) => layer[i]!.join('\n'))
+            .join('\n')
+        )
+      )
+    );
+  }
+  for (const face of text.faces.values()) await face.finish(work);
+  if (includeComments) comments(doc, pages, layout, work);
+}

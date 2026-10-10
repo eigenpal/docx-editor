@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "An inline w:object with a VML preview picture stayed opaque. It took no paragraph offset, reserved no layout space, and painted nothing. Copy kept the w:object with a relationship id that the fragment did not carry.",
+  "after": "Inline embedded objects outside paragraph frames project as read-only drawing atoms. Framed objects keep their model atom but reserve no preview geometry. Direct frames and inherited paragraph frames use the same refusal. Clipboard transfers refuse embedded objects without changing the source or target.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it writes nothing to the document. Each participant derives paragraph offsets from the shared tree locally. A published selection after such an object can differ by one offset between versions, as for other projection subset changes. Clipboard fragments are local and never replicated.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-object-preview.test.ts",
+    "packages/core/src/layout/__tests__/legacy-vml-layout.test.ts",
+    "packages/core/src/editor/__tests__/selection-clipboard-commands.test.ts",
+    "packages/core/src/editor/__tests__/clipboard-paste-router.test.ts"
+  ],
+  "changeset": "embedded-object-previews",
+  "migration": null
+}

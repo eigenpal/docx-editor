@@ -10,8 +10,7 @@ ECMA-376 PDFs and supplementary ZIPs (~58 MB) are gitignored. Fetch them on dema
 bun run reference:fetch
 ```
 
-Idempotent. The handwritten quick-refs and XSDs under
-`ecma-376/part1/schemas/` stay committed for offline schema lookups.
+Idempotent. The handwritten quick-refs and XSDs under `ecma-376/part1/schemas/` stay committed for offline schema lookups.
 
 ## Folder structure
 

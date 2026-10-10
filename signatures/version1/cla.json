@@ -209,6 +209,66 @@
       "id": 205565135,
       "signed_at": "2026-06-25T02:13:56Z",
       "pull_request_no": 1027
+    },
+    {
+      "name": "Nagi-ovo",
+      "id": 101612750,
+      "signed_at": "2026-08-07T17:36:58Z",
+      "pull_request_no": 251
+    },
+    {
+      "name": "yash-giantanalytics",
+      "id": 211263178,
+      "signed_at": "2026-08-10T08:11:30Z",
+      "pull_request_no": 264
+    },
+    {
+      "name": "tao-hpu",
+      "id": 1250043,
+      "signed_at": "2026-08-27T18:50:34Z",
+      "pull_request_no": 539
+    },
+    {
+      "name": "KanJieTeam",
+      "id": 325109917,
+      "signed_at": "2026-09-05T01:27:14Z",
+      "pull_request_no": 732
+    },
+    {
+      "name": "biejia-manus",
+      "id": 251161311,
+      "signed_at": "2026-09-14T09:10:10Z",
+      "pull_request_no": 818
+    },
+    {
+      "name": "sallasia-tribus",
+      "id": 120402049,
+      "signed_at": "2026-09-16T09:03:29Z",
+      "pull_request_no": 839
+    },
+    {
+      "name": "uhitsdoshin",
+      "id": 40540733,
+      "signed_at": "2026-09-16T09:05:31Z",
+      "pull_request_no": 839
+    },
+    {
+      "name": "waigel",
+      "id": 25115243,
+      "signed_at": "2026-09-22T15:32:32Z",
+      "pull_request_no": 954
+    },
+    {
+      "name": "Amayakite",
+      "id": 34462489,
+      "signed_at": "2026-09-25T09:30:54Z",
+      "pull_request_no": 997
+    },
+    {
+      "name": "SurceBeats",
+      "id": 1565956,
+      "signed_at": "2026-09-25T12:20:53Z",
+      "pull_request_no": 1003
     }
   ]
 }

@@ -1,0 +1,167 @@
+---
+title: Configure PDF fonts
+description: Choose font sources, control substitutions, and inspect font evidence for PDF conversion.
+category: Export formats
+---
+
+Fonts determine line breaks, page counts, and the glyphs embedded in PDF output. The converter uses installed fonts and packaged substitutes by default.
+
+## Choose a source
+
+| Need | Configuration |
+| --- | --- |
+| Use default font sources | Omit font options. |
+| Keep font selection consistent across hosts | Set `useSystemFonts: false` and pin package versions. |
+| Override an installed or packaged face | Supply `fonts`. |
+| Supply faces absent from packaged sources | Supply `fallbackFonts`. |
+| Keep embedded faces before your final fallback | Supply `lastResortFonts`. |
+
+Sources resolve in this order:
+
+1. Your `fonts` sources.
+2. Installed fonts, unless `useSystemFonts` is `false`.
+3. Packaged substitutes.
+4. Your `fallbackFonts` sources.
+5. Supplemental packaged faces, including `@docx-editor.dev/fonts-cjk` when it is installed.
+6. Document-embedded fonts.
+7. Your `lastResortFonts` sources.
+8. Generic substitutes for unresolved families.
+
+Earlier sources take priority. Each option accepts one source or an ordered array of sources.
+
+Export rejects font faces that exceed the shaping byte limit. Later sources can supply usable faces for those requests. The resolution report records the rejection. `fontPolicy: 'strict'` refuses rejected document fonts and the configured default font. A shaping-limit rejection for an optional glyph fallback alone does not cause strict refusal. Other source failures still cause strict refusal.
+
+Use `defineFontResolver` to read the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe font inputs.
+
+The default sources need no network access. A resolver that you supply can make network requests.
+
+## Add Chinese, Japanese, and Korean text
+
+The converter package does not include a Chinese, Japanese, or Korean (CJK) font. If your server has no suitable font, install the optional package:
+
+```sh
+npm install @docx-editor.dev/fonts-cjk
+```
+
+The converter declares this package as an optional peer dependency. Install a version that satisfies its peer dependency range. The converter finds the package at runtime and needs no configuration. Its Noto Sans CJK JP font supplies CJK characters that earlier sources do not cover. It also substitutes for unavailable families such as SimSun, MS Mincho, and Malgun Gothic.
+
+If you previously relied on bundled CJK coverage, add this package to your production dependencies. Keep the package external to your server bundle. Retain its `dist/` and `assets/` directories in their package locations. Include its license files when distributing the package.
+
+You can omit the package when installed fonts or your supplied fonts cover every required character. An installed package with missing or unreadable assets reports `font-origin-failed`. Inspect `result.fontResolution.originFailures` for the cause.
+
+When `useSystemFonts` is `true`, suitable installed fonts take priority. Setting `useSystemFonts: false` still permits the optional package and fonts that you supply.
+
+If no source covers a CJK character, export reports `missing-glyph`, and strict export fails. When the optional package is absent, the diagnostic names it. An unavailable CJK family uses a generic substitute and reports `font-substitution`.
+
+### CJK package API
+
+`@docx-editor.dev/fonts-cjk` runs on Node.js `^20.16.0 || >=22.3.0`. It exports the font family and its local file URL:
+
+| Export | Type | Value |
+| --- | --- | --- |
+| `NOTO_SANS_CJK_JP_FAMILY` | String literal | `'Noto Sans CJK JP'` |
+| `NOTO_SANS_CJK_JP_URL` | `URL` | A `file:` URL for `assets/NotoSansCJKjp-Regular.otf`. |
+
+Use the URL to read the font directly:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { NOTO_SANS_CJK_JP_FAMILY, NOTO_SANS_CJK_JP_URL } from '@docx-editor.dev/fonts-cjk';
+
+const fontBytes = new Uint8Array(await readFile(NOTO_SANS_CJK_JP_URL));
+console.log(NOTO_SANS_CJK_JP_FAMILY, fontBytes.byteLength);
+```
+
+Automatic PDF fallback needs no direct import. If you supply `glyphFallbacks`, your list replaces the defaults. For this fallback, add an entry with `family: NOTO_SANS_CJK_JP_FAMILY`, `weight: 400`, and `style: 'normal'`.
+
+### CJK font coverage and licensing
+
+The package supplies Noto Sans CJK JP Regular as an OpenType font with CFF outlines. It contains one weight (`400`) and one style (`'normal'`). PDF export can synthesize bold and italic from the regular face.
+
+The package contains the Japanese regional face, without separate Chinese or Korean regional faces. Substitution can change glyph forms, line breaks, and page counts. Supply your own font through `fonts` when you need a specific regional face or designed style.
+
+The package reads its font from disk without network access. It does not bundle the font into JavaScript or install a browser font.
+
+The package code uses the Apache License 2.0. The font uses the SIL Open Font License, Version 1.1. The PDF converter uses the separate EigenPal Pro License.
+
+## Export Arabic and Hebrew text
+
+Default fallback fonts cover Arabic and Hebrew. Arabic fallback selection requires a font with Arabic shaping support. Arabic joining continues across formatting runs, including changes in text color. The PDF text layer preserves logical word order for Arabic, Persian, and Hebrew text extraction.
+
+When a selected face lacks bold or italic variants, the writer can draw synthetic styles. It preserves text extraction and glyph positions. To use your own designed variants, supply separate regular, bold, italic, and bold-italic font files.
+
+## Supply a font file
+
+Use `createFontSource` from the converter package to validate your font bytes. This example expects your licensed regular font file and a document that requests `Application Sans`:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { createFontSource, exportPdf } from '@docx-editor.dev/docx-to-pdf';
+
+const fontBytes = new Uint8Array(await readFile('ApplicationSans.ttf'));
+const admitted = createFontSource(fontBytes, {
+  family: 'Application Sans',
+  weight: 400,
+  style: 'normal',
+});
+if ('failure' in admitted) {
+  throw new Error(admitted.failure.diagnostic ?? admitted.failure.reason);
+}
+
+const source = await readFile('document.docx');
+const result = await exportPdf(source, {
+  useSystemFonts: false,
+  fonts: { sources: [admitted.source] },
+});
+await writeFile('document.pdf', result.bytes);
+```
+
+Register bold, italic, and bold-italic files separately when the document needs those faces. Use weights `400` and `700`, with styles `'normal'` and `'italic'`.
+
+Check your font license before embedding its bytes. The writer rejects prohibited embedding, prohibited subsetting, variable fonts, and unsupported font containers.
+
+## Separate font policy from PDF policy
+
+`fontPolicy: 'strict'` rejects incomplete family coverage and required font-source failures. It can reject conversion even when a later source supplies the requested font.
+
+A shaping-limit rejection for an optional glyph fallback alone does not cause refusal. The report retains that rejection. Other source failures still cause refusal. An optional fallback family appears in the effective `glyphFallbacks` list. It is absent from the document's requested families and is not the configured default font.
+
+Complete coverage can include substitutions; it does not prove original font selection.
+
+`fidelityPolicy: 'strict'` rejects unsupported or approximate PDF output. It permits the packaged metric substitutes but rejects generic substitutions that can change page breaks. It does not automatically enable strict font policy. Missing glyphs still cause strict PDF fidelity to fail, even when font policy permits an optional fallback rejection.
+
+To require both checks, set both policies:
+
+```ts
+const result = await exportPdf(source, {
+  fontPolicy: 'strict',
+  fidelityPolicy: 'strict',
+  useSystemFonts: false,
+  onFontResolution(report) {
+    console.table(report.families);
+  },
+});
+```
+
+The callback runs before a strict font refusal. Returned callback promises do not delay conversion.
+
+## Inspect font evidence
+
+`result.fontResolution.families` records each family's coverage and selected faces. Inspect each face's `sourceFamily`, `via`, and `substitution` fields.
+
+`originFailures` retains source failures and their causes. `droppedEmbeddedFonts` identifies embedded faces rejected during font admission.
+
+Each `font-origin-failed` diagnostic provides the source index, optional source name, and a guarded cause message. The `incomplete-font` diagnostic reports partial coverage and substituted variants within a family. It remains informational when `fontPolicy` permits recovery.
+
+| Symptom | Action |
+| --- | --- |
+| Pages differ across hosts | Disable system fonts and use identical font bytes and package versions. |
+| `font-substitution` diagnostic | Supply the requested family through `fonts` or review best-effort output. |
+| Strict font policy rejects conversion | Inspect the callback report for failed sources and missing face variants. |
+| Missing font assets after bundling | Keep converter packages external and copy their assets with deployment output. |
+| Missing glyphs | Supply a face that contains the requested characters. For CJK text, install `@docx-editor.dev/fonts-cjk`. |
+
+## Next steps
+
+- Deploy font assets with [Integrate PDF conversion](/docs/2.x/export/pdf/integrations).
+- Review font diagnostics and errors in [PDF export API](/docs/2.x/export/pdf/api#diagnostics).

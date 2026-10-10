@@ -100,9 +100,9 @@ When a new HF part is materialized at runtime (e.g., the user toggles `titlePg` 
 
 **Rationale:** This is one of the few pieces of plumbing that's already in place. No new design needed.
 
-### 7. Vue parity is mandatory, lifted into core where possible
+### 7. Vue parity is mandatory, centralized into core where possible
 
-**Chosen:** Land the React changes first to validate the model, then port to `packages/vue/src/composables/useDocxEditor.ts`. Where the new abstraction is platform-agnostic (e.g., `findHfPmSpans` helper, the projection sync logic), lift into `packages/core/`. The float-zone pipeline in `packages/core/src/flow-model/metrics/measureBlocksPipeline.ts` is the canonical example to mirror.
+**Chosen:** Land the React changes first to validate the model, then port to `packages/vue/src/composables/useDocxEditor.ts`. Where the new abstraction is platform-agnostic (e.g., `findHfPmSpans` helper, the projection sync logic), centralize into `packages/core/`. The float-zone pipeline in `packages/core/src/flow-model/metrics/measureBlocksPipeline.ts` is the canonical example to mirror.
 
 **Rationale:** CLAUDE.md's parity rule explicitly demands this. The parity contract gate (`bun run check:parity-contract`) will block merge to main until both adapters are aligned.
 

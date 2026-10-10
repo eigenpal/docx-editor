@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Pasted HTML paragraphs after the first had no paraId, and a list pasted into a document with numbering referenced a numId the document did not define. Concurrent pastes and splits could mint the same paraId or numId.",
+  "after": "Every pasted, TOC, and placeholder paragraph gets a unique paraId, pasted list definitions are kept, and paste and split mints are scoped to the actor.",
+  "reason": "The shared data keeps its format. Released participants already read w14:paraId and w:numId as ordinary attribute values; only the chosen values differ, and they no longer collide.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-paste-lists.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste.test.ts",
+    "packages/core/src/store/__tests__/paragraph-identity-invariant.test.ts"
+  ],
+  "changeset": "paste-list-identity",
+  "migration": null
+}

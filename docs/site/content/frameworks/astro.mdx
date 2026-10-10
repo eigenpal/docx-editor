@@ -5,16 +5,16 @@ category: 'Frameworks'
 seoTitle: 'Astro DOCX editor setup'
 ---
 
-By the end of this page you have an Astro page that mounts the editor as a React island, opens a `.docx` from disk, and downloads the edited result.
+This guide shows an Astro page that mounts the editor as a React island, opens a `.docx` from disk, and downloads the edited result.
 
 ## Install
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 npx astro add react
 ```
 
-`astro add react` wires `@astrojs/react` into `astro.config.mjs` for you.
+`astro add react` adds `@astrojs/react` to `astro.config.mjs`.
 
 ## Mount the editor
 
@@ -42,7 +42,7 @@ import { Editor } from '../components/Editor';
 // src/components/Editor.tsx
 import { useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function Editor() {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -73,7 +73,9 @@ export function Editor() {
         <input type="file" accept=".docx" onChange={onFileSelect} />
         <button onClick={onSave}>Save .docx</button>
       </div>
-      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
+      </div>
     </div>
   );
 }
@@ -81,9 +83,9 @@ export function Editor() {
 
 ## Why this pattern
 
-`client:only="react"` is the key directive. `client:load` would still server-render the component once to produce static HTML, and the editor crashes on `window` during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
+`client:only="react"` is required. `client:load` would still server-render the component once to produce static HTML, and SSR throws when `window` is undefined during that pass. `client:only` skips SSR for the island entirely and renders it in the browser only. The rest of the page stays zero-JS static HTML.
 
-Styles need no extra setup: the `styles.css` import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
+Styles need no extra setup: the stylesheet import sits inside the island component, and Astro's Vite pipeline bundles CSS imported from `client:only` components like any other module.
 
 ## Run the example
 
@@ -99,7 +101,7 @@ bun run dev:astro   # http://localhost:4321
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Astro DOCX editor guide](/blog/astro-docx-editor): the long-form walkthrough
+- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Astro DOCX editor guide](/blog/astro-docx-editor): the detailed walkthrough
 - [Astro example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/astro)

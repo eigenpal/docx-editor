@@ -34,10 +34,12 @@
 
 import enJson from '../en.json';
 import deJson from '../de.json';
+import esJson from '../es.json';
 import frJson from '../fr.json';
 import heJson from '../he.json';
 import hiJson from '../hi.json';
 import idJson from '../id.json';
+import jaJson from '../ja.json';
 import plJson from '../pl.json';
 import ptBRJson from '../pt-BR.json';
 import ruJson from '../ru.json';
@@ -61,24 +63,17 @@ export type LocaleStrings = typeof enJson;
  *
  * @public
  */
-export type LocaleCode =
-  | 'en'
-  | 'de'
-  | 'fr'
-  | 'he'
-  | 'hi'
-  | 'id'
-  | 'pl'
-  | 'pt-BR'
-  | 'ru'
-  | 'tr'
-  | 'zh-CN';
+// prettier-ignore
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 /** English (`en`) — the source of truth, 100% covered. @public */
 export const en: LocaleStrings = enJson;
 
 /** German (`de`). Community-maintained; null leaves fall back to English. @public */
 export const de: PartialLocaleStrings = deJson;
+
+/** Spanish (`es`). Community-maintained; null leaves fall back to English. @public */
+export const es: PartialLocaleStrings = esJson;
 
 /** French (`fr`). Community-maintained; null leaves fall back to English. @public */
 export const fr: PartialLocaleStrings = frJson;
@@ -91,6 +86,9 @@ export const hi: PartialLocaleStrings = hiJson;
 
 /** Indonesian (`id`). Community-maintained; null leaves fall back to English. @public */
 export const id: PartialLocaleStrings = idJson;
+
+/** Japanese (`ja`). Community-maintained; null leaves fall back to English. @public */
+export const ja: PartialLocaleStrings = jaJson;
 
 /** Polish (`pl`). Community-maintained; null leaves fall back to English. @public */
 export const pl: PartialLocaleStrings = plJson;
@@ -124,10 +122,12 @@ export const zhCN: PartialLocaleStrings = zhCNJson;
 export const locales: Record<LocaleCode, PartialLocaleStrings> = {
   en,
   de,
+  es,
   fr,
   he,
   hi,
   id,
+  ja,
   pl,
   'pt-BR': ptBR,
   ru,
@@ -177,8 +177,8 @@ type DotPath<T, Prefix extends string = ''> = {
 }[keyof T & string];
 
 /**
- * Every valid dot-notation key into `LocaleStrings`, e.g. `'toolbar.bold'`
- * or `'dialogs.findReplace.matchCount'`. Pass to `t(key, vars?)` for
+ * Every valid dot-notation key into `LocaleStrings`, e.g. `'formattingBar.bold'`
+ * or `'navigation.find.counter'`. Pass to `t(key, vars?)` for
  * compile-time-checked translation lookup.
  *
  * @public
@@ -285,11 +285,14 @@ function formatMessage(
  */
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
+export { localizeDisabledReason } from './disabled-reasons';
+export { isApplePlatform, platformShortcut } from './platform-shortcuts';
+
 /**
  * Build a typed `t(key, vars?)` function from a merged locale.
  *
  * - **Lookup**: dot-notation paths against the locale tree
- *   (`'toolbar.bold'`, `'dialogs.findReplace.matchCount'`).
+ *   (`'formattingBar.bold'`, `'navigation.find.counter'`).
  * - **Interpolation**: `{name}` placeholders read from `vars`.
  * - **Plurals**: ICU `{count, plural, =0 {none} one {# item} other {# items}}`
  *   with `Intl.PluralRules` for CLDR categories and `=N` for exact matches.
@@ -304,8 +307,8 @@ export type TFunction = (key: TranslationKey, vars?: Record<string, string | num
  * import { deepMerge, createT, en, de } from '@docx-editor.dev/i18n';
  * const merged = deepMerge(en, de) as LocaleStrings;
  * const t = createT(merged, 'de');
- * t('toolbar.bold');                          // → 'Fett'
- * t('dialogs.findReplace.matchCount', { current: 3, total: 15 });
+ * t('formattingBar.bold');                    // → 'Fett'
+ * t('navigation.find.counter', { current: 3, total: 15 });
  * ```
  *
  * @public

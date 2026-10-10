@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Caret formatting has no independent undo step.",
+  "after": "Caret formatting has a local undo step between document edits.",
+  "reason": "Local history uses existing document undo positions. Shared schemas and operation formats remain unchanged.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-typing-history.test.ts"],
+  "changeset": "caret-format-undo",
+  "migration": null
+}

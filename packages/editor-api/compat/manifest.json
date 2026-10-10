@@ -1,0 +1,656 @@
+{
+  "schemaVersion": 1,
+  "$comment": "Allowlisted subset of the Microsoft Word JavaScript API (Word.* namespace) that DocxEditor's public surface is measured against for source/shape compatibility. This file selects the upstream UIDs used as *reference-only conformance input*; it is not a dependency declaration and DocxEditor does not vendor, copy, or generate its own declarations from Microsoft's. See README.md in this directory for the full policy.",
+  "categories": {
+    "core": [
+      "RequestContext",
+      "ClientObject",
+      "Document",
+      "Body",
+      "Range",
+      "Paragraph",
+      "DocumentProperties"
+    ],
+    "collectionsAndSearch": ["ParagraphCollection", "RangeCollection", "SearchOptions"],
+    "fontAndParagraphFormatting": ["Font"],
+    "contentControls": ["ContentControl", "ContentControlCollection"],
+    "listsAndNumbering": ["List", "ListCollection", "ListItem"],
+    "bookmarks": ["Bookmark", "BookmarkCollection"],
+    "sectionsAndStories": [
+      "Section",
+      "SectionCollection",
+      "PageSetup",
+      "NoteItem",
+      "NoteItemCollection"
+    ],
+    "commentsAndRevisions": [
+      "Comment",
+      "CommentCollection",
+      "CommentReply",
+      "CommentReplyCollection",
+      "Revision",
+      "RevisionCollection"
+    ]
+  },
+  "symbols": {
+    "run": {
+      "isFunction": true,
+      "members": []
+    },
+    "RequestContext": {
+      "members": ["document"]
+    },
+    "ClientObject": {
+      "namespace": "OfficeExtension",
+      "members": ["context", "isNullObject"]
+    },
+    "Document": {
+      "members": [
+        "body",
+        "changeTrackingMode",
+        "removeDocumentInformation",
+        "comments",
+        "contentControls",
+        "paragraphs",
+        "sections",
+        "revisions",
+        "properties"
+      ]
+    },
+    "Body": {
+      "members": [
+        "paragraphs",
+        "contentControls",
+        "font",
+        "lists",
+        "style",
+        "text",
+        "clear",
+        "getComments",
+        "insertParagraph",
+        "insertText",
+        "search",
+        "footnotes",
+        "endnotes"
+      ]
+    },
+    "Range": {
+      "members": [
+        "clear",
+        "delete",
+        "text",
+        "font",
+        "paragraphs",
+        "contentControls",
+        "bookmarks",
+        "hyperlink",
+        "style",
+        "insertComment",
+        "insertText",
+        "insertParagraph",
+        "search",
+        "select"
+      ]
+    },
+    "Paragraph": {
+      "members": [
+        "font",
+        "contentControls",
+        "alignment",
+        "firstLineIndent",
+        "leftIndent",
+        "rightIndent",
+        "lineSpacing",
+        "spaceBefore",
+        "spaceAfter",
+        "list",
+        "listItem",
+        "style",
+        "text",
+        "clear",
+        "delete",
+        "insertParagraph",
+        "insertText",
+        "split"
+      ]
+    },
+    "ParagraphCollection": {
+      "members": ["items", "getFirst", "getLast"]
+    },
+    "RangeCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "SearchOptions": {
+      "members": ["ignorePunct", "ignoreSpace", "matchCase", "matchWholeWord", "matchWildcards"]
+    },
+    "Font": {
+      "members": ["bold", "italic", "color", "name", "size"]
+    },
+    "ContentControl": {
+      "members": [
+        "tag",
+        "title",
+        "cannotEdit",
+        "cannotDelete",
+        "text",
+        "paragraphs",
+        "contentControls",
+        "delete",
+        "getRange",
+        "insertText"
+      ]
+    },
+    "ContentControlCollection": {
+      "members": ["items", "getById"]
+    },
+    "List": {
+      "members": ["id", "paragraphs", "getLevelParagraphs", "insertParagraph"]
+    },
+    "ListCollection": {
+      "members": ["items", "getById", "getFirst"]
+    },
+    "ListItem": {
+      "members": ["level"]
+    },
+    "Bookmark": {
+      "members": ["name", "range", "select"]
+    },
+    "BookmarkCollection": {
+      "members": ["items"]
+    },
+    "Section": {
+      "members": ["body", "pageSetup", "getHeader", "getFooter", "getNext"]
+    },
+    "SectionCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "PageSetup": {
+      "members": [
+        "pageWidth",
+        "pageHeight",
+        "orientation",
+        "topMargin",
+        "bottomMargin",
+        "leftMargin",
+        "rightMargin"
+      ]
+    },
+    "NoteItem": {
+      "members": ["body", "type", "delete", "getNext"]
+    },
+    "Comment": {
+      "members": [
+        "authorName",
+        "creationDate",
+        "id",
+        "replies",
+        "resolved",
+        "delete",
+        "getRange",
+        "reply"
+      ]
+    },
+    "CommentCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "CommentReply": {
+      "members": ["authorName", "creationDate", "id", "delete"]
+    },
+    "CommentReplyCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "Revision": {
+      "members": ["author", "date", "range", "type", "accept", "reject"]
+    },
+    "RevisionCollection": {
+      "members": ["items", "acceptAll", "rejectAll"]
+    },
+    "NoteItemCollection": {
+      "members": ["items", "getFirst"]
+    },
+    "DocumentProperties": {
+      "members": ["author", "title", "subject", "keywords", "comments", "category", "lastAuthor"]
+    }
+  },
+  "omissions": [
+    {
+      "uid": "Word.View#revisionsFilter",
+      "reason": "Deferred to a separate view API change, including markup and view. Revision markup preferences belong to the editor host, outside the Office-shaped document model. Use createDocxEditor revisionMarkup and setRevisionMarkup; no competing document automation member is introduced."
+    },
+    {
+      "uid": "Word.ContentControl#id",
+      "reason": "The control's file id IS implemented and readable, as a string. Not selected because it cannot match upstream's `number`: `w:id` is optional and the schema lets a document repeat it, so a number has no value for \"the file wrote none\" and would invite a caller to key a map on something ambiguous. The control's identity is its handle; the file id is metadata beside it."
+    },
+    {
+      "uid": "Word.ContentControl#subtype",
+      "reason": "The control's type IS implemented and readable, in the schema's own vocabulary (`plainText`, `dropDownList`, `checkbox`, `date`, ...). Not selected because upstream's enum is Word's UI wording and mixes in the two control kinds this lane defers (`Picture`, `RepeatingSection`), so answering it would mean naming types no read can produce."
+    },
+    {
+      "uid": "Word.ContentControl#appearance",
+      "reason": "A `w15` extension property describing how Word DRAWS the control's boundary. The engine paints its own furniture from the control's properties, so there is no stored chrome value to answer and nothing would consume one."
+    },
+    {
+      "uid": "Word.ContentControl#color",
+      "reason": "A `w15` extension property, omitted with `appearance` for the same reason."
+    },
+    {
+      "uid": "Word.ContentControl#placeholderText",
+      "reason": "Upstream answers the glossary entry's text. Placeholder STATE is implemented (the prompt is replaced on the first write and restored when the value is cleared) but the glossary part is preserved rather than read, and a zero-click load of a document part to answer a property is exactly what the file-safety rules forbid."
+    },
+    {
+      "uid": "Word.Shape",
+      "reason": "Published as a partial, unmeasured surface: Body#shapes, Paragraph#shapes, Shape#id, #name, #type and #body, and ShapeCollection#items, #getFirst, #getFirstOrNullObject and #getByTypes, for floating and inline drawings and text-box stories. Not selected for conformance because these members belong to WordApiDesktop 1.2, outside the target requirement sets. Geometry, text frames, insertTextBox, and shape writes are not implemented."
+    },
+    {
+      "uid": "Word.Body#getHtml",
+      "reason": "Returns OfficeExtension.ClientResult<string>. The ClientResult/RequestContext queuing wrapper is proxy-runtime plumbing (Task 3), not part of this contract-freeze task."
+    },
+    {
+      "uid": "Word.Body#getOoxml",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.Paragraph#getText",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml. Word.Paragraph#text is selected instead for the already-loaded case."
+    },
+    {
+      "uid": "Word.BookmarkCollection#exists",
+      "reason": "Returns OfficeExtension.ClientResult<boolean>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.List#getLevelPicture",
+      "reason": "Returns OfficeExtension.ClientResult<string> and is picture-related; omitted per both the ClientResult and image-omission reasons."
+    },
+    {
+      "uid": "Word.List#getLevelString",
+      "reason": "Returns OfficeExtension.ClientResult<string>; see Word.Body#getHtml."
+    },
+    {
+      "uid": "Word.Hyperlink",
+      "reason": "The standalone Hyperlink/HyperlinkCollection object model (WordApiDesktop 1.3) is deferred; Word.Range#hyperlink (get/set of the range's primary hyperlink, WordApi 1.3) covers this slice's hyperlink read/write needs."
+    },
+    {
+      "uid": "Word.HyperlinkCollection",
+      "reason": "Depends on Word.Hyperlink; omitted for the same reason."
+    },
+    {
+      "uid": "Word.Style",
+      "reason": "The named-style object model (Word.Style, Word.StyleCollection) is deferred. Word.Body/Range/Paragraph/ContentControl#style (apply a style by name, WordApi 1.1) and Word.ParagraphFormat (formatting values themselves) cover this slice's styling needs without it."
+    },
+    {
+      "uid": "Word.ContentControl#checkboxContentControl",
+      "reason": "Typed content-control subtypes (checkbox/dropdown/combo-box/date/picture/repeating-section/group/building-block-gallery) are explicitly out of scope for this task; see typed-content-controls OpenSpec change. Common ContentControl members only."
+    },
+    {
+      "uid": "Word.ContentControl#comboBoxContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#datePickerContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#dropDownListContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#pictureContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl; also image-omission applies."
+    },
+    {
+      "uid": "Word.ContentControl#repeatingSectionContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#groupContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#buildingBlockGalleryContentControl",
+      "reason": "See Word.ContentControl#checkboxContentControl."
+    },
+    {
+      "uid": "Word.ContentControl#xmlMapping",
+      "reason": "Custom-XML-bound content control writes are refused until XML mapping is a separate supported lane (per the redesign plan); the mapping object itself is out of scope here. DocxEditor's own read-only isBound boolean exposes binding presence for advisory preflight without exposing XPath, namespace mappings, store ids, or custom XML content."
+    },
+    {
+      "uid": "Word.Range#start",
+      "reason": "De-selected deliberately, and not implementable in DocxEditor's addressing model: upstream's start/end are DOCUMENT-WIDE character offsets, a coordinate space no part of this engine maintains. DocxEditor addresses every position as a stable paragraph identity plus a UTF-16 offset in that paragraph — the vocabulary the tree ops validate against, the selection uses and the layout reports — so an offset a caller reads is an offset it can write at. A document-wide counter would change under every edit above it and would have to be recomputed by walking the whole story per access; publishing one anyway would mean handing back numbers that go stale silently. A range's endpoints are reachable through range.paragraphs and the paragraph's own text instead."
+    },
+    {
+      "uid": "Word.Range#end",
+      "reason": "See Word.Range#start: the same document-wide character coordinate space, de-selected for the same reason."
+    },
+    {
+      "uid": "Word.RangeCollection#getLast",
+      "reason": "Implemented by DocxEditor's object model as an extension, not a conformance claim: the pieces a Paragraph#split answers are a range collection whose LAST member is the one a caller most often wants (\"what did this paragraph end up as\"), and finding it by counting items means loading them all. The pinned reference fixture is pruned to the selected subset, so it cannot say offline whether upstream declares this member; it is therefore recorded here as DocxEditor's own rather than measured, and the authored declarations do not declare it."
+    },
+    {
+      "uid": "Word.Paragraph#uniqueLocalId",
+      "reason": "Implemented by DocxEditor's object model (a paragraph's identity, from w14:paraId where the file wrote one) but deliberately NOT selected for exact conformance against the reference: the identity a DocxEditor session hands back is the canonical tree's, and pinning its shape to upstream's session-scoped string would freeze an engine detail into the compatibility contract. Recorded here so the divergence is a decision rather than an accident."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getFirstOrNullObject",
+      "reason": "Implemented by DocxEditor's object model — the null-object half of the proxy lifecycle needs one, and code that expects an empty document wants it — but not selected for exact conformance: the collection accessors selected for this subset are items/getFirst/getLast, and adding a member to the manifest requires re-extracting the reference fixture, which is the one network step CI never takes. The authored declarations therefore do not declare it, and the conformance assertions do not measure it."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getLastOrNullObject",
+      "reason": "See Word.ParagraphCollection#getFirstOrNullObject."
+    },
+    {
+      "uid": "Word.RangeCollection#getFirstOrNullObject",
+      "reason": "See Word.ParagraphCollection#getFirstOrNullObject."
+    },
+    {
+      "uid": "OfficeExtension.ClientRequestContext#sync",
+      "reason": "The batched request-context sync/flush call's real proxying/queuing behavior is the proxy runtime's own mechanism (Task 3), not part of this contract-freeze task. Word.RequestContext inherits the member from OfficeExtension.ClientRequestContext rather than redeclaring it, so it never appears as a Word.RequestContext member in this manifest. Upstream's actual signature is generic and pass-through (`sync<T>(passThroughValue?: T): Promise<T>`); rather than selecting and exactly matching that shape here, DocxEditor.ClientRequestContext independently authors a deliberately simplified, declaration-only `sync(): Promise<void>` — the zero-argument call shape every real Office.js sample actually uses — purely so representative source-compat fixtures in compat/fixtures/ can end a batch with `await context.sync()`, same as real Office.js samples do. This declaration has no runtime behavior and is not asserted against the upstream reference for exact conformance."
+    },
+    {
+      "uid": "Word.ParagraphFormat",
+      "reason": "The paragraph formatting values are implemented on Paragraph. The ParagraphFormat wrapper returned by some upstream objects is not published; table-cell paragraph formatting is available through cell.body.paragraphs. widowControl remains omitted."
+    },
+    {
+      "uid": "Word.ListItem#listString",
+      "reason": "The marker a reader SEES ('1.', 'a)', a bullet glyph) rather than anything the file states: the layout engine computes it while painting, from numbering.xml's abstract-numbering indirection and a running counter per level. Answering it from the automation lane would mean a second implementation of that counter, free to disagree with the one on the page — and a list marker that disagrees with the page is worse than no list marker. Word.List#getLevelString is omitted for the same reason (and for its ClientResult return)."
+    },
+    {
+      "uid": "Word.ListItem#siblingIndex",
+      "reason": "A position within a numbering sequence, which is the same counter as listString and is de-selected for the same reason. A caller who needs the position of a paragraph among a list's items can index Word.List#getLevelParagraphs, which is a question about the file rather than about the paint."
+    },
+    {
+      "uid": "Word.Bookmark#start",
+      "reason": "A document-wide character offset — the coordinate space already de-selected on Word.Range#start for the same reason: DocxEditor addresses every position as a paragraph identity plus a UTF-16 offset in that paragraph, and maintains no document-wide counter. Word.Bookmark#range answers the same question in the vocabulary this engine validates."
+    },
+    {
+      "uid": "Word.Bookmark#end",
+      "reason": "See Word.Bookmark#start."
+    },
+    {
+      "uid": "Word.Bookmark#delete",
+      "reason": "Removing a bookmark means deleting its marker PAIR (w:bookmarkStart plus the w:bookmarkEnd carrying the same w:id) as one transaction, and the canonical op vocabulary has no operation that removes a bookmark marker. Authoring one is store-lane work; a delete() that removed one half would leave the document with an unclosed bookmark, which Word treats as running to the end of the story."
+    },
+    {
+      "uid": "Word.Comment#authorEmail",
+      "reason": "An address is not in comments.xml — Word keeps it in word/people.xml, keyed by author name, and this subset does not read that part. The canonical comment record therefore has no email to answer, and a name-derived guess would be a fabricated identity attached to a real person's comment."
+    },
+    {
+      "uid": "Word.Comment#content",
+      "reason": "Assignable upstream: writing it REPLACES a comment's body. A comment's body is a story of its own in comments.xml, and this subset transacts one story per batch — the story the comment is anchored in — so replacing the body is a write the canonical path does not yet express. Reading a body stays available as DocxEditor's own read-only Comment#text (recorded below), so a script that reports on comments is unaffected; only rewriting somebody else's comment is."
+    },
+    {
+      "uid": "Word.CommentReply#content",
+      "reason": "See Word.Comment#content."
+    },
+    {
+      "uid": "Word.CommentReply#authorEmail",
+      "reason": "See Word.Comment#authorEmail."
+    },
+    {
+      "uid": "Word.Comment#text",
+      "reason": "Implemented by DocxEditor's object model as a read-only way to reach a comment's body — the half of Word.Comment#content that IS backed — but not selected for exact conformance, because upstream has no such member and adding one to the reference is impossible. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.CommentReply#text",
+      "reason": "See Word.Comment#text."
+    },
+    {
+      "uid": "Word.NoteItem#text",
+      "reason": "Implemented by DocxEditor's object model as a read-only shortcut to the exact plain text returned by NoteItem#body.text. Upstream has no such member to select for exact conformance, so it is recorded as a DocxEditor extension rather than added to the reference shape. The body remains available for structured traversal and edits."
+    },
+    {
+      "uid": "Word.Body#revisions",
+      "reason": "See Word.Document#revisions."
+    },
+    {
+      "uid": "Word.Document#footnotes",
+      "reason": "Legacy non-Office alias enumerates the notes part. Use Body#footnotes for references within a body."
+    },
+    {
+      "uid": "Word.Document#endnotes",
+      "reason": "Legacy non-Office alias enumerates the notes part. Use Body#endnotes for references within a body."
+    },
+    {
+      "uid": "Word.Body#revisions",
+      "reason": "Implemented by DocxEditor's object model — a header or a footnote can carry tracked changes of its own, and a review pass over one story is the natural way to reach them — but not selected for exact conformance: upstream declares revisions on Document (selected here), not on Body, so there is no reference shape for the story-scoped accessor. Recorded so the extra member is a decision rather than drift."
+    },
+    {
+      "uid": "Word.Body#bookmarks",
+      "reason": "Implemented by DocxEditor's object model as a story-scoped discovery accessor over the same BookmarkCollection that Word exposes on Range. Upstream has no Body#bookmarks member to select for exact conformance, while putting this collection on Document would falsely imply aggregation across the main body, headers, footers and notes. Each Body answers only the bookmarks declared in that body's own story."
+    },
+    {
+      "uid": "Word.Paragraph#readingOrder",
+      "reason": "Implemented by DocxEditor's object model as an addition: Office.js has no paragraph direction member on Paragraph or ParagraphFormat, in the pinned declarations or in the preview declarations. The name follows the desktop object model's ParagraphFormat.ReadingOrder, and the values follow Word.SectionDirection ('LeftToRight', 'RightToLeft'). Reads answer the effective direction: the paragraph's own w:bidi, else its style chain, its numbering level, an enclosing cell's table style, and the document defaults, as layout resolves them. A write of the direction the paragraph already has changes nothing. Otherwise it removes the paragraph's own w:bidi when that alone set the other direction, or states w:bidi, with the explicit off value only over a right-to-left style. Writes keep w:jc as authored. With change tracking on, a write that changes the direction records a paragraph property revision."
+    }
+  ],
+  "divergences": [
+    {
+      "uid": "Word.Paragraph#delete",
+      "note": "With TrackMineOnly, records the paragraph's text as deleted runs and its paragraph mark as a deleted paragraph mark. Accept removes the paragraph; reject restores it. Position markers between paragraphs stay in place until accept, which moves them to the join point. After a reopen, or when another participant rejects, an empty w:pPr or w:rPr that the proposal added can remain. NotSupported: the last paragraph of a story, table cell, or content control; a paragraph directly before a table or block content control; a mark that ends a section; an inline content control in the paragraph; a complex field crossing the mark; inline content nested more than 64 levels deep. NotImplemented: a pending change in the paragraph or at the start of the next paragraph, including the author's own, or a previous paragraph whose mark the author already proposed deleting; any tracked deletion or replacement that starts a paragraph after such a mark refuses the same way. Delete adjacent paragraphs in one sync; a later sync beside the author's own pending deletion refuses, because it would review as one decision. One refusal refuses the whole sync."
+    },
+    {
+      "uid": "Word.Range#insertBreak",
+      "note": "Supports Line, Page, and SectionNext. Line supports tracked insertion and text edits in the same sync. Single-line controls refuse Line. Page and SectionNext require a separate sync and refuse tracking. Other break types refuse. Text reads report manual line breaks as U+000B and column breaks as U+000E; text writes refuse U+000E."
+    },
+    {
+      "uid": "Word.Document#removeDocumentInformation",
+      "note": "Only DocumentProperties removes standard core, extended, and custom property parts. Other modes, tracked edits, and collaboration refuse with NotSupported. Run as the only write in its sync. Malformed or ambiguous dependencies refuse atomically. Document content and review authors remain unchanged."
+    },
+    {
+      "uid": "Word.Font#bold",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Font#italic",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Font#name",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Font#size",
+      "note": "Reads report authored values or null without resolving inherited formatting. Writes honor effective complex-script properties from direct formatting, character styles, paragraph styles, table styles, and document defaults."
+    },
+    {
+      "uid": "Word.Document#changeTrackingMode",
+      "note": "Server and browser hosts support Off and TrackMineOnly. Load changeTrackingMode explicitly before reading; Document.load() retains its empty default property set on every host. The setting is queued, atomic with edits, and retained per host across runs; it is not a persisted document-wide policy. TrackMineOnly uses the configured runtime author and does not change peers. TrackAll refuses with NotSupported. Browser tracked writes require the review module; runtime mode does not change browser UI mode. Tracked range edits refuse foreign pending revisions. Tracked deletion and replacement refuse simple fields whose cached results contain anything other than direct runs. Font, paragraph-format, paragraph-style, and list-membership mutations produce property revisions. Paragraph insertion tracks text and paragraph marks. New proposed list definitions can change; table row additions and partial deletions use native row revisions; established definitions and page setup refuse; comments and revision decisions remain available. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked deletion across adjacent sibling paragraphs strikes the text and each covered paragraph mark, in collaboration too; concurrent typing in struck text joins the deletion. Paragraph.delete records the paragraph's text and mark as deletions; see Word.Paragraph#delete for its refusals. Tracked table value replacement and tracked replacement across paragraphs refuse in collaboration. Tracked range replacements support adjacent sibling paragraphs outside collaboration."
+    },
+    {
+      "uid": "Word.Comment#creationDate",
+      "note": "Office.js declares Date, but OOXML makes w:date optional and untrusted files can contain an invalid lexical value. DocxEditor returns Date | null rather than inventing a timestamp or exposing Invalid Date; strict consumers must narrow null before using Date methods."
+    },
+    {
+      "uid": "Word.CommentReply#creationDate",
+      "note": "Replies inherit the same nullable date getter as comments because they are CT_Comment records with the same optional, file-authored w:date. The compatibility assertion removes only this documented null before comparing with Office.js Date."
+    },
+    {
+      "uid": "Word.Revision#date",
+      "note": "Office.js declares Date, while CT_TrackChange permits an absent w:date and untrusted input can contain an invalid one. DocxEditor returns Date | null and the compatibility assertion verifies that excluding the documented null leaves the upstream Date shape."
+    },
+    {
+      "uid": "Word.Comment#reply",
+      "note": "Office.js supplies the signed-in author through its host. DocxEditor has no ambient account identity, so createServer(bytes, { author }) and createBrowser(editor, { author }) carry the author explicitly. A missing or blank author refuses with NotSupported before queuing; browser sync can also refuse when the Pro review module, current editing mode, or live host does not permit the write. No static comment-write capability is published because those browser conditions are dynamic."
+    },
+    {
+      "uid": "Word.Revision#type",
+      "note": "The type union remains declared in full. The built-in reader emits Insert, Delete, Property, ParagraphProperty, MovedFrom, and MovedTo. Text replacements expose separate Insert and Delete revisions, including matching author, ID, and date. Replace remains declared but is not inferred from adjacent revisions. A change to a table row, a cell, the grid or a section's properties is STRUCTURAL, and the canonical accept/reject ops refuse it — so reporting it would list a change with an accept() and a reject() that both fail. Such revisions are therefore not reported at all rather than reported and un-actionable; the document's own markup is untouched either way, and a save round-trips it."
+    },
+    {
+      "uid": "Word.List#insertParagraph",
+      "note": "All four locations are accepted, and Before/After land INSIDE the list at its first and last position — the same places Start and End name. A list is a set of paragraphs sharing a w:numId rather than a contiguous region of the story, so 'before the list' is a position in the story, not in the list, and Word.Paragraph#insertParagraph is the member that addresses it. A refusal on two of the four locations would fail scripts written against the shape; a silent unnumbered insert outside the list would answer a paragraph the list does not contain."
+    },
+    {
+      "uid": "Word.ContentControl#getRange",
+      "note": "All six locations are accepted. Whole and Content answer the same stretch, and Before/After answer the content's own edges, because a control's boundary marks occupy no offset in the text this API addresses — there is no position between a mark and the first character for a range to start at. Refusing four of the six would fail scripts written against the shape; answering an invented offset would be worse."
+    },
+    {
+      "uid": "Word.ContentControl#insertText",
+      "note": "Text-like controls accept all three locations and return the range of the written text. Replace goes through the control's own value path, so the prompt a control was showing is replaced whole and a w:temporary wrapper is removed — upstream's own behaviour, reached through the one write path the keyboard also takes, which is why a locked or custom-XML-bound control refuses this call with the same named reason a keystroke gets. Text-like controls support all locations; date, checkbox, and other typed controls refuse with NotSupported."
+    },
+    {
+      "uid": "Word.ContentControlCollection",
+      "note": "getByTag, getByTitle, getFirst, getFirstOrNullObject, ContentControl#setValue and ContentControl#isBound are implemented and are NOT in this list's frozen reference fixture, so they are published as DocxEditor's own additions rather than as conformance-checked members. setValue exists because a control's value is not its characters: a dropdown takes a declared item, a date an ISO instant, a checkbox a state, and upstream spreads those over five sibling objects this subset does not ship. isBound is a presence-only advisory preflight; sync-time refusal remains authoritative."
+    },
+    {
+      "uid": "Word.Section#getHeader / #getFooter",
+      "note": "Existing and inherited stories keep their linkage. An absent story returns a virtual body: text and paragraph/list collections read empty without changing the package. Its first insertText or insertParagraph creates the part, reference, and content atomically and must be the only mutation in that sync. FirstPage and EvenPages creation enables the matching rendering flags. Unsupported virtual-body operations refuse until content exists."
+    },
+    {
+      "uid": "Word.ParagraphCollection#getFirst / #getLast, Word.RangeCollection#getFirst, Word.CommentCollection#getFirst, Word.ListCollection#getFirst and every other item accessor",
+      "note": "Supported read-derived proxies can be addressed within one sync through read-only prerequisite batches followed by one atomic write transaction. All phases share a revision; concurrent changes refuse without replay. Table cell reads/writes and Range text writes support this path. Other accessors may still require an explicit sync. Proxies returned by writes require a completed sync before dependent operations; the runtime never commits a producer just to resolve its dependent command."
+    },
+    {
+      "uid": "OfficeExtension.LoadOption#expand",
+      "note": "The expand query property remains in DocxEditor's public type for source compatibility, but navigation-property expansion is not implemented. Every non-empty value is rejected synchronously as InvalidArgument targeting the loaded object's .expand option; omitted and empty-array values preserve ordinary load behavior. This is explicit rather than accepting a request no model loader consumes."
+    },
+    {
+      "uid": "Word.Font#underline",
+      "note": "Writes 18 OOXML underline styles, including None and Single. Mixed, Hidden, and DotLine refuse with InvalidArgument. Underline color survives style changes. Reads return the agreed direct formatting value or null, not resolved style formatting."
+    },
+    {
+      "uid": "Word.Font#highlightColor",
+      "note": "Writes exact Word palette colors by Office name or #RRGGBB; accepts null to clear with w:highlight=none. Other colors refuse with InvalidArgument instead of approximating. Reads return #RRGGBB or null for mixed, absent, or cleared direct highlighting. Run shading is preserved and is not treated as highlighting. The public setter keeps the pinned string signature. Runtime null clearing follows Microsoft documentation and needs a type escape under that upstream declaration."
+    },
+    {
+      "uid": "Word.Font#strikeThrough",
+      "note": "Writes explicit on/off single strikethrough and preserves other run properties. Reads return agreed direct formatting or null; inherited style formatting is not resolved."
+    },
+    {
+      "uid": "Word.Font#subscript",
+      "note": "Writes mutually exclusive vertical alignment. True clears superscript; false preserves superscript if subscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal."
+    },
+    {
+      "uid": "Word.Font#superscript",
+      "note": "Writes mutually exclusive vertical alignment. True clears subscript; false preserves subscript if superscript was not active. Repeated assignments on one Font proxy respect assignment order. Reads report agreed direct formatting or null. Aliased proxies retain the existing conflicting-write refusal."
+    },
+    {
+      "uid": "Word.Range#insertInlinePictureFromBase64",
+      "note": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse."
+    },
+    {
+      "uid": "Word.InlinePicture#width",
+      "note": "Points. Under an aspect lock, changing one dimension updates the other proportionally. Simultaneous contradictory width/height writes refuse; unlock first for independent dimensions. Writes coalesce per proxy. Existing unrelated drawing settings survive."
+    },
+    {
+      "uid": "Word.InlinePicture#height",
+      "note": "See InlinePicture#width. Finite positive dimensions must fit OOXML coordinate limits."
+    },
+    {
+      "uid": "Word.InlinePicture#lockAspectRatio",
+      "note": "Writes the canonical noChangeAspect drawing lock and preserves other drawing locks. Disable the aspect lock to set independent width and height."
+    },
+    {
+      "uid": "Word.InlinePicture#altTextDescription",
+      "note": "Reads/writes drawing description; accepts empty text to clear. Preserves title and hyperlink. Invalid XML text and descriptions above 32767 characters refuse."
+    },
+    {
+      "uid": "Word.InlinePicture#delete",
+      "note": "Deletes the inline drawing. Media parts and relationships are preserved, including references shared by other pictures; this implementation does not garbage-collect image media. Deleted picture handles refuse on later use."
+    },
+    {
+      "uid": "Word.Range#insertTable",
+      "note": "Creates a rectangular table with optional row-major string values. Before/After use range endpoints. Insertion may split a paragraph; adjacent tables retain a paragraph separator. Nested table authoring refuses. Initial values commit atomically. Table insertion is the only mutation in its sync; sync before using its returned proxy. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    },
+    {
+      "uid": "Word.Table#values",
+      "note": "Reads a row-major matrix. Writes require exactly the current rectangular dimensions. Values replace plain cell text while preserving cell properties. Multiline values, nested blocks, merged tables, and complex cell contents refuse. Cells remain reachable through getCell(), rows/cells, and cell.body. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    },
+    {
+      "uid": "Word.Table#addRows",
+      "note": "Start/End insert ordinary rows using the first or last row as the source. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. Returns inserted rows; sync before dependent edits. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    },
+    {
+      "uid": "Word.TableRow#insertRows",
+      "note": "Before/After insert ordinary rows relative to the addressed row. Optional values cover every new cell. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. Returns TableRowCollection; sync before dependent edits. Unrelated merged headers survive. Merged source rows, row offsets, hidden source cells, and crossing vertical merges refuse with InvalidArgument. Tables with merges require an explicit grid. This structural mutation must be alone in its sync. TrackMineOnly writes native row insertion revisions. Direct and tracked insertion support collaboration, undo/redo, reconnect, and save/reopen."
+    },
+    {
+      "uid": "Word.Table#addColumns",
+      "note": "Start/End insert columns across all rows. Optional values are row-major with one entry per added column. New cells copy the source cell's paragraph formatting; written values take only the source paragraph mark's formatting, never a source text run's. This structural mutation must be alone in its sync. Merged topology refuses."
+    },
+    {
+      "uid": "Word.Table#deleteRows",
+      "note": "Deletes count rows from a zero-based index; default count is one. Deleting all rows removes the table. Merged tables are supported: a vertical merge that starts in a deleted row starts in the next row instead, unless a merged cell above on the same grid columns takes that row over. Rows with different cell counts are supported. Rows the editor cannot place in the grid refuse with InvalidArgument. Invalid bounds refuse atomically. Structural mutations are solitary. TrackMineOnly supports partial deletion, but pending row or cell structure revisions refuse with NotImplemented."
+    },
+    {
+      "uid": "Word.Table#deleteColumns",
+      "note": "Deletes count columns from a zero-based index; default count is one. Deleting every column removes the table. Invalid bounds and merged topology refuse. Structural mutations are solitary."
+    },
+    {
+      "uid": "Word.Table#delete",
+      "note": "Removes the table and its contents, including an existing merged table. Untouched neighboring blocks survive. Protected controls refuse. Deleted table/cell proxies become invalid."
+    },
+    {
+      "uid": "Word.Table#headerRowCount",
+      "note": "Authors contiguous repeated header rows from the first row. Zero clears header flags. Values must be an integer between zero and the row count. Other row properties survive."
+    },
+    {
+      "uid": "Word.Table#style",
+      "note": "Accepts the table style display name defined in the document, case-insensitively. Reads return that display name; OOXML stores the style ID. Unknown names and non-table styles refuse; no unformatted style definitions are invented."
+    },
+    {
+      "uid": "Word.TableCell#value",
+      "note": "Replaces ordinary single-paragraph cell text. Complex or multiline cell content refuses; use the cell body for supported targeted edits. Same-sync overlapping range/cell replacements refuse atomically. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    },
+    {
+      "uid": "Word.TableCell#columnWidth",
+      "note": "Points. Changes the entire rectangular grid column, updates matching cell widths and total table width, and authors fixed table layout. Widths must meet canonical bounds. Merged or absent-grid topology refuses."
+    },
+    {
+      "uid": "Word.TableCell#shadingColor",
+      "note": "Reads/writes direct cell shading. Writes accept six-digit hexadecimal RGB, optional #, or auto to remove direct shading. Other cell properties survive. Named and theme colors are not resolved by this subset."
+    },
+    {
+      "uid": "Word.TableCell#verticalAlignment",
+      "note": "Top, Center, and Bottom write direct cell alignment. Mixed is a read-shape token and refuses as a setter. Other cell properties survive."
+    },
+    {
+      "uid": "Word.Paragraph#startNewList",
+      "note": "Creates an independent bullet-list counter and nine defined levels. Existing templates may be shared, but missing levels and later format changes use private instance overrides. Creation must be the only mutation in its sync. Sync before configuring the returned list. Protected targets refuse. TrackMineOnly writes native list-membership revisions."
+    },
+    {
+      "uid": "Word.Paragraph#attachToList",
+      "note": "Joins a list already present in the same story, at a defined zero-based level from 0 through 8. Configure an undefined imported level before attaching to it. Returns the joined list. Unknown IDs and protected targets refuse. TrackMineOnly writes native list-membership revisions."
+    },
+    {
+      "uid": "Word.Paragraph#detachFromList",
+      "note": "Writes explicit numId 0 to suppress direct and style-inherited numbering while preserving other paragraph properties. It does not delete shared numbering definitions."
+    },
+    {
+      "uid": "Word.List#setLevelBullet",
+      "note": "Supports the seven public bullet choices and custom BMP character codes with an optional font name. Symbol and Wingdings stock glyphs retain their font mappings. Edits target this list instance, not other lists sharing a template. Mixed-story or protected list membership refuses. Same-level setters on one proxy coalesce. Different levels and existing item membership edits may share a sync. Aliases writing the same level in one batch refuse."
+    },
+    {
+      "uid": "Word.List#setLevelNumbering",
+      "note": "Supports None, Arabic, upper/lower letters, and upper/lower Roman numerals. Format arrays contain literal strings and zero-based ancestor/current-level numbers. Literal strings cannot embed OOXML counter placeholders. Switching from bullets clears the symbol font. Delegating style-linked and picture-bullet definitions refuse."
+    },
+    {
+      "uid": "Word.List#setLevelStartingNumber",
+      "note": "Sets the instance level counter start, including zero, as a nonnegative 32-bit integer. Existing startOverride values are replaced by the authored level start. Changes save/reopen and undo/redo without changing unrelated list counters."
+    },
+    {
+      "uid": "Word.List#setLevelIndents",
+      "note": "Uses points for paragraph left indent and relative first-line indent. A negative relative value creates a hanging indent. Absolute values are bounded to 1584 points. Other level and paragraph properties survive."
+    },
+    {
+      "uid": "Word.Range#insertField",
+      "note": "Supports Page and NumPages with no switches, or Empty/default with text PAGE or NUMPAGES. Other field types, unsupported switches, and removeFormatting=true refuse. Inserts a simple field with an empty cached result; call updateResult to compute supported page fields. Before/Start and After/End use range endpoints; Replace requires one paragraph. Sync before configuring the returned field proxy. Also accepts TOC with optional \\o \"1-3\", \\h, \\z, and \\u switches. The outline range accepts ascending levels 1 through 9. TOC creation saves an empty cached result; TOC evaluation and code writes remain unsupported. Tracked field creation refuses."
+    },
+    {
+      "uid": "Word.Field#code",
+      "note": "Reads the raw inert instruction. Writes support PAGE and NUMPAGES on existing supported page fields, preserving field identity, result runs, run formatting, and unrelated fields. Simple fields and ordinary complex fields with sibling runs are supported; unsupported field shapes/code, protected fields, and tracked mutations refuse. Code writes do not compute cached results; call updateResult explicitly."
+    },
+    {
+      "uid": "Word.Field#updateResult",
+      "note": "Computes PAGE/NUMPAGES cached text from actual semantic pagination, including section page numbering formats. Headless runtimes require explicit pagination measurement options; browser runtimes use the current surface layout. Missing pagination, unsupported instructions or non-rewritable results refuse with NotSupported. Multiple result updates can share one sync, including one paragraph; mixing with other writes refuses atomically. Save/reopen retains computed cache text. Synthetic fixed measurers are used only in deterministic tests, not as a default capability claim."
+    },
+    {
+      "uid": "Word.Field#delete",
+      "note": "Deletes the addressed field atom and its cached result, preserving neighboring content and unrelated fields. Protected fields refuse. Deleted handles become stale. Fields inside unsupported structures remain preserved."
+    },
+    {
+      "uid": "Word.Range#insertContentControl",
+      "note": "Creates RichText, PlainText, and DatePicker controls on eligible single-paragraph ranges. Other types refuse. DatePicker creates a date SDT; typed date configuration remains unsupported. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control’s tag and title. Empty ranges, existing review markup, and other control structure changes refuse."
+    }
+  ],
+  "$divergencesComment": "Members that ARE selected but differ from upstream in a documented source shape or observable behaviour. Kept apart from \"omissions\" on purpose: an omission is a member this subset does not publish, and one of these is a member it publishes and answers differently. The authored compatibility declarations remain the exact upstream reference shape; runtime conformance assertions explicitly account for any listed source-shape divergence."
+}

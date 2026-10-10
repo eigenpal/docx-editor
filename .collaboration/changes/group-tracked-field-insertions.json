@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph grouping can leave field wrappers outside a continuous insertion decision.",
+  "after": "Inline field wrappers group before tracked paragraph breaks, and each review decision retains all canonical revision sites.",
+  "reason": "Accept and reject use existing atomic revision operations and primitive journal updates. Shared schemas and released-client interpretation remain unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/tracked-field-grouping.test.ts"],
+  "changeset": "group-tracked-field-insertions",
+  "migration": null
+}

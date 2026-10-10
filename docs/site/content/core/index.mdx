@@ -1,95 +1,239 @@
 ---
-title: "@docx-editor.dev/core"
-description: "Framework-agnostic core: document tree, OOXML parser/serializer, ProseMirror schema, plugin contract. Underlies both the React and Vue adapters."
-category: "Packages"
-order: 20
+title: '@docx-editor.dev/core'
+description: 'The framework-agnostic engine: OOXML read and write, the canonical document tree, layout, paint, and the Editor contract that adapters render.'
+category: 'Reference'
+order: 70
 ---
 
 <PackageStats name="@docx-editor.dev/core" />
 
-## What's in it
+This package is the engine. It reads a `.docx` into a canonical document tree, lays that tree out into pages, paints them, and writes the tree back to OOXML. It has no framework dependency and no UI.
 
-The core package contains the document tree, OOXML parser and serializer, ProseMirror schema, layout engine, and plugin contract. It has no framework dependency. The React and Vue adapters depend on it. Install `-core` directly for headless DOCX processing or custom hosts.
+Install Core alongside the React or Vue adapter. Both adapters require it as a peer dependency. Keep one Core copy in your application. Import Core directly when you build an adapter or use its public contracts.
 
 ```bash
 npm install @docx-editor.dev/core
 ```
 
-## When to use it directly
+## Entry points
 
-- Server-side `.docx` processing: parse a buffer, walk the tree, mutate, and serialize back out.
-- Headless extraction: pull text, tables, headers/footers without rendering.
-- Custom renderer or DOM bridge against the shared schema.
-- Plugins that need to work in React, Vue, and headless contexts. Use the `core-plugins` subpath.
-
-If you want the editor UI in a React or Vue app, install `@docx-editor.dev/react` or `@docx-editor.dev/vue`. Both pull `-core` transitively.
-
-## In this section
-
-<Cards>
-  <Card
-    title="Architecture"
-    href="/docs/1.x/core/architecture"
-    description="The dual-renderer design: hidden ProseMirror for editing state, layout painter for Word-fidelity pages, and the data flow between them."
-  />
-  <Card
-    title="Headless API"
-    href="/docs/1.x/core/headless"
-    description="Parse, mutate, and serialize DOCX in Node or workers: text helpers, content controls, templates, watermarks, DocumentAgent."
-  />
-</Cards>
-
-## Subpaths
-
-The most common subpaths:
-
-- `@docx-editor.dev/core`: root barrel
-- `@docx-editor.dev/core/headless`: the full DOM-free surface in one import
-- `@docx-editor.dev/core/docx/parser`: `parseDocx(buffer)` → `Document` tree
-- `@docx-editor.dev/core/docx/rezip`: `repackDocx` / `createDocx` → `.docx` bytes
-- `@docx-editor.dev/core/types/document`: `Document`, `Paragraph`, `Run`, `Insertion`, `Deletion`, `Comment`
-- `@docx-editor.dev/core/core-plugins`: plugin contract for non-React, non-Vue hosts
-
-All generated subpaths are in the [API reference](/docs/1.x/api/core).
-
-## Parse, mutate, serialize
+The root is the entry point for typical editor creation and typing: create an editor over bytes, the contract it implements, fonts, and the chrome registry. See the [chrome slot reference](/docs/2.x/guides/chrome-slots) for the complete registry vocabulary and its React and Vue toolbar parts.
 
 ```ts
-import {
-  parseDocx,
-  getParagraphs,
-  getParagraphText,
-  repackDocx,
-} from '@docx-editor.dev/core/headless';
+import { createDocxEditor, loadFonts, DEFAULT_FONT } from '@docx-editor.dev/core';
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core';
+```
 
-const buffer = await fetch('./document.docx').then((r) => r.arrayBuffer());
-const doc = await parseDocx(buffer);
+`DEFAULT_FONT` provides the default font configuration: Calibri at 11 points. `WORD_DEFAULT_FONT` is its deprecated alias. Document formatting and document-default rules determine the text size used for layout. Missing defaults and explicitly empty defaults can produce different results.
 
-for (const para of getParagraphs(doc.package.document)) {
-  console.log(para.paraId, getParagraphText(para));
+Import a subpath when you need the canonical tree, the layout pass, or the paint step directly.
+
+| Subpath | Contents |
+| --- | --- |
+| `.` | Create an editor, the `Editor` contract, fonts, the chrome registry, the document model types. |
+| `./editor` | Everything the root re-exports, plus the paginated surface, ruler geometry, and module resolution. |
+| `./contracts/editor` | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `DocumentSource`, `PageSetup`, the contract an adapter renders. |
+| `./contracts/document` | The document-level edit and query vocabulary. |
+| `./contracts/types` | Document model types. |
+| `./contracts/modules` | `EditorModule`, the shape [`@docx-editor.dev/pro`](/docs/2.x/pro) implements. |
+| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` that an attempt returns. |
+| `./store` | The canonical tree and its transactional store. |
+| `./layout` | The DOM-free layout pass. |
+| `./output` | Paint: turning a laid-out document into page DOM, and the selection overlay over it. |
+| `./automation` | The document object model behind [`@docx-editor.dev/editor-api`](/docs/2.x/editor-api). |
+| `./styles/editor.css` | The editor stylesheet. The packaged chrome and your own chrome both use it. |
+
+Prefer the root import. Use `./editor` only when you build an adapter and need surface internals (the paginated surface, ruler geometry, module resolution).
+
+## The contract
+
+`Editor` is the whole public surface an adapter uses. Call `exec` for commands. Call `query` and `snapshot` for reads:
+
+```ts
+import type { Editor, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+
+function pageLabel(editor: Editor): string {
+  const snapshot: EditorSnapshot = editor.snapshot();
+  return `${snapshot.page.current} / ${snapshot.page.total}`;
 }
-
-const out = await repackDocx(doc); // ArrayBuffer, ready to download or store
 ```
 
-The tree shape is the same one the editor renders. Code written against `-core` can run before or after a document is opened in the live editor. Full walkthrough: [Headless processing](/docs/1.x/guides/headless-processing).
+`snapshot()` is version-cached: it returns the same reference until editor state changes, and its sub-objects are reference-stable. That is what makes `useSyncExternalStore` (and therefore [`useEditorState`](/docs/2.x/react/hooks)) correct without a deep compare on every store notification.
 
-## Content controls
+### Navigate the document
 
-Block-level content controls (Word's `w:sdt`) are addressable by tag, alias, id, or type. `findContentControls` lists matches, `setContentControlContent` fills a control, `setContentControlValue` sets typed values (dropdown selection, checkbox, date), and `addRepeatingSectionItem` / `removeRepeatingSectionItem` manage repeating sections. Edits preserve the control's identity and raw properties, so content controls can act as anchors for templates and document automation.
+Use the editor instance to navigate pages and headings, scroll to paragraph references, and select text. You can also highlight paragraph references:
 
 ```ts
-import { findContentControls, setContentControlValue } from '@docx-editor.dev/core/headless';
-
-const boxes = findContentControls(doc, { type: 'checkbox' });
-const next = setContentControlValue(doc, { tag: 'agreed' }, { kind: 'checkbox', checked: true });
+editor.scrollToPage(3);
+editor.scrollToAnchor({ paraId: '1B4C77A2' });
+editor.highlightAnchor({ paraId: '1B4C77A2' }, { timeoutMs: 1500 });
+const match = editor.findMatches('Acme GmbH')[0];
+if (match) editor.selectMatch(match);
 ```
 
-Full behavior contract (locks, typed controls, data binding): [Content controls guide](/docs/1.x/guides/content-controls).
+For more information, see [Navigate a document](/docs/2.x/guides/navigation).
+
+### Typing and undo
+
+Typing uses short undo groups. A pause of at least 1 second starts a new group on the next keystroke. Continuous typing starts a new group after 2 seconds. These actions also start a new step:
+
+- A caret move by keyboard, pointer, or API.
+- Another edit, such as Backspace, Delete, Enter, paste, or a formatting command.
+- A typing format set at the caret, such as **Bold** with no selection.
+- Undo and redo.
+- An edit to the same paragraph by a collaborator, by automation, or by another editor on the same document.
+
+Each Backspace, Delete, and Enter is its own undo step. Typing over a selection joins the text typed within the same time limits. Collaborative sessions group typing runs the same way. Separate editor deletion and formatting commands stay separate in collaborative sessions too. Undo restores the original text selection, including selections across paragraphs. Redo restores the final selection.
+
+Caret formatting has its own undo step. For example, type text, turn on **Bold**, and type more text. Undo removes the second text run, then undoes **Bold**, then removes the first text run. Caret formatting stays local to the editor and does not change the document until you type.
+
+### Group one gesture into one undo step
+
+If your app applies a value on every slider movement or color-picker input, group those writes into one user gesture. Each value renders and replicates immediately. One undo action restores the formatting before the gesture, including a mixed selection. A redo action restores the final value.
+
+If you use React or Vue, start with `useEditorValueCommand` and `useHistoryGroup`. See the [React integration guide](/docs/2.x/react/hooks#usehistorygroup) or [Vue integration guide](/docs/2.x/vue/composables#usehistorygroup). If your app owns the DOM directly, use `bindHistoryGroup` from the core package. Pass the binding's options to `editor.exec` for each update. Each update is a _frame_ of the gesture.
+
+#### Bind a DOM control
+
+This range control changes font size in points. The command takes half-points:
+
+```ts
+import { bindHistoryGroup, type Editor } from '@docx-editor.dev/core';
+
+function mountFontSize(editor: Editor, slider: HTMLInputElement, status: HTMLOutputElement) {
+  slider.type = 'range';
+  slider.min = '8';
+  slider.max = '72';
+  slider.step = '0.5';
+  const gesture = bindHistoryGroup(editor, slider, { kind: 'range' });
+  const sync = () => {
+    const size = editor.snapshot().formatting?.fontSizePt;
+    slider.value = String(size ?? 11);
+    slider.setAttribute('aria-label', 'Font size');
+    slider.setAttribute(
+      'aria-valuetext',
+      size === undefined ? 'Mixed or unavailable' : `${size} points`
+    );
+    const allowed = editor.can({
+      type: 'setMarkAttr',
+      mark: 'fontSize',
+      attr: 'val',
+      value: 22,
+    });
+    slider.disabled = !allowed.ok;
+    slider.title = allowed.ok ? '' : allowed.reason;
+  };
+  const apply = () => {
+    const result = editor.exec(
+      {
+        type: 'setMarkAttr',
+        mark: 'fontSize',
+        attr: 'val',
+        value: Number(slider.value) * 2,
+      },
+      gesture.options()
+    );
+    status.value = result.ok ? '' : result.reason;
+  };
+  slider.addEventListener('input', apply);
+  const off = editor.on('selectionChange', sync);
+  sync();
+  return () => {
+    slider.removeEventListener('input', apply);
+    off();
+    gesture.dispose();
+  };
+}
+```
+
+The binding starts a range gesture on `pointerdown` or the first relevant `keydown` event. Repeated key events use the same handle. Pointer release, cancellation, lost pointer capture, `keyup`, or blur ends the gesture. Pointer release works even outside the control. The binding closes the group after the event handlers run, so your final value uses the same handle. Call `dispose()` when you remove the control or replace the editor.
+
+For a held stepper, use `kind: 'repeat'` and stop your repeat timer on release. The binding groups writes; it does not schedule repeated commands.
+
+For native color inputs, use `kind: 'native-color'`. Remove the leading `#` before executing a color command. Apply values in React `onChange` or Vue `@input`; the binding listens for the native `change` event. That event signals a committed value. It does not guarantee that the color picker closed. If the browser sends no `change` event, the next activation, Escape, blur, or disposal ends the gesture. If you need consistent drag boundaries across browsers, use a custom range control. See the [React example](/docs/2.x/react/hooks#usehistorygroup) and [Vue example](/docs/2.x/vue/composables#usehistorygroup).
+
+#### Manage a gesture explicitly
+
+If your control provides its own lifecycle callbacks, manage the handle directly:
+
+1. At gesture start, call `editor.beginHistoryGroup()`.
+2. For each update, pass the same handle in `editor.exec(command, { historyGroup })`.
+3. On finish, cancellation, or disposal, call the handle's `end()` method.
+
+For a synchronous operation, use `try` and `finally` to end the group:
+
+```ts
+const group = editor.beginHistoryGroup();
+try {
+  const result = editor.exec({ type: 'setParagraphSpacing', afterPt: 12 }, { historyGroup: group });
+  if (!result.ok) console.error(result.reason);
+} finally {
+  group.end();
+}
+```
+
+For a gesture that spans asynchronous events, keep the handle between callbacks. End it in the finish or cancellation callback, rather than after each update. Creating or ending a handle does not change document content. You can call `end()` more than once. Ending a canceled gesture keeps the edits already applied.
+
+A handle belongs to one editor and mounted document. Loading a document, detaching, destroying, or remounting the editor expires its handles. Both `can` and `exec` return `unsupported` for ended or expired handles, handles from another editor, and objects that were not created by `beginHistoryGroup()`. DOM bindings create a new handle when the previous one expires.
+
+#### Supported commands and history outcomes
+
+Grouping supports `toggleMark`, `setMarkAttr`, `setAlignment`, `setParagraphDirection`, `clearFormatting`, `setLineSpacing`, `setParagraphSpacing`, `setParagraphStyle`, and `setParagraphFormat`. Other command families reject `historyGroup` before changing the document. These include text and structural edits, images, hyperlinks, notes, header/footer lifecycle, review, protection, form fields, and content controls. Those commands can create undo entries that cover multiple document parts or apply changes asynchronously. Omit `historyGroup` to run them with their default history behavior.
+
+For supported commands, inspect `result.history?.kind`. A _story_ in this table is a document region, such as the body, a header, or a footnote.
+
+| Event | History behavior |
+| --- | --- |
+| First committed frame | `history.kind: 'started'` |
+| Further frame on the same open undo entry | `extended` |
+| Intervening write, another group, typing flush, or local story change | Next committed frame reports `split` |
+| Undo or redo | Next committed frame starts a separate entry; `exec` undo/redo reports reason `undo-redo` |
+| Read-only command without a group, such as `selectAll` | Does not close the group |
+| Caret formatting changes the next typing format | Starts or extends a local undo entry |
+| No effective formatting change at a collapsed caret | `none`; no undo entry |
+| Command rejected before a store transaction | No history change |
+| Ungrouped store transaction, even if empty or refused | Closes the local group |
+| Ended handle | Further calls return `unsupported`; existing edits remain |
+
+The result describes the undo entry recorded for the command. An accepted call does not necessarily create an entry. Reapplying the same property value can report `changed: true` and `extended`. At a caret, formatting can set the format for subsequent typing and report `changed: false`. Its local undo entry still reports `started`, `extended`, or `split`.
+
+If composition or a transaction that spans document parts prevents grouping, the command reports `split` with reason `composition` or `package-unit`.
+
+#### Diagnose unexpected boundaries
+
+Subscribe to `historyDiagnostic` for optional development feedback. A `split` notification explains an interrupted gesture. `possible-ungrouped-gesture` flags three ungrouped formatting writes to the same selection. Each consecutive write must arrive within 250 ms of the previous one. Separate clicks can also trigger this diagnostic, so treat it as a possible integration issue. `possible-fragmented-gesture` similarly flags creating a new handle for each frame. These events do not write to the console or change history behavior.
+
+`runToolbarCommand(editor, 'text.bold', { historyGroup })` accepts options in the third position. Value slots take a typed value first: `runToolbarCommand(editor, 'text.color', '0070C0', { historyGroup })`. If you supply an invalid value, the helper rejects the command. It does not fall back to the slot's default command.
+
+#### Collaboration boundaries
+
+In a collaborative session, grouping affects undo for the session that makes the edits. Each collaborator keeps its own undo history. Grouped frames can extend one entry beyond the normal capture timeout. Ungrouped edits use the shared undo manager's timed capture behavior and can also share an undo entry. A story change can stay in one collaborative undo entry. Local store history splits the group at a story change.
+
+A later local undo entry, undo, redo, or a rejected journal resets shared capture. The next frame that records history reports a split. A journal records one committed transaction. If a transaction changes no tracked shared state, it creates no shared undo entry. Commands that publish separate relationship journals, including external hyperlink insertion, reject the grouping option.
+
+Custom collaboration ports must preserve journal identity and synchronous local capture. `historyGroupOfJournal(journal)` reads local metadata outside the replicated document. Spreading, `structuredClone`, serialization, and `postMessage` lose it. Worker ports need an explicit local identity mapping; a serialized journal alone cannot preserve grouping or synchronous outcomes.
+
+## The pipeline
+
+The pipeline has one direction:
+
+```text
+bytes → bounded OPC/XML read → canonical document tree → layout → painted pages → serialize
+```
+
+The painted pages are the editable surface. There is no shadow document model to keep in sync with what you see.
+
+Fidelity is structural. The canonical tree preserves XML content and package payloads pass through untouched. Content the engine cannot type (an unknown element, or a known one in an invalid position) becomes a generic node rather than being dropped, so unknown content never blocks editing and never disappears on save.
+
+## Untrusted input
+
+A `.docx` is a zip of XML that whoever sent it fully controls. The engine sanitizes at the parse boundary (URL allowlisting, entity and zip-bomb limits, recursion and element caps, no zero-click external fetches, escaping on the way back out) so everything downstream receives an already-sanitized projection.
+
+Anything you then render from document data (a font name, a hyperlink target, a comment body, a custom node's attributes) is still attacker-controlled at your boundary. Render it as text; do not build markup or URLs from it.
 
 ## Next steps
 
-- [Architecture](/docs/1.x/core/architecture) for how the pieces fit
-- [Headless API](/docs/1.x/core/headless) for the grouped DOM-free surface
-- [API reference (70 subpaths)](/docs/1.x/api/core)
-- [Plugins](/docs/1.x/plugins) for the plugin contract
+- [Architecture](/docs/2.x/core/architecture): how the pipeline fits together
+- [React](/docs/2.x/react): the adapter that renders this contract
+- [Editing API](/docs/2.x/editor-api): the object model over `./automation`

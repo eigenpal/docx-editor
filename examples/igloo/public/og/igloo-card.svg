@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Source for `igloo.png`, the demo's share card. Edit here, then re-render:
+
+      rsvg-convert -w 1200 -h 630 examples/igloo/public/og/igloo-card.svg \
+        -o examples/igloo/public/og/igloo.png
+
+  Every colour is lifted from `src/igloo.css` and `src/art/Iceberg.tsx`, so the card and the
+  demo it links to are the same ice. The page riding the crown is the one canvas thing the
+  theme never touches — which is the demo's whole point, and the reason it is white here.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"
+     font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <!-- The water, from `.igloo-shell`: bright at the horizon, deep below. -->
+    <radialGradient id="sea" gradientUnits="userSpaceOnUse"
+                    cx="600" cy="-63" r="1440"
+                    gradientTransform="matrix(1 0 0 0.30625 0 -43.71)">
+      <stop offset="0%" stop-color="#9fd9f2"/>
+      <stop offset="38%" stop-color="#4a9fc8"/>
+      <stop offset="72%" stop-color="#17547a"/>
+      <stop offset="100%" stop-color="#0b2740"/>
+    </radialGradient>
+
+    <!-- Crown and submerged mass, from `Iceberg.tsx`. -->
+    <linearGradient id="crown" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4fdff"/>
+      <stop offset="55%" stop-color="#cfeefc"/>
+      <stop offset="100%" stop-color="#9fd6ef"/>
+    </linearGradient>
+    <linearGradient id="below" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7fc4e4" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#2e7ba6" stop-opacity="0.04"/>
+    </linearGradient>
+
+    <linearGradient id="page" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#eef7fb"/>
+    </linearGradient>
+
+    <!-- The waterline fades out west of the berg rather than ending in mid-air. -->
+    <linearGradient id="waterline" gradientUnits="userSpaceOnUse" x1="560" y1="0" x2="820" y2="0">
+      <stop offset="0%" stop-color="#eaf9ff" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#eaf9ff" stop-opacity="0.8"/>
+    </linearGradient>
+
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <filter id="drop" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <filter id="contact" x="-40%" y="-60%" width="180%" height="220%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#sea)"/>
+
+  <!-- ── The berg ─────────────────────────────────────────────────────────────────── -->
+  <g>
+    <!-- Submerged mass first, so the lit crown sits on top of it. Wider than the crown,
+         because that is the whole visual joke about icebergs. -->
+    <path d="M652 462 L610 560 L662 630 L1200 630 L1200 468 L1170 462 Z" fill="url(#below)"/>
+
+    <!-- Glow where the crown meets the water. -->
+    <ellipse cx="930" cy="462" rx="250" ry="16" fill="#bfe9fb" opacity="0.35" filter="url(#soft)"/>
+
+    <!-- The crown: the part above the waterline. One mass with a plateau in the middle for
+         the page to stand on, jagged only at the shoulders. -->
+    <path d="M676 462 L728 374 L770 400 L808 334 L832 296 L1024 278 L1066 346 L1106 316
+             L1160 462 Z" fill="url(#crown)"/>
+
+    <!-- Facets, so the crown reads as carved rather than flat. Shallow on purpose: a facet
+         run to the waterline splits the one berg into several peaks. -->
+    <path d="M832 296 L1024 278 L1012 322 L848 340 Z" fill="#ffffff" opacity="0.5"/>
+    <path d="M808 334 L832 296 L848 340 L820 372 Z" fill="#ffffff" opacity="0.24"/>
+    <path d="M1106 316 L1160 462 L1118 462 Z" fill="#ffffff" opacity="0.16"/>
+
+    <!-- The waterline. -->
+    <path d="M560 462 H1200" stroke="url(#waterline)" stroke-width="4"/>
+  </g>
+
+  <!-- ── The page the berg carries ────────────────────────────────────────────────────
+       Untinted on purpose: the demo themes the chrome and leaves the canvas Word's. -->
+  <g transform="rotate(-5 906 180)">
+    <!-- Cast shadow on the ice, then the contact shadow where the sheet meets it. -->
+    <rect x="826" y="66" width="188" height="234" rx="3" fill="#1a5a7e" opacity="0.4"
+          filter="url(#drop)"/>
+    <ellipse cx="918" cy="300" rx="96" ry="9" fill="#2e7ba6" opacity="0.45"
+             filter="url(#contact)"/>
+    <rect x="818" y="60" width="188" height="238" rx="3" fill="url(#page)"/>
+
+    <!-- Body text. -->
+    <g fill="#c3d2da">
+      <rect x="842" y="90" width="112" height="9" rx="4.5" fill="#7d95a3"/>
+      <rect x="842" y="116" width="140" height="6" rx="3"/>
+      <rect x="842" y="132" width="140" height="6" rx="3"/>
+      <rect x="842" y="148" width="104" height="6" rx="3"/>
+      <rect x="842" y="186" width="140" height="6" rx="3"/>
+      <rect x="842" y="202" width="126" height="6" rx="3"/>
+      <rect x="842" y="246" width="140" height="6" rx="3"/>
+      <rect x="842" y="262" width="88" height="6" rx="3"/>
+    </g>
+
+    <!-- Two custom nodes the library has never heard of, wearing their chip tint. -->
+    <rect x="842" y="162" width="66" height="14" rx="7" fill="#bfe9fb"/>
+    <rect x="850" y="167" width="34" height="4" rx="2" fill="#1b7fa8"/>
+    <rect x="916" y="220" width="52" height="14" rx="7" fill="#d8f1fb"/>
+    <rect x="924" y="225" width="26" height="4" rx="2" fill="#2f9dc7"/>
+
+    <!-- A tracked insertion: the one canvas mark the theme is allowed to colour. -->
+    <rect x="842" y="220" width="62" height="6" rx="3" fill="#1b7fa8" opacity="0.75"/>
+  </g>
+
+  <!-- ── The type ─────────────────────────────────────────────────────────────────── -->
+  <g>
+    <text x="80" y="176" fill="#8fd3ef" font-size="21" font-weight="600" letter-spacing="4.5">
+      DOCX-EDITOR.DEV EXAMPLE
+    </text>
+
+    <text x="76" y="288" fill="#ffffff" font-size="96" font-weight="700" letter-spacing="-2">
+      Igloo Editor
+    </text>
+
+    <rect x="80" y="322" width="72" height="5" rx="2.5" fill="#8fd3ef"/>
+
+    <text x="80" y="384" fill="#dcf2fb" font-size="30" font-weight="400">
+      A fully themed editor, built to answer
+    </text>
+    <text x="80" y="424" fill="#dcf2fb" font-size="30" font-weight="400">
+      one question: <tspan font-weight="700" fill="#ffffff">how much of this is mine?</tspan>
+    </text>
+  </g>
+
+  <!-- Three of the rungs the demo climbs, as ice chips. -->
+  <g font-size="18" font-weight="600">
+    <g>
+      <rect x="80" y="480" width="176" height="42" rx="21" fill="#0d3149" opacity="0.32"/>
+      <rect x="80" y="480" width="176" height="42" rx="21" fill="none" stroke="#8fd3ef"
+            stroke-opacity="0.5"/>
+      <text x="168" y="507" fill="#e6f7ff" text-anchor="middle">Themed chrome</text>
+    </g>
+    <g>
+      <rect x="272" y="480" width="162" height="42" rx="21" fill="#0d3149" opacity="0.32"/>
+      <rect x="272" y="480" width="162" height="42" rx="21" fill="none" stroke="#8fd3ef"
+            stroke-opacity="0.5"/>
+      <text x="353" y="507" fill="#e6f7ff" text-anchor="middle">Custom nodes</text>
+    </g>
+    <g>
+      <rect x="450" y="480" width="140" height="42" rx="21" fill="#0d3149" opacity="0.32"/>
+      <rect x="450" y="480" width="140" height="42" rx="21" fill="none" stroke="#8fd3ef"
+            stroke-opacity="0.5"/>
+      <text x="520" y="507" fill="#e6f7ff" text-anchor="middle">Review rail</text>
+    </g>
+  </g>
+
+  <!-- ── The weather ──────────────────────────────────────────────────────────────── -->
+  <g fill="#ffffff">
+    <circle cx="146" cy="72" r="3.5" opacity="0.75"/>
+    <circle cx="238" cy="126" r="2" opacity="0.5"/>
+    <circle cx="322" cy="58" r="2.6" opacity="0.6"/>
+    <circle cx="404" cy="112" r="4" opacity="0.8"/>
+    <circle cx="486" cy="46" r="2.2" opacity="0.45"/>
+    <circle cx="566" cy="140" r="3" opacity="0.65"/>
+    <circle cx="648" cy="72" r="2.4" opacity="0.5"/>
+    <circle cx="716" cy="150" r="3.6" opacity="0.7"/>
+    <circle cx="784" cy="52" r="2" opacity="0.45"/>
+    <circle cx="1064" cy="96" r="3.2" opacity="0.7"/>
+    <circle cx="1132" cy="168" r="2.4" opacity="0.5"/>
+    <circle cx="1160" cy="60" r="4" opacity="0.75"/>
+    <circle cx="62" cy="218" r="2.6" opacity="0.55"/>
+    <circle cx="196" cy="248" r="2" opacity="0.4"/>
+    <circle cx="620" cy="256" r="3.4" opacity="0.6"/>
+    <circle cx="700" cy="330" r="2.2" opacity="0.45"/>
+    <circle cx="1116" cy="286" r="3" opacity="0.55"/>
+    <circle cx="1024" cy="196" r="2.2" opacity="0.45"/>
+    <circle cx="596" cy="392" r="2.6" opacity="0.5"/>
+    <circle cx="660" cy="576" r="3" opacity="0.4"/>
+    <circle cx="1148" cy="540" r="2.4" opacity="0.35"/>
+    <circle cx="352" cy="592" r="2.8" opacity="0.35"/>
+    <circle cx="140" cy="558" r="2" opacity="0.3"/>
+  </g>
+
+  <text x="80" y="588" fill="#9fd9f2" font-size="20" font-weight="600" letter-spacing="0.6">
+    docx-editor.dev
+  </text>
+</svg>

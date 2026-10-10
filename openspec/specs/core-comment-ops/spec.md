@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change unify-orchestration-tier1. Update Purpose after archive.
+Defines framework-neutral contracts for behavior shared by supported adapters.
 
 ## Requirements
 
@@ -13,7 +13,7 @@ TBD - created by archiving change unify-orchestration-tier1. Update Purpose afte
 #### Scenario: Add a comment over a located range
 
 - **WHEN** `createCommentTr` is invoked for a resolvable paraId/search range
-- **THEN** it produces a transaction adding the comment mark over the range and a comment id, matching prior behavior
+- **THEN** it produces a transaction adding the comment mark over the range and a comment id, according to the documented operation contract
 
 #### Scenario: Propose a tracked change
 
@@ -22,7 +22,7 @@ TBD - created by archiving change unify-orchestration-tier1. Update Purpose afte
 
 ### Requirement: Canonical, instance-scoped comment/revision ID allocation
 
-The lifted ID allocation SHALL use React's monotonic-no-reuse semantics as canonical, replacing Vue's `Math.max(...)+1` strategy. It SHALL be exposed as an instance-scoped `createCommentIdAllocator()` factory returning `{ next(), seedAbove(maxId) }` rather than module-global mutable state, so two editor instances on one page do not share a counter. Each adapter SHALL instantiate one allocator per editor and seed it on document load.
+ID allocation SHALL be monotonic and SHALL NOT reuse values released during an editor session. It SHALL be exposed as an instance-scoped `createCommentIdAllocator()` factory returning `{ next(), seedAbove(maxId) }` rather than module-global mutable state, so two editor instances on one page do not share a counter. Each adapter SHALL instantiate one allocator per editor and seed it on document load.
 
 #### Scenario: Monotonic ids survive deletions
 

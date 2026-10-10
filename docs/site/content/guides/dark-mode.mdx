@@ -5,72 +5,91 @@ category: 'Guides'
 seoTitle: 'Dark mode'
 ---
 
-The editor ships a native dark mode. One prop, `colorMode`, themes the whole UI and renders the document the way Word's dark view does. It is shared by the React and Vue adapters and behaves identically in both.
+Set `colorMode` to theme the chrome and document canvas the way Word's dark view does.
 
 ## Enabling dark mode
 
-`colorMode` is a controlled prop. There is no internal toggle button; you set the value and the editor follows it.
+`colorMode` is a controlled prop. There is no internal toggle button; you set the value and the editor uses that value.
 
 | Value | Behavior |
-|---|---|
+| --- | --- |
 | `'light'` | Light theme (default). |
 | `'dark'` | Dark theme. |
 | `'system'` | Follows the operating system via `prefers-color-scheme`, and updates live when the OS theme changes. |
 
+<FrameworkTabs>
+<Framework value="react">
+
 ```tsx
-// React
-<DocxEditor documentBuffer={buf} colorMode="dark" />
+<DocxEditor document={bytes} colorMode="dark" />
 ```
 
+</Framework>
+<Framework value="vue">
+
 ```vue
-<!-- Vue -->
-<DocxEditor :document-buffer="buf" color-mode="dark" />
+<DocxEditor :document="bytes" color-mode="dark" />
 ```
+
+</Framework>
+</FrameworkTabs>
 
 ## Toggling from your own UI
 
-Wire `colorMode` to your own control: a switch, a settings menu, a segmented button. The editor re-themes instantly when the value changes.
+Wire `colorMode` to your own control: a switch, a settings menu, a segmented button. The editor applies the new theme when the value changes.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
-// React
 const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
 
 <button onClick={() => setColorMode((m) => (m === 'dark' ? 'light' : 'dark'))}>
   Toggle theme
 </button>
-<DocxEditor documentBuffer={buf} colorMode={colorMode} />
+<DocxEditor document={bytes} colorMode={colorMode} />
 ```
 
+</Framework>
+<Framework value="vue">
+
 ```vue
-<!-- Vue -->
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
-const colorMode = ref('light');
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+const colorMode = ref<'light' | 'dark'>('light');
 </script>
 
 <template>
-  <button @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">Toggle theme</button>
-  <DocxEditor :document-buffer="buf" :color-mode="colorMode" />
+  <button type="button" @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">
+    Toggle theme
+  </button>
+  <DocxEditor :document="bytes" :color-mode="colorMode" />
 </template>
 ```
 
+</Framework>
+</FrameworkTabs>
+
 To follow the operating system instead, pass `colorMode="system"`.
 
-## What changes, and what doesn't
+## What dark mode changes
 
-Dark mode has two layers:
+Dark mode changes the editor controls and the document preview:
 
-- **Editor chrome** (toolbar, title bar, dialogs, dropdowns, sidebar, menus) re-themes through the shared design tokens, so every surface tracks the theme.
-- **The document canvas** is rendered like Word's dark view: the page turns dark and text turns light. Rather than swapping two fixed colors, the canvas applies a perceptual transform that inverts each authored color's lightness while preserving its hue: black body text becomes near-white, a dark-navy heading becomes light blue, a dark red stays red. Nothing on the page becomes unreadable.
+- Editor controls use the shared color tokens.
+- The document preview adjusts color lightness while preserving hue.
+- Embedded images retain their original colors.
 
-It is a **display transform only.** Dark mode never changes the document itself:
-
-- The saved DOCX is byte-for-byte unaffected; authored colors are preserved as written.
-- Printing always uses a white page with black text, regardless of `colorMode`.
-- Embedded images, logos, and screenshots are not inverted; they render as authored.
-
-The light theme is unchanged when `colorMode` is `'light'`.
+The preview transform does not change authored colors or saved DOCX bytes. Printing uses document colors and ignores `colorMode`.
 
 ## Reporting issues
 
-Dark mode covers a large surface, and the canvas transform is heuristic. If you find a control that doesn't theme correctly, text that's hard to read, or a color that transforms badly, please open an issue at [github.com/eigenpal/docx-editor/issues](https://github.com/eigenpal/docx-editor/issues). Mention `colorMode` and include a screenshot and which adapter (React or Vue) you're using.
+The document preview uses a color transform that can reduce contrast in some documents. If a control does not use the theme correctly, open an issue at [GitHub issues](https://github.com/eigenpal/docx-editor/issues). Also report text with low contrast or colors that transform incorrectly. Mention `colorMode` and include a screenshot.
+
+## Next steps
+
+- [React props](/docs/2.x/react/props#dark-mode) and [Vue props](/docs/2.x/vue/props#appearance): the `colorMode` prop
+- [Custom styles](/docs/2.x/guides/custom-styles): theming the chrome around the canvas
+- [React composition](/docs/2.x/react/composition) and [Vue composition](/docs/2.x/vue/composition): build chrome that themes with your app

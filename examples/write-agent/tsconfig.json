@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "paths": {
+      "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
+      "@docx-editor.dev/editor-api": ["../../packages/editor-api/src/index.ts"],
+      "@docx-editor.dev/editor-api/*": ["../../packages/editor-api/src/*"],
+      "@docx-editor.dev/pro": ["../../packages/pro/src/index.ts"],
+      "@docx-editor.dev/pro/*": ["../../packages/pro/src/*"],
+      "@docx-editor.dev/react": ["../../packages/react/src/index.ts"]
+    },
+    "types": ["bun"],
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [{ "name": "next" }]
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

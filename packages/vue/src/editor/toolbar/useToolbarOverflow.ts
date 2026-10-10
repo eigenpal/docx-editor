@@ -1,0 +1,160 @@
+import { onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue';
+import {
+  sameOverflow,
+  toolbarOverflowGroups,
+  TOOLBAR_OVERFLOW_HYSTERESIS,
+  type ToolbarFitInput,
+} from '@docx-editor.dev/core/editor';
+import {
+  collapsibleGroupCost,
+  controlsOverflow,
+  readAvailableWidth,
+  readColumnGap,
+  readInlineMargins,
+  separatorLeadingCost,
+  trailingGapCost,
+} from '@docx-editor.dev/core/editor';
+
+export const GROUP_ATTRIBUTE = 'data-toolbar-group';
+export const FIXED_ATTRIBUTE = 'data-toolbar-fixed';
+export const MORE_ATTRIBUTE = 'data-toolbar-more';
+
+const ASSUMED_MORE_WIDTH = 34;
+const NONE: ReadonlySet<string> = new Set<string>();
+
+export interface UseToolbarOverflowResult {
+  readonly attach: (element: HTMLElement | null) => void;
+  readonly overflow: Ref<ReadonlySet<string>>;
+}
+
+export function useToolbarOverflow(
+  enabled: Ref<boolean> | (() => boolean),
+  groups: Ref<readonly string[]> | (() => readonly string[]),
+  order: Ref<readonly string[]> | (() => readonly string[])
+): UseToolbarOverflowResult {
+  const barRef = shallowRef<HTMLElement | null>(null);
+  const widths = shallowRef(new Map<string, number>());
+  const moreWidth = shallowRef(ASSUMED_MORE_WIDTH);
+  const overflow = ref<ReadonlySet<string>>(NONE);
+  let frame = 0;
+  let observer: ResizeObserver | undefined;
+
+  const isEnabled = () => (typeof enabled === 'function' ? enabled() : enabled.value);
+  const getGroups = () => (typeof groups === 'function' ? groups() : groups.value);
+  const getOrder = () => (typeof order === 'function' ? order() : order.value);
+
+  const measure = () => {
+    const bar = barRef.value;
+    if (!bar || !isEnabled()) return;
+    const style = getComputedStyle(bar);
+    const gap = readColumnGap(style);
+    const available = readAvailableWidth(bar, style);
+    const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
+    let separatorLeading = gap * 2;
+    if (separator) {
+      const sepStyle = getComputedStyle(separator);
+      const margins = readInlineMargins(sepStyle);
+      separatorLeading = separatorLeadingCost(
+        separator.offsetWidth,
+        margins.start,
+        margins.end,
+        gap
+      );
+    }
+
+    const widthMap = new Map(widths.value);
+    for (const element of bar.querySelectorAll<HTMLElement>(`[${GROUP_ATTRIBUTE}]`)) {
+      const id = element.getAttribute(GROUP_ATTRIBUTE);
+      if (id && element.offsetWidth > 0) {
+        widthMap.set(id, collapsibleGroupCost(element.offsetWidth, separatorLeading));
+      }
+    }
+    widths.value = widthMap;
+
+    let fixed = 0;
+    for (const element of bar.querySelectorAll<HTMLElement>(`[${FIXED_ATTRIBUTE}]`)) {
+      if (element.offsetWidth > 0) fixed += trailingGapCost(element.offsetWidth, gap);
+    }
+    const more = bar.querySelector<HTMLElement>(`[${MORE_ATTRIBUTE}]`);
+    if (more && more.offsetWidth > 0) {
+      moreWidth.value = trailingGapCost(more.offsetWidth, gap);
+    }
+
+    const input: ToolbarFitInput = {
+      available,
+      widths: widthMap,
+      groups: getGroups(),
+      order: getOrder(),
+      fixed,
+      more: moreWidth.value,
+      previous: overflow.value,
+      hysteresis: TOOLBAR_OVERFLOW_HYSTERESIS,
+    };
+    // The arithmetic charges every group a few px of gap and separator it may not use, so on
+    // a bar sized to its content it can call a bar that fits too narrow. Collapsing one group
+    // then shrinks that bar and the next measurement collapses another, until every group is
+    // in "⋯". So the first collapse waits for a control that really runs past the bar's box.
+    // Without layout to read (null), the arithmetic decides alone.
+    const fits = overflow.value.size === 0 && controlsOverflow(bar, style) === false;
+    const next = fits ? NONE : toolbarOverflowGroups(input);
+    if (!sameOverflow(next, overflow.value)) {
+      overflow.value = next;
+    }
+  };
+
+  const attach = (element: HTMLElement | null) => {
+    barRef.value = element;
+  };
+
+  const setupObserver = () => {
+    observer?.disconnect();
+    if (frame !== 0) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+    const bar = barRef.value;
+    if (!isEnabled() || !bar || typeof ResizeObserver === 'undefined') return;
+
+    observer = new ResizeObserver(() => {
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        measure();
+      });
+    });
+    observer.observe(bar);
+    // The parent too: a bar as wide as its content does not resize when the room around
+    // it grows, so only the parent reports the space a collapsed group can come back into.
+    if (bar.parentElement) observer.observe(bar.parentElement);
+    for (const element of bar.querySelectorAll<HTMLElement>(
+      `[${GROUP_ATTRIBUTE}], [${FIXED_ATTRIBUTE}]`
+    )) {
+      observer.observe(element);
+    }
+  };
+
+  watch(
+    [barRef, overflow, () => isEnabled(), () => getGroups().join(','), () => getOrder().join(',')],
+    () => {
+      if (!isEnabled()) {
+        if (overflow.value.size > 0) overflow.value = NONE;
+        observer?.disconnect();
+        return;
+      }
+      measure();
+      setupObserver();
+    },
+    { flush: 'post' }
+  );
+
+  onMounted(() => {
+    if (isEnabled()) measure();
+  });
+
+  onBeforeUnmount(() => {
+    if (frame !== 0) cancelAnimationFrame(frame);
+    observer?.disconnect();
+  });
+
+  return { attach, overflow };
+}

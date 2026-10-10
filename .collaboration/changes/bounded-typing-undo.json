@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Continuous typing can remain in one undo item indefinitely.",
+  "after": "Local typing starts a new undo group after a pause or a bounded duration, including collaborative editing.",
+  "reason": "Existing local history group tokens control capture. Shared schemas and operation formats do not change.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-typing-history.test.ts", "packages/core/src/editor/__tests__/typing-history-groups.test.ts"],
+  "changeset": "bounded-typing-undo",
+  "migration": null
+}

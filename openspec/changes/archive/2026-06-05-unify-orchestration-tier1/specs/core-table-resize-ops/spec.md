@@ -7,14 +7,14 @@
 #### Scenario: Column resize commit
 
 - **WHEN** `commitColumnResize(view, opts)` is called with a column index and new left/right widths
-- **THEN** the table and affected cell widths are updated via a single transaction, identical to the prior adapter output
+- **THEN** the table and affected cell widths are updated atomically via a single transaction
 
 #### Scenario: Row and right-edge resize commits
 
 - **WHEN** `commitRowResize` or `commitRightEdgeResize` is called
-- **THEN** the row height / last-column width is updated matching prior behavior, honoring the minimum-size constants
+- **THEN** the row height / last-column width is updated according to the requested delta, honoring the minimum-size constants
 
 #### Scenario: Adapters keep their FSMs
 
-- **WHEN** the readers/commits are lifted
-- **THEN** React's `useTableResizeState` and Vue's `useTableResize` retain their gesture state machines and call core for reads/commits; the body-vs-header/footer target view is still resolved by the adapter
+- **WHEN** the readers/commits are centralized
+- **THEN** each adapter retains its gesture state machine and calls core for reads and commits; the body-vs-header/footer target view is still resolved by the adapter

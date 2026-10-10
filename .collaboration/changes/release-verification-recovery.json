@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Registry propagation beyond two minutes fails post-release verification and skips documentation and baseline updates.",
+  "after": "A separate downstream workflow verifies the original artifacts within a shared ten-minute deadline and requests site and catalog updates without holding publication. Manual recovery reuses the same verification.",
+  "reason": "Release tooling changes do not affect shared data, document APIs, or runtime compatibility.",
+  "tests": [
+    "scripts/collaboration/publication.test.ts",
+    "scripts/collaboration/workflow.test.ts",
+    "scripts/collaboration/post-release.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

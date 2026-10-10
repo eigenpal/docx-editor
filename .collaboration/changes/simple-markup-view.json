@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The review chrome offers All Markup, No Markup, and Original; change bars are painted per paragraph from span attribution.",
+  "after": "The review chrome also offers Simple Markup, and change bars are one page-level overlay that reads change sites the resolved layout publishes.",
+  "reason": "The change is display only: a review view and painted furniture. No tree op, no stored document format, and no replication payload changes; released peers exchange the same edits and see the same document.",
+  "tests": [
+    "packages/core/src/editor/__tests__/simple-markup-view.test.ts",
+    "packages/core/src/output/__tests__/revision-paint.test.ts",
+    "packages/core/src/output/__tests__/change-bars-stories.test.ts"
+  ],
+  "changeset": "neutral-change-bars",
+  "migration": null
+}

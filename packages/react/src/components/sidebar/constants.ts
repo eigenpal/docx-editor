@@ -1,7 +1,8 @@
-// Re-export from core where the canonical constants live.
+// Sidebar geometry, re-exported from the ported module. Kept in the adapter;
+// the greenfield core owns no sidebar constants, so the values live in `lib/`.
 export {
   SIDEBAR_WIDTH,
   SIDEBAR_PAGE_GAP,
   SIDEBAR_DOCUMENT_SHIFT,
   MIN_CARD_GAP,
-} from '@docx-editor.dev/core/utils/sidebarConstants';
+} from '../../lib/sidebarConstants';

@@ -6,38 +6,38 @@
  */
 
 import type { CSSProperties } from 'react';
+import { SvgIcon, type IconProps } from './icon-base';
+import {
+  IconAddComment,
+  IconChatBubbleCheck,
+  IconChatBubbleOutline,
+  IconCheck,
+  IconCheckCircle,
+  IconClose,
+  IconComment,
+  IconDoneAll,
+  IconEditNote,
+  IconLock,
+  IconRateReview,
+  IconVisibility,
+} from './IconsReview';
 
-export interface IconProps {
-  size?: number;
-  className?: string;
-  style?: CSSProperties;
-}
+export {
+  IconAddComment,
+  IconChatBubbleCheck,
+  IconChatBubbleOutline,
+  IconCheck,
+  IconCheckCircle,
+  IconClose,
+  IconComment,
+  IconDoneAll,
+  IconEditNote,
+  IconLock,
+  IconRateReview,
+  IconVisibility,
+};
 
-const defaultSize = 20;
-
-// SVG wrapper for Material Symbols (viewBox 0 -960 960 960)
-function SvgIcon({
-  size = defaultSize,
-  className = '',
-  style,
-  children,
-}: IconProps & { children: React.ReactNode }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 -960 960 960"
-      fill="currentColor"
-      className={className}
-      style={{ display: 'inline-flex', flexShrink: 0, ...style }}
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
-  );
-}
-
+export type { IconProps };
 // ============================================================================
 // TOOLBAR ICONS
 // ============================================================================
@@ -134,6 +134,23 @@ export function IconLink(props: IconProps) {
   return (
     <SvgIcon {...props}>
       <path d="M440-280H280q-83 0-141.5-58.5T80-480q0-83 58.5-141.5T280-680h160v80H280q-50 0-85 35t-35 85q0 50 35 85t85 35h160v80ZM320-440v-80h320v80H320Zm200 160v-80h160q50 0 85-35t35-85q0-50-35-85t-85-35H520v-80h160q83 0 141.5 58.5T880-480q0 83-58.5 141.5T680-280H520Z" />
+    </SvgIcon>
+  );
+}
+
+/** Material Symbols format_paragraph: Word's familiar Show/Hide symbol. */
+export function IconFormatParagraph(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M360-160v-240q-83 0-141.5-58.5T160-600q0-83 58.5-141.5T360-800h360v80h-80v560h-80v-560H440v560h-80Z" />
+    </SvgIcon>
+  );
+}
+
+export function IconFormatShapes(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M40-40v-240h80v-400H40v-240h240v80h400v-80h240v240h-80v400h80v240H680v-80H280v80H40Zm240-160h400v-80h80v-400h-80v-80H280v80h-80v400h80v80Zm32-120 136-360h64l136 360h-62l-32-92H408l-32 92h-64Zm114-144h108l-52-150h-4l-52 150ZM120-760h80v-80h-80v80Zm640 0h80v-80h-80v80Zm0 640h80v-80h-80v80Zm-640 0h80v-80h-80v80Zm80-640Zm560 0Zm0 560Zm-560 0Z" />
     </SvgIcon>
   );
 }
@@ -727,93 +744,18 @@ export function IconArrowBack(props: IconProps) {
   );
 }
 
-export function IconDoneAll(props: IconProps) {
+export function IconSearch(props: IconProps) {
   return (
     <SvgIcon {...props}>
-      <path d="M268-240 42-466l57-56 170 170 56 56-57 56Zm226 0L268-466l56-57 170 170 368-368 57 57-425 424Zm0-226-57-56 198-198 57 56-198 198Z" />
+      <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
     </SvgIcon>
   );
 }
 
-export function IconCheckCircle(props: IconProps) {
+export function IconToc(props: IconProps) {
   return (
     <SvgIcon {...props}>
-      <path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z" />
-    </SvgIcon>
-  );
-}
-
-/** Plain speech bubble outline (no lines inside) */
-export function IconChatBubbleOutline(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-    </SvgIcon>
-  );
-}
-
-/** Speech bubble with green checkmark (bubble inherits color, check is green) */
-export function IconChatBubbleCheck(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-      <path fill="var(--doc-success)" d="m421-380 227-227-45-45-182 182-92-91-45 45 137 136Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconCheck(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconClose(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconAddComment(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M440-400h80v-120h120v-80H520v-120h-80v120H320v80h120v120ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconComment(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M240-400h480v-80H240v80Zm0-120h480v-80H240v80Zm0-120h480v-80H240v80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconEditNote(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M160-400h280v-80H160v80Zm0-160h440v-80H160v80Zm0-160h440v-80H160v80Zm360 360v-123l221-220q9-9 20-13t22-4q12 0 23 4.5t20 13.5l37 37q8 9 12.5 20t4.5 22q0 11-4 22.5T863-380L643-160H520Zm300-263-37-37 37 37ZM580-220h38l121-122-18-19-19-18-122 121v38Zm141-141-19-18 37 37-18-19Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconRateReview(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M240-400h122l200-200q9-9 13.5-20.5T580-643q0-11-5-21.5T562-684l-36-38q-9-9-20-13.5t-23-4.5q-11 0-22.5 4.5T440-722L240-522v122Zm280-243-37-37 37 37ZM300-460v-38l101-101 20 18 18 20-101 101h-38Zm121-121 18 20-38-38 20 18Zm26 181h273v-80H527l-80 80ZM80-80v-720q0-33 23.5-56.5T160-880h640q33 0 56.5 23.5T880-800v480q0 33-23.5 56.5T800-240H240L80-80Zm126-240h594v-480H160v525l46-45Zm-46 0v-480 480Z" />
-    </SvgIcon>
-  );
-}
-
-export function IconVisibility(props: IconProps) {
-  return (
-    <SvgIcon {...props}>
-      <path d="M480-320q75 0 127.5-52.5T660-500q0-75-52.5-127.5T480-680q-75 0-127.5 52.5T300-500q0 75 52.5 127.5T480-320Zm0-72q-45 0-76.5-31.5T372-500q0-45 31.5-76.5T480-608q45 0 76.5 31.5T588-500q0 45-31.5 76.5T480-392Zm0 192q-146 0-266-81.5T40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200Zm0-300Zm0 220q113 0 207.5-59.5T832-500q-50-101-144.5-160.5T480-720q-113 0-207.5 59.5T128-500q50 101 144.5 160.5T480-280Z" />
+      <path d="M120-240v-80h240v80H120Zm0-200v-80h480v80H120Zm0-200v-80h720v80H120Z" />
     </SvgIcon>
   );
 }
@@ -863,6 +805,9 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   subscript: IconSubscript,
   link: IconLink,
   format_clear: IconFormatClear,
+  format_paragraph: IconFormatParagraph,
+  format_shapes: IconFormatShapes,
+  lock: IconLock,
   format_align_left: IconAlignLeft,
   format_align_center: IconAlignCenter,
   format_align_right: IconAlignRight,
@@ -944,6 +889,9 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   branding_watermark: IconWatermark,
   // Navigation
   arrow_back: IconArrowBack,
+  // Navigation pane
+  search: IconSearch,
+  toc: IconToc,
   // Comments sidebar
   done_all: IconDoneAll,
   check_circle: IconCheckCircle,

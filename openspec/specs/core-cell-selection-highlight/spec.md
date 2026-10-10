@@ -2,25 +2,25 @@
 
 ## Purpose
 
-TBD - created by archiving change unify-orchestration-tier1. Update Purpose after archive.
+Defines framework-neutral contracts for behavior shared by supported adapters.
 
 ## Requirements
 
 ### Requirement: Cell-selection highlight available to both adapters
 
-`@docx-editor.dev/core` SHALL expose `applyCellSelectionHighlight(container, state, options?)`, lifted from React's `internals/domSelection.ts`. It SHALL paint the `.layout-table-cell-selected` class on painted cells whose PM positions fall inside an active `CellSelection`, scoped by `options.scope` (`body` | `header` | `footer`). Both the React and Vue adapters SHALL call it.
+`@docx-editor.dev/core` SHALL paint the cell-selection highlight itself, so every adapter shows it without adapter code. When a `CellSelection` is active, the paginated surface SHALL compute one rectangle per painted occurrence of each selected cell from the layout records (`cellSelectionRects` in `packages/core/src/layout/semantic-cell-selection.ts`) and SHALL draw each as a `.docx-cell-selection-rect` element in the selection overlay layer (`paintSelectionOverlay` in `packages/core/src/output/semantic-selection-overlay.ts`). The overlay layer SHALL be a sibling of the painted pages, never a child, so the page painter cannot sweep it and a keystroke cannot land in it. Adapters SHALL NOT paint their own cell-selection highlight.
 
-#### Scenario: React behavior preserved after lift
+#### Scenario: Active cell selection is projected
 
-- **WHEN** a CellSelection is active and `applyCellSelectionHighlight` runs against the body scope
-- **THEN** the same set of cells receive `.layout-table-cell-selected` as before the lift
+- **WHEN** a `CellSelection` is active and the surface renders its overlay
+- **THEN** exactly the cells in the selection's rectangle are covered by `.docx-cell-selection-rect` elements at the painted cell geometry
 
-#### Scenario: Vue gains cell-selection highlight
+#### Scenario: Every adapter shows the highlight
 
-- **WHEN** a user selects multiple table cells in the Vue editor
-- **THEN** the selected cells are visually highlighted, matching React (Vue previously rendered no highlight)
+- **WHEN** a user selects multiple table cells in any supported adapter
+- **THEN** the selected cells are visually highlighted, because the highlight is painted by the core surface both adapters mount
 
 #### Scenario: Non-cell selection clears highlight
 
-- **WHEN** the selection is not a CellSelection
-- **THEN** no cell carries the selected class in the scoped container
+- **WHEN** the selection is not a `CellSelection`
+- **THEN** no `.docx-cell-selection-rect` element remains in the selection overlay

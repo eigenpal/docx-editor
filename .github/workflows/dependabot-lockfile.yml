@@ -22,19 +22,28 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Lets the advisory gate below publish its SARIF to the Security tab.
+  security-events: write
 
 jobs:
   refresh-and-verify:
     if: github.actor == 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
     steps:
       - name: Checkout PR branch
-        uses: actions/checkout@v6.0.3
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
           # Default GITHUB_TOKEN can push to dependabot PR branches when
           # workflow-level `permissions: contents: write` is granted.
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -60,6 +69,21 @@ jobs:
             echo "bun.lock already in sync — nothing to commit"
           fi
 
+      # Runs first, and against the refreshed lockfile above. ci.yml skips
+      # Dependabot, so this is the only place a dependency bump is checked for
+      # advisories in what we publish. A bump that pulls a vulnerable transitive
+      # package fails here rather than at the next release.
+      - name: Shipped dependency advisories
+        run: bun run check:shipped-advisories --sarif=shipped-advisories.sarif
+
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: shipped-advisories.sarif
+          category: shipped-advisories
+
       - name: Lint
         run: bun run lint
 
@@ -73,18 +97,41 @@ jobs:
         run: bun run i18n:validate
 
       - name: Run tests
-        run: bun test
+        run: bun run test
 
       - name: Build packages
         run: bun run build:packages
+
+      - name: Install Chromium for editor acceptance
+        run: bash scripts/install-ci-chromium.sh
+
+      - name: Editor acceptance tests (React and Vue)
+        run: bun run test:e2e:acceptance
+
+      - name: Save editor browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: editor-browser-failures-dependabot
+          path: test-results/
+          retention-days: 7
+
+      - name: Collaboration policy
         env:
-          NODE_OPTIONS: --max-old-space-size=8192
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bun run collaboration:check --base "$BASE_SHA"
+
+      - name: Collaboration published-release matrix
+        run: |
+          bun run notices:generate
+          bun run collaboration:test --all
 
       - name: API report check
         run: bun run api:check
 
-      - name: Parity contract check
-        run: bun run check:parity-contract
+      # Parity contract check is disabled here for the same reason as in ci.yml:
+      # @docx-editor.dev/vue is WIP, unpublished, and off `build:packages`, so its API
+      # Extractor snapshot is no longer regenerated. Restore alongside the ci.yml step.
 
       - name: i18n per-locale bundle size check
         run: bun run check:i18n-bundle-size

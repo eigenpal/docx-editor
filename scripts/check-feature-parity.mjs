@@ -4,13 +4,23 @@
 // (commands, dialogs, sidebar kinds, plugin hooks, agent bridges) that
 // haven't crossed over to Vue yet.
 //
-// Designed to land alongside check-export-parity.mjs and
-// check-i18n-parity.mjs as a third parity tier — informational while
-// the Vue adapter is hardening, strict once the matrix flips.
+// This is a GATE, not just a report. The current drift state must match
+// scripts/feature-parity-baseline.json exactly, the same idiom as the
+// pinned lane DAG in packages/core/src/__tests__/core-lane-graph.test.ts:
 //
-// Run: node scripts/check-feature-parity.mjs
+// - New drift (a component, prop, emit, command, shortcut, sidebar kind
+//   or plugin hook that exists in one adapter but not the other, and is
+//   not in the baseline) fails with a diff.
+// - Drift that CLOSES also fails, with a prompt to tighten the baseline,
+//   so the pinned file never goes stale and the ratchet only moves down.
+//
+// To intentionally accept either kind of change, rerun with
+// --update-baseline and commit the rewritten baseline alongside the
+// adapter change that caused it.
+//
+// Run: node scripts/check-feature-parity.mjs [--update-baseline]
 // Output: structured Markdown report on stdout, JSON to
-//   openspec/changes/vue-editor-robust-implementation/notes/feature-parity-report.json
+//   openspec/changes/typed-ooxml-paragraph-editor/notes/feature-parity-report.json
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,27 +31,26 @@ const REACT_ROOT = path.join(ROOT, 'packages/react/src');
 const VUE_ROOT = path.join(ROOT, 'packages/vue/src');
 const REPORT_PATH = path.join(
   ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/feature-parity-report.json'
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/feature-parity-report.json'
 );
+const BASELINE_PATH = path.join(ROOT, 'scripts/feature-parity-baseline.json');
 const RENDER_PATH_DIVERGENCE = path.join(
   ROOT,
-  'openspec/changes/vue-editor-robust-implementation/notes/intentional-render-path-divergence.md'
+  'openspec/changes/typed-ooxml-paragraph-editor/notes/intentional-render-path-divergence.md'
 );
 
 // Files whose React-only-ness is documented as intentional in the
 // render-path divergence note. They share their behaviour with Vue
-// via packages/core/src/painter-model/, so the parity counter
-// shouldn't penalise them.
+// via the core package surface, so the parity counter should not
+// penalize them. Keys are adapter-relative paths without extension,
+// the same keys buildReport pairs components by.
 function loadIntentionalRenderPathSet() {
   if (!fs.existsSync(RENDER_PATH_DIVERGENCE)) return new Set();
   const md = fs.readFileSync(RENDER_PATH_DIVERGENCE, 'utf8');
   const out = new Set();
   for (const line of md.split('\n')) {
-    const m = line.match(/`(packages\/react\/src\/[^`]+)`/);
-    if (m) {
-      const base = path.basename(m[1]).replace(/\.(tsx?|ts)$/, '');
-      out.add(base);
-    }
+    const m = line.match(/`packages\/react\/src\/([^`]+)`/);
+    if (m) out.add(m[1].replace(/\.(tsx?|jsx?)$/, ''));
   }
   return out;
 }
@@ -60,7 +69,12 @@ const PATTERNS = {
 function walkFiles(rootDir, accept) {
   const out = [];
   if (!fs.existsSync(rootDir)) return out;
-  for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+  // readdir order is filesystem-dependent; sort by code point so the
+  // walk (and everything derived from it) is identical on every host.
+  const entries = fs
+    .readdirSync(rootDir, { withFileTypes: true })
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
     const full = path.join(rootDir, entry.name);
     if (entry.isDirectory()) {
@@ -89,11 +103,16 @@ function readSfcScript(src) {
   return src.slice(openEnd + 1, close);
 }
 
-function extractFromFile(absPath) {
+function extractFromFile(absPath, adapterRoot) {
   const src = fs.readFileSync(absPath, 'utf8');
   const body = absPath.endsWith('.vue') ? readSfcScript(src) : src;
+  // Key by adapter-relative path, not basename: both adapters hold
+  // several files with the same basename (`parts`, `index`, `types`),
+  // and a basename key would let all but one of them escape the gate.
   const componentName = path
-    .basename(absPath)
+    .relative(adapterRoot, absPath)
+    .split(path.sep)
+    .join('/')
     .replace(/\.(tsx?|vue|jsx?)$/, '');
 
   // Tag files that are pure core re-exports — they don't add surface
@@ -179,15 +198,22 @@ function diffSets(reactSet, vueSet) {
 
 function buildReport() {
   const reactFiles = walkFiles(REACT_ROOT, (n) => n.endsWith('.tsx') || n.endsWith('.ts'));
-  const vueFiles = walkFiles(VUE_ROOT, (n) => n.endsWith('.vue') || n.endsWith('.ts'));
-  // Drop pure core re-exports — the surface lives in core, not in
-  // the adapter, so they shouldn't count as adapter-specific drift.
+  // The Vue adapter ships .tsx files too (render-function components);
+  // leaving them out would hide their pairs from the gate entirely.
+  const vueFiles = walkFiles(
+    VUE_ROOT,
+    (n) => n.endsWith('.vue') || n.endsWith('.tsx') || n.endsWith('.ts')
+  );
+  // Drop pure core re-exports, the surface lives in core, not in
+  // the adapter, so they should not count as adapter-specific drift.
   // Also drop files documented as intentional render-path divergence
-  // (Vue ships the same behaviour via core's painter).
+  // where Vue ships the same behaviour through the core package.
   const reactComponents = reactFiles
-    .map(extractFromFile)
+    .map((f) => extractFromFile(f, REACT_ROOT))
     .filter((f) => !f.isCoreReexport && !INTENTIONAL_RENDER_PATH.has(f.componentName));
-  const vueComponents = vueFiles.map(extractFromFile).filter((f) => !f.isCoreReexport);
+  const vueComponents = vueFiles
+    .map((f) => extractFromFile(f, VUE_ROOT))
+    .filter((f) => !f.isCoreReexport);
 
   const byName = new Map();
   for (const r of reactComponents) {
@@ -231,7 +257,9 @@ function buildReport() {
     }
     components.push(row);
   }
-  components.sort((a, b) => a.name.localeCompare(b.name));
+  // Code-point sort, not localeCompare: baseline output must not vary
+  // with the host's ICU locale.
+  components.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
   // Aggregate global category sets across the whole adapter.
   const aggregate = (xs, key) => {
@@ -327,9 +355,139 @@ function formatMarkdown(report) {
   return out.join('\n');
 }
 
+// The deterministic slice of the report the baseline pins. Every list is
+// sorted and `generatedAt` is excluded, so two runs over the same tree
+// produce byte-identical state.
+function parityState(report) {
+  const names = (status) =>
+    report.components
+      .filter((r) => r.status === status)
+      .map((r) => r.name)
+      .sort();
+  const signatureDivergence = {};
+  for (const row of report.components) {
+    if (row.status !== 'signature-divergence') continue;
+    signatureDivergence[row.name] = {
+      propsAddedInReact: row.divergence.propsAddedInReact.map((p) => p.name).sort(),
+      propsAddedInVue: row.divergence.propsAddedInVue.map((p) => p.name).sort(),
+      emitsAddedInReact: [...row.divergence.emitsAddedInReact].sort(),
+      emitsAddedInVue: [...row.divergence.emitsAddedInVue].sort(),
+    };
+  }
+  const categoryDrift = {};
+  for (const cat of ['commands', 'shortcuts', 'sidebarKinds', 'pluginHooks']) {
+    categoryDrift[cat] = {
+      reactOnly: [...report[cat].reactOnly].sort(),
+      vueOnly: [...report[cat].vueOnly].sort(),
+    };
+  }
+  return {
+    reactOnlyComponents: names('react-only'),
+    vueOnlyComponents: names('vue-only'),
+    signatureDivergence: Object.fromEntries(
+      Object.entries(signatureDivergence).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    ),
+    categoryDrift,
+  };
+}
+
+// Compare two sorted string arrays. Entries only in `current` are new
+// drift (regressions); entries only in `baseline` are drift that closed
+// (the baseline is stale and must tighten).
+function diffList(label, baseline, current, regressions, improvements) {
+  const base = new Set(baseline);
+  const cur = new Set(current);
+  for (const x of current) if (!base.has(x)) regressions.push(`${label}: ${x}`);
+  for (const x of baseline) if (!cur.has(x)) improvements.push(`${label}: ${x}`);
+}
+
+function compareToBaseline(baseline, current) {
+  const regressions = [];
+  const improvements = [];
+  diffList(
+    'react-only component',
+    baseline.reactOnlyComponents ?? [],
+    current.reactOnlyComponents,
+    regressions,
+    improvements
+  );
+  diffList(
+    'vue-only component',
+    baseline.vueOnlyComponents ?? [],
+    current.vueOnlyComponents,
+    regressions,
+    improvements
+  );
+  const baseDiv = baseline.signatureDivergence ?? {};
+  const allDivergent = new Set([...Object.keys(baseDiv), ...Object.keys(current.signatureDivergence)]);
+  for (const name of [...allDivergent].sort()) {
+    const b = baseDiv[name];
+    const c = current.signatureDivergence[name];
+    if (!b) {
+      regressions.push(`signature divergence: ${name}`);
+      continue;
+    }
+    if (!c) {
+      improvements.push(`signature divergence: ${name}`);
+      continue;
+    }
+    for (const key of ['propsAddedInReact', 'propsAddedInVue', 'emitsAddedInReact', 'emitsAddedInVue']) {
+      diffList(`${name}.${key}`, b[key] ?? [], c[key], regressions, improvements);
+    }
+  }
+  for (const cat of ['commands', 'shortcuts', 'sidebarKinds', 'pluginHooks']) {
+    const b = (baseline.categoryDrift ?? {})[cat] ?? {};
+    const c = current.categoryDrift[cat];
+    diffList(`${cat} react-only`, b.reactOnly ?? [], c.reactOnly, regressions, improvements);
+    diffList(`${cat} vue-only`, b.vueOnly ?? [], c.vueOnly, regressions, improvements);
+  }
+  return { regressions, improvements };
+}
+
 const report = buildReport();
 process.stdout.write(formatMarkdown(report) + '\n');
 
 fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
 fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 2) + '\n');
 process.stderr.write(`\nJSON report written to ${path.relative(ROOT, REPORT_PATH)}\n`);
+
+const state = parityState(report);
+const baselineRel = path.relative(ROOT, BASELINE_PATH);
+
+if (process.argv.includes('--update-baseline')) {
+  fs.writeFileSync(BASELINE_PATH, JSON.stringify(state, null, 2) + '\n');
+  process.stderr.write(`Baseline written to ${baselineRel}\n`);
+  process.exit(0);
+}
+
+if (!fs.existsSync(BASELINE_PATH)) {
+  process.stderr.write(
+    `\nFeature parity gate FAILED: ${baselineRel} is missing.\n` +
+      `Generate it with: node scripts/check-feature-parity.mjs --update-baseline\n`
+  );
+  process.exit(1);
+}
+
+const baseline = JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8'));
+const { regressions, improvements } = compareToBaseline(baseline, state);
+
+if (regressions.length) {
+  process.stderr.write(
+    `\nFeature parity gate FAILED: new React/Vue adapter drift not in ${baselineRel}:\n` +
+      regressions.map((r) => `  + ${r}`).join('\n') +
+      '\n\nClose the gap in the other adapter. If the drift is intentional,\n' +
+      'accept it with: node scripts/check-feature-parity.mjs --update-baseline\n' +
+      'and commit the rewritten baseline with an explanation.\n'
+  );
+}
+if (improvements.length) {
+  process.stderr.write(
+    `\nFeature parity gate FAILED: drift pinned in ${baselineRel} no longer exists:\n` +
+      improvements.map((r) => `  - ${r}`).join('\n') +
+      '\n\nThe parity gap narrowed — tighten the baseline so it cannot reopen:\n' +
+      'node scripts/check-feature-parity.mjs --update-baseline\n' +
+      'and commit the rewritten baseline.\n'
+  );
+}
+if (regressions.length || improvements.length) process.exit(1);
+process.stderr.write(`Feature parity gate passed: drift matches ${baselineRel}.\n`);

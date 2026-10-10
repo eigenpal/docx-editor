@@ -1,0 +1,311 @@
+# @docx-editor.dev/example-collaboration
+
+## 0.0.13
+
+### Patch Changes
+
+- Updated dependencies [fb596a6]
+- Updated dependencies [af15667]
+  - @docx-editor.dev/pro@2.19.0
+  - @docx-editor.dev/editor-api@2.19.0
+  - @docx-editor.dev/core@2.19.0
+  - @docx-editor.dev/i18n@2.19.0
+
+## 0.0.12
+
+### Patch Changes
+
+- Updated dependencies [ded420d]
+- Updated dependencies [d2d3824]
+- Updated dependencies [b5bf09f]
+- Updated dependencies [10a3d41]
+- Updated dependencies [c6a829d]
+- Updated dependencies [e78dc17]
+- Updated dependencies [84c4622]
+- Updated dependencies [564182f]
+- Updated dependencies [f2dfcac]
+- Updated dependencies [758551b]
+- Updated dependencies [452312f]
+- Updated dependencies [5598465]
+- Updated dependencies [60b9163]
+- Updated dependencies [59520ce]
+- Updated dependencies [95db5eb]
+- Updated dependencies [1e36856]
+- Updated dependencies [6eb1eb4]
+- Updated dependencies [37be540]
+- Updated dependencies [9198848]
+- Updated dependencies [2cea799]
+- Updated dependencies [f23f974]
+- Updated dependencies [7c2b4aa]
+- Updated dependencies [90ea211]
+- Updated dependencies [f56f0b6]
+- Updated dependencies [f10341d]
+- Updated dependencies [040e653]
+  - @docx-editor.dev/core@2.18.0
+  - @docx-editor.dev/pro@2.18.0
+  - @docx-editor.dev/editor-api@2.18.0
+  - @docx-editor.dev/i18n@2.18.0
+
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [332494b]
+  - @docx-editor.dev/core@2.17.0
+  - @docx-editor.dev/editor-api@2.17.0
+  - @docx-editor.dev/pro@2.17.0
+  - @docx-editor.dev/i18n@2.17.0
+
+## 0.0.10
+
+### Patch Changes
+
+- Updated dependencies [d8c40b2]
+- Updated dependencies [02b77f6]
+  - @docx-editor.dev/core@2.16.2
+  - @docx-editor.dev/editor-api@2.16.2
+  - @docx-editor.dev/pro@2.16.2
+  - @docx-editor.dev/i18n@2.16.2
+
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [b2390c6]
+  - @docx-editor.dev/core@2.16.1
+  - @docx-editor.dev/editor-api@2.16.1
+  - @docx-editor.dev/pro@2.16.1
+  - @docx-editor.dev/i18n@2.16.1
+
+## 0.0.8
+
+### Patch Changes
+
+- Updated dependencies [96d7e74]
+- Updated dependencies [0a3b35d]
+- Updated dependencies [82b8e0c]
+- Updated dependencies [7a18c15]
+- Updated dependencies [863680d]
+- Updated dependencies [62a6911]
+- Updated dependencies [41a3bc7]
+- Updated dependencies [e295e90]
+- Updated dependencies [00666a8]
+- Updated dependencies [a4a9bbc]
+- Updated dependencies [76a4c5d]
+- Updated dependencies [b7c82fa]
+- Updated dependencies [d0bac83]
+- Updated dependencies [03b88ea]
+- Updated dependencies [1f207f8]
+- Updated dependencies [19a420e]
+- Updated dependencies [485bfd4]
+- Updated dependencies [da01e25]
+- Updated dependencies [f416965]
+- Updated dependencies [954d9d1]
+- Updated dependencies [6fac0e1]
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [85bfd9c]
+- Updated dependencies [3641f1e]
+- Updated dependencies [10a0575]
+- Updated dependencies [0a75175]
+- Updated dependencies [3ca855b]
+- Updated dependencies [46c0de2]
+- Updated dependencies [fdd6045]
+- Updated dependencies [eb0e520]
+- Updated dependencies [5505944]
+- Updated dependencies [b5ab91b]
+- Updated dependencies [1de0f64]
+- Updated dependencies [6f7da01]
+  - @docx-editor.dev/core@2.16.0
+  - @docx-editor.dev/editor-api@2.16.0
+  - @docx-editor.dev/i18n@2.16.0
+  - @docx-editor.dev/pro@2.16.0
+
+## 0.0.7
+
+### Patch changes
+
+- @docx-editor.dev/core@2.15.1
+  - @docx-editor.dev/editor-api@2.15.1
+  - @docx-editor.dev/i18n@2.15.1
+  - @docx-editor.dev/pro@2.15.1
+
+## 0.0.6
+
+### Patch changes
+
+- Updated dependencies [5284df5]
+- Updated dependencies [e9baf4d]
+- Updated dependencies [087bb78]
+- Updated dependencies [0d81033]
+- Updated dependencies [a3819aa]
+- Updated dependencies [a53f75c]
+- Updated dependencies [36c1f04]
+- Updated dependencies [8e6133f]
+- Updated dependencies [678fe91]
+- Updated dependencies [cfe3fe1]
+- Updated dependencies [0e1360d]
+- Updated dependencies [2a8e57e]
+- Updated dependencies [7dc8b22]
+  - @docx-editor.dev/core@2.15.0
+  - @docx-editor.dev/pro@2.15.0
+  - @docx-editor.dev/editor-api@2.15.0
+  - @docx-editor.dev/i18n@2.15.0
+
+## 0.0.5
+
+### Patch Changes
+
+- @docx-editor.dev/core@2.14.1
+  - @docx-editor.dev/editor-api@2.14.1
+  - @docx-editor.dev/i18n@2.14.1
+  - @docx-editor.dev/pro@2.14.1
+
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [7633b2c]
+- Updated dependencies [1afc5f2]
+- Updated dependencies [01022a4]
+- Updated dependencies [6b5bb8d]
+- Updated dependencies [f731c52]
+  - @docx-editor.dev/core@2.14.0
+  - @docx-editor.dev/editor-api@2.14.0
+  - @docx-editor.dev/pro@2.14.0
+  - @docx-editor.dev/i18n@2.14.0
+
+## 0.0.3
+
+### Patch Changes
+
+- Updated dependencies [b360c3c]
+- Updated dependencies [845e38f]
+- Updated dependencies [fe26cd4]
+- Updated dependencies [66fcc36]
+- Updated dependencies [3c66a7c]
+- Updated dependencies [16966b2]
+- Updated dependencies [2d7dc10]
+- Updated dependencies [346f7e6]
+- Updated dependencies [5cf6f08]
+- Updated dependencies [7ea84c3]
+- Updated dependencies [2ea6a9d]
+- Updated dependencies [e268614]
+- Updated dependencies [8107826]
+- Updated dependencies [0860dd2]
+- Updated dependencies [b1fa0d6]
+- Updated dependencies [f1d3940]
+- Updated dependencies [0a6e44c]
+- Updated dependencies [72ff41f]
+- Updated dependencies [8506a62]
+- Updated dependencies [0d782e3]
+- Updated dependencies [7e85377]
+- Updated dependencies [96cdbe2]
+  - @docx-editor.dev/core@2.13.0
+  - @docx-editor.dev/pro@2.13.0
+  - @docx-editor.dev/editor-api@2.13.0
+  - @docx-editor.dev/i18n@2.13.0
+
+## 0.0.2
+
+### Patch Changes
+
+- Updated dependencies [531759c]
+- Updated dependencies [40699c8]
+- Updated dependencies [31780e5]
+- Updated dependencies [ce9c5cc]
+- Updated dependencies [71bc4e0]
+- Updated dependencies [b779bb8]
+- Updated dependencies [4c2c119]
+- Updated dependencies [3755b98]
+- Updated dependencies [9f1b924]
+- Updated dependencies [8fe5920]
+- Updated dependencies [fe3b8a3]
+  - @docx-editor.dev/core@2.12.0
+  - @docx-editor.dev/pro@2.12.0
+  - @docx-editor.dev/editor-api@2.12.0
+  - @docx-editor.dev/i18n@2.12.0
+
+## 0.0.1
+
+### Patch Changes
+
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [2015f33]
+- Updated dependencies [1542e73]
+- Updated dependencies [e4872fb]
+- Updated dependencies [40578c6]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [c4b4dab]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [af77c9b]
+- Updated dependencies [e4872fb]
+- Updated dependencies [d11816f]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [0d770d9]
+- Updated dependencies [dfaafc0]
+  - @docx-editor.dev/core@2.11.0
+  - @docx-editor.dev/editor-api@2.11.0
+  - @docx-editor.dev/pro@2.11.0
+  - @docx-editor.dev/i18n@2.11.0

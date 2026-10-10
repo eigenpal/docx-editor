@@ -1,48 +1,44 @@
-# Parity demo
+# Combined demo deployment
 
-Single deployment that serves the React and Vue adapter examples on the same domain. A switcher pill in each editor's toolbar flips between adapters with a normal page navigation. No iframes, no chrome wrapper — each adapter owns the full viewport.
+This site serves the React, Vue, Igloo, and DOCX-to-Markdown examples from one Vercel deployment. Each app fills the viewport.
 
-## Why this exists
+## Run locally
 
-The 1.0.0 unification renames packages and ships React and Vue adapters from a shared `@docx-editor.dev/core`. The community-trust signal is "the same DOCX renders identically in both adapters when installed from npm." This deployment proves it by serving both adapters from real `node_modules` resolution paths, not source aliases.
-
-The build trick: dev mode aliases `@docx-editor.dev/*` to `packages/*/src` for HMR. Parity mode sets `USE_PUBLISHED_PACKAGES=true` so vite resolves through `node_modules` → workspace `dist/` — the exact bytes a consumer downloads from npm.
-
-## Routes
-
-| Path      | Source               | Adapter                          |
-| --------- | -------------------- | -------------------------------- |
-| `/`       | (vercel.json)        | 307 redirects to `/react/`       |
-| `/react/` | `examples/vite/dist` | React (`@docx-editor.dev/react`) |
-| `/vue/`   | `examples/vue/dist`  | Vue (`@docx-editor.dev/vue`)     |
-
-The switcher pill in each editor's toolbar (`examples/shared/AdapterSwitcher.tsx` for React, inline HTML in Vue's `App.vue`) is just two anchor tags pointing at `/react/` and `/vue/`. Click is a normal navigation.
-
-## Build
+From the repository root, start the React and Vue development servers:
 
 ```bash
-bun run build
+bun install
+bun run dev
 ```
 
-Sequence:
+Open React at `http://localhost:5173`. Open Vue at `http://localhost:5174`.
 
-1. Build all five workspace packages (`bun run build:packages`) so each has a `dist/`.
-2. Build the React example with `USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/react/` — vite skips workspace source aliases and resolves package names normally.
-3. Build the Vue example with `USE_PUBLISHED_PACKAGES=true VITE_BASE_PATH=/vue/`.
-4. Merge into `examples/parity/dist/{react,vue}/` and copy this folder's `index.html` to the root.
+## Build the parity site
 
-## Local preview
+Build and preview the assembled site from the repository root:
 
 ```bash
 bun run preview
 ```
 
-## Deploying to Vercel
+Open one of these local URLs:
 
-Root `vercel.json` declares `bun run build` as the build, `examples/parity/dist` as the output, and the right SPA rewrites for `/react/*` and `/vue/*`. So any Vercel project pointed at this repo gets the parity preview by default — no dashboard overrides needed.
+- `http://localhost:4173/react/`
+- `http://localhost:4173/vue/`
+- `http://localhost:4173/igloo/`
+- `http://localhost:4173/docx-to-markdown/`
 
-To stand up a preview for the `1.0.0-release` branch on a custom URL:
+The local preview does not apply the root or hostname rewrites in `vercel.json`.
 
-- In your Vercel project Settings → Domains, add a domain (e.g. `next.docx-editor.dev` or `1-0-0-release.docx-editor.dev`) and set its Git Branch to `1.0.0-release`. Every push to that branch redeploys.
+The build performs these steps:
 
-The existing `latest.docx-editor.dev` deployment off `main` will pick up the parity build on its next deploy after this change merges. `/` redirects to `/react/`, the React adapter takes the full viewport, and a switcher pill in the toolbar flips to `/vue/`. A yellow banner on each editor route notes that this is a preview deployment and links back to `docx-editor.dev`.
+1. It builds the seven demo workspace packages.
+2. It builds the React, Vue, Igloo, and DOCX-to-Markdown example apps.
+3. It assigns `/react/`, `/vue/`, `/igloo/`, and `/docx-to-markdown/` as their base paths.
+4. It assembles all four builds in `examples/parity/dist/`.
+
+On Vercel, `/` rewrites to the React app. Hostname rewrites serve `igloo.docx-editor.dev` from `/igloo/` and `docx-to-markdown.docx-editor.dev` from `/docx-to-markdown/` without changing the browser URL. Before removing the old Igloo project, attach both custom domains to the same Vercel project.
+
+## Adapter switcher
+
+The React switcher is in `examples/shared/AdapterSwitcher.tsx`. The Vue switcher is in `examples/vue/src/AdapterSwitcher.vue`. The production links use `/react/` and `/vue/`.

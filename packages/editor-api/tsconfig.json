@@ -1,0 +1,69 @@
+{
+  // The package's real typecheck. It used to be an `echo`: the legacy sources could not compile
+  // against the current engine, so the script printed a paragraph explaining that and exited
+  // zero — which made every aggregate `bun run typecheck` report success for a package nobody
+  // was checking. Those sources are gone, so this compiles again.
+  //
+  // ES2022 rather than ES2020 because core's sources, which this program contains through the
+  // `paths` below, use `Array.prototype.at`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@docx-editor.dev/editor-api": ["./src/index.ts"],
+      "@docx-editor.dev/editor-api/browser": ["./src/browser.ts"],
+      "@docx-editor.dev/pro": ["../pro/src/index.ts"],
+      // Every published subpath, mapped to source. The export map points at dist, so a subpath missing here resolves to built .d.ts while its siblings resolve to src, and the same type arrives under two identities.
+      "@docx-editor.dev/core": ["../core/src/index.ts"],
+      "@docx-editor.dev/core/automation": ["../core/src/automation/index.ts"],
+      "@docx-editor.dev/core/binding": ["../core/src/binding/index.ts"],
+      "@docx-editor.dev/core/collaboration/replication": [
+        "../core/src/collaboration/replication.ts"
+      ],
+      "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
+      "@docx-editor.dev/core/contracts/editor": ["../core/src/contracts/editor.ts"],
+      "@docx-editor.dev/core/contracts/document": ["../core/src/contracts/document.ts"],
+      "@docx-editor.dev/core/contracts/interaction": ["../core/src/contracts/interaction.ts"],
+      "@docx-editor.dev/core/contracts/mcp": ["../core/src/contracts/mcp.ts"],
+      "@docx-editor.dev/core/contracts/modules": ["../core/src/contracts/modules.ts"],
+      "@docx-editor.dev/core/contracts/plugin": ["../core/src/contracts/plugin.ts"],
+      "@docx-editor.dev/core/contracts/types": ["../core/src/contracts/types-barrel.ts"],
+      "@docx-editor.dev/core/layout": ["../core/src/layout/index.ts"],
+      "@docx-editor.dev/core/export": ["../core/src/export/index.ts"],
+      "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
+      "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
+      "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"]
+    }
+  },
+  "include": ["src"],
+  // `__negative__` holds code that is SUPPOSED not to compile: it carries a deliberate type error
+  // and a test asserts that compiling it reports exactly that error. In this program it would be
+  // an ordinary failure, which would make the package's own typecheck permanently red for the one
+  // reason that means the check is working.
+  //
+  // `src/office-compat/__tests__` is excluded for a different and less satisfying reason: those
+  // tests import the compat corpus's build steps, which are plain `.mjs` run by plain Node before
+  // any TypeScript exists. TypeScript can only see them as `any` (`noImplicitAny` then rejects the
+  // import) or, with `allowJs`, as weakly inferred shapes that fail on every property read. Giving
+  // them hand-written `.d.mts` declarations is the fix, and it is a change to that harness rather
+  // than to this package's surface. They are exercised by `bun test` today.
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/runtime/__conformance__/__negative__",
+    "src/office-compat/__tests__"
+  ]
+}

@@ -1,13 +1,71 @@
-// Vue mirror of packages/react/src/i18n/LocaleContext.tsx — exposes
-// the same hook surface (`useTranslation`) and provider helper
-// (`provideLocale`) that the React side does. The runtime lives in
-// `./index.ts`; this file re-exports under the React-style filename
-// so consumer plugins can import portably. Locale string types live
-// in `@docx-editor.dev/i18n`; import them from there.
-export {
-  provideLocale,
-  createTranslator,
-  useTranslation,
-  i18nPlugin,
-  defaultLocale,
-} from './index';
+import {
+  computed,
+  inject,
+  provide,
+  shallowRef,
+  watch,
+  type InjectionKey,
+  type ShallowRef,
+} from 'vue';
+import { createT, deepMerge, en } from '@docx-editor.dev/i18n';
+import type { LocaleStrings, TFunction, Translations, TranslationKey } from '@docx-editor.dev/i18n';
+import { defineComponent, type PropType } from 'vue';
+
+const localeKey: InjectionKey<ShallowRef<LocaleStrings>> = Symbol('locale');
+const langKey: InjectionKey<ShallowRef<string>> = Symbol('lang');
+
+import type { DocxEditorChildren } from '../docx-editor-children';
+
+/** @public */
+export interface LocaleProviderProps {
+  i18n?: Translations;
+  children?: DocxEditorChildren;
+}
+
+/** @public */
+export const LocaleProvider = defineComponent({
+  name: 'LocaleProvider',
+  props: {
+    i18n: { type: Object as PropType<Translations>, default: undefined },
+  },
+  setup(props, { slots }) {
+    const inherited = inject(localeKey, shallowRef(en));
+    const inheritedLang = inject(langKey, shallowRef('en'));
+    const lang = computed(() =>
+      typeof props.i18n?._lang === 'string' ? props.i18n._lang : inheritedLang.value
+    );
+    const merged = computed(() =>
+      deepMerge(
+        inherited.value as Record<string, unknown>,
+        props.i18n as Record<string, unknown> | undefined
+      )
+    );
+    const strings = shallowRef(merged.value as LocaleStrings);
+    const langRef = shallowRef(lang.value);
+    watch([merged, lang], () => {
+      strings.value = merged.value as LocaleStrings;
+      langRef.value = lang.value;
+    });
+    provide(localeKey, strings);
+    provide(langKey, langRef);
+    return () => slots.default?.();
+  },
+});
+
+/** @public */
+export function useTranslation(): { t: TFunction; catalogue: ShallowRef<LocaleStrings> } {
+  const strings = inject(localeKey, shallowRef(en));
+  const lang = inject(langKey, shallowRef('en'));
+  const t = shallowRef(createT(strings.value, lang.value));
+  watch([strings, lang], () => {
+    t.value = createT(strings.value, lang.value);
+  });
+  return {
+    catalogue: strings,
+    get t() {
+      return t.value;
+    },
+  };
+}
+
+export type { TranslationKey };

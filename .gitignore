@@ -13,9 +13,13 @@ Thumbs.db
 
 # Claude Code (local-only files)
 .claude/settings.local.json
-.claude/CLAUDE.local.md
 .claude/worktrees/
 .worktrees/
+
+# Local workspace instructions and notes
+/local/
+# Generated documents and exports, which can hold private content
+/output/
 
 # IDE
 .idea/
@@ -36,7 +40,10 @@ coverage/
 playwright-report/
 test-results/
 
-screenshots/
+# Root-only: this was a bare `screenshots/`, which matches a directory of that name at
+# ANY depth and silently swallowed committed OpenSpec evidence. The comment above always
+# said "in root"; the pattern now says it too.
+/screenshots/
 
 # Environment
 .env
@@ -62,6 +69,7 @@ examples/plugins/*/node_modules/
 examples/*/.next/
 examples/*/.astro/
 examples/*/build/
+examples/*/dist-check/
 examples/*/bun.lockb
 examples/*/package-lock.json
 examples/plugins/*/bun.lockb
@@ -74,11 +82,55 @@ reference/ecma-376/**/*.zip
 # API Extractor temp output (committed snapshots live in docs/api/<pkg-slug>/)
 packages/*/temp/
 
+# Attribution for the third-party source esbuild inlines into the published
+# bundles. Generated at release time from the build's metafile, so committing it
+# would only ever be a stale copy of the build output. Regenerate with
+# `bun run notices:generate` (needs `bun run build:packages` first).
+packages/*/THIRD_PARTY_NOTICES.md
+
 # Consumer-generated docs JSON. Regenerate with `bun run docs:json`.
 # Not committed — consumer (e.g. docs-editor-page) clones the repo and
-# runs the script itself. See CLAUDE.md → Docs JSON.
+# runs the script itself. See CONTRIBUTING.md → Generate JSON documentation.
 docs/json/
 examples/vite/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
 examples/vue/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
 .gstack/
 .pr-checklist.json
+tmp-preview/
+openspec/changes/*/notes/feature-parity-report.json
+dist-types/
+
+# Generated profiling fixtures (scripts/create-sample-20x-fixture.mjs,
+# scripts/create-review-20x-fixture.mjs)
+examples/vite/public/paragraph-acceptance.docx
+examples/vite/public/sample-20x.docx
+examples/vite/public/sample-review.docx
+examples/vite/public/sample-review-20x.docx
+e2e/fixtures/synthetic-huge-tracked.docx
+# Generated on demand by scripts/create-synthetic-massive-edit-fixture.mjs
+e2e/fixtures/generated/
+e2e/fixtures/synthetic-massive-multisection.docx
+e2e/fixtures/synthetic-massive-singlesection.docx
+
+# SARIF from `bun run check:shipped-advisories --sarif=...`
+*.sarif
+
+# `api:check` writes this beside the repo root while diffing snapshots.
+.snap-tmp.txt
+
+# Rooms the collaboration example's Hocuspocus server persists.
+examples/collaboration-hocuspocus/server/.data/
+# Generated informational Office.js reports (the reference inventory is committed).
+packages/editor-api/compat/reports/
+
+# Isolated collaboration candidates and diagnostic traces.
+.cache/collaboration/
+
+# Frozen published-client dependency graphs are test fixtures.
+!.collaboration/releases/*/package-lock.json
+
+# Scratch bundles the adapter build tests write beside the package
+packages/*/.test-dist-*/
+
+# Local PDF exporter rendering checks.
+.cache/pdf/

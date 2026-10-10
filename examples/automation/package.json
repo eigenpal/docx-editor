@@ -1,0 +1,12 @@
+{
+  "name": "automation-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fill": "bun run fill-template.ts ../remix/public/sample.docx filled.docx"
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/editor-api": "workspace:*"
+  }
+}

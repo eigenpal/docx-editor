@@ -1,0 +1,150 @@
+{
+  "name": "@docx-editor.dev/pro",
+  "version": "2.27.0",
+  "description": "Commercial capabilities for @docx-editor.dev: the review module (comments, tracked changes, markup rendering), custom inline nodes, and realtime collaboration.",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "require": "./dist/react/index.cjs"
+    },
+    "./react/webrtc": {
+      "types": "./dist/react/webrtc.d.ts",
+      "import": "./dist/react/webrtc.js",
+      "require": "./dist/react/webrtc.cjs"
+    },
+    "./react/hocuspocus": {
+      "types": "./dist/react/hocuspocus.d.ts",
+      "import": "./dist/react/hocuspocus.js",
+      "require": "./dist/react/hocuspocus.cjs"
+    },
+    "./vue": {
+      "types": "./dist/vue/index.d.ts",
+      "import": "./dist/vue/index.js",
+      "require": "./dist/vue/index.cjs"
+    },
+    "./vue/webrtc": {
+      "types": "./dist/vue/webrtc.d.ts",
+      "import": "./dist/vue/webrtc.js",
+      "require": "./dist/vue/webrtc.cjs"
+    },
+    "./vue/hocuspocus": {
+      "types": "./dist/vue/hocuspocus.d.ts",
+      "import": "./dist/vue/hocuspocus.js",
+      "require": "./dist/vue/hocuspocus.cjs"
+    },
+    "./collaboration": {
+      "types": "./dist/collaboration/index.d.ts",
+      "import": "./dist/collaboration/index.js",
+      "require": "./dist/collaboration/index.cjs"
+    },
+    "./collaboration/webrtc": {
+      "types": "./dist/collaboration/webrtc.d.ts",
+      "import": "./dist/collaboration/webrtc.js",
+      "require": "./dist/collaboration/webrtc.cjs"
+    },
+    "./collaboration/hocuspocus": {
+      "types": "./dist/collaboration/hocuspocus.d.ts",
+      "import": "./dist/collaboration/hocuspocus.js",
+      "require": "./dist/collaboration/hocuspocus.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/metafile-*.json",
+    "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/check-built-siblings.mjs && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.vue.json",
+    "license:check": "license-check-and-add check -f license-check.json",
+    "license:add": "license-check-and-add add -f license-check.json"
+  },
+  "peerDependencies": {
+    "@docx-editor.dev/core": "~2.27.0",
+    "@docx-editor.dev/react": "~2.27.0",
+    "@docx-editor.dev/vue": "~2.27.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "vue": "^3.3.0",
+    "yjs": "^13.6.32",
+    "y-webrtc": "^10.3.0",
+    "@hocuspocus/provider": "^4.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@docx-editor.dev/react": {
+      "optional": true
+    },
+    "@docx-editor.dev/vue": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "yjs": {
+      "optional": true
+    },
+    "y-webrtc": {
+      "optional": true
+    },
+    "@hocuspocus/provider": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "y-protocols": "^1.0.7"
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/editor-api": "workspace:*",
+    "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
+    "@docx-editor.dev/vue": "workspace:*",
+    "@happy-dom/global-registrator": "^20.8.3",
+    "@hocuspocus/provider": "^4.6.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^19.3.0",
+    "fflate": "^0.8.2",
+    "license-check-and-add": "^4.0.5",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript7": "npm:typescript@^7.0.2",
+    "y-webrtc": "^10.3.0",
+    "yjs": "^13.6.32",
+    "zod": "^4.4.3"
+  },
+  "keywords": [
+    "docx",
+    "tracked-changes",
+    "comments",
+    "content-controls",
+    "collaboration"
+  ],
+  "author": {
+    "name": "EigenPal, Inc.",
+    "email": "licensing@eigenpal.com",
+    "url": "https://eigenpal.com"
+  },
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/pro"
+  }
+}

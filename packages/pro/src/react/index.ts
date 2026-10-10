@@ -1,0 +1,132 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+/**
+ * `@docx-editor.dev/pro/react` — React chrome for the review rail and custom nodes.
+ *
+ * Compound components over the pro modules: arrange the parts you want rather than accepting one
+ * fixed layout. Requires the matching module to be registered on the editor — without it there
+ * is nothing to derive cards or chips from.
+ *
+ * @example Render the review rail
+ * ```tsx
+ * import { DocxEditorReview } from '@docx-editor.dev/pro/react';
+ *
+ * <DocxEditorReview>
+ *   <DocxEditorReview.List>
+ *     <DocxEditorReview.Card>
+ *       <DocxEditorReview.Author />
+ *       <DocxEditorReview.Summary />
+ *     </DocxEditorReview.Card>
+ *   </DocxEditorReview.List>
+ * </DocxEditorReview>
+ * ```
+ *
+ *
+ * The review pane and its headless hook, plus the module factory re-exported so
+ * a React host imports one path. Compose inside `DocxEditor.Root` from
+ * `@docx-editor.dev/react` with the review module registered.
+ *
+ * @packageDocumentation
+ * @public
+ */
+
+export {
+  reviewModule,
+  type CommentMarkerStyle,
+  type ResolvedReviewPane,
+  type ReviewModuleOptions,
+  type ReviewPaneOpening,
+  type ReviewPaneOptions,
+  type ReviewPaneOverflow,
+  type RevisionDisplay,
+} from '../review/review-module.ts';
+export {
+  collaborationModule,
+  type CollaborationModuleOptions,
+} from '../collaboration/collaboration-module.ts';
+export { type ProLicenseOptions } from '../license.ts';
+export {
+  DocxEditorReview,
+  useReviewAuthor,
+  useReviewItem,
+  type DocxEditorReviewNamespace,
+  type ReviewActionProps,
+  type ReviewBalloonProps,
+  type ReviewMarkersProps,
+  type ReviewPartProps,
+  type ReviewProps,
+} from './DocxEditorReview';
+export {
+  DocxEditorCollaboration,
+  type CollaborationAvatarProps,
+  type CollaborationAvatarRenderProps,
+  type CollaborationAvatarsProps,
+  type CollaborationCaretLabelRenderProps,
+  type CollaborationCaretLabelsProps,
+  type DocxEditorCollaborationNamespace,
+} from './DocxEditorCollaboration.tsx';
+export type {
+  CollaborationStatusNoticeProps,
+  CollaborationStatusNoticeRenderProps,
+} from './CollaborationStatusNotice.tsx';
+export type { CollaborationNoticeKind } from '../collaboration/status-notice.ts';
+export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.tsx';
+export {
+  CustomNodeContextMenu,
+  type CustomNodeContextMenuProps,
+} from './CustomNodeContextMenu.tsx';
+export {
+  activatedCustomNodeOf,
+  resolveCustomNodeActivation,
+  useCustomNodeDefinitions,
+  type ResolvedCustomNodeActivation,
+} from './custom-node-activation.ts';
+export {
+  useReview,
+  useReviewOf,
+  useStackedReviewPositions,
+  type ReviewActivationOptions,
+  type ScrollPlacement,
+  type ReviewAdoptOptions,
+  type ReviewItemRevealEvent,
+  type ReviewItemRevealSource,
+  type ReviewItemView,
+  type UseReviewReturn,
+} from './useReview';
+export {
+  useCollaborationStatus,
+  type UseCollaborationStatusReturn,
+} from './useCollaborationStatus.ts';
+export { useCollaborationParticipants } from './useCollaborationParticipants.ts';
+export { useCollaborationSession } from './useCollaborationSession.ts';
+export {
+  DocxEditorCollaborationRoot,
+  type CollaborationRootSource,
+  type DocxEditorCollaborationRootProps,
+} from './DocxEditorCollaborationRoot.tsx';
+export {
+  useDocumentCollaboration,
+  type UseDocumentCollaborationConnectOptions,
+  type UseDocumentCollaborationOptions,
+  type UseDocumentCollaborationReturn,
+} from './useDocumentCollaboration.ts';
+export type {
+  CollaborationFailure,
+  CollaborationFailureCode,
+  CollaborationIdentity,
+  CollaborationParticipant,
+  CollaborationRemoteSelection,
+  CollaborationRemoteSelectionAddress,
+  CollaborationSelectionKind,
+  CollaborationStatus,
+  CollaborationStatusSnapshot,
+} from '@docx-editor.dev/core/collaboration';
+export type {
+  CollaborationBootstrap,
+  CollaborationIdentityUpdate,
+  CollaborationSession,
+} from '../collaboration/types.ts';
+export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';

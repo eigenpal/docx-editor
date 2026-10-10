@@ -1,29 +1,26 @@
-# Next.js example
+# Next.js DOCX editor example
 
-`@docx-editor.dev/react` in the Next.js App Router. The editor reads
-the DOM and measures layout in the browser, so it cannot run during server
-rendering. The fix is one `dynamic()` import with `ssr: false`.
+This Next.js App Router example loads the React DOCX editor in the browser. It includes the packaged toolbar and a review pane.
 
-## Run it
+## Run the example
 
-This example depends on the `@docx-editor.dev/*` workspace packages, so build them
-once first. From the repo root:
+From the repository root, build the workspace packages before you start Next.js:
 
 ```bash
 bun install
 bun run build:packages
-bun run dev:nextjs     # http://localhost:3000
+bun run dev:nextjs
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:3000`.
 
-## The SSR boundary
+## Set the client boundary
 
-`app/page.tsx` keeps the route a Server Component shell and pulls the editor
-in client-only:
+`app/page.tsx` is a Client Component that loads the editor with `dynamic()`:
 
 ```tsx
 'use client';
+
 import dynamic from 'next/dynamic';
 
 const Editor = dynamic(() => import('./components/Editor').then((m) => m.Editor), {
@@ -36,27 +33,32 @@ export default function Page() {
 }
 ```
 
-`app/components/Editor.tsx` is a `'use client'` component that renders
-`<DocxEditor />`. Without `ssr: false` the build fails on `window`/`document`
-access during prerender.
+`ssr: false` keeps the editor out of the server render. The editor measures layout and reads `window`, so a server render either fails or produces markup that does not match the browser.
 
-## Files
+The `'use client'` directive makes this file a Client Component. App Router does not allow `dynamic()` with `ssr: false` inside a Server Component.
 
-| File                        | What it does                             |
-| --------------------------- | ---------------------------------------- |
-| `app/page.tsx`              | Server shell, client-only editor import  |
-| `app/components/Editor.tsx` | `'use client'` editor component          |
-| `app/layout.tsx`            | Loads the Material Symbols font          |
-| `next.config.ts`            | Monorepo file tracing + build-time flags |
+`app/components/Editor.tsx` also declares `'use client'`, because it holds state.
 
-## Use it in your own Next.js app
+## Reserve space while the editor loads
+
+The `loading` option renders until the editor chunk arrives. Give it the height the editor will occupy. Without it the page is empty and then jumps, which counts against Cumulative Layout Shift on a route where the editor is the main content.
+
+## Where the stylesheet loads
+
+`app/globals.css` imports the editor stylesheet, and `app/layout.tsx` loads that file once for the whole app. The editor's styles are global, so they belong in one import rather than in each component that renders an editor.
+
+## What the page renders
+
+`app/components/Editor.tsx` renders `<DocxEditor>`, which supplies the title bar, menu, toolbar, and navigation pane. The `modules` prop registers comments, tracked changes, and suggesting mode, and `<DocxEditorReview />` mounts the review pane inside the editor.
+
+## Add the editor to Next.js
+
+Install the adapter and its required engine peer:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-Always import `DocxEditor` through `dynamic(..., { ssr: false })`, or wrap it
-in a `'use client'` component that only renders after mount. Load the
-Material Symbols font in `app/layout.tsx`.
+Load your editor component with `dynamic(..., { ssr: false })` from a Client Component.
 
-Docs: https://www.docx-editor.dev/docs/1.x/react
+For more information, see the [React adapter guide](https://www.docx-editor.dev/docs/2.x/react).

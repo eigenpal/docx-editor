@@ -1,0 +1,31 @@
+{
+  "license": "./license-header.txt",
+  "ignore": [
+    "test/**",
+    "**/*.md",
+    "**/*.txt",
+    "*.json",
+    "tsup.config.ts",
+    "assets/**",
+    "licenses/**",
+    "**/__pycache__/**",
+    ".gitignore",
+    ".local-validation/**"
+  ],
+  "trailingWhitespace": "TRIM",
+  "defaultFormat": {
+    "prepend": "/*",
+    "append": "*/"
+  },
+  "licenseFormats": {
+    "py": {
+      "eachLine": {
+        "prepend": "# "
+      }
+    },
+    "html": {
+      "prepend": "<!--",
+      "append": "-->"
+    }
+  }
+}

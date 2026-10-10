@@ -1,0 +1,105 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+/**
+ * `@docx-editor.dev/pro` — review, custom nodes, and realtime collaboration.
+ *
+ * Registering a module is the whole enablement story: the review chrome slots light up through
+ * the same `toolbarCommandState` that disabled them, the editor renders revisions as markup
+ * rather than the free tier's final-state projection, and a collaboration module attaches a replica.
+ *
+ * @example Enable comments, tracked changes, and a custom node type
+ * ```ts
+ * import { reviewModule, customNodesModule, defineCustomNode } from '@docx-editor.dev/pro';
+ *
+ * const citation = defineCustomNode({ name: 'citation', tagPrefix: 'acme' });
+ * const editor = createDocxEditor({
+ *   document: bytes,
+ *   modules: [reviewModule(), customNodesModule({ nodes: [citation] })],
+ * });
+ * ```
+ *
+ *
+ * Framework-neutral entry: the review module and custom nodes. React chrome
+ * lives under `@docx-editor.dev/pro/react`.
+ *
+ * @packageDocumentation
+ * @public
+ */
+
+export {
+  reviewModule,
+  type CommentMarkerStyle,
+  type ResolvedReviewPane,
+  type ReviewModuleOptions,
+  type ReviewPaneOpening,
+  type ReviewPaneOptions,
+  type ReviewPaneOverflow,
+  type RevisionDisplay,
+} from './review/review-module.ts';
+export {
+  collaborationModule,
+  type CollaborationModuleOptions,
+} from './collaboration/collaboration-module.ts';
+export { type ProLicenseOptions } from './license.ts';
+export {
+  customNodesModule,
+  defineCustomNode,
+  isCustomNodeDefinition,
+  recognizeCustomNodes,
+  type ActivatedCustomNode,
+  type AnyCustomNodeDefinition,
+  type CustomNode,
+  type CustomNodeDefinition,
+  type CustomNodeDiagnostic,
+  type CustomNodePayloadSource,
+  type CustomNodesModuleOptions,
+  type RecognizeCustomNodesOptions,
+  type RecognizedCustomNode,
+} from './custom-nodes/define-custom-node.ts';
+export { customNodesOf, type CustomNodesOfOptions } from './custom-nodes/read-custom-nodes.ts';
+export {
+  prepareForExport,
+  type DocumentDestination,
+  type DocumentExportOptions,
+  type DocumentExportResult,
+} from './custom-nodes/export-custom-nodes.ts';
+export { saveForExport, type SaveForExportOptions } from './custom-nodes/save-for-export.ts';
+export { CUSTOM_NODE_STORE_ROOT, customNodeNamespace } from './custom-nodes/node-payload.ts';
+export {
+  MAX_CUSTOM_NODE_DATA_LENGTH,
+  parseCustomNodeData,
+  serializeCustomNodeData,
+  type CustomNodeDataRejection,
+  type CustomNodeDataResult,
+  type InferSchemaInput,
+  type InferSchemaOutput,
+  type StandardSchemaIssue,
+  type StandardSchemaResult,
+  type StandardSchemaV1,
+} from './custom-nodes/data-schema.ts';
+export {
+  decodeCustomNodeTag,
+  encodeCustomNodeTag,
+  MAX_TAG_LENGTH,
+  type DecodedCustomNodeTag,
+  type EncodeTagResult,
+} from './custom-nodes/tag-codec.ts';
+export { insertCustomNode, type CustomNodeInput } from './custom-nodes/insert-custom-node.ts';
+export {
+  type CustomNodeIssue,
+  type CustomNodeWriteOutcome,
+} from './custom-nodes/node-write-result.ts';
+export {
+  removeCustomNode,
+  updateCustomNode,
+  type CustomNodeUpdate,
+} from './custom-nodes/update-custom-node.ts';
+export {
+  customNodeXml,
+  type CustomNodeXmlOptions,
+  type CustomNodeXmlResult,
+  type CustomNodeXmlStore,
+} from './custom-nodes/sdt-xml.ts';

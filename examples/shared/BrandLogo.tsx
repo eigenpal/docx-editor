@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 
 // "DOCX Editor by EigenPal" lockup — the exact same mark used in the
 // docx-editor.dev site header (DocxIcon + wordmark + EigenpalLogo). Kept in
@@ -128,7 +128,7 @@ export function BrandLogo() {
             gap: '4px',
             fontSize: '11px',
             lineHeight: 1.1,
-            color: 'var(--doc-text-subtle)',
+            color: 'var(--doc-text-muted)',
             whiteSpace: 'nowrap',
           }}
         >

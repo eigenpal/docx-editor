@@ -1,0 +1,127 @@
+# PDF export API
+
+Import conversion functions, error classes, font helpers, and result types from `@docx-editor.dev/docx-to-pdf`.
+
+## Convert a document
+
+`exportPdf(source, options?)` returns `Promise<PdfExportResult>`. Pass DOCX bytes as a `Uint8Array` or Node.js `Buffer`. Read files before conversion; the function does not accept paths, URLs, streams, or live editor views. The function preserves the source and releases its document session after success or failure.
+
+Use Node.js 20.16.0 or later in the 20.x release line, or Node.js 22.3.0 or later. The converter needs WebAssembly and access to its packaged font files. Browser and Edge runtimes are not supported.
+
+## Reusable sessions
+
+`openDocumentForExport(source, options?)` returns `Promise<OpenPdfDocumentForExportResult>`. It accepts immutable DOCX bytes and font/layout options. Its result has the same success/refusal shape as Markdown's open function. On success, `result.session` provides the font-backed capabilities required by PDF output. On refusal, inspect `reason` and optional `detail`. Font policy and resource failures still throw typed errors.
+
+`exportPdfFrom(session, options?)` returns `Promise<PdfExportResult>` without reopening the document. It accepts `PdfProjectionOptions`: `comments`, `fidelityPolicy`, `displayMode`, `timeoutMs`, `maxPages`, `maxOutputBytes`, and `signal`. Omit `displayMode` to use the session's default projection. An explicit mode uses the session's cached `layoutFor(mode)` projection. Result `timings.openMs` is `0` because this call does not open the document.
+
+Use `OpenPdfDocumentForExportOptions` for font and layout settings when opening. Use `PdfExportSession` when you need to name the session type. An ordinary Core session with approximate measurement cannot produce PDF output. `exportPdfFrom` rejects a session that lacks admitted fonts and glyph capabilities.
+
+The caller owns the session and must call `dispose()` in `finally`. An export failure, projection cancellation, or projection deadline does not dispose a caller-owned session. The signal supplied when opening controls shared resource work and the session lifetime. A signal supplied to `exportPdfFrom` stops only that export's wait and encoding work. Shared resource work can continue until settlement, its resource deadline, or session disposal. After disposal, later exports reject with `ExportResourceError` and `code: 'disposed'`.
+
+For both formats from one layout, see [Compare PDF and Markdown conversion](markdown-contract.md#reuse-one-session).
+
+## Options
+
+| Option | Default | Behavior |
+| --- | --- | --- |
+| `fidelityPolicy` | `'strict'` | Reject unsupported or approximate PDF content. `'best-effort'` returns available output with diagnostics. |
+| `displayMode` | `'proposed'` | Choose `'proposed'`, `'original'`, or `'all-markup'` for tracked changes. |
+| `comments` | `true` | Include native PDF annotations. |
+| `useSystemFonts` | `true` | Search supported installed font files. Disable for consistent font selection across hosts. |
+| `fonts` | — | Resolve these font sources before installed and packaged sources. |
+| `fallbackFonts` | — | Resolve missing faces after packaged substitutes. |
+| `lastResortFonts` | — | Resolve missing faces after embedded fonts and before generic substitutes. |
+| `fontPolicy` | `'best-effort'` | `'strict'` rejects failed sources or incomplete face coverage. Substitutes can satisfy coverage. |
+| `onFontResolution` | — | Receive font evidence before a strict font refusal. Callback promises do not delay export. |
+| `glyphFallbacks` | Packaged fallback list | Ordered faces for missing glyphs; at most 16 entries. |
+| `documentLigatures` | `true` | Apply optional document ligatures during measurement and PDF output. |
+| `timeoutMs` | `60000` | Cooperative conversion deadline. Integer from `1` to `2147483647`. |
+| `fontResolutionTimeoutMs` | `resourceTimeoutMs`, then `60000` | Font resolution deadline in milliseconds. |
+| `resourceTimeoutMs` | `60000` | Resource and layout deadline in milliseconds. |
+| `signal` | — | Cancel through an `AbortSignal`. |
+| `maxPages` | `10000` | Maximum pages; integer from `1` to `10000`. Checked after layout, before PDF painting. |
+| `maxOutputBytes` | `67108864` | Maximum encoded bytes; integer from `1` to `67108864`. Checked after encoding. |
+| `imageDecodePort` | Bounded built-in decoder | Supply image metadata through Core's decoder interface. |
+| `convertPreservedImage` | — | Convert a preserved image format through Core's converter interface. |
+
+Resource and font deadlines must be positive, finite numbers no greater than `2147483647`. The conversion deadline also applies during those phases. `measurer`, `producer`, and `reuseAcrossRevisions` are unsupported and cause `TypeError`. PDF conversion requires the fonts used during layout to encode the positioned glyphs.
+
+See [Configure PDF fonts](fonts.md) for font sources and policy details.
+
+## Result
+
+| Field | Meaning |
+| --- | --- |
+| `bytes` | PDF bytes owned by this result. Save them or send them with `Content-Type: application/pdf`. |
+| `pageCount` | Number of physical PDF pages. |
+| `layoutRevision` | Revision of this conversion's layout. This value is not a document identifier. |
+| `displayMode` | Applied revision display mode. |
+| `fontResolution` | Requested families, resolved faces, substitutions, and source failures. |
+| `diagnostics` | Immutable list of output limitations and informational notices. |
+| `timings` | `openMs`, `layoutMs`, `paintMs`, and `saveMs`, measured in milliseconds. |
+
+The result object and timing fields are immutable. The byte array remains mutable; changing it does not change later exports. Store the input hash, package versions, font configuration, and display mode when you need reproducible exports.
+
+## Diagnostics
+
+Each `PdfDiagnostic` includes `code`, `message`, and `severity`. Page diagnostics include zero-based `pageIndex` and one-based `pageNumber`. Use `pageNumber` for display, as with Markdown warnings. An absent page field means the diagnostic applies to the document or has no specific page.
+
+| Severity        | Strict output | Meaning                                                       |
+| --------------- | ------------- | ------------------------------------------------------------- |
+| `information`   | Allowed       | Inspect the report; this notice alone does not reject output. |
+| `approximation` | Rejected      | Output changes the requested presentation.                    |
+| `unsupported`   | Rejected      | The writer cannot reproduce the content.                      |
+
+Each `font-origin-failed` diagnostic identifies one failed source through `originIndex`, optional `originName`, and a guarded cause message. It appears even when another source supplies the font. `incomplete-font` identifies incomplete coverage or substituted face variants within a family. It has `information` severity; `fontPolicy: 'strict'` independently rejects the font failure. `font-substitution` reports generic substitutes that can change pagination. Other codes identify limitations such as `equation-fallback`, `image-clip`, or `core-*` source omissions. Handle unknown diagnostic codes by severity; the set can grow. Use messages for display, not program control.
+
+## Errors
+
+| Error | Stable `code` | Useful fields |
+| --- | --- | --- |
+| `PdfDocumentOpenError` | `documentOpenFailed` | Typed `reason` and optional `detail`. |
+| `PdfFidelityError` | `fidelityUnsupported` | `diagnostics` for the refused output. |
+| `PdfPageLimitError` | `pageLimitExceeded` | `limit` and `actual` page counts. Extends `RangeError`. |
+| `PdfOutputLimitError` | `outputTooLarge` | `limit` and `actual` byte counts. Extends `PdfEncodingError`. |
+| `PdfWorkLimitError` | `workLimitExceeded` | Content, operation, or diagnostic budget exceeded. |
+| `PdfEncodingError` | `encodingFailed` | Optional underlying `cause`. |
+| `ExportResourceError` | Core resource code | Optional underlying `cause`. |
+| `TypeError`, `RangeError` | — | Invalid arguments or other internal size limits. |
+
+PDF failure codes use Core's camelCase convention. Content diagnostic codes use kebab-case, as Markdown warnings do. Limit errors retain their previous base classes so existing `RangeError` and `PdfEncodingError` handlers still catch them.
+
+Core resource codes include `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layoutInvariant`, and `layoutFailed`. A strict font refusal uses `ExportResourceError` with `code: 'layoutFailed'`. Use `onFontResolution` to retain its font evidence.
+
+Handle expected refusals and rethrow unexpected failures:
+
+```ts
+import {
+  exportPdf,
+  PdfDocumentOpenError,
+  PdfFidelityError,
+  PdfOutputLimitError,
+  PdfPageLimitError,
+} from '@docx-editor.dev/docx-to-pdf';
+
+try {
+  const result = await exportPdf(docxBytes, { maxPages: 100 });
+  await savePdf(result.bytes);
+} catch (error) {
+  if (error instanceof PdfFidelityError) {
+    console.table(error.diagnostics);
+  } else if (error instanceof PdfDocumentOpenError) {
+    console.error(error.code, error.reason);
+  } else if (error instanceof PdfPageLimitError || error instanceof PdfOutputLimitError) {
+    console.error(error.code, error.actual, error.limit);
+  } else {
+    throw error;
+  }
+}
+```
+
+Here, `docxBytes` contains the input and `savePdf` is your storage function. Choose best-effort output explicitly after reviewing your application's fidelity requirements. Do not automatically retry a strict refusal with weaker settings.
+
+## Resource boundaries
+
+The writer limits operations to `2000000`, diagnostics to `10000`, and uncompressed content to `67108864` bytes. Core also bounds DOCX parsing, fonts, images, and layout. `maxPages` and `maxOutputBytes` do not impose a process memory limit. They check completed layout and completed encoding, respectively.
+
+Cancellation checks occur between batches. Synchronous parsing, font work, and image work cannot stop during a call. For hard deadlines, terminate a worker after your deadline. For memory isolation, configure the worker's `resourceLimits.maxOldGenerationSizeMb`. Bound concurrent conversions; each active document retains layout and font data.

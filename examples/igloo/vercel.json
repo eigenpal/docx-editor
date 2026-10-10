@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "cd ../.. && rm -rf node_modules && bun install --frozen-lockfile",
+  "buildCommand": "cd ../.. && bun run build:packages:demo && cd examples/igloo && bun run build",
+  "outputDirectory": "dist"
+}

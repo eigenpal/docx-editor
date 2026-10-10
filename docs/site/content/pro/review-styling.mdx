@@ -1,0 +1,351 @@
+---
+title: 'Review colors and styling'
+description: 'Color tracked changes and comments by author or change type, map reviewer colors, add avatars, and style review chrome.'
+category: 'Pro'
+order: 62
+---
+
+Revision markup preferences belong to each viewer. They do not change saved revision records or other participants' preferences.
+
+The `trackFormatting` preference also controls whether future editor formatting commands create formatting revisions. Text edits remain tracked.
+
+The same author color applies to [tracked changes](/docs/2.x/pro/tracked-changes) and [comments](/docs/2.x/pro/comments).
+
+## Default behavior
+
+| Behavior                | Result                                                           |
+| ----------------------- | ---------------------------------------------------------------- |
+| Author assignment       | Authors receive slots in first-appearance order.                 |
+| Color ramp              | `--doc-review-author-0` through `--doc-review-author-7`          |
+| More than eight authors | The ramp repeats after eight authors.                            |
+| Change type             | Insertions use a thin solid underline. Deletions use a strike.   |
+| Review sidebar          | Cards use the author color for the leading edge and avatar disc. |
+| Comment highlights      | All authors use the same yellow highlight by default.            |
+
+Override ramp tokens under `.docx-editor`. Load your stylesheet after `editor.css`, or use a more specific selector.
+
+```css
+.docx-editor {
+  --doc-review-author-0: #7c3aed;
+  --doc-review-author-1: #0e7490;
+}
+```
+
+The document filter handles dark mode. Review chrome adjusts separately.
+
+### Customize insertion underlines
+
+Override the insertion decoration tokens under `.docx-editor`. These tokens change presentation only.
+
+```css
+.docx-editor {
+  --doc-revision-insertion-decoration-style: dashed;
+  --doc-revision-insertion-decoration-thickness: 0.08em;
+  --doc-revision-insertion-underline-offset: 0.2em;
+}
+```
+
+## Choose a styling API
+
+| API | Use |
+| --- | --- |
+| CSS tokens | Replace the color ramp or insertion underline. |
+| `AuthorStyle` declaration | Set one author's color, backgrounds, classes, or avatar. |
+| `ColorByChangeType` declaration | Color unmatched insertions green and deletions red. |
+| `setRevisionStyles` | Control the same state from an editor instance or headless host. |
+
+Use declarations or `setRevisionStyles` as the source of style state. Calling `setRevisionStyles` replaces mounted declarations until a declaration changes.
+
+Declarations do not render Document Object Model (DOM) elements. Mounting, changing, or removing one repaints the editor without resetting selection, caret position, or undo history.
+
+### Declare author styles
+
+Place declarations anywhere inside the editor root.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+<DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+  <DocxEditor.AuthorStyle author="Jess Lin" color="#7c3aed" avatarUrl="/avatars/jess.png" />
+  <DocxEditor.ColorByChangeType />
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorAuthorStyle,
+  DocxEditorColorByChangeType,
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+} from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <DocxEditorRoot :document="bytes" :modules="modules" author="Jess Lin">
+    <DocxEditorAuthorStyle author="Jess Lin" color="#7c3aed" avatar-url="/avatars/jess.png" />
+    <DocxEditorColorByChangeType />
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`author` must match the document's `w:author` value. An absent author has no effect. Unmatched authors keep ramp colors unless `ColorByChangeType` is mounted.
+
+| Author style field                  | Effect                                            |
+| ----------------------------------- | ------------------------------------------------- |
+| `color`                             | Sets document ink, decorations, and card accents. |
+| `background`                        | Sets the background tint behind changes.          |
+| `activeBackground`                  | Sets the open change's highlight band.            |
+| `spanClassName` / `span-class-name` | Adds classes to painted change spans.             |
+| `avatarUrl` / `avatar-url`          | Sets the review sidebar avatar.                   |
+
+`background` tints all changes by that author. `activeBackground` sets the open change's highlight band and removes its default underline. Set both to `transparent` to clear the backgrounds.
+
+Keep span CSS metric-safe. Do not change font size, weight, or family. Such changes make painted text differ from measured layout.
+
+### Set styles through the editor
+
+`setRevisionStyles` and the editor creation option accept a `RevisionStyles` value. Declarative components accept individual author or change-type props. Set `others` to `'author'`, the default, or `'kind'` in `RevisionStyles`.
+
+```ts
+editor.setRevisionStyles({
+  others: 'kind',
+  authors: {
+    'Jess Lin': '#7c3aed',
+    'Sam Reyes': { color: '#0e7490', avatarUrl: '/avatars/sam.png' },
+  },
+});
+```
+
+An author value can be a color string or an author style object. A headless host can also pass `revisionStyles` during editor creation.
+
+## Set revision markup preferences
+
+For complete API, React, and Vue examples, see [Customize revision markup](/docs/2.x/pro/revision-markup).
+
+Pass `revisionMarkup` when you create the editor. Call `setRevisionMarkup(partial)` to update individual preferences. The editor keeps unspecified preferences. Read the full resolved value from `editor.snapshot().revisionMarkup`.
+
+Use this example to change deletion marks and formatting tracking:
+
+```ts
+editor.setRevisionMarkup({
+  deletions: { mark: 'doubleStrikethrough', color: 'red' },
+  trackFormatting: false,
+});
+
+const preferences = editor.snapshot().revisionMarkup;
+```
+
+Listen for `revisionMarkupChange` to save the resolved preferences for each user. This example uses the host's preference storage:
+
+```ts
+const unsubscribe = editor.on('revisionMarkupChange', (preferences) => {
+  localStorage.setItem('revision-markup', JSON.stringify(preferences));
+});
+
+// Call unsubscribe() when the host stops observing this editor.
+```
+
+Pass those preferences as `revisionMarkup` when that user opens another editor. The host owns storage. The editor does not write these preferences into the DOCX package or collaboration state.
+
+React and Vue expose a controlled `revisionMarkup` prop and an `onRevisionMarkupChange` callback. Store callback values in the prop to accept changes. If the prop stays unchanged, the editor restores its value after the framework renders. Omitted fields use defaults. Omit the prop to allow independent API and dialog changes.
+
+Use `DocxEditor.RevisionMarkup` inside the editor root for partial declarative configuration. Do not combine this component with the root's controlled prop. Pass preference fields directly to the component:
+
+```tsx
+<DocxEditor.RevisionMarkup
+  insertions={{ mark: 'doubleUnderline', color: 'blue' }}
+  changedLines={{ mark: 'rightBorder' }}
+  trackFormatting={false}
+/>
+```
+
+Vue also exports `DocxEditorRevisionMarkup`. Its `revisionMarkupChange` event returns the same resolved value. Use one configuration source for each editor.
+
+`revisionStyles` continues to control author colors, backgrounds, classes, and avatars. `revisionMarkup` controls revision marks, revision colors, optional text backgrounds, change bars, and cell shading. Text backgrounds default to `none`. See [Add text background highlighting](/docs/2.x/pro/revision-markup#add-text-background-highlighting) for examples and precedence. Named colors use theme tokens. Markup preferences do not accept arbitrary CSS color strings.
+
+Set the initial review display with `reviewDisplayMode`: `simple-markup`, `all-markup`, `proposed`, or `original`. Display preferences do not accept or reject revisions.
+
+### Use the settings dialog
+
+In the review toolbar group, select **Track changes options**. The Pro review module provides this dialog in React and Vue. Hosts can hide or replace its toolbar control through the normal toolbar composition API. Use `popups.revisionMarkup` to customize the dialog with `DocxEditor.RevisionMarkupDialog` and its named parts. See [Customize track changes options](/docs/2.x/guides/customize-dialogs#customize-track-changes-options).
+
+The dialog groups settings into **Markup**, **Moves**, **Table cell highlighting**, and **Formatting**. Each mark and color control has a label. The changed-lines preview shows the selected bar position.
+
+Select **OK** to apply the draft in one update. Select **Cancel** to discard the draft. **Reset to defaults** restores the default draft. Select **OK** to apply it. An API update also updates an open dialog.
+
+Cell colors also apply to cells in inserted and deleted rows. Explicit cell revision shading takes precedence over row shading. Select **None** to retain authored cell shading without a revision fill.
+
+Text markup settings apply to run revisions, including runs inside table cells. Row-level insertion and deletion indicators keep their existing text styling. Selecting **Hidden** for deleted text does not remove a structurally deleted row.
+
+### Control tracking behavior
+
+Clear **Track moves** to display imported moves with the insertion and deletion styles. This preference changes their display only. Creating move revisions remains unsupported.
+
+Clear **Track formatting** to apply future formatting commands without formatting revision records. Text insertions and deletions remain tracked. Existing formatting revisions remain available for review. The document's `w:doNotTrackFormatting` setting also prevents new formatting revisions. Turning on the viewer preference does not override that document setting.
+
+These host preferences are separate from the Office-shaped document automation model. The document model does not expose a competing revision-markup method. `View.revisionsFilter`, including its `markup` and `view` members, remains a separate compatibility task.
+
+### Export the same preferences
+
+Pass `editor.snapshot().revisionMarkup` to the PDF exporter's `revisionMarkup` option. Pass `editor.snapshot().reviewDisplayMode` as `displayMode`. The PDF exporter supports all four review views, including Simple Markup change bars. A reusable PDF session takes `revisionMarkup` when you open the session. Its layout and PDF output use those preferences together.
+
+PDF output uses the named colors' print values and the default author color ramp. Host CSS and `revisionStyles` overrides do not change PDF colors. Pass `revisionAuthorSlots` to preserve the session's author color assignments after edits. The File menu export handler receives this mapping with the captured viewer preferences.
+
+## Read document authors
+
+Use `useReviewAuthors()` to build legends and color controls. Use `getReviewAuthors()` without an adapter.
+
+| Returned behavior | Detail |
+| --- | --- |
+| Order | Tracked-change authors appear first. Comment-only authors follow. |
+| Updates | The list updates after document load or review style changes. |
+| `slot` | This unbounded rank identifies first-appearance order. |
+| `color` | This is the resolved card color. An unmatched value can be `var(--doc-review-author-N)`. |
+| Resolved view | Authors with only hidden revisions are omitted unless they also commented. |
+| `ColorByChangeType` | Page colors show change types. Returned colors still describe card accents. |
+
+React returns the list directly. Vue returns a shallow ref. Call the composable under `DocxEditorRoot`.
+
+Add `.docx-editor` to a legend or its ancestor. This class resolves ramp token values used by swatches.
+
+## Add avatars
+
+Set `avatarUrl` to replace initials in a review card. Authors without an avatar keep their initials.
+
+| Avatar behavior    | Result                                                       |
+| ------------------ | ------------------------------------------------------------ |
+| Loading or failure | The author color remains visible under the image.            |
+| Rejected URL       | The card uses initials. `useReviewAuthor` reports no avatar. |
+| Document page      | The avatar does not affect painted document content.         |
+| Request policy     | The packaged image uses `referrerPolicy="no-referrer"`.      |
+
+Use a host you control. The editor accepts application-held `blob:` URLs and non-SVG `data:image/*` URLs. It rejects other `data:` URLs, SVG data images, script schemes, and protocol-relative hosts.
+
+The browser fetches an avatar when its card renders. The editor never loads an avatar address from the document.
+
+Document authors are untrusted strings. A sender can use a known name and receive its configured image. Do not use review styling as identity proof.
+
+## Use CSS hooks
+
+| Element                  | Author hooks                                         |
+| ------------------------ | ---------------------------------------------------- |
+| Tracked-change spans     | `data-review-author`; slot only with author coloring |
+| Paragraph-mark pilcrows  | `data-review-author`, `data-review-author-slot`      |
+| Comment highlight bands  | Both attributes and `--doc-review-author-current`    |
+| Revision highlight bands | Both attributes and `--doc-review-author-current`    |
+| Review cards             | Both attributes and `--doc-review-author-current`    |
+| Replies inside cards     | Both attributes and `--doc-review-author-current`    |
+| Hover balloons           | Both attributes and `--doc-review-author-current`    |
+| Gutter markers           | Both attributes and `--doc-review-author-current`    |
+
+A reply sits inside its thread's card and carries its own author's hooks. A selector for one author also matches that author's replies in other threads.
+
+`data-review-author` contains the exact document value. `data-review-author-slot` wraps to `0` through `7`. Calculate it as `slot % 8` when you build selectors from `useReviewAuthors()`.
+
+Painted spans use inline ink and text decoration. CSS selectors cannot override those properties. Use a declaration or ramp token for ink. Use the insertion decoration tokens for insertion underlines. Use `currentColor` for metric-safe span effects.
+
+```css
+.docx-editor [data-review-author='Jess Lin'] {
+  outline: 1px dotted currentColor;
+  outline-offset: 1px;
+}
+
+.docx-editor .docx-comment-band {
+  background: color-mix(
+    in srgb,
+    var(--doc-review-author-current, var(--doc-comment-bg)) 22%,
+    transparent
+  );
+}
+```
+
+`--doc-review-author-current` contains the light-theme value in both themes. Define a dark-theme rule when you tint comment bands by author.
+
+## Style the change bar
+
+Text, table rows, and drawings use the same page-margin change bars. Tracked rows do not draw a second bar beside the table, and tracked images, shapes, and text boxes do not draw a colored revision frame. Deleted drawings remain dimmed in All Markup.
+
+The change bar marks changed lines in the margin selected by `revisionMarkup.changedLines.mark`. Two tokens control the gray bar of **All Markup**, and two more the red bar of **Simple Markup**. The bar is painted on the page sheet, outside the dark-mode inversion, so define both light and dark values when you change a color.
+
+```css
+.docx-editor {
+  --doc-review-change-bar: #8a8a8a;
+  --doc-review-change-bar-width: 2px;
+  --doc-review-change-bar-simple: #d32f2f;
+  --doc-review-change-bar-simple-width: 3px;
+}
+
+.docx-editor.dark {
+  --doc-review-change-bar: #b0b0b0;
+  --doc-review-change-bar-simple: #ef5350;
+}
+```
+
+Each bar is a `.docx-change-bar` element inside one `.docx-change-bars` overlay per page. A bar carries `docx-change-bar-insertion`, `docx-change-bar-deletion`, or `docx-change-bar-format` for each kind of change on its lines, so a bar over a replacement has both the insertion and the deletion class. The color and width are inline token references, so a selector on these classes overrides them only by redefining the token:
+
+```css
+.docx-editor .docx-change-bar-deletion {
+  --doc-review-change-bar: var(--doc-revision-deletion);
+}
+
+.docx-editor .docx-change-bar-insertion:not(.docx-change-bar-deletion) {
+  --doc-review-change-bar: var(--doc-revision-insertion);
+}
+
+/* The revision tokens are light-page values that the dark page inverts,
+   but the bar sits outside that inversion, so give it dark values of its own. */
+.docx-editor.dark .docx-change-bar-deletion {
+  --doc-review-change-bar: #ef9a9a;
+}
+
+.docx-editor.dark .docx-change-bar-insertion:not(.docx-change-bar-deletion) {
+  --doc-review-change-bar: #a5d6a7;
+}
+```
+
+Each bar also carries `data-docx-story` with `body`, `header`, `footer`, `footnote`, or `endnote`, and the overlay carries `data-docx-change-bars-mode` with `all-markup` or `simple-markup`. While a header or footer is being edited, the bars of the other stories dim with the text beside them. A click on a bar switches between Simple Markup and All Markup; the bars are the only painted furniture that takes the pointer.
+
+To hide the bars, set `display: none` on `.docx-change-bars`.
+
+## Build custom review cards
+
+`useReviewAuthor` returns one author's resolved color, ramp slot, and declared style. It works inside the review rail and anywhere else under the editor root, such as a side panel that lists changes. React returns the value directly. The Vue composable accepts a ref or getter and returns a computed ref.
+
+The `DocxEditorReview.List` callback or Vue `#item` slot receives each item and its `author`. Use that value to select a custom card.
+
+If the viewport is too narrow for the card column, the rail shows markers and one floating card for the active item. That card uses the same template as the list: the `DocxEditorReview.List` callback or Vue `#item` slot, a `DocxEditorReview.Card` part, or the part overrides and extra children inside the list. A part that you hide in the list stays hidden in the floating card. To keep the full column on narrower viewports, see [Make room for the review pane](/docs/2.x/guides/zoom#make-room-for-the-review-pane).
+
+For composition patterns, see [React composition](/docs/2.x/react/composition) or [Vue composition](/docs/2.x/vue/composition).
+
+## Next steps
+
+- [Tracked changes](/docs/2.x/pro/tracked-changes): Record and resolve revisions.
+- [Comments](/docs/2.x/pro/comments): Add discussion threads.
+
+## Customize your editor
+
+Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.

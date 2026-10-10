@@ -1,0 +1,172 @@
+# Configure fonts for Markdown layout
+
+Use fonts that match the source document when you need accurate page references. The converter measures text to calculate line wrapping, table row heights, and page boundaries before generating Markdown. Markdown does not preserve the DOCX font family; your renderer controls the displayed font.
+
+Before you begin, [install the converter](../README.md#install-the-package). The examples use Node.js and DOCX bytes. Save each complete example as `convert.mjs`, place `document.docx` beside it, and run `node convert.mjs`.
+
+## Choose a font source
+
+| Your task                                          | Configuration                                                                              |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Convert documents that use common Word fonts       | Start with the bundled defaults; no font option is required.                               |
+| Load missing faces from Google Fonts               | Set `fallbackFonts: googleFonts()`. Network access is required.                            |
+| Use your own fonts or replace a bundled substitute | Supply font bytes through `fonts`.                                                         |
+| Convert without network access                     | Use bundled fonts, document-embedded fonts, and local custom fonts. Omit remote resolvers. |
+
+Fonts resolve in this order:
+
+1. Your `fonts` configuration or resolvers, with earlier entries taking priority.
+2. Bundled substitutes.
+3. Optional `fallbackFonts`.
+4. Document-embedded fonts for faces that earlier sources did not resolve.
+
+A fallback supplies missing faces. It does not replace a face that an earlier source has already resolved. To override a bundled substitute, use `fonts`.
+
+## Start with bundled fonts
+
+The converter includes substitutes for common Word fonts:
+
+| Word font       | Bundled substitute |
+| --------------- | ------------------ |
+| Calibri         | Carlito            |
+| Cambria         | Caladea            |
+| Times New Roman | Liberation Serif   |
+| Arial           | Liberation Sans    |
+| Courier New     | Liberation Mono    |
+
+These substitutes target matching character widths for the glyphs they cover. Differences in glyphs and kerning can still change line and page breaks. For matching page references, compare representative exports with Word using the same revision visibility.
+
+If a font remains unresolved, the default `fontPolicy: 'best-effort'` allows approximate measurement. Check the resolution report before relying on page citations.
+
+## Add Google Fonts fallback
+
+Install the fonts package as a direct dependency of your application:
+
+```sh
+npm install @docx-editor.dev/fonts
+```
+
+This example keeps the bundled substitutes and requests missing faces from the Google Fonts catalog:
+
+```js
+import { readFile } from 'node:fs/promises';
+import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const docxBytes = await readFile('document.docx');
+const result = await exportMarkdown(docxBytes, {
+  fallbackFonts: googleFonts(),
+});
+
+console.log(result.markdown);
+console.dir(result.fontResolution, { depth: null });
+console.log(result.warnings);
+```
+
+The resolver fetches matching faces from a pinned catalog with verified content hashes. Requests disclose requested font families to the CDN. It cannot supply fonts outside the catalog or guarantee the same pagination as Word.
+
+For offline conversion, omit `fallbackFonts` and ensure that any custom resolvers use local data.
+
+## Supply your own fonts
+
+Use `fonts` when you have licensed font files that match the document, or when you need to override a bundled substitute. Register each face under the family name requested by the DOCX.
+
+This example expects a document that uses Aptos and four licensed files in a `fonts/` directory beside `convert.mjs`: `Aptos.ttf`, `Aptos-Bold.ttf`, `Aptos-Italic.ttf`, and `Aptos-BoldItalic.ttf`. Replace the family name and filenames with your document's fonts. The converter does not include these files.
+
+```js
+import { readFile } from 'node:fs/promises';
+import { createFontSource, exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+
+const faces = [
+  { file: 'Aptos.ttf', weight: 400, style: 'normal' },
+  { file: 'Aptos-Bold.ttf', weight: 700, style: 'normal' },
+  { file: 'Aptos-Italic.ttf', weight: 400, style: 'italic' },
+  { file: 'Aptos-BoldItalic.ttf', weight: 700, style: 'italic' },
+];
+
+const sources = [];
+for (const { file, weight, style } of faces) {
+  const bytes = new Uint8Array(await readFile(`fonts/${file}`));
+  const admitted = createFontSource(bytes, { family: 'Aptos', weight, style });
+  if ('failure' in admitted) {
+    throw new Error(admitted.failure.diagnostic ?? admitted.failure.reason);
+  }
+  sources.push(admitted.source);
+}
+
+const docxBytes = await readFile('document.docx');
+const result = await exportMarkdown(docxBytes, { fonts: { sources } });
+
+console.log(result.markdown);
+console.dir(result.fontResolution, { depth: null });
+```
+
+Repeat registration for other document families. You can combine `fonts` with `fallbackFonts` to resolve faces your local sources do not provide.
+
+## Read the font report
+
+`result.fontResolution.families` reports the faces available for each checked family. For example, a family with only its regular face can produce an entry like this; optional identity fields are omitted:
+
+```json
+{
+  "family": "Acme Sans",
+  "coverage": "partial",
+  "faces": [
+    {
+      "weight": 400,
+      "style": "normal",
+      "sourceFamily": "Acme Sans",
+      "via": "direct"
+    }
+  ]
+}
+```
+
+This entry means that the bold, italic, and bold-italic faces are missing. Supply those files through `fonts`, or use a fallback that provides them.
+
+- `coverage: 'complete'` means all four static faces resolved. It does not certify glyph coverage for every script or that the original Word fonts were used.
+- `coverage: 'partial'` means some faces resolved. `coverage: 'none'` means no faces resolved.
+- `via: 'substitution'` identifies a substituted face. Inspect `sourceFamily` and the face's `substitution` details to understand the choice.
+- `originFailures` records font-source failures, even when another source supplies the missing faces.
+
+For a compact view, add this code after either conversion example:
+
+```js
+console.table(
+  result.fontResolution?.families.map(({ family, coverage, faces }) => ({
+    family,
+    coverage,
+    faces: faces.map(({ weight, style, via }) => `${weight} ${style} (${via})`).join(', '),
+  })) ?? []
+);
+```
+
+Document-aware byte exports return a report. Detached layouts and custom measurers can return `fontResolution: null`; that means evidence is unavailable, not that no fonts were needed.
+
+## Require complete font resolution
+
+Add `fontPolicy: 'strict'` to the options in either conversion example to reject font-source failures or missing regular, bold, italic, or bold-italic faces among the checked families. Strict mode can reject an export even if the document only uses regular text or another source recovered from a font-source failure.
+
+Strict mode checks font resolution. It does not guarantee the same page breaks as Word, and complete coverage can include substitutes. The resolver checks at most 64 candidate families, prioritizing the body, then headers and footers, then notes. Additional families do not cause strict mode to fail.
+
+Save `result.fontResolution`, your package versions, font configuration, document version, and revision mode with exports that require reproducible page citations. Use `toMarkdownJSON(result)` when storing the result as JSON so font failure causes become diagnostic strings.
+
+## Troubleshoot fonts and pagination
+
+| Symptom                                        | What to check                                         | What to do                                                                                                                                                |
+| ---------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page breaks differ from Word                   | Substituted or incomplete families, and `displayMode` | Supply the source document's fonts through `fonts`, match revision visibility, and compare representative documents. Other layout differences can remain. |
+| `incomplete-font` warning                      | The family's `coverage` and `faces`                   | Supply the missing regular, bold, italic, or bold-italic files. Use Google Fonts fallback only if it contains that family and those faces.                |
+| `font-origin-failed` warning                   | `fontResolution.originFailures`                       | Correct the failing resolver or file path. For remote sources, check network access and the reported failure.                                             |
+| Google Fonts does not change the selected font | Whether an earlier source already resolved the face   | Put your replacement font in `fonts`; `fallbackFonts` does not override bundled substitutes.                                                              |
+| Strict export fails with `layoutFailed`        | The error message and font-source diagnostics         | Supply missing faces or fix the failing source. Use best effort only if approximate measurement is acceptable.                                            |
+| Font policy throws `TypeError`                 | Input type and custom `measurer`                      | Pass immutable DOCX bytes with the default measurer, or omit `fontPolicy` and `onFontResolution` for a live view or custom measurer.                      |
+| Deployed export cannot load bundled fonts      | Whether deployment retained package assets            | Follow the Node.js and Next.js deployment configuration in the integration guide.                                                                         |
+
+For strict failures, use `onFontResolution: (report) => console.dir(report, { depth: null })` to inspect the report before rejection. The exporter does not await callback promises. See the [font resource limits](api.md#font-limits) for file size and memory constraints.
+
+## Next steps
+
+- [Deploy the converter](integrations.md#nextjs).
+- [Read page and warning fields](api.md).
+- [Include and deliver images](images.md).

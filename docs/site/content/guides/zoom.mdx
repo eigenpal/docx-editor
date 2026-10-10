@@ -1,0 +1,194 @@
+---
+title: 'Zoom and fit to screen'
+description: 'Fit the document to the viewport, control zoom from your UI with useZoom, and let the comments pane shrink the page instead of covering it.'
+category: 'Guides'
+seoTitle: 'Zoom and fit to screen'
+---
+
+The editor fits the page to its container by default. A container wide enough for the page renders at 100%. A narrower container reduces the scale to a minimum of 50%, then scrolls horizontally if needed.
+
+## Choose a zoom mode
+
+Zoom has a value and a mode. The value sets the page scale. The mode determines how the editor calculates that value.
+
+| Mode | Behavior |
+| --- | --- |
+| `'auto'` (default) | Fit the page width, between 50% and 100%. Shrinks a page that does not fit, leaves one that does. |
+| `{ type: 'fit', fit: 'pageWidth' }` | Fit the page width in both directions, so a wide window magnifies the page. |
+| `{ type: 'fixed' }` | Use the scale set by `zoom`, regardless of container size. |
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor document={bytes} />                          {/* auto */}
+<DocxEditor document={bytes} zoomMode={{ type: 'fit', fit: 'pageWidth' }} />
+<DocxEditor document={bytes} zoom={1} zoomMode={{ type: 'fixed' }} />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<!-- auto -->
+<DocxEditor :document="bytes" />
+<DocxEditor :document="bytes" :zoom-mode="{ type: 'fit', fit: 'pageWidth' }" />
+<DocxEditor :document="bytes" :zoom="1" :zoom-mode="{ type: 'fixed' }" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+Passing `zoom` without `zoomMode` selects fixed mode.
+
+Fit mode updates when the container size changes. Resizing the window, opening the comments pane, or docking the navigation pane changes the space beside the page. The engine updates the scale without additional host code.
+
+Selecting a zoom level switches to fixed mode. Resizing the container then preserves that scale.
+
+## Build a zoom control
+
+`useZoom` returns zoom state and actions. Render this control inside `DocxEditor.Root`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useZoom } from '@docx-editor.dev/react';
+
+function ZoomControl() {
+  const { zoom, isFit, auto, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom();
+
+  return (
+    <div>
+      <button type="button" aria-label="Zoom out" onClick={zoomOut} disabled={!canZoomOut}>
+        &minus;
+      </button>
+      <span>{Math.round(zoom * 100)}%</span>
+      <button type="button" aria-label="Zoom in" onClick={zoomIn} disabled={!canZoomIn}>
+        +
+      </button>
+      <button type="button" onClick={auto} aria-pressed={isFit}>
+        Fit
+      </button>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useZoom } from '@docx-editor.dev/vue';
+
+const { zoom, isFit, auto, zoomIn, zoomOut, canZoomIn, canZoomOut } = useZoom();
+</script>
+
+<template>
+  <div>
+    <button type="button" aria-label="Zoom out" :disabled="!canZoomOut" @click="zoomOut">
+      &minus;
+    </button>
+    <span>{{ Math.round(zoom * 100) }}%</span>
+    <button type="button" aria-label="Zoom in" :disabled="!canZoomIn" @click="zoomIn">+</button>
+    <button type="button" :aria-pressed="isFit" @click="auto">Fit</button>
+  </div>
+</template>
+```
+
+The Vue composable returns computed refs. Destructured bindings unwrap in the template, so read them with `.value` only in script code.
+
+</Framework>
+</FrameworkTabs>
+
+| Member | What it does |
+| --- | --- |
+| `zoom` | The resolved scale. `1` is 100%. |
+| `mode`, `isFit` | Where the scale came from. Render a control's selected state from these, not from `zoom`. |
+| `setZoom(n)` | A fixed scale. Leaves any fit. |
+| `setMode(m)` | `'auto'`, a fit, or `{ type: 'fixed' }`. |
+| `auto()`, `fitToWidth()` | The two fits, by name. |
+| `reset()` | Reset to fixed 100% zoom. |
+| `zoomIn()`, `zoomOut()` | Move to the next preset in `levels`. |
+| `canZoomIn`, `canZoomOut` | Whether a higher or lower preset remains. |
+
+Render the selected state from `mode`, not from `zoom`. A menu that ticks the level matching the percentage marks "75%" as selected while fit mode still owns the scale.
+
+The packaged toolbar includes **Automatic**, **Fit width**, and preset zoom levels. Its checkmark follows the selected mode.
+
+If you configure custom fit bounds, the menu shows the resolved percentage without a checkmark. Selecting a preset replaces those bounds.
+
+## Fit comments on narrow screens
+
+The comments rail reserves space beside the page. In fit mode, opening comments reduces the available document width and shrinks the page.
+
+On narrow screens, automatic mode stops shrinking at 50% zoom. The container then scrolls horizontally to keep the document readable.
+
+Set `minZoom` to choose a different minimum scale:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor document={bytes} zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35 }} />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes" :zoom-mode="{ type: 'fit', fit: 'pageWidth', minZoom: 0.35 }" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+### Make room for the review pane
+
+The review pane needs a 316-pixel card column beside the page. A fit with `maxZoom` keeps the page at that maximum. If the column does not fit beside the page at that scale, the pane changes to a marker strip. It then shows one floating card for the active item, and that card can cover page text.
+
+To let the fit make room for the column instead, set the review pane's `overflow` setting to `'shrinkPage'`. While the pane is open, the page can shrink to `minZoom` so that the full column fits. The pane changes to the marker strip only if the column does not fit at `minZoom` either. If you omit `minZoom`, the limit is 10%, so set a `minZoom` that keeps the text readable, such as `0.35`. When the pane closes, the page returns to its usual fit. A fixed zoom ignores this setting.
+
+To keep the page at its size and scroll sideways to the cards instead, set `overflow` to `'scroll'`. The document and the card column then scroll together. The `overflow` setting doesn't change where the navigation pane sits. In every mode, the pane docks at its side and takes its room beside the page when the viewport is wide enough. In a narrow viewport, the pane covers the page instead. For the rule, see Place the navigation pane in [React composition](/docs/2.x/react/composition#place-the-navigation-pane) or [Vue composition](/docs/2.x/vue/composition#place-the-navigation-pane). The width that this rule measures excludes the scrolling review column: with `'scroll'`, only the visible marker strip counts.
+
+The following example sets the starting value through the review module and the zoom mode through the editor:
+
+```tsx
+const MODULES = [reviewModule({ pane: { overflow: 'shrinkPage' } })];
+
+<DocxEditor
+  document={bytes}
+  modules={MODULES}
+  zoomMode={{ type: 'fit', fit: 'pageWidth', minZoom: 0.35, maxZoom: 1 }}
+/>;
+```
+
+To change the setting at runtime, call `setReviewPaneOptions` on the editor instance. Read the value in force from `snapshot().reviewPane`:
+
+```ts
+editor.setReviewPaneOptions({ overflow: 'float' });
+```
+
+`setReviewPaneOptions` refuses an unknown field or value with `invalidArgs` and keeps the previous settings. For more information, see [Control the review pane](/docs/2.x/pro#control-the-review-pane).
+
+## Without an adapter
+
+Zoom APIs are on the engine. Every host calls the same methods:
+
+```ts
+editor.setZoomMode('auto');
+editor.getZoom(); // 0.79 on a container too narrow for the page
+editor.getZoomMode(); // { type: 'fit', fit: 'pageWidth', minZoom: 0.5, maxZoom: 1 }
+
+editor.setZoom(1.5); // leaves the fit
+editor.getZoomMode(); // { type: 'fixed' }
+```
+
+`snapshot()` includes `zoom` and `zoomMode`. The editor emits `selectionChange` when either changes, including after a container resize.
+
+## Next steps
+
+- [React hooks](/docs/2.x/react/hooks): Read editor state and run commands.
+- [Vue composables](/docs/2.x/vue/composables#usezoom): Use reactive zoom state.
+- [Toolbar](/docs/2.x/guides/toolbar): Configure the packaged zoom control.

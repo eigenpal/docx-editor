@@ -12,9 +12,9 @@
 #### Scenario: Float drag commit
 
 - **WHEN** the image is float/anchored (`displayMode === 'float'` or wrapType square/tight/through) and `commitImageDragMove` is called with an EMU offset
-- **THEN** the node's `position` attribute updates to the new margin-relative position, matching prior adapter behavior
+- **THEN** the node's `position` attribute updates to the new margin-relative position, according to the requested position and unit contract
 
 #### Scenario: Inline drag commit
 
 - **WHEN** the image is inline and `commitImageDragMove` is called with a resolved drop position
-- **THEN** the node is removed from its old position and inserted at the drop position, with selection re-asserted, matching prior behavior
+- **THEN** the node is removed from its old position and inserted at the drop position, with selection re-asserted, according to the documented operation contract

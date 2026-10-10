@@ -1,77 +1,99 @@
 ---
 title: 'Nuxt'
-description: 'Set up a Nuxt DOCX editor with the official module. One line in nuxt.config.ts gives you an auto-imported, SSR-safe DocxEditor component on Nuxt 3 and 4.'
+description: 'Set up the Vue DOCX editor in Nuxt with a client-only component, the editor stylesheet, and Vite dependency optimization.'
 category: 'Frameworks'
 seoTitle: 'Nuxt DOCX editor setup'
 ---
 
-By the end of this page you have a Nuxt app that opens a `.docx` from disk and edits it in the browser. The official module handles the SSR boundary and stylesheet registration.
+The editor measures text in the browser. Keep its package import and render work in a client-only component.
 
 ## Install
 
+Install the published Vue adapter and its engine peer.
+
 ```bash
-npm install @docx-editor.dev/nuxt
+npm install @docx-editor.dev/vue @docx-editor.dev/core
 ```
 
-## Register the module
+## Configure Nuxt
+
+Load the editor stylesheet once. Prebundle the adapter and engine for the Vite development server.
 
 ```ts
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['@docx-editor.dev/nuxt'],
+  css: ['@docx-editor.dev/vue/styles.css'],
+  vite: {
+    optimizeDeps: {
+      include: ['@docx-editor.dev/core', '@docx-editor.dev/vue'],
+    },
+  },
 });
 ```
 
-The module auto-imports an SSR-safe `<DocxEditor>` and injects the editor stylesheet. You do not need a manual component import, a `<ClientOnly>` wrapper, or Vite config. Works on Nuxt 3 and 4.
+## Add a client-only component
 
-## Use the component
-
-Adapted from [`examples/nuxt/app.vue`](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt):
+Use the `.client.vue` suffix. Nuxt excludes this component from server-side rendering (SSR).
 
 ```vue
-<!-- app.vue -->
+<!-- components/DocumentEditor.client.vue -->
 <script setup lang="ts">
-import { ref } from 'vue';
-
-const buffer = ref<ArrayBuffer | null>(null);
-
-async function onFileSelect(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (file) buffer.value = await file.arrayBuffer();
-}
+import { DocxEditor } from '@docx-editor.dev/vue';
 </script>
 
 <template>
-  <div style="height: 100vh; display: flex; flex-direction: column">
-    <div style="padding: 8px">
-      <input type="file" accept=".docx" @change="onFileSelect" />
-    </div>
-    <DocxEditor :document-buffer="buffer" :show-toolbar="true" />
+  <div class="editor-host">
+    <DocxEditor document="blank" />
   </div>
+</template>
+
+<style scoped>
+.editor-host {
+  height: 100vh;
+}
+</style>
+```
+
+Use the component from a page or layout. Nuxt auto-imports components from the `components` directory.
+
+```vue
+<!-- pages/index.vue -->
+<template>
+  <DocumentEditor />
 </template>
 ```
 
-`<DocxEditor>` never renders during SSR; Nuxt shows a placeholder and hydrates the editor on the client. The component is the Vue adapter registered unchanged, so every prop, event, and ref method from `@docx-editor.dev/vue` applies.
+The server output contains a placeholder for `DocumentEditor`. Nuxt mounts the editor in the browser. The editor fills its parent, so the parent needs a measured height.
 
-<Callout type="info">
-  This page is the short version. Module options (`prefix`, `injectStyles`), auto-imported
-  composables, and what the module does not re-export are covered on the
-  [Nuxt module reference](/docs/1.x/vue/nuxt).
-</Callout>
+## Nuxt module status
 
-## Run the example
+The repository contains `@docx-editor.dev/nuxt` source and a Nuxt example. The package has `"private": true`, so the repository does not publish it to npm. Use the Vue adapter setup on this page in an external application.
+
+The workspace module provides these behaviors:
+
+- It registers `<DocxEditor>` as a client-only component.
+- It injects the core editor stylesheet by default.
+- It auto-imports the Vue composables.
+- It supports a component prefix and optional stylesheet injection.
+
+For applications outside this workspace, install the published Vue adapter directly.
+
+## Run the repository example
+
+The Nuxt example uses the private module through the monorepo workspace. It runs against the Nuxt version in the workspace.
 
 ```bash
 git clone https://github.com/eigenpal/docx-editor.git
 cd docx-editor
 bun install
-bun run dev:nuxt   # http://localhost:3002
+bun run build:packages:vue
+bun run dev:nuxt
 ```
+
+Open `http://localhost:3002`.
 
 ## Next steps
 
-- [Nuxt module reference](/docs/1.x/vue/nuxt): options, composables, saving via a Nitro route
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Nuxt DOCX editor guide](/blog/nuxt-docx-editor): the long-form walkthrough
+- [Vue adapter](/docs/2.x/vue)
+- [Vue props](/docs/2.x/vue/props)
 - [Nuxt example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nuxt)

@@ -1,0 +1,966 @@
+import { readTwipsMeasure } from '@docx-editor.dev/core/store';
+import { styleSeparatorMembersOf } from './style-separator-group.ts';
+import { markerMeasureToken } from './list-marker-measure-key.ts';
+import {
+  numberingParagraphProperties,
+  numberingParagraphToken,
+  withNumberingParagraphProperties,
+} from './numbering-paragraph-properties.ts';
+// Resolve numbering into marker text, indentation, and font inputs for one story walk.
+
+import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { flattenContentControls } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
+import { framedTokenJoin } from './layout-cache.ts';
+import {
+  createListCounterState,
+  expandCountersOf,
+  type FullContextNumberSource,
+} from './list-counters.ts';
+import { resolvePictureBullet, type ResolvedPictureBullet } from './numbering-picture-bullet.ts';
+import {
+  EMPTY_NUMBERING_INDEX,
+  MAX_LEVEL_INDENT_PT,
+  resolveNumberingStyleLinks,
+  type ListMarkerAlign,
+  type ListSuffix,
+  type NumberingIndex,
+  type NumberingLevelIndent,
+} from './numbering-index.ts';
+import {
+  cascadeParagraphFormatting,
+  cascadeRunProperties,
+  MAX_STYLE_BASED_ON_DEPTH,
+  type StyleCascadeTable,
+  type StyleDefinition,
+} from './style-cascade.ts';
+import { hasSymbolPua, mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
+import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
+import type { TextMeasurer } from './semantic-records.ts';
+import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
+import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
+import { numberingLevelTiers } from './numbering-level-tier.ts';
+import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
+import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
+import type { LayoutScope } from './layout-scheduler.ts';
+import type { LayoutSession } from './layout-session.ts';
+import { numberingFlowBlocks } from './hidden-paragraph-mark.ts';
+
+interface ListResolveChangeEvidence {
+  readonly preservesNumberedSequence: boolean;
+}
+
+const listResolveEvidenceBySession = new WeakMap<LayoutSession, ListResolveChangeEvidence>();
+let listResolveBlockVisits = 0;
+
+/** @internal Read session-scoped list resolve memo for tests. */
+export function listResolveSessionMemoListItemsForTest(
+  session: LayoutSession
+): ReadonlyMap<string, ResolvedListItem> | undefined {
+  return lastStoryResolvesBySession.get(session)?.listItems;
+}
+
+/** @internal Warm-path recorder for list resolve block walks. */
+export function listResolveBlockVisitTestRecorder(): {
+  readonly blockVisits: number;
+  reset(): void;
+} {
+  return {
+    get blockVisits() {
+      return listResolveBlockVisits;
+    },
+    reset() {
+      listResolveBlockVisits = 0;
+    },
+  };
+}
+
+/**
+ * Attach one-use layout scope evidence before semantic layout runs.
+ *
+ * @internal
+ */
+export function attachListResolveChangeEvidence(session: LayoutSession, scope: LayoutScope): void {
+  const storySafe =
+    scope.dependencyKeys.size === 0 ||
+    [...scope.dependencyKeys].every((key) => key === DEPENDENCY_KEY_IDS.story);
+  listResolveEvidenceBySession.set(session, {
+    preservesNumberedSequence:
+      scope.impact === 'text-local' &&
+      !scope.structural &&
+      scope.created.size === 0 &&
+      scope.deleted.size === 0 &&
+      storySafe,
+  });
+}
+
+function consumeListResolveChangeEvidence(
+  session: LayoutSession
+): ListResolveChangeEvidence | undefined {
+  const evidence = listResolveEvidenceBySession.get(session);
+  listResolveEvidenceBySession.delete(session);
+  return evidence;
+}
+
+/**
+ * A paragraph's list membership fully resolved: definition, level, marker text and geometry.
+ *
+ * `markerText` is already expanded through the counter state, so it is the string a reader sees
+ * rather than the `w:lvlText` template.
+ */
+export interface ResolvedListItem {
+  readonly numId: string;
+  readonly ilvl: number;
+  readonly abstractNumId: string;
+  /** `w:numFmt` of the resolved level — `bullet` or a numbering format. */
+  readonly numFmt: string;
+  readonly markerText: string;
+  /** Counter value at this item's own level; absent for bullets. */
+  readonly ordinal?: number;
+  readonly markerAlign: ListMarkerAlign;
+  readonly suffix: ListSuffix;
+  /** Effective indent after merging level + paragraph indents, in points. */
+  readonly indent: NumberingLevelIndent;
+  readonly markerStyle: ResolvedRunStyle;
+  /**
+   * The image marker a `w:lvlPicBulletId` level resolved to, absent on every other item.
+   *
+   * Present means the marker is an IMAGE: it occupies `width` x `height` points in the
+   * hanging slot and `markerText` is only what a sink that cannot draw the image falls back
+   * to. The extent is the AUTHORED `v:shape` size scaled by the marker font size — see
+   * {@link resolvePictureBullet}, which also decides when the answer is no picture at all.
+   * Absent means the level declared none, named one the part does not declare, declared one
+   * this projection could not read, or resolved to a size nothing can paint.
+   */
+  readonly picBullet?: ResolvedPictureBullet;
+  /** Fingerprint for layout cache keys (indent, marker text, marker face). */
+  readonly cacheToken: string;
+}
+
+/**
+ * What composing an item's full-context number needs, keyed on the item object itself.
+ *
+ * A side channel rather than a `ResolvedListItem` member because the item type is public API
+ * and only cross-reference resolution reads this. Entries ride the item maps the memos above
+ * reuse by identity, and die with them.
+ */
+const listItemNumberSources = new WeakMap<ResolvedListItem, FullContextNumberSource>();
+
+/** The composition inputs captured when `item` was counted, or undefined off this resolver. */
+export function listItemNumberSource(item: ResolvedListItem): FullContextNumberSource | undefined {
+  return listItemNumberSources.get(item);
+}
+
+function isElement(node: OoxmlNode): node is OoxmlElement {
+  return node.kind !== 'textValue';
+}
+
+function attrVal(node: OoxmlElement, localName: string): string | undefined {
+  for (const a of node.attributes) {
+    if (a.localName === localName) return a.value;
+  }
+  return undefined;
+}
+
+function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undefined {
+  for (const child of node.children) {
+    if (isElement(child) && child.localName === localName) return child;
+  }
+  return undefined;
+}
+
+/**
+ * One `w:numPr` tier read per FIELD. `undefined` means the tier does not state the field.
+ *
+ * `numId: null` is a tier that states "no numbering": `w:val="0"` (§17.9.18 — the null
+ * numbering definition), a `w:numId` with no value, or an oversized value (hostile-input
+ * guard). `ilvl: null` is a stated level outside 0–8, which invalidates the tier's
+ * numbering the same way; an unparseable level reads as 0, as before.
+ */
+function numPrFieldsOf(
+  node: OoxmlNode
+): { numId: string | null | undefined; ilvl: number | null | undefined } | null {
+  if (!isElement(node)) return null;
+  const numPr = childNamed(node, 'numPr');
+  if (!numPr) return null;
+  const numIdNode = childNamed(numPr, 'numId');
+  const ilvlNode = childNamed(numPr, 'ilvl');
+  let numId: string | null | undefined;
+  if (numIdNode) {
+    const val = attrVal(numIdNode, 'val');
+    numId = val !== undefined && val !== '0' && val.length <= 64 ? val : null;
+  }
+  let ilvl: number | null | undefined;
+  if (ilvlNode) {
+    const raw = attrVal(ilvlNode, 'val');
+    const parsed = /^\d{1,2}$/.test(raw ?? '') ? Number(raw) : 0;
+    ilvl = parsed <= 8 ? parsed : null;
+  }
+  return { numId, ilvl };
+}
+
+/**
+ * Read `w:numPr` from cascaded paragraph-property nodes (lowest precedence first).
+ *
+ * Flat `OoxmlProperty[]` bags drop nested `ilvl`/`numId`, so this walks the tree nodes
+ * the same way borders and tabs do.
+ *
+ * `w:ilvl` and `w:numId` inherit INDEPENDENTLY through the style chain and the direct
+ * `w:pPr` (§17.3.1.19): a tier stating only the level keeps the id it inherits — Word's
+ * standard Heading2–Heading9 shape, where only Heading1 names the `w:num` — and a tier
+ * stating only the id keeps the inherited level. Treating each `w:numPr` node as a full
+ * replacement dropped the id at every level-only tier and unnumbered the paragraph. A
+ * stated `w:numId w:val="0"` (or an invalid value) still switches numbering off at that
+ * tier even when a lower tier set one; a higher tier stating a valid id re-enables. A
+ * level-only tier with no id inherited from below resolves to no numbering.
+ */
+export function readNumPr(
+  paragraphPropertyNodes: readonly OoxmlNode[]
+): { numId: string; ilvl: number } | null {
+  let numId: string | null = null;
+  let ilvl = 0;
+  for (const node of paragraphPropertyNodes) {
+    const fields = numPrFieldsOf(node);
+    if (!fields) continue;
+    if (fields.numId !== undefined) numId = fields.numId;
+    if (fields.ilvl !== undefined) {
+      if (fields.ilvl === null) numId = null;
+      else ilvl = fields.ilvl;
+    }
+  }
+  return numId === null ? null : { numId, ilvl };
+}
+
+/**
+ * The `w:numId` a style numbers with, following `w:basedOn` (§17.9.21 link target).
+ *
+ * A `w:numStyleLink` names a style, not a number: Word's own List Bullet / List Number are
+ * paragraph styles whose `w:numPr` points at the `w:num` that owns the real levels. The walk
+ * is depth-capped with a visited set because the `basedOn` chain comes from the file.
+ */
+function numIdForStyle(styleCascade: StyleCascadeTable, styleId: string): string | undefined {
+  const seen = new Set<string>();
+  let current: StyleDefinition | undefined = styleCascade.styles.get(styleId);
+  for (let depth = 0; current !== undefined && depth < MAX_STYLE_BASED_ON_DEPTH; depth += 1) {
+    if (seen.has(current.styleId)) return undefined;
+    seen.add(current.styleId);
+    const node = current.paragraphPropertiesNode;
+    const fields = node ? numPrFieldsOf(node) : null;
+    // The NEAREST style that states `w:numId` decides, exactly as the merged read above
+    // does: a stated `w:val="0"` switches numbering off rather than deferring to the
+    // base, and a level-only `w:numPr` keeps walking for the id it inherits.
+    if (fields && fields.numId !== undefined) return fields.numId ?? undefined;
+    current = current.basedOn === null ? undefined : styleCascade.styles.get(current.basedOn);
+  }
+  return undefined;
+}
+
+/**
+ * Memo keyed on the index object, validated against the cascade. A WeakMap so a disposed
+ * document's index releases its entry, and entered under the LINKED index too: layout
+ * links the raw index once per flush, then hands the linked result back through this
+ * function again, and without the self-entry that second call would clobber the memo
+ * every flush. Level-object identity across edits is NOT this memo's doing —
+ * `resolveNumberingStyleLinks` reuses the delegation target's `levels` maps by reference,
+ * so the per-paragraph `perLevel` caches stay warm even on a miss here.
+ */
+const linkedIndexMemos = new WeakMap<
+  NumberingIndex,
+  { readonly styleCascade: StyleCascadeTable; readonly linked: NumberingIndex }
+>();
+
+/**
+ * Resolve `w:numStyleLink` delegation using the document's styles (§17.9.21).
+ *
+ * Without a style table there is nothing to follow, so the index is returned unchanged —
+ * and so it is when nothing delegates, which keeps layout cache identity.
+ */
+export function withNumberingStyleLinks(
+  index: NumberingIndex,
+  styleCascade: StyleCascadeTable | undefined
+): NumberingIndex {
+  if (!styleCascade) return index;
+  const memo = linkedIndexMemos.get(index);
+  if (memo && memo.styleCascade === styleCascade) return memo.linked;
+  const linked = resolveNumberingStyleLinks(index, (styleId) =>
+    numIdForStyle(styleCascade, styleId)
+  );
+  const entry = { styleCascade, linked };
+  linkedIndexMemos.set(index, entry);
+  linkedIndexMemos.set(linked, entry);
+  return linked;
+}
+
+/** Bound a file-derived indent both ways — negative is legal, unbounded is not. */
+function clampIndentPt(pt: number): number {
+  if (!Number.isFinite(pt)) return 0;
+  if (pt > MAX_LEVEL_INDENT_PT) return MAX_LEVEL_INDENT_PT;
+  if (pt < -MAX_LEVEL_INDENT_PT) return -MAX_LEVEL_INDENT_PT;
+  return pt;
+}
+
+/** The first-line slot as one `w:ind` states it, or null when it states neither spelling. */
+function firstLineOffsetOf(
+  props: readonly OoxmlProperty[]
+): { hanging: number; firstLine: number } | null {
+  let found: { hanging: number; firstLine: number } | null = null;
+  for (const property of props) {
+    if (property.localName !== 'ind') continue;
+    const h = property.attributes?.hanging;
+    const f = property.attributes?.firstLine;
+    // Mutually exclusive (§17.3.1.10, §17.3.1.12): one signed first-line offset, two spellings,
+    // so an `w:ind` stating either replaces both. `w:firstLine` is read SIGNED because Word
+    // keeps a negative value as a hang. A bare `w:left` states neither and leaves them alone.
+    if (h === undefined && f === undefined) continue;
+    const hanging = readTwipsMeasure(h);
+    const firstLine = readTwipsMeasure(f);
+    found = {
+      hanging: hanging !== null && hanging >= 0 ? clampIndentPt(hanging / 20) : 0,
+      firstLine: firstLine !== null ? clampIndentPt(firstLine / 20) : 0,
+    };
+  }
+  return found;
+}
+
+/** Whether any `w:ind` in the list states the leading indent (`w:left` or `w:start`). */
+function statesLeading(props: readonly OoxmlProperty[]): boolean {
+  return props.some(
+    (property) =>
+      property.localName === 'ind' &&
+      (property.attributes?.left !== undefined || property.attributes?.start !== undefined)
+  );
+}
+
+/** Whether any `w:ind` in the list states the trailing indent (`w:right` or `w:end`). */
+function statesTrailing(props: readonly OoxmlProperty[]): boolean {
+  return props.some(
+    (property) =>
+      property.localName === 'ind' &&
+      (property.attributes?.right !== undefined || property.attributes?.end !== undefined)
+  );
+}
+
+/** Whether any `w:ind` in the list states the physical left side in this direction. */
+function statesLeft(props: readonly OoxmlProperty[], rtl: boolean): boolean {
+  return rtl ? statesTrailing(props) : statesLeading(props);
+}
+
+function statesRight(props: readonly OoxmlProperty[], rtl: boolean): boolean {
+  return rtl ? statesLeading(props) : statesTrailing(props);
+}
+
+/**
+ * The effective indent of a list paragraph: `inherited`, then the numbering LEVEL, then
+ * `direct`, per attribute.
+ *
+ * A level's `w:pPr/w:ind` applies per attribute between the two tiers, and the ordering
+ * matters on real documents. A converted agreement numbers its `(a)` items with a level
+ * stating `left=1512 hanging=738` under a `ListParagraph` style stating
+ * `left=775 hanging=624`, and states only `hanging="737"` on the paragraph itself. Reading
+ * the flattened cascade as "the paragraph's indent" gave the STYLE's 775 to a level that had
+ * overridden it, so every lettered sub-item hung a full indent step to the left of where
+ * Word puts it.
+ *
+ * `inherited` is what the level outranks and `direct` is what outranks it. When the
+ * paragraph's own `w:pPr` states a `w:numPr`, these are the style chain (after the document
+ * defaults) and that `w:pPr`. Otherwise the level sits directly below the nearest style that
+ * states a `w:numPr`: that style, the styles based on it and the paragraph's own `w:pPr` go
+ * in `direct`, and the defaults and that style's bases go in `inherited`.
+ */
+export function mergeListIndent(
+  levelIndent: NumberingLevelIndent,
+  inherited: readonly OoxmlProperty[],
+  direct: readonly OoxmlProperty[] = []
+): NumberingLevelIndent {
+  const rtl = paragraphIsRtl([...inherited, ...direct]);
+  const direction: OoxmlProperty = { localName: 'bidi', attributes: { val: rtl ? '1' : '0' } };
+  // A level's `left`/`right` are its leading and trailing indents (`w:left` or `w:start`,
+  // `w:right` or `w:end`); a right-to-left paragraph puts the leading one on the right.
+  if (rtl) {
+    levelIndent = {
+      ...levelIndent,
+      left: levelIndent.right,
+      right: levelIndent.left,
+      ...(levelIndent.stated
+        ? {
+            stated: {
+              ...levelIndent.stated,
+              left: levelIndent.stated.right,
+              right: levelIndent.stated.left,
+            },
+          }
+        : {}),
+    };
+  }
+  // A level built by hand (a unit test, not a file) carries no presence record; it then
+  // states nothing and the style still wins, which is the behaviour those callers had.
+  const levelStates = levelIndent.stated ?? {
+    left: false,
+    right: false,
+    firstLineOffset: false,
+  };
+  const inheritedIndent = paragraphIndent([...inherited, direction]);
+  const directIndent = paragraphIndent([...direct, direction]);
+  const levelOffset = { hanging: levelIndent.hanging, firstLine: levelIndent.firstLine };
+
+  const left = statesLeft(direct, rtl)
+    ? directIndent.left
+    : levelStates.left
+      ? levelIndent.left
+      : statesLeft(inherited, rtl)
+        ? inheritedIndent.left
+        : levelIndent.left;
+  const right = statesRight(direct, rtl)
+    ? directIndent.right
+    : levelStates.right
+      ? levelIndent.right
+      : statesRight(inherited, rtl)
+        ? inheritedIndent.right
+        : levelIndent.right;
+  const firstLineOffset =
+    firstLineOffsetOf(direct) ??
+    (levelStates.firstLineOffset ? levelOffset : (firstLineOffsetOf(inherited) ?? levelOffset));
+
+  return { left, right, ...firstLineOffset };
+}
+
+/**
+ * Collect paragraphs of a block list in document order, descending into tables.
+ *
+ * Caps nesting so a hostile nested-table document cannot recurse without bound.
+ */
+export function walkStoryParagraphs(
+  blocks: readonly OoxmlElement[],
+  maxTableDepth = 8
+): OoxmlElement[] {
+  const out: OoxmlElement[] = [];
+  const visit = (blockList: readonly OoxmlElement[], depth: number): void => {
+    for (const block of blockList) {
+      if (block.kind === 'paragraph') {
+        out.push(block);
+        continue;
+      }
+      if (block.kind !== 'table' || depth >= maxTableDepth) continue;
+      for (const row of flattenContentControls(block.children)) {
+        if (row.kind !== 'tableRow') continue;
+        for (const cell of flattenContentControls(row.children)) {
+          if (cell.kind !== 'tableCell') continue;
+          // Flatten cell SDTs under the shared content-control budget; table nesting still
+          // uses `maxTableDepth` for the table walk itself.
+          const inner = collectFlowBlocks(cell.children);
+          visit(inner, depth + 1);
+        }
+      }
+    }
+  };
+  visit(blocks, 0);
+  return out;
+}
+
+/**
+ * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which
+ * `numPr` a paragraph resolves to — and the cascaded property tiers feeding its indent and
+ * marker face — are pure functions of the immutable paragraph and the cascade table. An
+ * edit republishes only the touched paragraphs, yet the resolver walks the WHOLE story per
+ * keystroke; without this cache every unchanged paragraph re-ran the full style cascade
+ * just to learn (usually) that it has no numbering. Only the counter advance is genuinely
+ * sequential. `perLevel` holds level-derived indent/marker work, keyed on the level object
+ * (identity-stable because `resolveNumberingStyleLinks` reuses the target's `levels` maps
+ * by reference) — a WeakMap, so level objects orphaned by a numbering edit take their
+ * entries with them.
+ */
+interface ParagraphListPrelude {
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly numPr: { readonly numId: string; readonly ilvl: number } | null;
+  /** Properties below and above the numbering level, from `numberingLevelTiers`. */
+  readonly belowLevel: readonly OoxmlProperty[];
+  readonly aboveLevel: readonly OoxmlProperty[];
+  readonly inheritedMarkProps: readonly OoxmlProperty[];
+  readonly perLevel: WeakMap<
+    object,
+    { indent: NumberingLevelIndent; markerStyle: ResolvedRunStyle }
+  >;
+}
+const paragraphListPreludes = new WeakMap<OoxmlElement, ParagraphListPrelude>();
+
+function paragraphListPrelude(
+  paragraph: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): ParagraphListPrelude {
+  const cached = paragraphListPreludes.get(paragraph);
+  if (cached && cached.styleCascade === styleCascade) return cached;
+  const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const cascaded = styleCascade ? cascadeParagraphFormatting(styleCascade, pPr) : null;
+  const nodes: readonly OoxmlNode[] = cascaded ? cascaded.paragraphPropertyNodes : pPr ? [pPr] : [];
+  const directMarkRun = pPr && isElement(pPr) ? childNamed(pPr, 'rPr') : undefined;
+  const numPr = readNumPr(nodes);
+  // Only a list paragraph reads the tiers; skip the second style-chain walk for the rest.
+  const tiers =
+    numPr && styleCascade && cascaded
+      ? numberingLevelTiers(styleCascade, cascaded.styleId, pPr)
+      : { below: [], above: propertiesOf(pPr) };
+  const markProps = cascaded ? cascaded.markRunProperties : propertiesOf(directMarkRun);
+  // An admitted separator hides its mark, not its heading number. Content and level
+  // visibility remain independent, so an actually hidden list keeps its hidden marker.
+  const inheritedMarkProps = styleSeparatorMembersOf(paragraph)
+    ? [
+        ...markProps.filter((property) => property.localName !== 'vanish'),
+        ...(cascaded?.runProperties.filter((property) => property.localName === 'vanish') ?? []),
+      ]
+    : markProps;
+  const prelude: ParagraphListPrelude = {
+    styleCascade,
+    numPr,
+    belowLevel: tiers.below,
+    aboveLevel: tiers.above,
+    inheritedMarkProps,
+    perLevel: new WeakMap(),
+  };
+  paragraphListPreludes.set(paragraph, prelude);
+  return prelude;
+}
+
+/**
+ * Resolve every list paragraph in a story to a {@link ResolvedListItem}, keyed by node id.
+ *
+ * Non-list paragraphs are absent from the map. Hostile / missing numbering resolves inertly
+ * (paragraph omitted — laid out as ordinary text).
+ */
+export function resolveStoryListItems(
+  blocks: readonly OoxmlElement[],
+  index: NumberingIndex,
+  styleCascade: StyleCascadeTable | undefined,
+  isFontAvailable?: (family: string) => boolean
+): ReadonlyMap<string, ResolvedListItem> {
+  const map = new Map<string, ResolvedListItem>();
+  if (index.nums.size === 0) return map;
+
+  // A definition that delegates through `w:numStyleLink` has no levels of its own; resolving
+  // the link here is what keeps those paragraphs from losing their markers entirely.
+  const linked = withNumberingStyleLinks(index, styleCascade);
+  const counters = createListCounterState(linked);
+  for (const paragraph of walkStoryParagraphs(blocks)) {
+    const prelude = paragraphListPrelude(paragraph, styleCascade);
+    const numPr = prelude.numPr;
+    if (!numPr) continue;
+
+    const advanced = counters.advance(numPr.numId, numPr.ilvl);
+    if (!advanced) continue;
+
+    let levelDerived = prelude.perLevel.get(advanced.level);
+    if (!levelDerived) {
+      // Split, not flattened: the merge needs the tiers below and above the level apart.
+      const indent = mergeListIndent(advanced.level.indent, prelude.belowLevel, prelude.aboveLevel);
+      const markerProps = cascadeRunProperties(
+        prelude.inheritedMarkProps,
+        advanced.level.runProperties,
+        styleCascade
+      );
+      levelDerived = {
+        indent,
+        markerStyle: resolveRunStyle(markerProps, styleCascade?.themeFonts),
+      };
+      prelude.perLevel.set(advanced.level, levelDerived);
+    }
+    const { indent, markerStyle: authoredMarkerStyle } = levelDerived;
+    // Word writes a Symbol/Wingdings bullet as font-byte + 0xF000 (`` = U+F0B7 in
+    // Symbol), which is a private-use codepoint no other font can draw. Mapping it here —
+    // where the marker's FAMILY is finally known — keeps measurement and paint on the same
+    // string; doing it in the painter would size the marker box for a glyph nobody draws.
+    const mapMarker = advanced.level.numFmt === 'bullet' ? mapSymbolBulletText : mapSymbolPuaText;
+    const markerText = mapMarker(
+      advanced.markerText,
+      authoredMarkerStyle.fontFamily,
+      isFontAvailable
+    );
+    // A translated marker needs a Unicode face, not the unavailable byte-encoded face.
+    // Resolve the substrate's default in both measurement and painting. Preserve the
+    // authored face when any unknown private-use character remains, or when the host
+    // explicitly admits the original font. Never mutate the cached level style.
+    const markerStyle =
+      markerText !== advanced.markerText && !hasSymbolPua(markerText)
+        ? { ...authoredMarkerStyle, fontFamily: null, fontFamilyEastAsia: null }
+        : authoredMarkerStyle;
+    // `w:lvlPicBulletId` names a `w:numPicBullet` of the SAME part. A level naming one the
+    // part never declared, or one whose VML this projection could not read, keeps its
+    // `w:lvlText` — a missing image must never cost the reader the marker entirely.
+    const authoredPicBullet =
+      advanced.level.picBulletId === undefined
+        ? undefined
+        : linked.pictureBullets?.get(advanced.level.picBulletId);
+    const picBullet = authoredPicBullet
+      ? (resolvePictureBullet(authoredPicBullet, markerStyle.fontSizePt) ?? undefined)
+      : undefined;
+    // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
+    // carry any printable separator, so a separator join lets two different level
+    // geometries serialize to one token and share a break-cache entry.
+    const cacheToken = framedTokenJoin(
+      [
+        advanced.numId,
+        advanced.ilvl,
+        advanced.level.numFmt,
+        advanced.level.lvlText,
+        indent.left,
+        indent.right,
+        indent.hanging,
+        indent.firstLine,
+        advanced.level.lvlJc,
+        advanced.level.suff,
+        advanced.level.vanish ? 1 : 0,
+        numberingParagraphToken(advanced.level),
+        // The MARKER ITSELF, not its length. The first line starts where the marker ends
+        // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
+        // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
+        // served the previous marker's width to the new one, and the line wrapped a word late.
+        markerText,
+        // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
+        // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
+        markerMeasureToken(markerStyle),
+        // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
+        // it decides both the first line's start and the first line's height.
+        picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
+      ].map(String)
+    );
+
+    const item: ResolvedListItem = {
+      numId: advanced.numId,
+      ilvl: advanced.ilvl,
+      abstractNumId: advanced.abstractNumId,
+      numFmt: advanced.level.numFmt,
+      markerText,
+      ...(advanced.level.numFmt === 'bullet'
+        ? {}
+        : { ordinal: advanced.counters[advanced.ilvl] ?? 1 }),
+      markerAlign: advanced.level.lvlJc,
+      suffix: advanced.level.suff,
+      indent,
+      markerStyle,
+      ...(picBullet ? { picBullet } : {}),
+      cacheToken,
+    };
+    withNumberingParagraphProperties(item, numberingParagraphProperties(advanced.level));
+    listItemNumberSources.set(item, {
+      index: linked,
+      numId: advanced.numId,
+      ilvl: advanced.ilvl,
+      expandCounters: expandCountersOf(advanced),
+    });
+    map.set(paragraph.id, item);
+  }
+  return map;
+}
+
+interface ResolvedListItemsMemoEntry {
+  readonly rawIndex: NumberingIndex | undefined;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly isFontAvailable: ((family: string) => boolean) | undefined;
+  readonly linkedIndex: NumberingIndex;
+  readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+}
+
+/**
+ * Memo for {@link withResolvedListItems}, keyed on the blocks array (stable per part via
+ * the `storyBlocks` memo) and validated against the remaining RAW inputs by identity —
+ * the unlinked numbering index, the style cascade, and the font oracle. A WeakMap on the
+ * blocks array so a disposed document's entry dies with its part instead of pinning an
+ * O(document) item map at module scope. A miss on any input recomputes the sequential
+ * full-story counter walk exactly as before.
+ */
+const resolvedListItemsMemos = new WeakMap<readonly OoxmlElement[], ResolvedListItemsMemoEntry>();
+
+/** Session-stable outer memo for semantic body layout. */
+const resolvedListItemsMemosBySession = new WeakMap<LayoutSession, ResolvedListItemsMemoEntry>();
+
+type WithResolvedListItemsOptions = {
+  readonly numberingIndex?: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  readonly styleCascade?: StyleCascadeTable;
+  readonly isFontAvailable?: (family: string) => boolean;
+  /**
+   * The pass's measurer, read ONLY to learn which legacy symbol faces were admitted.
+   *
+   * A caller may still pass {@link isFontAvailable} explicitly and it wins; absent one, the
+   * measurer answers, because it is the only input that already knows the admitted faces and
+   * is already folded into every layout cache key. A caller with no measurer (the REF-refresh
+   * save path) keeps the pre-font-resolution answer: translate the private-use bullet.
+   */
+  readonly measurer?: TextMeasurer;
+};
+
+/** The oracle a pass actually resolves with: an explicit one, else the measurer's coverage. */
+function listFontAvailability(
+  options: WithResolvedListItemsOptions
+): ((family: string) => boolean) | undefined {
+  return options.isFontAvailable ?? markerSymbolFontAvailability(options.measurer);
+}
+
+function resolvedListItemsMemoHit(
+  options: WithResolvedListItemsOptions,
+  isFontAvailable: ((family: string) => boolean) | undefined,
+  blocks: readonly OoxmlElement[],
+  memoOwner: LayoutSession | undefined
+): ResolvedListItemsMemoEntry | undefined {
+  const memo = memoOwner
+    ? resolvedListItemsMemosBySession.get(memoOwner)
+    : resolvedListItemsMemos.get(blocks);
+  if (
+    memo &&
+    memo.rawIndex === options.numberingIndex &&
+    memo.styleCascade === options.styleCascade &&
+    memo.isFontAvailable === isFontAvailable
+  ) {
+    return memo;
+  }
+  return undefined;
+}
+
+function rememberResolvedListItemsMemo(
+  blocks: readonly OoxmlElement[],
+  memoOwner: LayoutSession | undefined,
+  entry: ResolvedListItemsMemoEntry
+): void {
+  if (memoOwner) resolvedListItemsMemosBySession.set(memoOwner, entry);
+  else resolvedListItemsMemos.set(blocks, entry);
+}
+
+function withResolvedListItemsInternal<T extends WithResolvedListItemsOptions>(
+  options: T,
+  flowBlocks: readonly OoxmlElement[],
+  memoOwner: LayoutSession | undefined
+): T & {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+} {
+  // Paragraphs a hidden mark took out of the flow still count; see `hidden-paragraph-mark.ts`.
+  const blocks = numberingFlowBlocks(flowBlocks);
+  const isFontAvailable = listFontAvailability(options);
+  if (options.listItems === undefined) {
+    const memo = resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner);
+    if (memo && memoOwner === undefined) {
+      return {
+        ...options,
+        numberingIndex: memo.linkedIndex,
+        ...(memo.listItems ? { listItems: memo.listItems } : {}),
+      };
+    }
+  }
+  const memoBeforeResolve =
+    options.listItems === undefined
+      ? resolvedListItemsMemoHit(options, isFontAvailable, blocks, memoOwner)
+      : undefined;
+  const numberingIndex =
+    memoBeforeResolve &&
+    memoBeforeResolve.rawIndex === options.numberingIndex &&
+    memoBeforeResolve.styleCascade === options.styleCascade &&
+    memoBeforeResolve.isFontAvailable === isFontAvailable
+      ? memoBeforeResolve.linkedIndex
+      : withNumberingStyleLinks(
+          options.numberingIndex ?? EMPTY_NUMBERING_INDEX,
+          options.styleCascade
+        );
+  const listItems =
+    options.listItems ??
+    (numberingIndex.nums.size > 0
+      ? resolveStoryListItemsStable(
+          blocks,
+          options.numberingIndex,
+          numberingIndex,
+          options.styleCascade,
+          isFontAvailable,
+          memoOwner
+        )
+      : undefined);
+  if (options.listItems === undefined) {
+    rememberResolvedListItemsMemo(blocks, memoOwner, {
+      rawIndex: options.numberingIndex,
+      styleCascade: options.styleCascade,
+      isFontAvailable,
+      linkedIndex: numberingIndex,
+      listItems,
+    });
+  }
+  return {
+    ...options,
+    numberingIndex,
+    ...(listItems ? { listItems } : {}),
+  };
+}
+
+/**
+ * Attach a full-story list-item map to layout options.
+ *
+ * Resolves once over `blocks` (body story including table cells) so counters continue across
+ * section boundaries. No-ops when numbering is absent.
+ */
+export function withResolvedListItems<
+  T extends {
+    readonly numberingIndex?: NumberingIndex;
+    readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+    readonly styleCascade?: StyleCascadeTable;
+    readonly isFontAvailable?: (family: string) => boolean;
+    readonly measurer?: TextMeasurer;
+  },
+>(
+  options: T,
+  blocks: readonly OoxmlElement[]
+): T & {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+} {
+  return withResolvedListItemsInternal(options, blocks, undefined);
+}
+
+/**
+ * Session-stable list resolve for semantic body layout.
+ *
+ * @internal
+ */
+export function withResolvedListItemsForSession<T extends WithResolvedListItemsOptions>(
+  options: T,
+  blocks: readonly OoxmlElement[],
+  session: LayoutSession
+): T & {
+  readonly numberingIndex: NumberingIndex;
+  readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+} {
+  return withResolvedListItemsInternal(options, blocks, session);
+}
+
+/** Numbered paragraphs of one top-level block, memoized per (immutable block, cascade). */
+interface NumberedBlockMemo {
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly numbered: readonly OoxmlElement[];
+}
+const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
+const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
+
+function numberedParagraphsOfBlock(
+  block: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): readonly OoxmlElement[] {
+  const cached = numberedBlockMemos.get(block);
+  if (cached && cached.styleCascade === styleCascade) return cached.numbered;
+  const collected = walkStoryParagraphs([block]).filter(
+    (paragraph) => paragraphListPrelude(paragraph, styleCascade).numPr !== null
+  );
+  const numbered = collected.length > 0 ? collected : NO_NUMBERED_PARAGRAPHS;
+  numberedBlockMemos.set(block, { styleCascade, numbered });
+  return numbered;
+}
+
+/**
+ * The previous full-story resolve, for reuse BY IDENTITY across keystrokes.
+ *
+ * The resolved item map is a pure function of the SEQUENCE of numbered paragraph nodes
+ * (the counter walk skips everything else), the linked numbering index, the cascade, and
+ * the font oracle. A text edit republishes the whole blocks array — which is what the
+ * per-array memo above keys on — while replacing one non-list paragraph node, so the
+ * numbered sequence is unchanged and the previous map still answers. Handing back the SAME
+ * map object is also what lets a section-level prepass memo validate list inputs with one
+ * identity compare.
+ *
+ * Keyed on the story's FIRST block node in a WeakMap rather than held in a module slot, so
+ * a closed document's resolve — its numbered subtrees, item map, cascade and index — dies
+ * with its tree instead of being pinned until some other document lays out. An edit to the
+ * first block itself only misses (one extra resolve), never mixes: the numbered sequence is
+ * still compared node-for-node.
+ */
+interface LastStoryResolve {
+  readonly rawIndex: NumberingIndex | undefined;
+  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly isFontAvailable: ((family: string) => boolean) | undefined;
+  readonly blocks: readonly OoxmlElement[];
+  readonly numberedByBlock: readonly (readonly OoxmlElement[])[];
+  readonly listItems: ReadonlyMap<string, ResolvedListItem>;
+}
+const lastStoryResolvesByAnchor = new WeakMap<OoxmlElement, LastStoryResolve>();
+const lastStoryResolvesBySession = new WeakMap<LayoutSession, LastStoryResolve>();
+
+function sameNumberingSequence(a: readonly OoxmlElement[], b: readonly OoxmlElement[]): boolean {
+  return (
+    a.length === b.length &&
+    a.every((paragraph, index) => {
+      const previous = b[index];
+      if (!previous || paragraph.id !== previous.id) return false;
+      const properties = paragraph.children.find((child) => child.kind === 'paragraphProperties');
+      const previousProperties = previous.children.find(
+        (child) => child.kind === 'paragraphProperties'
+      );
+      return properties === previousProperties;
+    })
+  );
+}
+
+function resolveStoryListItemsStable(
+  blocks: readonly OoxmlElement[],
+  rawIndex: NumberingIndex | undefined,
+  linkedIndex: NumberingIndex,
+  styleCascade: StyleCascadeTable | undefined,
+  isFontAvailable: ((family: string) => boolean) | undefined,
+  memoOwner: LayoutSession | undefined
+): ReadonlyMap<string, ResolvedListItem> {
+  const first = blocks[0];
+  const lastBlock = blocks[blocks.length - 1];
+  const last = memoOwner
+    ? lastStoryResolvesBySession.get(memoOwner)
+    : ((first ? lastStoryResolvesByAnchor.get(first) : undefined) ??
+      (lastBlock ? lastStoryResolvesByAnchor.get(lastBlock) : undefined));
+  const evidence = memoOwner ? consumeListResolveChangeEvidence(memoOwner) : undefined;
+  if (
+    evidence?.preservesNumberedSequence &&
+    last &&
+    last.rawIndex === rawIndex &&
+    last.styleCascade === styleCascade &&
+    last.isFontAvailable === isFontAvailable
+  ) {
+    return last.listItems;
+  }
+
+  const numberedByBlock = new Array<readonly OoxmlElement[]>(blocks.length);
+  let numberedSequenceUnchanged =
+    last !== undefined &&
+    last.rawIndex === rawIndex &&
+    last.styleCascade === styleCascade &&
+    last.isFontAvailable === isFontAvailable &&
+    last.blocks.length === blocks.length;
+  for (let index = 0; index < blocks.length; index += 1) {
+    listResolveBlockVisits += 1;
+    const block = blocks[index]!;
+    const numbered =
+      last && last.blocks[index] === block
+        ? last.numberedByBlock[index]!
+        : numberedParagraphsOfBlock(block, styleCascade);
+    numberedByBlock[index] = numbered;
+    if (
+      numberedSequenceUnchanged &&
+      !sameNumberingSequence(numbered, last!.numberedByBlock[index]!)
+    ) {
+      numberedSequenceUnchanged = false;
+    }
+  }
+  if (last && numberedSequenceUnchanged) {
+    const next = { ...last, blocks, numberedByBlock };
+    if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
+    else {
+      if (first) lastStoryResolvesByAnchor.set(first, next);
+      if (lastBlock && lastBlock !== first) lastStoryResolvesByAnchor.set(lastBlock, next);
+    }
+    return last.listItems;
+  }
+  const listItems = resolveStoryListItems(blocks, linkedIndex, styleCascade, isFontAvailable);
+  const next = { rawIndex, styleCascade, isFontAvailable, blocks, numberedByBlock, listItems };
+  if (memoOwner) lastStoryResolvesBySession.set(memoOwner, next);
+  else {
+    if (first) lastStoryResolvesByAnchor.set(first, next);
+    if (lastBlock && lastBlock !== first) lastStoryResolvesByAnchor.set(lastBlock, next);
+  }
+  return listItems;
+}
+
+export {
+  firstLineShift,
+  listFirstLineOffset,
+  listMarkerBox,
+  listMarkerWidth,
+} from './list-marker-geometry.ts';

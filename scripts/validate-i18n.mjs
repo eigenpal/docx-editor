@@ -78,6 +78,7 @@ const LANG_DISPLAY = new Intl.DisplayNames(['en'], { type: 'language' });
 const LOCALE_NAME_OVERRIDES = {
   en: 'English',
   de: 'German',
+  es: 'Spanish',
   he: 'Hebrew',
   pl: 'Polish',
   'pt-BR': 'Portuguese (Brazil)',
@@ -144,20 +145,9 @@ function renderGeneratedBlock(codes) {
   lines.push(' *');
   lines.push(' * @public');
   lines.push(' */');
-  // Render the union the way prettier (printWidth 100, `.prettierrc`) would:
-  // single line while it fits, one member per line once it doesn't. The 11th
-  // locale crosses that threshold, so `bun run format` and `i18n:validate`
-  // must agree on the wrapped form.
-  const localeUnion = sorted.map((c) => `'${c}'`).join(' | ');
-  const oneLineUnion = `export type LocaleCode = ${localeUnion};`;
-  if (oneLineUnion.length <= 100) {
-    lines.push(oneLineUnion);
-  } else {
-    lines.push('export type LocaleCode =');
-    sorted.forEach((code, index) => {
-      lines.push(`  | '${code}'${index === sorted.length - 1 ? ';' : ''}`);
-    });
-  }
+  // Keep the generated union stable as locales extend it past the formatter width.
+  lines.push('// prettier-ignore');
+  lines.push(`export type LocaleCode = ${sorted.map((c) => `'${c}'`).join(' | ')};`);
   lines.push('');
   for (const code of sorted) {
     const id = toIdentifier(code);

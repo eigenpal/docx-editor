@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "One rule decided every viewport follow: a pointer press scrolled to its caret, and a shift-extended or form-fill Tab move scrolled to nothing.",
+  "after": "The caller states which moves may scroll. A press does not, a move that carries the selection head follows it, and Select All stays put.",
+  "reason": "The change gates a viewport scroll on the caller. The selection it publishes, the operations it produces, the snapshot and every protocol message are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/pointer-caret-no-scroll.test.ts",
+    "packages/core/src/editor/__tests__/text-form-field-interaction.test.ts"
+  ],
+  "changeset": "pointer-caret-no-scroll",
+  "migration": null
+}

@@ -1,0 +1,925 @@
+# @docx-editor.dev/core
+
+## 2.27.0
+
+### Minor Changes
+
+- f4b7b73: Automation text reads report manual line breaks as `\v` and column breaks as U+000E instead of `\n`. Update text processing for these characters; paragraph separators remain `\r`.
+- a2bd25c: Add local tracked-change styling with optional text backgrounds through shared API settings and an accessible review dialog in React and Vue. Fixes #1113
+
+### Patch Changes
+
+- 2137ed4: Automation can insert manual line breaks with `insertBreak` and `Line`, or with `\v` in inserted text, including with change tracking. Fixes #1124
+- 2246044: Split typing undo groups after pauses and during continuous input to keep each undo step small.
+- 2246044: Give caret formatting its own undo and redo step in standalone and collaborative editors.
+- 4f19f31: Fix content after a floating table being pushed below the table: text in a following continuous section and text around no-overlap tables now flows beside floating tables. Fixes #1109
+- f64b50a: Header and footer drawings set in front of text no longer cover body text or body drawings in the editor and in PDF export. Fixes #1126
+- cd10695: Documents, scrolling, and zoom behave the same when the host page uses right-to-left direction. Fixes #1115
+- 2a6d116: Render and edit the text of legacy VML text boxes, and render VML lines, stroked and rounded rectangles, and aligned VML shapes. Fixes #1108
+- f00ea50: Open documents that contain a small, highly compressible entry, XML names with non-ASCII letters, or a malformed content type on a part the editor does not need. Fixes #1107
+- 79f3595: PAGE, NUMPAGES, and SECTIONPAGES fields with the Arabic, roman, alphabetic, or ArabicDash format switch now show the computed value on each page instead of the saved result. A numeric picture switch now applies in sections with a roman or alphabetic page-number format, and alphabetic page numbers past 26 repeat one letter. Fixes #1110
+- 7a3aa00: Require prosemirror-view 1.42.3 or later to include the paste security fix for GHSA-c8x8-7fp4-3x9w.
+- 2246044: Rename the review dialog to Track changes options, complete translations, and keep controls within narrow screens. Keep text inside tracked placeholder controls when replacing their prompts. Fixes #1128
+- 556210d: You can type before a locked custom node or content control at the start of a paragraph or between two of them, and typing next to a checkbox no longer writes into it.
+
+  Fixes #1121
+
+- 8fcab75: Undo and redo treat a run of typing as one step at any typing speed, in local and collaborative editing. Fixes #1114
+- e965797: A custom node without a review card no longer shows the active highlight when you place the cursor inside it.
+- 13785e8: Reads on a missing header or footer return empty results instead of refusing. Fixes #1125
+- Updated dependencies: @docx-editor.dev/i18n@2.27.0
+
+## 2.26.0
+
+### Minor Changes
+
+- 5799fda: Rename the default font exports to `DEFAULT_FONT`, `DefaultFontFamily`, `DEFAULT_FONT_FAMILIES`, and `ALL_DEFAULT_FONT_FAMILIES`. The previous names still work and are deprecated.
+- 6f356f2: Inline pictures take their correct position, caret, and paragraph mark in left-to-right and right-to-left text and beside floating objects. Fixes #1058
+- 9cceda8: The automation API exposes floating and inline shapes through `Body.shapes` and `Paragraph.shapes`, and a text box's `Shape.body` reads, searches, edits, and reviews its text like any body, so the owner story's tracked changes, `acceptAll`, and `rejectAll` no longer include text box changes. Saving writes edited text box text into the legacy VML copy too, and a paragraph that anchors a floating shape no longer reads an object character. Fixes #1070
+- ffe4071: Render display equations, paste equations from Microsoft Word and MathML as editable equations, and copy equations to Microsoft Word and other applications. Fixes #1063
+
+### Patch Changes
+
+- 2a6d159: Size AutoFit table columns from their content: a column widens to hold its widest unbroken word, columns whose cells state no width take their content's width, a spanning cell widens the columns it spans, a nested fixed table fits its cell, and cell spacing separates cells by twice its value. Fixes #1067
+- 4e9e3ef: Lay out a table cell paragraph that continues across many pages in time linear in its length, and keep a cell paragraph's indents next to a floating picture that sits beside the cell or above the paragraph. Fixes #1068
+- ffe4071: Preserve equations and optional hyphens when rich paste merges paragraphs with local namespace declarations.
+- 42c6c26: Lay out documents that declare compatibility mode 16 or later as mode 15, align fixed table content in every legacy mode, and split footnotes below their references in every mode.
+- 03edc1d: Read decimal and unit-suffixed twips values in page, column, paragraph, tab, and table properties, so a document with decimal column widths no longer lays out one character per line, and keep stated column widths and gaps when they do not fit the page.
+- 2399ed9: Documents that set `w:doNotExpandShiftReturn` keep the natural spacing of a justified line that ends in a manual line break. Fixes #1093
+- 6da4b6a: Fix invisible input-method composition text in empty paragraphs and beside inline pictures on lines without text.
+- 6da4b6a: Use available fallback fonts when an earlier export font exceeds the shaping limit, and report the rejected source.
+- 5e6c3c5: Line breaks and page breaks inside a field result now break the line or page, and REF fields keep line breaks from their bookmarked text.
+- 5955c48: Wrap an unbroken field result, such as a URL in a HYPERLINK field, at the line edge instead of painting it across neighboring table cells or past the right margin. A space after a word that is cut at the line edge now stays at the end of that line instead of starting the next one. Fixes #1065
+- 8c2b7ed: Render, edit, and search inline text boxes, and inset text box content by half its outline width.
+- 7803d5c: Justified right-to-left lines now fit between the margins, and the space at the end of a justified line hangs in the margin, also before a line break. A justified line that ends in a page or column break is no longer stretched. Fixes #1092
+- 6cf7b9f: Lay out, copy, and paste documents that omit their default run or paragraph properties with 12pt text and the default paragraph spacing, instead of 10pt text with no spacing. Fixes #1075
+- 774ea4d: Non-breaking and optional hyphens are now characters of paragraph text (U+001E and U+001F), so text reads, search, selection, and deletion include them, inserted U+001E and U+001F become hyphens, and deleting text across a symbol removes it. Paragraph offsets after a hyphen move by one. Fixes #1071
+- a4d6f8d: Lines now break at optional hyphens when a word does not fit, and the line ends with a visible hyphen, including in right-to-left paragraphs. A U+00AD character in run text shows as a hyphen, copies as itself, and in search matches only itself.
+- c6a061c: Documents that declare compatibility mode 14 or earlier, or no mode, stretch a justified line that ends in a page or column break to both margins. Fixes #1095
+- cd0202f: Break tables positioned against the page or margin across pages when they reach below the bottom margin, so rows past the first page are no longer hidden below it. Fixes #1074
+- 6da4b6a: Preserve right-to-left word order around field and note marks displayed with ASCII decimal digits. Fixes #1079
+- 77e1010: Place the trailing spaces of mixed-direction lines beside the text they follow, so right-to-left paragraph lines no longer run past the right margin, and spaces whose direction differs from their run or paragraph take room on the line instead of hanging. Fixes #1061
+- 7b96dfc: A symbol is now one character of paragraph text that reads as "(", so the caret steps over it in one move, Backspace and Delete remove it, and search never matches it. Paragraph offsets after a symbol move by one.
+- 36390bf: Deleting the row where a vertical merge starts now moves the merge start to the next row instead of leaving a continuation with nothing to continue, `Table.deleteRows()` accepts tables with merged cells, and a continuation cell with no merged cell above it starts its own merge instead of hiding its content. Fixes #1069
+- Updated dependencies: @docx-editor.dev/i18n@2.26.0
+
+## 2.25.0
+
+### Minor Changes
+
+- 5d02def: Report document refresh location diagnostics and processor review summaries, match paragraph IDs without case sensitivity, and reject malformed metadata before replacement.
+- 7ac4f41: Find highlights every match, and `useDocumentSearch()` and `createDocumentSearch()` search and highlight from code. Use `useHighlights`, `watchHighlights()`, or `setHighlights()` to highlight your own text ranges. Fixes #1042
+
+### Patch Changes
+
+- 5d02def: Remove unused empty comment parts when saving while preserving unknown metadata, live undo, and concurrent comment edits.
+- 95fbca3: Reduce page scans when painting text highlights in long documents.
+- e151687: Give every pasted paragraph a paragraph ID, and keep list numbering when you paste a list into a document that already has lists.
+- 5d02def: Preserve content in unsupported revision wrappers.
+- 95fbca3: Fix search results when single queries and query batches share an editor, and report exact search result limits.
+- f098ae6: The `@docx-editor.dev/i18n` type declarations are now valid when a project type-checks its dependencies with `skipLibCheck` turned off. Some declared types print in a different form, such as `DocumentOutline` as a `MemoExoticComponent`, with the same meaning.
+- a13f6a7: In viewing mode, clicks, drags, and caret keys no longer place a caret or select text, so the toolbar keeps its values and the pointer shows an arrow over text.
+- 5d02def: Fix successive writer edits and mixed paragraph insertion order, and reject control suggestions over pending paragraph revisions.
+- Updated dependencies [5d02def]
+  - @docx-editor.dev/i18n@2.25.0
+
+## 2.24.0
+
+### Minor Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- de3aac8: Render bounded paragraph frames with authored height rules, automatic width, relative alignment, wrapping, supported drop caps, and locked anchors.
+
+### Patch Changes
+
+- de3aac8: Fix centered footer page numbers and premature page breaks with directly formatted paragraph frames. Fixes #1019
+- 79d8bc1: Reduce text layout work during document rendering and export without changing glyph positions.
+- 997814e: Fix fixed-table column widths when explicit cell preferences are smaller than the initial grid.
+- Updated dependencies [3a8853f]
+- Updated dependencies [567c1e5]
+  - @docx-editor.dev/i18n@2.24.0
+
+## 2.23.0
+
+### Minor Changes
+
+- 30bd2a8: Show cached previews for inline embedded objects outside paragraph frames, and refuse clipboard transfers that cannot preserve objects.
+- 30bd2a8: Allow eligible text-anchored floating tables to split across pages while preserving anchor constraints.
+- d04902a: Draw vertical and horizontal lines, and draw shape outlines at their full width, inside the shape where the outline is set to sit inside it, and at the width the document theme gives them. Fixes #972
+- 30bd2a8: Support bounded body style-separator display flow and report unsupported joins through export content warnings.
+- a2951cf: Add customizable paragraph highlights with `editor.highlightAnchor()` and `editor.clearAnchorHighlight()`. Add alignment, motion, and offset settings to `editor.scrollToAnchor()`.
+- 30bd2a8: Keep footnote references with legal note openings and reserve authored continuation notices.
+- 30bd2a8: In documents that use Word 2013 layout, left-aligned and right-aligned tables with an absolute width now place their outer side rule on the aligned edge and measure cell margins from the rule center, so their cells wrap text at the correct width.
+- bf776f2: Numbered paragraphs now start their first line at a tab stop between the number and the text indent, so the line wraps with the width it has. Documents that set `w:doNotUseIndentAsNumberingTabStop` use the first tab stop past the number instead of the text indent.
+- 30bd2a8: Resolve character-style header references from visible page text and adjust header height for each page.
+- e608e2d: Right-to-left runs now render with their complex-script font, size, bold, and italic, and alignment, paste, and copy follow each paragraph's direction. A new `setParagraphDirection` command with `direction.ltr` and `direction.rtl` toolbar controls switches paragraph direction. Fixes #864
+- 30bd2a8: Paragraph lines follow active section line grids. Paragraph overrides and table compatibility settings control snapping.
+- 6794f4d: Odd-page and even-page sections, and sections that restart page numbering when odd and even pages differ, now start on a page of the correct parity, with one empty sheet inserted when needed and marked by `PageRecord.parityBlank`. Sheets after section-end note sheets or a continuous section now continue the running page number, and `w:evenAndOddHeaders` with the value `off` now turns different odd and even pages off.
+- 30bd2a8: Render supported picture members in shape groups in the editor and PDF exports.
+- 30bd2a8: Table row layout records report `placesWhole` for rows with `w:cantSplit` or an exact height, and `hasContinuation` for a row that continues on the next page.
+
+### Patch Changes
+
+- 30bd2a8: Documents with `doNotUseHTMLParagraphAutoSpacing` add adjacent paragraph gaps. Automatic spacing uses 5pt before and 10pt after.
+- e608e2d: Arabic and other joining scripts now join across a formatting change inside a word, such as a color change, in layout and in PDF export.
+- e608e2d: PDF export now joins Arabic letters when the run's font has no Arabic glyphs, and the exported text extracts as whole words in logical order.
+- 30bd2a8: A line with at-least line spacing no longer extends past the bottom margin, so it moves to the next page when its full height does not fit.
+- b981ea6: Wrap text around floating drawings that use `behindDoc` with `wrapSquare`, `wrapTight`, or another wrapping mode. These drawings still paint behind the text, while `wrapNone` watermarks remain unchanged.
+- 30bd2a8: A bordered or shaded paragraph that starts with a manual page break no longer adds a blank page after a full page. The borders and the space before of a paragraph that starts with a manual page break go with the text after the break.
+- 30bd2a8: Bottom-to-top table cell text wraps within the final row or merged cell height.
+- 30bd2a8: Prevent manual page breaks inside table cells from adding empty lines or changing tab alignment, justification, and text wrap.
+- 30bd2a8: Preserve visible field result formatting after leading direction marks.
+- 30bd2a8: Fix footnote pagination after live headers change the available body space.
+- 30bd2a8: A manual page break at the start of a table cell paragraph no longer adds an empty line before a word or picture that does not fit, and no longer moves the caret or line beside a floating picture.
+- 30bd2a8: Manual page breaks inside table cells no longer reorder right-to-left text and numbers or move decimal tab alignment. Layout measures Arabic letters on both sides of such a break as one joined word when the font has Arabic glyphs.
+- 30bd2a8: A manual page break inside a table cell no longer increases the height of a line that also holds an inline picture or equation with automatic line spacing.
+- 30bd2a8: A manual page break inside a table cell no longer increases line height when the word that holds it wraps to the next line.
+- 0e42c85: A continuous section with a different header or footer height, or with a different first page, now continues on the sheet where the previous section ended instead of starting a new sheet.
+- 30bd2a8: Correct body pagination and placement for right-aligned footer page fields above empty anchor paragraphs.
+- 30bd2a8: Fix blank space before returning paragraph continuations when their footnotes fit.
+- 30bd2a8: Paragraphs ahead of a footnote reference that moves to the next page now stay on the earlier page when they fit, instead of leaving blank space above the footnotes.
+- 30bd2a8: A footnote cited on the second line of a paragraph no longer moves to a later page without its first lines when the paragraphs ahead of the reference change pages.
+- 30bd2a8: Fix footnote spacing when paragraph continuations and kept paragraph openings return to an earlier page.
+- 30bd2a8: Footnotes referenced from table rows now stay on the page of their row. A long footnote continues on the next page when at least two of its lines fit below the row, or below the reference line where the row splits; otherwise the row moves to the next page with the footnote.
+- 30bd2a8: Footnotes that fit below the text of the last line on a page no longer split or move to a later page.
+- 30bd2a8: Place floating tables in headers and footers at their anchor positions, and stop spaces and tabs from making lines taller. Text below a top-and-bottom object now keeps its paragraph spacing before.
+- 30bd2a8: A page number frame at the start of a header shares the first line of the header text instead of adding a line, so the body starts one line higher. Frames aligned inside or outside alternate margins by physical page, also after a page numbering restart.
+- 30bd2a8: A vertically merged cell inside table header rows now sizes each header row by its own content, on the first page and on every repeated header.
+- e608e2d: In exported PDFs, Hebrew lines drawn in a fallback font now take that font's line height, so they no longer take the extra height of the run's own font.
+- 30bd2a8: Reserve wrapping space for unsupported floating drawing groups while their content stays hidden.
+- 30bd2a8: Preserve host callback failures when checking whether hidden header or footer drawings require a layout retry.
+- 30bd2a8: Justified paragraphs in documents that use modern compatibility settings can now fit their last word on the line by compressing the spaces between words.
+- 30bd2a8: Preserve justified word wrapping and compressed spacing across formatting runs.
+- 30bd2a8: A keep-with-next paragraph that does not fit in the space left on a page now splits there when its keep-lines and widow-control settings allow it, instead of moving whole to the next page. In documents that use Word 2013 or later layout, a paragraph in a keep-with-next chain that fits but leaves no room for the next paragraph also splits, and its last lines move to the next page.
+- ab460dc: Keep headings with following paragraphs when widow control or keep-lines moves those paragraphs to the next page.
+- 30bd2a8: Render known single-byte Symbol and Wingdings bullets when their font is unavailable.
+- e633def: A plain paragraph that starts with a manual page break and has text after the break no longer adds a blank page when it follows a full page.
+- 30bd2a8: Prevent blank lines before long words that follow leading tabs.
+- 30bd2a8: Legacy checkbox form fields take their line height from the run font, so lines and table rows that hold them no longer grow taller.
+- 30bd2a8: Render uniform single-line borders around inline legacy VML pictures and reserve their full size.
+- 30bd2a8: A table row that continues a vertical merge in any column ignores "Page break before" and keeps its placement.
+- cee5764: A paragraph that contains a line break outside a run now renders and stays editable, and the misplaced break is saved unchanged.
+- 30bd2a8: Correct cell widths for automatic-width tables with simple borders in documents that use Word 2013 layout.
+- 30bd2a8: In documents that use Word 2013 layout, centered tables with an absolute width no longer inset cell text by an extra half border width, so their cells wrap text at the correct width.
+- 30bd2a8: A word that wraps to a line or float passage where only the word itself fits now keeps its trailing space at the end of that line, instead of starting the next line with the space or adding a line that holds only the space.
+- 30bd2a8: A negative top or bottom page margin places the text at that exact distance from the page edge, and a taller header or footer overlaps the text instead of pushing it. In that overlap, text, links, note references, pictures, and form fields take the pointer, and a closed header or footer highlights only its part in the page margin.
+- 390c177: A field nested inside another field's instruction no longer adds its saved result, including line breaks, to the displayed text, Find, or text reads.
+- 30bd2a8: A vertically merged cell that contains another vertical merge in a different column now sizes each covered row by its own content instead of adding the merged height to its first row.
+- ae1afe0: Preserve no-break space behavior across formatting runs and keep figure spaces attached to adjacent East Asian text.
+- 30bd2a8: Numbered and bulleted paragraphs keep their markers with their text after a leading manual page break.
+- 30bd2a8: A paragraph whose own top-and-bottom picture leaves no room for its text on a page no longer adds blank pages. The paragraph and its picture move to the next page once.
+- d6c75d2: A manual page break followed by an empty section-break paragraph no longer adds a blank page before a section that starts on a new page.
+- 2eea4de: A character style on a paragraph mark now sets the height of an empty paragraph and formats the paragraph's list number, so headers and footers with styled empty paragraphs leave the correct space for body text. Text typed into such a paragraph takes the same character style.
+- 30bd2a8: A larger paragraph mark no longer makes the last line of its paragraph taller when that line holds text, superscript or subscript text, an inline picture, or an equation; a line with only inline pictures takes the text height of the runs that hold them, and a larger paragraph style size no longer makes a superscript or subscript last line taller. Empty paragraphs and empty last lines still take the mark's height.
+- e040ff8: Runs, paragraphs, tables, and pictures written with indented XML under `xml:space="preserve"` now open as editable content, so their no-break spaces, tabs, and text appear in the layout instead of disappearing.
+- 30bd2a8: Account for raised and lowered text when sizing automatic paragraph lines.
+- aab4053: Render embedded rasters when their byte signature differs from the declared raster format. Format-class mismatches remain refused.
+- 30bd2a8: Correct character-style header selection and preserve supported picture and table border boundaries.
+- 30bd2a8: Right-aligned page numbers can share the following footer text line without adding footer height or reducing body space.
+- e608e2d: Right-to-left paragraphs now take `w:left` indents from the right margin, place list markers on the right in right-to-left order, and number `hebrew1`, `hebrew2`, `arabicAlpha`, `arabicAbjad`, and `hindiNumbers` lists in their own scripts. For these paragraphs, `formatting.indent` reports the `w:left` value as `left` and sets `rtl`, and the ruler mirrors its indent handles.
+- e608e2d: Tabs in right-to-left paragraphs now keep the text segments in reading order and measure tab stops from the right margin.
+- 9afb832: An empty section-break paragraph with a page break before it no longer adds a blank page after the content of its section, also when the paragraph holds only bookmarks, proofing marks, permission or comment range markers, or empty text.
+- 30bd2a8: Vertically merged cells that start and end in the same rows now share those rows, so the first row no longer grows to hold a merged cell's full content.
+- 30bd2a8: Table indents now move left-aligned and right-to-left tables by the full stated amount, including negative indents and tables wider than the text column, and a zero indent on a table overrides the indent of its table style.
+- 30bd2a8: A word that spans more than one run now wraps to the same place as the same word in one run when it fits the line or float passage it moves to, so it no longer splits around a floating picture, sits under it, or loses the height of an inline picture on the line it leaves.
+- 30bd2a8: In a paragraph numbered through its style, the numbered style's own indents, spacing, alignment, and tab stops override the list level, and the level overrides that style's base styles.
+- 30bd2a8: Table text in the default paragraph style keeps the font size of that style when the table style states no font size.
+- 30bd2a8: A table row whose first cell starts with a keep-with-next paragraph now moves to the next page with the row or paragraph that follows it, and a keep-with-next paragraph before a table now moves with the rows it keeps with instead of staying alone at the bottom of a page.
+- 30bd2a8: Move a table row to the next page when the remaining space cannot hold its minimum height. Keep preceding captions with the row.
+- 30bd2a8: Start a table row on a new page when the first paragraph of its first cell has "Page break before" set, including through its paragraph or table style.
+- 30bd2a8: Place tables below wrapping pictures when their rows would overlap the pictures, including header pictures on continuation pages.
+- 30bd2a8: Keep terminal note citations with words that fit through justified space compression.
+- 30bd2a8: Fix clipboard checks in headers, footers, and notes so they do not retain editing resources.
+- 30bd2a8: A floating picture that may not overlap other objects no longer moves to a later page, or adds blank pages, when it reaches past the bottom margin without touching another object.
+- 30bd2a8: PDF export no longer fails on a centered bottom-to-top cell that spans merged rows.
+- 30bd2a8: Support visible hidden-mark paragraph joins with compatible paragraph geometry.
+- 30bd2a8: Carry merged text to the next row when a two-row vertical merge breaks before its text can start.
+- 30bd2a8: Floating drawings handle negative wrap distances without excess gaps. Changing a drawing's wrap mode preserves inherited anchor distances.
+- Updated dependencies [5981e48]
+- Updated dependencies [3b95523]
+  - @docx-editor.dev/i18n@2.23.0
+
+## 2.22.0
+
+### Minor Changes
+
+- 07718bd: Reserve the full height of a collapsed horizontal table border in the row below it. Draw each column's border downward from the shared boundary.
+- fe66ece: Add safe DOCX refresh with scroll preservation, customizable timed change highlights, and configurable change navigation. Fixes #951
+- 648f13c: Add optional File menu exports for continuous Markdown and PDF with clear setup and conversion errors. Customize export feedback with `popups.export` in React and Vue.
+- 95c792f: Add File > Print and Ctrl+P, which print the document through the configured PDF converter. Customize print feedback with `popups.print` in React and Vue.
+- 07718bd: Add `lastResortFonts` to `openFontBackedDocumentForExport`. These font sources resolve missing families after embedded fonts, preserving fonts supplied by the document.
+- 07718bd: Add export capabilities for absolute span geometry, laid-out glyph shaping, glyph fallback, picture bullet records, and fixed picture opacity from `a:alphaModFix`.
+- a893c05: Add `editor.scrollToAnchor()` to reveal paragraphs by `paraId` without changing selection or focus. Fixes #957
+
+### Patch Changes
+
+- 139688b: Improve screen reader labels and keyboard access for document pages, formatting controls, and vertical ruler margins.
+- d98b6d8: Floating objects that must not overlap now move beside the object they collide with, as Word places them, and move down only when neither side has room.
+- abc656b: Keep floating drawings whose anchor flags are spelled with surrounding whitespace. `behindDoc`, `locked`, `layoutInCell`, `allowOverlap`, `simplePos` and `hidden` are `xsd:boolean`, which carries a fixed `whiteSpace="collapse"` facet, so `1` and `true\n` are legal — the anchor gate compared the raw string and dropped the drawing instead. Schema-invalid spellings such as `yes` or `2` are still refused.
+- 07718bd: Center `w:insideV` table borders on column boundaries, including the first and last columns.
+- 07718bd: Center vertical table borders on column boundaries when `w:tblW` uses `w:type="auto"`.
+- 07718bd: Support color fonts that include glyph outlines. Prefer color emoji fonts for emoji-presentation text while preserving symbol fonts for other characters.
+- 9912e81: Fix slow download file names, layout, and Markdown conversion for text with long runs of spaces or dots. Download names also prefix Windows device names that have an extension, such as `_NUL.tar.docx`, and no longer double a padded `.docx` suffix.
+- 7ff2004: When a section has other content, the empty paragraph that ends it before a continuous section no longer adds its line height or paragraph spacing, so the next section starts directly below the previous content.
+- ac84ccf: Convert long documents to PDF about twice as fast, and shape text faster in the editor and in headless exports. Page content is unchanged, but compressed PDF stream bytes can differ.
+- cde01d8: Enter, Backspace, and typing are faster in long documents, most of all in documents with many sections, tables, comments, or page-number footers.
+- 07718bd: Include a floating table's outer border in its text-wrapping exclusion area.
+- 07718bd: Use the run font's strikeout metrics to set the thickness and baseline offset of `w:separator` footnote rules.
+- 07718bd: Draw a framed paragraph's bottom border at the frame's bottom edge, after the paragraph's trailing spacing.
+- d98b6d8: Header and footer text outside tables in documents saved before Word 2013 compatibility mode no longer wraps around the floating objects in that header or footer, as Word lays it out.
+- 23093e9: Empty paragraphs whose paragraph mark is hidden no longer add blank lines and spacing to the page, and they still count in list numbering.
+- edfb06d: Justified paragraphs now compress inter-word spaces to fit a word when the space after that word is in a separate run or the paragraph uses an East Asian language, so these lines no longer wrap one word early. Justified lines that end in a double space split across runs now fill the full line width.
+- 07718bd: Apply `w:widowControl` to footnotes and endnotes that span pages. Move a three-line note to the next page when splitting it would leave its final line alone.
+- d98b6d8: Floating objects in a table cell now stay in the cell when `layoutInCell` is off in a document saved in Word 2013 or later compatibility mode, as Word lays them out. For such an object, `AnchoredDrawingRecord.layoutInCell` now reports where the layout placed it rather than the authored attribute.
+- 07718bd: Exclude page-positioned floating objects with `w:layoutInCell="0"` from text wrapping inside their containing table cell.
+- d98b6d8: In documents saved before Word 2013 compatibility mode, table rows now move below a floating object that a cell places against the page, and objects positioned against their own character or line stay in their cell, as Word lays them out.
+- e6616fe: Table rows that cannot break across pages but are taller than a page now start on a new page and continue onto the following pages, instead of failing layout and export.
+- 1bb2434: A page- or margin-anchored floating table that spans the text column now moves to the next page with its following paragraph when earlier text on the page would leave no room for that paragraph below the table.
+- 07718bd: Keep picture bullets aligned with text when a bottom-aligned cell, frame, or note moves the paragraph. Apply fixed picture opacity in the editor and reject invalid character-border colors before rendering.
+- 07718bd: Render `w:numPicBullet` picture bullets as image list markers in the editor and PDF export. Use the list level's bullet text when the image is unavailable.
+- 139688b: Preserve accepted document refresh results when a change observer cancels processing.
+- 07718bd: Use authored `w:tblGrid` column widths when the table specifies a total width. Apply absolute cell widths only to columns without a grid width.
+- 07718bd: Reduce cumulative rounding errors in PDF text baselines across paragraph lines.
+- 07718bd: Render list bullets and calculate their line height using the document's specified symbol font. Preserve Unicode text for copying.
+- 07718bd: Apply automatic spacing between table-cell paragraphs when `w:beforeAutospacing` or `w:afterAutospacing` is enabled.
+- 9db7eb3: Improve PDF conversion with reusable export sessions, configurable limits, typed errors, and font diagnostics.
+- 07718bd: Include the anchor's vertical offset when positioning text below a drawing with top-and-bottom wrapping.
+- 07718bd: Prevent extra line breaks at run boundaries after a drawing with top-and-bottom wrapping.
+- 07718bd: Draw vertical table borders outward from their grid lines instead of inside the preceding cell.
+- 07718bd: Apply modern justification and default ligatures to documents with `compatibilityMode` 16 or later.
+- 07718bd: Expand `w:lineRule="atLeast"` line boxes upward when their minimum height exceeds the text height. Improve PDF baseline placement at rounding boundaries.
+- 07718bd: Allow documents with wrapping exclusions to complete layout when they require more than eight reflow passes.
+- @docx-editor.dev/i18n@2.22.0
+
+## 2.21.1
+
+### Patch Changes
+
+- 0b06827: Update the wording of public documentation comments.
+- 9c7ac7c: Prevent unformatted paragraph marks from inflating smaller text and adding extra pages. Preserve nested-table insertion controls while moving the pointer onto them.
+
+  Reduce mount-time hash overhead, skip selection geometry for collapsed ranges, and reuse bounded serialization results when saving an unchanged document.
+
+- 377882e: Keep the viewport still when a click places the caret, so a double-click in the blank header or footer margin creates and opens that story. Shift-extended keyboard moves and form-fill Tab now scroll to keep their target in view.
+- 6a7b93a: Include tracked formatting in shared styles in document-wide review decisions, counts, and individual review commands. Commit style and story decisions atomically with protection, undo/redo, collaboration replay, and formatting-cache invalidation. Keep malformed authorless revisions visible instead of silently omitting them.
+- 6a7b93a: Support accepting and rejecting table rows, independent cells, merge states, table grids, and structural property history. Preserve dependent and protected changes, restore cell geometry consistently, and keep historical markers out of the pending review queue.
+- 6a7b93a: Match Word when resolving paragraph breaks before tables, numbering-reference insertion history, and partial section-property history. Preserve protection and selected-decision boundaries, and expose structural operation details and accurate table/cell review anchors.
+
+  Show structural decisions in the React and Vue review sidebars by default, with descriptive row, cell, merge, and numbering labels. Keep run/paragraph formatting in balloons while showing formatting without a painted anchor in the sidebar.
+
+- fc755da: Preserve list spacing when pressing Enter, including inherited styles, blank-paragraph separators, following styles, and automatic list margins.
+
+  Resolve relocated style definitions through the document relationship when editing and creating list styles.
+
+  Resolve line-unit paragraph margins, numbering-level formatting, and contextual spacing in body text and table cells. Preserve separator behavior across content controls and distinguish blank paragraphs from non-text content. Keep edits valid when XML namespace prefixes conflict.
+
+- a023045: Fix grouping and resolution of tracked table changes, including nested rows, cell formatting, shared grid histories, widths, alignment, and row heights. Related changes resolve together while preserving independent revisions, protected content, and unknown metadata.
+
+  Fix move-revision handling and partial-resolution reporting. Preserve existing nested tables when a row cannot be removed, and report `retained-structure` when its structural change remains pending.
+
+- Updated dependencies [6a7b93a]
+  - @docx-editor.dev/i18n@2.21.1
+
+## 2.21.0
+
+### Minor Changes
+
+- db1b50c: Add keyboard-accessible content-control popups, regional date entry, replaceable React/Vue parts, picture replacement, and glossary building-block insertion with restored placeholders. Legacy checkboxes support click and Space toggling with larger pointer targets and matching caret geometry; symbol-only paragraphs now render.
+- be94e1c: Add engine-owned history groups, shared React and Vue gesture bindings, and history outcomes so live formatting controls record one undo step per gesture while every value renders and replicates. Fixes #902
+- f30cd6a: Legacy Word dropdown form fields (`FORMDROPDOWN`) use native select menus. Choices update the saved index and displayed text together, support undo and forms protection, and survive save/reopen. Disabled fields and viewing or suggesting mode refuse changes.
+- 87b8b3d: Add Word's Simple Markup view: the proposed text with a red change bar beside every changed line, and a click on the bar that switches to All Markup and back. All Markup now draws one neutral gray hairline per page, halfway into the left margin, continuous across changed lines, for every story, and No Markup and Original no longer paint insertion or deletion markup.
+- 06b79d7: Render section page borders with text-relative or page-relative offsets, first-page filters, and foreground or background placement. Art borders remain preserved without rendering, and page borders have no editing UI.
+
+### Patch Changes
+
+- ab9548d: Preserve empty paragraph typing formatting across caret moves and save/reopen, and update caret size immediately when the typing font changes.
+- 424a121: Hash layout cache tokens and admitted font bytes with the host's native SHA-256 in Node and Bun, which cuts headless export time by about a tenth on long documents. Browsers keep the JavaScript implementation.
+- 06b79d7: Fix dashed and dotted paragraph and page borders that incorrectly rendered as solid lines.
+- 40ef065: Remove circular declaration re-export warnings from core package builds without changing public APIs.
+- 14a3468: Use the shared page-margin revision bars for tables and drawings without duplicate colored row bars or image frames. All Markup uses gray bars; Simple Markup uses red bars. Remove unused legacy cell-revision styles and tint tokens. The Igloo demo also inherits the standard margin-bar colors.
+- 424a121: Headless export no longer fails with "unsupported value type in comparator input: undefined" for a document whose theme has no East Asian, complex-script, or supplemental font scheme.
+- 2d4e0e7: Resolve independent table and paragraph changes in bulk without blocking them on unsupported or excluded revisions. Preserve pending table properties when removing all rows, and group only the properties a selected revision can replace or remove.
+- @docx-editor.dev/i18n@2.21.0
+
+## 2.20.0
+
+### Minor Changes
+
+- c10916a: Resolve filtered or explicitly selected revisions in one undo unit. Skip unsupported groups and report remaining decisions; retain strict story-wide automation methods.
+
+### Patch Changes
+
+- a9034d4: Fix cross-reference links so clicking their results navigates to the target bookmark. Fixes #886.
+- a9034d4: Keep continuous tracked insertions containing fields together in one review card. Fixes #890.
+- a9034d4: Show pointer cursors on clickable document links in standalone hosts. Keep inert links and format-painter cursors distinct. Fixes #893.
+- a9034d4: Fix editing and highlighting of ordinary text beside table-of-contents field boundaries. Fixes #887.
+- a9034d4: Match Word's TOC link appearance while preserving explicit formatting and clickable targets. Fixes #892.
+- a9034d4: Support the Word keyboard shortcut for switching between field instructions and results. Fixes #891.
+- Updated dependencies [c10916a]
+  - @docx-editor.dev/i18n@2.20.0
+
+## 2.19.1
+
+### Patch Changes
+
+- ccd6bdd: Avoid an extra blank page when a page-break-before paragraph starts a new section. Fixes #870.
+- ccd6bdd: Use Word's default C identifier for TOC source filtering and untyped TC entries. Fixes #878.
+- ccd6bdd: Bound TOC detection work when documents contain excessive nested field markers. Fixes #879.
+- ccd6bdd: Keep the first refreshed TOC entry beside its opening field markers, without adding a blank paragraph. Fixes #877.
+- ccd6bdd: Fix numbered table-of-contents rows skipping the hanging-indent tab and wrapping page numbers. Fixes #867.
+- ccd6bdd: Keep TOC hover highlights around the complete entry, including hanging clause numbers and right-aligned page numbers. Fixes #874.
+- ccd6bdd: Refresh table-of-contents entries within field boundary paragraphs and detect single-paragraph tables of contents. Fixes #869.
+- ccd6bdd: Preserve inline content controls during TOC refresh and respect locked cached page numbers. Fixes #875.
+- ccd6bdd: Preserve stale tabbed TOC titles when page numbers are omitted by their TC source. Fixes #876.
+- ccd6bdd: Preserve TC-based table-of-contents entries during refresh, including entry levels, identifiers, and page numbers. Fixes #868.
+- @docx-editor.dev/i18n@2.19.1
+
+## 2.19.0
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.19.0
+
+## 2.18.0
+
+### Minor Changes
+
+- ded420d: Render Arabic text paragraphs with script-aware measurement, inherited RTL alignment, and matching caret geometry. Fixes #773.
+- 564182f: Add `customFonts()` to supply company fonts alongside packaged and Google fonts, with validation and failure reporting. Support cancellation in `loadFonts()` and custom font resolution, and match font names consistently during measurement and painting.
+- f2dfcac: Style packaged dialogs with bordered inputs and visible buttons that withstand host CSS resets. Forward `id`, `aria-*`, and `data-*` attributes through popup parts, and omit decorative classes when using `asChild`.
+- 758551b: Add Review > Protect Document for Forms to enable forms protection or stop an enforced restriction without a password. Each toggle supports undo and persists on save. Enforce read-only and comments-only restrictions, and disable suggesting mode under forms protection.
+- 6eb1eb4: Expand the Office.js-compatible API for text, formatting, lists, tables, pictures, fields, and review workflows, with task guides and compatibility reports. Fix batching errors and preserve document content during structural edits.
+- 9198848: Show configured providers’ supported fonts in the searchable font dropdown without preloading their bytes. Load newly selected fonts on demand while preserving selection and undo history.
+- f23f974: Render visually RTL table columns, merged cells, borders, interaction geometry, and HTML clipboard direction in the correct order. Fixes #774.
+- 040e653: Improve Word fidelity for theme fonts, RTL numbers, floating-table passages, and narrow CJK punctuation.
+
+  Use editor-scoped fonts; `packagedFonts.install` and `installDefaultFontFaces()` are deprecated and inert, so configure app fonts separately.
+
+### Patch Changes
+
+- d2d3824: Add `activeBackground` to author styles to set the open change's highlight band per author.
+- b5bf09f: Preserve table structure and formatting when toggling checkbox content controls. Fixes #817.
+- 10a3d41: Fix automated checkbox updates to save Word symbol glyphs with the declared state font, matching editor toggles. Fixes #754.
+- e78dc17: Keep the toolbar's standard font choices available in empty and populated documents. Merge configured and document-specific fonts into that list without loading unused font bytes.
+- 84c4622: Preserve the table cell or row a text, dropdown, combo box, or date content control wraps when its value changes. Fixes #825.
+- 452312f: Keep direct text formatting, including font family and size, when you press Enter after formatted text. Preserve paragraph style transitions, such as a heading followed by body text.
+- 5598465: Fix CJK punctuation spacing and overlap when `characterSpacingControl` enables compression, while preserving authored spaces and paragraph boundaries.
+- 60b9163: Release temporary font-discovery caches before export layout to keep large documents within constrained memory limits.
+- 59520ce: Apply reviewer filters and display modes inside legacy text form fields and tracked positional tabs, and remove empty revision cards after nested changes are resolved. Fixes #826. Fixes #829.
+- 95db5eb: Fix declaration builds and text-shaper initialization with bidi-js 1.1.0 and harfbuzzjs 1.6.1.
+- 1e36856: Match Word's picture brightness and contrast so washout watermarks retain a white background. Fixes #821.
+- 37be540: Allow adding, replying to, resolving, reopening, and deleting comments in comments-only documents. Disable commands that forms protection refuses and return a readable reason. Keep supported form fields, unlocked content controls, and unprotected sections editable.
+- 2cea799: Resolve missing East Asian fonts from document theme languages, inherited language hints, and supplemental theme fonts. Load the selected Chinese, Japanese, and Korean fonts before shaping in editors and exports.
+- 7c2b4aa: Keep typing at the end of an unprotected legacy text form field outside its result, matching Word. Preserve protected filling, surrounding locks, and tracked changes at the boundary.
+
+  Treat unprotected form fields as complete units for word-delete shortcuts. Preserve Word’s select-then-delete behavior for Backspace and Shift+Backspace.
+
+- 90ea211: Preserve the document's scroll position and text selection when picking or typing a font size, or dismissing the font-size input with Escape. Restore the saved selection when returning focus to the editor from toolbar inputs.
+- f10341d: Prevent excessive processing time when documents contain malformed VML color values with long whitespace sequences.
+- @docx-editor.dev/i18n@2.18.0
+
+## 2.17.0
+
+### Patch Changes
+
+- 332494b: Dismiss content-control dropdown and date menus on outside press or Escape; re-pressing the widget toggles the menu shut.
+- @docx-editor.dev/i18n@2.17.0
+
+## 2.16.2
+
+### Patch Changes
+
+- d8c40b2: Set tracked insertion underlines slightly below the text like Word, with a CSS token for the gap.
+- 02b77f6: Use a thin solid underline for tracked insertions and add CSS tokens for its style and thickness.
+- @docx-editor.dev/i18n@2.16.2
+
+## 2.16.1
+
+### Patch Changes
+
+- b2390c6: Improve Word review parity with grouped paragraph breaks, optional paragraph and manual line-break marks, detailed formatting cards, separate formatting decisions, navigation, bulk acceptance/rejection, and markup display controls. Fixes #793 and #794.
+- @docx-editor.dev/i18n@2.16.1
+
+## 2.16.0
+
+### Minor Changes
+
+- 0a3b35d: Fix East Asian wrapping across formatting changes, preserve full-width number groups, and apply CJK justification and document typography settings.
+- 00666a8: Render, edit, search, and copy text inside smart tags, inline custom XML, and bidirectional run wrappers, and add text form selection, boundary deletion, replacement, field options in React and Vue, and protected filling; Fixes #710
+- 19a420e: Render supported legacy VML photos, annotation groups, and straight WordArt while preserving original XML, shared media, and drawing offsets during edits.
+- 6fac0e1: Keep symbol faces, such as the MS Gothic face a Word checkbox names, out of the font substitution notice, and report them to the font resolver so an app can supply them. Fixes #729, fixes #730
+- 2c7a3c9: Use `locale` for regional date input in text form fields, including dotted dates and year-first patterns. Remove the unreleased `dateInputOrder` prop and setter. Preserve existing dates when locale changes.
+
+  Form-field dialogs and accessibility labels now honor `i18n`, including live catalogue changes.
+
+- 0a75175: Preserve pending form values when moving or remounting the editor. Add `PaginatedSurface.save()` to validate pending input and refresh REF fields before serialization. Browser automation and paginated React and Vue refs use this save path. Synchronous saves refuse active edits and destroyed surfaces. Field-exit callbacks can throw or remount the editor without changing date interpretation.
+
+  Preserve nested simple-field results in clipboard HTML. Reject partial field quotes in the server-agent review example before an edit can affect additional text. Refuse tracked deletion or replacement of simple fields with nested result structures instead of leaving old text behind.
+
+- 3ca855b: Add Office-shaped server redlining through `Document.changeTrackingMode` and standard `Range.insertText`, `delete`, and `clear`. Collaborative agents can author real Word revisions and replicate them to open editors, with atomic commits, revision checks, and typed refusals for unsupported targets. `TrackMineOnly` is host-local; `TrackAll` explicitly refuses.
+- 1de0f64: Write a suggested replacement as Word does: the deletion first, then the insertion, each under its own revision id, wherever in the paragraph the replaced text sits. Add `replacementLanding` to the editor surface and the automation port, so a scripted replacement writes and reports the same position typing does. Fixes #691.
+
+### Patch Changes
+
+- 96d7e74: CJK text now wraps at the column width with UAX #14 ideographic break opportunities and basic kinsoku, instead of breaking only at run boundaries or spaces. Fixes #526
+- 82b8e0c: Preserve regional dates during save, keep four-digit years, and reject tracked edits inside rows with pending revisions.
+- 7a18c15: Render flipped DrawingML paths and open connectors with triangular line ends.
+- 863680d: Honor explicit East Asian font hints for Latin-1 symbols, including middle dots, degree signs, multiplication and division signs. Keep ASCII text, model offsets and canonical run formatting unchanged.
+- 62a6911: Keep floating image overlays visible beyond their anchor cells while preserving page clipping.
+- 41a3bc7: Render checkbox states that omit their font with Word's default MS Gothic font instead of literal hexadecimal text. Fixes #752.
+- e295e90: Report omitted legacy drawings and incomplete content scans during export. Preserve usable font faces after partial font-source failures while reporting those failures to strict policy.
+- a4a9bbc: Search body, header, and footer text-box stories during Find navigation. Fixes #711
+- 76a4c5d: Keep overflowing whitespace-only runs at the end of their current line instead of indenting the next line, preserving their canonical text and caret ranges.
+- b7c82fa: Render JPEG photos with large metadata segments and validate their EXIF-oriented dimensions without changing the original media.
+- 03b88ea: Position supported legacy PAGE footer frames without adding an extra footer line. Clip fixed-width frames above empty or PAGE anchors while preserving fields, selections, and document structure.
+- 1f207f8: Preserve supported legacy full-width table alignment across body, header, footer, text-box, and note stories, with consistent compatibility settings and cache invalidation.
+- 485bfd4: Render the DrawingML bilevel picture color mode.
+- da01e25: Render numeric positioned text frames and wrap body text around supported floating tables without adding their height to paragraph flow.
+- f416965: Avoid quadratic merge time when you paste many distinct images. Fixes #502.
+- 954d9d1: Keep focus in outside controls when fonts finish loading, while preserving the editor's saved selection across the font remount.
+- 85bfd9c: Keep joined emoji and combining marks intact under East Asian font hints, avoid premature word wrapping at trailing spaces, and preserve terminal floating tables beside empty anchors with bookmarks or paragraph spacing.
+- 3641f1e: Improve fidelity for justified lines, East Asian font hints, explicit symbol fonts, drawing and textbox updates, EXIF-oriented JPEG photos, and clicks beside legacy centered PAGE footer frames.
+- 10a0575: Fix shared-border spacing between repeated table headers and complete text rows without changing authored borders.
+- 46c0de2: Render opaque solid Word 2010 text outlines with explicit RGB colors.
+- fdd6045: Preserve pending date input when fonts load, wrap long words after protected text boundaries, and keep default document loads compatible with browser runtimes.
+- eb0e520: Enabling suggesting mode without a configured author now returns a clear configuration error and raises it once through the `error` event, instead of entering the mode and silently ignoring keystrokes. Setting the author later enters the requested mode, and the toolbar's mode menu keeps the other modes available. Fixes #692
+- 5505944: Request fonts used by SYMBOL fields and numbering markers when you open a document. Fixes #749.
+- b5ab91b: Preserve floating-image text distances, and keep text out of narrow image side gaps.
+- 6f7da01: Avoid an extra blank page after simple text-anchored tables with a terminal empty paragraph that fits the same page.
+- Updated dependencies [00666a8]
+  - @docx-editor.dev/i18n@2.16.0
+
+## 2.15.1
+
+### Patch changes
+
+- @docx-editor.dev/i18n@2.15.1
+
+## 2.15.0
+
+### Minor changes
+
+- 5284df5: Add `@docx-editor.dev/core/export` for document layout without a DOM. Export sessions share the browser editor's layout engine and return immutable pages, comments, tracked changes, and font-resolution reports.
+- 0d81033: Add font resources, shaped text, embedded fonts, metadata, internal link targets, and comment and tracked-change positions to export sessions.
+- 8e6133f: Apply author, mode, translation, and locale changes without rebuilding the editor, including Vue root and packaged components. Fixes #695 and #561.
+
+### Patch changes
+
+- e9baf4d: Search headers, footers, footnotes, endnotes, table cells, and saved field results. Fixes #703 and #694.
+- 087bb78: Fix floating table positions, vertical cell text, stacked fractions, and inline pictures in later columns. Preserve equation size and pagination with automatic line spacing. Fixes #662.
+- a3819aa: Wrap long words across tracked insertions in suggesting mode without splitting Unicode graphemes. Fixes #716.
+- a53f75c: Render hyperlinks in headers, footers, and anchored text boxes. While editing a header or footer, use Control+K to edit or remove its links. Links in these regions do not navigate. Fixes #643.
+- 36c1f04: Update list markers in text boxes inside tables and reduce repeated paragraph layout work. Fixes #639.
+- 678fe91: Group tracked field controls into one review card for each insertion or deletion. Fixes #718.
+- cfe3fe1: Allow on-demand font resolvers to return empty results without a configuration error.
+- 0e1360d: Keep underlined trailing spaces and underscore tab leaders as single rules that reach the line margin.
+- 2a8e57e: Show tracked field controls with their adjacent replacement instead of separate **Deleted** cards.
+- @docx-editor.dev/i18n@2.15.0
+
+## 2.14.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.14.1
+
+## 2.14.0
+
+### Minor Changes
+
+- 7633b2c: Add Review > Markup Options > Reviewers to filter tracked changes and comments by author without changing saved document data. Keep an optional composable toolbar shortcut with a host-provided icon. Fixes #666.
+- 01022a4: CJK text now measures and paints in the `eastAsia` font the document names (`w:rFonts w:eastAsia` / `w:eastAsiaTheme`, including through `w:docDefaults` and the theme's `a:ea` typefaces) instead of the run's Latin face. `ResolvedRunStyle` gains `fontFamilyEastAsia`, and `StyleSpanRecord` gains `fontSlot`; the format painter copies the East Asian face into `w:eastAsia`, and the font catalog lists the theme's East Asian faces.
+- 6b5bb8d: Add `setTrackedChangesFilter` with a predicate over complete revision items. Filtered revisions render as accepted without changing saved OOXML. Fixes #668.
+- f731c52: Add an `accept` or `reject` content projection mode to `setTrackedChangesFilter`. Both modes remain view-only and preserve tracked changes in saved DOCX files.
+
+### Patch Changes
+
+- 1afc5f2: Treat contextual table controls as the first collapsible preset-toolbar group, so entering a table moves those controls into More before ordinary formatting controls instead of overlapping them. Keep table color pickers contained within the More panel so later controls remain clipped and scrollable while a picker is open. Fixes #669.
+- @docx-editor.dev/i18n@2.14.0
+
+## 2.13.0
+
+### Minor Changes
+
+- 3c66a7c: The font-substitution notice now reports only families that rendered text resolves to through the style cascade, so declarations in unused styles no longer trigger it. Adds `renderedFontFamilies()` to the tree session.
+- 2ea6a9d: Saving now refreshes stale REF field results inside footnotes and endnotes as one undoable transaction with the body, so the exported note parts carry the values the pages paint; a field inside a locked or data-bound content control keeps its cached result without blocking the others, and collaborative sessions keep exporting cached results. Fixes #611
+- 0860dd2: Let a font substitution carry the requested family's line box through `FontSourceSubstitution.lineMetrics`, so a substitute with different vertical metrics still paginates like the face the document names.
+- b1fa0d6: REF cross-reference fields now compute their results live from the bookmark target and the resolved numbering, so references such as "Section 1.2" track renumbering edits instead of painting the saved result forever. Fixes #601.
+- f1d3940: Saving now rewrites stale REF field results into the exported bytes, and REF fields inside footnotes and endnotes paint live values. Fixes #606.
+- 96cdbe2: Preserve Word page breaks, paragraph flow, list formats, tables, inline controls, links, and mislabeled preview images during rich copy and paste.
+
+### Patch Changes
+
+- b360c3c: Paragraph spacing-after no longer counts toward the page-fit decision: a line that fits stays on its page and trailing space clips at the boundary, so an oversized `w:after` (the signature-block idiom) no longer mints blank trailing pages. Fixes #615.
+- 845e38f: `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` fields now paint a synthesized sequential number (one counter per kind, in document order, with `\*` format switches and `\e`) instead of nothing, and `REF` number switches resolve against bookmarked auto-numbered paragraphs. Fixes #618.
+- fe26cd4: Numbered lists inside text boxes in table cells and headers stay correct after a numbering edit. Headers no longer keep stale list markers or images. Fixes #622
+- 16966b2: Keep a footnote whole with its reference: a note that cannot fit below its reference line moves to the next page with the line instead of splitting mid-sentence or trailing its reference as an unmarked continuation. Fixes #627
+- 2d7dc10: Price the `w:keepNext` group-height lookahead at the placed column's width, so a keep group in a section with unequal explicit column widths breaks on the correct block. Fixes #623
+- 346f7e6: Layout no longer eagerly measures per-character caret edges for every laid span; caret and hit-test positions are measured on demand through the same measurer, and the selection-rect APIs accept an optional measurer for exact intra-span edges. Repagination after a page-boundary edit costs about a third of before. Fixes #632
+- 5cf6f08: Re-break a renumbered list paragraph when its wider ordinal overflows the hanging indent, so the first line moves to the next tab stop instead of keeping its pre-renumber position under the marker.
+- 7ea84c3: Hyperlinks inside footnotes and endnotes now resolve their relationship ids against the notes part's own relationships instead of the body part's. Fixes #637
+- e268614: Typing in a paragraph that carries a footnote reference no longer re-lays every note story in the document, and unchanged footnote pages keep their identity across passes so the painter keeps their DOM. Fixes #631
+- 8107826: Body `PAGEREF` fields now compute the page number of their bookmark target at pagination time and refresh on save, so table-of-contents page numbers stay correct after edits and in exported files. Each field is calibrated against its authored cache; unsupported switches or a missing bookmark keep the cached result. Fixes #617.
+- 0a6e44c: Resolve the REF `\t` switch and NOTEREF fields live from the document's numbering, so those references track edits instead of painting stale cached results. Fixes #612.
+- 72ff41f: Footnotes taller than the remaining page now start on their reference page, share it correctly with other references, and release their space when drained, so footnote-heavy documents paginate at the correct density. A `w:cantSplit` table row taller than the band a footnote reserve leaves now takes the full page instead of failing the layout. Fixes #608.
+- 8506a62: Numbered paragraphs now inherit the list id through the style chain when a style sets only the level, so multilevel heading numbering in legal templates renders. Fixes #600.
+- 0d782e3: Invalidate a table's cached break correctly when drawing layout moves between its cell paragraphs: the drawing-token aggregate now preserves paragraph position instead of sorting, so two different token assignments can no longer alias. Fixes #626
+- 7e85377: Declare the Node floor the text shaper needs (`^20.16.0 || >=22.3.0`) so an installer reports it before a run fails. Fixes #595.
+- @docx-editor.dev/i18n@2.13.0
+
+## 2.12.0
+
+### Minor Changes
+
+- 531759c: Paint theme-coloured DrawingML shapes and grouped vector graphics.
+
+### Patch Changes
+
+- 40699c8: Keep note overflow sheets in separate page rectangles after insertion. Fixes #513.
+- 31780e5: Every authorable op kind and every accepted property, image-wrap, and content-control variant is now proven to replicate through collaboration by a journal replay-convergence fixture, or declared not-expressible with a reason. Adding an editing capability without one fails the coverage gate.
+- 4c2c119: A collaborative edit that moves an existing node while changing its content — a hyperlink inserted across a tracked-change run — now replicates the change instead of duplicating the old text on every receiving peer. Fixes #557.
+- 3755b98: Combine style toggle properties per level of the style hierarchy, shape small capitals with matching advances, and draw one frame around consecutive identically bordered paragraphs in a table cell. Fixes #505.
+- 8fe5920: A relationship, content type, or extra part written through a transaction's `applyPackage` now survives into the package, the save, and one shared undo unit with the story edit, instead of replicating to peers while vanishing from the author's own document. Fixes #558.
+- fe3b8a3: Pasting rich content into non-empty documents no longer degrades to plain text or inserts Word's macOS preview image. Word headings, captions, and image dimensions now retain their source semantics and physical size.
+- @docx-editor.dev/i18n@2.12.0
+
+## 2.11.0
+
+### Minor Changes
+
+- e4872fb: Replicate a cross-paragraph collaboration selection as an anchor and a head address.
+- 1542e73: Fix toolbar and menu bar popups rendering behind the open navigation pane. Fixes #522
+- 40578c6: Add a format painter: the `format.painter` toolbar slot, `copyFormatting` and `pasteFormatting` commands, `Ctrl+Alt+C` / `Ctrl+Alt+V` (`Command` on macOS), and Copy formatting / Paste formatting rows on the right-click menu. Clear formatting now leaves a paragraph alone when the selection only ends at its start. Fixes #519
+- e4872fb: Add a provider-neutral collaboration port and session contracts so the editor can attach a replication implementation without importing a CRDT or transport.
+- e4872fb: Share table-cell and header selection presence as two endpoints plus an optional cell kind.
+- af77c9b: Tables match Word's default cell metrics: a table that names no style resolves the document's default table style, cell margins fall back to Word's own values, the paragraph Word writes to close a cell after a nested table takes no height, and a single-spaced line box includes the font's line gap. `StyleCascadeTable` gains `defaultTableStyleId`, and `DEFAULT_CELL_MARGINS` is no longer a uniform 3pt.
+- dfaafc0: Live collaboration now reports every failure a room can reach, including a session that fails after connecting, and presence chrome finds its session through the editor rather than a prop. Adds `DocxEditorCollaborationRoot` for mounting a room and `readCollaborationDocument` for reading one on a server.
+
+### Patch Changes
+
+- e4872fb: Allocate bookmark ids per collaboration actor so concurrent table-of-contents edits cannot mint the same id.
+- e4872fb: Give each picture its own `wp:docPr` id when two people insert an image into the same document at the same time, so Word no longer renumbers the drawings when it opens the merged file.
+- e4872fb: Allocate revision, comment, relationship, bookmark, and numbering ids per collaboration actor so concurrent peers no longer mint the same id from a shared snapshot.
+- e4872fb: Keep both footnotes when two people add the first one to the same document at the same time, so neither author's note becomes unreachable after the edits merge.
+- e4872fb: Give each paste its own bookmark, revision, and `wp:docPr` ids when two people paste into the same document at the same time, so the merged file keeps every marker, tracked change, and drawing addressable on its own.
+- e4872fb: Allocate table-of-contents bookmark names and content-control ids per collaboration actor so concurrent peers cannot mint the same value.
+- e4872fb: Headless automation writes now publish to a collaboration replica before the call returns, so a script that edits and then reads a peer no longer sees the document as it stood before the edit.
+- e4872fb: Insert Picture and Replace Picture now mint their `wp:docPr` and relationship ids under the collaboration actor, so two people adding an image to the same document at the same time no longer produce colliding ids. A single author still gets Word's dense numbering.
+- e4872fb: A rich clipboard paste now replicates story content and imported package resources to collaboration peers.
+- e4872fb: Attach a collaboration session after the editing surface finishes mounting, so a session no longer fails to start and report an error status.
+- e4872fb: Comments, tracked-change decisions, tables of contents, and custom nodes now replicate while a collaboration replica is attached, so those writes are no longer refused.
+- e4872fb: Comment writes now replicate the comments part, relationship, and content type to collaboration peers.
+- e4872fb: Add the `create-or-join` collaboration bootstrap: every peer opens a room with the same options, the first peer seeds it and later peers join it, so hosts no longer decide out-of-band which peer creates the room. A room that two partitioned peers seeded concurrently reports the new terminal failure code `concurrent-seed` on every replica; recover by creating a new room from saved bytes.
+- e4872fb: Concurrent first-create of a customXml store keeps both custom nodes on collaboration peers.
+- e4872fb: Give each review author slot its own hue, so two authors no longer read as the same colour.
+- 2015f33: Grow a vertically merged cell by one row when you insert a row inside its span, instead of breaking the merge and shifting the grid. In a merged table, a row that holds a cell inside a content control refuses the insert rather than marking the wrong column. Fixes #57.
+- e4872fb: Minted external hyperlink relationships are indexed in both `relationships` and `externalTargets`, matching the shape after save and reopen.
+- e4872fb: Image insert, list numbering, and hyperlink minting now replicate to collaboration peers instead of staying local.
+- e4872fb: A collaborative replica now rebuilds only the nodes a received edit names, keeps the rest of the document by identity, and revalidates only the parts that changed.
+- e4872fb: Joining a collaboration room keeps inline images, and the image selection frame sits on the selected drawing.
+- e4872fb: Typing in a large document with a collaboration replica attached no longer costs a scan of every node id in the part on each edit, so an attached editor now runs at close to solo speed.
+- e4872fb: Add an `offlineEditing` option to the collaboration factories and hooks: a disconnected replica keeps accepting local edits, and the buffered updates merge on reconnect.
+- c4b4dab: Minify the shipped `dist/editor.css`, which halves it from 212 KiB to 109 KiB.
+- e4872fb: Keep a queued collaboration edit when a remote update arrives during it, and flush each document's queue independently so two documents in one process no longer strand each other.
+- e4872fb: Resolve collaboration presence addresses without scanning the document, so remote carets no longer slow down typing on long documents.
+- e4872fb: Remote carets now follow a collaborator's typing instead of stopping at the last place they clicked.
+- e4872fb: Remote presence highlights now measure only visible pages, so a large remote selection no longer walks the whole document on every keystroke.
+- e4872fb: Rejected tracked deletions restore ordinary run text on collaboration peers, and custom-node create-part writes now carry their content-type overrides.
+- e4872fb: Receiving a collaborative edit now costs the size of the edit instead of the size of the document, and a received keystroke reaches layout as the same paragraph-scoped change a local one does.
+- e4872fb: Review chrome no longer commits queued typing while it reads, and a missing image at paint time shows a placeholder instead of throwing.
+- d11816f: A cell merged over several rows now takes the height of the rows it covers instead of loading all of it onto the row it starts on, so the rows beside it keep their own heights and shading. A `w:cantSplit` row holding such a merge can now split across a page rather than failing the table's layout. Fixes #504
+- 0d770d9: Header and footer variants resolve per page, so a title page with no first-page header starts its body at the top margin, and a sheet added for note overflow takes the variant its own page number resolves. `PAGE` and `NUMPAGES` fields evaluate the `\#` numeric picture switch instead of painting the result cached in the file.
+- @docx-editor.dev/i18n@2.11.0
+
+## 2.10.0
+
+### Minor Changes
+
+- 79170d8: Add continuous section breaks: `insertBreak` takes a new `sectionContinuous` kind, and the Insert > Break > Section break (continuous) menu row is live. A next-page break cut from a continuous section now really starts a page.
+- 56848c8: Add an Image row to the packaged Insert menu that opens the shared file picker, and scale an inserted image down proportionally when its natural size does not fit its cell, column, or page content box. Fixes #276
+- 8ac2e88: Word-like copy and paste: copy writes plain text plus HTML with an embedded document fragment, and paste restores styles, lists, tables, links, images, and footnotes — inside the editor and from external HTML. Adds a `pasteWithoutFormatting` command (Ctrl+Shift+V) and an optional `html` payload on `paste`.
+- 0e3663d: Suggesting mode records a formatting change as a tracked change instead of applying it outright, so a reviewer can reject it and get the previous properties back. Formatting also reaches the same runs through the toolbar and the automation object model, and only the runs the current view shows. Fixes #495, fixes #497, fixes #498
+
+### Patch Changes
+
+- 99c7408: Press Enter at the end of a paragraph, and the new paragraph takes the style's `w:next` the way Word does, so a heading is followed by body text instead of a second heading.
+- ab81336: Remove leftover stylesheet rules for class names the painter no longer emits, and restore the text cursor over the page content area. Fixes #239
+- 0928951: Mark a drawing inside a tracked insertion or deletion with a revision outline, the standard revision datasets, and a margin change bar; a deleted picture stays visible and dimmed under all-markup and disappears from the proposed result. In suggesting mode, inserting an image proposes a tracked insertion, deleting a selected image proposes a tracked deletion, and Delete on a pointer-selected picture deletes the picture instead of the paragraph break beside it. Fixes #479
+- b10d396: Run formatting (bold, italic, font family, font size, color) now applies to text inside tracked changes; it previously did nothing over runs wrapped in `w:ins` or `w:del`. Fixes #493
+- 0e3663d: Double-clicking either half of a tracked replacement now selects that half. A word no longer runs through struck text, which Word paints immediately before the text proposed to replace it.
+- @docx-editor.dev/i18n@2.10.0
+
+## 2.9.2
+
+### Patch Changes
+
+- 541e16f: Reduce per-keystroke latency on documents with footnotes or endnotes: mutation-path note-reference scans reuse per-subtree results instead of re-walking the whole package.
+- d459c9b: Refresh header and footer pages when a picture that a text box clips out of the baseline layout finishes decoding, so a page-specific projection of the box no longer keeps a loading placeholder. Fixes #467
+- 88935e6: Smart text substitutions (macOS double-space period, autocorrect) now replace the text they target instead of inserting beside it, and the browser's selection fix-up around them no longer highlights a stale range or moves the caret.
+- 3289402: Repaint a header or footer once a picture inside one of its text boxes finishes decoding, so the picture no longer stays a loading placeholder. Fixes #442
+- af18283: Fix the image selection overlay keeping the drawing's old frame after a resize, move, wrap, or transform. Image ops now commit through the same layout/paint tail as keystrokes, and multi-section layout no longer republishes a previous pass's sheets for a section that changed inside a balancing or re-run pass.
+- e01432d: Drawing selection now follows Word's object-selection rule: a document no longer opens with a drawing selected, typing beside a drawing's anchor no longer selects it, and the selection ring and resize handles align with the image instead of landing outside the page.
+- ba2fd94: Reduce input delay while typing into very large documents: when the browser reports queued input behind an expensive layout pass, a keystroke commits in its own task and layout and paint follow in separate tasks, instead of one blocking flush.
+- d043089: Reduce per-keystroke latency on very large documents: structural edits no longer re-derive whole-document indexes, and page-field projection reuses unchanged pages.
+- a11911c: Fix footnote placement in multi-section documents: a citation on a full page of a later section now reserves space on that page, so the note sits under its citation instead of draining onto the following pages. Fixes #460
+- 067cec6: Reduce per-keystroke scan work and memory use on documents with footnotes or endnotes.
+- 9716e13: PAGE and NUMPAGES footers on reused pages now update when an edit changes the page count in a single-section document. Fixes #441
+- e506262: Speed up typing and document open on large multi-section documents: each keystroke now pays for the edit instead of the document, and documents with footnotes open with one pagination pass instead of two.
+- 0d572e0: Render list markers for numbered paragraphs inside anchored text boxes, in the body and in headers and footers, and refresh reused pages when a numbering change moves a marker inside a box. Fixes #466
+- 950d5c5: Draw a thinner insertion caret with a translucent contrast ring, so the caret no longer shows a hard outline over highlighted or shaded text.
+- bb31f97: Fix tracked replacements over a rectangle of table cells to land in the first cell after its struck content, and allow `proposeReplacement` to span paragraph marks with the same landing rule as typing. Text-carrying proposals (`proposeInsertion`, `proposeReplacement`, and the matching `proposeTextChange` kinds) now refuse empty or newline-containing text instead of committing it. Fixes #459
+- da051fc: Suggesting mode now records page field, hyperlink, and footnote/endnote insertion as tracked changes, and an armed caret format survives an IME replacement. Fixes #463
+- e568148: Fix replacements over a selection in tracked-changes mode: typing, paste, Enter, tab, breaks, and page fields now land after the struck words with the caret following, instead of reversed or in front of the strike. Multi-line paste now splits its paragraphs inside the tracked insertion, and typing over your own pending Enter merges it instead of doing nothing.
+- 263ceb1: Suggesting mode now records inserted tabs, line breaks, and page breaks as tracked insertions, and an armed typing format is no longer dropped when the insert relocates past struck text. Fixes #458
+- @docx-editor.dev/i18n@2.9.2
+
+## 2.9.1
+
+### Patch Changes
+
+- 36ea49a: Show selected paragraph marks and empty lines with a small selection block.
+- @docx-editor.dev/i18n@2.9.1
+
+## 2.9.0
+
+### Minor Changes
+
+- 686a9d6: Add agent-safe document writing and revision APIs.
+  - Add an explicit `original` text projection. Pending deletions remain visible, while pending insertions stay hidden. This matches Word's Original review view.
+  - Add the atomic `replaceStoryBlocks` automation operation with stable paragraph identities.
+  - Add the DocxEditor `revisionTextView` runtime option outside the Office.js object model.
+  - Implement `proposeInsertion`, `proposeDeletion`, and `proposeReplacement` editor commands.
+
+  Projected search ranges map back to editable model offsets and retain their projection for later range reads and searches.
+
+- dfe6d27: Display and edit Word mathematical equations through a bounded linear-math editor.
+- 0fb376a: The store entry point now exports the full review-item vocabulary: `ReviewCustomItem` joins the `ReviewItem` union, and `ReviewModelInput` carries the custom-node inputs.
+
+### Patch Changes
+
+- 1b7ce7c: API report snapshots now use a canonical member order, so `api:check` no longer fails across machines; no runtime changes.
+- 71052d6: Internal unit-type hardening: twips and points values now carry branded types and share one conversion module, with no behavior change.
+- 91d3797: Typing now skips unused note pagination and reuses unchanged document layout data in large documents. Fixes #391.
+- 1367058: Typing in a long document no longer rebuilds the review paragraph-order index on every keystroke, and repeated state reads reuse the resolved caret content control instead of re-running the hit test. Replacing a block content-control placeholder now reports the paragraph swap, so review items anchored in the replacement stay activatable.
+- 5d08027: Lists now suppress paragraph spacing between consecutive items when converted documents omit the built-in contextual spacing rule.
+- 0f09123: List markers now reflow when the numbering level's face or size changes.
+- 5fbddee: Keep font, spacing, and alignment menus visible in the responsive toolbar overflow panel.
+- fae8055: The note-properties state now refreshes when a shared header or footer is re-entered from a different section, instead of reporting the previously opened section's numbering.
+- 865637a: New ordered lists now start at one instead of continuing an earlier disconnected list.
+- 808ffac: Typing in a multi-page section keeps the section's untouched sheets identical across passes, so paint skips them, and repaints no longer walk the whole document to collect drawing keys.
+- abd2d27: Selection writes in a repeating table header now land on the page the user is looking at, so copy and typing no longer target the first painted copy.
+- 94ec84e: Plain horizontal arrow keys now collapse a text selection to its start or end without moving one extra character.
+- 44f11db: The editor snapshot now notifies subscribers when `hasReviewContent` changes.
+- 03262fc: Review author colours now remain stable while you edit, remove, and undo comments or tracked changes in an attached document.
+- 2704c4d: Speed up large-document typing by caching paragraph, section, list, and content-control lookups so keystrokes avoid repeated full-document walks.
+  - @docx-editor.dev/i18n@2.9.0
+
+## 2.8.0
+
+### Minor Changes
+
+- 5ae7f4d: A blank document now ships Word's built-in style gallery, so the style picker offers Heading 1 through Heading 9, Title, Subtitle, Quote, No Spacing, and List Paragraph. Turning a list on applies List Paragraph the way Word does, which closes the space between consecutive items and leaves the paragraph indented when you turn the list back off.
+- 91fc4c8: Add `insertContentControl`, so an open editor can create a content control as well as fill and remove one, as a single undoable step.
+
+  A collapsed selection inserts an empty control showing its type's prompt, the way Word does, and the first character typed replaces the prompt whole. The same position now works through the automation protocol, which refused it before.
+
+- 91cb3e0: Added the Paragraph dialog, which sets alignment, indentation, spacing, line spacing, tab stops and the pagination flags by value as one undo step. Open it from **Line spacing options…** on the line-spacing menu, or drive it yourself with the new `setParagraphFormat` command and `useParagraphFormat` hook.
+- dab6700: `selectionRects` and `spansInSelection` now require the story's paragraph order as a third argument, so a two-argument call no longer compiles. Pass the new `everyStoryOrder(layout)` when you have no story in hand: the body-only order they used to assume is what made `spansInSelection` read a selection in a header, footer or note as empty. `selectionRects` still walks body fragments only, so it returns no rectangles outside the body whichever order you give it.
+- dab6700: `PaginatedSurface` gains `sectionAnchorParagraphAt` and `sectionAtPage`, `TreeDocxSessionView` gains `storyParts`, and `PlacedCell` gains `offsetX` and `offsetY`. All three are produced by the engine and consumed by hosts, so this is additive for callers.
+- dab6700: Editing in a header, footer, footnote or endnote now behaves as it does in the body: lists, tables, content controls, page setup, formatting and indent all act on the story the caret is in, and every story's paragraphs are addressable by anchor. A comment authored in one of those stories is now related from the main document, so Word can see it. Pointer chrome follows too: content control outlines and the hyperlink popover resolve in the story they are painted in, and table row and column handles are offered in the story you are editing.
+
+### Patch Changes
+
+- ac5ec3f: Fixed bordered paragraphs drawing a separate box each instead of one box, in a section whose columns have different widths.
+- 130ba52: Fixed bordered paragraphs drawing the wrong edges, and pages breaking in the wrong place, after you edited a bordered run. Fixed a refreshed table of contents losing its empty-TOC placeholder line until you reopened the document.
+- 5ae7f4d: Fixed list items and other same-style paragraphs not closing up until you reopened the document.
+- 7a58fb2: Fixed IME text being dropped when you compose into an empty paragraph, and fixed a composition deleting an inline image or hidden text elsewhere in the same paragraph. Composing over a selection that spans two paragraphs now replaces the whole range in one step. Text in a header, a repeating table header row, or a footnote referenced twice no longer duplicates when you compose into it.
+- dab6700: A document protected with `w:documentProtection w:edit="forms"` now refuses edits in headers, footers and notes as it already did in the body. Form fields in those stories stay fillable.
+  - @docx-editor.dev/i18n@2.8.0
+
+## 2.7.0
+
+### Minor Changes
+
+- 010a327: Fixed paragraph formatting controls reading a paragraph's document defaults instead of its own formatting, which left "Add space before/after paragraph" with no effect on the page. `PaginatedDocxEditorHandle.setParagraphProperty` takes an `options.mergeAttributes` flag so a line-spacing pick keeps the paragraph's spacing. Fixes #360
+
+### Patch Changes
+
+- 4c907ed: Fixes a group of caret and scope defects: undo after editing a header no longer leaves the editor unable to type, opening a header while a footnote is open no longer refuses every keystroke, inserting a footnote over a selection replaces it instead of destroying the note on the next keystroke, redo puts the caret where the redone edit ends, resolving a tracked change keeps the caret on the text it was in, accepting the deletion of a table's only row removes the table, a selection ending at a field no longer collapses, Backspace after a table is a quiet no-op instead of a dropped keystroke, and the paragraph, delete-row and delete-column commands act on every cell of a selected rectangle.
+- 447d983: Fixed the caret jumping back to the start of a header or footer after each character typed. The `change` event's revision and `getDocumentHandle().revision` now rise for every edit, including one made in a header, footer or note, and an explicit table target is no longer refused as stale after such an edit. Fixes #361
+- 047b2c6: Entering a header or moving between shared header copies no longer rebuilds every visible page. The active band is retinted in place.
+- 4c907ed: Typing no longer rebuilds every visible page. A document carrying a footnotes part — which is nearly every file Word writes, even with no notes in it — discarded every page record on every layout pass, and pressing Enter in a list re-measured every paragraph in the document.
+- 25235c1: Pressing Enter or Backspace in a large multi-section document no longer re-lays the whole document; layout now reuses unchanged sections and whole pages shifted by the edit, and typing latency in 500+ page documents drops sharply.
+- 25235c1: Typing in long documents with footnotes gets faster again: the notes pass reuses per-page footnote areas, reserves, reference hits, and mark contexts across keystrokes when nothing note-related changed, instead of re-deriving them for every page on every edit.
+- 25235c1: Typing in a long document repaints only the paragraph that changed, instead of rebuilding whole pages: pages keep their identity when content controls or page-level indexes have not moved, and the document-wide indexes the toolbar and review rail read are now built per page and reused.
+- 4c907ed: Typed characters now stay in order after a repaint. A repaint that followed an edit could read the browser's own selection back as the paragraph start, so the first character landed and every one after it was inserted in front of it.
+- 4c907ed: Backspace now takes back a paragraph break you proposed a moment earlier, instead of proposing to delete your own proposal. Enter then Backspace in suggesting mode left an empty paragraph behind and two entries in the review pane.
+- 4c907ed: Typing over your own pending suggestion now replaces it. The keystroke was refused and silently dropped, because a suggestion the same author retracts leaves the paragraph instead of staying struck in place.
+- 25235c1: Typing latency in very long documents drops further: layout reuses each unchanged section's whole prepass, list numbering, font catalogs, drawing scans, and note-mark projection reuse memoized answers across keystrokes, and shaped text measurement stops rebuilding string keys per probe.
+- 4c907ed: Fixes four write lanes that had drifted from the rules the others follow: Enter inside a tracked insertion now breaks the paragraph at the caret, a table inside a header or footer can be deleted, IME text in suggesting mode is proposed rather than written, and a multi-line paste proposes its paragraph breaks and leaves the caret after the pasted text.
+  - @docx-editor.dev/i18n@2.7.0
+
+## 2.6.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.6.1
+
+## 2.6.0
+
+### Minor Changes
+
+- 56bb68f: The font compatibility notice no longer reports a document that renders no text, or a family whose metric-compatible substitute is available on the platform.
+- 622c4f9: `document` and `load()` now accept `'blank'` for an empty document. Omitting `document` still means no document at all, which holds the editor on its loading screen with every control disabled. Fixes #275
+- c6529c8: ESM browser builds no longer fail with `Module not found: Can't resolve 'module'`, and the new `setHarfBuzzWasmUrl` points bundlers that emit no WASM asset (esbuild, Bun) at a self-hosted `harfbuzz.wasm`. Server-side shaping over ESM now needs Node 20.16 or 22.3 and later. Fixes #282
+- 0452f9c: Opening a review card no longer selects the change's text: the caret moves to the start of the range and the card's own highlight marks it, so the reader keeps whatever they had selected. Read `item.ranges` (revisions) or `item.range` (comments) for what a card is about, rather than the selection after `setActive`.
+- 0652ae4: Replace `PaginatedSurface.session` with the PM-free `TreeDocxSessionView` and remove unsupported projection methods from the public editor surface.
+- 9a64477: Tracked changes are now colored per author by default, the way Word shows them, and review cards carry each author's color. Mount `DocxEditor.AuthorStyle` to give a named author their own color, background, class names, or avatar, or `DocxEditor.ColorByChangeType` to keep the previous green-and-red rendering.
+
+  Comment authors share the same colors, and every element with an author — painted spans, comment highlights, cards, balloons, and markers — carries `data-review-author` and `data-review-author-slot`. This renames the painted span's `data-revision-author` and the `--doc-review-author` custom property, which is now `--doc-review-author-current`; update any CSS that used the old names. Read the roster with `useReviewAuthors()` or `editor.getReviewAuthors()`.
+
+- 008243e: Viewing mode no longer offers write affordances it refuses: the header and footer hover invitation, content-control widgets, image resize handles, and the custom-node and comment context-menu rows. Content-control edits are now refused in viewing instead of committing.
+
+### Patch Changes
+
+- 7e59774: The caret now moves freely through tracked-deleted text, one character at a time, as Word does. Text typed with the caret inside a deletion lands beside the deletion instead of corrupting it.
+- 3c80f4f: Fix inter-word gap painting on lines that merge two paragraphs in a resolved revision view: a drawing in one half no longer shifts or doubles gaps in the other half.
+- 3c80f4f: Fix the selection highlight in justified paragraphs: the band is now continuous across stretched inter-word spaces instead of breaking into one block per word. Underline and character shading also continue across those spaces, as Word draws them.
+- bc614bd: Anchored images in the document body now keep their place when a header or footer is taller than its margin. A page-relative image was pushed down the page by the header height, and a bottom-margin-relative one followed an oversized footer. Fixes #274.
+- 1ce2f55: Resolved comment miniatures now show a hover fill, and the reply field shows a focus outline.
+- 887f67f: Viewing mode refuses every path into header and footer editing, not only a double-click, and a document opened in viewing no longer comes up with an editable pages layer.
+  - @docx-editor.dev/i18n@2.6.0
+
+## 2.5.0
+
+### Minor Changes
+
+- d905af3: PAGE, NUMPAGES, and SECTIONPAGES fields in the document body (and body tables) now render the page number, document page count, or section page count when the field has no cached result, instead of showing blank.
+- 5c65a88: Opening a large document now shows a loading screen instead of freezing the page: the engine mounts it behind one painted frame, `snapshot().isOpening` reports that window, and `DocxEditor.Loading` gains an `overlay` variant that the packaged React frame mounts by default.
+- d905af3: Document-property fields (TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and DOCPROPERTY for those names) now render their value from the document properties when the field has no cached result, instead of showing blank.
+- d905af3: HYPERLINK field links now work with the link popover the same way typed links do: the popover opens read-only over one, Ctrl/Cmd+K reaches it, and it dismisses when the caret leaves the field. Two adjacent HYPERLINK fields that point at the same target now render as two separate links.
+- 346cc78: Tracked changes on a paragraph mark now reach the page and the review pane: every decision on a mark is read rather than the first, a paragraph moved whole raises a card and resolves, a format change on the mark is published, a mark inside a table cell is drawn, the margin gets its change bar, and a resolved view draws no attribution. Renumbering a list or a footnote, and every field a fragment publishes, now take part in incremental layout reuse, so a reused page no longer shows a value the document has moved past.
+- 289a7a1: Clicking a tracked-change card now opens that card, and text one reviewer inserted and another struck opens the deletion, as Word reads it.
+- 5a2f3ed: A review card for a paragraph break now says which change it is. A deleted break read as "Inserted paragraph break", which is the reverse of what accepting that card does, and both halves of a moved paragraph read the same way.
+- 5a2f3ed: The resolved display modes now merge the paragraphs their decisions merge, in the body, in table cells, and in headers and footers: a paragraph whose mark a tracked change deleted runs into the next one in the final view, as it does in Word and as accepting the change already did. Accepting a run of deleted paragraph marks also collapses them into one paragraph rather than into pairs, and no longer carries content past a table or a content control.
+- 266a086: The `mode` option accepts `'suggesting'` and now decides the mode a document opens in; the React and Vue `<DocxEditor>` components default it to `'edit'`, so a document carrying `w:trackRevisions` opens ready to type there. Omit `mode` on `createDocxEditor` or `DocxEditor.Root` to keep following the document's request.
+- d905af3: SYMBOL, MACROBUTTON, and GOTOBUTTON fields and w:sym symbol runs now render, legacy FORMCHECKBOX and FORMDROPDOWN fields paint their w:ffData state, and PAGE-family fields nested inside other fields evaluate per page. HYPERLINK fields are clickable links with the same target sanitization as typed hyperlinks.
+
+### Patch Changes
+
+- f3e5d58: Keystrokes arriving in a burst now land as one transaction and one layout flush instead of one per character, so fast typing in long documents stays responsive; a burst is also one undo step and one tracked change.
+- 192c644: Pasting from an application that offers only an HTML flavour now recovers its text more faithfully: an attribute value holding a `>` no longer truncates the paste, unterminated markup is no longer pasted as literal text, and a very large table no longer blocks the page. Reading a document's content types no longer uses a pattern a crafted file could make backtrack.
+- f811b44: Memoize package snapshots, section enumeration, and list resolution so a keystroke in a long document no longer rescans the whole tree; typing in large documents is significantly faster.
+- 4a57eed: Update harfbuzzjs to 1.6.0 (HarfBuzz 14.3.0). Shaping output does not change.
+  - @docx-editor.dev/i18n@2.5.0
+
+## 2.4.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.4.1
+
+## 2.4.0
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.4.0
+
+## 2.3.1
+
+### Patch Changes
+
+- 1c9b6a2: Long documents now reuse pagination after explicit page and section breaks, avoiding full-document work for ordinary typing, wrap-inducing edits, and character, word, line, vertical, or document-edge caret movement. Rapid typing preserves input order while coalescing pending page, toolbar, and review-rail refreshes, and repeated tracked deletions stay compact instead of adding one OOXML run per keypress.
+- 1c9b6a2: Rapid typing no longer reorders characters when a deferred paint leaves the DOM caret behind the model. Native and touch carets that return to that leftover offset still edit there.
+  - @docx-editor.dev/i18n@2.3.1
+
+## 2.3.0
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.3.0
+
+## 2.2.1
+
+### Patch Changes
+
+- 35f6d04: Fix exported comment replies opening as separate comments instead of a thread in Microsoft Word.
+  - @docx-editor.dev/i18n@2.2.1
+
+## 2.2.0
+
+### Minor Changes
+
+- 3096225: The document now fits its container by default, so a narrow window shrinks the page instead of overflowing it and opening the comments pane shrinks the document rather than pushing it off screen. Drive it with `Editor.setZoomMode` or React's new `useZoom` hook, and pass `zoomMode={{ type: 'fixed' }}` to keep the old behavior.
+
+### Patch Changes
+
+- 9c25492: Keep legacy FORMTEXT result text editable with character-accurate caret and selection offsets.
+- 04c2379: Programmatic selections made while embedded fonts load now keep their range and visible highlight after the shaped-font remount.
+- f0e4ab9: Tracked changes on a field's result now render as tracked. A deletion or insertion around the value of a cross-reference, page number or form field previously painted as ordinary unchanged text, so a reviewer saw no strikethrough or author colour on an edit the review sidebar was reporting correctly. A paragraph containing such a field also measured longer than what was laid out from it, which put the caret and the keystroke at different offsets — clicking after the field placed the cursor in one place and typing appeared in another. `w:fldSimple` now paints its cached result instead of blank space, allowlisted PAGE/NUMPAGES/SECTIONPAGES nested inside a non-page simple field evaluate per sheet rather than reusing the saved cache, and field results carry Word's grey field shading — always for legacy form fields unless the document sets `w:doNotShadeFormData`, and per the new `fieldShading` option (`never` / `when-selected` / `always`) for the rest.
+- Updated dependencies [568ccf7]
+  - @docx-editor.dev/i18n@2.2.0
+
+## 2.1.3
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.1.3
+
+## 2.1.2
+
+### Patch Changes
+
+- efd3d76: Menus and popovers now paint above the editor's own furniture. Toolbar dropdowns, the menu bar, colour pickers and the hyperlink popover sat at a lower z-index than the navigation gutter and table chrome, so opening File put the menu underneath the navigation toggle. Layering is now three `--doc-z-*` tokens (`chrome`, `overlay`, `context`) rather than a dozen hand-picked numbers.
+- 69a97f3: `setActiveReviewItem` and `useReview().setActive` take a `reveal` option, so a host can choose where an activated change lands instead of taking the engine's default: `'start'`, `'center'`, `'centerIfNeeded'`, `'nearest'`, or `false` to select the item without moving the viewport at all.
+- ede69f6: Activating a review card now reports whether it landed. `setActiveReviewItem` returns an `ExecResult` and `useReview().setActive` a boolean, so a host walking the queue with next/previous controls can tell a step that did nothing from one that worked — activation is refused for an unknown key, an item with no range, a story that will not open, and a revision kind the rail excluded. Review items carry a matching `activatable` flag, so a card that cannot be clicked can be drawn that way instead of discovering it on click.
+- 802ab3e: The collapsed review rail now draws a glyph for what each marker actually is — an insertion, a deletion, a formatting change, a comment or a custom node — instead of one comment bubble for every kind. A custom node names its own through `reviewCard`'s new `icon`, and the `Markers` part takes an `icon` of its own for a host that wants to draw all of them itself.
+- 4fa91bd: The painted-document rules are now scoped to the editor. Around a hundred `.layout-*` and `.paged-editor*` selectors shipped unscoped, so a host with its own `.layout-page-header` or `.layout-page-content` had those elements restyled by the editor's stylesheet. The class names are unchanged; only the rules moved under `.docx-editor`. The stylesheet guard now exempts `.docx-` alone, so nothing else can ship unanchored.
+- 4fa91bd: The y-prosemirror remote-cursor styles are now scoped to the editor. `.ProseMirror-yjs-cursor` is y-prosemirror's class name rather than one the engine mints, and it shipped unscoped, so a host running its own ProseMirror editor with Yjs on the same page had its remote cursors restyled. The stylesheet guard no longer treats `.ProseMirror-` as an engine-owned namespace.
+  - @docx-editor.dev/i18n@2.1.2
+
+## 2.1.1
+
+### Patch Changes
+
+- d74c5d6: Jumping to a tracked change or a selection now lands on it: the reveal was measuring caret geometry against the top of the sheet rather than the page's content box, so every jump stopped one page margin short and left the target just under the fold. Reveals that have to travel now centre their target instead of stopping the moment it clears the bottom edge, and one that is already on screen still does not move.
+  - @docx-editor.dev/i18n@2.1.1
+
+## 2.1.0
+
+### Minor Changes
+
+- a9fd363: BMP and WebP images now render instead of showing an unsupported-format placeholder.
+- 3310029: Custom nodes can carry a payload larger than the 64-character `w:tag` cap, in a customXml data part an SDT binds to, with a sweep that collects payloads whose control was deleted and a removal that leaves no record of the store for documents exported outside the system.
+- d116599: Custom nodes can be inserted, updated and removed inside a header, footer or note, including a node carrying a payload: the control lands in that story while its customXml store stays on the main document part, where Word looks for it. Which story a write targets now comes from the node or paragraph id rather than from wherever the reader happens to be, so a caller can address a node in a story it has left. Inserting, updating and removing all refuse a document open for viewing instead of editing it — these writes go through the store, below the editing-mode gate — and report the same `locked` code the engine's own refusal uses.
+- dbf5501: Every remaining `ep-` prefixed CSS class and keyframe is renamed to `docx-editor-`, so the whole stylesheet shares one namespace with the `.docx-editor` root class. If your own CSS targets an `.ep-*` class or the `ep-caret-blink` keyframe, switch it to the same name under `docx-editor-` (`.ep-one-surface__caret` becomes `.docx-editor-one-surface__caret`).
+- 8b4830e: Review navigation now goes where it says it does: activating a card selects the item's whole range and scrolls to it even when your own UI holds focus or the target page is not yet materialized, walking from a header change back to a body change leaves the header story so the body card activates again, and the `setSelection` command reveals its target. New `setReviewActivationExclusions` lets a host rail tell the engine which revision kinds it hides, so clicking tracked text never opens a card the rail does not render.
+- 7a72c42: Tracked changes and comments inside footnotes and endnotes now reach the review queue. They get cards with real geometry, `getTrackedChanges` names the story holding them, the caret can make one active, opening a card enters that note, accept and reject resolve against the note's own part, and a note card can be replied to — commenting anywhere after a note reference was refused before, because the offset walk counted note marks as no characters. Commenting outside the body works the same way: a range selected in a header, footer or note offers the affordance and the comment lands in that story. `focus(scope)` honours its argument, and a scope it cannot open is refused without first closing the story the reader had open.
+- 43c3e6a: The shipped stylesheet is now precompiled and fully namespaced: every Tailwind utility, editable-surface rule and keyframe is scoped under the renamed `.docx-editor` root class (previously `.ep-root`), so the CSS no longer collides with a host app's Tailwind setup and styles the chrome correctly in hosts without Tailwind. If your own CSS targets `.ep-root`, switch it to `.docx-editor`.
+- d793994: TIFF images now render instead of reserving their extent behind a placeholder. The image decode port's `convertMetafile` hook is renamed to `convertPreserved` and receives TIFF alongside EMF and WMF.
+
+### Patch Changes
+
+- d793994: The caret now carries a contrasting ring, so it stays visible against dark content. Clicking beside a dark image, or arrowing onto the line one sits on, no longer leaves the insertion point invisible.
+- 6dee1e3: Comment markers now land on the character they were asked for in paragraphs holding a drawing, a field or an inline content control, and a comment can be anchored inside a content control at all. The comment writer measured those paragraphs with a walk of its own that counted such elements as nothing, so commenting near one was either refused outright or, worse, placed the marker silently on the wrong character. A marker at the far edge of a complex field is also placed after the whole field rather than among its parts, where Word would drop it on the next field rebuild.
+- f4eac0c: Update fast-xml-parser to 5.10.1.
+- b3e3457: Pin the node and mark name unions on `treeSchema` so the generated type declaration is identical between builds.
+- 7dce3ba: Keep sub-1pt drawing extents at full paint height so Word's hairline form-rule bars stay visible instead of shrinking to a sub-pixel clip.
+- a758db1: Fix images in a header or footer staying on the loading placeholder forever. The picture decodes, but the page kept the furniture it was laid out with, so it never showed.
+- 42406bc: Header and footer ink now overflows its band like Word instead of being clipped: anchored shapes offset past the content width or below the header text stay visible, and negative indents hang into the margin. Overflowing shapes stay inert until the band is edited, so they never swallow clicks meant for the body.
+- d793994: Fix a band of blank space under an inline image in a paragraph using multiple line spacing. The multiple now scales the text line, as Word does, instead of the image's own height.
+- d89ef55: Stop binding Cmd+R for right alignment on macOS: the browser reserves that chord for reload, so the old binding re-aligned the paragraph and the page still reloaded. Right alignment stays on Ctrl+R on every platform.
+- d56b1a5: Speed up the document pipeline on long documents: opening, laying out, editing and saving a 500-page document is roughly a third faster end to end, and unchanged-document layout passes drop by more than half. Parsing, validation, layout keying and serialization now avoid recomputing facts already proven for unchanged, immutable nodes; no validation or security bound changed.
+- 34be525: Apply Word's automatic paragraph spacing when `w:beforeAutospacing` or `w:afterAutospacing` is set, instead of the measurement the flag replaces. Documents written by Word's HTML filter carry it on every paragraph and were laid out 9pt tight per boundary, which moved page breaks.
+- 765e617: Stop applying paragraph-mark `w:pPr/w:rPr` font size to content runs that inherit the paragraph style. Mark formatting still sizes empty lines and last-line mark height.
+- 113ed44: Tracked changes from other editors now coalesce the way Word shows them: adjacent same-author deletions or insertions merge into one review card, and a deletion meeting an insertion pairs into a single Replaced card regardless of how far apart their timestamps are.
+- 3f70246: Speed up comment and tracked-change derivation on heavily reviewed long documents: re-reading the review queue over an unchanged document is ~25x faster, and the re-derive after an accept, reject, comment write or undo drops by more than half. Derivation semantics are unchanged.
+- 8b4830e: Review and navigation now land in the story they name: accepting or rejecting a header or footer card leaves the caret inside that story instead of throwing it into the body (after which every keystroke was silently refused), replying to a header or footer card writes into that part instead of being refused, and jumping to a body search hit or outline heading leaves an open header or note first.
+- 585413d: Fix caret and hit-test drift on lines containing superscript or subscript text. The shaped measurer rounded the reduced super/subscript size to a whole half-point, measuring those runs up to 3% wider than they paint; the caret landed mid-glyph for the rest of the line.
+- cc82d50: Pictures inside footnotes, endnotes and text boxes now render. They previously painted nothing at all, not even a placeholder.
+- ec538fa: Fix suggesting mode dropping text typed at the start of a paragraph that carries properties, which made the keyboard look dead in the item Enter had just opened. An empty list item's marker also no longer paints over the item above it.
+- 45c9b93: Anchored text boxes now render their content clipped inside the shape's extent in the body, headers, and footers, with PAGE / NUMPAGES / SECTIONPAGES fields inside header/footer text boxes evaluated per page. Editing a header or footer whose direct content is nearly empty now shows a full-height edit band instead of a hairline.
+- 0a62c6d: Typing in a tracked table row no longer drops that row's tracked-change card, so the row insertion stays acceptable and rejectable.
+- e215962: Trailing tabs no longer start a new line, so a header authored as tabbed columns keeps its own height and stops pushing the body down the page. Header and footer shapes marked `behindDoc` now paint beneath the body text instead of over it.
+- 434454d: Paint form-blank underlines across tab advances: an underlined `w:tab` now draws a rule for the reserved stop width instead of relying on CSS text-decoration on an invisible tab glyph.
+- Updated dependencies [232728c]
+  - @docx-editor.dev/i18n@2.1.0
+
+## 2.0.1
+
+### Patch Changes
+
+- 51f14f5: Add the `repository` field to the core package manifest so npm can verify its provenance statement on publish.
+  - @docx-editor.dev/i18n@2.0.1
+
+## 2.0.0
+
+### Major Changes
+
+- 26095c6: Initial release.
+
+  A WYSIWYG `.docx` editor that runs entirely in the browser: it opens a Word file, paints the real paginated layout, edits it in place, and writes a `.docx` back out.
+  - `@docx-editor.dev/react` — the React adapter. `<DocxEditor document={bytes} />` for the packaged editor, or compose `DocxEditor.Root` / `.Viewport` / `.Content` with the hooks (`useEditorState`, `useEditorCommand`, `useDocxEditor`) to build your own chrome.
+  - `@docx-editor.dev/core` — the framework-agnostic engine: OPC/XML reading, the canonical OOXML tree, layout, paint, and the `Editor` contract the adapters render.
+  - `@docx-editor.dev/i18n` — the shared string catalogue, with nine locales.
+  - `@docx-editor.dev/editor-api` — a batching document object model for automating a document from a server or from an editor already open in a page.
+  - `@docx-editor.dev/pro` — tracked changes, comments, and custom nodes.
+
+  Word fidelity is structural: styles, theme colours, tables, headers and footers, section layout, numbering, and tab stops resolve through the same cascade Word uses, and content the editor does not model round-trips untouched.
+
+- 26095c6: `setSelection` now types the forms it actually accepts. `EditorSelection` gained the `{ anchor, head }` paragraph-id pair the engine honours, and lost the `SemanticTarget` and `DocLocation` arms it never accepted, so the outline and any other caller can move the caret without a cast.
+
+  Breaking if you passed a `SemanticTarget` or a `DocLocation`-ended range to `setSelection`: both were refused at runtime with `unsupported`, so working code is unaffected.
+
+- 26095c6: Remove `EditorHost`, `EditorConfig` and `createEditor` from the public surface. They described a retired pipeline in which the adapter supplied DOM handles and a display sink; the editor has painted its own surface since `createDocxEditor` replaced it, and none of the three had a caller. Use `createDocxEditor` with `DocxEditorConfig`.
+
+### Minor Changes
+
+- 26095c6: Put the caret in the right place on an empty paragraph. A centred or right-aligned one drew it at the left margin, and one with a first-line indent ignored the indent; in both cases it only jumped to the correct position once a character was typed. Lines now publish their aligned content origin as `LineRecord.contentX`.
+- 26095c6: The root entry and the `contracts/*` entries now export the types their own signatures hand out — `CanResult` from `can()`, `TextMatch` from `findText()`, `TableContext` from `query()` and around 60 more that were previously unnameable from the entry point that returns them. The root re-exports the whole `Editor` contract rather than a hand-listed subset, so it cannot drift from it again.
+
+  Removes `@docx-editor.dev/core/contracts/plugin` and `@docx-editor.dev/core/contracts/mcp`. Every function in them threw, and `coreTools` had no runtime binding at all. Extensions and MCP are deferred to a separately specified contract; `EditorModule` is the supported seam.
+
+### Patch Changes
+
+- Updated dependencies [26095c6]
+  - @docx-editor.dev/i18n@2.0.0

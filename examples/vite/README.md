@@ -1,57 +1,83 @@
-# Vite example
+# Vite DOCX editor example
 
-`@docx-editor.dev/react` in a plain Vite + React SPA. No SSR, so the
-editor mounts directly with no lazy-loading wrapper. The simplest of the
-examples. Start here.
+This Vite and React app shows the editor composition API with custom chrome.
 
-## Run it
+The demo combines `packagedFonts()` with `googleFonts()`. Packaged substitutes load first. A document can cause CDN requests for other declared font families.
 
-From the repo root:
+## Run the example
+
+From the repository root, run:
 
 ```bash
 bun install
-bun run dev:react      # http://localhost:5173
+bun run dev:react
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:5173`.
 
-## Files
+The default document is `public/sample.docx`. In development, `?fixture=<name>.docx` resolves a file with that name from `e2e/fixtures/`. Production builds include only the fixtures listed in `vite.config.ts`.
 
-| File             | What it does                                            |
-| ---------------- | ------------------------------------------------------- |
-| `src/App.tsx`    | The editor: open `.docx`, edit, render an agent panel   |
-| `src/main.tsx`   | React root + `styles.css`                               |
-| `index.html`     | Loads the Material Symbols font for toolbar icons       |
-| `vite.config.ts` | Aliases `@docx-editor.dev/*` to workspace source in dev |
+## Add the editor to Vite
 
-## Minimal integration
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-
-export default function App() {
-  return <DocxEditor document={createEmptyDocument()} showToolbar />;
-}
-```
-
-To open a real file, read it as an `ArrayBuffer` and pass it as
-`documentBuffer` instead of `document`.
-
-## Use it in your own Vite app
+Install the adapter and its engine peer:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-The React adapter injects its own CSS. The toolbar icons need the Material
-Symbols font, add this to `index.html`:
+Import `@docx-editor.dev/core/styles/editor.css` once in your application entry. Then render the editor:
 
-```html
-<link
-  rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-/>
+```tsx
+import '@docx-editor.dev/core/styles/editor.css';
+import { useRef } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+
+function Editor({ file }: { file: ArrayBuffer }) {
+  const editorRef = useRef<DocxEditorRef>(null);
+
+  const handleSave = async () => {
+    const buffer = await editorRef.current?.save();
+    if (buffer) await fetch('/api/documents/1', { method: 'PUT', body: buffer });
+  };
+
+  return <DocxEditor ref={editorRef} document={file} onSave={handleSave} />;
+}
 ```
 
-Docs: https://www.docx-editor.dev/docs/1.x/react
+`document` takes an `ArrayBuffer`, a `Uint8Array`, or an existing `DocumentHandle`. The editor loads embedded fonts without a resolver.
+
+Pass usable font bytes for Word-accurate measurement. Without them, fallback measurement does not guarantee Word-compatible layout. Use `packagedFonts()` for local substitutes. `googleFonts()` opts your application into CDN requests.
+
+## Build custom chrome
+
+`src/ComposedEditorDemo.tsx` uses the editor primitives and hooks directly.
+
+```tsx
+<DocxEditor.Root document={bytes}>
+  <YourHeader />
+  <DocxEditor.Toolbar t={t} />
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>
+```
+
+For more information, see the [React adapter guide](https://www.docx-editor.dev/docs/2.x/react).
+
+## Review changes in batches
+
+Open `http://localhost:5173/?bulkReview=1&fixture=bulk-review.docx` after running `bun run dev:react` from the repository root. Filter by author or select individual changes, then accept or reject them. Check the skipped-change report and try **Undo**, **Redo**, and **Save and reopen**. The main-story API controls use `RevisionCollection.resolve()` without a selection, so they include changes hidden by the editor filter.
+
+Run the browser checks with:
+
+```sh
+bunx playwright test --config e2e/editor-smoke.config.ts bulk-review.interaction.spec.ts
+```
+
+See [Resolve a batch of changes](../../docs/site/content/editor-api/revisions.mdx) for selection, result handling, and strict batches.
+
+## Edit textboxes
+
+Open `http://localhost:5173/?textboxes=1` to load the anonymous textbox sample. Click inside the box to edit its text. Click its border to select, drag, or resize it. Use **Undo**, **Redo**, and **Save** to inspect the result. Table and header textboxes remain read-only. Use **Insert → Text Box** to add an empty box and start typing.
+
+The demo uses the default `<DocxEditor.Toolbar />` appearance, including the font picker and spacing. Applications do not need demo-specific toolbar CSS.

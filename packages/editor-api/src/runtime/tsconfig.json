@@ -1,0 +1,52 @@
+{
+  // The whole runtime, browser entry included, under the strictest settings the repository uses.
+  //
+  // Separate from `packages/editor-api/tsconfig.json` for the same reason `compat/tsconfig.json` is:
+  // the package around this slice is mid-rebuild, and a brand new public surface should be held to
+  // zero diagnostics now rather than whenever the rest of the package gets there. The lane checks
+  // in `__tests__/runtime-boundaries.test.ts` compile both this project and the neutral one.
+  //
+  // DOM is in `lib` here because `browser.ts` takes an editor instance. That is exactly the reach
+  // `tsconfig.neutral.json` refuses, which is why there are two projects and not one.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    // Same strictness as `packages/core/tsconfig.json`, for the reason given in
+    // `tsconfig.neutral.json`: these programs contain core's sources, and the point of these two
+    // projects is the lib boundary, not a new strictness bar for another package.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "types": [],
+    "paths": {
+      // Every published subpath, mapped to source. The export map points at dist, so a subpath
+      // missing here resolves to built .d.ts while its siblings resolve to src, and the same
+      // type then arrives under two identities.
+      "@docx-editor.dev/core": ["../../../core/src/index.ts"],
+      "@docx-editor.dev/core/automation": ["../../../core/src/automation/index.ts"],
+      "@docx-editor.dev/core/binding": ["../../../core/src/binding/index.ts"],
+      "@docx-editor.dev/core/contracts/editor": ["../../../core/src/contracts/editor.ts"],
+      "@docx-editor.dev/core/contracts/document": ["../../../core/src/contracts/document.ts"],
+      "@docx-editor.dev/core/contracts/interaction": ["../../../core/src/contracts/interaction.ts"],
+      "@docx-editor.dev/core/contracts/mcp": ["../../../core/src/contracts/mcp.ts"],
+      "@docx-editor.dev/core/contracts/modules": ["../../../core/src/contracts/modules.ts"],
+      "@docx-editor.dev/core/contracts/plugin": ["../../../core/src/contracts/plugin.ts"],
+      "@docx-editor.dev/core/contracts/types": ["../../../core/src/contracts/types-barrel.ts"],
+      "@docx-editor.dev/core/layout": ["../../../core/src/layout/index.ts"],
+      "@docx-editor.dev/core/export": ["../../../core/src/export/index.ts"],
+      "@docx-editor.dev/core/output": ["../../../core/src/output/index.ts"],
+      "@docx-editor.dev/core/store": ["../../../core/src/store/index.ts"],
+      "@docx-editor.dev/core/collaboration": ["../../../core/src/collaboration/index.ts"],
+      "@docx-editor.dev/core/editor": ["../../../core/src/editor/index.ts"]
+    }
+  },
+  "include": ["*.ts", "examples/*.ts", "../model/*.ts", "../index.ts", "../browser.ts"],
+  "exclude": ["node_modules", "__tests__"]
+}

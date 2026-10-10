@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Each typed character that landed in its own task was a separate local undo step. Collaborative typing merged by a five-second capture window.",
+  "after": "A typing run is one undo step locally and in collaboration. A caret move, another edit, undo, redo, a caret format, or another participant's change to the run's paragraph ends the run.",
+  "reason": "Only each participant's own undo grouping changes. Shared state, operations, journals, and update meaning stay the same, so released participants interoperate unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/typing-history-groups.test.ts",
+    "packages/core/src/editor/__tests__/typing-history.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-typing-history.test.ts"
+  ],
+  "changeset": "typing-undo-runs",
+  "migration": null
+}

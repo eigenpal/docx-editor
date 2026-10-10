@@ -1,10 +1,28 @@
-import { createApp } from 'vue';
-import App from './App.vue';
-// Toolbar + dialog scoped styles ship as a separate file from the library
-// bundle (Vite's lib mode doesn't auto-inject CSS imports). The
-// alias-resolved dev path picks up SFC <style scoped> blocks via the Vue
-// compiler, but the published-package parity build (USE_PUBLISHED_PACKAGES=true)
-// needs this import or the toolbar renders unstyled.
-import '@docx-editor.dev/vue/styles.css';
+import './styles.css';
+import { createApp, h } from 'vue';
+import PreviewBanner from '../../shared/PreviewBanner.vue';
 
-createApp(App).mount('#app');
+const params = new URLSearchParams(location.search);
+const base = import.meta.env.BASE_URL;
+const DEFAULT_DOCUMENT = 'sample.docx';
+const fixtureParam = params.get('fixture') ?? '';
+const documentName = /^[\w.-]+\.docx$/.test(fixtureParam) ? fixtureParam : DEFAULT_DOCUMENT;
+
+void (async () => {
+  const ComposedEditorDemo =
+    params.get('refresh') === '1'
+      ? (await import('./RefreshDemo.vue')).default
+      : params.get('dialogs') === '1'
+        ? (await import('./DialogCustomizationDemo.vue')).default
+        : (await import('./ComposedEditorDemo.vue')).default;
+  createApp({
+    setup() {
+      const fixtureUrl = `${base}${documentName}`;
+      return () =>
+        h('div', { style: 'display: flex; flex-direction: column; height: 100vh' }, [
+          h(PreviewBanner),
+          h(ComposedEditorDemo, { fixtureUrl }),
+        ]);
+    },
+  }).mount('#app');
+})();

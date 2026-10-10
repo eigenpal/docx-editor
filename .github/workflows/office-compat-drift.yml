@@ -1,0 +1,317 @@
+name: Office.js compatibility drift check
+
+# Scheduled-only: fetches the current stable @types/office-js release into
+# a temporary directory, verifies its integrity, and regenerates the
+# normalized reference fixture (packages/editor-api/compat/reference/word.reference.json)
+# to see whether it differs from what's checked in. This is the ONLY
+# workflow in this repository that needs network access to Microsoft-derived
+# material; normal CI (ci.yml) never fetches it and never depends on it.
+#
+# What happens on drift depends on what actually drifted:
+#
+#   * No symbol or member moved — upstream only republished, so the delta is
+#     the version string and the provenance record. There is nothing about
+#     the API for a person to read, so this job adopts it itself and opens a
+#     normal PR (`compat:adopt`). The source commit that PR pins is proved
+#     against the published bytes, not assumed: see
+#     packages/editor-api/scripts/lib/definitely-typed-commit.mjs.
+#   * A symbol or member moved — that is a fact about the Word API and needs
+#     a maintainer. This job opens (or updates) a single tracking issue with
+#     the delta and changes nothing in the repository.
+#
+# So the write path a machine may take is narrow by construction: it can
+# carry provenance forward, and it cannot land a shape change unattended.
+# The PR it opens is still an ordinary PR — full CI, human approval.
+
+on:
+  schedule:
+    # Weekly, Monday 09:00 UTC.
+    - cron: '0 9 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+# One run at a time: a workflow_dispatch racing the schedule would push the
+# same branch twice, and the "is a PR already open" guard below is not atomic.
+concurrency:
+  group: office-compat-drift
+  cancel-in-progress: false
+
+jobs:
+  check-drift:
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    # No pull-requests: write — every `gh pr` call and the push below use the
+    # release-pal App token, which carries its own installation permissions.
+    permissions:
+      contents: read
+      issues: write
+    defaults:
+      run:
+        working-directory: packages/editor-api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # HUSKY=0 for the same reason dependabot-lockfile.yml sets it: the root
+      # `prepare` script points core.hooksPath at .husky, and the adopt step
+      # below commits. That pre-commit hook runs api:check, which needs a
+      # built dist this job never produces.
+      - name: Install dependencies
+        working-directory: .
+        env:
+          HUSKY: 0
+        run: bun install --frozen-lockfile
+
+      - name: Check for upstream @types/office-js drift
+        id: drift
+        env:
+          # Step-level, not job-level: the `runner` context is not available
+          # in a job `env:` block, where it silently expands to nothing.
+          DRIFT_RESULT: ${{ runner.temp }}/office-compat-drift.json
+        run: |
+          # set +e: the check exits 1 on drift by design, and drift is the
+          # case this workflow exists to handle, not a step failure.
+          set +e
+          node scripts/fetch-office-reference.mjs --check --json "$DRIFT_RESULT" > drift-output.txt 2>&1
+          echo "drift check exited $?"
+          cat drift-output.txt
+
+      # The check prints for people; this file is the same answer for the
+      # workflow, so the branch below doesn't depend on grepping prose.
+      # A missing file means the check failed for some other reason (network,
+      # integrity, a validation bug) — fail loudly rather than treat that as
+      # "no drift".
+      - name: Read the drift decision
+        id: decision
+        env:
+          DRIFT_RESULT: ${{ runner.temp }}/office-compat-drift.json
+        run: |
+          if [ ! -f "$DRIFT_RESULT" ]; then
+            echo "Drift check produced no result file — it failed before deciding anything."
+            exit 1
+          fi
+          cat "$DRIFT_RESULT"
+          jq -r '
+            "drift=\(.driftDetected)",
+            "shape_changed=\(.shapeChanged)",
+            "upstream_version=\(.upstreamVersion)"
+          ' "$DRIFT_RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload regenerated reference (drift only)
+        if: steps.decision.outputs.drift == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: office-compat-drift-regenerated
+          path: /tmp/office-compat-drift-*/
+          if-no-files-found: ignore
+
+      # --- Provenance-only drift: adopt it and open a PR ------------------
+
+      # The PR is pushed as the release-pal App, not GITHUB_TOKEN: pushes made
+      # with GITHUB_TOKEN don't trigger workflows, and a compat PR nobody ran
+      # CI on defeats the point of opening one.
+      - name: Mint release-pal App token
+        if: steps.decision.outputs.drift == 'true' && steps.decision.outputs.shape_changed == 'false'
+        id: pal-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: docx-editor
+
+      # --version pins this to the release the decision above measured. Without
+      # it both steps resolve the `latest` dist-tag independently, so a publish
+      # between them would either be adopted under the previous version's
+      # branch name and PR title, or refuse and fail the run with no issue
+      # filed. This step failing for any other reason (a shape change that
+      # landed mid-run, an unprovable source commit) fails the whole run, which
+      # is the intended fallback: loud, and nothing written.
+      - name: Adopt the provenance-only bump
+        id: adopt
+        if: steps.decision.outputs.drift == 'true' && steps.decision.outputs.shape_changed == 'false'
+        env:
+          # Spent on the DefinitelyTyped commit walk that proves the source
+          # commit; the anonymous 60/hour limit is shared per runner IP.
+          GITHUB_TOKEN: ${{ steps.pal-token.outputs.token }}
+          VERSION: ${{ steps.decision.outputs.upstream_version }}
+        run: |
+          node scripts/fetch-office-reference.mjs --adopt --version "$VERSION"
+          bun run compat:generate
+
+      - name: Verify the adopted reference offline
+        id: verify
+        if: steps.decision.outputs.drift == 'true' && steps.decision.outputs.shape_changed == 'false'
+        run: bun test src/office-compat
+
+      - name: Open a PR for the adopted bump
+        id: pr
+        if: steps.decision.outputs.drift == 'true' && steps.decision.outputs.shape_changed == 'false'
+        env:
+          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
+          VERSION: ${{ steps.decision.outputs.upstream_version }}
+          HUSKY: 0
+        working-directory: .
+        run: |
+          branch="chore/office-compat-$VERSION"
+          # --state all, not open: a PR a maintainer closed unmerged is a
+          # decision, and reopening it every Monday would ignore that. It also
+          # keeps the force-push below off any branch a human has touched,
+          # because touching it means there was a PR.
+          if [ -n "$(gh pr list --head "$branch" --state all --json number --jq '.[0].number')" ]; then
+            echo "A PR for $branch already exists (open, merged or closed) — nothing to do."
+            exit 0
+          fi
+          if [ -z "$(git status --porcelain packages/editor-api/compat)" ]; then
+            echo "compat/ is unchanged after adopting — nothing to open a PR for."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add packages/editor-api/compat
+          git commit -m "chore(editor-api): adopt @types/office-js $VERSION"
+          git push --force \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" \
+            "HEAD:refs/heads/$branch"
+
+          # Only now may the tracking issue be closed: every early exit above
+          # leaves this unset, so a re-run that opens nothing closes nothing.
+          echo "opened=true" >> "$GITHUB_OUTPUT"
+
+          gh pr create \
+            --head "$branch" \
+            --base main \
+            --title "chore(editor-api): adopt @types/office-js $VERSION" \
+            --body "$(printf '%s\n' \
+              "Scheduled drift check found @types/office-js $VERSION with no symbol or member changes, so this only moves the version string, the provenance record, and the reviewed DefinitelyTyped source commit." \
+              "" \
+              "The pinned commit was accepted only because its \`types/office-js/index.d.ts\` is byte-identical to the integrity-verified npm tarball.")"
+
+      - name: Close the tracking issue the PR resolves
+        if: steps.pr.outputs.opened == 'true'
+        env:
+          # The job's own GITHUB_TOKEN, not the App: this job is granted
+          # `issues: write` above, while the App's installation permissions are
+          # contents/pull-requests/statuses.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.decision.outputs.upstream_version }}
+        working-directory: .
+        run: |
+          number=$(gh issue list --label office-compat-drift --state open --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            echo "No open drift issue to close."
+            exit 0
+          fi
+          gh issue close "$number" \
+            --comment "Adopted @types/office-js $VERSION automatically: no symbol or member changed, so the bump is provenance-only. Reopening happens on the next shape change, not on a republish."
+
+      # --- Everything a person has to read --------------------------------
+
+      # Fires on a shape change, and also when the adopt path itself failed —
+      # an unprovable source commit, a shape change that landed between the two
+      # fetches, a failing offline verify. Without the second half those end as
+      # a red scheduled run and nothing else, and a red weekly cron is seen by
+      # almost nobody. `!cancelled()` rather than the implicit success(), since
+      # by construction this needs to run after a failed step.
+      - name: Open or update a tracking issue
+        if: >-
+          !cancelled() && steps.decision.outputs.drift == 'true' &&
+          (steps.decision.outputs.shape_changed == 'true' ||
+          steps.adopt.outcome == 'failure' ||
+          steps.verify.outcome == 'failure' ||
+          steps.pr.outcome == 'failure')
+        uses: actions/github-script@v9
+        env:
+          ADOPT_FAILED: ${{ steps.decision.outputs.shape_changed != 'true' }}
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('packages/editor-api/drift-output.txt', 'utf8');
+            const title = 'Office.js compatibility reference drift detected';
+            const adoptFailed = process.env.ADOPT_FAILED === 'true';
+            const lead = adoptFailed
+              ? [
+                  'The scheduled drift check found a **provenance-only** `@types/office-js` release',
+                  '(no symbol or member moved), but adopting it automatically FAILED. Nothing in this',
+                  'repository was changed. See the run log for which step failed — commonly an',
+                  'unprovable DefinitelyTyped source commit, or a release published between the',
+                  'check and the adopt.',
+                ]
+              : [
+                  'The scheduled drift check found that the current stable `@types/office-js` release',
+                  'no longer matches `packages/editor-api/compat/reference/word.reference.json`, and the',
+                  'delta is a **shape change**: the reference moved beyond the version string.',
+                  'Provenance-only republishes are adopted automatically by PR; this one is not,',
+                  'because it is a fact about the Word API.',
+                ];
+            // A fence long enough to survive whatever the delta contains:
+            // upstream type strings are attacker-controlled, and a ``` inside
+            // one would otherwise close the block early and render the rest of
+            // upstream's text as markdown in this issue.
+            const longestRun = Math.max(0, ...[...output.matchAll(/`+/g)].map((m) => m[0].length));
+            const fence = '`'.repeat(Math.max(3, longestRun + 1));
+            const body = [
+              ...lead,
+              '',
+              'This issue is informational — nothing in this repository was changed automatically.',
+              'To review and adopt the new reference:',
+              '',
+              '```bash',
+              'cd packages/editor-api',
+              '# 1. Record the reviewed DefinitelyTyped source commit for the new version in',
+              '#    compat/definitely-typed-commits.json (the write path refuses without it).',
+              'bun run compat:fetch-reference',
+              'bun run compat:generate',
+              'bun test',
+              '```',
+              '',
+              'Then open a normal PR with the resulting diff.',
+              '',
+              '<details><summary>Drift check output</summary>',
+              '',
+              fence,
+              output,
+              fence,
+              '</details>',
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'office-compat-drift',
+            });
+
+            if (existing.data.length > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['office-compat-drift'],
+              });
+            }

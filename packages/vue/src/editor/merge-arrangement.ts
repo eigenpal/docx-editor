@@ -1,0 +1,100 @@
+// Default-set + in-place-override merge for Vue vnodes.
+import type { DocxEditorChildren } from '../docx-editor-children';
+// Same contract as packages/react/src/editor/merge-arrangement.tsx.
+
+import { Fragment, type VNode, type VNodeArrayChildren, isVNode } from 'vue';
+
+/** Marker on component options: which packaged member this part overrides. */
+export interface DocxSlotComponent {
+  docxSlot?: string;
+}
+
+/** Resolve the override key for one vnode, or null when it is host content. */
+export type KeyOfChild = (child: VNode) => string | null;
+
+function vnodeChildren(child: VNode): VNode[] {
+  const raw = child.children;
+  if (Array.isArray(raw)) return raw.filter(isVNode);
+  if (typeof raw === 'object' && raw !== null && 'default' in raw) {
+    const slot = (raw as { default?: () => DocxEditorChildren[] }).default;
+    return slot?.().filter(isVNode) ?? [];
+  }
+  return [];
+}
+
+/**
+ * Flatten a single-child Fragment (`v-for`, `<template>`) to its override key.
+ * Returns null when the Fragment holds zero or several keyed children.
+ */
+export function unwrapFragment(child: VNode, keyOf: KeyOfChild): string | null {
+  if (!isVNode(child) || child.type !== Fragment) return null;
+  const inner = vnodeChildren(child);
+  const keys = inner.map(keyOf).filter((key): key is string => key !== null);
+  return keys.length === 1 ? keys[0]! : null;
+}
+
+/** Read `docxSlot` from a part component's options object. */
+export function docxSlotOf(vnode: VNode): string | null {
+  if (!isVNode(vnode)) return null;
+  const type = vnode.type;
+  if (typeof type === 'object' && type !== null && 'docxSlot' in type) {
+    const slot = (type as DocxSlotComponent).docxSlot;
+    return typeof slot === 'string' ? slot : null;
+  }
+  return null;
+}
+
+export interface MergeArrangementInput<Entry> {
+  readonly entries: readonly Entry[];
+  readonly children: VNode[];
+  readonly preset: boolean;
+  readonly keyOfEntry: (entry: Entry, index: number) => string;
+  readonly keyOfChild: KeyOfChild;
+  readonly renderEntry: (entry: Entry, index: number, children?: VNode[]) => DocxEditorChildren;
+  /** Nested registry entries use the same slot overrides as their parent panel. */
+  readonly childrenOfEntry?: (entry: Entry) => readonly Entry[] | undefined;
+  /** Told of each keyed child that names no entry; it still renders after the default set. */
+  readonly onUnmatched?: (key: string, vnode: VNode) => void;
+}
+
+/**
+ * Merge host vnodes into a packaged arrangement.
+ * Last override for a key wins; unmatched overrides append; unknown children append.
+ */
+export function mergeArrangement<Entry>({
+  entries,
+  children,
+  preset,
+  keyOfEntry,
+  keyOfChild,
+  renderEntry,
+  childrenOfEntry,
+  onUnmatched,
+}: MergeArrangementInput<Entry>): VNodeArrayChildren {
+  if (!preset) return children;
+  const overrides = new Map<string, VNode>();
+  const appended: VNode[] = [];
+  for (const child of children) {
+    if (!isVNode(child)) continue;
+    const key = keyOfChild(child);
+    if (key) overrides.set(key, child);
+    else appended.push(child);
+  }
+  const known = new Set<string>();
+  const renderEntries = (items: readonly Entry[]): VNode[] =>
+    items.map((entry, index) => {
+      const key = keyOfEntry(entry, index);
+      known.add(key);
+      const nested = childrenOfEntry?.(entry);
+      const content = nested ? renderEntries(nested) : undefined;
+      return overrides.get(key) ?? renderEntry(entry, index, content);
+    });
+  const base = renderEntries(entries);
+  const unmatched = [...overrides.entries()]
+    .filter(([key]) => !known.has(key))
+    .map(([key, vnode]) => {
+      onUnmatched?.(key, vnode);
+      return vnode;
+    });
+  return [...base, ...unmatched, ...appended];
+}

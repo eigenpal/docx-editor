@@ -1,235 +1,108 @@
 # Toolbar
 
-## Overview
+Use root props to customize the packaged React editor. For a custom layout, compose the provider and toolbar components from `@docx-editor.dev/react`.
 
-The editor uses a two-level composable toolbar with a title bar and a formatting bar.
+## Layout
 
-### Layout Structure
+The packaged editor places the title and menus above the formatting toolbar. Use title-bar slots for your logo and application actions.
 
-```
-┌──────────┬────────────────────────────────┬──────────────────────┐
-│          │ Document Name                  │                      │
-│  Logo    │                                │  Right Actions       │
-│          │ File  Format  Insert           │                      │
-├──────────┴────────────────────────────────┴──────────────────────┤
-│ ╭─ Formatting Bar (rounded pill) ─────────────────────────────╮ │
-│ │ ↩ ↪  100% ▾  Normal ▾  Inter ▾  — 32 +  B I U  A▾ 🖌▾ ... │ │
-│ ╰─────────────────────────────────────────────────────────────╯ │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  title[Title bar: logo, document title, and actions]
+  menu[Menu row]
+  toolbar[Formatting toolbar]
+  viewport[Document viewport]
+  title --> menu --> toolbar --> viewport
 ```
 
-- **Title Bar**: 3-column layout — Logo and Right Actions span full height, Document Name + Menus stack vertically in the center
-- **Formatting Bar**: Rendered inside a rounded pill with a subtle gray background
-- Every slot is customizable — pass your own logo, action buttons, or extra toolbar items
+## Customize the packaged editor
 
-There are **two ways** to customize the toolbar:
-
-1. **DocxEditor props** — Quick setup with render props
-2. **Compound components** — Full control using `EditorToolbar` and its sub-components
-
----
-
-## Quick Setup (DocxEditor Props)
-
-The simplest way to customize the toolbar:
+Pass title state and application actions through root props:
 
 ```tsx
+import { useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
-function App() {
-  const [fileName, setFileName] = useState('Untitled.docx');
+function App({ bytes }: { bytes: Uint8Array }) {
+  const [title, setTitle] = useState('Untitled.docx');
 
   return (
     <DocxEditor
-      documentBuffer={buffer}
-      renderLogo={() => <img src="/logo.svg" alt="Logo" />}
-      documentName={fileName}
-      onDocumentNameChange={setFileName}
-      renderTitleBarRight={() => (
-        <div>
-          <button onClick={handleSave}>Save</button>
-        </div>
-      )}
+      document={bytes}
+      title={title}
+      onTitleChange={setTitle}
+      renderTitleBarRight={() => <span>Draft</span>}
     />
   );
 }
 ```
 
-### DocxEditor Toolbar Props
+### Root toolbar props
 
-| Prop                   | Type                     | Default | Description                                       |
-| ---------------------- | ------------------------ | ------- | ------------------------------------------------- |
-| `renderLogo`           | `() => ReactNode`        | —       | Custom logo/icon in the title bar                 |
-| `documentName`         | `string`                 | —       | Editable document name displayed in the title bar |
-| `onDocumentNameChange` | `(name: string) => void` | —       | Called when the user edits the document name      |
-| `renderTitleBarRight`  | `() => ReactNode`        | —       | Custom actions on the right side of the title bar |
+| Prop | Type | Description |
+| --- | --- | --- |
+| `title` | `string` | Document title in the title bar. |
+| `onTitleChange` | `(name: string) => void` | Receives document title edits. |
+| `renderTitleBarLeft` | `() => ReactNode` | Custom content before the document title. |
+| `renderTitleBarRight` | `() => ReactNode` | Custom actions after the document title. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Shows, hides, or customizes the menu row. |
+| `chrome` | `boolean` | Shows or hides the packaged frame. Defaults to `true`. |
 
-All existing toolbar props (`showToolbar`, `showZoomControl`, `showRuler`, `toolbarExtra`, etc.) continue to work.
+## Compose the toolbar
 
----
+Place components under `DocxEditor.Root` to share the editor instance. Packaged compounds apply their own style scope. Use a `docx-editor` wrapper to scope custom controls and share theme tokens. Use `useChromeTranslate()` to supply labels for composed controls.
 
-## Compound Component API
-
-For full control over the toolbar structure, use `EditorToolbar` directly:
+The custom button prevents a mouse press from moving focus away from the document:
 
 ```tsx
-import { EditorToolbar, type EditorToolbarProps } from '@docx-editor.dev/react/ui';
+import { DocxEditor, useChromeTranslate, useEditorCommand } from '@docx-editor.dev/react';
+import '@docx-editor.dev/react/styles.css';
 
-function MyEditor({ toolbarProps }: { toolbarProps: EditorToolbarProps }) {
+function BoldButton() {
+  const bold = useEditorCommand('text.bold');
+  const t = useChromeTranslate();
   return (
-    <EditorToolbar {...toolbarProps}>
-      <EditorToolbar.TitleBar>
-        <EditorToolbar.Logo>
-          <img src="/logo.svg" alt="My App" />
-        </EditorToolbar.Logo>
-        <EditorToolbar.DocumentName
-          value={fileName}
-          onChange={setFileName}
-          placeholder="Untitled"
-        />
-        <EditorToolbar.MenuBar />
-        <EditorToolbar.TitleBarRight>
-          <button onClick={handleSave}>Save</button>
-          <button onClick={handleShare}>Share</button>
-        </EditorToolbar.TitleBarRight>
-      </EditorToolbar.TitleBar>
-      <EditorToolbar.Toolbar />
-    </EditorToolbar>
+    <button
+      type="button"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => bold.execute()}
+      disabled={!bold.isEnabled}
+      aria-pressed={bold.isActive}
+    >
+      {t('formattingBar.bold')}
+    </button>
+  );
+}
+
+function EditorChrome() {
+  const t = useChromeTranslate();
+  return (
+    <>
+      <DocxEditor.Toolbar t={t} preset={false}>
+        <BoldButton />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport>
+        <DocxEditor.Navigation t={t} />
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu t={t} />
+      </DocxEditor.Viewport>
+    </>
+  );
+}
+
+function MyEditor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <div className="docx-editor">
+      <DocxEditor.Root document={bytes}>
+        <EditorChrome />
+      </DocxEditor.Root>
+    </div>
   );
 }
 ```
 
-### Sub-Components
+`DocxEditor.Root` owns the editor instance. `DocxEditor.Viewport` provides the scroll container, and `DocxEditor.Content` renders the document pages.
 
-#### `EditorToolbar`
-
-The root wrapper. Provides toolbar context to all sub-components.
-
-| Prop              | Type        | Description                                                   |
-| ----------------- | ----------- | ------------------------------------------------------------- |
-| `children`        | `ReactNode` | Sub-components (TitleBar, Toolbar)                            |
-| `className`       | `string`    | Additional CSS class for the container                        |
-| _...ToolbarProps_ |             | All standard toolbar props (formatting state, handlers, etc.) |
-
-#### `EditorToolbar.TitleBar`
-
-Three-column layout. Automatically arranges children:
-
-- **Left column**: Logo (spans full height)
-- **Center column**: DocumentName on top, MenuBar below
-- **Right column**: TitleBarRight (spans full height)
-
-| Prop       | Type        | Description                                |
-| ---------- | ----------- | ------------------------------------------ |
-| `children` | `ReactNode` | Logo, DocumentName, MenuBar, TitleBarRight |
-
-#### `EditorToolbar.Logo`
-
-Renders custom content (icon, image, badge) left-aligned in the title bar.
-
-| Prop       | Type        | Description  |
-| ---------- | ----------- | ------------ |
-| `children` | `ReactNode` | Logo content |
-
-#### `EditorToolbar.DocumentName`
-
-Editable text input styled as a borderless field.
-
-| Prop          | Type                      | Default      | Description           |
-| ------------- | ------------------------- | ------------ | --------------------- |
-| `value`       | `string`                  | —            | Current document name |
-| `onChange`    | `(value: string) => void` | —            | Called on name change |
-| `placeholder` | `string`                  | `'Untitled'` | Placeholder text      |
-
-#### `EditorToolbar.MenuBar`
-
-Renders File, Format, and Insert dropdown menus. Automatically wired to the toolbar context — no props needed.
-
-Menu contents are derived from the toolbar context (print, page setup, text direction, image/table insert, page break, table of contents).
-
-#### `EditorToolbar.TitleBarRight`
-
-Right-aligned container for custom actions (buttons, toggles, status indicators).
-
-| Prop       | Type        | Description                   |
-| ---------- | ----------- | ----------------------------- |
-| `children` | `ReactNode` | Action buttons, toggles, etc. |
-
-#### `EditorToolbar.Toolbar`
-
-The icon formatting toolbar (undo/redo, zoom, fonts, bold/italic/underline, colors, alignment, lists, etc.) rendered inside a rounded pill with a subtle gray background. Can also be used standalone outside of `EditorToolbar`.
-
-| Prop       | Type        | Description                                                             |
-| ---------- | ----------- | ----------------------------------------------------------------------- |
-| `children` | `ReactNode` | Additional toolbar items appended at the end                            |
-| `inline`   | `boolean`   | When true, renders with `display: contents` for embedding in a flex row |
-
----
-
-## Customization Patterns
-
-### Custom logo with branding
-
-```tsx
-<DocxEditor
-  renderLogo={() => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <img src="/logo.svg" width={24} height={24} />
-      <span style={{ fontWeight: 600 }}>My App</span>
-    </div>
-  )}
-/>
-```
-
-### Right-side actions with status
-
-```tsx
-<DocxEditor
-  renderTitleBarRight={() => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ fontSize: 12, color: '#666' }}>Saved</span>
-      <button onClick={handleExport}>Export</button>
-      <button onClick={handleShare}>Share</button>
-    </div>
-  )}
-/>
-```
-
-### Extra formatting toolbar items
-
-Use `toolbarExtra` to append custom buttons to the formatting bar:
-
-```tsx
-<DocxEditor
-  toolbarExtra={
-    <>
-      <button onClick={handleSpellCheck}>Spell Check</button>
-      <button onClick={handleWordCount}>Word Count</button>
-    </>
-  }
-/>
-```
-
-### Compound components with custom elements
-
-Mix standard sub-components with your own elements inside the TitleBar:
-
-```tsx
-<EditorToolbar {...toolbarProps}>
-  <EditorToolbar.TitleBar>
-    <EditorToolbar.Logo>
-      <MyBrandLogo />
-    </EditorToolbar.Logo>
-    <EditorToolbar.DocumentName value={name} onChange={setName} />
-    <EditorToolbar.MenuBar />
-    <EditorToolbar.TitleBarRight>
-      <UserAvatar />
-      <ShareButton />
-      <SaveButton />
-    </EditorToolbar.TitleBarRight>
-  </EditorToolbar.TitleBar>
-  <EditorToolbar.Toolbar>
-    <CustomToolbarButton icon="spell_check" onClick={handleSpellCheck} />
-  </EditorToolbar.Toolbar>
-</EditorToolbar>
-```
+For more information, see [Customize the toolbar](site/content/guides/toolbar.mdx) and [React composition](site/content/react/composition.mdx).

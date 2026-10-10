@@ -1,0 +1,472 @@
+---
+title: 'Collaboration versions and upgrades'
+description: 'Check client compatibility, deploy collaboration updates, and upgrade saved rooms without losing pending work.'
+category: 'Pro'
+order: 65
+seoTitle: 'DOCX collaboration version compatibility and upgrade guide'
+---
+
+Collaboration has its own compatibility version, separate from the editor package version. Use it to decide which clients and workers can share a room. The same contract applies to Hocuspocus, WebRTC, and custom providers.
+
+The installed package supplies the collaboration version. Changing that value does not upgrade a saved room. Ordinary DOCX files do not need a collaboration upgrade.
+
+## Understand the terms
+
+A collaboration deployment includes every program that reads or writes shared room state. Include browsers, servers, export workers, and background agents when you plan an upgrade.
+
+| Term | Meaning |
+| --- | --- |
+| Package version | The npm release you install, such as `2.18.0`. |
+| Collaboration format | The rules your installed code uses to interpret shared data and updates. Compare the complete exported value when admitting a connection. |
+| Room | Shared editing state for one collaborative document. It includes identities and history that an ordinary DOCX export does not retain. |
+| Replica | A participant's local copy of the shared room state. Participants exchange updates to keep their copies synchronized. |
+| Saved room | A persisted snapshot of collaboration state. Upgrading application packages does not convert this data. |
+| Export and reseed | Export a DOCX with a compatible build, then use it to initialize a separate room. The replacement room starts with empty collaboration undo history. |
+| Persistence key | The storage identifier for saved room state or queued updates. Use fresh keys during migration to keep updates from different rooms separate. |
+
+### Understand the format value
+
+The releases from 2.18.0 to 2.27.0 use `docx-collaboration:1.3.1.1`. Format `docx-collaboration:1.4.2.1` follows it. The four numbers identify synchronization rules, shared storage structure, conflict-repair rules, and the editor's document model, in that order.
+
+Treat the complete value as one compatibility identifier. Import it from the installed package; do not construct it yourself. Changing the stored value does not convert the data or make incompatible code safe to use.
+
+### Decide whether a fix requires migration
+
+A fix can keep the same format when released code already understands its corrected writes. For example, a paragraph-split fix can preserve text without changing its shared representation. Older writers still have their original bug.
+
+A fix requires a format change when it changes the meaning of shared data or updates. For example, two versions might choose different surviving text for the same conflict, even though the stored fields have the same names.
+
+Package versions and room compatibility have separate policies. A minor package release can require a saved-room migration. Check the release notes for a `Breaking collaboration upgrade` notice and its release-specific instructions. The public document API retains its own compatibility policy.
+
+## Published collaboration formats
+
+The upgrade column describes moving from the previous stable release. Matching formats allow synchronization; older releases can still have bugs fixed in newer releases.
+
+{/* collaboration-releases:start */}
+
+| Release | Collaboration format         | Saved-room upgrade                        |
+| ------- | ---------------------------- | ----------------------------------------- |
+| 2.18.0  | `docx-collaboration:1.3.1.1` | [Export and reseed](#upgrade-saved-rooms) |
+| 2.19.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.19.1  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.20.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.21.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.21.1  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.22.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.23.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.24.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.25.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.26.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+| 2.27.0  | `docx-collaboration:1.3.1.1` | Same format; no room migration            |
+
+{/* collaboration-releases:end */}
+
+## Choose the upgrade path
+
+Upgrading from 2.17.0 to 2.18.0 requires a saved-room migration. Upgrading from 2.27.0 or earlier to a release with format `docx-collaboration:1.4.2.1` also requires one. In both cases, export with the compatible previous build, then follow [Upgrade saved rooms](#upgrade-saved-rooms).
+
+| Situation | What you do |
+| --- | --- |
+| Clients and workers support the same collaboration version | Keep using compatible rooms. Follow the release notes for other package changes. |
+| A client has a different collaboration version | Refuse synchronization and direct the user to a compatible app deployment. |
+| A saved room is incompatible with your deployment | Keep the room intact and follow [Upgrade saved rooms](#upgrade-saved-rooms). |
+| You only open and save DOCX files without collaboration | No collaboration-room migration is needed. |
+
+Check both the connecting client and the saved room. A compatible client does not make an older room compatible. Include export workers and background agents in your deployment checks.
+
+## Check clients before synchronization
+
+Import the collaboration format version and send it unchanged with your connection request. Do not hard-code its value or compare parts of it.
+
+For Hocuspocus, your client can encode it with your access token:
+
+```ts
+import { COLLABORATION_FORMAT_VERSION } from '@docx-editor.dev/pro/collaboration';
+
+export function connectionToken(accessToken: string): string {
+  return JSON.stringify({
+    token: accessToken,
+    collaborationVersion: COLLABORATION_FORMAT_VERSION,
+  });
+}
+```
+
+Pass the result to the `token` option of `useHocuspocusCollaboration` or its `connect` method. The provider sends this string unchanged. If you refresh access tokens, encode the current token on each refresh.
+
+Use a callback for tokens that expire:
+
+```ts
+import { COLLABORATION_FORMAT_VERSION } from '@docx-editor.dev/pro/collaboration';
+
+// Implement this with your application's access-token service.
+declare function fetchAccessToken(): Promise<string>;
+
+export const token = async (): Promise<string> =>
+  JSON.stringify({
+    token: await fetchAccessToken(),
+    collaborationVersion: COLLABORATION_FORMAT_VERSION,
+  });
+```
+
+Pass this callback as the connection's `token` option. The provider calls the callback on each reconnection, so it sends both the refreshed credential and the format version.
+
+On your server, authenticate the user and document access before checking the collaboration version. Complete both checks before allowing synchronization:
+
+```ts
+import { Server } from '@hocuspocus/server';
+import {
+  assertCollaborationFormatCompatibility,
+  CollaborationSchemaError,
+} from '@docx-editor.dev/pro/collaboration';
+
+// Implement this with your authentication service and document permissions.
+declare function verifyDocumentAccess(accessToken: string, documentId: string): Promise<void>;
+
+const server = new Server({
+  async onAuthenticate({ token, documentName }) {
+    let request: unknown;
+    try {
+      request = JSON.parse(token);
+    } catch {
+      throw new Error('Invalid credentials');
+    }
+    if (
+      request === null ||
+      typeof request !== 'object' ||
+      Array.isArray(request) ||
+      !('token' in request) ||
+      typeof request.token !== 'string'
+    ) {
+      throw new Error('Invalid credentials');
+    }
+    await verifyDocumentAccess(request.token, documentName);
+    try {
+      assertCollaborationFormatCompatibility(
+        'collaborationVersion' in request ? request.collaborationVersion : undefined
+      );
+    } catch (error) {
+      if (error instanceof CollaborationSchemaError) {
+        // Hocuspocus forwards `reason` to the refused client.
+        throw Object.assign(new Error(error.code), { reason: error.code });
+      }
+      throw error;
+    }
+  },
+});
+
+await server.listen();
+```
+
+The assertion accepts an exact match. Missing, malformed, or different values throw `CollaborationSchemaError` with code `collaboration-format-mismatch`. The Hocuspocus wrapper preserves recognized failure codes from the server during initial connection and reconnection. Handle `error.code` in your app; do not parse error messages to detect a version mismatch. A reported version prevents accidental mixed-version connections. It does not prove which code a client runs or replace access control.
+
+For a custom provider, perform the same checks in its connection admission flow. For WebRTC, your application must control access to room invitations before peers connect. Deploy compatible clients to every participant. The library detects incompatible room state, but does not provide a WebRTC admission server.
+
+`DOCUMENT_COLLABORATION_VERSIONS` and `assertDocumentCollaborationCompatibility` are deprecated. They remain supported for integrations that already use them. Use `COLLABORATION_FORMAT_VERSION` and `assertCollaborationFormatCompatibility` for new connection handshakes. The [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus) accepts compatible clients using either handshake.
+
+## Check saved rooms before loading
+
+`readCollaborationFormatVersion` reads a room's recorded format version without joining, exporting, or changing its shared data. It can inspect incompatible rooms so you can identify which deployment they need.
+
+Check a saved snapshot in a temporary document before loading your live room:
+
+```ts
+import * as Y from 'yjs';
+import {
+  assertCollaborationFormatCompatibility,
+  readCollaborationFormatVersion,
+  readCollaborationDocument,
+} from '@docx-editor.dev/pro/collaboration';
+
+export function loadRoom(live: Y.Doc, snapshot: Uint8Array): void {
+  const candidate = new Y.Doc();
+  try {
+    Y.applyUpdate(candidate, snapshot);
+    const version = readCollaborationFormatVersion(candidate);
+    assertCollaborationFormatCompatibility(version);
+    // Also validate that the compatible room can export a complete DOCX.
+    readCollaborationDocument(candidate);
+    Y.applyUpdate(live, snapshot);
+  } finally {
+    candidate.destroy();
+  }
+}
+```
+
+Version inspection is a small metadata read. It does not validate the document's content. The separate export check validates compatible content and costs a full document export. A failure leaves the saved snapshot intact. If decoding the snapshot throws an unrecognized error, treat it as damaged saved data. Keep the snapshot for recovery, as the example server does.
+
+Reading an unseeded room throws `not-initialized`. Missing or invalid version information causes `collaboration-format-mismatch`. Treat those errors as recovery cases for saved rooms. Only create an empty room when your storage confirms no room exists.
+
+## Upgrade saved rooms
+
+When the release notes require a room migration, the new release cannot open rooms that an earlier release saved. Each room moves in two steps. The build that created the room exports it as a DOCX, and the new build seeds a room in the new format from that export. The new room is checked against the export before it replaces anything.
+
+Choose one of two procedures:
+
+| Procedure | When to use it |
+| --- | --- |
+| [Migrate rooms on a server](#migrate-rooms-on-a-server) | You store rooms yourself and can stop editing for the migration. Each room keeps its room ID, storage key, and document links. |
+| [Replace rooms with new IDs](#replace-rooms-with-new-ids) | You cannot stop editing, or tabs of the earlier deployment must keep their room until users save their work. |
+
+Try the procedure on copies of your rooms in a test deployment before you upgrade production rooms. Collaboration undo history starts afresh in a migrated room.
+
+### Upgrade rooms to format 1.4.2.1
+
+Format `docx-collaboration:1.4.2.1` stores each paragraph's text, runs, and character formatting as one shared text, and changes how participants resolve concurrent edits:
+
+- Two participants who change different properties of one paragraph, or apply different formatting to the same characters, at the same time both keep their change. Earlier formats kept one participant's whole set of properties.
+- Text a participant types into a run that another participant deletes or reformats at the same time is kept.
+- Text a participant types into a paragraph that another participant joins into the paragraph before it is kept, after the text it was typed beside.
+- When two participants split or join the same text at the same time, each character shows once.
+- Text a participant types over a selection is placed before the text it replaces. Undo then restores the old text where the replacement stood, even after another participant typed at that place.
+
+Participants with earlier formats store paragraphs differently and would show different documents, so the formats refuse to share a room. Migrate each saved room. For rooms that you store, see [Migrate rooms on a server](#migrate-rooms-on-a-server).
+
+A room in which participants changed one paragraph's properties at the same time can export that paragraph with two `w:pPr` elements. The new build reads such a paragraph with its first `w:pPr` and keeps the second unchanged, so the paragraph shows and saves in the migrated room.
+
+### Migrate rooms on a server
+
+`@docx-editor.dev/pro/collaboration` provides two functions for the new build. They take and return bytes, so they work with any storage:
+
+- `collaborationMigrationNeed(state)` returns `current`, `earlier-format`, or `later-format` for saved room state. Only an `earlier-format` room needs a migration. Never open or replace a `later-format` room with this build.
+- `migrateCollaborationRoom({ state, exported })` seeds a room in the current format from the export, and checks it against the export. The check compares every XML part: text, formatting, tables, sections, styles, numbering, tracked changes, comments, and notes. It ignores only what every save writes anew: namespace declarations, the relationship parts, the values of paragraph IDs and `w:id`, which a save can renumber, and revision IDs, which only need to be unique. A comment anchor, note reference, or bookmark must still name the same element. It also compares every media file and external link target. The new room keeps the earlier room's document ID, which its clients open it with.
+
+Before you start, ask users with offline or unsynchronized edits to reconnect so that their edits reach the room. After the migration, the server refuses tabs of the earlier build, and edits that never reached the room do not transfer. For more information, see [Preserve offline work across upgrades](#preserve-offline-work-across-upgrades).
+
+A migrated room keeps its room ID, so a client can still hold the earlier room in memory or in browser storage. A server of the new build needs two calls that a 2.27.0 server does not make:
+
+- `checkCollaborationRoomGeneration` in `beforeHandleMessage` refuses a client that holds the earlier room, before its state merges into the migrated room. A client of the new build reports `room-generation-changed` and rejoins. A tab of the earlier build is refused at each attempt until the user reloads it with the new build. For the server code, see [Compact rooms on a server](/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
+- `prepareCollaborationServerDocument`, called before the saved state loads, keeps the formatting markers that format 1.4.2.1 stores. If a Hocuspocus extension loads the state, call it from an extension that runs first. For more information, see [Prepare the room document on a server](/docs/2.x/pro/collaboration#prepare-the-room-document-on-a-server).
+
+To migrate the rooms, follow these steps:
+
+1. Stop every server that serves the rooms, and the background jobs that write to them. Nobody can edit a room during its migration.
+1. Back up the state of every room.
+1. Export every room with the build that created it, as described in [Export rooms with the earlier build](#export-rooms-with-the-earlier-build). Store each export with the digest of the state it was exported from.
+1. With the new build, run the migration with writes turned off, as described in [Migrate each room](#migrate-each-room). Check the result for every room.
+1. If any room returns an outcome other than `would-migrate` or `current`, stop here. No room has changed, so you can start the servers with the earlier build again. Resolve each such room as the outcomes table describes, then run this step again.
+1. If every room passes, run the migration again with writes turned on.
+1. Deploy the new build to the servers, with `prepareCollaborationServerDocument` and `checkCollaborationRoomGeneration` in place. If your app keeps room updates in browser storage, change the storage key in the new build, so that it does not load updates of the earlier room.
+1. Start the servers. Open a few migrated rooms with two clients, edit them, and export them.
+
+Keep the backups until you accept the migration.
+
+#### Export rooms with the earlier build
+
+Only the build that created a room can read its format, so install that build in a directory of its own. Node.js 22.18 or later runs the TypeScript files in it, and `type=module` makes Node.js read them as ES modules. Replace `2.27.0` with the release your servers ran:
+
+```bash
+mkdir room-export && cd room-export
+npm init -y && npm pkg set type=module
+npm install @docx-editor.dev/pro@2.27.0 @docx-editor.dev/core@2.27.0 yjs@^13.6.32
+```
+
+In that directory, export each room with `readCollaborationDocument`, and compute the SHA-256 of the exact state you exported. The following function returns both. Call it for each room, and store both values with the room:
+
+```ts
+import { createHash } from 'node:crypto';
+import * as Y from 'yjs';
+import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
+
+export function exportRoom(state: Uint8Array) {
+  const room = new Y.Doc();
+  try {
+    Y.applyUpdate(room, state);
+    return {
+      exported: readCollaborationDocument(room),
+      stateDigest: createHash('sha256').update(state).digest('hex'),
+    };
+  } finally {
+    room.destroy();
+  }
+}
+```
+
+Read each room's state exactly as you store it. If your storage keeps a room as a list of updates, see [Migrate rooms stored as update lists](#migrate-rooms-stored-as-update-lists) first.
+
+The digest ties the export to the state. If people edit a room after its export, the digests differ, and the migration refuses the room instead of losing those edits. Export that room again.
+
+#### Migrate each room
+
+The following function migrates one room in place with the new build. `storage` stands for your own storage. `dryRun` turns writes off.
+
+```ts
+import { createHash } from 'node:crypto';
+import {
+  CollaborationSchemaError,
+  collaborationMigrationNeed,
+  migrateCollaborationRoom,
+  type CollaborationMigrationReport,
+} from '@docx-editor.dev/pro/collaboration';
+
+type SavedExport = { exported: Uint8Array; stateDigest: string };
+
+declare const storage: {
+  readRoom(roomId: string): Promise<Uint8Array>;
+  readExport(roomId: string): Promise<SavedExport | null>;
+  backUpRoom(roomId: string, state: Uint8Array): Promise<void>;
+  writeRoom(roomId: string, state: Uint8Array): Promise<void>;
+};
+
+async function migrateRoom(roomId: string, dryRun: boolean) {
+  const state = await storage.readRoom(roomId);
+  try {
+    const need = collaborationMigrationNeed(state);
+    if (need !== 'earlier-format') return need;
+    const saved = await storage.readExport(roomId);
+    if (!saved) return 'no-export';
+    const digest = createHash('sha256').update(state).digest('hex');
+    if (saved.stateDigest !== digest) return 'stale-export';
+    const migrated = await migrateCollaborationRoom({
+      state,
+      exported: saved.exported,
+    });
+    if (!migrated.ok) {
+      if (migrated.reason !== 'check-failed') return migrated.reason;
+      logReport(roomId, migrated.report);
+      return 'failed-check';
+    }
+    logReport(roomId, migrated.report);
+    if (dryRun) return 'would-migrate';
+    await storage.backUpRoom(roomId, state);
+    await storage.writeRoom(roomId, migrated.state);
+    return 'migrated';
+  } catch (error) {
+    if (!(error instanceof CollaborationSchemaError)) throw error;
+    console.error(roomId, error.code, error.detail);
+    return 'error';
+  }
+}
+
+function logReport(roomId: string, report: CollaborationMigrationReport) {
+  // Positions only: `differences` also holds document text.
+  const where = report.differences.map(
+    ({ kind, part, paragraph }) => `${kind} at ${part} #${paragraph}`
+  );
+  const hidden = report.hiddenAt.map((at) => `${at.part} #${at.paragraph}`);
+  console.log(roomId, report.failed, report.differenceCount, where, hidden);
+}
+```
+
+A room in the current format returns `current`, so you can run the migration again after an interruption. Write each room's new state in one atomic write, so an interruption leaves either the earlier state or the new one.
+
+The function returns one of these outcomes:
+
+| Outcome | Meaning | What you do |
+| --- | --- | --- |
+| `migrated`, `would-migrate` | The new room passed the check. | Review the paragraphs the report lists in `hiddenAt`, if any. |
+| `current` | The room is in the current format. | Nothing. |
+| `failed-check` | The new room differs from the export. The room is unchanged. | Do not finish the migration. Contact support with the report. |
+| `no-export` | The room has no export. | Export it with the earlier build. |
+| `stale-export` | The room changed after its export. | Export it again. |
+| `later-format` | A later build wrote the room. | Serve it with that build. |
+| `error` | An input cannot be used. The room is unchanged. | Act on the error code, as the next table describes. |
+
+A thrown error carries one of these codes:
+
+| Code | Meaning | What you do |
+| --- | --- | --- |
+| `not-initialized` | The state holds no document that a build can open. | Keep the state with your backups, and remove the room from the set you migrate. |
+| `invalid-document-id` | The earlier room holds no usable document ID. | Pass the ID that the room's clients use as `documentId`. |
+| `invalid-baseline` | The bytes are not room state, or the export is not a DOCX. | Read the room and its export again. If the error stays, contact support. |
+| A limit code, such as `too-many-nodes` | The export is larger than a room can hold. | Contact support with the code. |
+
+The report lists differences in document order. Read the first one: when a paragraph is missing, every later paragraph also differs by position. `changedParts` names each XML part that differs.
+
+The report's `hidden` field counts paragraphs that the new room keeps but the editor cannot show or edit, and `hiddenAt` gives the first positions. They save back unchanged and do not fail the check. Review such rooms before people edit them again.
+
+#### Migrate rooms stored as update lists
+
+If your storage keeps a room as a list of updates, merge the list once before the export. Merge it with `Y.mergeUpdates` in the earlier build, and write the merged state back as the room's only update. Then export the room, and compute the digest over the stored merged state. The migration reads the same bytes, so the digests match. After the migration, replace the whole list with the migrated state.
+
+#### Plan the migration window
+
+Editing stops for the whole migration, so measure it on copies of your largest rooms first. The migration runs in a worker process, not in your collaboration server, and the memory it needs is for that worker only. Its time and memory grow in proportion to the number of paragraphs in the room.
+
+The following figures are for one room, under Node.js 25 on an Apple M4 Pro. Minimum heap is the smallest `--max-old-space-size` with which the migration completes. Peak RSS is the most memory the whole process held, including Node.js itself.
+
+| Room                                                | Time         | Minimum heap | Peak RSS  |
+| --------------------------------------------------- | ------------ | ------------ | --------- |
+| 340 paragraphs, with images                         | 0.5 seconds  | 49 MiB       | 353 MiB   |
+| 1,000 paragraphs                                    | 0.8 seconds  | 131 MiB      | 473 MiB   |
+| 2,644 paragraphs, with comments and tracked changes | 2.3 seconds  | 423 MiB      | 1,050 MiB |
+| 5,000 paragraphs                                    | 3.6 seconds  | 558 MiB      | 1,490 MiB |
+| 12,841 paragraphs on 521 pages                      | 10.1 seconds | 1,047 MiB    | 2,110 MiB |
+| 20,000 paragraphs                                   | 16.8 seconds | 2,133 MiB    | 3,113 MiB |
+
+As a rule, allow about 110 MiB of heap for each 1,000 paragraphs, plus a margin. For example, a worker for rooms of up to 10,000 paragraphs runs with `node --max-old-space-size=1536`. Migrate one room at a time in each worker, and run several workers if you need more throughput. To measure your own rooms, use the [migration memory benchmark](https://github.com/eigenpal/docx-editor/tree/main/benchmarks/collaboration-server#measure-room-migration-memory).
+
+#### Roll back a migration
+
+To return a room to the earlier build, follow these steps:
+
+1. Stop the servers that run the new build.
+1. If people edited the room after its migration, export it with the new build, and keep the DOCX. Those edits do not transfer back.
+1. Restore the backup of the room's earlier state.
+1. Start the servers with the earlier build.
+
+The example server keeps each backup as `<room>.ydoc.previous`.
+
+#### Run the example scripts
+
+The Hocuspocus example includes scripts that run this procedure for every room that the example server stores. They have a dry run and a JSON report, and they keep a backup of each room. For the steps, see [Migrate saved rooms](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus#migrate-saved-rooms).
+
+### Replace rooms with new IDs
+
+Use this procedure when you cannot stop editing for a migration:
+
+1. Pause editing in the old deployment, including background jobs. Let accepted updates finish. Ask users with offline or unsynchronized edits to reconnect to that deployment or save their work for reconciliation.
+1. Back up each room and any separately stored files. Keep the application build that can open the backup. Export a DOCX with that build, as described in [Export rooms with the earlier build](#export-rooms-with-the-earlier-build).
+1. Reopen the exported DOCX. Check the expected text, formatting, comments, tracked changes, tables, and embedded content. Resolve missing work before proceeding. An export does not repair pre-existing document damage.
+1. Deploy compatible clients, room servers, agents, and export workers. Create the replacement room with `migrateCollaborationRoom({ state, exported, documentId })`, where `documentId` is the new room's ID. Store its state under a new storage key, then route your application's document link to that room.
+1. Use a new browser persistence key for the replacement room, if your app stores edits locally. Keep old tabs and queued updates attached to the old room. Do not copy saved room data or pending updates into the replacement room.
+1. Open the replacement room with two clients. Check editing and DOCX export before you resume normal access. Keep the old room and backups read-only until you accept the migration.
+
+Unsynchronized edits do not transfer automatically. Keep recovered local documents until their changes have been reconciled.
+
+Before editing starts in the replacement room, you can restore the previous deployment and route users back to the original room. After editing starts, pause the replacement room and preserve its changes first. Export with its compatible build, then reconcile those changes before returning users to the previous deployment. Do not send replacement-room updates to the original room.
+
+## Help users recover
+
+Use the failure's `code` for application logic. Keep `detail` in diagnostic logs; show users an action they can take.
+
+A thrown `CollaborationSchemaError` for a version mismatch includes recovery instructions and this guide's URL in its `message`. Framework hooks expose a structured failure through `error`; render your own message and a link to [the collaboration upgrade guide](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions). Open the guide in a separate tab so users can keep their local document available.
+
+| Where compatibility fails | Suggested message | Application action |
+| --- | --- | --- |
+| A client is refused before synchronization | “This app version cannot join the document. Save any local work, then open the compatible app version.” | Offer the correct deployment link. If that deployment is already active, offer a reload after saving local work. |
+| Your server cannot open a saved room | “This document needs a collaboration upgrade. Contact your administrator.” | Keep the saved room and follow the migration procedure. |
+| An active session reports a version mismatch | “Collaboration stopped. Save a copy of your changes before continuing.” | Preserve local work and investigate the client and room versions. |
+
+The codes `collaboration-format-mismatch`, `protocol-version-mismatch`, and `schema-version-mismatch` have one meaning: this client and the room use different collaboration formats. Stop reconnect attempts, preserve local work, and open a deployment that matches the room or upgrade the saved room. The code alone does not identify whether a client or saved room needs attention. Use the operation that failed to choose the message. Repeated reconnects cannot upgrade an incompatible room.
+
+If an editor is mounted, offer a DOCX download using `await editor.save()` before reloading or replacing its session. Keep the copy if reconnection fails. Rejoining uses the room's document; it does not merge the saved local copy.
+
+For other failures, see [Recover a diverged replica](/docs/2.x/pro/collaboration#recover-a-diverged-replica).
+
+## Preserve offline work across upgrades
+
+A client can have unsynchronized edits when a deployment changes. Refusing its connection does not transfer those edits. Keep its local document available and offer a DOCX download before reloading, clearing browser storage, or leaving.
+
+If possible, reconnect that client to the compatible previous deployment before exporting the migration snapshot. Otherwise, reconcile its saved DOCX separately. Do not replay old queued updates into a replacement room.
+
+## Package versions and collaboration versions
+
+Package versions identify releases. The collaboration format version identifies which clients, workers, and rooms can work together. Use the format assertion for connection decisions and read release notes before deploying an update.
+
+A minor package release can require room migration. The format-version check detects incompatible rooms; it does not migrate them.
+
+## Verify a deployment
+
+Before admitting production traffic, verify these outcomes in a test deployment:
+
+- Compatible clients can join, edit, reconnect, and export a document.
+- Incompatible clients are refused before they can send document updates.
+- An incompatible saved room is refused without being changed or deleted.
+- Offline work remains recoverable when a user returns after an upgrade.
+- Migrated rooms open with two clients, accept edits, and export the expected document.
+- `collaborationMigrationNeed` returns `current` for every saved room.
+- A tab of the earlier build is refused, and a tab of the new build that held the earlier room rejoins after `room-generation-changed`.
+
+## Next steps
+
+For a runnable server example, see the [Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus).

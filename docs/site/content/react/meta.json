@@ -1,4 +1,4 @@
 {
   "title": "React",
-  "pages": ["index", "props", "examples"]
+  "pages": ["index", "composition", "hooks", "props", "examples"]
 }

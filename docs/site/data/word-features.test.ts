@@ -1,0 +1,125 @@
+import { describe, expect, test } from 'bun:test';
+import { FEATURE_TIERS, wordFeatures } from './word-features.ts';
+
+function feature(id: string) {
+  const row = wordFeatures.find((f) => f.id === id);
+  if (!row) throw new Error(`missing feature row: ${id}`);
+  return row;
+}
+
+describe('word-features — the matrix itself', () => {
+  test('every row declares a tier this site can render', () => {
+    // A `tier: 'pro'` shipped here because no typecheck project included this file. The union
+    // is the type gate; this is the one the suite runs.
+    const tiers = new Set<string>(FEATURE_TIERS);
+    const invalid = wordFeatures
+      .filter((row) => !tiers.has(row.tier))
+      .map((row) => `${row.id}: ${String(row.tier)}`);
+    expect(invalid).toEqual([]);
+  });
+
+  test('every row has a unique id, so `feature()` cannot silently read the wrong row', () => {
+    const ids = wordFeatures.map((row) => row.id);
+    expect(ids.length).toBe(new Set(ids).size);
+  });
+});
+
+describe('word-features — images lane honesty', () => {
+  test('inline and anchored editing is partial in both adapters', () => {
+    for (const id of ['images.inline', 'images.anchored'] as const) {
+      const row = feature(id);
+      expect(row.editing).toBe('partial');
+      expect(row.rendering).toBe('full');
+      expect(row.roundTrip).toBe('full');
+      expect(row.notes?.toLowerCase()).toContain('both');
+    }
+  });
+
+  test('raster decode/paint is full for inline and anchored rows', () => {
+    expect(feature('images.inline').rendering).toBe('full');
+    expect(feature('images.anchored').rendering).toBe('full');
+  });
+
+  test('legacy and undecodable formats are preserved with placeholder rendering, not full paint', () => {
+    const wmf = feature('images.wmf');
+    expect(wmf.rendering).toBe('partial');
+    expect(wmf.roundTrip).toBe('full');
+    expect(wmf.editing).toBe('none');
+    expect(wmf.notes?.toLowerCase()).toMatch(/placeholder|converter/);
+  });
+
+  test('SVG renders but is not claimed as insertable', () => {
+    const svg = feature('images.svg');
+    expect(svg.rendering).toBe('full');
+    expect(svg.roundTrip).toBe('full');
+    expect(svg.editing).toBe('none');
+    expect(svg.notes?.toLowerCase()).toContain('insert');
+  });
+
+  test('unsupported non-picture payloads are preserved inertly, not claimed as supported', () => {
+    for (const id of ['images.charts', 'images.smartart', 'images.shapes'] as const) {
+      const row = feature(id);
+      expect(row.editing).toBe('none');
+      expect(row.rendering).toBe('partial');
+      expect(row.roundTrip).toBe('preserved');
+      expect(row.notes?.toLowerCase()).toMatch(/placeholder|preserv|generic|inert/);
+    }
+  });
+
+  test('textboxes report partial editing with explicit limits', () => {
+    const row = feature('images.textboxes');
+    expect(row.editing).toBe('partial');
+    expect(row.rendering).toBe('partial');
+    expect(row.roundTrip).toBe('preserved');
+    expect(row.notes).toContain('read-only');
+  });
+
+  test('tracked image revisions report insert and delete support', () => {
+    const row = feature('images.tracked');
+    expect(row.editing).toBe('partial');
+    expect(row.rendering).toBe('full');
+    expect(row.roundTrip).toBe('full');
+    expect(row.notes).toMatch(/insertion and deletion/);
+    expect(row.notes).toMatch(/property edits are unavailable/);
+  });
+
+  test('crop renders fully; React-only properties editing is partial', () => {
+    const row = feature('images.crop');
+    expect(row.rendering).toBe('full');
+    expect(row.editing).toBe('partial');
+    expect(row.roundTrip).toBe('full');
+  });
+});
+
+describe('word-features — lossless round-trip contract', () => {
+  test('every tracked construct is full or preserved on round-trip', () => {
+    for (const row of wordFeatures.filter((item) => item.category !== 'export')) {
+      expect(['full', 'preserved']).toContain(row.roundTrip);
+    }
+  });
+
+  test('inert constructs proven by the focused preservation fixture stay marked preserved', () => {
+    for (const id of [
+      'lists.picture-bullets',
+      'images.effects',
+      'images.ink',
+      'layout.background',
+      'fields.citations',
+      'fields.legacy-forms',
+      'structure.ole',
+    ]) {
+      expect(feature(id).roundTrip).toBe('preserved');
+    }
+    expect(feature('images.adjustments').roundTrip).toBe('full');
+  });
+});
+
+test('export formats declare conversion limits without claiming round-trip support', () => {
+  for (const id of ['export.markdown', 'export.pdf', 'export.print']) {
+    const row = feature(id);
+    expect(row.category).toBe('export');
+    expect(row.rendering).toBe('partial');
+    expect(row.roundTrip).toBe('none');
+    expect(row.notes).toContain('Missing handlers');
+  }
+});

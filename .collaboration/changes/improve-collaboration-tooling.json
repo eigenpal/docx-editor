@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Tooling errors and interrupted catalog publication are difficult to reproduce or recover.",
+  "after": "Commands validate arguments early, preserve failure context, check targeted fixture hashes, and resume catalog PR creation.",
+  "reason": "These changes affect development and release tooling without changing shared data, document APIs, or runtime compatibility.",
+  "tests": ["scripts/collaboration/developer-experience.test.ts"],
+  "changeset": null,
+  "migration": null
+}

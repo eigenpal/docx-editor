@@ -1,0 +1,236 @@
+/**
+ * `@docx-editor.dev/core/contracts/document` — the document-level edit and query vocabulary.
+ *
+ * The subset that means something without a live editor: what an automation host or an LLM tool
+ * can ask for and change.
+ *
+ * A CONTRACT module, not a barrel. `contracts/editor` builds the `Editor` command and query
+ * surfaces on top of these, so they cannot live in the package root: the root re-exports
+ * runtime from `../editor`, and a contract importing the root would invert the dependency —
+ * safe today only because that import is type-only, and one accidental value import away from
+ * pulling the painted engine into a server bundle.
+ *
+ * @packageDocumentation
+ * @public
+ */
+
+import type {
+  ContainerRef,
+  ContentControlFilter,
+  ContentControlType,
+  DocComment,
+  DocRange,
+  InsertableContentControlType,
+  Revision,
+  StyleDefinitions,
+  DocTarget,
+  DocxDocument,
+  ExecResult,
+  Extent,
+  RunFormatting,
+} from './types';
+
+// Re-exported because the signatures below hand every one of them to a caller. This entry
+// point is meant to be usable on its own — an automation host or a tool layer names it
+// without touching the editor contract — so a name it returns and does not export is a
+// result the caller cannot type.
+export type {
+  Block,
+  ColorValue,
+  ContainerRef,
+  ContentControl,
+  ContentControlFilter,
+  ContentControlType,
+  DocAnchor,
+  DocAnchorRange,
+  DocComment,
+  DocLocation,
+  DocRange,
+  DocTarget,
+  DocumentBody,
+  DocxDocument,
+  ExecErrorCode,
+  ExecResult,
+  Extent,
+  HeaderFooterSet,
+  IndentFormatting,
+  InsertableContentControlType,
+  Paragraph,
+  ParagraphFlags,
+  ParagraphTabStop,
+  Revision,
+  RevisionType,
+  RunFormatting,
+  Section,
+  SectionProperties,
+  StyleDefinition,
+  StyleDefinitions,
+  Table,
+  Theme,
+  ThemeColorScheme,
+} from './types';
+
+// ─── Edits ───────────────────────────────────────────────────────────────────
+
+/**
+ * The document-executable edit vocabulary.
+ *
+ * An interface rather than a closed union so extensions can widen it by
+ * declaration merging. A sealed union cannot be extended by a plugin, and the
+ * runtime dispatch is already registry-backed.
+ */
+export interface DocEdits {
+  insertText: { target: DocTarget; text: string };
+  replaceText: { target: DocTarget; text: string };
+  deleteText: { target: DocTarget };
+  applyFormatting: { target: DocTarget; marks: RunFormatting };
+  setParagraphStyle: { target: DocTarget; styleId: string };
+  insertTable: { target: DocTarget; rows: number; cols: number };
+  insertImage: { target: DocTarget; data: Uint8Array; extent?: Extent };
+  insertHyperlink: { target: DocTarget; href: string; text?: string };
+  removeHyperlink: { target: DocTarget };
+  /**
+   * `'section'` is Word's Next Page break; `'sectionContinuous'` keeps the new section on
+   * the sheet the previous one ended, which is how a mid-page column or margin change is
+   * authored. `'column'` belongs to the multi-column lane and is refused for now.
+   */
+  insertBreak: {
+    target: DocTarget;
+    kind: 'page' | 'column' | 'line' | 'section' | 'sectionContinuous';
+  };
+  /**
+   * Word's Increase/Decrease Indent.
+   *
+   * A numbered or bulleted paragraph changes LEVEL, so its marker re-resolves from the
+   * numbering definition — a bullet becomes a hollow circle, a `1.` becomes an `a.`.
+   * Every other paragraph moves its left indent by one default tab stop.
+   */
+  adjustIndent: { target: DocTarget; direction: 'increase' | 'decrease' };
+  /**
+   * Word's Bullets and Numbering.
+   *
+   * Turns the selection into a list, or takes it out of one when it already is. The
+   * definition is created on first use, `numbering.xml` included.
+   */
+  toggleList: { target: DocTarget; kind: 'bullet' | 'ordered' };
+  splitParagraph: { target: DocTarget };
+  mergeParagraphs: { target: DocTarget };
+  setVariable: { name: string; value: string };
+  applyVariables: { values: Record<string, string> };
+
+  /**
+   * Authored family. `author` is required: tracked-ness is verb identity, not a
+   * boolean flag, so there is no global trackChanges toggle to forget.
+   */
+  proposeReplacement: { target: DocTarget; replaceWith: string; author: string };
+  proposeInsertion: { target: DocTarget; text: string; author: string };
+  proposeDeletion: { target: DocTarget; author: string };
+  addComment: { target: DocTarget; text: string; author: string };
+  replyComment: { commentId: string; text: string; author: string };
+  resolveComment: { commentId: string };
+
+  acceptRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
+  rejectRevision: { id: number; part?: 'body' | 'footnote' | 'endnote'; noteId?: number };
+  acceptAllRevisions: Record<never, never>;
+  rejectAllRevisions: Record<never, never>;
+
+  /**
+   * Author a NEW control over the addressed span.
+   *
+   * A RANGE becomes a wrapper around the characters that are already there. A COLLAPSED
+   * position inserts an empty control showing its type's prompt, which is Word's own gesture
+   * and the one a template host reaches for: the first character typed replaces the prompt
+   * whole, so nothing has to detect and undo text the caller never asked for.
+   *
+   * `title` is Word's `w:alias` — the label a user sees — and `tag` is `w:tag`, the
+   * machine-readable identity a host looks the control back up by. Named as the automation
+   * protocol names them, so a caller who reaches for both surfaces writes one vocabulary.
+   *
+   * One paragraph only. A control that starts in one paragraph and ends in another is a BLOCK
+   * wrapper over both, a different element than the inline one this authors — refused rather
+   * than guessed, so a caller learns which they asked for.
+   */
+  insertContentControl: {
+    target: DocTarget;
+    subtype: InsertableContentControlType;
+    tag?: string;
+    title?: string;
+  };
+  setContentControlValue: { target: DocTarget; value: string };
+  removeContentControl: { target: DocTarget };
+  addRepeatingSectionItem: { target: DocTarget; index?: number };
+  removeRepeatingSectionItem: { target: DocTarget; index: number };
+}
+
+/**
+ * One edit, as a discriminated union derived from {@link DocEdits}.
+ *
+ * Adding a key to `DocEdits` — including by declaration merging from a plugin — widens this
+ * automatically, so the union never drifts from the vocabulary it is built out of.
+ */
+export type DocEdit = { [K in keyof DocEdits]: { type: K } & DocEdits[K] }[keyof DocEdits];
+
+/**
+ * What applying a batch of edits produced: the new document, and a per-edit verdict.
+ *
+ * `results` is positionally aligned with the input, so an edit that failed is identified by its
+ * index rather than by anything the caller has to correlate.
+ */
+export interface ApplyResult {
+  doc: DocxDocument;
+  /** One per edit, positionally aligned with the input. */
+  results: ExecResult[];
+}
+
+// ─── Queries ─────────────────────────────────────────────────────────────────
+
+/**
+ * The document-readable query vocabulary, keyed identically to {@link DocQueryResults}.
+ *
+ * An interface rather than a closed union for the same reason {@link DocEdits} is: an extension
+ * widens it by declaration merging, and the runtime dispatch is registry-backed.
+ */
+export interface DocQueries {
+  paragraphs: { container?: ContainerRef };
+  findText: { text: string; container?: ContainerRef };
+  contentControls: { filter?: ContentControlFilter };
+  revisions: { part?: 'body' | 'footnote' | 'endnote' };
+  comments: { resolved?: boolean };
+  styles: Record<never, never>;
+  variables: Record<never, never>;
+}
+
+/** One query, as a discriminated union derived from {@link DocQueries}. */
+export type DocQuery = { [K in keyof DocQueries]: { type: K } & DocQueries[K] }[keyof DocQueries];
+
+/** What each query returns. Keyed identically to `DocQueries`. */
+export interface DocQueryResults {
+  paragraphs: readonly ParagraphSummary[];
+  findText: readonly DocRange[];
+  contentControls: readonly ContentControlSummary[];
+  revisions: readonly Revision[];
+  comments: readonly DocComment[];
+  styles: StyleDefinitions;
+  variables: Readonly<Record<string, string>>;
+}
+
+/**
+ * A paragraph reduced to what a listing needs: its stable handle, its text, and its style.
+ *
+ * `paraId` is what a follow-up edit addresses, so a summary without one names a paragraph the
+ * file gave no `w14:paraId` and that a `DocAnchor` cannot reach.
+ */
+export interface ParagraphSummary {
+  readonly paraId?: string;
+  readonly text: string;
+  readonly styleId?: string;
+}
+
+/** A content control reduced to what a listing needs: its identity, kind, and lock state. */
+export interface ContentControlSummary {
+  readonly id: string;
+  readonly tag?: string;
+  readonly alias?: string;
+  readonly controlType: ContentControlType;
+  readonly locked?: boolean;
+}

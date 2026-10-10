@@ -1,0 +1,55 @@
+name: Verify release
+
+# Checks that the published packages match the original tested candidate. Called by the
+# post-release workflow and by Recover release; every downstream update needs it.
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      source_run_id:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    name: Verify published packages
+    if: github.ref == 'refs/heads/main'
+    # Serializes the verification of automatic and manual updates without locking
+    # publication. Only this short job holds the group: GitHub keeps one pending run per
+    # group, and an hour-long site wait would let a newer request cancel a queued one. The
+    # site jobs check npm latest before they send a request, so a late one cannot move a
+    # site back.
+    concurrency:
+      group: post-release-updates
+      cancel-in-progress: false
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Validate the original release run and tag
+        run: node scripts/collaboration/recovery.mjs source
+      - name: Download the original tested candidate
+        uses: actions/download-artifact@v8
+        with:
+          name: collaboration-candidate
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: .cache/collaboration/recovery
+      - name: Verify archived tarballs and published integrity
+        run: node scripts/collaboration/recovery.mjs verify .cache/collaboration/recovery
+

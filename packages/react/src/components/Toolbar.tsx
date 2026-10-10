@@ -1,3 +1,6 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { RefObject } from '../docx-editor-ref-object';
+import type { ReactNode } from 'react';
 /**
  * Toolbar Component
  *
@@ -12,14 +15,11 @@
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from '../i18n';
-import type { CSSProperties, ReactNode } from 'react';
-import type {
-  ColorValue,
-  ParagraphAlignment,
-  Style,
-  Theme,
-} from '@docx-editor.dev/core/types/document';
-import { resolveColorToHex } from '@docx-editor.dev/core/utils';
+import type { CSSProperties } from 'react';
+import type { ColorValue, Theme } from '@docx-editor.dev/core/contracts/editor';
+import { resolveColorToHex } from '../lib/colorResolver';
+import type { DocumentStyleSummary } from '../lib/stylePreview';
+import type { ParagraphAlignment } from './ui/AlignmentButtons';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { FontPicker } from './ui/FontPicker';
@@ -117,6 +117,7 @@ export type FormattingAction =
 
 /**
  * Props for the Toolbar (formatting rail) component
+ * @deprecated Use `DocxEditor.Toolbar` from the composition layer instead.
  */
 export interface ToolbarProps {
   /** Current formatting of the selection */
@@ -140,9 +141,9 @@ export interface ToolbarProps {
   /** Whether to enable keyboard shortcuts (default: true) */
   enableShortcuts?: boolean;
   /** Ref to the editor container for keyboard events */
-  editorRef?: React.RefObject<HTMLElement>;
+  editorRef?: RefObject<HTMLElement>;
   /** Custom toolbar items to render at the end */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
   /** When true, renders with display:contents so children flow in the parent flex container */
   inline?: boolean;
   /** Whether to show font family picker (default: true) */
@@ -174,8 +175,8 @@ export interface ToolbarProps {
   showLineSpacingPicker?: boolean;
   /** Whether to show style picker (default: true) */
   showStylePicker?: boolean;
-  /** Document styles for the style picker */
-  documentStyles?: Style[];
+  /** Document styles for the style picker (`Editor.getDocumentStyles()`). */
+  documentStyles?: readonly DocumentStyleSummary[];
   /** Theme for the style picker / color picker theme matrix */
   theme?: Theme | null;
   /** Callback for print action. Set to enable the File > Print menu entry. */
@@ -287,6 +288,7 @@ export interface ToolbarGroupProps {
 /**
  * Individual toolbar button with shadcn styling
  */
+/** @deprecated Use `DocxEditor.Toolbar` button parts instead. */
 export function ToolbarButton({
   active = false,
   disabled = false,
@@ -315,16 +317,21 @@ export function ToolbarButton({
       variant="ghost"
       size="icon-sm"
       className={cn(
-        // Hover + active states live in editor.css (.ep-toolbar-toggle); see
+        // Hover + active states live in editor.css (.docx-editor-toolbar-toggle); see
         // that rule for why they're not Tailwind utilities here.
-        'ep-toolbar-toggle text-muted-foreground',
+        'docx-editor-toolbar-toggle text-muted-foreground',
         disabled && 'opacity-30 cursor-not-allowed',
         className
       )}
       data-active={active ? 'true' : undefined}
       onMouseDown={handleMouseDown}
       onClick={disabled ? undefined : onClick}
-      disabled={disabled}
+      // Native disabled controls receive no mouse event in Chromium, so their
+      // preventDefault handler cannot preserve the editor's focus/caret.
+      // Keep the control semantically disabled and out of tab order while
+      // allowing pointer-down cancellation at the toolbar boundary.
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
       aria-pressed={active ? true : false}
       aria-label={ariaLabel || title}
       data-testid={testId ? `toolbar-${testId}` : undefined}
@@ -343,6 +350,7 @@ export function ToolbarButton({
 /**
  * Toolbar button group with modern styling
  */
+/** @deprecated Use `DocxEditor.Toolbar` group parts instead. */
 export function ToolbarGroup({ label, children, className }: ToolbarGroupProps) {
   return (
     <div
@@ -396,6 +404,7 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
  * Icon-based formatting toolbar — undo/redo, zoom, styles, fonts,
  * bold/italic/underline, colors, alignment, lists, table/image context, clear formatting.
  */
+/** @deprecated Use `DocxEditor.Toolbar` from the composition layer instead. */
 export function Toolbar(explicitProps: ToolbarProps) {
   const { t } = useTranslation();
   const props = useToolbarProps(explicitProps);
@@ -574,6 +583,14 @@ export function Toolbar(explicitProps: ToolbarProps) {
     if (!enableShortcuts) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      // FAIL SOFT on a chord someone else already claimed, like the shared engine keymap.
+      //
+      // This is a `document`-level BUBBLE listener, so anything the host claimed on the way
+      // down has already run: `DocxEditor.Viewport` takes Ctrl/Cmd `=` (and its shifted `+`
+      // spelling) for live zoom during capture, and Word's subscript/superscript is bound to
+      // the same chord below. Without this, a host that mounts this toolbar around the new
+      // viewport got the zoom AND the script toggle from one keystroke.
+      if (event.defaultPrevented) return;
       const target = event.target as HTMLElement;
       const editorContainer = editorRef?.current;
       const barContainer = barRef.current;
@@ -955,11 +972,6 @@ export function Toolbar(explicitProps: ToolbarProps) {
 // RE-EXPORTED UTILITIES (from toolbarUtils.ts)
 // ============================================================================
 
-export {
-  getSelectionFormatting,
-  applyFormattingAction,
-  hasActiveFormatting,
-  mapHexToHighlightName,
-} from './toolbarUtils';
+export { getSelectionFormatting, hasActiveFormatting, mapHexToHighlightName } from './toolbarUtils';
 
 export default Toolbar;

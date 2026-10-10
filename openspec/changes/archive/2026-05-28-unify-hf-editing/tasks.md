@@ -72,7 +72,7 @@ Deferred:
 ## 7. Phase 6 — Vue adapter parity
 
 - [ ] 7.1 Mirror the `useHeaderFooterPM` hook into `packages/vue/src/composables/useDocxEditor.ts` (as a Vue composable using `ref`/`onMounted` semantics).
-- [ ] 7.2 Lift platform-agnostic pieces (`findHfPmSpans`, the projection sync logic) into `packages/core/` per CLAUDE.md's parity rule (the float-zone pipeline is the canonical example to copy).
+- [ ] 7.2 Centralize platform-agnostic pieces (`findHfPmSpans`, the projection sync logic) into `packages/core/` per CLAUDE.md's parity rule (the float-zone pipeline is the canonical example to copy).
 - [ ] 7.3 Apply phases 1–5 equivalent changes to the Vue example/composable.
 - [ ] 7.4 Run `bun run check:parity-contract`; resolve any divergences (add to `paired` / `pairedViaInheritance` buckets as appropriate).
 - [ ] 7.5 Verify both example apps (vite React at `examples/vite`, Vue at `examples/vue`) load the fixture and edit a header without regression.

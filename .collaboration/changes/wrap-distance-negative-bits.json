@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Drawing projection clamped wrap distances above the signed 32-bit maximum, and digit strings past the unsigned range, to the largest distance. VML projection refused negative or exponent wrap distances. Wrap changes copied distances through Number() and wrote every wrap-side distance, as 0 when the old wrap element omitted it.",
+  "after": "Drawing projection reads wrap distances above the signed 32-bit maximum and malformed values as zero. VML projection reads exponent wrap distances and reads negatives as zero. Wrap changes copy valid unsigned distance text, write malformed values as zero, and omit wrap-side distances the old wrap element omitted, so the anchor distances keep applying.",
+  "reason": "The change is a read-only projection of existing document XML plus the attribute text a local wrap change writes. It adds no shared state, operations, snapshot fields, or protocol messages. Valid saved distance values are unchanged, and omitted wrap-side distances are optional in the schema, so readers take the anchor distance for those sides.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-wrap-distances.test.ts",
+    "packages/core/src/store/__tests__/tree-drawing-ops.test.ts",
+    "packages/core/src/layout/__tests__/footer-wrap-distance.test.ts"
+  ],
+  "changeset": "wrap-distance-negative-bits",
+  "migration": null
+}

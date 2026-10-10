@@ -1,0 +1,93 @@
+---
+title: DOCX to Markdown
+description: Convert DOCX to Markdown in TypeScript or Python with layout-derived pages, headers, footers, comments, and tracked changes.
+category: Export formats
+---
+
+Use `@docx-editor.dev/docx-to-markdown` to convert Word documents into Markdown with individual pages, headers, footers, comments, and tracked changes.
+
+The converter runs DOCX Editor's layout engine in your Node.js process. It calculates page boundaries directly from DOCX, without running Microsoft Word, LibreOffice, a browser, or a Python service.
+
+[Try the DOCX to Markdown demo](https://docx-to-markdown.docx-editor.dev/).
+
+## Get started
+
+Use Node.js 20.16.0 or later in the 20.x release line, or 22.3.0 or later. The converter requires WebAssembly and bundled font files; see [deployment setup](/docs/2.x/export/markdown/integrations#nodejs-and-serverless-functions) when packaging your application.
+
+```sh
+npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core
+```
+
+Core is a required peer dependency. Install a version that satisfies the converter's peer dependency range and commit your lockfile.
+
+Save the following as `convert.mjs` and place `contract.docx` in the same directory:
+
+```js
+import { readFile } from 'node:fs/promises';
+import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+
+const result = await exportMarkdown(await readFile('contract.docx'), {
+  displayMode: 'proposed',
+});
+
+for (const page of result.pages) {
+  console.log(`Page ${page.number}`, page.markdown);
+  console.log(page.headerMarkdown, page.footerMarkdown);
+}
+
+console.log(result.markdown); // Continuous document body.
+console.log(result.warnings);
+```
+
+Run `node convert.mjs` from that directory. The output includes each page's body, header, and footer, followed by the continuous document body and any warnings.
+
+`'proposed'` includes pending insertions and hides pending deletions, which is useful when indexing proposed contract text. The default, `'all-markup'`, includes both. Exporting does not accept or reject changes in the source file.
+
+## Python
+
+The Python package [`docx-to-markdown` on PyPI](https://pypi.org/project/docx-to-markdown/) wraps the same converter in a self-contained executable, with no Node.js installation required. It provides document Markdown, individual pages, headers, footers, comments, and tracked changes. The converter requires Python 3.11 or later.
+
+```sh
+pip install docx-to-markdown
+```
+
+```python
+from docx_to_markdown import convert
+
+result = convert("contract.docx")
+print(result.markdown)
+```
+
+See the [Python package README](https://github.com/eigenpal/docx-editor/tree/main/python/docx-to-markdown#readme) for page output, fonts, images, and batch conversion.
+
+## Configure fonts for accurate layout
+
+Fonts determine line wrapping, table row heights, and the page boundaries in `result.pages`. Markdown does not preserve the DOCX font family, but the converter needs font measurements to calculate layout.
+
+Start with the bundled substitutes for common Word fonts. Use `fonts` to supply the author's licensed fonts or override a substitute. Use `fallbackFonts: googleFonts()` to load missing faces from Google Fonts; it requires network access and does not override faces already resolved by earlier sources.
+
+See [font setup and troubleshooting](/docs/2.x/export/markdown/fonts) for runnable examples, resolution reports, and guidance on matching page references to Word.
+
+## When to use it
+
+**Answers that need page references.** A search system can find the right clause and still leave the reader searching for it. For contract review, compliance checks, and audit reports, use `pages[]` to attach a reference such as “contract.docx, page 12” before splitting text into retrieval chunks. Headers and footers stay separate, so you can index body text without repeating those labels.
+
+**Conversion inside a Node.js application.** Call the converter from an upload handler, background job, or serverless function. Bundled fonts and WebAssembly supply the default text measurement, so deployment does not require an office application or an intermediate PDF. Conversion still needs CPU, memory, and its packaged assets; Edge runtimes are unsupported.
+
+**Document content and review data together.** Use `markdown` for the continuous document body and `reviewArtifacts` for comments and tracked changes. Enable `images` when your application also needs image links and extracted bytes.
+
+Page numbers describe the export snapshot and can differ from Microsoft Word because of fonts, document features, and revision settings. Store the document version with citations and inspect `warnings` for omitted content. See the [response model](/docs/2.x/export/markdown/api#response-model) for field semantics and limits.
+
+The converter uses the Apache 2.0 license, including review extraction. Bundled fonts retain their own open-source licenses. For interactive document editing with comments and tracked changes, see [Pro](/docs/2.x/pro).
+
+## Next steps
+
+- [Configure fonts and troubleshoot page layout](/docs/2.x/export/markdown/fonts).
+- [Include and deliver images](/docs/2.x/export/markdown/images).
+
+- [API reference](/docs/2.x/export/markdown/api): options, response fields, pagination, and images.
+- [Integrations](/docs/2.x/export/markdown/integrations): serverless deployment, Next.js, and retrieval pipelines.
+
+## Export from the editor
+
+For File menu setup in React and Vue, see [Export Markdown and PDF](/docs/2.x/guides/export).

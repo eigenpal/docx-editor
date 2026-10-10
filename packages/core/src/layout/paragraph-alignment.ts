@@ -1,0 +1,454 @@
+import { shrinkJustifiedSpans } from './paragraph-space-shrink.ts';
+import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
+import { paragraphIsRtl, reorderBidiSpans, splitBidiTrailingWhitespace } from './rtl-paragraph.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import { measureDisplayText } from './run-style.ts';
+import { styleForFontSlot } from './script-itemization.ts';
+import { justifyCjkSpans } from './cjk-justify.ts';
+import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
+
+const OVERFLOW_TOLERANCE_PT = 0.001;
+const SLACK_RESIDUE_PT = 1e-9;
+
+/** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
+export type Alignment = 'left' | 'center' | 'right' | 'both';
+
+/**
+ * The PHYSICAL alignment of a paragraph.
+ *
+ * In a bidi paragraph Word reads `left` and `right` as the leading and trailing edges, the
+ * same as `start` and `end`: `<w:bidi/><w:jc w:val="left"/>` sits at the right margin
+ * (verified against Word 16 PDF output). The kashida and Thai variants justify.
+ */
+export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
+  const rtl = paragraphIsRtl(props);
+  const leading: Alignment = rtl ? 'right' : 'left';
+  const trailing: Alignment = rtl ? 'left' : 'right';
+  let alignment: Alignment = leading;
+  for (const property of props) {
+    if (property.localName !== 'jc') continue;
+    switch (property.attributes?.val) {
+      case 'center':
+        alignment = 'center';
+        break;
+      case 'right':
+      case 'end':
+        alignment = trailing;
+        break;
+      case 'both':
+      case 'distribute':
+      case 'lowKashida':
+      case 'mediumKashida':
+      case 'highKashida':
+      case 'thaiDistribute':
+        alignment = 'both';
+        break;
+      default:
+        alignment = leading;
+    }
+  }
+  return alignment;
+}
+
+/**
+ * The `w:jc` value that puts a paragraph at a PHYSICAL edge, the inverse of
+ * {@link paragraphAlignment}: a bidi paragraph reaches its right margin with `left`.
+ */
+export function jcValueForAlignment(
+  alignment: 'left' | 'center' | 'right' | 'justify' | 'both',
+  rtl: boolean
+): string {
+  if (alignment === 'center') return 'center';
+  if (alignment === 'justify' || alignment === 'both') return 'both';
+  if (!rtl) return alignment;
+  return alignment === 'left' ? 'right' : 'left';
+}
+
+/**
+ * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
+ *
+ * Paint reapplies justification as CSS `word-spacing` on those same spaces. Inserting layout
+ * slack at every style-span boundary (tabs, run splits mid-phrase) put gaps where paint has
+ * none and shifted every later span — caret mid-word drifted by a multiple of the step while
+ * the highlight (DOM) stayed on the glyphs.
+ */
+function endsWithExpandableSpace(text: string): boolean {
+  return text.endsWith(' ');
+}
+
+/**
+ * A table cell ignores its page breaks, so a line that wrapped right after one aligns as the
+ * same line without it: otherwise the break span would end the content, and the space before
+ * it would count as text. The breaks then follow the aligned text. Null when the line does
+ * not end with such a break, or holds nothing else.
+ */
+function alignBeforeIgnoredBreaks(
+  spans: readonly StyleSpanRecord[],
+  align: (content: readonly StyleSpanRecord[]) => readonly StyleSpanRecord[]
+): readonly StyleSpanRecord[] | null {
+  let end = spans.length;
+  while (end > 0 && spans[end - 1]!.text === PAGE_BREAK_CHAR && spans[end - 1]!.box.width === 0) {
+    end -= 1;
+  }
+  if (end === 0 || end === spans.length) return null;
+  const aligned = align(spans.slice(0, end));
+  const before = spans[end - 1]!;
+  const after = aligned[aligned.length - 1]!;
+  const shift = after.box.x + after.box.width - (before.box.x + before.box.width);
+  return [
+    ...aligned,
+    ...spans.slice(end).map((span) => ({ ...span, box: { ...span.box, x: span.box.x + shift } })),
+  ];
+}
+
+/**
+ * Align logical spans before bidi reordering. Layout publishes the shared geometry.
+ * Justification expands inter-word spaces, matching paint's CSS word-spacing.
+ * Empty lines stay unchanged; callers publish their aligned origin as contentX.
+ */
+function alignLogicalSpans(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  indentLeft: number,
+  available: number,
+  alignment: Alignment,
+  isLastLine: boolean,
+  lineUsedWidth: number | undefined,
+  paragraphRtl: boolean,
+  pageBreaksIgnored: boolean,
+  lastLineShrinks: boolean
+): readonly StyleSpanRecord[] {
+  if (spans.length === 0) return spans;
+  // An unbounded line (a measuring pass) has no far edge to align or justify against.
+  if (alignment === 'left' || !Number.isFinite(available)) return spans;
+  if (pageBreaksIgnored) {
+    const aligned = alignBeforeIgnoredBreaks(spans, (content) =>
+      alignLogicalSpans(
+        content,
+        measurer,
+        indentLeft,
+        available,
+        alignment,
+        isLastLine,
+        lineUsedWidth,
+        paragraphRtl,
+        false,
+        lastLineShrinks
+      )
+    );
+    if (aligned) return aligned;
+  }
+
+  let trailingEnd = spans.length;
+  while (
+    trailingEnd > 0 &&
+    spans[trailingEnd - 1]!.box.width === 0 &&
+    (spans[trailingEnd - 1]!.text === '\n' || spans[trailingEnd - 1]!.text === PAGE_BREAK_CHAR)
+  ) {
+    trailingEnd -= 1;
+  }
+  let trailingStart = trailingEnd;
+  while (trailingStart > 0 && spans[trailingStart - 1]!.lineEndWhitespace) {
+    trailingStart -= 1;
+  }
+  const lastContentSpan = spans[trailingEnd - 1];
+  // Clipped whitespace runs hang past the content: with two of them the last one is a
+  // zero-width span AT the measure, so last-span arithmetic reports no slack at all. The
+  // content ends where the first hanging span starts, whatever hangs after it.
+  // Breaks alone do not hang: the content then ends where its own whitespace starts.
+  const hangingStart =
+    trailingStart < trailingEnd ? spans[trailingStart]!.box.x - indentLeft : undefined;
+  const spansReachLineEnd =
+    lineUsedWidth !== undefined &&
+    lastContentSpan !== undefined &&
+    Math.abs(lastContentSpan.box.x + lastContentSpan.box.width - indentLeft - lineUsedWidth) <=
+      OVERFLOW_TOLERANCE_PT;
+  if (
+    trailingStart < trailingEnd &&
+    spansReachLineEnd &&
+    (alignment === 'center' || alignment === 'right')
+  ) {
+    const slack = available - hangingStart!;
+    if (slack <= 0) return spans;
+    const offset = alignment === 'center' ? slack / 2 : slack;
+    const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
+    let fillX = spans[trailingStart]!.box.x + offset;
+    return spans.map((span, index) => {
+      if (index < trailingStart) return { ...span, box: { ...span.box, x: span.box.x + offset } };
+      if (!clipsAtMargin) return { ...span, box: { ...span.box, x: span.box.x + offset } };
+      const width = Math.min(span.box.width, Math.max(0, indentLeft + available - fillX));
+      const aligned = { ...span, box: { ...span.box, x: fillX, width } };
+      fillX += width;
+      return aligned;
+    });
+  }
+
+  // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
+  // is what Word does and what stops a line ending in a space from looking misaligned.
+  const last = spans[spans.length - 1]!;
+  // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
+  // same way: the difference is what the trailing whitespace measures, and mixing a drawn
+  // total with a source-measured visible part reports nearly the whole span as whitespace.
+  // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
+  // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
+  // over-stretches the line. Measured only on that path.
+  // Only U+0020 hangs. A tab or no-break space remains content after bidi alignment
+  // separates the zero-width break that follows it.
+  const trailingWhitespaceOf = (
+    span: StyleSpanRecord,
+    visible = withoutTrailingSpaces(span.text)
+  ): number =>
+    visible === span.text
+      ? 0
+      : span.box.width -
+        measureDisplayText(visible, styleForFontSlot(span.style, span.fontSlot), measurer);
+  // The content ends at the last span holding more than U+0020 spaces. A break closing the
+  // line, and spaces in spans of their own, are not content: they hang. Before a break only
+  // U+0020 hangs; a tab or a no-break space there is content.
+  let contentLast = trailingEnd - 1;
+  while (contentLast > 0 && withoutTrailingSpaces(spans[contentLast]!.text) === '') {
+    contentLast -= 1;
+  }
+  const contentEnd = spans[contentLast] ?? last;
+  const contentEndWithoutTrailingWhitespace = (): number =>
+    contentEnd.box.x -
+    indentLeft +
+    contentEnd.box.width -
+    trailingWhitespaceOf(
+      contentEnd,
+      contentEnd === last ? undefined : withoutTrailingSpaces(contentEnd.text)
+    );
+  // A justified line's hanging spaces may follow a word that keeps its own space (a double
+  // space split across runs). That space hangs too: it is neither content nor a slot.
+  // Only U+0020 hangs; a tab or a no-break space before the hanging spaces is content.
+  const hangsAfterOwnSpace =
+    alignment === 'both' &&
+    !paragraphRtl &&
+    lineUsedWidth === undefined &&
+    trailingStart > 0 &&
+    trailingStart < trailingEnd;
+  let used =
+    lineUsedWidth ??
+    (hangingStart !== undefined && hangsAfterOwnSpace
+      ? hangingStart -
+        trailingWhitespaceOf(
+          spans[trailingStart - 1]!,
+          withoutTrailingSpaces(spans[trailingStart - 1]!.text)
+        )
+      : hangingStart) ??
+    contentEndWithoutTrailingWhitespace();
+  let rtlTrailingAdvance = 0;
+  // A space retained at a natural wrap still owns its model/caret advance, but Word
+  // centers/right-aligns the visible text. Do not subtract from drawing-owned width,
+  // tabs or nonbreaking spaces: only a text span reaching the measured line end qualifies.
+  if (
+    (alignment === 'center' || alignment === 'right') &&
+    spansReachLineEnd &&
+    lastContentSpan?.text.endsWith(' ') &&
+    !lastContentSpan.lineEndWhitespace
+  ) {
+    const visible = withoutTrailingSpaces(lastContentSpan.text);
+    const width = measureDisplayText(
+      visible,
+      styleForFontSlot(lastContentSpan.style, lastContentSpan.fontSlot),
+      measurer
+    );
+    const trailing = Math.max(0, lastContentSpan.box.width - width);
+    used -= trailing;
+    // Bidi puts these spaces before the visible text. Move the full line back by
+    // their advance, so right/center alignment still anchors the visible glyphs.
+    if (paragraphRtl) rtlTrailingAdvance = trailing;
+  }
+  const slack = available - used;
+  // A last line compresses only when the flow kept the paragraph's last word by borrowing
+  // inter-word space. Hanging punctuation also overflows a line, and keeps its spacing.
+  if (slack < -0.001 && alignment === 'both' && (!isLastLine || lastLineShrinks))
+    return shrinkJustifiedSpans(
+      spans,
+      -slack,
+      measurer,
+      hangsAfterOwnSpace ? trailingStart - 1 : Math.max(0, contentLast)
+    );
+  // A line that fills its measure can leave a rounding residue, which must not become spacing.
+  if (slack <= SLACK_RESIDUE_PT) return spans;
+
+  // The last line of a justified paragraph is set flush left, never stretched.
+  if (alignment === 'both') {
+    if (isLastLine) return spans;
+    const justified = justifyCjkSpans(spans, measurer, slack);
+    if (justified) return justified;
+    // Only boundaries after an expandable space receive slack — the same slots paint stretches
+    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
+    // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
+    // slots either: a boundary between two of them took a share of the slack from the words.
+    const gapBefore: number[] = [];
+    for (let index = 1; index < Math.min(trailingStart, contentLast + 1); index += 1) {
+      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
+    }
+    if (gapBefore.length === 0) return spans;
+    const step = slack / gapBefore.length;
+    const gapSet = new Set(gapBefore);
+    let shift = 0;
+    return spans.map((span, index) => {
+      if (gapSet.has(index)) shift += step;
+      return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+    });
+  }
+
+  const offset = (alignment === 'center' ? slack / 2 : slack) - rtlTrailingAdvance;
+  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
+}
+
+/**
+ * Whether a line aligns as its paragraph's last line: it is that line, or a page or column
+ * break closes it. Under the `pageBreakLinesStretch` compatibility rule, a page or column
+ * break does not; under `unstretchedManualBreakLines`, a manual line break does. A distributed
+ * paragraph (`w:jc w:val="distribute"`) stretches a line before such a break as it does any
+ * other.
+ */
+export function setsLikeLastLine(
+  props: readonly OoxmlProperty[],
+  line: {
+    readonly pageBreakAfter?: boolean;
+    readonly columnBreakAfter?: boolean;
+    readonly manualBreakAfter?: true;
+  },
+  isLastLine: boolean,
+  compatibility?: {
+    readonly unstretchedManualBreakLines?: true;
+    readonly pageBreakLinesStretch?: true;
+  }
+): boolean {
+  if (isLastLine) return true;
+  const pageBreakSetsLast =
+    (line.pageBreakAfter === true || line.columnBreakAfter === true) &&
+    compatibility?.pageBreakLinesStretch !== true;
+  const manualBreakSetsLast =
+    line.manualBreakAfter === true && compatibility?.unstretchedManualBreakLines === true;
+  if (!pageBreakSetsLast && !manualBreakSetsLast) return false;
+  let distributed = false;
+  for (const property of props) {
+    if (property.localName === 'jc') distributed = property.attributes?.val === 'distribute';
+  }
+  return !distributed;
+}
+
+/**
+ * {@link setsLikeLastLine} for a line laid out in a box: a table cell, a header or footer, a
+ * note, or a text box. A table cell ignores page breaks, so there only a manual line break
+ * can close a line. In the other stories a page break still closes its line. Column breaks
+ * do not change how a line in a box aligns.
+ */
+export function boxLineSetsLikeLastLine(
+  props: readonly OoxmlProperty[],
+  line: { readonly pageBreakAfter?: boolean; readonly manualBreakAfter?: true },
+  isLastLine: boolean,
+  compatibility?: Parameters<typeof setsLikeLastLine>[3]
+): boolean {
+  if (isLastLine) return true;
+  const closing = {
+    ...(line.pageBreakAfter === true ? { pageBreakAfter: true } : {}),
+    ...(line.manualBreakAfter === true ? { manualBreakAfter: true as const } : {}),
+  };
+  return setsLikeLastLine(props, closing, false, compatibility);
+}
+
+/**
+ * Align one line. `lastLineShrinks` is the line's `PendingLine.spaceShrink`: without
+ * it, a justified last line that overflows keeps its natural spacing.
+ */
+export function alignSpans(
+  spans: readonly StyleSpanRecord[],
+  measurer: TextMeasurer,
+  indentLeft: number,
+  available: number,
+  alignment: Alignment,
+  isLastLine: boolean,
+  lineUsedWidth?: number,
+  paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
+  pageBreaksIgnored = false,
+  lastLineShrinks = false
+): readonly StyleSpanRecord[] {
+  const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
+  const split = splitBidiTrailingWhitespace(spans, measurer);
+  const align = (
+    line: readonly StyleSpanRecord[],
+    measure: number,
+    usedWidth: number | undefined
+  ): readonly StyleSpanRecord[] =>
+    alignLogicalSpans(
+      line,
+      measurer,
+      indentLeft,
+      measure,
+      effective,
+      isLastLine,
+      usedWidth,
+      paragraphRtl,
+      pageBreaksIgnored,
+      lastLineShrinks
+    );
+  const trailing = bidiTrailingSpaces(split, paragraphRtl, isLastLine, pageBreaksIgnored);
+  if (trailing) {
+    return alignBidiTrailingSpaces(
+      split,
+      trailing,
+      align,
+      indentLeft,
+      available,
+      lineUsedWidth,
+      paragraphRtl,
+      pageBreaksIgnored
+    );
+  }
+  return reorderBidiSpans(align(split, available, lineUsedWidth), paragraphRtl, pageBreaksIgnored);
+}
+
+/**
+ * How far alignment moved a line. A line with no spans still aligns: an empty centred
+ * paragraph puts its (zero width) content, and so the caret, at the middle of the measure.
+ */
+export function lineAlignOffset(
+  placedSpans: readonly StyleSpanRecord[],
+  alignedSpans: readonly StyleSpanRecord[],
+  alignment: Alignment,
+  available: number,
+  used: number
+): number {
+  if (placedSpans.length > 0 && alignedSpans.length > 0) {
+    return alignedSpans[0]!.box.x - placedSpans[0]!.box.x;
+  }
+  if (alignment === 'left' || alignment === 'both') return 0;
+  const slack = available - used;
+  if (slack <= 0 || !Number.isFinite(slack)) return 0;
+  return alignment === 'center' ? slack / 2 : slack;
+}
+
+/**
+ * The horizontal box a line aligns inside: the passage a float left it, or the paragraph's
+ * own measure when no float shortens the line.
+ *
+ * `used` is the line's content extent measured from that box's left edge, so the snap advance
+ * a float forced before the first glyph is not mistaken for content and does not push a
+ * centred line off toward the far margin.
+ */
+export function lineAlignmentMeasure(
+  line: {
+    readonly width: number;
+    readonly wrapSegment?: { readonly start: number; readonly end: number };
+  },
+  columnX: number,
+  lineIndent: number,
+  lineAvailableWidth: number
+): { readonly indent: number; readonly available: number; readonly used: number } {
+  const segment = line.wrapSegment;
+  if (!segment) {
+    return { indent: lineIndent, available: lineAvailableWidth, used: line.width };
+  }
+  return {
+    indent: columnX + segment.start,
+    available: Math.max(1, segment.end - segment.start),
+    used: lineIndent - columnX + line.width - segment.start,
+  };
+}

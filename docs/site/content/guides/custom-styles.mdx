@@ -1,11 +1,11 @@
 ---
-title: 'Custom styles & branding'
-description: 'Use a branded DOCX template to control headings, fonts, and table styles. Documents inherit your styles automatically and preserve them when saved.'
+title: 'Custom styles and branding'
+description: 'Define document styles with DOCX templates and customize the editor interface with components and CSS.'
 category: 'Guides'
 seoTitle: 'Custom styles, fonts, and branded DOCX templates'
 ---
 
-Load a styled `.docx` template to give documents your branding. The editor uses the styles defined in the document itself (headings, fonts, colors, spacing, and table styles) and preserves them when users save.
+Load a `.docx` template to define document styles. The editor reads its headings, fonts, colors, spacing, and table styles. Saving preserves these definitions.
 
 Templates can define:
 
@@ -14,16 +14,29 @@ Templates can define:
 - Fonts and themes
 - Table styles and the default table style
 
-Any content users create or insert inherits those styles automatically.
+Paragraphs use the document style definitions and any direct formatting. New tables use explicit borders; they do not inherit the default table style. See [Tables](#tables) for details.
+
+## Customize the editor interface
+
+Use components and CSS to style the editor interface. Use the DOCX template to style document content.
+
+These toolbar examples demonstrate selected controls and application styles, not packaged presets. Their source includes the selected components and CSS.
+
+<ToolbarCustomDemo />
+
+Arrange named parts, connect custom buttons through hooks, and set interface colors with `--doc-*` CSS properties. For implementation details, see [Toolbar customization](/docs/2.x/guides/toolbar).
 
 ## Quick start
 
-Create a `.docx` containing your brand styles, remove its content, and load it whenever a user starts a new document.
+Create a `.docx` with your brand styles and remove its content. Load that template when a user starts a document.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { useEffect, useState } from 'react';
 import { DocxEditor } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function BrandedEditor() {
   const [template, setTemplate] = useState<ArrayBuffer>();
@@ -34,81 +47,116 @@ export function BrandedEditor() {
       .then(setTemplate);
   }, []);
 
-  return <DocxEditor documentBuffer={template} />;
+  return <DocxEditor document={template} />;
 }
 ```
 
-For Vue, pass the template buffer to the `document-buffer` prop.
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useDocxSource } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+
+const { document: template } = useDocxSource('/templates/brand.docx');
+</script>
+
+<template>
+  <DocxEditor :document="template" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
 
 ## Create a template
 
 ### Use a word processor
 
 1. Create a document with your desired styles.
-2. Configure a default table style (see [Tables](#tables)).
+2. Define any table styles you use (see [Tables](#tables)).
 3. Remove the document content.
 4. Save the file as your template.
 
-### Patch a DOCX programmatically
-
-You can also update DOCX files directly with the headless API.
-
-```ts
-import { updateMultipleFiles } from '@docx-editor.dev/core/headless';
-
-const SETTINGS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:defaultTableStyle w:val="BrandGrid"/>
-</w:settings>`;
-
-const branded = await updateMultipleFiles(
-  originalDocx,
-  new Map([['word/settings.xml', SETTINGS]])
-);
-```
-
 ## Headings and paragraph styles
 
-The style dropdown is populated from the paragraph styles defined in the document. When a user applies a style, the editor uses the document's definition for fonts, colors, spacing, and the configured `next` style. For example, pressing Enter after a heading switches back to body text.
+The style dropdown lists paragraph styles from the document. Applying a style uses its fonts, colors, spacing, and configured `next` style. When `next` selects a body style, pressing Enter after a heading starts a body paragraph.
 
-Set `w:qFormat` to surface a style in the dropdown, and `w:semiHidden` or `w:hidden` to keep one out.
+The picker lists paragraph styles without filtering `w:qFormat`, `w:semiHidden`, or `w:hidden`. Use a custom picker to restrict the displayed options.
 
 ## Tables
 
-New tables use the document's default table style. To apply branded borders, shading, and header formatting automatically, define a table style and set it as the default:
+Existing tables retain their document styles after editing and saving. The editor resolves borders, shading, banded rows, and header formatting, including `basedOn` inheritance.
 
-```xml
-<!-- word/settings.xml -->
-<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:defaultTableStyle w:val="BrandGrid"/>
-</w:settings>
-```
-
-If no default table style is configured, inserted tables use a basic single-border style.
+New tables do not use the document default table style. **Insert > Table** creates an even grid with explicit single-line borders. Use the table border and fill controls to change its appearance.
 
 ## Fonts
 
-The recommended way to provide custom fonts is the editor's `fonts` prop. Each entry registers an `@font-face` rule, allowing the editor to render and measure the font without additional setup. Use `fontFamilies` to make fonts available in the toolbar.
+Pass brand fonts through the `fonts` prop. `loadFonts` fetches the listed URLs and returns a fragment for text measurement and rendering:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
-const FONTS = [
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
-];
+import { loadFonts } from '@docx-editor.dev/react';
 
-<DocxEditor
-  documentBuffer={template}
-  fonts={FONTS}
-  fontFamilies={['Custom Sans', 'Arial']}
-/>;
+const brand = await loadFonts({
+  sources: [
+    { url: '/fonts/CustomSans-Regular.ttf', family: 'Custom Sans', weight: 400, style: 'normal' },
+    { url: '/fonts/CustomSans-Bold.ttf', family: 'Custom Sans', weight: 700, style: 'normal' },
+  ],
+});
+
+<DocxEditor document={template} fonts={brand} />;
 ```
 
-See [React props: Fonts](/docs/1.x/react/props#fonts) for the full API. In Vue, use the `fonts` and `font-families` props.
+</Framework>
+<Framework value="vue">
 
-Alternatively, fonts can be installed on the user's system or loaded using your own `@font-face` rules. The editor renders fonts by name, so any font available to the browser can be used.
+```vue
+<script setup lang="ts">
+import { shallowRef } from 'vue';
+import { DocxEditor, loadFonts, type FontConfigurationFragment } from '@docx-editor.dev/vue';
 
-Fonts embedded inside a `.docx` are loaded automatically: the editor de-obfuscates the embedded faces, renders with them, and lists them in the font picker. They are also preserved when saving.
+// A top-level `await` would make this an async component, which renders
+// nothing without a <Suspense> ancestor. Resolve into a ref instead.
+const brand = shallowRef<FontConfigurationFragment>();
+void loadFonts({
+  sources: [
+    { url: '/fonts/CustomSans-Regular.ttf', family: 'Custom Sans', weight: 400, style: 'normal' },
+    { url: '/fonts/CustomSans-Bold.ttf', family: 'Custom Sans', weight: 700, style: 'normal' },
+  ],
+}).then((loaded) => {
+  brand.value = loaded;
+});
+</script>
+
+<template>
+  <DocxEditor :document="template" :fonts="brand" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The font picker lists families from the document and your configuration. See [React fonts](/docs/2.x/react/props#fonts) or [Vue fonts](/docs/2.x/vue/props#fonts) for prop details. [Fonts and measurement](/docs/2.x/guides/fonts) covers hashes, failures, and loading fonts on demand.
+
+System fonts and your `@font-face` rules affect rendering only. The editor measures text with supplied font bytes. Without those bytes, it uses estimated metrics.
+
+The editor automatically loads and de-obfuscates fonts embedded in a `.docx`. It renders those fonts and lists them in the font picker. Saving preserves embedded fonts.
 
 ## Style preservation
 
 The editor preserves existing style files (`styles.xml`, `theme1.xml`, `settings.xml`) rather than regenerating them. Custom styles, themes, fonts, and table defaults survive a full edit-and-save round trip.
+
+## Next steps
+
+- [Toolbar customization](/docs/2.x/guides/toolbar): editor controls and interface styles
+- [Fonts and measurement](/docs/2.x/guides/fonts): font sources and measurement
+- [Word fidelity](/docs/2.x/word-fidelity): what survives a round trip
+- [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props): `fonts` and the rest of the root props
+
+## Customize your editor
+
+Start with [Overview](/docs/2.x/customization). Choose a focused guide with a live contract preview and React and Vue examples.

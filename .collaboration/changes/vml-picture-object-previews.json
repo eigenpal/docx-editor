@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A w:pict picture with an o:OLEObject beside it stayed opaque, and so did a w:object whose preview floats. Neither took a paragraph offset, reserved layout space, or painted.",
+  "after": "Both project as read-only drawing atoms that show the preview picture. A floating preview wraps text as a floating picture does. Clipboard transfers refuse a w:pict with an o:OLEObject as they refuse a w:object.",
+  "reason": "The change is a read-only projection of existing document XML. It adds no shared state, operations, snapshot fields, or protocol messages, and it writes nothing to the document. Each participant derives paragraph offsets from the shared tree locally. A published selection after such an object can differ by one offset between versions, as for other projection subset changes. Clipboard fragments are local and never replicated.",
+  "tests": [
+    "packages/core/src/store/__tests__/legacy-vml-picture-object.test.ts",
+    "packages/core/src/store/__tests__/legacy-vml-object-preview.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-legacy-object-preview.test.ts"
+  ],
+  "changeset": "header-drawing-fidelity",
+  "migration": null
+}

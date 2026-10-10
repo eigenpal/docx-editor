@@ -1,36 +1,45 @@
 #!/bin/sh
 
-# Run type checking
-echo "Running TypeScript type check..."
-bun run typecheck
-if [ $? -ne 0 ]; then
-  echo "TypeScript type check failed. Please fix the errors before committing."
-  exit 1
+# Keep every whole-repository gate. Local caches avoid rechecking unchanged files;
+# the package scripts and CI still run without these cache flags.
+run_check() {
+  check_label="$1"
+  shift
+  check_started=$(date +%s)
+  printf '\nRunning %s...\n' "$check_label"
+  if "$@"; then
+    printf 'Passed %s (%ss)\n' "$check_label" "$(($(date +%s) - check_started))"
+  else
+    check_status=$?
+    printf 'Failed %s (%ss, exit %s)\n' "$check_label" "$(($(date +%s) - check_started))" "$check_status" >&2
+    exit "$check_status"
+  fi
+}
+
+# Fix staged formatting first, then validate the resulting source with every gate.
+run_check 'staged formatting and lint' npx lint-staged
+
+# The collaboration policy CI job needs a decision record for any change under the covered
+# implementation paths. The check reads the working tree and untracked files too, so it sees
+# what this commit adds. It compares against the merge base with main; a checkout without a
+# main ref (a shallow clone, a fork) skips it and leaves CI to enforce it.
+collaboration_base=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null)
+if [ -n "$collaboration_base" ]; then
+  run_check 'collaboration policy' node scripts/collaboration/cli.mjs check --base "$collaboration_base"
+else
+  printf '\nSkipping collaboration policy (no main ref to compare against).\n'
 fi
 
-# Parity gate — fast (<1s). Blocks drift between the React and Vue adapter
-# exports before it reaches CI. (i18n keys are no longer a parity concern —
-# both adapters read the same @docx-editor.dev/i18n package.)
-# Spec: openspec/changes/vue-editor-robust-implementation/specs/vue-react-parity/spec.md
-echo "Running parity gates..."
-bun run check:parity
-if [ $? -ne 0 ]; then
-  echo "Parity gates failed. Fix the drift or document it in notes/intentional-export-divergence.md."
-  exit 1
-fi
+# Each workspace gets compiler-managed build info under its own node_modules.
+# TypeScript tracks imported files and compiler options, not just the staged paths.
+run_check 'TypeScript type check' bun run typecheck --incremental --tsBuildInfoFile node_modules/.cache/precommit/typecheck.tsbuildinfo
+run_check 'parity gates' bun run check:parity
+run_check 'license header checks' bun run check:license-headers
+run_check 'API snapshot check' bun run api:check
 
-# API snapshot gate — catches changes to any @public symbol that the
-# committer forgot to regenerate. CI runs the same `api:check`, so failing
-# here saves a round-trip. Fix is `bun run api:extract` then
-# `git add docs/api/` and `git commit --amend --no-edit` (or re-stage on
-# a fresh commit).
-echo "Running API snapshot check..."
-bun run api:check
-if [ $? -ne 0 ]; then
-  echo "API snapshot drift. Run 'bun run api:extract' and commit the updated docs/api/*.api.md files."
-  exit 1
-fi
-
-# Run lint-staged (prettier + eslint on staged files)
-echo "Running lint-staged..."
-npx lint-staged
+# Content hashes survive branch switches and catch edits even when mtimes match.
+# These still walk the entire source tree, including unstaged files. The lint
+# script also runs the whole-file max-lines guard on every invocation; oxlint
+# lints the whole tree in about a second, so it needs no cache.
+run_check 'formatting check' bun run format:check --cache --cache-strategy content --cache-location node_modules/.cache/precommit/prettier
+run_check 'lint' bun run lint

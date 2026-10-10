@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Document-wide review omits tracked properties in shared styles, leaving unreported pending formatting after story revisions are resolved.",
+  "after": "Shared-style and story decisions commit in one canonical package transaction, replay and undo together, and refresh review and formatting state.",
+  "reason": "The related-part transaction path emits existing primitive journals. No stored schema or replication format changes are introduced.",
+  "tests": [
+    "packages/core/src/editor/__tests__/review-style-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-style-revisions.test.ts"
+  ],
+  "changeset": "shared-style-revisions",
+  "migration": null
+}

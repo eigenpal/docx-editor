@@ -1,0 +1,138 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+.docx-editor {
+  min-height: 100vh;
+  color: var(--doc-text);
+  background: var(--doc-bg);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  padding: 0.55rem 0.8rem;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 0.45rem;
+  cursor: pointer;
+}
+
+button.primary {
+  color: var(--doc-surface);
+  background: var(--doc-accent);
+  border-color: var(--doc-accent);
+}
+
+input {
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 0.45rem;
+}
+
+.lobby {
+  display: grid;
+  gap: 1rem;
+  width: min(36rem, calc(100% - 2rem));
+  margin: 4rem auto;
+  padding: 1.5rem;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 0.8rem;
+}
+
+.lobby h1,
+.room-header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.subtitle,
+.scope-note,
+.warning {
+  margin: 0;
+  color: var(--doc-text-muted);
+}
+
+.warning {
+  padding: 0.7rem;
+  background: var(--doc-warning-bg);
+  border: 1px solid var(--doc-warning);
+  border-radius: 0.45rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.field-label {
+  font-weight: 600;
+}
+
+.lobby-actions,
+.controls,
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.room-shell {
+  min-height: 100vh;
+}
+
+.room-header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+}
+
+.status {
+  padding: 0.45rem 0.65rem;
+  color: var(--doc-text-muted);
+  background: var(--doc-bg);
+  border-radius: 0.45rem;
+}
+
+.share-row,
+.room-shell > .warning {
+  margin: 0.8rem 1rem;
+}
+
+.share-link {
+  flex: 1 1 20rem;
+}
+
+.editor-host {
+  width: min(100%, 80rem);
+  min-height: 70vh;
+  margin: 0 auto;
+  overflow: auto;
+}
+
+@media (max-width: 760px) {
+  .room-header {
+    flex-direction: column;
+  }
+}

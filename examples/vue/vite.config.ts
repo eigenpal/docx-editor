@@ -1,36 +1,98 @@
-import { defineConfig } from 'vite';
+import { pdfExportPlugin } from '../shared/pdf-export-plugin';
+import { defineConfig, type Plugin } from 'vite';
+import { readFile } from 'node:fs/promises';
 import vue from '@vitejs/plugin-vue';
+import vueJsx from '@vitejs/plugin-vue-jsx';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+import { stripUnexpandedTailwind } from '../shared/strip-unexpanded-tailwind';
 import path from 'path';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
 
-// USE_PUBLISHED_PACKAGES=true is set by the parity build; in that mode we
-// resolve `@docx-editor.dev/vue` + `/agents/*` through node_modules
-// (the workspace's published dist/) so the deployment shows the real
-// consumer experience.
-//
-// `@docx-editor.dev/core` lives in a separate repo and is installed from npm,
-// so it resolves through node_modules in both modes.
+function canonicalFixturePlugin(): Plugin {
+  const fixtures = new Map([
+    ['/sample.docx', path.join(monorepoRoot, 'examples/vite/public/sample.docx')],
+    [
+      '/comprehensive-word-element-test.docx',
+      path.join(monorepoRoot, 'e2e/fixtures/comprehensive-word-element-test.docx'),
+    ],
+    [
+      '/harfbuzz-text-fidelity.docx',
+      path.join(monorepoRoot, 'e2e/fixtures/harfbuzz-text-fidelity.docx'),
+    ],
+  ]);
+  return {
+    name: 'docx-editor-canonical-fixture',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url ? req.url.split('?')[0]! : '';
+        const devFixture =
+          fixtures.get(url) ??
+          (/^\/[\w.-]+\.docx$/.test(url)
+            ? path.join(monorepoRoot, 'e2e/fixtures', path.basename(url))
+            : undefined);
+        const source = devFixture;
+        if (!source) return next();
+        readFile(source)
+          .then((bytes) => {
+            res.setHeader(
+              'Content-Type',
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            );
+            res.end(bytes);
+          })
+          .catch(() => next());
+      });
+    },
+    async generateBundle() {
+      for (const [url, source] of fixtures) {
+        this.emitFile({
+          type: 'asset',
+          fileName: url.slice(1),
+          source: await readFile(source),
+        });
+      }
+    },
+  };
+}
+
 const usePublished = process.env.USE_PUBLISHED_PACKAGES === 'true';
 
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
-  plugins: [vue()],
+  plugins: [vue(), vueJsx(), canonicalFixturePlugin(), pdfExportPlugin()],
   define: {
-    // Matches the React examples — the parity build sets this to true so
-    // the framework-switcher pills render alongside the chevron source
-    // menu. Regular previews keep the title bar minimal.
     __ENABLE_FRAMEWORK_SWITCHER__: JSON.stringify(process.env.ENABLE_FRAMEWORK_SWITCHER === 'true'),
   },
   root: __dirname,
   resolve: {
     alias: usePublished
-      ? []
+      ? [
+          {
+            find: /^@docx-editor\.dev\/vue$/,
+            replacement: path.join(monorepoRoot, 'packages/vue/dist/index.js'),
+          },
+          {
+            find: '@docx-editor.dev/pro/vue',
+            replacement: path.join(monorepoRoot, 'packages/pro/dist/vue/index.js'),
+          },
+          // examples/shared imports it, and node_modules lookup from there never
+          // reaches this app's workspace link.
+          {
+            find: /^@docx-editor\.dev\/docx-to-markdown$/,
+            replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/dist/index.js'),
+          },
+        ]
       : [
-          // Resolve the CSS subpath to source in dev so a clean checkout can
-          // run the Vue demo and parity smoke tests without prebuilding dist.
+          {
+            find: /^@docx-editor\.dev\/docx-to-markdown$/,
+            replacement: path.join(monorepoRoot, 'packages/docx-to-markdown/src/index.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/core$/,
+            replacement: path.join(monorepoRoot, 'packages/core/src/index.ts'),
+          },
           {
             find: '@docx-editor.dev/vue/styles.css',
             replacement: path.join(monorepoRoot, 'packages/vue/src/styles/editor.css'),
@@ -39,37 +101,74 @@ export default defineConfig({
             find: /^@docx-editor\.dev\/vue$/,
             replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
           },
+          // `packages/vue/src/styles/editor.css` imports core's stylesheet by package
+          // specifier, which the export map points at `dist/`. Without this the demo
+          // cannot build until `build:packages` has run, so a source-only check fails on
+          // a clean checkout. The React demo sidesteps it by importing core's stylesheet
+          // from source with a relative path in its own `styles.css`.
+          {
+            find: '@docx-editor.dev/core/styles/editor.css',
+            replacement: path.join(monorepoRoot, 'packages/core/src/styles/editor.css'),
+          },
+          {
+            find: '@docx-editor.dev/core/editor',
+            replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
+          },
+          {
+            find: '@docx-editor.dev/core/collaboration/replication',
+            replacement: path.join(monorepoRoot, 'packages/core/src/collaboration/replication.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/core\/(automation|binding|collaboration|export|layout|output|store|sync|clients|server)$/,
+            replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
+            replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro/collaboration/webrtc',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/webrtc.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro/collaboration',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro/vue/webrtc',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/vue/webrtc.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro/vue',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/vue/index.ts'),
+          },
+          {
+            find: '@docx-editor.dev/pro',
+            replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
+          },
+          // Before the bare `fonts` entry: matching is prefix-based, so the shorter find
+          // would rewrite `@docx-editor.dev/fonts/google` to `…/src/index.ts/google` and
+          // fail with "Not a directory". The React config carries the same pair.
+          {
+            find: '@docx-editor.dev/fonts/google',
+            replacement: path.join(monorepoRoot, 'packages/fonts/src/google-fonts.ts'),
+          },
+          {
+            find: '@docx-editor.dev/fonts',
+            replacement: path.join(monorepoRoot, 'packages/fonts/src/index.ts'),
+          },
           {
             find: '@docx-editor.dev/i18n',
             replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
           },
-          {
-            find: '@docx-editor.dev/agents/vue',
-            replacement: path.join(monorepoRoot, 'packages/agents/src/vue.ts'),
-          },
-          {
-            find: '@docx-editor.dev/agents/bridge',
-            replacement: path.join(monorepoRoot, 'packages/agents/src/bridge.ts'),
-          },
-          // Bare @docx-editor.dev/agents (e.g. for type re-exports)
-          {
-            find: /^@docx-editor\.dev\/agents$/,
-            replacement: path.join(monorepoRoot, 'packages/agents/src/index.ts'),
-          },
         ],
   },
   css: {
-    // Dev mode aliases the adapter (and its styles.css) to source, so the
-    // '@tailwind utilities' directive in packages/vue/src/styles/editor.css
-    // must be expanded here. Point at the Vue package's own tailwind config
-    // (scans packages/vue/src) so the demo shows real toolbar/dialog styles
-    // without a prebuild — mirrors examples/vite's React setup. The published
-    // parity build (USE_PUBLISHED_PACKAGES) instead loads the prebuilt
-    // dist/docx-editor-vue.css, which already carries these utilities.
     postcss: {
       plugins: [
-        tailwindcss({ config: path.join(monorepoRoot, 'packages/vue/tailwind.config.js') }),
+        tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
         autoprefixer(),
+        stripUnexpandedTailwind,
       ],
     },
   },

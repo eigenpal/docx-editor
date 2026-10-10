@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Empty paragraphs could lose the insertion font after a caret move or save, and pending font settings did not resize the caret.",
+  "after": "Enter persists direct typing properties on paragraph marks, first text inherits saved empty-paragraph formatting, and caret metrics reflect the pending font.",
+  "reason": "The editor emits existing paragraph-mark and run-property operations with unchanged OOXML and replication schemas. Released peers already interpret these properties; no format migration is needed.",
+  "tests": [
+    "packages/core/src/editor/__tests__/next-paragraph-style.test.ts",
+    "packages/core/src/editor/__tests__/pending-caret-formatting.test.ts",
+    "packages/core/src/editor/__tests__/surface-caret.test.ts",
+    "packages/core/src/editor/__tests__/surface-caret-frame.test.ts"
+  ],
+  "changeset": "caret-typing-format",
+  "migration": null
+}

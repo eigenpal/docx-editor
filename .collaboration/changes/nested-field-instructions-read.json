@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Nested field results can appear in outer field instruction text reads and layout.",
+  "after": "Text reads and layout hide nested field results inside an outer instruction.",
+  "reason": "The change affects derived text projections. Canonical nodes, operations, snapshots, digests, and wire formats keep their existing shapes.",
+  "tests": [
+    "packages/core/src/automation/__tests__/text-projection.test.ts",
+    "packages/core/src/binding/__tests__/document-search-nested-instruction.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-nested-editing.test.ts",
+    "packages/core/src/layout/__tests__/field-instruction-nested-results.test.ts",
+    "packages/core/src/store/__tests__/field-instruction-nested-text.test.ts"
+  ],
+  "changeset": "nested-field-instruction-results",
+  "migration": null
+}

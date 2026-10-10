@@ -1,0 +1,686 @@
+---
+title: 'Composition'
+description: 'Build a custom React editor with primitives, compound parts, slot overrides, and hooks.'
+category: 'React'
+order: 32
+---
+
+`<DocxEditor>` combines public components into a packaged editor. Arrange these components yourself, or connect your own controls to the same commands and state.
+
+## Arrange editor components
+
+Choose toolbar controls, placement, labels, spacing, and styles. Add optional document controls, then copy the selected components and CSS.
+
+The demo shows a subset of the available components and options. These layouts demonstrate composition; they are not packaged toolbar presets.
+
+Use your own React components and TSX for toolbars, menus, and panels. Connect them with [React hooks](/docs/2.x/react/hooks), combine them with packaged parts, and supply your own CSS.
+
+<ReactCompositionDemo />
+
+## Composition requirements
+
+| Requirement | When required | Purpose |
+| --- | --- | --- |
+| `DocxEditor.Root` | Every composed editor | Owns and provides the editor instance |
+| `DocxEditor.Viewport` | Every composed editor | Supplies the scroll container and page-layout classes |
+| `DocxEditor.Content` | Every composed editor | Mounts the painted document surface |
+| Editor stylesheet | Every composed editor | Styles the viewport and packaged controls |
+| `.docx-editor` wrapper | Custom controls that use editor styles | Supplies scoped styles and tokens |
+| Container height | Every composed editor | Gives the viewport room to render |
+| Remount `key` | When you change modules | Loads the new modules |
+| Positioned workspace row | When you place the navigation pane beside the viewport | Anchors the navigation pane |
+| Pro review module | When you use Pro review chrome | Enables comments, tracked changes, and custom-node review chrome |
+
+If you use Pro review chrome, register its modules once on `Root`. For setup, see the [Pro package documentation](/docs/2.x/pro).
+
+<Callout>
+  The [Igloo customization example](https://igloo.docx-editor.dev/) implements these patterns with
+  custom markup. Open the demo, or read the [Igloo example
+  source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo) and run it with `bun run
+  dev:igloo`.
+</Callout>
+
+## Primitives
+
+Compose the three required components in this order:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <div className="docx-editor" style={{ height: '100vh' }}>
+      <DocxEditor.Root document={bytes}>
+        <DocxEditor.Viewport>
+          <DocxEditor.Content />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+`Root` does not render a DOM element. The rendered pages in `Content` form the editable surface.
+
+You can place optional chrome anywhere inside `Root`. Optional chrome includes the toolbar, menu, rulers, navigation pane, hyperlink popover, and context menu.
+
+### Root props
+
+The editor reads construction props when it creates the instance. Changes to `document`, `fonts`, or `imageDecodePort` remount the editor. Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, or the locale catalog apply without a remount. These changes preserve edits, caret position, and undo history.
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `document` | `DocumentSource` | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. An identity change remounts the editor. |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Supplies font bytes or a resolver. An identity change remounts the editor. |
+| `author` | `string` | Sets the author for later comments, replies, and tracked changes. Changes apply without a remount. |
+| `locale` | `string` | Regional date input and generated document labels. Defaults to `en-US`; updates without a remount. |
+| `mode` | `'edit' \| 'view' \| 'suggesting'` | Sets the editing mode. When omitted, `w:trackRevisions` can select suggesting mode. |
+| `modules` | `readonly EditorModule[]` | Registers modules during construction. Remount with a different `key` to change them. |
+| `zoom` / `zoomMode` | `number` / `ZoomMode \| 'auto'` | Sets the display scale and its source. `'auto'` fits the page width. |
+| `onReady` | `(editor: Editor) => void` | Runs once per instance after `Content` attaches. |
+| `onChange` | `(change: DocumentChange) => void` | Reports revision and identity changes after mutations. |
+| `onFontError` | `(error: EditorFontError) => void` | Reports typed font-resolution failures. |
+| `translate` | `(key, params?) => string` | Resolves live document-surface labels. It defaults to the active catalog. |
+| `tableInteractionLabel` | `(key) => string` | Resolves labels for table insertion controls. |
+| `imageDecodePort` | `ImageDecodePort` | Overrides raster decoding for tests or custom hosts. |
+
+For exact signatures, see the [React API reference](/docs/2.x/api/react).
+
+### UI language and date input
+
+`Root` reads UI translations from `LocaleProvider`; it has no `i18n` prop. Set `locale` separately for regional date input. This example uses Polish for both:
+
+```tsx
+import { DocxEditor, LocaleProvider, useChromeTranslate } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
+
+function LocalizedToolbar() {
+  const t = useChromeTranslate();
+  return <DocxEditor.Toolbar t={t} />;
+}
+
+<LocaleProvider i18n={pl}>
+  <DocxEditor.Root document={bytes} locale="pl-PL">
+    <LocalizedToolbar />
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</LocaleProvider>;
+```
+
+Without the provider, UI strings remain English unless an ancestor supplies a catalog. See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
+
+For composed chrome, call `useChromeTranslate()` inside the locale provider and pass its result through each part's `t` prop.
+
+## Customization options
+
+Choose the amount of customization you need:
+
+1. Override CSS custom properties from the `--doc-*` palette.
+2. Use the `icon` prop to replace a glyph.
+3. Use `asChild` to apply behavior to your element.
+4. Override a compound slot while preserving other default slots.
+5. Add your controls to the preset with `Toolbar.Group`, or replace a slot's content with `Toolbar.Slot`.
+6. Set `preset={false}` and arrange all parts.
+7. Use [React hooks](/docs/2.x/react/hooks) with your own markup.
+
+### Use `asChild`
+
+`asChild` applies the part's behavior to its child. This behavior includes handlers, disabled state, ARIA attributes, and active state. The part does not render a wrapper:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { Button } from '@/components/ui/button';
+
+<DocxEditor.Toolbar.Bold asChild>
+  <Button variant="ghost">Bold</Button>
+</DocxEditor.Toolbar.Bold>;
+```
+
+### Override a slot
+
+A compound child replaces the slot with the same name. Other default slots remain unchanged. The `hidden` prop removes a slot:
+
+```tsx
+// Keep the default toolbar, replace Bold, and remove Highlight.
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Bold className="my-bold" />
+  <DocxEditor.Toolbar.Highlight hidden />
+</DocxEditor.Toolbar>
+```
+
+A group whose slots are all hidden is removed with its separator.
+
+### Add controls to the preset toolbar
+
+`Toolbar.Group` adds your controls to the preset toolbar as a group. The group collapses into the **More** panel like the built-in groups. `Toolbar.Slot` replaces one built-in slot with your own content in the slot's place:
+
+```tsx
+<DocxEditor.Toolbar>
+  <DocxEditor.Toolbar.Group id="review-nav" label="Review" priority={15}>
+    <DocxEditor.Toolbar.Action label="Next change" icon={<DownIcon />} onSelect={next} />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Group id="review">
+    <DocxEditor.Toolbar.AddComment />
+  </DocxEditor.Toolbar.Group>
+  <DocxEditor.Toolbar.Slot slotId="zoom.level">
+    <ZoomPicker />
+  </DocxEditor.Toolbar.Slot>
+  <DocxEditor.Toolbar.Group id="zoom" hidden />
+</DocxEditor.Toolbar>
+```
+
+For placement, collapse priorities, and panel content, see [Keep host controls responsive](/docs/2.x/guides/toolbar#keep-host-controls-responsive).
+
+## Custom toolbar
+
+Set `preset={false}` to include only your chosen parts. Their JSX order sets the toolbar order. Each part gets enabled state, active state, and commands from the engine.
+
+This example combines selected packaged parts with custom icons and styles:
+
+```tsx
+<DocxEditor.Toolbar preset={false} className="my-toolbar">
+  <DocxEditor.Toolbar.Undo icon={MyUndo} />
+  <DocxEditor.Toolbar.Redo icon={MyRedo} />
+  <DocxEditor.Toolbar.Separator />
+
+  {/* Keep picker behavior and apply custom styles. */}
+  <DocxEditor.Toolbar.StylePicker className="my-picker" />
+  <DocxEditor.Toolbar.FontFamily className="my-picker" />
+  <DocxEditor.Toolbar.FontSize />
+  <DocxEditor.Toolbar.Separator />
+
+  <DocxEditor.Toolbar.Bold icon={MyBold} />
+  <DocxEditor.Toolbar.Italic icon={MyItalic} />
+  <DocxEditor.Toolbar.FontColor icon={MyFontColor} />
+  <DocxEditor.Toolbar.Separator />
+
+  <div className="my-toolbar__spacer" />
+  <DocxEditor.Toolbar.Zoom />
+</DocxEditor.Toolbar>
+```
+
+Most named parts map to one `ChromeSlotId`. `Alignment` combines the four `alignment.*` slots. The [chrome slot reference](/docs/2.x/guides/chrome-slots) lists every slot and named React and Vue part. The default arrangement includes slots that the registry adds later. A manual arrangement includes only the parts that you specify.
+
+The `icon` prop accepts a React element. It does not accept a component function:
+
+```tsx
+// Pass a React element.
+export const MyBold = (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M7 5h6a4 4 0 0 1 0 8H7z" />
+  </svg>
+);
+
+<DocxEditor.Toolbar.Bold icon={MyBold} />;
+
+// Do not pass `() => <svg />`. The prop accepts a ReactNode.
+```
+
+### Add a host action
+
+Use `Toolbar.Action` when the registry has no matching slot. You provide the label, icon, and effect. Use `useEditorCommand` to get enabled state for the same command. The control can then show the engine's refusal reason.
+
+```tsx
+import {
+  useDocxEditor,
+  useEditorCommand,
+  useEditorState,
+  type EditorCommand,
+} from '@docx-editor.dev/react';
+
+const highlight = (value: string): EditorCommand => ({
+  type: 'setMarkAttr',
+  mark: 'highlight',
+  attr: 'val',
+  value,
+});
+
+function useHighlightAction() {
+  const editor = useDocxEditor();
+  const { isEnabled, disabledReason } = useEditorCommand(highlight('cyan'));
+  // The command supports a collapsed caret for future typing.
+  // Disable this action because it applies only to selected text.
+  const collapsed = useEditorState((s) => s.selectionCollapsed);
+
+  return {
+    apply: () => editor?.exec(highlight('cyan')),
+    enabled: isEnabled && !collapsed,
+    disabledReason: collapsed && isEnabled ? 'nothing is selected' : disabledReason,
+  };
+}
+
+function HighlightAction() {
+  const { apply, enabled, disabledReason } = useHighlightAction();
+  return (
+    <DocxEditor.Toolbar.Action
+      label="Highlight"
+      icon={MyHighlight}
+      disabled={!enabled}
+      {...(disabledReason ? { disabledReason } : {})}
+      onSelect={apply}
+    />
+  );
+}
+```
+
+Reuse one hook wherever you expose the action. This keeps its enabled-state rules consistent. Packaged toolbar and menu controls share these rules through the chrome registry.
+
+## Custom context menu
+
+You can combine packaged rows, custom rows, slots, and submenus. This example also replaces icons and removes a packaged row:
+
+To remove a row, render its slot override with `hidden`, such as `<DocxEditor.ContextMenu.Slot slotId="edit.cut" hidden />`. A named row part is shorthand for that override: `<DocxEditor.ContextMenu.Cut hidden />` removes the same row in place. The toolbar and the menu bar follow the same rule.
+
+```tsx
+{
+  /* Get `editor` from `useDocxEditor()`. */
+  /* Get `enabled` and `apply` from `useHighlightAction()`. */
+}
+<DocxEditor.ContextMenu className="my-menu">
+  {/* These rows keep their packaged commands and disabled reasons. */}
+  <DocxEditor.ContextMenu.Cut icon={MyCut} />
+  <DocxEditor.ContextMenu.Copy icon={MyCopy} />
+
+  {/* Remove a packaged row. */}
+  <DocxEditor.ContextMenu.Slot slotId="review.addComment" hidden />
+
+  {/* Supply all behavior for a custom row. */}
+  <DocxEditor.ContextMenu.Item
+    label="Highlight"
+    icon={MyHighlight}
+    disabled={!enabled}
+    onSelect={apply}
+  />
+
+  <DocxEditor.ContextMenu.Submenu labelKey="my.insert" paths={null}>
+    <DocxEditor.ContextMenu.Item
+      label="Page break"
+      onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'page' })}
+    />
+    <DocxEditor.ContextMenu.Item
+      label="3×3 table"
+      onSelect={() => editor?.exec({ type: 'insertTable', rows: 3, cols: 3 })}
+    />
+  </DocxEditor.ContextMenu.Submenu>
+
+  {/* Get the label, icon, and enabled state from the registry. */}
+  <DocxEditor.ContextMenu.Slot slotId="format.clear" />
+</DocxEditor.ContextMenu>;
+```
+
+The compound appends unrecognized children after its rows. It keeps the packaged panel element, roles, keyboard behavior, and placement.
+
+## Custom menu bar
+
+The menu bar stays on one line. Menus that do not fit move into one `⋯` menu as submenus. Set `overflow={false}` to let the bar wrap instead. For details, see [Menu bar overflow](/docs/2.x/guides/toolbar#menu-bar-overflow).
+
+Pass `exporters` to the menu to connect export and print handlers. For setup, see [Print documents](/docs/2.x/guides/print).
+
+The default menu bar derives from `CHROME_MENUS`. Registry updates therefore appear in the default bar. You can add a host menu or replace the **Help** menu:
+
+```tsx
+{
+  /* Get `editor` from `useDocxEditor()`. */
+  /* Get `enabled` and `apply` from `useHighlightAction()`. */
+}
+<DocxEditor.Menu className="my-menubar">
+  {/* Replace menu icons and keep registry-defined rows. */}
+  <DocxEditor.Menu.File icon={MyFile} />
+  <DocxEditor.Menu.Format icon={MyFormat} />
+  <DocxEditor.Menu.Insert icon={MyInsert} />
+
+  {/* `MenuId` accepts host-defined strings. Use `label` for host text. */}
+  <DocxEditor.Menu.Menu id="review" label="Review" icon={MyReview} preset={false}>
+    <DocxEditor.Menu.Row disabled={!enabled} onSelect={apply}>
+      Highlight passage
+    </DocxEditor.Menu.Row>
+    <DocxEditor.Menu.Separator />
+    <DocxEditor.Menu.Row
+      onSelect={() => editor?.exec({ type: 'insertBreak', kind: 'page' })}
+      shortcut="Ctrl+Enter"
+    >
+      Page break
+    </DocxEditor.Menu.Row>
+  </DocxEditor.Menu.Menu>
+
+  {/* Replace Help with links for the host application. */}
+  <DocxEditor.Menu.Help icon={MyHelp} preset={false}>
+    <DocxEditor.Menu.Row onSelect={() => window.open('/docs', '_blank', 'noopener')}>
+      Documentation
+    </DocxEditor.Menu.Row>
+  </DocxEditor.Menu.Help>
+</DocxEditor.Menu>;
+```
+
+## Custom navigation pane
+
+Navigation parts are compound statics. Add a class to each part instead of targeting internal classes. The headings part continues to use the engine outline:
+
+```tsx
+<DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
+  <DocxEditor.Navigation.Header className="my-nav__header">
+    <DocxEditor.Navigation.Close className="my-nav__close" />
+    <DocxEditor.Navigation.Title className="my-nav__title" />
+  </DocxEditor.Navigation.Header>
+  <DocxEditor.Navigation.Tabs className="my-nav__tabs" />
+  <DocxEditor.Navigation.Headings className="my-nav__headings" />
+  <DocxEditor.Navigation.Find className="my-nav__find" />
+</DocxEditor.Navigation>
+```
+
+### Place the navigation pane
+
+Place `DocxEditor.Navigation` as a direct child of `DocxEditor.Viewport`, or beside the viewport in a positioned container. As a direct child of the viewport, the pane stays in place while the pages scroll. In both positions, the pane moves the page only when the left margin area cannot hold it.
+
+If the viewport leaves less than `NAVIGATION_PANE_MIN_PAGE_ROOM` (320 pixels) beside the pane, the pane covers the page instead. The review pane's visible room counts against the viewport. With the review pane's `overflow: 'scroll'`, only its marker strip counts, because the card column scrolls out of view. It then spans the viewport width less its inset on each side, and the page doesn't move. The pane closes after you choose a heading or a result. `useNavigationPane().overlay` reports this mode.
+
+The pane takes its labels from its `t` prop. Without `t`, it uses the `translate` function of `DocxEditor.Root`, then the active locale catalog.
+
+## Custom loading screen
+
+`DocxEditor.Loading` renders before document bytes arrive. It also renders while a large document opens. The engine reports the second state through `snapshot().isOpening`.
+
+This example replaces the packaged loading content:
+
+```tsx
+<DocxEditor.Viewport>
+  <DocxEditor.Loading>
+    <div className="my-loading">
+      <MySpinner />
+      <span>Opening...</span>
+    </div>
+  </DocxEditor.Loading>
+  <DocxEditor.Content />
+</DocxEditor.Viewport>
+```
+
+Pass `overlay` to position the loading screen over its nearest positioned ancestor. The opaque overlay covers the previous document while the next document opens. The overlay does not appear when loading finishes before the delay. This prevents a visible flash. `<DocxEditor />` mounts this overlay by default.
+
+```tsx
+<div style={{ position: 'relative' }}>
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+  <DocxEditor.Loading overlay />
+</div>
+```
+
+Use `DocxEditor.Loading.Spinner` with `className` to style the packaged spinner. If you conditionally mount content, use `snapshot().isLoading`. Do not use `isOpening` for that condition. `DocxEditor.Content` must remain mounted while the scheduled open completes.
+
+## Custom link popover
+
+`DocxEditor.HyperLink` provides the hyperlink popover. It includes the URL, edit fields, apply, copy, and unlink actions. Its parts accept `className`, `asChild`, and `hidden`. Action parts also accept `icon`:
+
+```tsx
+<DocxEditor.HyperLink className="my-popover">
+  <DocxEditor.HyperLink.Copy hidden />
+  <DocxEditor.HyperLink.Unlink icon={MyUnlink} />
+</DocxEditor.HyperLink>
+```
+
+The parts are `Url`, `Fields`, `Edit`, `Apply`, `Cancel`, `Copy`, `Unlink`, and `Error`. Use `useHyperlinkPopup()` when you provide all popover markup.
+
+## Rulers
+
+`DocxEditor.HorizontalRuler` and `DocxEditor.VerticalRuler` read page setup and zoom from the snapshot. They update after section and zoom changes. A margin drag shows a preview and commits one transaction on release. The transaction creates one undo entry. The handles do not operate in view mode.
+
+Use Tab to focus a vertical ruler margin handle. Arrow Up increases the margin; Arrow Down decreases it. Hold Shift to change one twip. Home and End select the permitted limits. Each change creates one undo entry.
+
+```tsx
+<DocxEditor.Root document={bytes}>
+  <DocxEditor.HorizontalRuler />
+  <DocxEditor.Viewport>
+    {/* Position this ruler at the editing area's left edge. */}
+    <DocxEditor.VerticalRuler />
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>
+```
+
+## Page setup dialog
+
+`DocxEditor.PageSetupDialog` is a controlled component. You provide `open` and handle `onClose`. The packaged menu connects it to **Format > Page setup**. This example connects it to a host button:
+
+```tsx
+const [open, setOpen] = useState(false);
+
+<button onClick={() => setOpen(true)}>Page setup...</button>
+<DocxEditor.PageSetupDialog open={open} onClose={() => setOpen(false)} />
+```
+
+The dialog and `usePageSetup()` use the same engine command.
+
+Page setup, paragraph options, and legacy text field options expose replaceable parts and draft contexts. Import `definePopup` from `@docx-editor.dev/react` and pass your component through the editor's `popups` map.
+
+Use `popups.export` for export feedback and `popups.print` for print feedback. The packaged dialogs are `DocxEditor.ExportDialog` and `DocxEditor.PrintDialog`. For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+
+## Content-control panel
+
+`DocxEditor.ContentControl` inspects the content control at the caret. Its compound parts include `Header`, `Fields`, and `Remove`. For locks, data bindings, and fill-only mode, see the [Content controls guide](/docs/2.x/guides/content-controls).
+
+## Page furniture
+
+Mount a part only when your layout needs its interface:
+
+| Part                            | Interface                                     |
+| ------------------------------- | --------------------------------------------- |
+| `DocxEditor.PageNumber`         | Current and total page count during scrolling |
+| `DocxEditor.AuthorStyle`        | Review style for one author                   |
+| `DocxEditor.ColorByChangeType`  | Tracked-change colors by change type          |
+| `DocxEditor.FontNotice`         | Rendered families without a compatible face   |
+| `DocxEditor.DocumentOutline`    | Standalone heading list with caret navigation |
+| `DocxEditor.HeaderFooterChrome` | Header and footer editing controls            |
+| `DocxEditor.NotesChrome`        | Footnote and endnote controls                 |
+
+For review colors, see [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+## Custom labels
+
+Composed chrome resolves labels through the active locale catalog. `LocaleProvider` supplies labels to `DocxEditor.Toolbar`, `Menu`, `ContextMenu`, and other parts.
+
+Pass `t` when you need to rename labels. `useChromeTranslate(overrides?)` returns a catalog-backed resolver. It checks your overrides before the catalog:
+
+```tsx
+import { DocxEditor, useChromeTranslate } from '@docx-editor.dev/react';
+
+// Keep this Map at module scope to preserve its identity.
+// A Map also avoids inherited object keys.
+const OVERRIDES = new Map([
+  ['contextMenu.cut', 'Cut text'],
+  ['formattingBar.bold', 'Heavy'],
+]);
+
+function MyToolbar() {
+  const t = useChromeTranslate(OVERRIDES);
+  return <DocxEditor.Toolbar t={t} />;
+}
+```
+
+Keys without overrides resolve from the catalog.
+
+## Custom colors
+
+The editor chrome uses the `--doc-*` custom-property palette. Override these properties in a scope to theme its toolbar, menu, panels, pickers, rulers, and navigation pane:
+
+```css
+.my-nav {
+  --doc-surface: transparent;
+  --doc-text: #fff;
+  --doc-border: rgba(255, 255, 255, 0.25);
+}
+```
+
+Follow these styling requirements:
+
+- Do not target `docx-*` classes. These classes are implementation details.
+- Do not use `!important`. Use a component prop, a `--doc-*` property, or an element that you own.
+- Do not theme the document canvas. The canvas preserves the document's Word-compatible appearance.
+
+## Custom tracked changes and comments
+
+[`@docx-editor.dev/pro`](/docs/2.x/pro) provides the review surface. `DocxEditorReview` renders one card for each pending decision. Its props select decisions and control stacking. Its parts control card markup.
+
+```tsx
+import { DocxEditorReview } from '@docx-editor.dev/pro/react';
+
+<DocxEditorReview
+  className="my-review"
+  // Show comments in this rail.
+  filter={(item) => item.kind === 'comment'}
+  // Keep structural and formatting changes on the document page.
+  structural={false}
+  formatting={false}
+  stack
+  gap={12}
+  furniture={<MyReviewFilters />}
+/>;
+```
+
+The `furniture` prop renders host content above the cards. Use it for controls such as filters or a legend. Place the compound inside the viewport to scroll it with the document. For suggesting mode, bulk actions, and `useReview()`, see [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+### Custom cards
+
+Each card is a compound component. You can reorder, hide, or replace icons for its parts:
+
+```tsx
+<DocxEditorReview className="my-review">
+  <DocxEditorReview.List>
+    <DocxEditorReview.Card className="my-card">
+      <DocxEditorReview.Avatar className="my-avatar" />
+      <DocxEditorReview.Author />
+      <DocxEditorReview.Time hidden />
+      <DocxEditorReview.Summary />
+      <DocxEditorReview.Accept icon={MyCheck} />
+      <DocxEditorReview.Reject icon={MyCross} />
+      <DocxEditorReview.Replies />
+      <DocxEditorReview.Reply />
+    </DocxEditorReview.Card>
+    <DocxEditorReview.Empty>Nothing to review</DocxEditorReview.Empty>
+  </DocxEditorReview.List>
+</DocxEditorReview>
+```
+
+Each part accepts `className`, `asChild`, and `hidden`. Action parts also accept `icon`.
+
+Use a render callback on `List` when you replace all packaged card markup. Root parts remain siblings. This structure supports a custom **Add comment** control and custom cards:
+
+```tsx
+<DocxEditorReview>
+  <DocxEditorReview.AddComment asChild>
+    <MyAddCommentButton />
+  </DocxEditorReview.AddComment>
+  <DocxEditorReview.List>{(item) => <MyReviewCard item={item} />}</DocxEditorReview.List>
+</DocxEditorReview>
+```
+
+The root callback form remains an alias for an implicit `List`. It cannot include root siblings. Use `List` for new code.
+
+Set `preset={false}` when you replace the packaged review arrangement. The component still provides rail context and root-owned positioning. It does not render omitted defaults. `useStackedReviewPositions(items, heights, options)` provides the packaged stacking calculation. Pass `{ gap, scale: editor.getRenderScale() }` as `options`. Use `useReview()` when you need the review queue without chrome. For placement details, see [Tracked changes](/docs/2.x/pro/tracked-changes).
+
+Use `useReviewItem()` to read the card that contains a child:
+
+```tsx
+import { DocxEditorReview, useReviewItem } from '@docx-editor.dev/pro/react';
+
+function OpenSource() {
+  const item = useReviewItem();
+  // Show this action only for custom-node review cards.
+  if (item?.kind !== 'custom') return null;
+  return <button onClick={() => openSource(item)}>Open source</button>;
+}
+
+<DocxEditorReview>
+  <OpenSource />
+</DocxEditorReview>;
+```
+
+## Custom nodes
+
+`CustomNodeChrome` renders interaction markers for [custom nodes](/docs/2.x/pro/custom-nodes). The node definition's `chrome.color` sets each marker color. Use click and hover handlers to update host state.
+
+```tsx
+import { CustomNodeChrome, CustomNodeContextMenu } from '@docx-editor.dev/pro/react';
+
+<DocxEditor.Viewport>
+  <DocxEditor.Content />
+  <CustomNodeChrome
+    // Omit `nodes` to use all registered definitions.
+    nodes={[Citation]}
+    onNodeClick={(node) => setPopover({ at: node.rect, attrs: node.attrs })}
+    onNodeHover={(node) => prefetch(node.attrs['sourceId'])}
+  />
+  <DocxEditor.ContextMenu>
+    {/* Add an edit row when the context-menu target is a custom node. */}
+    <CustomNodeContextMenu onEditNode={(node) => openEditForm(node)} />
+  </DocxEditor.ContextMenu>
+</DocxEditor.Viewport>;
+```
+
+An activated node includes `name`, `attrs`, `tag`, and `rect`. The viewport-relative `rect` can anchor a host popover. The node also includes `nodeId` and `text` when available. Use `useCustomNodeDefinitions()` to read registered definitions.
+
+Register the required module on `Root` before you use either compound.
+
+## A full composition
+
+This example combines common composition parts:
+
+```tsx
+export function Workspace({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} author="Jess Lin">
+      <MyBrandHeader />
+      <MyMenu />
+      <MyToolbar />
+      <DocxEditor.HorizontalRuler />
+
+      <div className="workspace">
+        <DocxEditor.Navigation />
+        <DocxEditor.Viewport>
+          <DocxEditor.VerticalRuler />
+          {/* Mount optional overlays that this application uses. */}
+          <DocxEditor.HeaderFooterChrome />
+          <DocxEditor.NotesChrome />
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+        </DocxEditor.Viewport>
+        <DocxEditor.PageNumber />
+      </div>
+    </DocxEditor.Root>
+  );
+}
+```
+
+Composition lets you mount each part explicitly. Omitted parts do not render an interface. The packaged `<DocxEditor>` mounts the default part set.
+
+## Layout constraints
+
+Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.
+
+Inside `DocxEditor.Viewport`, the navigation pane is sticky and needs no positioning context. If you place the pane beside the viewport instead, put both in a row with `position: relative`. Beside the viewport, the pane uses absolute positioning over the document gutter, and without that row it enters normal flow and moves the page.
+
+`DocxEditor.PageNumber` uses absolute positioning against the same positioning context. Place it beside the viewport or inside it. Inside the viewport, it renders into the viewport's parent element, so it stays in view while the pages scroll.
+
+Do not set `z-index` on the workspace row or viewport. That property can create a stacking context around the context menu. A fixed panel cannot escape its containing stacking context. The panel can then render under the chrome bar.
+
+## Keep the caret
+
+A `mousedown` event on the document moves the caret. Prevent the event on chrome that must preserve the document caret:
+
+```tsx
+<div onMouseDown={(e) => e.preventDefault()}>{/* your toolbar */}</div>
+```
+
+Do not prevent `mousedown` on `input`, `select`, or `textarea` elements. These controls require focus. Packaged chrome applies this behavior. Apply the same behavior to custom chrome.
+
+## Next steps
+
+- [Igloo customization example](https://igloo.docx-editor.dev/)
+- [Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo)
+- [Custom nodes example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes)
+- [React hooks](/docs/2.x/react/hooks)
+- [Toolbar guide](/docs/2.x/guides/toolbar)
+- [React props](/docs/2.x/react/props)

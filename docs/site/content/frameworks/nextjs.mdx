@@ -5,17 +5,17 @@ category: 'Frameworks'
 seoTitle: 'Next.js DOCX editor setup'
 ---
 
-By the end of this page you have an App Router route that opens a `.docx` from disk, edits it in the browser, and downloads the result as a `.docx`.
+This guide shows an App Router route that opens a `.docx` from disk, edits it in the browser, and downloads the result as a `.docx`.
 
 ## Install
 
 ```bash
-npm install @docx-editor.dev/react
+npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
 ## Mount the editor
 
-Two files. The route stays a thin client shell; the editor itself lives in a separate component loaded with `dynamic()` and `ssr: false`. This is the structure of [`examples/nextjs`](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs).
+Create a client route and a separate editor component. Load the editor component with `dynamic()` and `ssr: false`. This is the structure of [`examples/nextjs`](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs).
 
 ```tsx
 // app/page.tsx
@@ -39,7 +39,7 @@ export default function Page() {
 
 import { useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
+import '@docx-editor.dev/core/styles/editor.css';
 
 export function Editor() {
   const editorRef = useRef<DocxEditorRef>(null);
@@ -73,19 +73,23 @@ export function Editor() {
         <input type="file" accept=".docx" onChange={onFileSelect} />
         <button onClick={onSave}>Save .docx</button>
       </div>
-      <DocxEditor ref={editorRef} documentBuffer={buffer} showToolbar />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <DocxEditor ref={editorRef} document={buffer ?? 'blank'} />
+      </div>
     </div>
   );
 }
 ```
 
-`documentBuffer={null}` mounts an empty document until the user picks a file. The stylesheet import is required once.
+`document={buffer ?? 'blank'}` starts the user on an empty page, and replaces it with their file when they pick one. Leaving `document` undefined is not the same thing. It means no document at all. The editor shows its loading screen, and every control reports `no document is loaded` until bytes arrive. Use `undefined` only while your fetch is still running.
+
+The stylesheet import is required once, and the editor fills its parent so it needs a box with a real height.
 
 ## Why this pattern
 
 The editor reads the DOM and measures text at mount, so it cannot run during server rendering. If you import `DocxEditor` directly in a route, `next build` fails during prerender with:
 
-```
+```text
 ReferenceError: window is not defined
 ```
 
@@ -109,7 +113,7 @@ bun run dev:nextjs   # http://localhost:3000
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save flow in detail
-- [Loading and saving](/docs/1.x/guides/loading-and-saving): URLs, autosave, upload to your API
-- [Next.js DOCX editor guide](/blog/nextjs-docx-editor): the long-form walkthrough
+- [Quickstart](/docs/2.x/quickstart): the load, edit, save flow in detail
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): URLs, autosave, upload to your API
+- [Next.js DOCX editor guide](/blog/nextjs-docx-editor): the detailed walkthrough
 - [Next.js example on GitHub](https://github.com/eigenpal/docx-editor/tree/main/examples/nextjs)

@@ -1,60 +1,54 @@
-# Astro example
+# Astro DOCX editor example
 
-`@docx-editor.dev/react` as an Astro island. Astro ships zero JS by
-default. The editor is interactive and browser-only, so it loads with the
-`client:only` directive, which skips SSR for that component entirely.
+This example loads the React DOCX editor as an Astro island in the browser. It includes the packaged toolbar and a review pane.
 
-## Run it
+## Run the example
 
-This example resolves the `@docx-editor.dev/*` packages from their built output, so
-build the workspace packages once first. From the repo root:
+From the repository root, build the workspace packages before you start Astro:
 
 ```bash
 bun install
 bun run build:packages
-bun run dev:astro      # http://localhost:4321
+bun run dev:astro
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:4321`.
 
-## The island
+## Create the island
 
-`src/pages/index.astro` renders the React editor as a client-only island:
+Astro renders components on the server by default. The editor measures layout in the browser and reads `window`, so it must not run during the server render. Use `client:only="react"`:
 
 ```astro
 ---
 import { Editor } from '../components/Editor';
 ---
+
 <Editor client:only="react" />
 ```
 
-`client:only="react"` is the key: `client:load` would still server-render the
-component first and crash on `window`. `client:only` renders it in the
-browser only. The page shell, fonts, and styles are still static HTML.
+`client:load` hydrates in the browser, but it still renders the component on the server first. That server render fails when the editor reads `window`. `client:only` skips it and mounts the component after the page loads.
 
-## Files
+## Reserve space for the island
 
-| File                        | What it does                            |
-| --------------------------- | --------------------------------------- |
-| `src/pages/index.astro`     | Page shell + the `client:only` island   |
-| `src/components/Editor.tsx` | React `<DocxEditor />` component        |
-| `astro.config.mjs`          | `@astrojs/react` integration + Tailwind |
+Astro sends no HTML for a `client:only` island, so the page has an empty gap until React mounts. Give the island a height, or the rest of the page moves when the editor appears. In this example `src/components/Editor.tsx` sets its own root to the full viewport height, and the page body matches it.
 
-## Use it in your own Astro app
+## Load the stylesheet once
+
+`src/pages/index.astro` imports `src/styles.css` in its frontmatter, and that file imports the editor stylesheet. The editor's styles are global, so import them once for the site rather than inside each island.
+
+## What the island renders
+
+`src/components/Editor.tsx` renders `<DocxEditor>`, which supplies the title bar, menu, toolbar, and navigation pane. Two props turn it into a review editor: `modules` registers comments, tracked changes, and suggesting mode, and `<DocxEditorReview />` mounts the review pane inside the editor. Remove both and the same document still opens, with revisions in their final state.
+
+## Add the editor to an Astro site
+
+Install the adapter, its required engine peer, and the Astro React integration:
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 npx astro add react
 ```
 
-Always mount the editor with `client:only="react"`. Load the Material
-Symbols font in the page `<head>`:
+Mount the editor with `client:only="react"` and import the stylesheet once.
 
-```html
-<link
-  rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-/>
-```
-
-Docs: https://www.docx-editor.dev/docs/1.x/react
+For more information, see the [Astro integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/astro).

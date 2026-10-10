@@ -1,0 +1,90 @@
+---
+title: 'Lists and numbering'
+description: 'Create lists, attach paragraphs, configure nine levels, choose markers, and restart numbering.'
+category: 'Editing API'
+order: 56
+---
+
+A `List` groups paragraphs by their numbering definition within a body story. Use `Body.lists` to discover existing lists, or `Paragraph.startNewList()` to create one. List levels use zero-based indexes from `0` through `8`.
+
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+
+## Create and configure a list
+
+Sync after paragraph and list creation before configuring their returned objects:
+
+```ts
+await runtime.run(async (context) => {
+  const first = context.document.body.insertParagraph('Review contract', 'End');
+  await context.sync();
+  const list = first.startNewList();
+  await context.sync();
+
+  list.setLevelNumbering(0, 'Arabic', [0, '.']);
+  list.setLevelStartingNumber(0, 1);
+  list.setLevelIndents(0, 36, -18);
+  await context.sync();
+
+  const second = list.insertParagraph('Approve changes', 'End');
+  await context.sync();
+  second.listItem.level = 0;
+  await context.sync();
+});
+```
+
+A new list starts as an independent bullet list and defines all nine levels. `List.insertParagraph(text, location)` accepts `Start`, `End`, `Before`, and `After`. `Before` and `After` insert inside the list, at its first or last position. Use `Paragraph.insertParagraph()` to create content outside the list. The returned paragraph requires sync before dependent work.
+
+## Paragraph spacing
+
+Paragraph margins and line height come from document defaults, the paragraph style and its `basedOn` ancestors, and direct formatting. Inside tables, table styles can also supply paragraph formatting. Direct formatting overrides the inherited attributes it specifies; omitted attributes keep their inherited values. Numbering definitions also supply paragraph spacing, alignment, tabs, and borders. When a paragraph states its own numbering properties, even only a list level, its level properties apply after the paragraph style; direct paragraph properties still win. Otherwise, the level properties apply after the base styles of the nearest style that states numbering properties. That style, the styles based on it, and direct paragraph properties override the level. Indents follow the same order.
+
+A level with empty number text, such as `w:numFmt="none"` or `w:lvlText w:val=""`, paints no number. The suffix after the number still applies. A tab moves the first line to the next tab stop, which is the text indent for a hanging indent. A space moves the first line one space past the number position, and no suffix starts the first line at that position. Continuation lines start at the text indent.
+
+Enter preserves that inheritance instead of copying resolved spacing into the new paragraph. A style's **Style for following paragraph** setting can start a different style; entering that style drops the old direct numbering. Shift+Enter creates a line break within the existing paragraph.
+
+Word's AutoFormat list continuation is separate from paragraph spacing. When the preceding item belongs to the same list and level, with exactly one unnumbered blank paragraph between them, Enter inserts an unnumbered separator before the new item. Spaces or tabs in the blank paragraph do not change this behavior. It applies to bullets, numbered lists, and Enter replacing text within an item. A different list, different level, or a gap only after the current item does not establish this pattern. Content-control boundaries preserve the pattern within the same flow. A paragraph containing a shape, field, or reference does not count as blank.
+
+The separator uses the document's **List Paragraph** style and the direct typing format, even when the items use a custom style. If that built-in style is missing, the editor creates it based on the document's default paragraph style. The items keep their own styles. Undo restores the paragraphs and any newly created style together; redo restores the caret on the new item. Tracked editing records both inserted breaks for acceptance or rejection.
+
+Automatic spacing stays tight between adjacent items in the same list, including nested levels. The list keeps its outer automatic margins, except before a list at section start. Explicit spacing still applies between items unless the paragraph enables **Don’t add space between paragraphs of the same style**. Blank paragraphs and line breaks add height independently of these settings.
+
+The editor follows the document relationship when style definitions use a different package filename. Line-unit paragraph margins (`w:beforeLines` and `w:afterLines`) use a fixed 12-point unit without a document grid. An active section grid supplies its line pitch instead. Line-unit values take precedence over point values, including inherited values; automatic spacing takes precedence over both. Contextual spacing applies in body text and table cells, including paragraphs using the implicit default style.
+
+## Discover and join existing lists
+
+`ListCollection` exposes `items`, `getFirst()`, and `getById(id)`. Load a list's `id` before using its numeric value. `List.paragraphs` returns all its paragraphs. `List.getLevelParagraphs(level)` returns the paragraphs at one level. Load collection items, then load their text or formatting properties.
+
+To attach an existing paragraph, pass a loaded list ID and defined level:
+
+```ts
+const list = context.document.body.lists.getFirst();
+list.load('id');
+await context.sync();
+paragraph.attachToList(list.id, 1);
+await context.sync();
+```
+
+`Paragraph.attachToList(listId, level)` returns the addressed `List`. `Paragraph.detachFromList()` removes that paragraph's list membership. `Paragraph.list` returns its existing list. If the paragraph has no list, the operation fails with `InvalidArgument`. `Paragraph.listItem.level` reads or writes its level. Existing lists can omit levels. The runtime rejects assignments to a missing level. There is no marker-text `listString` or `siblingIndex` property in this subset.
+
+## Choose level markers
+
+| Method | Arguments and behavior |
+| --- | --- |
+| `setLevelBullet(level, listBullet, charCode?, fontName?)` | Select a built-in bullet, or supply a custom Unicode character and font |
+| `setLevelNumbering(level, listNumbering, formatString?)` | Choose numbering and an optional array of text and level references |
+| `setLevelStartingNumber(level, startingNumber)` | Set this list instance's starting counter |
+| `setLevelIndents(level, textIndent, bulletNumberPictureIndent)` | Set point measurements; the second indent is relative to the text indent |
+
+`ListBullet` provides `Custom`, `Solid`, `Hollow`, `Square`, `Diamonds`, `Arrow`, and `Checkmark`. A custom bullet requires a Unicode character code. For example, `list.setLevelBullet(0, 'Custom', 0x2022, 'Calibri')` uses a bullet in Calibri. The rendering or pagination host must provide that font. Picture bullets are unavailable.
+
+`ListNumbering` provides `None`, `Arabic`, `UpperRoman`, `LowerRoman`, `UpperLetter`, and `LowerLetter`. Numeric entries in `formatString` reference zero-based levels. For example, `[0, '.', 1, ')']` combines level counters with literal punctuation. The runtime validates level references and counters and rejects unsupported values.
+
+## Respect batching and tracking limits
+
+Changes to one list level coalesce on its list proxy within a sync. Changes to different levels can share a sync after list creation completes. Compatible level assignments and paragraph attachments can join that batch. Different proxies that write the same list level still conflict. Structural changes sharing a paragraph can also conflict. Sync list creation before attaching paragraphs or changing level properties.
+
+The runtime tracks list creation, membership, and level changes as paragraph-property revisions. Reject restores the original membership. Accept retains the change. While tracking, definition changes require every member to belong to the same author’s proposed list. The runtime rejects definition changes to established lists. Edits to protected paragraphs and unsupported numbering structures also fail. The runtime rejects formatting for numbering instances shared across stories, such as the main body and notes. It also rejects instances referenced by styles, including unused styles, because inherited membership can affect protected paragraphs. On a conflict, read the document again before separating the proposed operations. Do not remove existing numbering structure to force a write.
+
+## Next steps
+
+See [Formatting and styles](/docs/2.x/editor-api/formatting), [Fields and pagination](/docs/2.x/editor-api/fields), and [API member directory](/docs/2.x/editor-api/reference).

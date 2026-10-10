@@ -1,0 +1,316 @@
+name: Dependabot Slack reminders
+
+# Posts open Dependabot alerts
+# (https://github.com/eigenpal/docx-editor/security/dependabot) to the Slack
+# channel configured by the DOCX_EDITOR_SLACK_WEBHOOK_URL repository secret.
+# This incoming webhook is separate from the release notification webhook.
+# Create it for the destination channel; a channel name cannot override a webhook.
+#
+#   - Daily (07:00 UTC): high and critical alerts only. The job stays silent
+#     when there are none, so a message in the channel always means somebody
+#     has to act.
+#   - Weekly (Monday 08:00 UTC): every open alert, at any severity. It posts
+#     even at zero, so the digest doubles as a heartbeat. Without it, a broken
+#     reminder and a clean repository look identical in the channel.
+#
+# Monday 08:00 UTC lands after Dependabot's own weekly run opens the grouped
+# update PRs (.github/dependabot.yml), so the digest reflects them.
+#
+# Because the daily report treats channel silence as the all-clear, a failed
+# run must not be silent too. The last step posts a failure notice for anything
+# that goes wrong above it, and the weekly heartbeat catches a run that never
+# started at all.
+#
+# Auth: the default GITHUB_TOKEN cannot read Dependabot alerts, and the
+# `permissions:` block cannot grant it. The job mints a release-pal App token
+# scoped to that one read instead.
+
+on:
+  schedule:
+    - cron: '0 7 * * *' # daily high/critical reminder
+    - cron: '0 8 * * 1' # weekly full digest
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Which report to post
+        type: choice
+        options: [daily, weekly]
+        default: weekly
+
+# The default token is unused (see the auth note above); grant it nothing.
+permissions: {}
+
+# Serialize runs so a dispatched run cannot post at the same moment as a
+# scheduled one. This orders them; it does not deduplicate them. GitHub keeps
+# one run pending per group, so queueing a third evicts the one already
+# waiting. An evicted run never starts, so nothing in this job can report it —
+# the weekly digest is the backstop.
+concurrency:
+  group: dependabot-slack-reminders
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    name: Post Dependabot alert summary
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Resolve report mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_MODE: ${{ inputs.mode }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          # Match the daily cron and let everything else fall through to
+          # weekly, never the other way round. Both branches compare against a
+          # literal copied from the `schedule:` block above, and an edit there
+          # (`0 8 * * MON` for `0 8 * * 1`, say) breaks the match. Falling
+          # through to daily would then make the Monday run silent whenever
+          # nothing is high or critical, and succeed — so the heartbeat dies
+          # with no failure to notice. Falling through to weekly posts instead,
+          # and a digest on the wrong day is something you can see.
+          if [ "$EVENT_NAME" = 'workflow_dispatch' ]; then
+            mode="$DISPATCH_MODE"
+          elif [ "$SCHEDULE" = '0 7 * * *' ]; then
+            mode=daily
+          else
+            mode=weekly
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Report mode: $mode"
+
+      - name: Mint release-pal App token (Dependabot alerts read)
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Hardcoded on purpose, matching every other workflow here. Do not
+          # derive it from `github.event.repository.name`: the schedule event
+          # carries no webhook payload, and an empty `repositories` with `owner`
+          # set does not fail — it widens the token to every repository in the
+          # organization installation. A stale name after a rename is a loud
+          # 404; a token scoped org-wide is silent.
+          repositories: docx-editor
+          permission-vulnerability-alerts: read
+
+      - name: Fetch open alerts and build the Slack payload
+        id: payload
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # --paginate emits one JSON array per page; -s 'add' flattens them.
+          gh api "/repos/$REPO/dependabot/alerts?state=open&per_page=100" \
+            --paginate | jq -s 'add // []' > alerts.json
+
+          # Nothing below prints an alert. This repository is public, so its
+          # Actions logs are readable by anyone, while the alert list itself is
+          # not. Log the decision and the payload shape, never the contents.
+          # Indexed defensively, like the projection below and for the same
+          # reason: one alert whose `security_vulnerability` is not an object
+          # would otherwise abort this step, and a malformed alert must cost
+          # its own line, never the whole report.
+          high_crit=$(jq '[.[] | (.security_vulnerability?.severity? // "unknown")
+                               | select(. == "critical" or . == "high")] | length' alerts.json)
+
+          # Daily is signal-only: no high or critical alert, no message.
+          if [ "$MODE" = 'daily' ] && [ "$high_crit" -eq 0 ]; then
+            echo 'should_post=false' >> "$GITHUB_OUTPUT"
+            echo 'Daily report: nothing to act on, staying silent.'
+            exit 0
+          fi
+          echo 'should_post=true' >> "$GITHUB_OUTPUT"
+
+          cat > build-payload.jq <<'JQ'
+          def trunc($n): if (length > $n) then .[0:$n - 1] + "…" else . end;
+
+          # Slack reads `<` as the start of a link token in mrkdwn text, and
+          # about one npm advisory summary in fifty carries one ("Unescaped
+          # <template> Content", "denial of service in foo < 2.0"). Left raw,
+          # that `<` swallows the rest of the line, taking the manifest path
+          # with it. Escape `&` first, or the later escapes escape each other.
+          # Truncate before escaping, so no entity is ever cut in half; `pack`
+          # measures the finished lines, so the growth cannot overflow a block.
+          # A lone backtick is the other structural break: advisory text quotes
+          # package names often, and truncation at 160 characters can leave an
+          # odd one, which then pairs with the manifest's opening backtick and
+          # swallows the path. Slack offers no escape, so substitute a quote.
+          #
+          # `*` and `_` stay as they are on purpose. They can only italicize or
+          # embolden part of one line, and rewriting them would corrupt real
+          # package names such as `string_decoder` — the one string in the
+          # message a reader copies out to fix the alert.
+          def mrkdwn: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")
+                    | gsub("`"; "'");
+
+          def sev_rank: {critical: 0, high: 1, medium: 2, low: 3}[.] // 4;
+          def sev_emoji: {
+            critical: ":rotating_light:", high: ":red_circle:",
+            medium: ":large_orange_circle:", low: ":large_yellow_circle:"
+          }[.] // ":white_circle:";
+
+          # Slack rejects a section whose text exceeds 3000 characters, and an
+          # advisory summary has no length bound this repository controls. Pack
+          # the lines greedily instead of using a fixed lines-per-block count.
+          def pack($limit): reduce .[] as $line ([];
+            if (length == 0) or (((.[-1] + "\n" + $line) | length) > $limit)
+            then . + [$line]
+            else .[0:-1] + [.[-1] + "\n" + $line]
+            end);
+
+          # The alert list arrives by --slurpfile, not --argjson: a hundred
+          # alerts carry their full advisories and would not reliably fit in an
+          # argument vector.
+          #
+          # Project it down to the fields the report uses, and give every one a
+          # fallback. A single alert with no severity would otherwise take down
+          # the whole digest: `sev_rank` and `sev_emoji` cannot index on null,
+          # and `group_by` cannot use null as an object key. One malformed
+          # alert must cost its own line, not the report.
+          # `url` stays raw: it has to sit inside Slack's <url|label> syntax,
+          # which is the one place those characters are structural.
+          # `?` and `tostring` make this total. `//` alone only catches null: a
+          # field that arrives as an object is truthy, passes through, and then
+          # throws inside `gsub`. That abort would both lose the report and
+          # print the offending value to a world-readable log, breaking the
+          # "nothing here prints an alert" rule above.
+          ($alerts_file[0] | map({
+              sev: (.security_vulnerability?.severity? // "unknown" | tostring),
+              name: (.dependency?.package?.name? // "unknown package"
+                     | tostring | trunc(80) | mrkdwn),
+              manifest: (.dependency?.manifest_path? // "unknown manifest"
+                         | tostring | trunc(80) | mrkdwn),
+              url: (.html_url? // "https://github.com/\($repo)/security/dependabot" | tostring),
+              ref: (.security_advisory?.cve_id? // .security_advisory?.ghsa_id?
+                    // "no advisory id" | tostring | trunc(40) | mrkdwn),
+              summary: (.security_advisory?.summary? // "no summary"
+                        | tostring | trunc(160) | mrkdwn)
+            })) as $alerts
+          | ($alerts
+              | if $mode == "daily"
+                then map(select(.sev == "critical" or .sev == "high"))
+                else . end
+              | sort_by(.sev | sev_rank)) as $selected
+          | ($alerts | group_by(.sev) | map({(.[0].sev): length}) | add // {}) as $counts
+          # A severity outside GitHub's four still has to show up somewhere, or
+          # the count line silently disagrees with the total.
+          | ($counts | delpaths([["critical"], ["high"], ["medium"], ["low"]])
+                     | [.[]] | add // 0) as $other
+          # The count line always covers every severity, while the daily
+          # headline counts only high and critical. Label it, or the two lines
+          # read as a contradiction.
+          | ("*All open:*  " + ((["critical", "high", "medium", "low"]
+                | map("\(sev_emoji) \($counts[.] // 0) \(.)"))
+             + (if $other > 0 then [":white_circle: \($other) other"] else [] end)
+             | join("   "))) as $countline
+          | ($selected[:20] | map(
+              "\(.sev | sev_emoji) *\(.name)* (\(.sev | mrkdwn)) — <\(.url)|\(.ref)>"
+              + " \(.summary) — `\(.manifest)`"
+            )) as $lines
+          | (if $mode == "daily"
+             then ":rotating_light: docx-editor — \($selected | length) open high/critical Dependabot alert(s)"
+             else ":shield: docx-editor — weekly Dependabot digest, \($alerts | length) open alert(s)"
+             end) as $headline
+          | {
+              text: $headline,
+              blocks: (
+                [{type: "header", text: {type: "plain_text", emoji: true, text: ($headline | trunc(150))}},
+                 {type: "section", text: {type: "mrkdwn", text: $countline}}]
+                + (if ($lines | length) == 0
+                   then [{type: "section", text: {type: "mrkdwn", text: ":white_check_mark: Nothing open."}}]
+                   else ($lines | pack(2800) | map({type: "section", text: {type: "mrkdwn", text: .}}))
+                   end)
+                + (if ($selected | length) > 20
+                   then [{type: "section", text: {type: "mrkdwn", text: "…and \(($selected | length) - 20) more."}}]
+                   else [] end)
+                + [{type: "context", elements: [{type: "mrkdwn", text:
+                     ("<https://github.com/\($repo)/security/dependabot|Full list on GitHub>"
+                     + " · fix by bumping the dependency; Dependabot opens the PR")}]}]
+              )
+            }
+          JQ
+
+          jq -n \
+            --slurpfile alerts_file alerts.json \
+            --arg mode "$MODE" \
+            --arg repo "$REPO" \
+            -f build-payload.jq > slack-payload.json
+
+          # Prove the payload is well formed without printing it (see above).
+          jq -e 'type == "object" and (.blocks | length) > 0' slack-payload.json > /dev/null
+          echo "Built a Slack payload with $(jq '.blocks | length' slack-payload.json) block(s)."
+
+      - name: Post to Slack
+        if: steps.payload.outputs.should_post == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCX_EDITOR_SLACK_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          # Unlike the release notifications, a missing webhook is not a
+          # tolerable no-op here: silence is how this job reports "nothing is
+          # wrong". Fail loudly instead of dropping a security report.
+          if [ -z "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo '::error::DOCX_EDITOR_SLACK_WEBHOOK_URL is not set; configure the dedicated Slack incoming webhook secret.'
+            exit 1
+          fi
+          # Retry transient failures. Without it a one-minute Slack blip drops
+          # that day's security report, and on the daily schedule an empty
+          # channel is defined to mean "nothing to act on". A duplicate digest
+          # from a retried-but-delivered post is visible and harmless; a
+          # missing one is not.
+          curl -sSf --connect-timeout 10 --max-time 30 \
+            --retry 3 --retry-delay 2 --retry-all-errors \
+            -X POST -H 'Content-Type: application/json' \
+            -d @slack-payload.json "$SLACK_WEBHOOK_URL" >/dev/null
+
+      # Every step above can fail quietly as far as the channel is concerned:
+      # an unapproved App permission, Dependabot alerts turned off, a malformed
+      # alert, a Slack 4xx. On the daily schedule an empty channel means "all
+      # clear", so a failure has to say so out loud. Best effort by design — it
+      # cannot report a webhook that is itself missing or broken.
+      #
+      # The condition is `always() && job.status != 'success'`, not `failure()`.
+      # A cancelled job skips `failure()` steps, and the 5-minute timeout above
+      # cancels this job — a hung `gh api` has no per-request deadline of its
+      # own. That would otherwise leave the channel silent, which the daily
+      # report means as "nothing to act on". This cannot cover a run evicted
+      # from the concurrency queue, because such a run never starts; see the
+      # note on `concurrency` above.
+      - name: Notify Slack — reminder failed
+        if: ${{ always() && job.status != 'success' }}
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCX_EDITOR_SLACK_WEBHOOK_URL }}
+          MODE: ${{ steps.mode.outputs.mode }}
+          JOB_STATUS: ${{ job.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [ -n "${SLACK_WEBHOOK_URL:-}" ] || exit 0
+          payload=$(jq -n \
+            --arg mode "${MODE:-unknown}" \
+            --arg status "${JOB_STATUS:-unknown}" \
+            --arg run_url "$RUN_URL" \
+            '({failure: "failed", cancelled: "was cancelled"}[$status]
+              // "did not succeed (\($status))") as $verb
+            | ":x: docx-editor — the \($mode) Dependabot reminder \($verb)" as $title
+            | {
+              text: $title,
+              blocks: [
+                { type: "section", text: { type: "mrkdwn", text: "*\($title)*" } },
+                { type: "section", text: { type: "mrkdwn",
+                  text: "No alert summary went out, so an empty channel does not mean the repository is clean. Read the run, fix the cause, then re-run the workflow." } },
+                { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run log>" } ] }
+              ]
+            }')
+          curl -sSf --connect-timeout 10 --max-time 30 \
+            --retry 3 --retry-delay 2 --retry-all-errors \
+            -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null

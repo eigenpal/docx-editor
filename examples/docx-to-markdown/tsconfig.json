@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "paths": {
+      "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
+      "@docx-editor.dev/docx-to-markdown": ["../../packages/docx-to-markdown/src/index.ts"],
+      "@docx-editor.dev/fonts": ["../../packages/fonts/src/index.ts"],
+      "@docx-editor.dev/fonts/google": ["../../packages/fonts/src/google-fonts.ts"],
+      "@docx-editor.dev/fonts/*": ["../../packages/fonts/src/*"],
+      "@docx-editor.dev/i18n": ["../../packages/i18n/src/index.ts"],
+      "@docx-editor.dev/pro": ["../../packages/pro/src/index.ts"],
+      "@docx-editor.dev/pro/*": ["../../packages/pro/src/*"],
+      "@docx-editor.dev/react": ["../../packages/react/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "types": ["bun", "vite/client"]
+  },
+  "include": ["src", "../shared"]
+}

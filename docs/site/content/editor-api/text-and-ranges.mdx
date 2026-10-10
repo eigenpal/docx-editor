@@ -1,0 +1,143 @@
+---
+title: 'Text and ranges'
+description: 'Read document text and insert, replace, clear, or delete content through bodies, paragraphs, and ranges.'
+category: 'Editing API'
+order: 53
+---
+
+Use `Body` for a story, `Paragraph` for a paragraph, and `Range` for an addressed span. `context.document.body` is the main story. `document.paragraphs` and `document.body.paragraphs` cover its paragraphs, including table cells and nested controls. They do not aggregate headers, footers, or notes. See [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) for those bodies.
+
+Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
+
+## Refresh ranges after edits
+
+A `Range` stores paragraph identities and UTF-16 offsets from the moment it was found. It does not follow later edits inside those paragraphs. For example, a range over `alpha` still names offsets zero through five after text is inserted before it. Using that range, to read or to edit, then fails with `StaleDocument` instead of addressing different text. Edits after the range and formatting changes keep it valid. Deleting an endpoint paragraph invalidates the range.
+
+After a successful edit, search again before acting on another target in that paragraph. For the inserted text itself, use the `Range` returned by `insertText()` after sync. Tracking a proxy across runs preserves its lifetime; it does not turn its range into a live text region. This differs from Word's moving range behavior.
+
+## Read text without exporting proxies
+
+Load text before reading it:
+
+```ts
+const text = await runtime.run(async (context) => {
+  const body = context.document.body;
+  body.load('text');
+  await context.sync();
+  return body.text;
+});
+```
+
+`Body.text` joins paragraphs with carriage returns (`\r`). `Paragraph.text` reads paragraph text; `Range.text` reads the addressed content. Text reads follow the runtime's `revisionTextView` option.
+
+Some document elements use a single character in API text, regardless of their displayed glyph:
+
+| Document element    | API text | Range length    | `insertText()` behavior                     |
+| ------------------- | -------- | --------------- | ------------------------------------------- |
+| Non-breaking hyphen | U+001E   | One UTF-16 unit | Restores the non-breaking hyphen element    |
+| Optional hyphen     | U+001F   | One UTF-16 unit | Restores the optional hyphen element        |
+| Symbol (`w:sym`)    | `(`      | One UTF-16 unit | Inserts a literal parenthesis, not a symbol |
+| Manual line break   | `\v`     | One UTF-16 unit | Inserts a manual line break                 |
+| Column break        | U+000E   | One UTF-16 unit | Refused                                     |
+
+Hyphen elements can survive a text read and write through these characters. This does not preserve arbitrary document structure, such as symbols or fields. Convert the hyphen characters before passing text to readers that require ordinary text.
+
+Search never matches a symbol. A search for `(` does not find it, and search does not join the text on either side. For hyphen matching rules, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
+
+The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
+
+## Upgrade text processing
+
+Automation reads in 2.26.0 report manual line breaks and column breaks as `\n`. This release changes those results to `\v` and U+000E, respectively. Paragraph separators remain `\r`. Each break still occupies one UTF-16 unit.
+
+Update comparisons, line splitting, stored expectations, and text display code to handle these characters. For plain-text display, you can convert `\v` to `\n` in a separate string. Keep the original API text when writing manual line breaks back to the document. Text writes refuse U+000E. Do not replace column breaks with manual line breaks.
+
+Search and `Paragraph.split()` accept `\n` as an alias for a manual line break. This alias does not change text read results or make `\n` valid insertion text. Text reads do not preserve arbitrary document structure when you write them back.
+
+## Choose an insertion location
+
+The location types describe the supported call shapes:
+
+| Receiver    | `insertText(text, location)`                 | `insertParagraph(text, location)` |
+| ----------- | -------------------------------------------- | --------------------------------- |
+| `Body`      | `Replace`, `Start`, `End`                    | `Start`, `End`                    |
+| `Paragraph` | `Replace`, `Start`, `End`                    | `Before`, `After`                 |
+| `Range`     | `Replace`, `Start`, `End`, `Before`, `After` | `Before`, `After`                 |
+
+The exported aliases are `BodyInsertTextLocation`, `BodyInsertParagraphLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation`, and `BesideLocation`. `InsertLocation` provides matching enum values, such as `InsertLocation.replace`. A method only accepts the locations shown in its signature.
+
+`insertText()` returns the inserted `Range`. `insertParagraph()` returns the created `Paragraph`. Sync before configuring or reading the returned object. Use one paragraph insertion per new paragraph. Text writes refuse paragraph separators such as `\r` and `\n`.
+
+To keep lines in one paragraph, write a manual line break as `\v` (U+000B). `insertText()` and `insertParagraph()` write each `\v` as a line break. Text reads report that break as `\v`. A single-line content control refuses a line break. You can also insert one break with `Range.insertBreak('Line', location)`.
+
+Text inserted into an empty paragraph takes the character style that the paragraph mark names. It does not take the mark's direct run properties, such as a direct font size. To apply those, set `font` on the returned range after sync.
+
+This example appends a paragraph and configures it after creation:
+
+```ts
+await runtime.run(async (context) => {
+  const paragraph = context.document.body.insertParagraph('Review complete.', 'End');
+  await context.sync();
+  paragraph.spaceAfter = 12;
+  const range = paragraph.getRange('Content');
+  range.load('text');
+  await context.sync();
+  console.log(range.text);
+});
+```
+
+## Address existing content
+
+`Body.getRange(location?)` and `Paragraph.getRange(location?)` accept `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. The default is `Whole`. Use `Content` when you want the owner's text, and an endpoint for an insertion point. `Range.paragraphs` enumerates paragraphs intersecting the span.
+
+Supported read-derived ranges accept text writes within one sync. For example, queue `paragraph.getRange('End').insertText(' suffix', 'Before')`, then call `await context.sync()`. Sync before inspecting loaded properties or reusing an object returned by a write. Other dependent operations can require a separate sync.
+
+For an exact replacement, use search and verify the match count:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one clause');
+  const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+  replacement.load('text');
+  await context.sync();
+  console.log(replacement.text);
+});
+```
+
+See [Search and navigation](/docs/2.x/editor-api/search-and-navigation) for search options and bookmarks.
+
+## Batch plain-text replacements
+
+Disjoint text replacements and insertions can share one sync in ordinary paragraphs with direct text runs. The batch interprets their targets using its initial snapshot coordinates. Returned inserted ranges account for all supported text edits in that batch. Multiple insertions at one explicit snapshot point keep their call order. `Paragraph.insertText(..., 'Start')` and `Body.insertText(..., 'Start')` prepend on each call; `'End'` appends on each call. This behavior does not make old ranges follow later batches.
+
+The runtime rejects overlapping edits and batches that combine text edits with formatting, hyperlinks, or structural changes in the same paragraph. Use separate syncs, then obtain fresh ranges before the dependent operation. Rich paragraphs and browser suggesting edits support one text edit per paragraph per sync. On `ConflictingChanges`, read again and revise the batch before retrying.
+
+## Clear or delete content
+
+| Member | Effect |
+| --- | --- |
+| `Body.clear()` | Clears supported story content and leaves one empty paragraph |
+| `Paragraph.clear()` | Clears paragraph content while retaining the paragraph |
+| `Paragraph.delete()` | Deletes the addressed paragraph, or proposes its deletion while tracking |
+| `Range.clear()` or `Range.delete()` | Deletes the addressed range content |
+
+If a body has no paragraphs, `clear()` fails with `InvalidArgument`. These methods do not flatten protected or unsupported structures to force an edit. Cross-cell boundaries, pending revisions, and preserved structures can cause atomic refusal. Read the target again before choosing another edit.
+
+Structural edits sharing a paragraph can conflict within one sync. Separate dependent edits and reconsider their targets after each successful transaction. For tracked replacements or deletions, use [Tracked changes](/docs/2.x/editor-api/revisions). Tracked range edits support adjacent sibling paragraphs, including paragraphs within one cell. Table and wrapper boundaries refuse. In collaboration, tracked replacements must remain within one paragraph. Whole-body replacement remains unsupported while tracking. For tracked paragraph deletion, see [Propose removing paragraphs](/docs/2.x/editor-api/revisions#propose-removing-paragraphs).
+
+## Reach other document objects
+
+`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `shapes`, `fields`, `contentControls`, `bookmarks`, and `revisions`. `Body.getComments()` returns story comments. `Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, and `bookmarks`. A range can create a table, picture, field, content control, comment, or break through its insertion methods. `Paragraph` exposes `font`, `style`, `list`, `listItem`, and `shapes`. Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
+
+For shape enumeration and text-box editing, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes). `Range.shapes` is not available.
+
+## Next steps
+
+- [Editing API overview](/docs/2.x/editor-api)
+- [API member directory](/docs/2.x/editor-api/reference)

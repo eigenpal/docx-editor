@@ -1,0 +1,254 @@
+---
+title: 'Images and drawings'
+description: 'Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React or Vue, accessibility, and the security boundaries.'
+category: 'Guides'
+seoTitle: 'Images and floating pictures'
+---
+
+The editor displays inline and floating DrawingML pictures (`w:drawing` with `pic:pic`). React and Vue provide controls to insert pictures, change wrapping, resize pictures, and edit alternative text. Saving preserves the picture markup and media.
+
+## Supported formats
+
+| Format | Insert | Layout & paint | Round-trip |
+| --- | --- | --- | --- |
+| PNG, JPEG, GIF | Yes, `normalizeImageBytes` preflight | Full decode at authored `wp:extent` | Original media preserved unless replaced |
+| BMP, WebP | No insert | Full decode at authored `wp:extent` | Original media preserved |
+| SVG | No insert | Painted at authored `wp:extent` | Original media preserved |
+| TIFF, EMF, WMF | No insert | Rasterized when conversion succeeds; labeled placeholder otherwise | Preserved; no zero-click fetch |
+| External `r:link` / `TargetMode="External"` | No auto-load | Placeholder + preserved rel | Preserved; explicit user gesture to embed |
+
+Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
+
+The editor identifies PNG, JPEG, GIF, BMP, and WebP images from their bytes. These images can render even when the document declares another format from this list. For example, JPEG bytes declared as PNG still display. Image validation and size limits still apply. Saving preserves the original bytes and content-type declaration.
+
+This recovery does not cover declarations that confuse these formats with SVG, TIFF, EMF, or WMF. Those mismatches show a placeholder.
+
+JPEG validation accepts large EXIF and ICC metadata segments before the frame header. Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image. The original photo bytes and the authored drawing extent remain unchanged.
+
+BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended containers.
+
+TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The original media stays unchanged in the package through save. When conversion is unavailable, declined, or fails, the image keeps its extent and shows a labeled placeholder.
+
+SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
+
+## Reading selection state
+
+Use the canonical read model shared by snapshot and imperative API:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEditorState } from '@docx-editor.dev/react';
+
+const image = useEditorState((s) => s.image);
+// SelectedImageState | null: widthEmu/heightEmu, crop, wrap, position, locks, resourceStatus
+```
+
+</Framework>
+<Framework value="vue">
+
+```ts
+import { useEditorState } from '@docx-editor.dev/vue';
+
+const image = useEditorState((s) => s.image);
+// ShallowRef<SelectedImageState | null>: widthEmu/heightEmu, crop, wrap, position,
+// locks, resourceStatus
+```
+
+</Framework>
+</FrameworkTabs>
+
+```ts
+editor.getSelectedImage(); // same SelectedImageState shape
+editor.snapshot().image; // reference-stable until selection or image fields move
+```
+
+`SelectedImageState.wrap` reports one of these Word menu targets:
+
+| Value          | Text behavior                                   | OOXML mapping                |
+| -------------- | ----------------------------------------------- | ---------------------------- |
+| `inline`       | Places the picture in the text line             | `wp:inline`                  |
+| `square`       | Wraps on both sides of a square boundary        | `wrapSquare`, `bothSides`    |
+| `squareLeft`   | Wraps on the left                               | `wrapSquare`, `left`         |
+| `squareRight`  | Wraps on the right                              | `wrapSquare`, `right`        |
+| `tight`        | Wraps around the authored polygon               | `wrapTight`                  |
+| `through`      | Wraps through the authored polygon              | `wrapThrough`                |
+| `topAndBottom` | Keeps text above and below                      | `wrapTopAndBottom`           |
+| `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
+| `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
+
+The wrap element controls text flow. The `@behindDoc` attribute controls paint order. A picture with `@behindDoc="1"` paints behind text. If its wrap element differs from `wrapNone`, text still wraps around it. `SelectedImageState.wrap` reports that wrap mode.
+
+Images in front of or behind text can paint beyond their anchor cells. Their cell-relative position is preserved, but the cell does not crop these overlays. Page-relative images are clipped to the physical sheet, including its margins.
+
+The `resourceStatus` field reports image availability:
+
+| Status         | Meaning                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| `pending`      | Validation or decoding is in progress                                       |
+| `ready`        | Validated image bytes are ready to paint                                    |
+| `unrenderable` | Validation, decoding, conversion, or format support failed                  |
+| `external`     | The relationship points outside the package and is not loaded automatically |
+| `missing`      | The relationship target is missing                                          |
+
+## Authoring surface
+
+Both adapters export the same parts under the same names. Default toolbar slots (contextual `image` group when a picture is selected):
+
+| Slot | Component / hook | Engine command |
+| --- | --- | --- |
+| `image.insert` | `ImageInsertProvider`, `ImageInsertTrigger` | `executeImageCommand({ type: 'insertImage', … })` |
+| `image.wrap` | `ImageWrap`, `useEditorValueCommand('image.wrap')` | `setImageWrapType` via `runToolbarCommand` |
+| `image.altText` | `ImageAltText` | `setImageAltText` |
+| `image.properties` | `ImagePropertiesTrigger`, `DocxEditorImagePropertiesDialog` | `setImageProperties` |
+
+The packaged Insert menu carries an **Image** row that opens the same file picker as `ImageInsertTrigger`. Hide it or place it elsewhere through `DocxEditor.Menu.ImageInsert`.
+
+`widthPoints` and `heightPoints` are the extent to insert at most. An image that fits where the caret flows keeps its natural size; a wider or taller one scales down proportionally to its cell, column, or page content box. Read the committed extent back from `snapshot().image`.
+
+Insert preflight:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```ts
+import { normalizeImageBytes } from '@docx-editor.dev/react';
+
+const result = normalizeImageBytes(bytes);
+if (result.ok) {
+  await editor.executeImageCommand({
+    type: 'insertImage',
+    data: result.bytes,
+    mime: result.mime,
+    widthPoints: result.widthPoints,
+    heightPoints: result.heightPoints,
+  });
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```ts
+import { normalizeImageBytes } from '@docx-editor.dev/vue';
+
+const result = normalizeImageBytes(bytes);
+if (result.ok) {
+  await editor.executeImageCommand({
+    type: 'insertImage',
+    data: result.bytes,
+    mime: result.mime,
+    widthPoints: result.widthPoints,
+    heightPoints: result.heightPoints,
+  });
+}
+```
+
+</Framework>
+</FrameworkTabs>
+
+Floating pictures: select in the canvas, drag to move (`setImagePosition`), eight handles or Alt+Arrow to resize (`setImageProperties`), wrap menu for all nine choices. One undo step per completed gesture.
+
+## Wrap modes and text reflow
+
+Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box. Body flow height still sizes the furniture band.
+
+Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
+
+A line break (`w:br`) with `w:clear` restarts the text after it on the next line that the floating objects on one side do not interrupt. The picture keeps its position; only the restart line moves.
+
+- `left` clears the objects that block the start of the line that holds the break.
+- `right` clears the objects that come after the break on that line.
+- `all` clears every object that wraps text, including objects from earlier paragraphs and objects in the same table cell.
+
+Objects with no text wrapping, in front of text or behind it, are not cleared. If the restart line does not fit above the bottom margin, it starts on the next page or column. The value `none` lays out as an ordinary line break, and the attribute is kept when you save.
+
+An inline picture flows like a word. If it does not fit before a floating picture, it continues past the floating picture on the same line. Text after an inline picture starts at the picture's edge, and a click past the picture places the caret after it. A click in the space that a floating picture leaves between two pieces of content places the caret between them.
+
+## Accessibility
+
+Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture with neither description nor title is exposed as decorative. Hidden drawings (`@hidden`) suppress paint, hit-testing, and handles while remaining preserved on save.
+
+## Security and external images
+
+- No network fetch on open, layout, paint, or save for external relationships.
+- Embedded bytes are signature-checked and dimension-capped before decode.
+- Hyperlinks on drawings (`a:hlinkClick`) require an explicit gesture and pass through `sanitizeHref`.
+- Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
+
+## Drawing limits
+
+The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments. It preserves image alpha and adjustment markup when you save. PDF export does not apply these adjustments.
+
+| Drawing content | Status |
+| --- | --- |
+| Solid shapes and bounded shape groups | Render geometry with sRGB or theme colors |
+| One picture in a shape group, below the group's shapes | Render in its own frame, as described in [Pictures in shape groups](#pictures-in-shape-groups) |
+| Charts, SmartArt, unsupported groups, and canvases | Preserve the extent and show a labeled placeholder. In alternative content (`mc:AlternateContent`), charts, SmartArt, and unsupported groups are not shown, and a floating one with a wrapping mode still reserves its wrap area. A canvas in alternative content uses the fallback content instead |
+| Anchored text boxes | Render clipped stories, edit supported body text boxes, and drag or resize their borders |
+| Page fields in anchored header or footer text boxes | Evaluate per page |
+| Inline text boxes | Render clipped stories on the line and edit supported body text boxes. They move with their line, so they cannot be dragged or resized |
+| Text boxes inside text boxes, linked chains, autofit, and rotation | Show a placeholder or clip |
+| Standalone VML (`w:pict`) | Render the subset described in [Legacy VML previews](#legacy-vml-previews) |
+| `w:object` and `w:altChunk` | Preserve as generic content with diagnostics |
+| Tracked image insertion and deletion | Record the change in suggesting mode |
+| Tracked image property edits | Stay unavailable in suggesting mode |
+| Artistic effects (`a:effectLst`) | Do not render; authored markup round-trips |
+
+## Pictures in shape groups
+
+A DrawingML shape group (`wpg:wgp`) can hold one picture member beside its shape members. For example, a scanned letterhead page can sit behind the text with ruled lines drawn over it. The editor and PDF export render the picture in its own frame inside the group, then render the group's shapes over it.
+
+The picture renders only if all of these conditions are true:
+
+- The group holds exactly one picture, and the picture comes before every shape member.
+- The picture is not rotated or flipped, it has a rectangle geometry, and its fill is not tiled.
+- The picture is visible and has no image effects, visible outline, shape effects, or 3D properties.
+- Its fill rectangle has no offsets. An omitted fill rectangle uses the full picture frame.
+- The picture frame overlaps the group's area and extends no more than one group width or height past it.
+- Every other member of the group is a supported solid shape.
+
+If a condition is false, the group is an unsupported group. Word stores most groups in alternative content (`mc:AlternateContent`). An unsupported group in alternative content is not shown. Other unsupported groups show a labeled placeholder. Text boxes inside a group do not render, so a group with a text box member is an unsupported group.
+
+An unsupported group in alternative content still takes part in layout if it floats with square, tight, through, or top-and-bottom wrapping. Text flows around its wrap area as it would around the group if it were shown. The hidden group paints nothing and cannot be selected, and exports do not include it. A group with no wrapping (`wp:wrapNone`) takes no space.
+
+A group renders completely or not at all. While the picture loads, the editor renders the group's shapes alone. If the picture cannot load, the editor and PDF export treat the group as an unsupported group. For example, the picture is missing, linked, damaged, or over a decode limit. PDF export embeds PNG and JPEG pictures only. If a group in alternative content holds a picture in another format, PDF export leaves the group out and reports an `information` diagnostic. PDF export reports other groups that it cannot render as `unsupported`.
+
+The picture is clipped to the group's area. The group's shapes can extend into the effect extent (`wp:effectExtent`), as the shapes of a group without a picture can.
+
+Picture commands, such as resize and replace, do not apply to a picture in a group. Markdown export omits the group as one drawing and reports an `omitted-drawing` warning. Saving preserves the group, its alternative content, and its media without changes. An embedded picture passes the normal image validation and decode limits. A linked picture is never fetched.
+
+## Insert and edit text boxes
+
+Choose **Insert → Text Box** from a body paragraph to add an empty rectangular box and start typing. The new box has a white fill, a black border, and a fixed starting size. Drag its border to move it, or drag its handles to resize it. Clicking its text shows the frame and places the caret. Insertion in tables, headers, and footers is unavailable.
+
+## Find text in text boxes
+
+**Find** searches anchored and inline text boxes in the body, headers, and footers. Selecting a match selects its text box. Click inside an unrotated body text box to edit its paragraphs. Use the border of an anchored text box to select, drag, or resize it. Press **Delete** or use the context menu to delete the selected box. **Undo** restores it. Pasting into a text box inserts plain text. Table insertion is unavailable inside a text box. Text boxes with tables, and text boxes in headers or footers, remain read-only. Text boxes in footnotes or endnotes are not searched.
+
+Use `useDocumentSearch` to add Find navigation to a custom [React](/docs/2.x/react/hooks#usedocumentsearch) or [Vue](/docs/2.x/vue/composables#usedocumentsearch) interface.
+
+## Legacy VML previews
+
+Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos, solid rectangles, rounded rectangles, and ellipses, straight line segments with arrows, and straight fit-to-box WordArt (`_x0000_t136`). A floating `v:line` spans its `from` and `to` points and also renders in PDF export. Group-local coordinates, picture crops, supported text wrapping, aligned positions, and source order are retained. A shape without `position:absolute` in its style is inline. WordArt uses the authored font when available on the host; curved or rotated WordArt is not supported.
+
+Floating `v:shape` paths with two explicit points can have one zero extent. They paint as native vector lines. A zero coordinate axis requires both corresponding coordinates to match its origin. Curves, multiple subpaths, and invalid coordinate axes remain opaque.
+
+A text box (`v:textbox`) on a rectangle, rounded rectangle, or text box shape lays out its story inside the shape with the `inset` margins, floating or inline, in the body, headers, and footers. It paints the solid fill and outline of the shape. **Find** reaches its text, and a body box takes the same text editing as other text boxes. Rounded corners, shadows, and dash patterns of a text box are not painted. Vertical text flow keeps the shape opaque.
+
+Previews are read-only. Saving preserves the original VML, media, and relationships without adding generated SVG parts or converting the source to DrawingML. Deleting another picture preserves shared photo relationships.
+
+The editor does not partially render unsupported, oversized, or clipped groups. Custom templates, text boxes, curves, image effects, rotation, and unsupported group members prevent a group preview. Only recognized standard shape templates are supported. When a document supplies DrawingML and VML alternatives, the editor displays only the selected alternative.
+
+An inline standalone photo can have a picture border (`w10:border*`) when all four sides use one `single` line with the same width and color. The photo keeps its authored size and crop, and the border line surrounds it. The drawing grows by the line width on each side. Other border combinations, and borders on floating, color-keyed, or grouped photos, prevent the preview.
+
+An inline embedded object (`w:object`) shows its cached preview picture when the preview is one standard picture shape (`_x0000_t75`) with an embedded image. The object takes one position in the text, and layout reserves the preview size. The editor never runs, loads, or resolves the embedded object, and never fetches a linked preview. Picture commands, such as resize and replace, do not apply to the preview. You can delete the object with the text around it; the embedded binary stays in the package. Copy and cut refuse selections that contain an object. Rich paste refuses fragments that contain an object and preserves the target selection. A WMF or EMF preview keeps its size and shows a labeled placeholder when conversion is unavailable. Objects inside paragraph frames show no preview or reserved preview size. Direct frames and frames inherited from paragraph styles have this limit. The object keeps its text position, and the surrounding text stays unchanged. Floating objects, linked objects, and objects with other content show no preview.
+
+Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the normal image validation and decode limits; an external or missing member never triggers a fetch or a misleading partial group preview.
+
+## Next steps
+
+- [Toolbar customization](/docs/2.x/guides/toolbar): override the toolbar's `ImageWrap` part and its siblings
+- [Word fidelity matrix](/docs/2.x/word-fidelity): live support claims
+- [Headers and footers](/docs/2.x/guides/headers-footers): letterhead anchors in page bands

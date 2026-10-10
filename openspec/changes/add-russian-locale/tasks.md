@@ -42,13 +42,20 @@
 - [x] `bun run i18n:validate` (all locales), `bun test`, `bun run typecheck`. (i18n typecheck green; full-repo typecheck/test red only on the pre-existing `@docx-editor.dev/core/*` resolution class — 500 `TS2307` in react/vue/agents/nuxt + 24 test failures — unchanged by this change.)
 - [x] `bun run --filter '@docx-editor.dev/i18n' build` then `bun run check:i18n-bundle-size` (ru per-locale bundle under 80 KB — ru.mjs 40.2 KB).
 - [x] `bun run api:extract`; commit `docs/api/docx-editor-i18n/ru.api.md` and updated `index.api.md`. (Generated + EOL-normalized to LF; `api:check` green; files left in the working tree for the commit.)
-- [x] `bun run format`. (Also fixed `scripts/validate-i18n.mjs` to render the `LocaleCode` union in the prettier-wrapped form once it exceeds printWidth 100 — the 11th locale trips that, and `format` vs `i18n:validate` disagreed.)
+- [x] `bun run format`. (Pre-merge note: the old `LocaleCode` one-liner crossed prettier's printWidth with the 11th locale; upstream solved this during the merge with `// prettier-ignore` on the generated union — our wrap-emulation was replaced by upstream's approach in merge resolution, so `format` and `i18n:validate` agree by construction.)
 
 ## 7. Docs and release meta
 
 - [x] `packages/i18n/README.md`: add `ru` to the locale table and subpath list; fix missing `fr`/`hi`/`id` entries.
 - [x] `docs/site/content/i18n/index.mdx`: add `id` + `ru` rows, correct the language count; `docs/site/content/i18n/contributing.mdx`: correct the count.
 - [x] Add `.changeset/add-russian-locale.md`: `'@docx-editor.dev/i18n': patch`, summary `Add Russian (ru) locale (100% translated); validate placeholder/ICU integrity across locales.` (Final summary kept consumer-facing: `Add Russian (ru) locale with full UI translation coverage.`)
+
+## 7.5 Post-merge resync (main @ 48f4ee68, 686 commits)
+
+- [x] Merge `main` into the branch; resolve conflicts (6 files). Adopted upstream's `// prettier-ignore` `LocaleCode` union; kept our integrity wiring in `scripts/validate-i18n.mjs`; union of locales in docs tables (13 shipped: en, de, es, fr, he, hi, id, ja, pl, pt-BR, ru, tr, zh-CN).
+- [x] The merged `en.json` is 822 keys (upstream restructure: `collaboration.*`, `disabledReason.*`, `revisionMarkup.*`, `contentControl.*`, `textFormField.*`, `review.*`, `navigation.*`, …). `i18n:fix` reshaped `ru.json` (433 stale keys removed, 537 added).
+- [x] Resync translations to keep `ru` at 100%: 91 keys ported by exact English-text match against the pre-merge pair (`c815d02` en ↔ our ru), 2 stale surviving translations corrected (`revisions.runPropertiesChanged`, `contextMenu.ariaLabel`), 446 strings newly translated in 3 batches under the frozen glossary.
+- [x] Merged gates green: `i18n:validate` (key sync + integrity, all 12 community catalogs), `i18n:status` → ru 822/822 (100%), `bun test packages/i18n` → 76 pass / 0 fail (includes upstream `catalogs.test.ts` — every locale non-null, placeholder-equal, plural-rendered — and `placeholder-syntax.test.ts`), i18n `typecheck`, `build`, `check:i18n-bundle-size` (26 bundles < 80 KB), `api:extract` + `api:check` (snapshot gains `'ru'` in `LocaleCode` and `export const ru` alongside upstream `es`/`ja`).
 
 ## 8. Manual visual QA (local only, not committed)
 

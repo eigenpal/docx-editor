@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraph-to-table joins, numbering history and partial section history differ from Word's resolution behavior. Some structural decisions have missing or misleading review anchors.",
+  "after": "Resolution uses the observed Word transformations and emits existing canonical journals; structural metadata and anchors make the resulting review decisions discoverable in both adapters.",
+  "reason": "No stored schema or replication format changes. Peers replay existing primitive journals, including text moved into a table cell, and undo the complete transaction.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-word-boundaries.test.ts",
+    "packages/core/src/store/__tests__/revision-word-oracle.test.ts",
+    "packages/core/src/editor/__tests__/review-structural-matrix.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-table-revisions.test.ts"
+  ],
+  "changeset": "structural-word-audit",
+  "migration": null
+}

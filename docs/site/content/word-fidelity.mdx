@@ -1,45 +1,98 @@
 ---
 title: 'Word fidelity'
-description: 'Word feature support matrix for the DOCX editor: rendering, round-trip behavior, security, and API stability.'
-category: 'Getting Started'
+description: 'Word feature support for editing, rendering, and structural round-trip fidelity, plus security and API stability.'
+category: 'Getting started'
 seoTitle: 'Word feature support and fidelity'
 ---
 
 <PackageStats name="@docx-editor.dev/react" />
 
-## Overview
+Use this page to check which document features you can edit, display, and preserve when you save. Read each feature's note for limits, including document settings that change layout. Use the guides for setup and editing instructions.
 
-- **Browser editor use is client-side.** Parsing, rendering, editing, and serialization run in the browser for normal `<DocxEditor>` usage. Headless core, `DocxReviewer`, and MCP run wherever you host them.
-- **`.docx` in, `.docx` out.** The editor reads OOXML and writes OOXML. Parts of the file it does not edit are carried over from the original archive unchanged.
-- **Apache 2.0**, all published packages. **SemVer**, with the public API tracked by generated snapshots in CI. React and Vue parity is a machine-checked contract.
-- **Commercial support**: [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com).
+- [Fonts and measurement](/docs/2.x/guides/fonts): Supply fonts that control text width and page breaks.
+- [Right-to-left text](/docs/2.x/guides/right-to-left): Configure paragraph direction and understand mixed-direction editing.
+- [Images](/docs/2.x/guides/images): Review picture formats, text wrapping, and drawing limits.
+- [Headers and footers](/docs/2.x/guides/headers-footers): Configure section variants and edit page content.
+- [Footnotes and endnotes](/docs/2.x/guides/footnotes-and-endnotes): Review note placement and continuation limits.
+
+## Product behavior
+
+| Area | Behavior |
+| --- | --- |
+| Browser editor | Parses, renders, edits, and serializes DOCX data in the browser. |
+| Server editing API | Runs where you host it. |
+| File format | Reads and writes Office Open XML (OOXML). |
+| Unsupported content | Preserves unmodeled markup and package payloads when you edit other content. |
+| Support | Contact [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com). |
+
+## Layout checks
+
+Start with the features your documents use. The matrix provides support details and limits for each feature.
+
+| Area | What to check |
+| --- | --- |
+| [Paragraphs](#paragraphs-and-styles) | Check line spacing, paragraph keeps, tab stops, and words split across formatting runs. |
+| [Sections and page breaks](#section-boundaries) | Check continuous sections, empty section marks, page numbering, and inserted blank sheets. |
+| [Tables](#tables) | Check row minimums, merged cells, repeated headers, and floating table placement. |
+| [Footnotes and endnotes](/docs/2.x/guides/footnotes-and-endnotes) | Check reference placement, note openings, continuation space, and unsupported configurations. |
+| [Drawings and frames](#images-and-drawings) | Check text wrapping, anchor positions, shape groups, and preserved content. |
+| [PDF export](/docs/2.x/export/pdf) | Check fallback fonts, joined Arabic text, text extraction, and unsupported effects. |
+
+## Input-method checks
+
+Test your target browser and input method before deployment. Start composition in an empty paragraph, inside a table cell, and beside an inline picture. Check the composition text, candidate window, committed text, and undo behavior. Review the input-method row in the feature matrix for limits.
 
 ## Feature matrix
 
-Every feature is tracked on three axes:
+The matrix reports editing, rendering, and round-trip support separately. A feature can display without editing controls, or survive save without displaying.
 
-- **Editing**: can a user (or an AI agent) change it in the editor?
-- **Rendering**: does it display the way Microsoft Word renders it?
-- **Round-trip**: does it survive open, then save, unchanged?
+| Axis       | Question                                      |
+| ---------- | --------------------------------------------- |
+| Editing    | Can a user or API change the feature?         |
+| Rendering  | Does the feature display like Microsoft Word? |
+| Round-trip | Does it survive open, edit, save, and reopen? |
 
-A construct the editor doesn't model is preserved byte-for-byte and
-written back on save; that's the "Preserved" status below.
+| Status      | Meaning                                                      |
+| ----------- | ------------------------------------------------------------ |
+| Full        | Supports the feature within the scope described in its note. |
+| Partial     | Works with the limits in its note.                           |
+| Render only | Displays correctly but is not editable.                      |
+| Preserved   | Remains as inert content through editing and save.           |
+| No          | Is not supported.                                            |
 
 <FeatureSummary />
 
-**Legend**: Full = works like Word · Partial = works with noted limits ·
-Render only = displays correctly, not editable · Preserved = round-trips
-losslessly without rendering · Planned = on the roadmap · No = not supported.
-
-### Text & formatting
+### Text and formatting
 
 <FeatureMatrix category="text" />
 
-### Paragraphs & styles
+Raised and lowered text contributes to automatic and minimum line heights. This includes inherited `w:position` values combined with subscript or superscript. Exact line spacing retains its authored height.
+
+### Paragraphs and styles
 
 <FeatureMatrix category="paragraphs" />
 
-### Lists & numbering
+#### Tabs and paragraph keeps
+
+In left-to-right text, an opening word wraps within the space after leading left-aligned tabs. The tabs retain their advances and do not add a blank line. This applies to ordinary text without floating objects beside it, including table cells.
+
+A paragraph with `w:keepNext` stays with the opening lines that the following paragraph must keep together. With widow control, a following three-line paragraph stays whole. `w:keepLines` keeps the entire following paragraph together when the group fits on a page. Consecutive kept paragraphs form one group, including groups with more than eight paragraphs. Inherited keep properties apply to the complete group. Explicit page breaks and section boundaries end the group.
+
+#### Text frames
+
+Body text frames retain numeric and relative page, margin, or text positions. The engine supports fixed width. Frames with omitted width use the containing text column. It supports `auto`, `atLeast`, and `exact` height rules. A positive authored height sets a minimum when the height rule is absent. Exact-height frames clip content to the authored rectangle. Frame attributes inherit individually from paragraph styles. Wrapping defaults alone do not create a positioned frame. Adjacent paragraphs with identical resolved `w:framePr` attributes share one frame. Inline pictures remain inside their frame.
+
+All `ST_Wrap` values use the frame's rectangular contour. `auto` uses the default `around` behavior. `none`, `notBeside`, and vertical `inline` alignment move following text below the frame. Single-line left-to-right dropped caps use the requested body-line band. Multiline dropped caps retain ordinary flow. Right-to-left dropped caps retain ordinary flow. Margin caps sit outside the text column on either side.
+
+Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height. Bounded negative page-relative and margin-relative offsets remain authored. Negative text-relative vertical offsets retain ordinary flow to prevent overlap with earlier text. Locked anchors remain attached during supported text, property, split, and join edits. A following continuous section clears preceding frames that intersect the body area. Frames outside that area do not advance its text position.
+
+This support applies to single-column sections. Frames containing unsupported drawings, notes, or revision structures retain ordinary layout. Frame groups that block the full text width and leave no vertical room on a fresh page also retain ordinary layout. The editor preserves all frame properties on save. There is no interface for creating, moving, or resizing text frames.
+
+Headers also support bounded page-anchored text frames with numeric positions and widths. Adjacent paragraphs with identical direct frame properties share one frame. These frames retain paragraph borders and auto or minimum heights. They do not increase the header height that positions body text. Ordinary header content, including inline images, keeps its flow position.
+
+This subset requires a separate ordinary paragraph and clear space around the frame. Headers with fields or revisions retain ordinary flow for this subset. Frames with exact heights, negative positions, overlapping content, or unsupported properties also retain ordinary flow. The editor preserves source paragraphs and their text positions.
+
+### Lists and numbering
 
 <FeatureMatrix category="lists" />
 
@@ -47,114 +100,276 @@ losslessly without rendering · Planned = on the roadmap · No = not supported.
 
 <FeatureMatrix category="tables" />
 
-### Images & drawings
+For fixed tables without a positive table width, explicit cell preferences can replace a wider initial grid. This applies when every cell has a positive absolute width and occupies one column. The largest preference in each column sets its width. Hidden revision rows prevent this replacement. Layout does not rewrite these properties when you save.
+
+#### Table alignment
+
+Files without a compatibility mode, and files in compatibility mode 11, 12, or 14, align the content of a top-level percentage-width table with the text column. The percentage is a share of the text-column width plus the outer cell margins that the table states. A left-aligned table puts the content of its first cell on the left text edge, moved by its indent. A right-aligned table puts the content of its last cell on the right text edge, and a centered table centers on the text column. A right-to-left table aligns from its leading edge in the same way. This applies to AutoFit and fixed tables, whatever width the authored grid states, in body, header, footer, text-box, and note stories. Floating tables, tables with cell spacing, and tables with uneven or unstated outer margins keep their existing geometry. A top-level table that states no usable width uses the same reference box. An AutoFit table without a width fits the room its leading indent leaves, in every compatibility mode. With neither a table style nor a stated indent, a left-aligned table puts its outer edge, not its content, on the text edge.
+
+Outside that reference box, a percentage excludes the mean width of the table's simple outer side rules, and the table then adds that rule back. This applies to nested tables in every mode and to every table in compatibility mode 15 and later.
+
+In that reference box, a cell margin narrower than half of a single outer side rule counts as half of that rule. A table with zero cell margins, with or without a percentage width, therefore also aligns its content with the text column. A percentage stated with a percent sign above 655.34% uses the same reference box. In a text box, the reference box for a percentage is 0.75 points wider, and a right-aligned table puts its outer edge, not its content, on the right edge of the text box. A nested AutoFit table without a usable width fits the content width of its cell plus its own outer cell margins.
+
+An AutoFit table in which every column states an absolute preferred width starts from those widths. First, each column grows to hold its widest unbroken word. If the table is then wider than its room, or than its percentage share, each column gives up width in proportion to how far it is wider than that minimum. A percentage table that is narrower than its share grows each column in proportion to its width. Nested tables keep proportional scaling.
+
+In compatibility mode 15 and later, a right-to-left table moves toward its visual left by half the mean width of its simple outer side rules.
+
+A table percentage width can be larger than 100%, up to 655.34%. The table then extends past the text column and keeps its cells' line breaks. This applies to every alignment, to AutoFit and fixed tables, and in every compatibility mode. A nested table can extend past its cell in the same way. A supported full-width table in a file without a compatibility mode, or in compatibility mode 11, 12, or 14, measures the percentage against the text-column width plus its outer cell margins. A larger count of fiftieths wraps at 65536, and a count that wraps above 32767 states no width. A larger value stated with a percent sign makes the table as narrow as its content allows.
+
+A table percentage width can be larger than 100%, up to 655.34%. The table then extends past the text column and keeps its cells' line breaks. This applies to every alignment, to AutoFit and fixed tables, and in every compatibility mode. A nested table can extend past its cell in the same way. A supported full-width table in a file without a compatibility mode, or in compatibility mode 11, 12, or 14, measures the percentage against the text-column width plus its outer cell margins. A larger count of fiftieths wraps at 65536, and a count that wraps above 32767 states no width. A larger value stated with a percent sign makes the table as narrow as its content allows.
+
+An AutoFit column widens to hold its widest unbroken word, such as a long URL, with its indents and cell margins. The other columns give up width in proportion to their spare room. When the minimums are wider than both the text column and the table, the columns shrink in proportion to their minimums to the wider of the two.
+
+An AutoFit column whose cells state no width is sized by its content. Each such column takes its widest unwrapped line when the table has room, and the columns share any extra room in proportion to those widths. A table with no width of its own takes only what its content needs. Columns with a stated width give way first. When the table is still too narrow, the content-sized columns wrap, each by the same fraction of its range.
+
+A cell that spans columns widens them to hold its widest unbroken word. The spanned columns share that width in proportion to their stated width plus their content, and the columns outside the span give up the difference. A nested fixed table needs only the content it holds, whatever its stated width, and paints no wider than its cell: its columns give way down to their own content. A nested AutoFit table also keeps its resolved width. Both keep their leading indent. A narrowed nested fixed table keeps the width its cells of vertical text have; elsewhere, cells with vertical text set no minimum.
+
+Cell spacing applies on each side of every cell. Neighboring cells, and a cell and the table edge, sit twice the spacing apart, and the gaps come out of the table width.
+
+With no compatibility mode, or in compatibility mode 11, 12, or 14, supported fixed tables align the first cell’s content with the table indent. This applies to left-aligned, top-level tables with automatic or absolute widths and no cell spacing. Each row must cover the grid and use the same leading cell margin. Simple side rules share the margin space when the margins clear half the rule. The column widths remain unchanged.
+
+Nested, positioned, and right-to-left tables retain their existing geometry. Tables with row-level geometry exceptions also retain their existing geometry.
+
+#### Tabs inside cells
+
+In left-to-right table text without adjacent floating objects, an ordinary left tab can continue on the next line. This occurs when its next stop exceeds the cell line edge and visible content follows it. The tab keeps its source position and uses the next line’s tab stops. Paragraphs with consecutive tabs retain their existing placement. Trailing, aligned, and positional tabs also retain their existing placement.
+
+#### Floating tables
+
+Body text wraps beside supported floating tables and below tables that cover the text column. Text does not wrap into gaps of 0.25 inches or less beside floating tables. Captions and headings move past these gaps. The table's text distances keep the authored gap between its border and surrounding text. Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column.
+
+A page- or margin-anchored table that overlaps the text column and reaches below the bottom margin breaks across pages. It starts at its authored position, or higher so that the part that fits on the page ends at the bottom edge of the page. The rest continues at the top of the next page, and the text after the table starts below its last row. In documents that use Word 2013 or later layout, the first part ends at the bottom margin. In earlier layout, only a table that reaches below the bottom edge of the page breaks, and its first part can reach that edge. Text after a narrow table starts below the table instead of beside its last part.
+
+Negative offsets remain in place when they clear preceding text. A table that intersects preceding text moves below that text.
+
+Text-anchored tables taller than a content page retain row pagination. A text-anchored table that covers the text column can also continue across pages. The remaining space must hold its header rows and first body row. The remaining rows continue at the top of the next page. Following text starts below the last row. This continuation requires a single-column section with one table per anchor.
+
+The table moves with its following paragraph when its first rows do not fit. The following conditions also keep the table whole:
+
+- The anchor has a page break, column break, or space before it.
+- The table has text distances above or below it.
+- The table fits a full page and the document enables `w:doNotBreakWrappedTables`.
+
+Text-anchored tables that use vertical alignment retain their normal flow behavior. Tables whose cells can wrap around earlier floating pictures or frames retain row pagination.
+
+A text-anchored table marked no-overlap floats like other tables, and text wraps around it. If it would cover an earlier floating table, it moves right of that table, so that their text distances touch. In compatibility mode 15 and later, it can also move left of that table. If neither side has room between the margins, it moves below that table. Floating tables without this setting can overlap one another. The cell text of a floating table placed at its anchor never wraps around another floating table.
+
+A continuous section that starts on the same page wraps its text beside the floating tables and wrapping pictures of earlier sections on that page. An ordinary table that would cover a floating table starts below it. A narrower table stays beside it.
+
+Before compatibility mode 15, a right-aligned floating table in the body moves right by the right cell margin of the table, so that its cell text ends at the frame edge. Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page. The editor preserves floating-table properties when you save. There are no controls for editing those properties.
+
+A floating table at the top level of a header or footer sits outside the story flow. In compatibility mode 15 and later, the header or footer text after it wraps beside it or moves below it, and the header or footer grows with that text. Body text wraps around the table on every page that shows that header or footer, in every compatibility mode. A page- or margin-anchored header or footer table keeps its page position and moves up onto the page when it would pass the bottom edge of the page. Footer text moves below such a table when the table ends above the bottom edge of the footer. When the table reaches past that edge, or when the text below it would pass the bottom edge of the page, the footer text moves above the table instead. Text that the table pushes down can extend past the bottom edge of the footer, but never past the bottom edge of the page. Footer text that wraps beside a narrow table grows the footer upward when it would pass the bottom edge of the page.
+
+When you compare a multipage table, check the space between each repeated header and its first body row. The table pagination note lists the shared-border measurement limits. Keep the original document when you report a spacing issue.
+
+### Images and drawings
 
 <FeatureMatrix category="images" />
 
-### Page layout, headers & footers
+A floating object in a table cell can turn off the **Layout in table cell** option. Word honors that setting only in compatibility mode 14 or earlier, or when the document declares no mode. The object is then placed against the page, unless it is positioned against its own character or line. If the object wraps text, intersecting table rows move below it. The object keeps its position. In compatibility mode 15 and later, Word ignores the setting and keeps the object in its cell.
+
+Two other placement rules depend on the compatibility mode or the object options. Before compatibility mode 15, ordinary header and footer text ignores wrapping objects in the same header or footer. If an object must not overlap another object, Word moves it beside that object at the same height. The object moves down only when neither side has room.
+
+### Page layout, headers, and footers
 
 <FeatureMatrix category="layout" />
 
-### Review: tracked changes, comments, notes
+### Tracked changes, comments, and notes
 
 <FeatureMatrix category="review" />
 
-### Fields, links & TOC
+### Fields, links, and table of contents
 
 <FeatureMatrix category="fields" />
 
-### Document structure & content controls
+Character-style `STYLEREF` headers resolve supported display-name references and adjust each page’s header height. See [Fields and cross-references](/docs/2.x/guides/fields) for limits.
+
+### Document structure and content controls
 
 <FeatureMatrix category="structure" />
 
-### Collaboration, i18n & editing UX
+### Collaboration, languages, and editing
 
 <FeatureMatrix category="collaboration" />
 
-## Rendering fidelity
+## Important drawing limits
 
-The editor runs two renderers at once. A hidden ProseMirror instance owns the editing state (document, selection,
-undo history, keyboard and IME input) and is never shown. On every change, a
-layout painter rebuilds the visible pages from that state using Word's own
-metrics: twips, the document's fonts and themes, its section and margin
-geometry. The browser never decides where a line or page breaks; the painter does.
-The output stays plain DOM text rather than a canvas bitmap.
+The matrix defines support status. Check these limits when a document contains drawings.
 
-The full comparison with contenteditable and canvas approaches is in
-[Architecture](/docs/1.x/core/architecture). To judge fidelity yourself, open
-one of your own documents in the [live demo](https://docx-editor.dev/editor)
-next to Word.
+| Feature | Rendering | Editing | Round-trip |
+| --- | --- | --- | --- |
+| Anchored text boxes | Insert → Text Box creates a rectangular body text box. Supports typing, paragraph editing, text formatting, plain-text paste, undo, deletion, dragging, and resizing. Edits synchronize during collaboration, with remote cursors and text selections. Clicking inside shows the caret and frame handles. Content stays inside the authored extent. Header/footer text boxes and boxes with tables remain read-only. Linked chains, autofit, and rotation can clip or use placeholders. | Body text boxes | Preserved |
+| Drawing shapes | Renders solid rectangles, ellipses, lines, bounded polygons, and groups, with outlines drawn at full width. A group can include one unrotated picture below its shapes. Other shapes use a placeholder. Unsupported shapes in alternative content are hidden, and floating ones keep their wrap area. | No | Preserved |
+| WMF and EMF | Rasterizes supported files. Other files keep their extent with a placeholder. | No | Full |
 
-## Drawings, shapes and legacy images
+Drawing groups require visible members and supported group properties. Groups with unsupported effects or 3D properties retain their unsupported drawing behavior. The editor does not render only the supported members of such a group.
 
-These rows in the "Images & drawings" matrix are not Full yet. Original bytes
-round-trip on save, so editing the document does not lose them.
+The editor renders opaque solid Word 2010 text outlines with explicit RGB colors. Other text effects remain preserved; the text-effects matrix lists the rendering limits. PDF export does not paint these outlines.
 
-- **Text boxes**: render and round-trip; inner text is editable. Move and
-  resize handles for the box are not built yet.
-- **Drawing shapes**: round-trip but are not painted yet. Custom geometry is
-  reduced to its bounding rectangle on save.
-- **WMF / EMF**: round-trip without loss; not rendered yet.
+## Layout and document settings
 
-## Round-trip behavior
+The editor calculates document layout without browser flow layout. It uses document fonts, themes, section geometry, margins, and Word units.
 
-A `.docx` file is a ZIP of XML parts, and Word writes a lot of XML the
-editor has no reason to model: bookmarks, custom XML parts, mail-merge fields,
-compatibility settings, VBA projects.
+The layout result controls line and page breaks. The editor paints selectable DOM text from that result.
 
-This editor's pipeline is parse → document model → edit → serialize. On
-save it rewrites only the parts it changed (the body, plus headers, footers,
-comments and notes when touched) and repacks every other part of the
-original archive as-is: `styles.xml`, themes, the font table, settings,
-media, relationships, custom XML. Concretely:
+Document settings affect pagination as well as appearance. These settings include compatibility mode, paragraph keep rules, section line grids, and table row minimums. The feature notes identify the settings and limits for each behavior.
 
-- Unmodeled XML elements and attributes are kept and re-emitted in place. (One exception: legacy run-level VML drawn shapes other than watermarks, namely `v:rect`, `v:line`, and non-text `v:shape`, are not yet modeled or preserved.)
-- Whole parts the editor never touches (custom XML, VBA projects, embedded fonts, OLE objects) are copied through the ZIP untouched.
-- References stay intact: relationship IDs, bookmark names, field codes, style IDs and numbering definitions are not renamed or renumbered.
-- Output is canonical OOXML, not merely valid: tracked changes are real `w:ins`/`w:del` revisions Word's review pane understands, theme colors stay theme references, numbering keeps its definitions.
+A valid compatibility mode declared directly under the settings element, outside `w:compat`, applies when `w:compat` holds no valid declaration. An invalid value there is ignored.
 
-How it's tested: a parity corpus of real documents is round-tripped in CI
-and compared structurally; serializer unit tests assert revision markup,
-conditional table formatting and section properties survive; 500+ Playwright
-tests drive the editor against Word-derived expectations.
+### Manual page breaks
 
-What this does not mean: bit-identical files. The ZIP container is
-rebuilt and XML is re-serialized, so whitespace and part ordering can differ.
-The goal is semantic preservation: content you did not edit should not be lost or reinterpreted. A document that
-breaks this behavior is a bug; attach it to a
-[GitHub issue](https://github.com/eigenpal/docx-editor/issues/new/choose).
+Manual page breaks (`w:br w:type="page"`) inside table cells do not add lines, line height, or pages. This applies to breaks at the start, middle, or end of a cell paragraph. The text on each side of a break stays on the same line. Line wrapping, tab alignment, and text wrap around floating pictures treat the text as if the break were absent. The document retains these breaks for editing and saving. Manual line breaks still start a new line inside a cell.
 
-## Security
+A manual page break at the start of a paragraph moves its following text or page break to the next page. This also applies when the current page has no room for another line. The position before the break stays at the bottom of the current page. The text on the next page gets the space before of the paragraph, in every compatibility mode. Adjacent paragraph spacing follows the document’s spacing rules.
 
-- **Normal editor use is browser-only.** The editor package does not upload documents or call a conversion API.
-- **No macro execution.** VBA macros and embedded code are not evaluated.
-- **AI integrations are host-controlled.** With the [agents toolkit](/docs/1.x/agents), the live-editor setup keeps the DOCX file client-side and sends chat/tool-call text to a route you own. Headless review and MCP setups run wherever you host them.
+The preceding space after normally reduces this leading space. The space after of the text overlaps the space before of the next paragraph in the same way. In a numbered or bulleted paragraph, the number or bullet goes to the next page with the text.
+
+This rule also applies to a paragraph with borders or shading. Lines that hold only page breaks draw no border. The text after the breaks starts a separate border box on the next page, including the paragraph’s top border. The preceding paragraph closes its border box with its bottom border. This happens only when the displayed paragraph starts with the break.
+
+A hidden break does not separate the border group. This includes tracked changes hidden by the selected review view. Shading fills each break line where it sits, up to the page edge.
+
+This rule does not apply to some paragraphs. A paragraph with only one page break, or with only hidden content after the break, keeps the ordinary rule. This includes a single break after a table that fills the page. A paragraph that opens with a page break followed by another page or column break keeps its first break on the current page. Each later break starts one more page. A paragraph that anchors a floating table, text frame, or drawing also keeps it. After a full page, its break line moves to a new page. Its text starts one page later.
+
+### Section boundaries
+
+A continuous section can share the preceding section’s last page when its page size and orientation stay the same. A trailing page break in the preceding section starts the continued text on the next page. A shared page retains its header, footer, and text area, even if the following section uses different variants or heights. The following section’s header and footer start on the next page.
+
+Odd-page and even-page sections can insert an empty sheet to reach the required page number parity. That sheet contains no header, footer, or document content. `NUMPAGES` includes it; `SECTIONPAGES` does not. The sections matrix note also explains page numbering restarts.
+
+An empty paragraph that ends a section ignores its own page break before, from direct formatting or its style. It stays after the section's content, so it does not add a blank page. The next section's break type controls where that section starts. This rule does not apply when nothing comes before the paragraph in its section. It also does not apply when the paragraph holds text, a tab, hidden text, or a field. Bookmarks, proofing marks, permission markers, comment range markers, and empty text runs do not prevent this rule.
+
+### Table rows and merged cells
+
+Bottom-to-top cell text does not make its row taller. The text wraps at the final row height, or along the full merged cell height. The cell width clips overflowing text.
+
+A table row starts below other content only when the remaining space holds its minimum height. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If a fresh page cannot hold that minimum below repeated headers, the row splits where it stands. Rows of positioned tables keep their existing placement.
+
+Keep-with-next table groups include closed vertical merges. Their merged content contributes its height once across the covered rows. Table decisions measure at most 256 kept rows and the next row. Longer groups use that measured prefix as a lower bound. Paragraph keep lookahead remains unchanged.
+
+Changes to numbering and document properties update field text and table pagination during editing.
+
+Merges that enter or leave the measured group retain ordinary row placement. Active floating content also uses ordinary row placement when it changes the available width.
+
+Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
+
+### Fields and paragraph spacing
+
+Saved results of fields inside another field's instruction do not add text, line breaks, or links. The outer field keeps its normal display behavior. Fields inside a saved result still display.
+
+Named character styles set the font properties of empty paragraph marks and numbering markers. Direct mark properties override those styles. A mark's character style also sizes the empty line after a trailing line break. It does not enlarge a line that contains text or an inline picture. A direct mark size also leaves lines with text, inline pictures, or equations unchanged.
+
+For lines containing only inline pictures, the picture runs set the text height. A line with superscript or subscript text keeps that text's full-size height above and below the baseline, on every line of the paragraph. A larger paragraph style size does not enlarge that line. When you type in an empty paragraph, the new text takes the character style of the paragraph mark.
+
+Active section line grids set the height of automatically spaced body lines in whole grid steps. The space below the text in a grid line can extend past the bottom margin, so a line fits on a page when its text fits. Multiple line spacing counts in grid steps: a line takes the larger of the steps its text needs and the multiple, with the text centered. Minimum line spacing up to the grid step takes the grid step, and a larger minimum keeps its own height. Exact line spacing keeps its authored rule, and the whole line must fit. A paragraph can turn off snapping through direct formatting or an inherited style. Table cells snap only when the document enables `w:adjustLineHeightInTable`. Footnote and endnote text snaps to the grid of the section that holds it. Headers, footers, and text boxes do not snap.
+
+Adjacent paragraph spacing normally uses the larger of the preceding space after and following space before. With `w:doNotUseHTMLParagraphAutoSpacing`, those values add together. That setting also changes automatic spacing to 5pt before and 10pt after. The rule applies in body text, table cells, headers, footers, notes, and text boxes.
+
+### Fonts and text direction
+
+Supply usable font bytes for accurate text measurement. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts).
+
+Known single-byte Symbol and Wingdings bullets use Unicode fallback when their font is unavailable. The editor preserves the original numbering definition when you save.
+
+No-break spaces (U+00A0, U+2007, and U+202F) retain their line-break behavior across formatting runs. This also applies to word joiners (U+2060 and U+FEFF). Ordinary spaces can still provide break positions. Oversized groups retain the existing overflow rules.
+
+The configured font resolver also receives faces used by SYMBOL fields and numbering markers. Your host must supply usable font bytes for those faces when they are unavailable locally. Unused numbering definitions do not add font requests.
+
+Paragraph `w:bidi` controls alignment and the order of groups with different run directions. Run `w:rtl` controls the directional context within each group. Unmarked numeric text such as `1 980` keeps its left-to-right order in right-to-left paragraphs. Arabic, Hebrew, and Arabic-Indic digits retain their Unicode direction within that context. Authored Unicode direction controls use paragraph-wide Unicode ordering. Selection and caret positions follow the displayed text without changing source offsets.
+
+### East Asian typography
+
+East Asian layout keeps punctuation, graphemes, and full-width number groups together across formatting changes. Justified lines distribute inter-character spacing through the same geometry used for paint and caret placement.
+
+Modern Latin justification includes terminal footnote and endnote citations when testing whether a complete word fits. Citations keep their formatting and model positions. Marks with reserved page-local widths retain their existing line-break behavior.
+
+East Asian font hints select the document's East Asian face for supported punctuation, symbols, Greek, and Cyrillic ranges. Combining marks and joined emoji keep their base character's slot across text runs. Explicit symbol fonts retain their selected face.
+
+Document settings control kinsoku, Japanese strict rules, and language-specific break restrictions. They also control Korean character wrapping, punctuation overflow, and punctuation or kana compression. Punctuation compression removes shared side bearings and preserves the ink position during native text selection. Compression removes shared spacing between adjacent punctuation. Paragraph and manual line-break boundaries retain their advance widths.
+
+Colons can compress before opening brackets, bounded by the following bracket's available bearing. With measured glyph bounds, colons also compress before closing punctuation. This pair rule halves the colon's advance, including authored character spacing. Other centered punctuation, authored spaces, outlined text, decorated text, and tracked changes retain their advances. Colons with highlight or shading retain their advances.
+
+If wrapping separates a compressed colon from its opening bracket, the paragraph uses natural colon advances. Narrow plain left-to-right (LTR) East Asian paragraphs can use measured punctuation bearings to fit the next glyph and protected punctuation. Fitting uses measured glyph bounds and preserves source positions. Mixed Latin text, fields, decorations, revisions, and right-to-left (RTL) text retain conservative fitting. So do gaps beside floating objects and measurers without ink bounds.
+
+Kana uses deterministic advance reductions.
+
+The document's `w:themeFontLang` selects supplemental theme fonts for its Latin, East Asian, and complex-script theme tokens. The resolver reads `val`, `eastAsia`, and `bidi` independently. It supports CJK languages, common complex-script languages, and explicit script subtags. Complex-script theme tokens also work on Latin font attributes. When no inherited or direct Latin font reference exists, the resolved body Latin theme supplies the default.
+
+When no style supplies an East Asian face, a resolved body East Asian theme face supplies the default. When the East Asian theme language is absent and its face is empty, inherited `w:lang/@w:eastAsia` selects the supplemental face. Chinese, Japanese, and Korean use named CJK defaults when neither the theme nor the run supplies a face. Word's default language can depend on its installation language and keyboards. Font resolvers receive the selected candidates before shaping.
+
+Supply suitable fonts for matching glyph metrics.
+
+The feature matrix lists the support limits for East Asian typography.
+
+For pipeline details, see [Architecture](/docs/2.x/core/architecture). Test your documents in the [live demo](https://docx-editor.dev/editor).
+
+## Round-trip contract
+
+A DOCX file is a ZIP package with XML parts and binary payloads.
+
+| Content | Save behavior |
+| --- | --- |
+| Modeled OOXML | Serializes from typed document nodes. |
+| Unmodeled XML elements and attributes | Re-emits generic nodes in place. |
+| Legacy VML, custom XML, and add-in markup | Preserves structural content. |
+| Media, VBA projects, embedded fonts, and OLE binaries | Copies package payloads without modification. |
+| Relationship IDs, bookmark names, style IDs, and numbering definitions | Keeps references intact. |
+| Tracked changes | Writes Word `w:ins` and `w:del` revisions. |
+| Theme colors | Keeps theme references instead of flattening them to RGB values. |
+
+The contract protects semantic meaning and structure. It does not promise byte identity for rewritten XML parts.
+
+An `xml:space="preserve"` attribute on a run does not turn indentation into document text. Spaces inside text elements remain authored text.
+
+The editor preserves `w:br` and `w:cr` elements outside runs, directly inside paragraphs or hyperlinks. Save retains their position. The paragraph and its runs still render and stay editable. The misplaced break does not start a new line or page. A `w:tab` or `w:t` directly inside a paragraph, outside a run, still makes the whole paragraph unknown content. That paragraph and its text are kept on save, but the paragraph does not render and you cannot edit it.
+
+Continuous integration checks real documents with a canonical tree fingerprint and a save-and-reopen semantic digest. Focused tests cover revisions, fields, hyperlinks, content controls, and browser editing.
+
+If untouched content is lost or reinterpreted, report a [round-trip issue](https://github.com/eigenpal/docx-editor/issues/new/choose) with the source document.
+
+## Security and data flow
+
+| Concern | Behavior |
+| --- | --- |
+| Browser uploads | The editor package does not upload documents or call a conversion service. |
+| Macros | The editor preserves VBA payloads but never executes them. |
+| OLE | The editor preserves OLE payloads without running them. Supported inline objects display their cached preview picture. |
+| Calculated fields | Supported calculated fields update display text only. Macros, DDE, and external includes remain inert. |
+| Hyperlinks | Allowlisted targets open only after a user gesture. |
+| Server editing | Your host controls where DOCX data runs. |
+| Browser automation | Controls an editor already in the page. |
+| External artificial intelligence | `@docx-editor.dev/editor-api` includes no model integration or transport. |
+
+Your application controls any data sent to another service or model.
 
 ## Bundle and performance
 
-- `-core` ships subpath exports that tree-shake independently.
-- ProseMirror packages are peers so your package manager can share one copy.
-- Lazy-load the editor (`next/dynamic`, `React.lazy`) to keep it out of the initial bundle.
-- The layout engine caches per-block measurements; an edit doesn't re-measure the document.
+| Area           | Behavior                                                               |
+| -------------- | ---------------------------------------------------------------------- |
+| Core exports   | Subpath exports can tree-shake independently.                          |
+| Engine copies  | Adapters use core as a peer dependency to resolve one engine copy.     |
+| Initial bundle | You can lazy-load the editor with your framework.                      |
+| Layout work    | Per-block caches avoid measuring unchanged blocks again.               |
+| Benchmarks     | No published benchmark represents every document. Test your own files. |
 
-No published benchmarks; test with your own documents in the
-[live demo](https://docx-editor.dev/editor).
+## License and API stability
 
-## Stability, license and support
+| Package or policy | Terms |
+| --- | --- |
+| `@docx-editor.dev/core`, `@docx-editor.dev/react`, `@docx-editor.dev/vue`, and `@docx-editor.dev/i18n` | Apache 2.0 |
+| `@docx-editor.dev/fonts` | Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License |
+| `@docx-editor.dev/fonts-cjk` | Apache-2.0 AND OFL-1.1 |
+| `@docx-editor.dev/docx-to-pdf` | EigenPal Pro License |
+| `@docx-editor.dev/editor-api` | EigenPal Pro License |
+| `@docx-editor.dev/pro` | EigenPal Pro License |
+| Versions | Semantic Versioning with one fixed version group |
+| Public API | CI checks generated API Extractor snapshots |
+| Contributions | Require a one-time [Contributor License Agreement](https://github.com/eigenpal/docx-editor/blob/main/CLA.md) |
 
-- **Apache 2.0**, all packages. Contributions need a one-time [CLA](https://github.com/eigenpal/docx-editor/blob/main/CLA.md).
-- **SemVer** via changesets; all packages share one version number.
-- The public API is tracked by [API Extractor snapshots](https://github.com/eigenpal/docx-editor/tree/main/docs/api); CI fails on drift.
-- React/Vue parity is a checked contract; `agentPanel` and controlled `comments` are still React-only.
-- `pagination-model`, `painter-model`, `flow-model` and `plugin-api` are `@experimental`.
-- Some advanced fidelity features may move to a commercial plan later; everything published stays Apache 2.0.
-
-If a feature you need is Partial or missing, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose)
-with a sample `.docx`, or email [docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)
-for priority features and support contracts.
+The Pro packages use the EigenPal Pro License. Compare license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 ## Next steps
 
-- [Quickstart](/docs/1.x/quickstart): the load, edit, save loop
-- [Architecture](/docs/1.x/core/architecture): the dual-renderer design in depth
-- [Tracked changes](/docs/1.x/guides/tracked-changes): the review model in practice
+- [Quickstart](/docs/2.x/quickstart): Load, edit, and save a DOCX file.
+- [Architecture](/docs/2.x/core/architecture): Review the engine pipeline.
+- [Fields and cross-references](/docs/2.x/guides/fields): Review field evaluation limits.
+- [Tracked changes](/docs/2.x/pro/tracked-changes): Review revision behavior.

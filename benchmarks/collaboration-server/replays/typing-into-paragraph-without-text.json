@@ -1,0 +1,90 @@
+{
+  "config": "offline",
+  "seed": 4,
+  "replicas": 4,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 3,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 5,
+          "end": 13,
+          "properties": [
+            {
+              "localName": "i"
+            }
+          ]
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 3
+    },
+    {
+      "kind": "toggle",
+      "replica": 3
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 8
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 0,
+          "text": "l"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "toggle",
+      "replica": 3
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 3
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 7
+        },
+        "paragraphs": [1]
+      }
+    }
+  ]
+}

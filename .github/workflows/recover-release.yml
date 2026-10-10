@@ -1,0 +1,41 @@
+name: Recover release
+
+# Reruns verification and the downstream updates of a published release. See
+# docs/RELEASING.md, "Recover post-release updates without publishing".
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published stable version to recover (for example, 2.19.0)
+        type: string
+        required: true
+      source_run_id:
+        description: Original Release run containing the tested collaboration-candidate artifact
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    # The ref check sits on this calling job, so a skip here skips the downstream updates.
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/verify-release.yml
+    with:
+      version: ${{ inputs.version }}
+      source_run_id: ${{ inputs.source_run_id }}
+
+  downstream:
+    needs: verify
+    uses: ./.github/workflows/release-downstream.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      checks: read
+      statuses: read

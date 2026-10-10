@@ -1,0 +1,191 @@
+// Space compression adapted from PR #707's paragraph-justify.ts (2ce89f6e7).
+// Publish spacing in Core so PDF, browser paint, and caret measurement agree.
+// The format's producers use a 75% space floor and prefer expansion near natural spacing.
+// An open reference implementation of the same rule:
+// https://github.com/LibreOffice/core/commit/529755f0919217a84a12daad0fddfddd1124f0e9
+import { measureDisplayText } from './run-style.ts';
+import { styleForFontSlot } from './script-itemization.ts';
+import type { ResolvedRunStyle } from './run-style.ts';
+import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import type { FieldAwarePiece } from './field-pieces.ts';
+import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
+
+function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
+  if (
+    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} ]*$/u.test(span.text)) ||
+    span.lineEndWhitespace ||
+    !/^[^\s]* $/u.test(span.text) ||
+    span.equation
+  )
+    return 0;
+  const style = styleForFontSlot(span.style, span.fontSlot);
+  const space = Math.max(
+    0,
+    span.box.width - measureDisplayText(span.text.slice(0, -1), style, measurer)
+  );
+  const minimum = space * 0.75;
+  return space - minimum;
+}
+
+/**
+ * Only an ordinary word followed by a space, or the paragraph's last word, can borrow
+ * existing inter-word space.
+ *
+ * A word that straddles a source-run seam — a quoted bold term, a semicolon left in
+ * the next run — overflows on a later piece than the one that opened it. The kept
+ * line still runs to `lineWidth`, but the line the reference would produce instead
+ * ends where the word began, so `wordStart`/`wordStartWidth` describe that
+ * alternative. Their defaults are the values the caller already holds when the
+ * overflowing candidate opens the word, so that path measures exactly as before.
+ *
+ * `wordEnds` says the next character is a space, in this run or at the start of the
+ * next one, or that only hanging spaces remain in the paragraph. A candidate without its
+ * own space is then a complete word: a space in its own run, or one split off by East
+ * Asian break rules, hangs at the line end exactly as a space inside the candidate would,
+ * and the paragraph's last word borrows space as any other word does.
+ * `followingWidth` measures the remainder of that same word in later plain-text pieces.
+ * It lets an overflowing opening fragment use the complete word's fit decision.
+ */
+export function fitsWithSpaceShrink(
+  spans: readonly StyleSpanRecord[],
+  candidate: string,
+  style: ResolvedRunStyle,
+  measurer: TextMeasurer,
+  lineWidth: number,
+  available: number,
+  wordStart: number = spans.length,
+  wordStartWidth: number = lineWidth,
+  wordEnds = false,
+  followingWidth = 0
+): boolean {
+  const ownSpace = /^[^\s]+ $/u.test(candidate);
+  if (
+    !(ownSpace || (wordEnds && /^[^\s]+$/u.test(candidate))) ||
+    spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
+  )
+    return false;
+  const visible = measureDisplayText(
+    ownSpace ? candidate.slice(0, -1) : candidate,
+    style,
+    measurer
+  );
+  const needed = lineWidth + visible + followingWidth - available;
+  const budget = spans.reduce((sum, span) => sum + capacity(span, measurer), 0);
+  if (needed <= 0 || needed > budget + 0.001) return false;
+  const spaceWidth = budget * 4;
+  // The alternative line stops before the overflowing word, so only the spans ahead
+  // of it carry its stretch, and the space in front of it is the one that hangs.
+  const before = spans.slice(0, Math.max(0, Math.min(wordStart, spans.length)));
+  const terminalSpace = before.length ? capacity(before[before.length - 1]!, measurer) * 4 : 0;
+  const existingSpaces =
+    before.reduce((sum, span) => sum + capacity(span, measurer) * 4, 0) - terminalSpace;
+  if (existingSpaces <= 0) return false;
+  const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
+  const compression = spaceWidth / (spaceWidth - needed);
+  return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
+}
+
+/**
+ * Whether the candidate ending at `boundary` of `pieces[pieceIndex]` is the paragraph's
+ * last word: only plain U+0020 spaces follow it, and they hang at the line end.
+ *
+ * One backward scan finds where that closing run of spaces begins. Any other piece (a
+ * field result, positional tab, drawing, equation, reserved note mark or anchor) ends the scan
+ * after itself, so no word before it is last. A tab, hard break or page break in plain
+ * text is not a space either, and ends the scan the same way. Stable body citations
+ * can complete the last word while retaining their atomic model ranges.
+ */
+export function paragraphEndAt(
+  pieces: readonly FieldAwarePiece[]
+): (pieceIndex: number, boundary: number) => boolean {
+  let tailPiece = 0;
+  let tailOffset = 0;
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index]!;
+    if (!isSpaceShrinkWordPiece(piece)) {
+      tailPiece = index + 1;
+      break;
+    }
+    let offset = piece.text.length;
+    while (offset > 0 && piece.text[offset - 1] === ' ') offset -= 1;
+    if (offset > 0) {
+      tailPiece = index;
+      tailOffset = offset;
+      break;
+    }
+  }
+  return (pieceIndex, boundary) =>
+    pieceIndex > tailPiece || (pieceIndex === tailPiece && boundary >= tailOffset);
+}
+
+/**
+ * True when `piece` opens with a U+0020 that can hang at a line end. Only a plain text
+ * piece splits into candidates; a projected field result, positional tab, or reserved
+ * measure is laid out whole, so its leading space would open the next line instead.
+ */
+export function opensWithHangingSpace(piece: FieldAwarePiece | undefined): boolean {
+  return (
+    piece !== undefined &&
+    piece.text[0] === ' ' &&
+    !piece.projected &&
+    !piece.positionalTab &&
+    piece.measureText === undefined &&
+    piece.end - piece.start === piece.text.length
+  );
+}
+
+/**
+ * Compress eligible spaces evenly, respecting every face's minimum space advance.
+ * Only spans before `slotEnd` are slots: the span there ends the content and its space hangs.
+ */
+export function shrinkJustifiedSpans(
+  spans: readonly StyleSpanRecord[],
+  needed: number,
+  measurer: TextMeasurer,
+  slotEnd: number = spans.length - 1
+): readonly StyleSpanRecord[] {
+  const capacities = spans.map((span, index) => (index < slotEnd ? capacity(span, measurer) : 0));
+  if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
+  const amounts = capacities.map(() => 0);
+  let remaining = needed;
+  for (let pass = 0; pass < capacities.length && remaining > 0.001; pass++) {
+    const active = capacities
+      .map((cap, index) => (cap - amounts[index]! > 0.001 ? index : -1))
+      .filter((i) => i >= 0);
+    if (!active.length) break;
+    const step = remaining / active.length;
+    for (const index of active) {
+      const take = Math.min(step, capacities[index]! - amounts[index]!);
+      amounts[index] += take;
+      remaining -= take;
+    }
+  }
+  let shift = 0;
+  return spans.map((span, index) => {
+    const amount = amounts[index]!;
+    const result =
+      shift || amount
+        ? {
+            ...span,
+            box: { ...span.box, x: span.box.x - shift, width: span.box.width - amount },
+            ...(amount
+              ? {
+                  style: {
+                    ...span.style,
+                    shaping: {
+                      script: 'Latn',
+                      direction: 'ltr' as const,
+                      level: 0,
+                      baseLevel: 0,
+                      ...span.style.shaping,
+                      wordSpacingPt: (span.style.shaping?.wordSpacingPt ?? 0) - amount,
+                    },
+                  },
+                }
+              : {}),
+          }
+        : span;
+    shift += amount;
+    return result;
+  });
+}

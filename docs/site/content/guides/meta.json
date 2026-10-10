@@ -2,13 +2,23 @@
   "title": "Guides",
   "pages": [
     "loading-and-saving",
-    "tracked-changes",
-    "comments",
-    "content-controls",
-    "headers-footers",
-    "custom-styles",
+    "document-refresh",
+    "navigation",
     "toolbar",
+    "chrome-slots",
+    "customize-dialogs",
+    "zoom",
+    "content-controls",
+    "document-protection",
+    "headers-footers",
+    "footnotes-and-endnotes",
+    "fields",
+    "images",
+    "custom-styles",
+    "fonts",
+    "right-to-left",
     "dark-mode",
-    "headless-processing"
+    "export",
+    "print"
   ]
 }

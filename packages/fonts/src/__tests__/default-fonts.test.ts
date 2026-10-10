@@ -1,0 +1,315 @@
+// @docx-editor.dev/fonts (font-resolution-overhaul group 4).
+//
+// Pins the package's promises: no fetch without a call, family narrowing fetches only
+// the requested assets, baked hashes match the shipped bytes, and the fragment's
+// substitution map speaks the Word family names.
+
+import { describe, expect, test } from 'bun:test';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import {
+  composeFontConfiguration,
+  createLayoutShaping,
+  disposeLayoutShaping,
+} from '@docx-editor.dev/core/editor';
+import {
+  DEFAULT_RUN_STYLE,
+  FontResolutionError,
+  createFixedMeasurer,
+  createLayoutShapedMeasurer,
+} from '@docx-editor.dev/core/layout';
+import {
+  ALL_DEFAULT_FONT_FAMILIES,
+  ALL_WORD_DEFAULT_FAMILIES,
+  DEFAULT_FONT_FAMILIES,
+  FONT_ASSET_MANIFEST,
+  FONT_ASSET_ROOT,
+  WORD_DOCUMENT_DEFAULT_FAMILIES,
+  loadDefaultFonts,
+} from '../index.ts';
+import { resolvePackagedAssetRoot } from '../asset-root.ts';
+import { FONT_ASSET_URLS } from '../manifest.generated.ts';
+
+const assetsDir = new URL('../../assets/', import.meta.url);
+
+function countingFetcher(): { fetcher: typeof fetch; requested: string[] } {
+  const requested: string[] = [];
+  const fetcher = ((input: RequestInfo | URL) => {
+    const url = String(input);
+    requested.push(url);
+    const file = url.slice(url.lastIndexOf('/') + 1);
+    const bytes = readFileSync(new URL(file, assetsDir));
+    return Promise.resolve(new Response(new Uint8Array(bytes)));
+  }) as typeof fetch;
+  return { fetcher, requested };
+}
+
+describe('packaged manifest', () => {
+  test('baked hashes match the shipped bytes (the CI guarantee, asserted here too)', () => {
+    const files = readdirSync(assetsDir).filter(
+      (name) => name.endsWith('.ttf') || name.endsWith('.otf')
+    );
+    expect(files.length).toBe(FONT_ASSET_MANIFEST.length);
+    for (const entry of FONT_ASSET_MANIFEST) {
+      const bytes = readFileSync(new URL(entry.file, assetsDir));
+      expect(bytes.byteLength).toBe(entry.byteLength);
+      expect(`sha256:${createHash('sha256').update(bytes).digest('hex')}`).toBe(entry.hash);
+    }
+  });
+
+  test('every Word family has all four faces packaged', () => {
+    expect(ALL_DEFAULT_FONT_FAMILIES).toHaveLength(6);
+    expect(FONT_ASSET_MANIFEST).toHaveLength(24);
+  });
+
+  test('the omitted-families default carries only Word DOCUMENT defaults', () => {
+    // Every family here costs four faces on EVERY load, whether or not the file names it.
+    // Century Gothic is not a Word document default and most documents never name it, so
+    // it is opt-in (`families`) or on-demand (`googleFonts()`), not a 709 KB tax on both.
+    expect([...DEFAULT_FONT_FAMILIES]).toEqual([
+      'Calibri',
+      'Cambria',
+      'Times New Roman',
+      'Arial',
+      'Courier New',
+    ]);
+    expect(DEFAULT_FONT_FAMILIES).not.toContain('Century Gothic');
+    expect(ALL_DEFAULT_FONT_FAMILIES).toContain('Century Gothic');
+  });
+
+  test('the deprecated family list names are the same lists', () => {
+    expect(WORD_DOCUMENT_DEFAULT_FAMILIES).toBe(DEFAULT_FONT_FAMILIES);
+    expect(ALL_WORD_DEFAULT_FAMILIES).toBe(ALL_DEFAULT_FONT_FAMILIES);
+  });
+});
+
+describe('loadDefaultFonts', () => {
+  test('family narrowing fetches ONLY the requested assets', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await loadDefaultFonts({ families: ['Times New Roman'], fetcher });
+    expect(requested).toHaveLength(4);
+    expect(requested.every((url) => url.includes('LiberationSerif'))).toBe(true);
+    expect(fragment.failures).toHaveLength(0);
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.sources.every((s) => s.request.family === 'Liberation Serif')).toBe(true);
+    // The substitution map speaks the WORD name on the from side.
+    expect(fragment.substitutions).toHaveLength(4);
+    expect(
+      fragment.substitutions.every(
+        (s) => s.from.family === 'Times New Roman' && s.to.family === 'Liberation Serif'
+      )
+    ).toBe(true);
+  });
+
+  test('default load covers the document defaults with baked hashes attached', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await loadDefaultFonts({ fetcher });
+    expect(requested).toHaveLength(20);
+    expect(requested.some((url) => url.includes('TeXGyreAdventor'))).toBe(false);
+    expect(fragment.sources).toHaveLength(20);
+    expect(fragment.failures).toHaveLength(0);
+    const manifestHashes = new Set(FONT_ASSET_MANIFEST.map((entry) => entry.hash));
+    for (const source of fragment.sources) expect(manifestHashes.has(source.hash)).toBe(true);
+    // Deterministic source order for stable configuration fingerprints.
+    const ids = fragment.sources.map((source) => source.id);
+    expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b)));
+  });
+
+  test('the full family list is opt-in and adds the packaged extras', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await loadDefaultFonts({ families: ALL_DEFAULT_FONT_FAMILIES, fetcher });
+    expect(requested).toHaveLength(24);
+    expect(requested.filter((url) => url.includes('TeXGyreAdventor'))).toHaveLength(4);
+    expect(fragment.sources).toHaveLength(24);
+    expect(fragment.failures).toHaveLength(0);
+  });
+
+  test('Century Gothic resolves to shaped Adventor metrics', async () => {
+    const { fetcher } = countingFetcher();
+    const fragment = await loadDefaultFonts({ families: ['Century Gothic'], fetcher });
+    const shaping = await createLayoutShaping(composeFontConfiguration(fragment));
+    try {
+      const measurer = createLayoutShapedMeasurer(shaping, {
+        resolveFont: (style) => {
+          const resolved = shaping.fonts.resolve({
+            family: style.fontFamily ?? 'Century Gothic',
+            weight: style.bold ? 700 : 400,
+            style: style.italic ? 'italic' : 'normal',
+          });
+          return resolved instanceof FontResolutionError ? null : resolved;
+        },
+        fallback: createFixedMeasurer(),
+      });
+      const style = { ...DEFAULT_RUN_STYLE, fontFamily: 'Century Gothic', fontSizePt: 10 };
+      // Pin the geometry every layout host shares: 1000-unit, half-to-even quantization,
+      // with kerning OFF. ECMA-376 17.3.2.16 says an omitted `w:kern` means kerning is not
+      // performed for the run, and this style omits it. The numbers were higher while
+      // shaping passed no `kern` feature at all and HarfBuzz applied its own default, which
+      // kerned text Word would not; the canvas host sets `fontKerning: 'none'` for the same
+      // reason, so the two agree again.
+      const cases = [
+        ['Document layout', 84.89],
+        ['Precise font metrics', 93.63],
+        ['Reliable page breaks', 103.2],
+      ] as const;
+      for (const [text, expectedWidth] of cases) {
+        expect(measurer.measure(text, style)).toBeCloseTo(expectedWidth, 6);
+      }
+      expect(measurer.lineMetrics(style)).toEqual({
+        height: 11.9140625,
+        baseline: 9.7119140625,
+      });
+      const resolved = shaping.fonts.resolve({
+        family: 'Century Gothic',
+        weight: 400,
+        style: 'normal',
+      });
+      expect(resolved).not.toBeInstanceOf(FontResolutionError);
+      if (!(resolved instanceof FontResolutionError)) {
+        expect(resolved.substitution?.resolved.family).toBe('TeX Gyre Adventor');
+      }
+    } finally {
+      disposeLayoutShaping(shaping);
+    }
+  });
+
+  test('a failed face degrades that face only', async () => {
+    const { fetcher } = countingFetcher();
+    const failing = ((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('Carlito-Bold.ttf'))
+        return Promise.resolve(new Response(null, { status: 500 }));
+      return fetcher(input as RequestInfo);
+    }) as typeof fetch;
+    const fragment = await loadDefaultFonts({ families: ['Calibri'], fetcher: failing });
+    expect(fragment.sources).toHaveLength(3);
+    expect(fragment.failures).toEqual([
+      { family: 'Calibri', file: 'Carlito-Bold.ttf', diagnostic: 'HTTP 500' },
+    ]);
+    // All four substitution entries stay: the missing face falls back at resolve time.
+    expect(fragment.substitutions).toHaveLength(4);
+  });
+
+  test('importing the module fetches nothing (no fetch without a call)', () => {
+    // The fetch spy in this suite is injected per call; the module itself holds no
+    // top-level fetch. This asserts the structural fact: the only fetch call sites
+    // live inside the exported functions.
+    const moduleSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+    const topLevel = moduleSource
+      .split('\n')
+      .filter((line) => !line.startsWith(' ') && !line.startsWith('\t'));
+    expect(topLevel.some((line) => line.includes('fetch('))).toBe(false);
+  });
+
+  test('no inlined font bytes in the module source (assets stay separate files)', () => {
+    const moduleSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+    const manifestSource = readFileSync(
+      new URL('../manifest.generated.ts', import.meta.url),
+      'utf8'
+    );
+    for (const source of [moduleSource, manifestSource]) {
+      expect(source.length).toBeLessThan(64 * 1024);
+      expect(source.includes('base64')).toBe(false);
+    }
+  });
+
+  test('every packaged face uses a literal bundler-visible asset URL', () => {
+    const moduleSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+    const manifestSource = readFileSync(
+      new URL('../manifest.generated.ts', import.meta.url),
+      'utf8'
+    );
+
+    expect(moduleSource).not.toContain('new URL(`../assets/${');
+    for (const entry of FONT_ASSET_MANIFEST) {
+      expect(manifestSource).toContain(`'../assets/${entry.file}'`);
+    }
+    expect(manifestSource.match(/new URL\(/g)).toHaveLength(FONT_ASSET_MANIFEST.length);
+  });
+
+  test('FONT_ASSET_ROOT is the shared directory of every packaged face URL', () => {
+    expect(FONT_ASSET_ROOT.protocol).toBe('file:');
+    expect(FONT_ASSET_ROOT.pathname.endsWith('/')).toBe(true);
+    expect(FONT_ASSET_ROOT.href).toBe(
+      new URL('./', FONT_ASSET_URLS[FONT_ASSET_MANIFEST[0]!.file]!).href
+    );
+    for (const entry of FONT_ASSET_MANIFEST) {
+      const url = new URL(String(FONT_ASSET_URLS[entry.file]));
+      expect(new URL('./', url).href).toBe(FONT_ASSET_ROOT.href);
+      expect(new URL(entry.file, FONT_ASSET_ROOT).href).toBe(url.href);
+    }
+  });
+
+  // Regression: a bundler-shaped entry threw here at MODULE SCOPE, which is uncatchable,
+  // so importing this package took down the whole client bundle with
+  // "URL constructor: /_next/static/media/Caladea-Bold.<hash>.ttf is not a valid URL"
+  // instead of degrading font loading.
+  const REWRITTEN = '/_next/static/media/Caladea-Bold.d6e01b80.ttf';
+
+  test('a URL entry keeps its own directory, file: included', () => {
+    // Node, Bun, and Vite leave the expression alone. `file:` is the right answer here:
+    // it is the directory headless exporters confine their reads to.
+    const packagedRoot = new URL('../../assets/', import.meta.url);
+    const root = resolvePackagedAssetRoot(new URL('Caladea-Bold.ttf', packagedRoot));
+    expect(root.href).toBe(packagedRoot.href);
+    expect(root.protocol).toBe('file:');
+  });
+
+  test('a bundler-rewritten entry resolves against the page origin', () => {
+    // The arm that runs in a real webpack or Turbopack browser bundle. `origin` is a
+    // parameter precisely so this is reachable: the suite's own `location` is
+    // `about:blank`, and Node has none at all.
+    expect(resolvePackagedAssetRoot(REWRITTEN, 'https://site.example/docs/').href).toBe(
+      'https://site.example/_next/static/media/'
+    );
+    expect(
+      resolvePackagedAssetRoot('https://cdn.example/static/Caladea-Bold.abc123.ttf').href
+    ).toBe('https://cdn.example/static/');
+  });
+
+  test('a bundler-rewritten entry never resolves to a file: directory', () => {
+    // A `file:` document origin is real: an Electron renderer, a static export opened
+    // from disk, Capacitor. The bundler moved the faces, so that directory does not hold
+    // them, and `createPackagedFileFetch` REJECTS a broad filesystem root by throwing.
+    // An asset path at the root would otherwise yield `file:///` and crash
+    // `@docx-editor.dev/docx-to-markdown` at module scope, reintroducing exactly the
+    // uncatchable failure this module exists to prevent.
+    for (const origin of ['file:///Users/x/out/index.html', 'file:///out/index.html']) {
+      expect(resolvePackagedAssetRoot(REWRITTEN, origin).protocol).not.toBe('file:');
+      expect(resolvePackagedAssetRoot('/Caladea-Bold.d6e01b80.ttf', origin).protocol).not.toBe(
+        'file:'
+      );
+    }
+  });
+
+  test('a bundler-rewritten entry survives an origin that cannot base a URL', () => {
+    // `about:blank` and `about:srcdoc` are what a sandboxed or srcdoc iframe reports.
+    // This is also the suite's own origin under happy-dom.
+    for (const origin of ['about:blank', 'about:srcdoc', '', undefined]) {
+      expect(() => resolvePackagedAssetRoot(REWRITTEN, origin)).not.toThrow();
+      expect(resolvePackagedAssetRoot(REWRITTEN, origin).href).toBe(
+        'https://bundled.invalid/_next/static/media/'
+      );
+    }
+    expect(() => new URL(REWRITTEN, globalThis.location?.href)).toThrow();
+  });
+
+  test('no packaged face href is built by reading .href off a bundler string', () => {
+    // `.href` on the string webpack and Turbopack emit is undefined, which renders as
+    // the literal `url(undefined)` in a FontFace source and silently loses the face.
+    // `assetHref` is the only sanctioned reader; it narrows the union first.
+    const moduleSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+    expect(moduleSource).not.toContain('assetUrl(file).href');
+    expect(moduleSource).not.toMatch(/assetUrl\([^)]*\)\.href/);
+  });
+});
+
+describe('lane boundary', () => {
+  test('the engine never imports this package (fonts are strictly opt-in)', () => {
+    const corePackage = JSON.parse(
+      readFileSync(new URL('../../../core/package.json', import.meta.url), 'utf8')
+    ) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    expect(corePackage.dependencies?.['@docx-editor.dev/fonts']).toBeUndefined();
+    expect(corePackage.devDependencies?.['@docx-editor.dev/fonts']).toBeUndefined();
+  });
+});

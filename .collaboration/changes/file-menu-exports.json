@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The File menu opens and saves DOCX documents.",
+  "after": "The File menu also exports saved document bytes to Markdown and PDF.",
+  "reason": "Export reads a saved snapshot and runs host conversion handlers. It does not change document operations, shared state, or synchronization.",
+  "tests": [
+    "packages/core/src/editor/__tests__/chrome-export.test.ts",
+    "packages/react/test/menu-composition.test.tsx",
+    "packages/vue/test/menu-composition.test.ts",
+    "e2e/file-export.interaction.spec.ts"
+  ],
+  "changeset": "file-menu-conversion",
+  "migration": null
+}

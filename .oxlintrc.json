@@ -1,0 +1,403 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // Repository-specific rules live in scripts/oxlint/docx-rules.mjs (the `docx/*` rules).
+  "jsPlugins": ["./scripts/oxlint/docx-rules.mjs"],
+  "plugins": ["eslint", "typescript", "react"],
+  // Only the rules below run. oxlint's default categories would add rules this repository has
+  // never enforced.
+  "categories": { "correctness": "off" },
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    // Root-level config files only, as in the ESLint configuration this replaces.
+    "/*.config.js",
+    "/*.config.ts",
+    "packages/editor-api/compat/generated/**",
+    // Third-party vendored code (Extend UI PDF viewer + shadcn primitives, MIT), not ours to lint.
+    "examples/docx-to-pdf/src/vendor/**"
+  ],
+  "overrides": [
+    {
+      "files": ["**/*.{ts,tsx,vue}"],
+      "rules": {
+        "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+        "typescript/no-explicit-any": "warn",
+        "no-console": ["warn", { "allow": ["warn", "error"] }],
+        "prefer-const": "error",
+        "max-lines": ["error", { "max": 1000, "skipBlankLines": false, "skipComments": false }],
+        // Loop labels are minified to single characters, and Vite's SSR module-runner transform
+        // (vite-node — Nuxt's dev server) rewrites imported bindings to
+        // `__vite_ssr_import_N__.<name>` in label position too. A minified label that collides
+        // with an imported binding emits a syntax error that 500s SSR. We ship these bundles to
+        // consumers, so keep the emitted JS label-free.
+        "no-labels": "error"
+      }
+    },
+    {
+      "files": ["**/*.{ts,tsx}"],
+      "rules": {
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn"
+      }
+    },
+
+    // Every published package's source bans the HTML-from-strings sinks and global
+    // `@keyframes` names. Tests are exempt: the ban guards the render path from file-derived
+    // strings, and test fixtures and cleanup (`innerHTML = ''`) never see one; the AGENTS.md
+    // audit grep draws the same line.
+    {
+      "files": ["packages/*/src/**/*.{ts,tsx,vue}"],
+      "rules": { "docx/no-html-sinks": "error", "docx/no-global-keyframes": "error" }
+    },
+    {
+      "files": ["packages/*/src/**/__tests__/**", "packages/*/src/**/*.test.{ts,tsx}"],
+      "rules": { "docx/no-html-sinks": "off", "docx/no-global-keyframes": "off" }
+    },
+
+    // The DOM-free engine lanes also ban spreading an array into a call. A file-controlled
+    // collection spread into varargs grows the argument stack with the document and throws on
+    // attacker-sized input — a rule repeated in source comments across both lanes
+    // (table-widths.ts, drawing-projection.ts, tree-op-revisions.ts, ...). Tests spread bounded
+    // literal fixtures; the rule guards the engine paths that see attacker-sized collections.
+    // In these lanes only `__tests__` is exempt, so a `*.test.ts` beside the source keeps the
+    // sink and keyframes checks too.
+    {
+      "files": ["packages/core/src/store/**/*.ts", "packages/core/src/layout/**/*.ts"],
+      "rules": {
+        "docx/no-varargs-spread": "error",
+        "docx/no-html-sinks": "error",
+        "docx/no-global-keyframes": "error"
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/store/**/__tests__/**",
+        "packages/core/src/layout/**/__tests__/**"
+      ],
+      "rules": {
+        "docx/no-varargs-spread": "off",
+        "docx/no-html-sinks": "off",
+        "docx/no-global-keyframes": "off"
+      }
+    },
+
+    // Library code branches on the Word compatibility mode only through the named rules in
+    // packages/core/src/layout/compatibility/, never by comparing mode numbers. The module itself
+    // classifies the numbers, and tests state modes as literal fixtures.
+    {
+      "files": ["packages/*/src/**/*.{ts,tsx,vue}"],
+      "rules": { "docx/no-raw-compatibility-mode": "error" }
+    },
+    {
+      "files": [
+        "packages/core/src/layout/compatibility/**",
+        "packages/*/src/**/__tests__/**",
+        "packages/*/src/**/*.test.{ts,tsx}"
+      ],
+      "rules": { "docx/no-raw-compatibility-mode": "off" }
+    },
+
+    // Framework isolation: keep the React adapter, the Vue adapter (and pro's Vue entry), and
+    // editor-api from importing each other's UI framework. `packages/core/src` has no block here,
+    // as it had none in the ESLint configuration. Spec:
+    //   openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md
+    // `no-restricted-imports` covers static imports and `import(...)` alike (`*` and `/*` are
+    // separate entries: a glob matches path-with-suffix, the bare specifier matches no-suffix).
+    // These areas also check their tests for the sinks above.
+
+    // Vue adapter: no React imports, and none of React's hook rules. `rules-of-hooks` keys off
+    // the `use` PREFIX, so it reads a Vue composable called inside `setup()` as a React hook
+    // called outside a component. Vue has no rules-of-hooks ordering contract, so the rule can
+    // only produce false positives here.
+    {
+      "files": ["packages/vue/src/**/*.{ts,tsx,vue}", "packages/pro/src/vue/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react/*",
+                  "react-dom",
+                  "react-dom/*",
+                  "@vitejs/plugin-react",
+                  "@docx-editor.dev/react",
+                  "@docx-editor.dev/react/*"
+                ],
+                "message": "Vue/core files cannot import React. Use @docx-editor.dev/core for shared logic. See openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md"
+              }
+            ]
+          }
+        ],
+        "docx/no-html-sinks": "error",
+        "docx/no-global-keyframes": "error",
+        "react/rules-of-hooks": "off",
+        "react/exhaustive-deps": "off"
+      }
+    },
+    // Vue chrome passes children to its own components as function slots.
+    {
+      "files": ["packages/vue/src/**/*.tsx", "packages/pro/src/vue/**/*.tsx"],
+      "rules": { "docx/vue-function-slots": "error" }
+    },
+    {
+      "files": ["packages/pro/src/__tests__/**/*vue*.{ts,tsx}"],
+      "rules": { "react/rules-of-hooks": "off", "react/exhaustive-deps": "off" }
+    },
+    // React adapter: no Vue imports.
+    {
+      "files": ["packages/react/src/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "vue",
+                  "vue/*",
+                  "@vue/*",
+                  "@vitejs/plugin-vue",
+                  "@docx-editor.dev/vue",
+                  "@docx-editor.dev/vue/*"
+                ],
+                "message": "React/core files cannot import Vue. Use @docx-editor.dev/core for shared logic. See openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md"
+              }
+            ]
+          }
+        ],
+        "docx/no-html-sinks": "error",
+        "docx/no-global-keyframes": "error"
+      }
+    },
+    // The document automation package is framework-neutral end to end.
+    {
+      "files": ["packages/editor-api/src/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "react",
+                  "react/*",
+                  "react-dom",
+                  "react-dom/*",
+                  "@vitejs/plugin-react",
+                  "@docx-editor.dev/react",
+                  "@docx-editor.dev/react/*",
+                  "vue",
+                  "vue/*",
+                  "@vue/*",
+                  "@vitejs/plugin-vue",
+                  "@docx-editor.dev/vue",
+                  "@docx-editor.dev/vue/*"
+                ],
+                "message": "Core stays UI-framework-agnostic. See openspec/changes/archive/2026-07-22-vue-editor-robust-implementation/specs/framework-isolation-lint/spec.md"
+              }
+            ]
+          }
+        ],
+        "docx/no-html-sinks": "error",
+        "docx/no-global-keyframes": "error"
+      }
+    },
+
+    // Per-file `max-lines` caps. scripts/check-max-lines-caps.mjs holds each one within 150
+    // lines of the file's length, so a cap is a ratchet, not a permanent ceiling.
+
+    // word-features.ts is the feature-support matrix — a flat data table with one entry per
+    // Word feature and no logic. It grows with every shipped feature by design, so its cap
+    // buys headroom and is never met by trimming an honest note.
+    {
+      "files": ["docs/site/data/word-features.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1400, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    // table-borders.ts resolves the collapsed border model: cell-over-table inheritance, the
+    // conflict rule, and the per-column ownership grid. Ownership is decided BY the conflict
+    // outcome, so they cannot be separated.
+    {
+      "files": ["packages/core/src/layout/table-borders.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1100, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+
+    // TODO: split these files and delete their blocks. Each cap is the file's length plus a
+    // little headroom, so nothing here can grow while the splits are pending, and a file that
+    // gets split drops back under the global cap and comes off this list.
+    {
+      "files": [
+        "packages/core/src/editor/chrome-controls.ts",
+        "packages/core/src/store/__tests__/table-resize-ops.test.ts",
+        "packages/core/src/store/__tests__/table-row-ops.test.ts",
+        "packages/react/src/editor/menu/parts.tsx"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1100, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/editor/surface-pointer.ts",
+        "packages/core/src/store/package/ooxml-drawing-rules.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1200, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/editor/__tests__/docx-editor.test.ts",
+        "packages/core/src/editor/__tests__/table-command-plan.test.ts",
+        "packages/core/src/editor/docx-editor-images.ts",
+        "packages/core/src/binding/tree-session.ts",
+        "packages/core/src/store/store/tree-package-store.ts",
+        "packages/core/src/store/store/tree-op-types.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1310, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/layout/drawing-layout.ts",
+        "packages/core/src/store/__tests__/image-resources.test.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1400, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/layout/semantic-hit-test.ts",
+        "packages/core/src/store/__tests__/table-column-ops.test.ts",
+        "packages/core/src/store/package/image-resources.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1450, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/react/test/toolbar-composition.test.tsx"],
+      "rules": {
+        "max-lines": ["error", { "max": 1500, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/editor/__tests__/surface-table-interaction.test.ts",
+        "packages/core/src/store/__tests__/content-control-ops.test.ts",
+        "packages/core/src/store/__tests__/drawing-package-edit.test.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1600, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/store/store/tree-op-drawings.ts",
+        "packages/core/src/store/store/tree-op-table-cell-properties.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1650, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/contracts/editor.ts",
+        "packages/core/src/layout/paragraph-flow.ts",
+        "packages/pro/src/__tests__/review-facade.test.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1700, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/core/src/store/__tests__/table-cell-properties.test.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1800, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": [
+        "packages/core/src/store/store/tree-op-content-controls.ts",
+        "packages/core/src/store/package/drawing-projection.ts"
+      ],
+      "rules": {
+        "max-lines": ["error", { "max": 1850, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    // semantic-table-layout.ts holds cell flow and row-split placement, which stay together
+    // because a row's real height is only known after its cells have laid out. A ceiling with
+    // headroom, not a blanket disable.
+    {
+      "files": ["packages/core/src/layout/semantic-table-layout.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1800, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/core/src/store/store/tree-op-tables.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1900, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/core/src/store/package/ooxml-tree.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 2050, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/core/src/editor/docx-editor.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 2675, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/core/src/store/__tests__/ooxml-tree.test.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 2350, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/core/src/automation/plan.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 2950, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    // semantic-records.ts is the record VOCABULARY: one interface per thing layout publishes,
+    // each with the note on what paint may and may not re-derive from it. Mostly comment.
+    {
+      "files": ["packages/core/src/layout/semantic-records.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 1100, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    // semantic-layout.ts is the story loop: section flow and paragraph fragmentation advance
+    // ONE cursor, and a paragraph that spans a page boundary is decided by both at once.
+    {
+      "files": ["packages/core/src/layout/semantic-layout.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 3050, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    {
+      "files": ["packages/fonts/src/google-catalog.generated.ts"],
+      "rules": {
+        "max-lines": ["error", { "max": 3500, "skipBlankLines": false, "skipComments": false }]
+      }
+    },
+    // The benchmark and scenario tools are command-line programs: their report is console output.
+    {
+      "files": ["benchmarks/**/*.ts"],
+      "rules": { "no-console": "off" }
+    }
+  ]
+}

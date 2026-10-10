@@ -1,0 +1,120 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+/**
+ * Vue review rail — preset layout with {@link useReview} data wiring.
+ *
+ * Compound part overrides (`List`, `Card`, `Accept`, …) match the React export names and
+ * mount when passed as slots; the preset arrangement is the default when no slot overrides
+ * are supplied. Full `asChild` merge semantics follow the React ladder and are typed on
+ * each part export for hosts that replace individual pieces.
+ *
+ * @packageDocumentation
+ * @public
+ */
+
+export {
+  reviewModule,
+  type CommentMarkerStyle,
+  type ResolvedReviewPane,
+  type ReviewModuleOptions,
+  type ReviewPaneOpening,
+  type ReviewPaneOptions,
+  type ReviewPaneOverflow,
+  type RevisionDisplay,
+} from '../review/review-module.ts';
+export {
+  collaborationModule,
+  type CollaborationModuleOptions,
+} from '../collaboration/collaboration-module.ts';
+export { type ProLicenseOptions } from '../license.ts';
+export {
+  DocxEditorReview,
+  useReviewItem,
+  type DocxEditorReviewNamespace,
+  type ReviewActionProps,
+  type ReviewBalloonProps,
+  type ReviewMarkersProps,
+  type ReviewPartProps,
+  type ReviewProps,
+} from './DocxEditorReview.tsx';
+export { useReviewAuthor } from './review-context.ts';
+export {
+  useReview,
+  useReviewOf,
+  useStackedReviewPositions,
+  type ReviewActivationOptions,
+  type ScrollPlacement,
+  type ReviewAdoptOptions,
+  type ReviewItemRevealEvent,
+  type ReviewItemRevealSource,
+  type ReviewItemView,
+  type UseReviewReturn,
+} from './useReview.ts';
+export {
+  useCollaborationStatus,
+  type UseCollaborationStatusReturn,
+} from './useCollaborationStatus.ts';
+export {
+  useCollaborationParticipants,
+  type UseCollaborationParticipantsReturn,
+} from './useCollaborationParticipants.ts';
+export {
+  useCollaborationSession,
+  type UseCollaborationSessionReturn,
+} from './useCollaborationSession.ts';
+export {
+  DocxEditorCollaborationRoot,
+  type CollaborationRootSource,
+  type DocxEditorCollaborationRootProps,
+} from './DocxEditorCollaborationRoot.ts';
+export {
+  useDocumentCollaboration,
+  type UseDocumentCollaborationConnectOptions,
+  type UseDocumentCollaborationOptions,
+  type UseDocumentCollaborationReturn,
+} from './useDocumentCollaboration.ts';
+export type {
+  CollaborationFailure,
+  CollaborationFailureCode,
+  CollaborationIdentity,
+  CollaborationParticipant,
+  CollaborationRemoteSelection,
+  CollaborationRemoteSelectionAddress,
+  CollaborationSelectionKind,
+  CollaborationStatus,
+  CollaborationStatusSnapshot,
+} from '@docx-editor.dev/core/collaboration';
+export type {
+  CollaborationBootstrap,
+  CollaborationIdentityUpdate,
+  CollaborationSession,
+} from '../collaboration/types.ts';
+export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
+export {
+  DocxEditorCollaboration,
+  type CollaborationAvatarProps,
+  type CollaborationAvatarRenderProps,
+  type CollaborationAvatarsProps,
+  type CollaborationCaretLabelRenderProps,
+  type CollaborationCaretLabelsProps,
+  type DocxEditorCollaborationNamespace,
+} from './DocxEditorCollaboration.ts';
+export type {
+  CollaborationStatusNoticeProps,
+  CollaborationStatusNoticeRenderProps,
+} from './CollaborationStatusNotice.ts';
+export type { CollaborationNoticeKind } from '../collaboration/status-notice.ts';
+export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.ts';
+export {
+  CustomNodeContextMenu,
+  type CustomNodeContextMenuProps,
+} from './CustomNodeContextMenu.tsx';
+export {
+  activatedCustomNodeOf,
+  resolveCustomNodeActivation,
+  useCustomNodeDefinitions,
+  type ResolvedCustomNodeActivation,
+} from './custom-node-activation.ts';

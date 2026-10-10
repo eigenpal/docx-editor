@@ -1,13 +1,17 @@
-# Contributing to @docx-editor.dev/react
+# Contributing to docx-editor.dev
 
-Thanks for your interest in contributing! This guide will help you get started.
+This guide covers setup, tests, and pull requests for the monorepo.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) (v1.0+)
-- [Node.js](https://nodejs.org/) (v18+)
+- [Bun](https://bun.sh/) 1.4.2, the release workflow version.
+- [Node.js](https://nodejs.org/) 24, the CI and release workflow version.
 
-## Development Setup
+These versions apply to repository development. Published packages declare their supported Node.js versions in their `engines` fields.
+
+## Development setup
+
+Clone the repository, install dependencies, and start the development server:
 
 ```bash
 # Clone the repo
@@ -22,28 +26,27 @@ bun run dev
 # Open http://localhost:5173
 ```
 
-Working on the parser, serializer, or layout engine? `bun run reference:fetch` pulls the gitignored ECMA-376 PDFs and supplementary ZIPs (~58 MB). The handwritten quick-refs and XSD schemas under `reference/` stay committed.
+If you work on parsing, serialization, or layout, run `bun run reference:fetch` to download the ECMA-376 reference files. The download includes about 58 MB of PDFs and ZIP archives. Git ignores these files. The repository includes reference summaries and XML schemas under `reference/`.
 
-## Running Tests
+## Demo deployment builds
+
+`bun run build:preview` builds five demos from workspace source and assembles `examples/parity/dist`. It checks assets and routing without a package build. CI runs this command on a clean checkout. Separate build and type checks verify package artifacts.
+
+Vercel runs `bun run build:pdf` and `bun run build:preview` for production and preview deployments. `bun run build` retains the full package-backed demo build for local verification. Vercel runs `bun install --frozen-lockfile` with Git hooks disabled, preserving restored dependencies between deployments.
+
+## Run tests
+
+Run one test file during development:
 
 ```bash
-# Type checking (fast, run often)
-bun run typecheck
-
-# Unit tests
-bun test
-
-# E2E tests (requires Playwright browsers)
-npx playwright install --with-deps chromium
-npx playwright test --timeout=30000 --workers=4
-
-# Single test file
-npx playwright test e2e/tests/formatting.spec.ts --timeout=30000
+bun test path/to/test.ts
 ```
 
-## Code Style
+Before submission, run the checks in [Make changes](#make-changes).
 
-The project uses ESLint and Prettier with pre-commit hooks (Husky + lint-staged), so formatting is handled automatically on commit.
+## Code style
+
+The project uses [oxlint](https://oxc.rs/docs/guide/usage/linter.html) and Prettier. Pre-commit hooks run both checks. The lint configuration is `.oxlintrc.json`, and repository-specific rules live in `scripts/oxlint/docx-rules.mjs`.
 
 ```bash
 # Manual lint/format
@@ -51,32 +54,71 @@ bun run lint:fix
 bun run format
 ```
 
-## Contributor License Agreement
+The pre-commit hook formats and lints staged files, then runs the full typecheck, parity, license, API, formatting, and lint checks. It prints the duration of each step. Local commits use TypeScript's incremental build information and a content-based Prettier cache; CI runs the uncached package commands. oxlint needs no cache. The first commit after creating or clearing these caches takes longer.
 
-Contributors are required to sign our [Contributor License Agreement](CLA.md). The CLA assistant will leave a comment on your first pull request with signing instructions — one short comment, about 30 seconds. That signature covers all of your future contributions.
+The Prettier cache lives under the root `node_modules/.cache/precommit/`. TypeScript writes build information under each workspace's `node_modules/.cache/precommit/`, outside the source and license scans. To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`, or `bun run format:check` without the hook's cache flags.
 
-## Making Changes
+## Contributor license agreement
 
-1. **Fork** the repository and create a branch from `main`
-2. **Read the code** before modifying it — understand the dual rendering system (see [Architecture](docs/ARCHITECTURE.md))
-3. **Make your changes** — keep them focused and minimal
-4. **Add/update tests** for your changes (see `e2e/` for E2E tests)
-5. **Verify** everything works:
+You must sign the [Contributor License Agreement](CLA.md). The CLA assistant adds signing instructions to your first pull request.
+
+## Make changes
+
+1. Fork the repository and create a branch from `main`.
+2. Read the [engine architecture](docs/architecture/production-engine-packages.md).
+3. Keep each change focused.
+4. Add or update package tests.
+5. Verify the change:
    ```bash
-   bun run typecheck && bun test && bun run build:packages
+   bun run typecheck
+   bun run lint
+   bun run format:check
+   bun run test
+   bun run check:parity
+   bun run api:check
+   bun run i18n:validate
    ```
-6. **Submit a PR** against `main` — the CLA bot will prompt you on your first one
+6. Add a changeset for code changes with `bun changeset`. Documentation, test, and CI-only changes do not need one.
+7. Submit a pull request against `main`.
 
-## Architecture Overview
+## Architecture overview
 
-The editor has two rendering systems:
+The canonical OOXML tree is the only editing state. Layout reads that tree and produces painted pages.
 
-- **Hidden ProseMirror** — the real editing state (selection, undo/redo, keyboard input)
-- **Visible Pages** (painter-model) — what the user sees, rebuilt from PM state on every change
+The painted pages are the editable surface. Browser mutations become tree operations instead of document markup.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture and [CLAUDE.md](CLAUDE.md) for the agent-facing quick reference (also useful for humans).
+ProseMirror is a projection inside `packages/core/src/binding/`. It never reconstructs the canonical tree.
 
-## Public API Surface
+See the [engine architecture](docs/architecture/production-engine-packages.md) and [public architecture guide](docs/site/content/core/architecture.mdx).
+
+## Write documentation
+
+Follow the [Google developer documentation style guide](https://developers.google.com/style/highlights) for READMEs, guides, feature descriptions, and release notes.
+
+- Lead with the task or behavior. Use active voice and address the reader as "you."
+- Keep sentences to 20 words and paragraphs to six sentences. Give each sentence one idea.
+- Use sentence-case headings, descriptive links, and exact identifiers in code formatting.
+- State prerequisites, defaults, units, and limits near the relevant example.
+- Explain failures and recovery. Link to details instead of repeating them in overviews.
+- Keep implementation history in design and review records.
+
+Every package needs a README with a title and purpose paragraph. Public packages also need an installation command. Keep the root package list complete, including conversion packages. Keep private workspace instructions separate from public installation instructions.
+
+Run the documentation checks before submission:
+
+```bash
+bun run check:docs
+```
+
+The checks cover all package READMEs, package `docs/` guides, example READMEs, and site MDX pages. They check selected prose rules, README structure, documented API exports, and MDX expressions. They do not prove full style compliance or validate every link or example. Review sentence length, heading case, links, and example behavior separately.
+
+For MDX source conventions, see [Site documentation source](docs/site/README.md). Check another authored guide with `bun run check:docs-style path/to/guide.md`.
+
+## Agent instructions
+
+The root [AGENTS.md](AGENTS.md) contains shared instructions and is tracked in Git. Update it when project conventions change.
+
+## Public API surface
 
 Every published package's `@public` exports are locked in `docs/api/<pkg-slug>/<entry>.api.md` snapshots generated by API Extractor. CI runs `bun run api:check` and fails on undocumented drift.
 
@@ -88,34 +130,42 @@ bun run api:extract
 git add docs/api/<pkg-slug>/
 ```
 
-The CI error message points at the source file for each drifted entry, so the fix is mechanical. Full details live in [CLAUDE.md](CLAUDE.md) under "Public API surface".
+The CI error names the source file for each changed entry. For more information, see [Public API](AGENTS.md#public-api).
 
-**Adding a `DocxEditorProps` field or `DocxEditorRef` method to either adapter** also requires updating `scripts/parity/parity.contract.json` — the cross-adapter parity contract that tracks which fields are shared, deliberately Vue-deferred, or Vue-exclusive. `bun run check:parity-contract` (also run in CI) fails until the contract acknowledges the new symbol. The error message names the symbol and tells you which bucket to add it to.
+If you add a `DocxEditorProps` field or `DocxEditorRef` method, update `scripts/parity/parity.contract.json`. The contract records shared, Vue-deferred, and Vue-exclusive members. Run `bun run check:parity-contract` to check the change.
 
-**Adding a new Vue composable**: declare a `Use<Name>Return` interface and annotate the function's return type with it. Without the annotation the snapshot recursively inlines core's internal types into Vue's public surface.
+If you add a Vue composable, declare a `Use<Name>Return` interface and annotate its return type. This prevents internal engine types from expanding into the public snapshot.
 
-**Adding a new published package**: edit `scripts/lib/packages.mjs` (one entry — name, root, slug, tsconfig, build hint). Add matching `api:extract` / `api:check` scripts in the new package's `package.json` delegating to `../../scripts/api-extractor.mjs --package <name>`. Then run `bun run api:extract && bun run docs:json` to generate snapshots.
+If you add a published package, register it in `scripts/lib/packages.mjs`. Include its name, root, slug, TypeScript configuration, and build hint. Add `api:extract` and `api:check` scripts to the package. Delegate them to `../../scripts/api-extractor.mjs --package <name>`, with `--local` for extraction. Run `bun run api:extract` and `bun run docs:json` to generate the outputs.
 
-### Consumer-facing JSON docs (`docs/json/`)
+### Generate JSON documentation
 
-The same `@public` surface is also emitted as structured JSON for downstream docs sites: `bun run docs:json` writes `docs/json/<pkg-slug>/<subpath>.json` per published subpath, plus a root `docs/json/index.json`. **The JSON is gitignored** — downstream sites (e.g. `docx-editor-page`) clone the repo and run the script themselves. CI runs `bun run docs:json` as a smoke test so generator breakage surfaces in this repo, not in the consumer's build.
+Run `bun run docs:json` to generate JSON from the public API. It writes one `docs/json/<pkg-slug>/<subpath>.json` file per published subpath and a root index.
 
-## Adapter Parity
+Git ignores these files. Documentation sites clone the repository and run the generator during their builds. CI runs the same command to detect generation failures.
 
-The editor ships first-party adapters for React (`packages/react`) and Vue (`packages/vue`). Both share `@docx-editor.dev/core`, which owns the parser, ProseMirror schema, layout engine, layout bridge (page mapping, footnote convergence, header/footer measurement), and serializer. Adapters only own their framework-specific shell, components, and lifecycle wiring.
+## Adapter parity
 
-**When you touch layout, parsing, or rendering logic, put it in core, not in an adapter.** If you copy a 30-line helper from React to Vue, you've created a divergence trap. The footnote convergence loop (`stabilizeFootnoteLayout` in `packages/core/src/flow-model/footnoteLayout.ts`) is the canonical example: one helper, both adapters call it.
+The editor ships React and Vue adapters. Both use `@docx-editor.dev/core` for document state, input, layout, paint, and serialization.
 
-Parity smoke tests live under `e2e/tests/parity/smoke/` and run each spec against both demos. Add one when you fix a bug that could plausibly affect rendering on either side.
+Put platform-neutral logic in core. Keep adapters limited to framework components, hooks, composables, and lifecycle integration.
 
-## Reporting Bugs
+Use `bun run check:parity` for adapter contract and surface parity. These checks do not establish browser behavior parity.
 
-Open an issue at [github.com/eigenpal/docx-editor/issues](https://github.com/eigenpal/docx-editor/issues) with:
+## Report bugs
 
-- Steps to reproduce
-- Expected vs actual behavior
-- Attach a `.docx` file if relevant (remove sensitive content first)
+Open a [GitHub issue](https://github.com/eigenpal/docx-editor/issues) with:
+
+- Steps to reproduce.
+- Expected and actual behavior.
+- A sanitized `.docx` file, when relevant.
+
+Every issue needs a `Bug`, `Feature`, or `Task` type. Maintainers also assign one `area:*` label and one `priority:*` label.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+Contributions to `packages/editor-api/`, `packages/pro/`, and `packages/docx-to-pdf/` use the EigenPal Pro License. Other code contributions use [Apache 2.0](LICENSE).
+
+## Collaboration compatibility
+
+After 2.18, changes to shared document behavior need an explicit compatibility assessment. Run `bun run collaboration:change`, then follow the [collaboration compatibility policy](docs/architecture/collaboration-compatibility.md). The policy covers version decisions, published-release tests, migration rehearsal, and release checks. Public document APIs must retain the Office.js contract.

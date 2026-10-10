@@ -3,8 +3,25 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-const packageDirs = ['react', 'vue', 'agents', 'i18n', 'nuxt'];
+// Discover publishable packages so new packages cannot bypass artifact checks.
+const packageDirs = readdirSync(path.join(root, 'packages')).filter((directory) => {
+  const manifest = path.join(root, 'packages', directory, 'package.json');
+  return existsSync(manifest) && JSON.parse(readFileSync(manifest, 'utf8')).private !== true;
+});
 const errors = [];
+
+// What a published artifact may name when it reaches for the engine: exactly the
+// subpaths core's own export map declares. Deriving the set instead of listing it
+// keeps this honest when core adds or retires a lane — a hand-written denylist ages
+// into false positives on subpaths that have since become public.
+const corePackageJson = JSON.parse(
+  readFileSync(path.join(root, 'packages/core/package.json'), 'utf8')
+);
+const publicCoreSubpaths = new Set(
+  Object.keys(corePackageJson.exports ?? {})
+    .filter((subpath) => subpath.startsWith('./'))
+    .map((subpath) => subpath.slice(2))
+);
 
 function filesBelow(directory) {
   if (!existsSync(directory)) return [];
@@ -26,35 +43,57 @@ for (const packageDir of packageDirs) {
 
   for (const [subpath, declaration] of Object.entries(packageJson.exports ?? {})) {
     for (const target of exportTargets(declaration)) {
-      if (!target.startsWith('./dist/')) continue;
+      if (!target.startsWith('./')) continue;
       if (!existsSync(path.resolve(packageRoot, target))) {
         errors.push(`${packageJson.name} ${subpath} points to missing ${target}`);
       }
     }
   }
 
-  for (const artifact of filesBelow(path.join(packageRoot, 'dist'))) {
-    if (!/\.(?:[cm]?js|d\.ts)$/.test(artifact)) continue;
+  const artifacts = ['dist', 'types'].flatMap((directory) =>
+    filesBelow(path.join(packageRoot, directory))
+  );
+  for (const artifact of artifacts) {
+    if (!/\.(?:[cm]?js|d\.[cm]?ts)$/.test(artifact)) continue;
     const content = readFileSync(artifact, 'utf8');
-    const isDeclaration = artifact.endsWith('.d.ts');
-    const leaksWorkspacePath =
+    const isDeclaration = /\.d\.[cm]?ts$/.test(artifact);
+    if (
       isDeclaration &&
-      (/(?:\.\.\/)+core\/src\//.test(content) ||
-        /\/packages\/[^/]+\/src\//.test(content) ||
-        /@docx-editor\.dev\/core\/(?:flow-model|pagination-model|painter-model|editor)(?:\/|['"])/.test(
-          content
-        ));
-    const importsPrivateCoreSubpath =
-      !isDeclaration &&
-      /(?:from\s*|import\s*\()\s*['"]@docx-editor\.dev\/core\/(?:flow-model|pagination-model|painter-model|editor)(?:\/|['"])/.test(
-        content
-      );
-    if (leaksWorkspacePath || importsPrivateCoreSubpath) {
+      (/(?:\.\.\/)+core\/src\//.test(content) || /\/packages\/[^/]+\/src\//.test(content))
+    ) {
       errors.push(`${path.relative(root, artifact)} exposes a workspace-only source path`);
+    }
+    if (isDeclaration) {
+      for (const [, request] of content.matchAll(
+        /\b(?:from\s*|import\s*\(\s*)['"](\.{1,2}\/[^'"]+)['"]/g
+      )) {
+        const target = path.resolve(path.dirname(artifact), request);
+        const candidates = [
+          target,
+          target.replace(/\.([cm]?)js$/, '.d.$1ts'),
+          `${target}.d.ts`,
+          path.join(target, 'index.d.ts'),
+        ];
+        if (!candidates.some(existsSync)) {
+          errors.push(`${path.relative(root, artifact)} references missing declaration ${request}`);
+        }
+      }
+    }
+
+    // A subpath core does not export resolves to nothing on a consumer's disk, so the
+    // failure lands at their `npm install`, not ours.
+    if (packageDir !== 'core') {
+      for (const [, subpath] of content.matchAll(/@docx-editor\.dev\/core\/([\w./-]+)/g)) {
+        if (!publicCoreSubpaths.has(subpath)) {
+          errors.push(
+            `${path.relative(root, artifact)} imports @docx-editor.dev/core/${subpath}, which core does not export`
+          );
+        }
+      }
     }
 
     if (!isDeclaration && artifact.endsWith('.js')) {
-      for (const match of content.matchAll(/\brequire\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
+      for (const match of content.matchAll(/\brequire\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g)) {
         const request = match[1];
         const target = path.resolve(path.dirname(artifact), request);
         const candidates = [target, `${target}.js`, path.join(target, 'index.js')];
@@ -67,9 +106,6 @@ for (const packageDir of packageDirs) {
     }
   }
 }
-
-// The `@docx-editor.dev/core/api` runtime-export check lives in the core repo —
-// core ships from npm and its dist/ is not present here.
 
 if (errors.length > 0) {
   console.error(errors.join('\n'));

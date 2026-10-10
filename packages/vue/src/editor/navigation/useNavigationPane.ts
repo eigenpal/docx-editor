@@ -1,0 +1,272 @@
+import {
+  computed,
+  ref,
+  shallowRef,
+  toValue,
+  watch,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+} from 'vue';
+import { scopeDispose } from '../scope-dispose';
+import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
+import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
+import { twipsToPixels } from '../../lib/units';
+import { inject } from 'vue';
+import { ReviewRailContext, useDocxEditor } from '../context';
+import { useEditorState } from '../useEditorState';
+import { useReviewGutter, visibleInlineEndReservation } from '../review-gutter';
+import {
+  NAVIGATION_PANE_WIDTH,
+  navigationPaneOverlays,
+  navigationPaneReservation,
+  navigationShift,
+} from './navigation-geometry';
+import { useNavigationLayoutStore, useNavigationViewportElement } from './navigation-layout';
+import { trackWidestPage, type WidestPageTracker } from './navigation-widest-page';
+
+/** @public */
+export type NavigationTab = 'headings' | 'find';
+
+/** @internal */
+export interface PaneGeometry {
+  readonly pageSetup: PageSetup | null;
+  readonly zoom: number;
+  readonly reviewPaneOpen: boolean;
+  readonly fitting: boolean;
+}
+
+/** @internal */
+export const selectPaneGeometry = (snapshot: EditorSnapshot): PaneGeometry => {
+  const mode = snapshot.zoomMode;
+  return {
+    pageSetup: snapshot.pageSetup ?? null,
+    zoom: snapshot.zoom,
+    reviewPaneOpen: snapshot.reviewPaneOpen ?? true,
+    fitting:
+      mode?.type === 'fit' &&
+      snapshot.zoom < (mode.maxZoom ?? ZOOM_MAX) &&
+      snapshot.zoom > (mode.minZoom ?? ZOOM_MIN),
+  };
+};
+
+const samePageGeometry = (a: PaneGeometry, b: PaneGeometry) =>
+  a.zoom === b.zoom &&
+  a.reviewPaneOpen === b.reviewPaneOpen &&
+  a.fitting === b.fitting &&
+  a.pageSetup?.pageWidthTwips === b.pageSetup?.pageWidthTwips;
+
+const selectPageCount = (snapshot: EditorSnapshot): number => snapshot.page.total;
+
+/** @public */
+export interface UseNavigationPaneOptions {
+  defaultOpen?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  defaultTab?: NavigationTab;
+  tab?: NavigationTab;
+  onTabChange?: (tab: NavigationTab) => void;
+  paneWidth?: number;
+}
+
+/** @public */
+export interface UseNavigationPaneResult {
+  readonly open: ComputedRef<boolean>;
+  readonly setOpen: (open: boolean) => void;
+  readonly toggle: () => void;
+  readonly tab: ComputedRef<NavigationTab>;
+  readonly setTab: (tab: NavigationTab) => void;
+  readonly paneWidth: ComputedRef<number>;
+  readonly shift: ComputedRef<number>;
+  /**
+   * Whether the open pane covers the page instead of moving it. True on a viewport too
+   * narrow to show a readable page beside the pane (see `NAVIGATION_PANE_MIN_PAGE_ROOM`);
+   * `shift` is then 0, and `DocxEditorNavigation` closes after a heading or result is picked.
+   */
+  readonly overlay: ComputedRef<boolean>;
+}
+
+/** @public */
+export function useNavigationPane(
+  options: MaybeRefOrGetter<UseNavigationPaneOptions> = {}
+): UseNavigationPaneResult {
+  const liveOptions = computed(() => toValue(options));
+  const uncontrolledOpen = ref(liveOptions.value.defaultOpen ?? false);
+  const uncontrolledTab = ref<NavigationTab>(liveOptions.value.defaultTab ?? 'headings');
+
+  watch(
+    () => liveOptions.value.defaultOpen,
+    (next) => {
+      if (next !== undefined) uncontrolledOpen.value = next;
+    },
+    { immediate: true }
+  );
+  watch(
+    () => liveOptions.value.defaultTab,
+    (next) => {
+      if (next !== undefined) uncontrolledTab.value = next;
+    },
+    { immediate: true }
+  );
+
+  const openVal = computed(() => liveOptions.value.open ?? uncontrolledOpen.value);
+  const tabVal = computed(() => liveOptions.value.tab ?? uncontrolledTab.value);
+  const isOpenControlled = computed(() => liveOptions.value.open !== undefined);
+  const isTabControlled = computed(() => liveOptions.value.tab !== undefined);
+  const paneWidthVal = computed(() => liveOptions.value.paneWidth ?? NAVIGATION_PANE_WIDTH);
+
+  const setOpen = (next: boolean) => {
+    if (!isOpenControlled.value) uncontrolledOpen.value = next;
+    liveOptions.value.onOpenChange?.(next);
+  };
+  const toggle = () => setOpen(!openVal.value);
+  const setTab = (next: NavigationTab) => {
+    if (!isTabControlled.value) uncontrolledTab.value = next;
+    liveOptions.value.onTabChange?.(next);
+  };
+
+  const store = useNavigationLayoutStore();
+  const viewport = useNavigationViewportElement();
+  const rail = inject(ReviewRailContext, shallowRef({ mounted: 0, register: () => () => {} }));
+  const geometry = useEditorState(selectPaneGeometry, samePageGeometry);
+  const editor = useDocxEditor();
+  const pageCount = useEditorState(selectPageCount);
+  const viewportWidth = ref(0);
+  const widestPage = ref<number | null>(null);
+  const inlineEndReservation = ref(0);
+  const inlineStartReservation = ref(0);
+  // The review gutter the viewport pads by. A source of the measurement below: the gutter
+  // settles AFTER the pane state it follows, so a measurement keyed on the pane state alone
+  // read the previous gutter and left the page off its reservation by the difference.
+  const reviewGutter = useReviewGutter();
+
+  scopeDispose(
+    watch(
+      [
+        viewport,
+        openVal,
+        () => geometry.value.reviewPaneOpen,
+        () => rail.value.mounted,
+        reviewGutter,
+      ],
+      (_values, _previous, onCleanup) => {
+        const el = viewport.value;
+        if (!el) {
+          viewportWidth.value = 0;
+          inlineEndReservation.value = 0;
+          inlineStartReservation.value = 0;
+          return;
+        }
+        const measure = () => {
+          viewportWidth.value = el.clientWidth;
+          const style = getComputedStyle(el);
+          const padding = Number.parseFloat(style.paddingInlineEnd);
+          inlineEndReservation.value = Number.isFinite(padding) ? padding : 0;
+          const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
+          inlineStartReservation.value = Number.isFinite(strip) ? strip : 0;
+        };
+        measure();
+        if (typeof ResizeObserver === 'undefined') return;
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        onCleanup(() => observer.disconnect());
+      },
+      { flush: 'post' }
+    )
+  );
+
+  const lastPageWidthTwips = ref<number | null>(null);
+  watch(
+    () => geometry.value.pageSetup,
+    (pageSetup) => {
+      if (pageSetup) lastPageWidthTwips.value = pageSetup.pageWidthTwips;
+    },
+    { immediate: true }
+  );
+
+  // The page stack is as wide as its WIDEST page (see `navigation-widest-page.ts`). Tracked
+  // only while the pane is open; page-count steps and caret-section changes nudge a settled
+  // re-read, and the tracker itself listens for document changes.
+  let widestTracker: WidestPageTracker | null = null;
+  scopeDispose(
+    watch(
+      [openVal, editor],
+      ([isOpen, instance], _previous, onCleanup) => {
+        if (!isOpen || !instance) return;
+        const tracker = trackWidestPage(instance, (next) => {
+          widestPage.value = next;
+        });
+        widestTracker = tracker;
+        onCleanup(() => {
+          tracker.dispose();
+          if (widestTracker === tracker) widestTracker = null;
+        });
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+  scopeDispose(
+    watch([pageCount, () => geometry.value.pageSetup?.pageWidthTwips], () => widestTracker?.nudge())
+  );
+
+  const reservation = computed(() => navigationPaneReservation(paneWidthVal.value));
+  const overlay = computed(
+    () =>
+      openVal.value &&
+      navigationPaneOverlays(
+        // A scrolling review column counts only its visible marker strip.
+        viewportWidth.value -
+          visibleInlineEndReservation(reviewGutter.value, inlineEndReservation.value),
+        reservation.value
+      )
+  );
+
+  const shift = computed(() => {
+    if (!openVal.value || overlay.value) return 0;
+    const pageWidthTwips = geometry.value.pageSetup?.pageWidthTwips ?? lastPageWidthTwips.value;
+    if (pageWidthTwips === null) return 0;
+    return navigationShift({
+      viewportWidth: viewportWidth.value,
+      pageWidthPx:
+        Math.max(widestPage.value ?? 0, twipsToPixels(pageWidthTwips)) * geometry.value.zoom,
+      reservation: reservation.value,
+      inlineEndReservation: inlineEndReservation.value,
+      inlineStartReservation: inlineStartReservation.value,
+      docked: geometry.value.fitting,
+    });
+  });
+
+  scopeDispose(
+    watch(
+      [() => store, shift],
+      () => {
+        if (!store) return;
+        store.setShift(shift.value);
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+  scopeDispose(() => store?.setShift(0));
+
+  scopeDispose(
+    watch(
+      [() => store, openVal, overlay, reservation],
+      () => {
+        // An overlaying pane reserves nothing: it covers the page and leaves the gutters alone.
+        store?.setReservation(openVal.value && !overlay.value ? reservation.value : 0);
+      },
+      { immediate: true, flush: 'post' }
+    )
+  );
+  scopeDispose(() => store?.setReservation(0));
+
+  return {
+    open: openVal,
+    setOpen,
+    toggle,
+    tab: tabVal,
+    setTab,
+    paneWidth: paneWidthVal,
+    shift,
+    overlay,
+  };
+}

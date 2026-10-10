@@ -1,21 +1,31 @@
 {
-  "$schema": "https://unpkg.com/@changesets/config@3.1.3/schema.json",
-  "changelog": "@changesets/cli/changelog",
+  "$schema": "https://unpkg.com/@changesets/config@4.0.0/schema.json",
+  "changelog": "../scripts/changesets/changelog.mjs",
   "commit": false,
   "fixed": [
     [
+      "@docx-editor.dev/core",
       "@docx-editor.dev/react",
-      "@docx-editor.dev/agents",
+      "@docx-editor.dev/editor-api",
       "@docx-editor.dev/vue",
-      "@docx-editor.dev/nuxt",
-      "@docx-editor.dev/i18n"
+      "@docx-editor.dev/i18n",
+      "@docx-editor.dev/pro",
+      "@docx-editor.dev/fonts",
+      "@docx-editor.dev/fonts-cjk",
+      "@docx-editor.dev/docx-to-markdown",
+      "@docx-editor.dev/docx-to-pdf"
     ]
   ],
   "linked": [],
+  "ignore": [],
   "access": "public",
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  },
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": [
-    "@docx-editor.dev/core-contract"
-  ]
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+    "onlyUpdatePeerDependentsWhenOutOfRange": true
+  }
 }

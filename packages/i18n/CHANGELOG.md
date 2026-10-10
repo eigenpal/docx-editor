@@ -1,5 +1,136 @@
 # @docx-editor.dev/i18n
 
+## 2.27.0
+
+## 2.26.0
+
+## 2.25.0
+
+### Patch Changes
+
+- 5d02def: Remove accidentally included example-only messages from the locale catalogs.
+
+## 2.24.0
+
+### Minor Changes
+
+- 3a8853f: Support inserting, editing, deleting, moving, and resizing body textboxes, with synchronized edits and remote cursors during collaboration. Fix textbox pagination and caret visibility, and keep text direction commands in Format.
+- 567c1e5: Add Japanese translations through the `ja` export and the `@docx-editor.dev/i18n/ja` subpath.
+
+## 2.23.0
+
+### Minor Changes
+
+- 5981e48: Add a Spanish (`es`) locale, available as the `es` export and the `@docx-editor.dev/i18n/es` subpath.
+
+### Patch Changes
+
+- 3b95523: Fix translation differences and fill missing interface translations across nine languages.
+
+## 2.22.0
+
+## 2.21.1
+
+### Patch Changes
+
+- 6a7b93a: Match Word when resolving paragraph breaks before tables, numbering-reference insertion history, and partial section-property history. Preserve protection and selected-decision boundaries, and expose structural operation details and accurate table/cell review anchors.
+
+  Show structural decisions in the React and Vue review sidebars by default, with descriptive row, cell, merge, and numbering labels. Keep run/paragraph formatting in balloons while showing formatting without a painted anchor in the sidebar.
+
+## 2.21.0
+
+## 2.20.0
+
+### Patch Changes
+
+- c10916a: Resolve filtered or explicitly selected revisions in one undo unit. Skip unsupported groups and report remaining decisions; retain strict story-wide automation methods.
+
+## 2.19.1
+
+## 2.19.0
+
+## 2.18.0
+
+## 2.17.0
+
+## 2.16.2
+
+## 2.16.1
+
+## 2.16.0
+
+### Patch Changes
+
+- 00666a8: Render, edit, search, and copy text inside smart tags, inline custom XML, and bidirectional run wrappers, and add text form selection, boundary deletion, replacement, field options in React and Vue, and protected filling; Fixes #710
+
+## 2.15.1
+
+## 2.15.0
+
+## 2.14.1
+
+## 2.14.0
+
+## 2.13.0
+
+## 2.12.0
+
+## 2.11.0
+
+## 2.10.0
+
+## 2.9.2
+
+## 2.9.1
+
+## 2.9.0
+
+## 2.8.0
+
+## 2.7.0
+
+## 2.6.1
+
+## 2.6.0
+
+## 2.5.0
+
+## 2.4.1
+
+## 2.4.0
+
+## 2.3.1
+
+## 2.3.0
+
+## 2.2.1
+
+## 2.2.0
+
+### Minor Changes
+
+- 568ccf7: The catalogue drops 456 keys nothing renders, mostly strings for dialogs that no longer ship, and every community locale is pruned to match. `TranslationKey` and `LocaleStrings` narrow accordingly, so naming a removed key is now a type error rather than a lookup that returned nothing visible.
+
+## 2.1.3
+
+## 2.1.2
+
+## 2.1.1
+
+## 2.1.0
+
+### Patch Changes
+
+- 232728c: Complete the German, French, Hebrew, Hindi, Indonesian, Polish, Brazilian Portuguese, Turkish, and Simplified Chinese translations; previously missing strings fell back to English.
+
+## 2.0.1
+
+## 2.0.0
+
+### Patch Changes
+
+- 26095c6: Published packages now ship a `THIRD_PARTY_NOTICES.md` reproducing the license of every third-party package bundled into their release artifacts.
+
 ## 1.10.0
 
 ## 1.9.0
@@ -64,9 +195,7 @@
 
 ### Patch Changes
 
-- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic
-  locale loading can code-split a single locale instead of bundling the whole
-  set:
+- fe4cb94: Add per-locale subpath imports to `@docx-editor.dev/i18n` so dynamic locale loading can code-split a single locale instead of bundling the whole set:
 
   ```ts
   // Static — bundler ships only this locale's strings
@@ -76,21 +205,11 @@
   const pl = (await import('@docx-editor.dev/i18n/pl')).default;
   ```
 
-  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`,
-  `/zh-CN`. The named exports on the package root still work — pick the
-  ergonomic path for static lists, the subpath for runtime locale switching.
+  Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. The named exports on the package root still work — pick the ergonomic path for static lists, the subpath for runtime locale switching.
 
-  Also re-export `createEmptyDocument`, `createDocumentWithText`, and
-  `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and
-  `@docx-editor.dev/vue` so the common "spawn a blank editor"
-  affordance no longer requires installing `-core` alongside the adapter.
+  Also re-export `createEmptyDocument`, `createDocumentWithText`, and `CreateEmptyDocumentOptions` from `@docx-editor.dev/react` and `@docx-editor.dev/vue` so the common "spawn a blank editor" affordance no longer requires installing `-core` alongside the adapter.
 
-  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`,
-  `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`,
-  `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main
-  `@docx-editor.dev/core` entry. They were already public via
-  `@docx-editor.dev/core/headless`; the main entry just hadn't been
-  re-exporting them.
+  Surface `Comment`, `CommentRangeStart`, `CommentRangeEnd`, `TrackedChangeInfo`, `TrackedRunChange`, `Insertion`, `Deletion`, `MoveFrom`, `MoveTo`, and `ParagraphContent` from the main `@docx-editor.dev/core` entry. They were already public via `@docx-editor.dev/core/headless`; the main entry just hadn't been re-exporting them.
 
 ## 1.0.0
 

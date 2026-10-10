@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../../docx-editor-children';
+import type { ReactNode } from 'react';
 /**
  * TableToolbar Component
  *
@@ -12,8 +14,7 @@
  */
 
 import React from 'react';
-import type { CSSProperties, ReactNode } from 'react';
-import type { Table } from '@docx-editor.dev/core/types/document';
+import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 import { useTranslation } from '../../i18n';
 
@@ -110,11 +111,11 @@ export interface TableSelection {
 }
 
 /**
- * Context for table operations
+ * Context for table operations. Derivable from the engine's selected-table
+ * summary (`Editor.getSelectedTable()`); structure edits themselves go through
+ * `Editor.exec` table commands, so no table content model appears here.
  */
 export interface TableContext {
-  /** The table being edited */
-  table: Table;
   /** Current selection within the table */
   selection: TableSelection;
   /** Whether multiple cells are selected (for merge) */
@@ -125,13 +126,6 @@ export interface TableContext {
   rowCount: number;
   /** Total number of columns */
   columnCount: number;
-}
-
-export interface TableSplitConfig {
-  minRows: number;
-  minCols: number;
-  initialRows: number;
-  initialCols: number;
 }
 
 /**
@@ -155,7 +149,7 @@ export interface TableToolbarProps {
   /** Position of the toolbar */
   position?: 'top' | 'floating';
   /** Custom render for additional buttons */
-  children?: ReactNode;
+  children?: DocxEditorChildren;
 }
 
 /**
@@ -539,26 +533,13 @@ export function TableToolbar({
 }
 
 // ============================================================================
-// TABLE OPERATIONS (re-exported from TableToolbar/operations.ts)
+// TABLE SELECTION HELPERS (re-exported from TableToolbar/operations.ts)
 // ============================================================================
 
 export {
-  createTableContext,
-  getColumnCount,
-  getCellAt,
   isMultiCellSelection,
   getSelectionBounds,
   isCellInSelection,
-  createEmptyRow,
-  createEmptyCell,
-  getTableSplitCellDialogConfig,
-  splitTableCell,
-  addRow,
-  deleteRow,
-  addColumn,
-  deleteColumn,
-  mergeCells,
-  splitCell,
   getActionLabel,
   isDeleteAction,
   handleTableShortcut,

@@ -1,0 +1,97 @@
+---
+title: DOCX to PDF
+seoTitle: DOCX to PDF
+description: Convert DOCX documents to PDF on Node.js with searchable text and native comments.
+category: Export formats
+---
+
+`@docx-editor.dev/docx-to-pdf` converts DOCX documents to PDF using Core's pagination, font resolution, and positioned glyphs. It runs on Node.js. Browser applications send documents to a server for conversion.
+
+The package uses the EigenPal Pro License. Production use requires a commercial agreement.
+
+## Install the package
+
+Use Node.js `^20.16.0 || >=22.3.0`. Install the converter and its required engine peer:
+
+```sh
+npm install @docx-editor.dev/docx-to-pdf @docx-editor.dev/core
+```
+
+For Chinese, Japanese, or Korean text, supply suitable fonts or install the optional `@docx-editor.dev/fonts-cjk` package. The converter finds the package without configuration. For more information, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts).
+
+## Convert a document
+
+Read the DOCX bytes, convert the document, and save the PDF:
+
+```ts
+import { readFile, writeFile } from 'node:fs/promises';
+import { exportPdf } from '@docx-editor.dev/docx-to-pdf';
+
+const source = await readFile('document.docx');
+const result = await exportPdf(source, {
+  displayMode: 'proposed',
+  comments: true,
+});
+
+await writeFile('document.pdf', result.bytes);
+```
+
+## Configure conversion
+
+By default, export includes proposed revisions and preserves comments as native PDF annotations. Conversion preserves the source DOCX.
+
+Set `comments: false` to omit annotations. Set `displayMode` to `'original'` or `'all-markup'` to change how revisions appear.
+
+The default `fidelityPolicy: 'strict'` rejects unsupported or approximate output. Use `'best-effort'` to receive available output with `result.diagnostics`.
+
+Core's `fontPolicy` controls failed font sources and incomplete face coverage. Inspect `result.fontResolution` for the fonts used in the PDF.
+
+## Handle limits and failures
+
+Set `maxPages`, `maxOutputBytes`, and `timeoutMs` for your conversion workload. `maxPages` checks completed layout before painting. `maxOutputBytes` checks encoded output. Neither option limits process memory.
+
+Pass `signal` to cancel conversion between processing batches.
+
+`PdfPageLimitError` and `PdfOutputLimitError` include `limit`, `actual`, and stable `code` fields. `PdfFidelityError.diagnostics` explains a strict refusal. `PdfDocumentOpenError.reason` identifies rejected input.
+
+A `font-origin-failed` diagnostic identifies source failures that fallback sources can recover from. Inspect `fontResolution.originFailures` for causes. Set `fontPolicy: 'strict'` when source failures must reject conversion.
+
+## Configure server fonts
+
+Set `useSystemFonts: false` for consistent font selection across hosts. Supply `fonts` to override packaged sources. Supply `lastResortFonts` to resolve missing faces after embedded fonts and before generic substitutes. Import `createFontSource` and `defineFontResolver` from the converter package.
+
+For font sources and examples, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts).
+
+## Reuse a conversion session
+
+Use `openDocumentForExport` and `exportPdfFrom` to reuse font resolution and layout. Pass the same session to Markdown's `exportMarkdownFrom` when you need both formats. Dispose the session in `finally` after all exports. An export failure does not dispose a caller-owned session.
+
+Page diagnostics include one-based `pageNumber`, consistent with Markdown warnings. They also include zero-based `pageIndex`.
+
+## Supported content
+
+The exporter supports searchable multilingual text, tables, images, notes, textboxes, structured equations, links, and comments. Arabic joining continues across formatting runs. The PDF text layer preserves logical word order for Arabic, Persian, and Hebrew text extraction.
+
+Supported vector shapes include horizontal and vertical lines, including lines within groups. Shape outlines retain their full width. The converter reads PNG and JPEG images even when DOCX metadata declares another supported raster format. Supported declarations include PNG, JPEG, GIF, BMP, and WebP.
+
+Charts, rotated table-cell text, and advanced image effects produce diagnostics. For detailed coverage and limits, see [Word feature support](/docs/2.x/word-fidelity).
+
+## Try the demo
+
+[Try the DOCX to PDF demo](https://docx-to-pdf.docx-editor.dev/).
+
+1. Edit the sample or select **Open DOCX**.
+2. Select **Generate PDF** to preview the result.
+3. Select **Download PDF** to save the result.
+
+After further edits, select **Regenerate PDF** to update the preview. The demo runs conversions on request and does not retain uploaded documents or generated PDFs.
+
+## Export from the editor
+
+For File menu setup in React and Vue, see [Export Markdown and PDF](/docs/2.x/guides/export).
+
+## Next steps
+
+- Return PDF responses with [Integrate PDF conversion](/docs/2.x/export/pdf/integrations).
+- Review options, diagnostics, and limits in [PDF export API](/docs/2.x/export/pdf/api).
+- Share settings and sessions with [Compare PDF and Markdown conversion](/docs/2.x/export/pdf/markdown-contract).

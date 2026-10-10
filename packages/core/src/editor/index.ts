@@ -1,0 +1,552 @@
+/**
+ * `@docx-editor.dev/core/editor` — the editor facade and its chrome vocabulary.
+ *
+ * `createDocxEditor` implements the full `Editor` contract over a paginated surface, and the
+ * chrome registry (`CHROME_GROUPS`, `ChromeSlotId`) is the toolbar taxonomy both adapters derive
+ * their default arrangement from. Enabled state has exactly one source — `toolbarCommandState`,
+ * which asks the engine — so a control and the engine can never disagree.
+ *
+ * @packageDocumentation
+ * @public
+ */
+// Lane: editor. Responsibilities and dependency rules:
+// docs/architecture/production-engine-packages.md.
+//
+// Browser composition root: composes the typed OOXML tree session, layout pagination,
+// and the paginated surface into the PM-free Editor contract.
+
+export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
+export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
+export {
+  createLayoutShaping,
+  disposeLayoutShaping,
+  toEditorFontError,
+} from './font-configuration.ts';
+export { LOADING_SNAPSHOT } from './loading-snapshot.ts';
+export {
+  MAX_RESOLVER_FAMILIES,
+  DEFAULT_FONT,
+  WORD_DEFAULT_FONT,
+  composeFontConfiguration,
+  type FontConfigurationBase,
+  type FontConfigurationFragment,
+  type FontResolutionRequest,
+  type FontResolver,
+} from './font-composition.ts';
+export {
+  FONT_RESOLVER_BRAND,
+  FONT_RESOLVER_MARK_KEY,
+  composeFontOrigins,
+  defineFontResolver,
+  isFontResolver,
+  type ComposeFontOriginsOptions,
+  type FontOrigin,
+  type FontOriginFailure,
+  type FontResolverMark,
+  type MarkedFontResolver,
+} from './font-resolver.ts';
+export { blankDocumentBytes } from './blank-document.ts';
+export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
+/**
+ * The part a node id names, read from the live package.
+ *
+ * Published because a module building on the surface needs a way to reach a node's own part for
+ * a READ without opening — and permanently retaining — that story's store.
+ */
+export { partOfNodeId } from './surface-scope.ts';
+/**
+ * How a section-addressed op names the section a caret is in.
+ *
+ * Published because `PaginatedSurface.sectionAnchorParagraphAt` returns it, and a host typing
+ * against that member could otherwise not name what it gets back.
+ */
+export type { SectionAnchor } from './section-scope.ts';
+export { customFonts, type CustomFontsOptions, type CustomFontsResolver } from './custom-fonts.ts';
+export {
+  createFontSource,
+  loadFonts,
+  type FontLoadFailure,
+  type FontLoadFailureReason,
+  type FontUrlSource,
+  type LoadFontsRequest,
+  type LoadFontsResult,
+} from './load-fonts.ts';
+export {
+  generateRulerTicks,
+  rulerPageBox,
+  PX_PER_INCH,
+  PX_PER_CM,
+  type RulerTick,
+  type RulerUnit,
+} from './ruler-ticks.ts';
+export {
+  dragIndent,
+  handlePosition,
+  snapTwips,
+  SNAP_TWIPS_CM,
+  SNAP_TWIPS_INCH,
+  TWIPS_PER_CM,
+  TWIPS_PER_INCH,
+  type RulerDragOptions,
+  type RulerIndent,
+  type RulerIndentHandle,
+  type RulerPageMetrics,
+} from './ruler-indent.ts';
+export {
+  chromeProbeForSlot,
+  chromeSlotIsToggle,
+  commandForSlot,
+  commandForSlotValue,
+  commandForTableChromeSlotValue,
+  runSave,
+  runTableChromeCommand,
+  runTableCommand,
+  runToolbarCommand,
+  tableChromeToolbarState,
+  tableCommandToolbarState,
+  toolbarCommandState,
+  toolbarCommandStates,
+  type RunTableChromeCommandResult,
+  type ToolbarCommandState,
+} from './toolbar-commands.ts';
+export { editorCommandKey } from './command-key.ts';
+export {
+  arrangeToolbarGroups,
+  collapseOrder,
+  sameOverflow,
+  toolbarGroupPriority,
+  toolbarOverflowGroups,
+  toolbarPanelPlacement,
+  toolbarPopupLeft,
+  TOOLBAR_COLLAPSE_ORDER,
+  TOOLBAR_OVERFLOW_HYSTERESIS,
+  TOOLBAR_PANEL_EDGE_MARGIN,
+  TOOLBAR_PINNED_GROUPS,
+  type ToolbarFitInput,
+  type ToolbarHostGroupPlacement,
+  type ToolbarPanelPlacement,
+} from './toolbar-fit.ts';
+export {
+  barRoomWidth,
+  collapsibleGroupCost,
+  controlsOverflow,
+  readAvailableWidth,
+  readColumnGap,
+  readInlineMargins,
+  separatorLeadingCost,
+  trailingGapCost,
+  type BarRoomInput,
+} from './toolbar-measure.ts';
+export { chordLetter } from './chord-letter.ts';
+export { tableCommandState } from './docx-editor-derive.ts';
+export {
+  applyTableChromePick,
+  DEFAULT_TABLE_CHROME_DRAFT,
+  defaultTableLabel,
+  isTableChromeSlot,
+  probeTableChromeCommand,
+  TABLE_BORDER_STYLE_OPTIONS,
+  TABLE_BORDER_TARGET_OPTIONS,
+  TABLE_BORDER_WIDTH_OPTIONS,
+  TABLE_CHROME_SLOT_IDS,
+  tableChromeLabelKeyForTarget,
+  tableChromeIconPaths,
+  tableChromeVisible,
+  type TableBorderTargetValue,
+  type TableBorderStyleOption,
+  type TableBorderTargetOption,
+  type TableBorderWidthOption,
+  type TableChromeDraft,
+  type TableChromePick,
+  type TableChromeSlotId,
+  type TableInteractionLabelKey,
+} from './table-chrome.ts';
+
+export {
+  CHROME_GROUPS,
+  CHROME_MENUS,
+  CHROME_UNAVAILABLE_KEY,
+  chromeControlCount,
+  chromeMenuSlots,
+  chromeSlotId,
+  defaultChromeGroups,
+  formattingBarChromeGroups,
+  type ChromeControl,
+  type ChromeControlId,
+  type ChromeControlState,
+  type ChromeGroup,
+  type ChromeGroupId,
+  type ChromeMenu,
+  type ChromeMenuEntry,
+  type ChromeMenuId,
+  type ChromeMenuItemEntry,
+  type ChromeMenuSeparatorEntry,
+  type ChromeMenuSubmenuEntry,
+  type ChromeSlotId,
+} from './chrome-controls.ts';
+export {
+  mountPaginatedSurface,
+  type DrawingSelectionIntent,
+  type OpenPaginatedResult,
+  type PaginatedSurface,
+  type PaginatedSurfaceOptions,
+  type PaginatedSurfaceState,
+  type ParagraphFlags,
+  type SurfaceParagraphFormat,
+  type ParagraphPropertyEdit,
+  type ParagraphTabStop,
+  type RemoteCaretLabelAnchor,
+  type RemoteCaretLabelHost,
+  type SectionBreakInsertType,
+  type ReviewWriteIntent,
+  type SurfaceFormatting,
+} from './paginated-surface.ts';
+export {
+  createDocxEditor,
+  type DocxEditorInstance,
+  type DocxEditorConfig,
+  type EquationChromeHandlers,
+  type HyperlinkChromeHandlers,
+} from './docx-editor.ts';
+// `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
+// has to export the answer too.
+export type { FontMeasurementState } from './docx-editor-types.ts';
+// `DocxEditorConfig.fieldResults` takes it.
+export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
+// Automation over an editor that is already open. The protocol itself lives in the neutral
+// automation subpath — only the adapter that needs a live editor ships from here, and only as
+// a factory: there is no composition hook a consumer could point at a second document model.
+export { BROWSER_AUTOMATION_CAPABILITIES, createBrowserAutomationHost } from './automation-host.ts';
+// The capability seam: what `createDocxEditor({ modules })` accepts and what a
+// capability package (the pro review module) implements.
+export {
+  resolveEditorModules,
+  type CollectReviewItems,
+  type EditorModule,
+  type EditorModuleRegistry,
+  type ReviewModelInput,
+  type ReviewDisplayMode,
+  type ReviewModuleContribution,
+  type CollaborationModuleContribution,
+} from '../contracts/modules.ts';
+export {
+  applyThemeShade,
+  applyThemeTint,
+  lowerColorValueForBorder,
+  lowerColorValueForFill,
+  resolveColorValueToCss,
+  resolveThemeColorHex,
+  validateThemeModifier,
+} from './color-value-lower.ts';
+export type { ColorLowerResult } from './color-value-lower.ts';
+export {
+  canExecuteImageCommand,
+  captureImageMutationPreconditions,
+  executeImageCommand,
+  selectedImageStateOf,
+  selectedDrawingOverlayTargetOf,
+  computeMovedImagePosition,
+  computeResizedImageExtentEmu,
+  isStaleImageInteractionCommit,
+  pointsToEmu,
+  emuToOverlayPoints,
+  IMAGE_OVERLAY_NUDGE_PT,
+  IMAGE_OVERLAY_NUDGE_SHIFT_PT,
+  EMU_PER_POINT,
+  type ImageContext,
+  type SelectedImageState,
+  type ImageInteractionSession,
+  type ImageOverlayScrollPort,
+  type ImageResizeHandle,
+  type SelectedDrawingOverlayTarget,
+} from './docx-editor-images.ts';
+export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
+// The fit's vocabulary — only the part an adapter actually needs, so the published surface
+// stays something we can keep. The two canonical modes, because a zoom control has to render
+// its own selected state and must not respell a mode the engine already names; the two
+// comparisons, because that state is a value comparison and re-deriving it per adapter is how
+// a menu ends up ticking a row the editor is not in; and the range, because chrome bounds its
+// own inputs. Everything else here is internal until something outside core asks for it.
+export {
+  AUTO_ZOOM_MODE,
+  FIT_WIDTH_ZOOM_MODE,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  resolveZoomMode,
+  REVIEW_MARKERS_GUTTER_PX,
+  reviewPaneEntitledZoom,
+  sameZoomMode,
+} from './zoom-fit.ts';
+export {
+  editorInstanceScope,
+  hasOpenNestedPopup,
+  listenForPopupEscape,
+  listenForPopupFocusLeave,
+  type PopupEscapeOptions,
+  type PopupFocusLeaveOptions,
+} from './popup-escape.ts';
+export {
+  computeImageResizeResult,
+  createImageOverlayScrollPort,
+  cssPixelsToLayoutPoints,
+  layoutPointsToCssPixels,
+  overlayFrameToSheetCssPixels,
+  overlayHostOrigin,
+  resizePreservesAspect,
+  surfacePaintScale,
+  finalizeImageOverlayInteraction,
+  type AnchorFrameOrigin,
+  type ImageResizeResult,
+  type FinalizedImageOverlayInteraction,
+  type OverlayFrameRect,
+  type SurfaceOverlayCoordinates,
+} from './surface-overlay-coordinates.ts';
+export {
+  IMAGE_WRAP_TARGETS,
+  type ImageWrapTarget,
+  type DrawingPositionInput,
+} from '../store/package/drawing-projection.ts';
+export {
+  DRAWING_REL_FROM_H,
+  DRAWING_REL_FROM_V,
+  propertiesCommandHasPositionFields,
+  positionInputFromPropertiesCommand,
+  validateDrawingPositionInput,
+  validateSetImagePositionCommand,
+} from '../store/package/drawing-position-input.ts';
+export {
+  cropPercentFromCropPermille,
+  cropPercentFromPermille,
+  cropPercentFromSourceCrop,
+  cropPermilleFromCropPercent,
+  cropPermilleFromPercent,
+  sourceCropFromCropPercent,
+  validateImageCropPercent,
+  type ImageCropPercent,
+  type ImageCropPermille,
+} from '../store/package/image-crop-units.ts';
+export {
+  resolveSvgIntrinsicSize,
+  sniffImageMime,
+  validateRasterHeader,
+  type ImageDecodePort,
+  type RenderableImageMime,
+  type SupportedImageMime,
+  type VectorImageMime,
+} from '../store/package/image-resources.ts';
+export {
+  DEFAULT_IMAGE_RESOURCE_LIMITS,
+  resolveImageResourceLimits,
+  type ImageResourceLimits,
+} from '../store/runtime/limits.ts';
+export type { HyperlinkOps, SurfaceHyperlink } from './surface-hyperlinks.ts';
+export type { SurfaceInsertImageInput } from './surface-image-ops.ts';
+export {
+  equationAtPosition,
+  type EquationActivation,
+  type EquationOps,
+  type SurfaceEquation,
+} from './surface-equations.ts';
+export type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
+// The types an adapter needs to CALL the surface, re-exported from the composition root.
+// Adapters may depend on this package and not on the layout lane, so a host reaching into
+// `engine-layout` for a parameter type would be reaching past the boundary for a name.
+export type {
+  SectionProperties,
+  NavigationCommand,
+  SemanticPosition,
+  SemanticSelection,
+  TextMeasurer,
+} from '@docx-editor.dev/core/layout';
+// Same reason: `PaginatedSurfaceOptions.fieldShading` is typed by it.
+export type { FieldShadingMode } from '../output/semantic-paint.ts';
+// And `DocxEditorConfig.revisionStyles`, `getReviewAuthors` by these.
+export type {
+  ReviewAuthorInfo,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionStyles,
+} from '../output/revision-presentation.ts';
+
+export type {
+  TextFormFieldDialogSession,
+  TextFormFieldChromeHandlers,
+} from './text-form-field-session.ts';
+
+export type {
+  ParagraphFlagState,
+  ParagraphFormatRead,
+  ParagraphFormatUpdate,
+} from './paragraph-dialog-types.ts';
+export {
+  twipsToInches,
+  formatInches,
+  inchesToTwips,
+  type TabAlignment,
+  type TabLeaderName,
+  TAB_ALIGNMENT_LABELS,
+  type SpecialIndent,
+  specialOf,
+  signedFirstLineOf,
+  type ParagraphDialogFields,
+  seedFields,
+  type ParagraphDialogMixed,
+  type ParagraphFlagKey,
+  NO_MIXED_FIELDS,
+  mixedFieldsOf,
+  sameTabStops,
+  changedFields,
+  alignmentAfterDirectionChange,
+  withTabStop,
+  trapTabWithin,
+} from './paragraph-dialog-fields.ts';
+export { TEXT_FORM_FORMATS } from '../store/store/text-form-field-options.ts';
+
+export type {
+  PopupChromeRegistrationOptions,
+  ContentControlWidgetSession,
+  ContentControlWidgetChromeHandlers,
+  InvalidTextFormFieldSession,
+  InvalidTextFormFieldChromeHandlers,
+} from './popup-sessions.ts';
+export {
+  calendarMonth,
+  calendarMonthTitle,
+  calendarWeekdays,
+  firstDayOfWeek,
+  isoDateOf,
+  parseIsoDate,
+  shiftMonth,
+} from './content-control-calendar.ts';
+export type {
+  CalendarDay,
+  CalendarMonth,
+  CalendarMonthOptions,
+} from './content-control-calendar.ts';
+
+export {
+  calendarDateForKey,
+  calendarDateText,
+  calendarDateFromText,
+} from './content-control-calendar.ts';
+export {
+  positionContentControlPopup,
+  observeContentControlPopup,
+  contentControlPopupKeyDown,
+} from './content-control-popup-behavior.ts';
+export { createContentControlListNavigation } from './content-control-list-navigation.ts';
+export type { ContentControlListNavigation } from './content-control-list-navigation.ts';
+
+export { calendarMonthNames } from './content-control-calendar.ts';
+
+export { contentControlPopupOpener } from './content-control-popup-behavior.ts';
+export { CONTENT_CONTROL_PICTURE_ACCEPT } from './content-control-picture-widget.ts';
+
+export {
+  bindHistoryGroup,
+  type HistoryGroupBinding,
+  type HistoryGroupBindingOptions,
+} from './bind-history-group.ts';
+
+export {
+  commandExecOptions,
+  type EditorCommandExecute,
+  type ToolbarValueMap,
+  type ToolbarValueSlot,
+  type ToolbarSlotValue,
+} from './toolbar-values.ts';
+
+export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
+export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';
+export type {
+  HighlightSource,
+  HighlightWatch,
+  WatchHighlightsOptions,
+} from './watch-highlights.ts';
+export {
+  createDocumentSearch,
+  SEARCH_DEBOUNCE_MS,
+  SEARCH_HIGHLIGHT_PRIORITY,
+  SEARCH_HIGHLIGHT_SET,
+  SEARCH_MATCH_LIMIT,
+} from './document-search.ts';
+export type {
+  DocumentSearch,
+  DocumentSearchFindOptions,
+  DocumentSearchHighlight,
+  DocumentSearchNavigateOptions,
+  DocumentSearchOptions,
+  DocumentSearchState,
+} from './document-search.ts';
+export type {
+  DocumentRefresh,
+  DocumentRefreshState,
+  RefreshSubmission,
+  RefreshUpdate,
+  RefreshResult,
+  RefreshFailureCode,
+  RefreshChange,
+  RefreshChangeInput,
+  RefreshLocation,
+  RefreshHighlightOptions,
+  RefreshHighlightAnimation,
+  ClearRefreshHighlightsOptions,
+  NavigateToChangeOptions,
+} from './document-refresh.ts';
+export type {
+  AnchorHighlightAnimation,
+  AnchorHighlightOptions,
+  ClearAnchorHighlightOptions,
+  HighlightHit,
+  HighlightOptions,
+  HighlightRange,
+  HighlightRect,
+  HighlightResult,
+  ReviewItemHit,
+  ScrollPlacement,
+  ScrollToAnchorOptions,
+} from '../contracts/editor.ts';
+
+export { runChromeExport, ChromeExportError } from './chrome-export.ts';
+export type {
+  ChromeExportView,
+  ChromeExportFormat,
+  ChromeExportHandlers,
+  ChromeExportResult,
+} from './chrome-export.ts';
+export { runChromePrint, ChromePrintError, isChromePrintShortcut } from './chrome-print.ts';
+export type { ChromePrintErrorCode, ChromePrintJob, ChromePrintOptions } from './chrome-print.ts';
+
+export {
+  DEFAULT_REVIEW_PANE,
+  resolveReviewPane,
+  reviewPaneListsItem,
+} from '../contracts/review-pane.ts';
+export type {
+  CommentMarkerStyle,
+  ResolvedReviewPane,
+  ReviewPaneItemFields,
+  ReviewPaneOpening,
+  ReviewPaneOptions,
+  ReviewPaneOverflow,
+  RevisionDisplay,
+} from '../contracts/review-pane.ts';
+export {
+  DEFAULT_REVISION_MARKUP,
+  REVISION_MARKUP_COLORS,
+  resolveRevisionMarkup,
+} from '../contracts/revision-markup.ts';
+export type {
+  RevisionMarkupOptions,
+  RevisionMarkupDialogSession,
+  RevisionMarkupChromeHandlers,
+  ResolvedRevisionMarkup,
+  RevisionMarkupNamedColor,
+  RevisionMarkupColor,
+  RevisionMarkupMark,
+  RevisionDeletionMark,
+  RevisionChangedLinesMark,
+  RevisionMarkupStyle,
+  RevisionMarkupTextStyle,
+} from '../contracts/revision-markup.ts';
+export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';

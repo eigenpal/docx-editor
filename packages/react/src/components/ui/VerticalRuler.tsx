@@ -12,8 +12,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { SectionProperties } from '@docx-editor.dev/core/types/document';
-import { twipsToPixels, pixelsToTwips, formatPx } from '@docx-editor.dev/core/utils';
+import type { RulerPageSetup } from './HorizontalRuler';
+import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================
@@ -21,8 +21,8 @@ import { useTranslation } from '../../i18n';
 // ============================================================================
 
 export interface VerticalRulerProps {
-  /** Section properties for page layout */
-  sectionProps?: SectionProperties | null;
+  /** Section page setup (`Editor.getPageSetup()`), twips throughout */
+  pageSetup?: RulerPageSetup | null;
   /** Zoom level (1.0 = 100%) */
   zoom?: number;
   /** Whether margins can be dragged to adjust */
@@ -31,6 +31,8 @@ export interface VerticalRulerProps {
   onTopMarginChange?: (marginTwips: number) => void;
   /** Callback when bottom margin changes (in twips) */
   onBottomMarginChange?: (marginTwips: number) => void;
+  /** Fires when a margin drag is released — the moment to commit what the drag previewed. */
+  onMarginDragEnd?: () => void;
   /** Unit to display (inches or cm) */
   unit?: 'inch' | 'cm';
   /** Additional CSS class name */
@@ -65,11 +67,12 @@ const MARKER_ACTIVE_COLOR = 'var(--doc-primary-hover)';
 // ============================================================================
 
 export function VerticalRuler({
-  sectionProps,
+  pageSetup,
   zoom = 1,
   editable = false,
   onTopMarginChange,
   onBottomMarginChange,
+  onMarginDragEnd,
   unit = 'inch',
   className = '',
   style,
@@ -80,9 +83,30 @@ export function VerticalRuler({
   const rulerRef = useRef<HTMLDivElement>(null);
 
   // Get page dimensions
-  const pageHeightTwips = sectionProps?.pageHeight ?? DEFAULT_PAGE_HEIGHT_TWIPS;
-  const topMarginTwips = sectionProps?.marginTop ?? DEFAULT_MARGIN_TWIPS;
-  const bottomMarginTwips = sectionProps?.marginBottom ?? DEFAULT_MARGIN_TWIPS;
+  const pageHeightTwips = pageSetup?.pageHeightTwips ?? DEFAULT_PAGE_HEIGHT_TWIPS;
+  const topMarginTwips = pageSetup?.marginsTwips.top ?? DEFAULT_MARGIN_TWIPS;
+  const bottomMarginTwips = pageSetup?.marginsTwips.bottom ?? DEFAULT_MARGIN_TWIPS;
+
+  const handleKeyDown = (event: React.KeyboardEvent, marker: MarkerType) => {
+    if (!editable || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const current = marker === 'topMargin' ? topMarginTwips : bottomMarginTwips;
+    const other = marker === 'topMargin' ? bottomMarginTwips : topMarginTwips;
+    const maximum = Math.max(0, pageHeightTwips - other - 720);
+    const step = event.shiftKey
+      ? 1
+      : Math.round(unit === 'cm' ? TWIPS_PER_CM / 10 : TWIPS_PER_INCH / 8);
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? maximum
+          : Math.max(0, Math.min(maximum, current + (event.key === 'ArrowUp' ? step : -step)));
+    if (next === current) return;
+    (marker === 'topMargin' ? onTopMarginChange : onBottomMarginChange)?.(next);
+    onMarginDragEnd?.();
+  };
 
   // Convert to pixels with zoom
   const pageHeightPx = twipsToPixels(pageHeightTwips) * zoom;
@@ -133,8 +157,9 @@ export function VerticalRuler({
 
   // Handle drag end
   const handleDragEnd = useCallback(() => {
+    if (dragging !== null) onMarginDragEnd?.();
     setDragging(null);
-  }, []);
+  }, [dragging, onMarginDragEnd]);
 
   // Add/remove document event listeners
   useEffect(() => {
@@ -167,9 +192,8 @@ export function VerticalRuler({
       ref={rulerRef}
       className={`docx-vertical-ruler ${className}`}
       style={rulerStyle}
-      role="slider"
+      role="group"
       aria-label={t('ruler.vertical')}
-      aria-orientation="vertical"
     >
       {/* Tick marks */}
       <div
@@ -190,6 +214,11 @@ export function VerticalRuler({
       {/* Top margin marker */}
       <VerticalMarginMarker
         type="topMargin"
+        value={topMarginTwips}
+        maximum={Math.max(0, pageHeightTwips - bottomMarginTwips - 720)}
+        valueText={topMarginTwips / (unit === 'cm' ? TWIPS_PER_CM : TWIPS_PER_INCH)}
+        unit={unit}
+        onKeyDown={(event) => handleKeyDown(event, 'topMargin')}
         position={topMarginPx}
         editable={editable}
         isDragging={dragging === 'topMargin'}
@@ -202,6 +231,11 @@ export function VerticalRuler({
       {/* Bottom margin marker */}
       <VerticalMarginMarker
         type="bottomMargin"
+        value={bottomMarginTwips}
+        maximum={Math.max(0, pageHeightTwips - topMarginTwips - 720)}
+        valueText={bottomMarginTwips / (unit === 'cm' ? TWIPS_PER_CM : TWIPS_PER_INCH)}
+        unit={unit}
+        onKeyDown={(event) => handleKeyDown(event, 'bottomMargin')}
         position={pageHeightPx - bottomMarginPx}
         editable={editable}
         isDragging={dragging === 'bottomMargin'}
@@ -256,6 +290,11 @@ function VerticalTick({ tick }: { tick: VerticalTickData }): React.ReactElement 
 interface VerticalMarginMarkerProps {
   type: 'topMargin' | 'bottomMargin';
   position: number;
+  value: number;
+  maximum: number;
+  valueText: number;
+  unit: 'inch' | 'cm';
+  onKeyDown: (event: React.KeyboardEvent) => void;
   editable: boolean;
   isDragging: boolean;
   isHovered: boolean;
@@ -267,6 +306,11 @@ interface VerticalMarginMarkerProps {
 function VerticalMarginMarker({
   type,
   position,
+  value,
+  maximum,
+  valueText,
+  unit,
+  onKeyDown,
   editable,
   isDragging,
   isHovered,
@@ -310,6 +354,12 @@ function VerticalMarginMarker({
       role="slider"
       aria-label={type === 'topMargin' ? t('ruler.topMargin') : t('ruler.bottomMargin')}
       aria-orientation="vertical"
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={maximum}
+      aria-valuetext={`${valueText.toFixed(2)} ${unit === 'cm' ? 'cm' : 'in'}`}
+      aria-disabled={!editable}
+      onKeyDown={onKeyDown}
       tabIndex={editable ? 0 : -1}
     >
       <div style={triangleStyle} />

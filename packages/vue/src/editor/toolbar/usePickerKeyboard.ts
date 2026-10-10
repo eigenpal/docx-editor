@@ -1,0 +1,89 @@
+import { watch, type Ref } from 'vue';
+import { listenForPopupEscape, listenForPopupFocusLeave } from '@docx-editor.dev/core/editor';
+import { useNavigationViewportElement } from '../navigation/navigation-layout';
+
+/** Bind keyboard dismissal and option navigation to this mounted picker. */
+export function usePickerKeyboard(rootRef: Ref<HTMLElement | null>, open: Ref<boolean>): void {
+  const viewport = useNavigationViewportElement();
+  watch(
+    [rootRef, open],
+    ([root, isOpen], _, onCleanup) => {
+      if (!isOpen || !root) return;
+      onCleanup(
+        bindPickerKeyboard(
+          root,
+          () => {
+            open.value = false;
+          },
+          () => viewport.value
+        )
+      );
+    },
+    { flush: 'post' }
+  );
+}
+
+function bindPickerKeyboard(
+  root: HTMLElement,
+  close: () => void,
+  viewport: () => HTMLElement | null
+): () => void {
+  const keydown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    const target = event.target as HTMLElement;
+    // The editable size input owns its draft and step keys.
+    if (target.matches('input[role="combobox"]')) return;
+    const typing = target.matches('input, textarea, select');
+    if (typing && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const options = Array.from(root.querySelectorAll<HTMLElement>('[role="option"]')).filter(
+      (option) => !option.matches(':disabled, [aria-disabled="true"]')
+    );
+    if (options.length === 0) return;
+    const current = options.indexOf(target);
+    let next: number;
+    if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = options.length - 1;
+    else if (event.key === 'ArrowDown') next = (current + 1) % options.length;
+    else if (event.key === 'ArrowUp')
+      next = current < 0 ? options.length - 1 : (current - 1 + options.length) % options.length;
+    else return;
+    event.preventDefault();
+    event.stopPropagation();
+    options[next]?.focus();
+  };
+  const focusout = (event: FocusEvent) => {
+    if (event.relatedTarget instanceof Node && !root.contains(event.relatedTarget)) close();
+  };
+  // Escape is not handled here: the capture listener below hears it before the surface,
+  // also when a click opened the picker and focus stayed in the pages.
+  const stopEscape = listenForPopupEscape({
+    popup: root,
+    contains: (node) => root.contains(node),
+    chromeRoot: () => root.closest('.docx-editor'),
+    editorElements: () => [viewport()],
+    // The editable size input owns its draft and its Escape.
+    skip: (event) =>
+      event.target instanceof Element &&
+      root.contains(event.target) &&
+      event.target.matches('input[role="combobox"]'),
+    close: (fromInside) => {
+      if (fromInside) root.querySelector<HTMLElement>('[aria-haspopup]')?.focus();
+      close();
+    },
+  });
+  // Focus that moves elsewhere while focus stayed in the pages, such as Ctrl+F into the
+  // find field, closes the picker too. `focusout` alone never fires for a click-opened picker.
+  const stopFocus = listenForPopupFocusLeave({
+    popup: root,
+    contains: (node) => root.contains(node),
+    close,
+  });
+  root.addEventListener('keydown', keydown);
+  root.addEventListener('focusout', focusout);
+  return () => {
+    root.removeEventListener('keydown', keydown);
+    root.removeEventListener('focusout', focusout);
+    stopEscape();
+    stopFocus();
+  };
+}

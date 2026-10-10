@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The editor displays field results without a field-code shortcut.",
+  "after": "A local display mode toggles inert field instructions while retaining canonical document ranges and saved results.",
+  "reason": "The display mode does not enter shared state, operations, snapshots, or protocol messages. Existing editing operations remain unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/field-code-shortcut.test.ts"],
+  "changeset": "toggle-field-code-display",
+  "migration": null
+}

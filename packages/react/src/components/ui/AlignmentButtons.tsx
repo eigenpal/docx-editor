@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * Alignment Dropdown Component (Google Docs style)
  *
@@ -8,19 +9,25 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
-import type { ParagraphAlignment } from '@docx-editor.dev/core/types/document';
+import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@docx-editor.dev/i18n';
+import type { TranslationKey } from '../../i18n';
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+/**
+ * The paragraph alignments this control understands, in OOXML `w:jc`
+ * vocabulary (`both` is Word's justify; `distribute` renders as justify).
+ * Presentation-only: the dropdown emits the first four.
+ */
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
 
 /**
  * Alignment option for the buttons

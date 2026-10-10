@@ -1,0 +1,122 @@
+---
+title: Compare PDF and Markdown conversion
+description: Share conversion settings and reuse one document session for PDF and Markdown output.
+category: Export formats
+---
+
+Use `exportPdf(source, options)` and `exportMarkdown(source, options)` to convert each format separately. Both functions accept DOCX bytes, preserve the source, and dispose their document session after success or failure.
+
+PDF and Markdown share font-source types, font helpers, font reports, and resource-error codes.
+
+## Share conversion settings
+
+Set `displayMode` explicitly when your application produces both formats. Markdown defaults to `'all-markup'`; PDF defaults to `'proposed'`. Without an explicit setting, the outputs can contain different text.
+
+Share your font sources and disable PDF system-font discovery for consistent font selection across hosts. Use `documentLigatures: false` on PDF to align with Markdown's default shaping policy. PDF otherwise honors optional document ligatures by default.
+
+This function uses the same input and common settings for both formats:
+
+```ts
+import { exportMarkdown, type MarkdownExportOptions } from '@docx-editor.dev/docx-to-markdown';
+import {
+  exportPdf,
+  type PdfExportOptions,
+  type PdfFontsSource,
+} from '@docx-editor.dev/docx-to-pdf';
+
+export async function convertBoth(source: Uint8Array, fonts: PdfFontsSource, signal?: AbortSignal) {
+  const common = {
+    displayMode: 'proposed',
+    fonts,
+    fontPolicy: 'best-effort',
+    resourceTimeoutMs: 15_000,
+    signal,
+  } satisfies MarkdownExportOptions & PdfExportOptions;
+
+  const markdown = await exportMarkdown(source, common);
+  const pdf = await exportPdf(source, {
+    ...common,
+    useSystemFonts: false,
+    documentLigatures: false,
+  });
+  return { markdown, pdf };
+}
+```
+
+Both packages export the same `createFontSource` and `defineFontResolver` helpers. For font registration, see [Configure PDF fonts](/docs/2.x/export/pdf/fonts).
+
+These settings align common controls; they do not guarantee identical pagination for every document. Missing glyphs, fallback faces, and unsupported features can still affect output.
+
+## Shared controls
+
+| Member | Shared meaning |
+| --- | --- |
+| `fonts` | Caller sources take priority over packaged substitutes. |
+| `fallbackFonts` | Supply faces absent from earlier sources. |
+| `fontPolicy` | Strict mode rejects failed origins and incomplete face coverage. |
+| `onFontResolution` | Receive font evidence before a strict font refusal. |
+| `displayMode` | Select proposed content, original content, or all markup. |
+| `signal` | Cancel resource waits and subsequent work. |
+| `resourceTimeoutMs` | Bound resource and layout work. |
+| `fontResolution` | Inspect requested families, selected faces, substitutions, and failed sources. |
+| `ExportResourceError` | Handle shared codes such as `aborted` and `timedOut`. |
+
+Strict font policy checks coverage and source failures. It does not prove that the selected faces are the document author's fonts.
+
+## Intentional differences
+
+| Area | Markdown | PDF |
+| --- | --- | --- |
+| Source | DOCX bytes or supported live views | DOCX bytes only |
+| Primary output | `result.markdown` | `result.bytes` |
+| Page data | `result.pages` | `result.pageCount` |
+| Page metadata | `result.pagination.layoutRevision` and `.displayMode` | `result.layoutRevision` and `.displayMode` |
+| Content notices | `result.warnings` | `result.diagnostics`, including severity |
+| Notice page location | Optional one-based `pageNumber` | Optional one-based `pageNumber`, plus zero-based `pageIndex` |
+| Open refusal | `DocumentOpenError` | `PdfDocumentOpenError` |
+| Default revisions | `'all-markup'` | `'proposed'` |
+| Default font discovery | Packaged and embedded sources | Installed, packaged, and embedded sources |
+| Optional ligatures | Disabled | Enabled unless `documentLigatures` is `false` |
+| Unsupported content | Warnings for omissions | Strict refusal by default; optional best-effort output |
+| Comments | Structured review data | Native PDF annotations, unless `comments` is `false` |
+| Reuse | Public export sessions and detached layouts | Public font-backed export sessions |
+| Result delivery | Markdown text, JSON projection, or media bundles | PDF bytes for storage or an HTTP response |
+
+PDF also exposes encoding limits, `fidelityPolicy`, and a whole-conversion `timeoutMs`. It requires the admitted font bytes that produced the layout to encode searchable text. It accepts font-backed sessions and rejects arbitrary sessions or detached layouts.
+
+Handle notices using each format's public fields. Do not treat a PDF `pageIndex` as a Markdown `pageNumber` without adding one. Store the input version with page references. Layout revisions are not persistent document identifiers.
+
+## Reuse one session
+
+Open through PDF when you need both formats from one font-backed layout. Markdown-opened sessions use different font and ligature settings. PDF accepts these sessions, but strict conversion can refuse missing font identities or unshaped text.
+
+This example uses the PDF opener for both outputs:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { openDocumentForExport, exportPdfFrom } from '@docx-editor.dev/docx-to-pdf';
+import { exportMarkdownFrom } from '@docx-editor.dev/docx-to-markdown';
+
+const opened = await openDocumentForExport(await readFile('document.docx'), {
+  displayMode: 'proposed',
+  useSystemFonts: false,
+});
+if (!opened.ok) throw new Error(opened.reason);
+
+try {
+  const markdown = await exportMarkdownFrom(opened.session);
+  const pdf = await exportPdfFrom(opened.session);
+  console.log(markdown.pages.length, pdf.pageCount);
+} finally {
+  opened.session.dispose();
+}
+```
+
+Both exporters consume the same cached layout and font evidence. This workflow retains PDF's font and shaping policy for both outputs.
+
+`exportPdfFrom` also accepts `displayMode` to encode another cached revision projection. The default session mode does not change when you request another projection.
+
+## Next steps
+
+- Review PDF session ownership and cancellation in [PDF export API](/docs/2.x/export/pdf/api#reusable-sessions).
+- Configure Markdown output with [DOCX to Markdown](/docs/2.x/export/markdown).

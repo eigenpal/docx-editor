@@ -1,0 +1,248 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+// The document: the root everything else is reached from.
+//
+// It is deliberately thin. A document in this API is not a bag of content — it is the thing that has
+// stories, and this slice publishes one of them (`body`) plus the main story's paragraphs as a
+// convenience, because `document.paragraphs` is how source-compatible code walks a document.
+//
+
+import {
+  ObjectPath,
+  fail,
+  internalsOf,
+  type RequestContext,
+  type ResolvedLoadOptions,
+} from '../runtime/model-support.ts';
+import { DocumentProperties } from './document-properties.ts';
+import { Body } from './body.ts';
+import type { ParagraphCollection } from './collections.ts';
+import { ContentControlCollection } from './content-controls.ts';
+import { ModelObject } from './model-object.ts';
+import { NoteItemCollection } from './notes.ts';
+import { CommentCollection, RevisionCollection } from './review.ts';
+import { SectionCollection } from './sections.ts';
+
+/** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
+export { ChangeTrackingMode } from './editing-enums.ts';
+import { ChangeTrackingMode, RemoveDocInfoType } from './editing-enums.ts';
+
+/**
+ * The document: the root every other object is reached from.
+ *
+ * Deliberately thin. A document here is not a bag of content — it is the thing that HAS stories.
+ * It publishes the main story as {@link Document.body}, plus that story's paragraphs directly as
+ * `document.paragraphs`, because that is how source-compatible code walks a document.
+ *
+ * Reached once per {@link RequestContext} and memoized: `context.document` is the same object
+ * every time, so a property loaded through one reference reads back through any other.
+ *
+ * @example
+ * ```ts
+ * await runtime.run(async (context) => {
+ *   const paragraphs = context.document.paragraphs;
+ *   paragraphs.load('items');
+ *   await context.sync();
+ *
+ *   for (const paragraph of paragraphs.items) paragraph.load('text');
+ *   await context.sync();
+ *
+ *   for (const paragraph of paragraphs.items) console.log(paragraph.text);
+ * });
+ * ```
+ *
+ * The first sync retrieves the collection's items. Once those items are available, the second
+ * sync retrieves each paragraph's text.
+ *
+ * @public
+ */
+export class Document extends ModelObject {
+  #properties: DocumentProperties | undefined;
+  #body: Body | undefined;
+  #paragraphs: ParagraphCollection | undefined;
+  #sections: SectionCollection | undefined;
+  #comments: CommentCollection | undefined;
+  #revisions: RevisionCollection | undefined;
+  #contentControls: ContentControlCollection | undefined;
+  #footnotes: NoteItemCollection | undefined;
+  #endnotes: NoteItemCollection | undefined;
+
+  /** @internal One per request context; the context memoizes it. */
+  static open(context: RequestContext): Document {
+    return new Document(context);
+  }
+
+  private constructor(context: RequestContext) {
+    super(context, ObjectPath.of('document', internalsOf(context).roots().document));
+  }
+
+  /**
+   * Tracking for this automation runtime. Load 'changeTrackingMode' explicitly before reading.
+   * Document.load() keeps an empty default property set across hosts. Assignments take effect at sync.
+   * TrackMineOnly tracks this runtime's inline text edits using its configured author.
+   * TrackAll is unsupported. Browser tracked writes require the review module; this setting
+   * does not change the editor UI mode. Unsupported tracked mutation
+   * kinds refuse; the setting is session-local and is not saved as a document-wide policy.
+   */
+  get changeTrackingMode(): ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly' {
+    return this.loadedProperty<ChangeTrackingMode>('changeTrackingMode');
+  }
+
+  set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly') {
+    if (!['Off', 'TrackAll', 'TrackMineOnly'].includes(mode))
+      fail({ code: 'InvalidArgument', target: 'document.changeTrackingMode' });
+    const author = this.internals.author;
+    this.commandAnswering(
+      'document.changeTrackingMode',
+      () => ({ op: 'setChangeTrackingMode', mode, ...(author === undefined ? {} : { author }) }),
+      () => this.setLoadedProperty('changeTrackingMode', mode)
+    );
+  }
+
+  /**
+   * The main story.
+   *
+   * The same proxy every time, like every navigation property in this API: a consumer who loads
+   * `document.body` and then reads `document.body.text` is talking about one object, and handing
+   * back a fresh proxy per access would put the load on one and the read on another.
+   */
+  get body(): Body {
+    this.#body ??= Body.main(this.context, 'document.body');
+    return this.#body;
+  }
+
+  /**
+   * Remove standard core, extended, and custom document-property parts in one sync.
+   * Only DocumentProperties is supported. Tracking and collaboration refuse with NotSupported.
+   * This command must be the only write in its sync. It does not anonymize document content.
+   */
+  removeDocumentInformation(removeDocInfoType: RemoveDocInfoType): void;
+  removeDocumentInformation(
+    removeDocInfoType:
+      | 'Comments'
+      | 'Revisions'
+      | 'Versions'
+      | 'RemovePersonalInformation'
+      | 'EmailHeader'
+      | 'RoutingSlip'
+      | 'SendForReview'
+      | 'DocumentProperties'
+      | 'Template'
+      | 'DocumentWorkspace'
+      | 'InkAnnotations'
+      | 'DocumentServerProperties'
+      | 'DocumentManagementPolicy'
+      | 'ContentType'
+      | 'TaskpaneWebExtensions'
+      | 'AtMentions'
+      | 'DocumentTasks'
+      | 'DocumentIntelligence'
+      | 'CommentReactions'
+      | 'All'
+  ): void;
+  removeDocumentInformation(removeDocInfoType: string): void {
+    this.command(`${this.path.label}.removeDocumentInformation`, () => ({
+      op: 'removeDocumentInformation',
+      removeDocInfoType,
+    }));
+  }
+
+  /** Core document metadata. Reads require load; writes commit at sync. */
+  get properties(): DocumentProperties {
+    this.#properties ??= DocumentProperties.of(this.context, this.path);
+    return this.#properties;
+  }
+
+  /** The main story's paragraphs, in reading order. */
+  get paragraphs(): ParagraphCollection {
+    this.#paragraphs ??= this.body.paragraphsUnder('document.paragraphs');
+    return this.#paragraphs;
+  }
+
+  /** The document's sections, in document order. */
+  get sections(): SectionCollection {
+    const document = this.path.handle();
+    this.#sections ??= SectionCollection.of(this.context, 'document.sections', this.path, () => ({
+      op: 'getSections',
+      document,
+    }));
+    return this.#sections;
+  }
+
+  /** The content controls of the main story, in document order — the outermost ones. */
+  get contentControls(): ContentControlCollection {
+    this.#contentControls ??= ContentControlCollection.of(
+      this.context,
+      'document.contentControls',
+      this.path,
+      { body: this.internals.roots().body }
+    );
+    return this.#contentControls;
+  }
+
+  /** The comments anchored in the main story, in document order. */
+  get comments(): CommentCollection {
+    this.#comments ??= CommentCollection.of(this.context, 'document.comments', this.path, () => ({
+      op: 'getComments',
+      scope: { body: this.internals.roots().body },
+    }));
+    return this.#comments;
+  }
+
+  /**
+   * The tracked changes of the main-body story that this API can publish as typed objects.
+   *
+   * Structural cards whose exact Word subtype cannot be named are omitted from `items`.
+   * `acceptAll` / `rejectAll` still resolve every store-resolvable revision in the main body
+   * and refuse atomically if any `readOnly` or otherwise unsupported revision remains. Header,
+   * footer, and note revisions live on those stories' own `Body.revisions` collections.
+   */
+  get revisions(): RevisionCollection {
+    this.#revisions ??= RevisionCollection.of(
+      this.context,
+      'document.revisions',
+      this.path,
+      this.internals.roots().body
+    );
+    return this.#revisions;
+  }
+
+  /**
+   * The document's footnotes, in the order its notes part writes them.
+   *
+   * Legacy document-wide accessor. Prefer the Office.js-shaped `body.footnotes` accessor.
+   */
+  get footnotes(): NoteItemCollection {
+    const document = this.path.handle();
+    this.#footnotes ??= NoteItemCollection.of(
+      this.context,
+      'document.footnotes',
+      this.path,
+      () => ({ op: 'getNotes', document, noteKind: 'footnote' })
+    );
+    return this.#footnotes;
+  }
+
+  /** The document's endnotes, in the order its notes part writes them. */
+  get endnotes(): NoteItemCollection {
+    const document = this.path.handle();
+    this.#endnotes ??= NoteItemCollection.of(this.context, 'document.endnotes', this.path, () => ({
+      op: 'getNotes',
+      document,
+      noteKind: 'endnote',
+    }));
+    return this.#endnotes;
+  }
+
+  /** @internal Plan the read this object's `load(...)` asked for. */
+  protected override onLoad(request: ResolvedLoadOptions): void {
+    // Keep the default load valid across hosts; tracking requires an explicit property load.
+    if (request.select.length === 0) return;
+    const selected = this.selection(request, ['changeTrackingMode']);
+    if (selected.includes('changeTrackingMode'))
+      this.loadTextInto('changeTrackingMode', () => ({ op: 'getChangeTrackingMode' }));
+  }
+}

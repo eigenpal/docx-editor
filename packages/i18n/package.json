@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/i18n",
-  "version": "0.0.1",
+  "version": "2.27.0",
   "description": "Shared UI locale strings and types for the @docx-editor.dev editor adapters (React and Vue).",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -22,6 +22,11 @@
       "import": "./dist/de.mjs",
       "require": "./dist/de.js"
     },
+    "./es": {
+      "types": "./dist/es.d.ts",
+      "import": "./dist/es.mjs",
+      "require": "./dist/es.js"
+    },
     "./fr": {
       "types": "./dist/fr.d.ts",
       "import": "./dist/fr.mjs",
@@ -41,6 +46,11 @@
       "types": "./dist/id.d.ts",
       "import": "./dist/id.mjs",
       "require": "./dist/id.js"
+    },
+    "./ja": {
+      "types": "./dist/ja.d.ts",
+      "import": "./dist/ja.mjs",
+      "require": "./dist/ja.js"
     },
     "./pl": {
       "types": "./dist/pl.d.ts",
@@ -71,7 +81,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "!dist/metafile-*.json",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsup && node ../../scripts/inject-package-doc.mjs --package @docx-editor.dev/i18n",
@@ -81,7 +93,7 @@
   },
   "devDependencies": {
     "tsup": "^8.0.1",
-    "typescript": "^5.3.3"
+    "typescript7": "npm:typescript@^7.0.2"
   },
   "keywords": [
     "docx",

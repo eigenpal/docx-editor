@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Bulk planning can block independent revisions or consume unsupported table properties when removing every row.",
+  "after": "Bulk planning groups selected decisions according to the content and properties their resolution can remove, preserving unrelated pending changes.",
+  "reason": "The planner emits existing selected-site revision operations and canonical primitive journal updates. Stored schemas, replication formats, and released-peer replay semantics are unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/revision-batch-tables.test.ts",
+    "packages/core/src/store/__tests__/revision-batch-dependencies.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-revisions.test.ts"
+  ],
+  "changeset": "independent-revision-batches",
+  "migration": null
+}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 /**
  * EditorToolbar — Google Docs-style 2-level compound component.
  *
@@ -15,7 +16,6 @@
  *   </EditorToolbar>
  */
 
-import type { ReactNode } from 'react';
 import { EditorToolbarContext } from './EditorToolbarContext';
 import type { EditorToolbarProps } from './EditorToolbarContext';
 import { TitleBar, Logo, DocumentName, MenuBar, TitleBarRight } from './TitleBar';

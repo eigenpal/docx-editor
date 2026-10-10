@@ -1,0 +1,74 @@
+{
+  "name": "@docx-editor.dev/docx-to-markdown",
+  "version": "2.27.0",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Convert DOCX to Markdown with layout-derived pages, headers, footers, comments, and tracked changes.",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.16.0 || >=22.3.0"
+  },
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./types/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json",
+    "./node": {
+      "require": {
+        "types": "./types/node.d.cts",
+        "default": "./dist/node.cjs"
+      },
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "types",
+    "!dist/metafile-*.json",
+    "README.md",
+    "docs",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/check-built-siblings.mjs && tsup",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-markdown",
+    "check:consumer": "node ../../scripts/check-markdown-media-consumer.mjs"
+  },
+  "peerDependencies": {
+    "@docx-editor.dev/core": "~2.27.0"
+  },
+  "dependencies": {
+    "@docx-editor.dev/fonts": "~2.27.0",
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "^20.8.3",
+    "@docx-editor.dev/core": "workspace:*",
+    "micromark": "^4.0.2",
+    "micromark-extension-gfm": "^3.0.0",
+    "typescript7": "npm:typescript@^7.0.2"
+  },
+  "keywords": [
+    "docx",
+    "markdown",
+    "converter",
+    "headless"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/docx-to-markdown"
+  }
+}

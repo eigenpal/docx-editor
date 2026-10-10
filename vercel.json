@@ -1,11 +1,64 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bun run build",
+  "buildCommand": "bun run build:pdf && bun run build:preview",
   "outputDirectory": "examples/parity/dist",
-  "installCommand": "rm -rf node_modules && bun install --frozen-lockfile",
-  "redirects": [{ "source": "/", "destination": "/react/", "permanent": false }],
+  "installCommand": "HUSKY=0 bunx bun@1.4.2 install --frozen-lockfile",
+  "functions": {
+    "api/convert.ts": {
+      "maxDuration": 90,
+      "memory": 3008,
+      "includeFiles": "packages/{docx-to-pdf,fonts,fonts-cjk}/assets/**"
+    }
+  },
   "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "igloo.docx-editor.dev" }],
+      "destination": "/igloo/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "igloo.docx-editor.dev" }],
+      "destination": "/igloo/index.html"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "docx-to-markdown.docx-editor.dev" }],
+      "destination": "/docx-to-markdown/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "docx-to-markdown.docx-editor.dev" }],
+      "destination": "/docx-to-markdown/index.html"
+    },
+    {
+      "source": "/robots.txt",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/sitemap.xml"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "docx-to-pdf.docx-editor.dev" }],
+      "destination": "/docx-to-pdf/index.html"
+    },
     { "source": "/react/(.*)", "destination": "/react/index.html" },
-    { "source": "/vue/(.*)", "destination": "/vue/index.html" }
+    { "source": "/vue/(.*)", "destination": "/vue/index.html" },
+    { "source": "/igloo/(.*)", "destination": "/igloo/index.html" },
+    {
+      "source": "/docx-to-markdown/(.*)",
+      "destination": "/docx-to-markdown/index.html"
+    },
+    { "source": "/docx-to-pdf/(.*)", "destination": "/docx-to-pdf/index.html" },
+    { "source": "/", "destination": "/react/index.html" }
   ]
 }

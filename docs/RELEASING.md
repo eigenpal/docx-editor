@@ -1,84 +1,160 @@
 # Releasing
 
-This document explains how releases work for the DOCX editor, what every contributor needs to do per PR, and what the maintainer does to ship.
+Use Changesets to prepare package releases for the DOCX editor.
 
-Releases follow the canonical [`changesets/action@v1`](https://github.com/changesets/action) flow:
+The [Release workflow](../.github/workflows/release.yml) uses Changesets:
 
-1. Every code-touching PR drops a `.changeset/*.md` describing its change.
+1. For each pull request that changes package code, add a `.changeset/*.md` file that describes the change.
 2. Pushes to `main` open or update a `chore: release` PR aggregating those entries.
-3. Merging that PR publishes to npm and creates a GitHub Release.
+3. Merging that PR starts prepublish checks. After they pass, the workflow publishes to npm and creates a GitHub Release.
 
 ## Packages
 
-| Package                   | Path              | Published?               |
-| ------------------------- | ----------------- | ------------------------ |
-| `@docx-editor.dev/react`  | `packages/react`  | ✅                       |
-| `@docx-editor.dev/agents` | `packages/agents` | ✅                       |
-| `@docx-editor.dev/vue`    | `packages/vue`    | ✅                       |
-| `@docx-editor.dev/i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
-| `@docx-editor.dev/nuxt`   | `packages/nuxt`   | ✅                       |
+| Package                             | Path                        | Published |
+| ----------------------------------- | --------------------------- | --------- |
+| `@docx-editor.dev/core`             | `packages/core`             | Yes       |
+| `@docx-editor.dev/react`            | `packages/react`            | Yes       |
+| `@docx-editor.dev/editor-api`       | `packages/editor-api`       | Yes       |
+| `@docx-editor.dev/vue`              | `packages/vue`              | Yes       |
+| `@docx-editor.dev/nuxt`             | `packages/nuxt`             | No        |
+| `@docx-editor.dev/i18n`             | `packages/i18n`             | Yes       |
+| `@docx-editor.dev/pro`              | `packages/pro`              | Yes       |
+| `@docx-editor.dev/fonts`            | `packages/fonts`            | Yes       |
+| `@docx-editor.dev/docx-to-markdown` | `packages/docx-to-markdown` | Yes       |
+| `@docx-editor.dev/docx-to-pdf`      | `packages/docx-to-pdf`      | Yes       |
+| `@docx-editor.dev/fonts-cjk`        | `packages/fonts-cjk`        | Yes       |
 
-All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
+`@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, and `@docx-editor.dev/docx-to-pdf` use the EigenPal Pro License. See the [editor-api terms](../packages/editor-api/LICENSE.md), [Pro terms](../packages/pro/LICENSE.md), and [DOCX to PDF terms](../packages/docx-to-pdf/LICENSE.md). Their manifests use `LicenseRef-EigenPal-Pro-Evaluation-1.0`.
 
-## Author flow (every contributor, every code PR)
+Core, React, Vue, Nuxt, i18n, and DOCX to Markdown use Apache 2.0. The fonts package uses `Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License`. The CJK font package uses `Apache-2.0 AND OFL-1.1`.
+
+The ten published packages are in a fixed group in `.changeset/config.json`. Changesets assigns them the same release version.
+
+Example applications and the Nuxt package are private workspaces (`"private": true`). They are not published to npm. Private workspace versioning and tagging are disabled in Changesets, so these workspaces do not receive release version bumps or appear in the release PR's release notes. Keep example applications private when adding them to the workspace.
+
+A changeset can declare one package bump. The other packages in the fixed group follow that bump. `@docx-editor.dev/i18n` changes use an i18n changeset.
+
+## Python (PyPI) releases
+
+The `docx-to-markdown` Python distribution uses the same Changesets version and changelog as `@docx-editor.dev/docx-to-markdown`. No separate Python version bump is needed:
+
+1. Run `bun changeset` and select `@docx-editor.dev/docx-to-markdown` for Python package changes, including Python-only fixes. Describe the Python behavior in the summary.
+2. Changesets updates `packages/docx-to-markdown/package.json` and its `CHANGELOG.md` in the release PR. The Python package's `pyproject.toml` reads that version directly when building a wheel.
+3. After npm publication and version tagging, `release.yml` dispatches `python-wheels.yml` at the `vX.Y.Z` tag with `publish=true`.
+4. The Python workflow builds and tests platform wheels, then uploads them through PyPI Trusted Publishing using the `pypi` GitHub environment.
+
+The private `python/docx-to-markdown/package.json` is a build workspace; its `0.0.0` version is not the PyPI version. Keep it private so Changesets does not publish it to npm. The Python README links to the converter's generated changelog, which includes release notes for both the shared engine and Python wrapper.
+
+Configure a PyPI Trusted Publisher for `docx-to-markdown` with repository `eigenpal/docx-editor`, workflow `python-wheels.yml`, and environment `pypi`. The workflow can also be dispatched manually at the release tag with `publish=true` to retry a failed upload or add missing platform wheels; existing wheels are skipped. Successful platform builds can publish even if another platform fails. Check the Python wheels run separately from the npm release to confirm platform coverage.
+
+## Add a changeset
+
+Run Changesets from the repository root, then stage the generated release note:
 
 ```bash
-bun changeset       # interactive — pick bump + write a one-line summary
+bun changeset
 git add .changeset/*.md
-# ... commit with the rest of your PR
 ```
 
-Skip only for **test-only / docs-only / CI-only** PRs (no published-package code changed). When in doubt, add one — an extra patch entry is harmless; a missing entry ships invisibly.
+Skip a changeset for test-only, documentation-only, and CI-only pull requests.
 
-### Bump levels (semver)
+### Version increments
 
-- **patch** — bug fix, internal refactor, no public API change. **Default — use this unless you have a clear reason not to.**
-- **minor** — new public API (additive, backward compatible).
-- **major** — breaking change to existing public API.
+- `patch`: Bug fix or internal change without a public API change. Use this by default.
+- `minor`: Additive public API change.
+- `major`: Breaking public API change.
 
-`changeset version` resolves to the **highest bump** across all pending changesets, so a single `minor` from another PR will correctly bump everything. You don't need to coordinate bumps with other authors.
+`changeset version` uses the highest increment across pending changesets for the fixed group. A pending `minor` change therefore increments every published package to the next minor version.
 
-The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGELOG.md`, so write it for the **consumer** of the package — not for the team. Avoid PR/issue numbers in the body; the changelog tooling backlinks them automatically when needed.
+Write one or two sentences that describe the behavior consumers receive. Changesets copies this summary into `CHANGELOG.md`. Use active voice and omit implementation details, marketing language, and emojis. If the change resolves an issue, put `Fixes #N` at the end.
 
-## Release flow (the maintainer, when ready to ship)
+Changes to collaboration formats also require a compatibility decision. Format changes require at least a minor release and migration instructions. See [Collaboration compatibility](architecture/collaboration-compatibility.md).
 
-1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
-2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
-3. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@docx-editor.dev/react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
+## Publish a release
 
-That's the entire release. One PR merge.
+1. Find the open `chore: release` PR on `main`. The bot opens it when a changeset lands. Later changesets update the same PR.
+2. Review the versions, generated changelog entries, and consumed changeset files. Confirm that the PR includes the intended commits and that CI passes for those commits. Bot-created release updates might not start pull-request CI. Preview and CodeQL checks alone do not establish release readiness.
+3. Before a package's first release, configure its npm Trusted Publisher. It must authorize repository `eigenpal/docx-editor` and workflow `release.yml`. The workflow has no `NPM_TOKEN` fallback.
+4. Merge the PR through the normal review process. The merge starts the Release workflow.
+5. Wait for all Release jobs to pass. With an empty changeset queue, the workflow checks, builds, and tests the release candidate. It then publishes the validated artifacts, creates tags, and creates GitHub Releases with the changelog entries.
+6. Check the separate Post-release updates workflow for registry verification and downstream updates. Also check the Python wheels workflow for PyPI publication.
+
+If the former `@docx-editor.dev/agents` package is not yet deprecated, deprecate it after `@docx-editor.dev/editor-api` is available. Direct consumers to the replacement package. This is a one-time maintainer action outside the release workflow.
+
+While changesets are pending, the workflow updates the release PR without running prepublish checks or builds. Contributor PRs run their own CI checks.
+
+The publish path runs lint, formatting, type checks, tests, parity, license, and translation checks. A separate job builds packages and demos, validates a consumer install, and generates third-party notices. Publishing uses those artifacts only after every required job succeeds.
+
+If no changesets are pending and every published package version is already on npm, the run is idle. The **Detect release mode** job lists the result, and every later job is skipped. A registry lookup that fails counts as an unpublished version, so the run takes the publish path.
+
+### Check documentation before merging
+
+Match the pending changesets against the user guides, package READMEs, API snapshots, and `docs/site/data/word-features.ts`. Include usage instructions, upgrade steps, and unsupported cases for new behavior. Add Python release notes through the converter changeset, including the first Python release.
+
+Run the documentation checks from the repository root:
+
+```bash
+bun run check:docs-mdx
+bun run check:docs-chrome-slots
+bun run check:docs-vue-refs
+bun run check:public-docs-surface
+bun run check:example-readmes
+bun run format:check
+bun run build:packages
+bun run api:check
+bun run docs:json
+```
+
+Build fresh package declarations before generating JSON. The generator also rewrites API snapshots, so stale builds can replace current API documentation with old declarations.
+
+Review the generated release plan with `bun changeset status`. Keep all ten published npm packages on the intended version. Do not add an unreleased version to the generated collaboration release table; the post-release catalog updates it after verification.
+
+These checks cover documentation and public declarations. Before publication, also require the [Release workflow](../.github/workflows/release.yml) checks on the release commit. These include lint, type checks, unit tests, parity, licenses, translations, consumer installation, and collaboration candidate tests.
+
+For Python changes, check all five platform jobs in **Python wheels**. A passing npm release does not establish Python wheel availability. After publication, check the separate Python publish job and the documentation deployment.
 
 ### Common situations
 
-| Situation                                | What to do                                                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Hotfix, ship now                         | Land the fix PR with a `patch` changeset → release PR auto-updates → merge it.                          |
-| Several PRs, ship together               | All landed PRs aggregated into one release PR. Merge once, one coordinated release.                     |
-| Forgot a changeset on a merged PR        | Open a tiny follow-up PR with just `.changeset/foo.md`, _or_ edit the release PR's frontmatter inline.  |
-| Not ready to release yet                 | Don't merge the release PR. It keeps updating as new PRs land.                                          |
-| Publish step crashed after PR merged     | Re-run the workflow manually (`workflow_dispatch` is kept for this). `changeset publish` is idempotent. |
-| Need to force a major bump for marketing | Edit a pending changeset's frontmatter from `minor` → `major` before merging.                           |
-| No pending changesets                    | No release PR opens. Nothing to ship.                                                                   |
+| Situation | What to do |
+| --- | --- |
+| Hotfix, ship now | Land the fix PR with a `patch` changeset → release PR auto-updates → merge it. |
+| Several PRs, ship together | All landed PRs aggregated into one release PR. Merge once, one coordinated release. |
+| Forgot a changeset on a merged PR | Open a follow-up PR against `main` with `.changeset/foo.md`; let the bot regenerate the release PR. |
+| Not ready to release yet | Don't merge the release PR. It keeps updating as new PRs land. |
+| Publish step crashed after PR merged | Re-run the workflow manually (`workflow_dispatch` is kept for this). If every version reached npm, the re-run is idle. Check npm for partial publication before retrying. For failures after successful publication, see [Recover post-release updates without publishing](#recover-post-release-updates-without-publishing). |
+| Breaking public API change | Add a `major` changeset and document the migration before merging. |
+| No pending changesets | If a package version is not on npm yet, the workflow takes the publish path and publishes it. If every version is on npm, the run is idle and skips every job after **Detect release mode**. |
 
-## First-time setup (already configured, documented for future reference)
+## Configure release automation
 
-| Where                    | What                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| npmjs.com                | Trusted Publisher configured for each published `@docx-editor.dev/*` package → repo `eigenpal/docx-editor`, workflow `release.yml`          |
-| `package.json`           | `"publishConfig": { "access": "public" }` on each published package                                                                         |
-| `.changeset/config.json` | `"access": "public"`; fixed release group for react, agents, vue, i18n, and nuxt packages                                             |
-| GitHub perms             | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
-| GitHub secrets           | `SLACK_WEBHOOK_URL` (optional — release notifications)                                                                                      |
+| Where | What |
+| --- | --- |
+| npmjs.com | Trusted Publisher configured for each published `@docx-editor.dev/*` package, including `editor-api` and `docx-to-markdown`, → repo `eigenpal/docx-editor`, workflow `release.yml` |
+| `package.json` | `"publishConfig": { "access": "public" }` on each published package |
+| `.changeset/config.json` | `"access": "public"`; fixed release group for the ten published packages; private workspace versioning and tagging disabled |
+| GitHub perms | Settings → Actions → General → Workflow permissions = **Read and write**, **Allow GitHub Actions to create and approve pull requests** = on |
+| GitHub secrets | `SLACK_WEBHOOK_URL` (optional — release notifications) |
 
-## Manual / local releases (don't, but if you must)
+### Configure Dependabot notifications
+
+Set the repository secret `DOCX_EDITOR_SLACK_WEBHOOK_URL` to an incoming webhook for the channel that receives Dependabot notifications. Both alert summaries and reminder failure notices use this destination. Release notifications continue to use `SLACK_WEBHOOK_URL`.
+
+Create the webhook for the intended channel in Slack, then save its URL in the repository's Actions secrets. Incoming webhooks have a fixed destination; a channel name or ID cannot override it. See [Sending messages using incoming webhooks](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/).
+
+Configure the secret before enabling the reminder workflow. A weekly run posts a summary even when no alerts are open. Daily runs post only for high or critical alerts. If the secret is missing, a run that needs to post fails without sending to the release channel.
+
+## Run a local release
+
+Prefer the CI workflow. It uses OpenID Connect (OIDC) for npm Trusted Publishing and produces npm provenance.
+
+For a local release, first complete the same validation as CI and configure npm authentication. Then run:
 
 ```bash
-bun run version-packages   # consume .changeset/*.md → bump versions + write CHANGELOGs
-bun run release            # build + changeset publish (needs NPM_TOKEN locally)
+bun run version-packages
+bun run release
 ```
 
-The CI flow is preferred because it uses OIDC (no long-lived npm token needed) and produces npm provenance.
+`version-packages` updates versions, changelogs, the lockfile, and the generated Office.js compatibility fixture. `release` builds packages, generates notices, checks collaboration decisions, tests and verifies the packed candidate, and publishes to npm. It does not run every CI check or the post-release workflows.
 
 ## Anti-patterns to avoid
 
@@ -87,3 +163,66 @@ The CI flow is preferred because it uses OIDC (no long-lived npm token needed) a
 - **Don't edit `CHANGELOG.md` by hand.** It's auto-generated from changesets; manual edits get clobbered on the next release.
 - **Don't edit the `version` field in `package.json` by hand.** `changeset version` owns it.
 - **Don't hand-write package names in changeset frontmatter.** Run `bun changeset` so the names come from the workspace — a typo crashes the post-merge Release workflow and blocks all releases.
+
+## Post-release verification and updates
+
+The [Post-release updates workflow](../.github/workflows/post-release.yml) starts when Release completes. It checks that the source run published packages and created the version tag. Release-PR updates and runs that published nothing skip these tasks.
+
+Release finishes without waiting for npm metadata propagation. The post-release workflow calls [Verify release](../.github/workflows/verify-release.yml) and then [Release downstream updates](../.github/workflows/release-downstream.yml). Each step is its own job:
+
+| Job | What it does |
+| --- | --- |
+| **Verify published packages** | Checks the published packages against the original tested artifacts. Every other step waits for it. |
+| **Site update (docx-editor.dev)** | Requests the documentation update and waits for that site's sync run to finish. |
+| **Site update (docx-to-markdown.com)** | Requests the Markdown site update and waits for its sync run. |
+| **Site update (docx-to-pdf.dev)** | Requests the PDF site update and waits for its sync run. |
+| **Capture collaboration catalog** | Opens the generated collaboration baseline PR. |
+| **Merge verified catalog** | Waits for the PR's checks, approves the tested commit, and merges it. |
+| **Release comments and roadmap** | Comments on the shipped PRs and issues and updates the roadmap board. |
+
+A site job passes only when that site's own sync run passes. Each site deploys in a separate workflow that the site job does not follow. If a site's content looks out of date, check that site's deployment. To read the sync runs, the `eigenpal-release-pal` GitHub App needs the **Actions: Read-only** repository permission.
+
+Each request carries an ID in `client_payload.request` that starts with the version, and each site's sync workflow names its run `upstream-release <request>`. The site job uses that name to find its own run. If a site does not name its runs, the site job waits 2 minutes and then takes the first unnamed sync run created after the request. If the site cancels the run because a newer sync of the same version queued, the site job follows the newer run.
+
+A site job sends nothing when a newer version is already npm `latest`, and it passes as superseded, because the site follows the newer release. The same check applies when a newer version's sync cancels the run. So neither a rerun nor a late request moves a site back to an older version.
+
+`main` requires an approving review, and release-pal cannot approve the catalog PR that it opened. The merge job approves it with the workflow token. This needs the repository setting **Allow GitHub Actions to create and approve pull requests** under **Settings** > **Actions** > **General**. The release comments need only verification, so they do not wait for the site updates or the catalog, and a failure there does not hold them back. Retried comments are deduplicated.
+
+The **Report** job posts one Slack message that lists every job with its result and a link. A skipped job is listed as skipped, not as passed. A downstream failure does not change the completed Release run.
+
+The release-success Slack notification runs immediately after publication and tagging, so it confirms publication only. The post-release report confirms the site syncs and the catalog.
+
+The verification jobs of automatic and manual downstream updates share a concurrency group that is separate from Release. Registry retries do not hold the release lock or delay another publication. The site jobs run outside that group, so a long documentation sync does not hold back the next request. The npm `latest` check, not the order of the requests, keeps each site on the newest release.
+
+## Recover post-release updates without publishing
+
+If a post-release job failed after verification passed, fix the cause and rerun the failed jobs in that post-release run (`gh run rerun <run-id> --failed`). The rerun can also repeat other jobs in the same reusable workflow, such as site updates that passed. That is safe: a site that already has the version records no change, and a catalog that already records the version passes.
+
+A rerun of the failed jobs does not repeat a verification that passed, and the jobs that need it run again from its passed result. A site job that reruns after a newer release passes as superseded and sends nothing. To recover a catalog that a newer release left behind, run `collaboration-catalog.yml` with the missed `version` input. The Recover release workflow repeats verification, which fails when a newer version is already npm `latest`.
+
+If npm publication succeeded but registry verification failed, or if the post-release run cannot be rerun, use the [Recover release workflow](../.github/workflows/recover-release.yml). Rerunning Release can skip these updates because Changesets reports that the packages are already published.
+
+1. Open the original Release run. Confirm that **Release PR or Publish** succeeded, and copy the run ID from its URL.
+2. Run the recovery workflow from `main` with the published version and original run ID. For example, to recover 2.19.0:
+
+   ```bash
+   gh workflow run recover-release.yml --ref main \
+     -f version=2.19.0 \
+     -f source_run_id=35011912193
+   ```
+
+3. Check the recovery run. It validates the source run and version tag, downloads the original `collaboration-candidate` artifact, checks its local hashes, and compares every published package's integrity with the tested tarball.
+4. Check the site jobs. Each one passes only when its site's sync run passes, and links to that run.
+5. Check the collaboration baseline PR. The catalog workflow waits for the full CI run and all PR checks, then approves and merges the tested commit. If checks fail, the PR stays open. Fix the failure and rerun the catalog workflow to resume an existing PR.
+
+Recovery does not build or publish packages, create release tags, or replay release announcements. It only updates sites for the current npm `latest` version at verification time. Verification is serialized separately from publication. To capture a historical baseline, run `collaboration-catalog.yml` with its `version` input separately.
+
+The candidate artifact is retained for 30 days on new Release runs. Earlier runs keep their original retention period. If the original artifact has expired, stop: a rebuilt tarball does not establish what the original release tested.
+
+### Registry verification and retries
+
+In the downstream workflow, artifact verification and the `latest` tag checks share one 10-minute deadline. This is a maximum: verification finishes as soon as all checks pass, with no fixed delay before the first request. Packages are checked concurrently. The verifier retries network errors, HTTP 404, 408, 429, and temporary server errors with increasing delays, respects `Retry-After`, and logs the package, last error, and remaining time.
+
+If the version endpoint is unavailable, the verifier also checks the exact version in npm's package metadata. It never substitutes the `latest` version. Authentication errors and metadata or integrity mismatches fail immediately. A timeout keeps downstream updates blocked; use recovery after npm becomes available. An integrity mismatch requires investigation before any recovery.
+
+The `latest` tags can update after the version metadata becomes available. After verifying the artifacts, recovery waits for the core and converter tags within the remaining deadline. A missing tag or an older stable version triggers a retry. A newer stable version stops recovery to prevent a site downgrade. Unexpected tag values also fail. Logs distinguish a stale tag from a superseded release.

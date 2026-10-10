@@ -1,42 +1,59 @@
 ---
-title: "@docx-editor.dev/i18n"
-description: "Locale data shared by the React and Vue adapters. Ships eleven languages: English, German, French, Hebrew, Hindi, Indonesian, Polish, Portuguese (Brazil), Russian, Turkish, and Chinese."
-category: "Packages"
+title: '@docx-editor.dev/i18n'
+description: 'Locale data for editor controls in thirteen languages.'
+category: 'Reference'
 order: 60
 ---
 
 <PackageStats name="@docx-editor.dev/i18n" />
 
-Locale data for the editor UI; both adapters consume it through the `i18n` prop.
+Use locale catalogs to translate editor controls in React and Vue. Both adapters accept the catalog through the `i18n` prop.
 
 ```bash
 npm install @docx-editor.dev/i18n
 ```
 
-You usually don't install this directly. `-react` and `-vue` pull it in transitively. Install it explicitly only when you're using the locale data outside the editor (a custom toolbar, a search dropdown, that kind of thing).
+Add this package as a direct dependency when importing its catalogs, including for the editor's `i18n` prop.
+
+## UI language and date input
+
+`i18n` supplies UI translations; `locale` selects regional date input and generated document labels. Neither setting infers the other. UI strings default to English or an inherited catalog; `locale` defaults to `en-US`.
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
+
+// English UI, Polish dates (with no inherited catalog)
+<DocxEditor document={bytes} locale="pl-PL" />;
+
+// Polish UI, Polish dates
+<DocxEditor document={bytes} locale="pl-PL" i18n={pl} />;
+```
+
+In Vue, use `locale="pl-PL"` and `:i18n="pl"` on `<DocxEditor>`. For composed editors, wrap Root and its chrome in `LocaleProvider`; Root has no `i18n` prop. See the [React](/docs/2.x/react/composition#ui-language-and-date-input) and [Vue](/docs/2.x/vue/composition#ui-language-and-date-input) examples. See [form fields](/docs/2.x/guides/fields) for supported date input.
 
 ## Available locales
 
-| Code | Language | Named export |
-|---|---|---|
-| `en` | English | `en` |
-| `de` | German | `de` |
-| `fr` | French | `fr` |
-| `he` | Hebrew | `he` |
-| `hi` | Hindi | `hi` |
-| `id` | Indonesian | `id` |
-| `pl` | Polish | `pl` |
-| `pt-BR` | Brazilian Portuguese | `ptBR` |
-| `ru` | Russian | `ru` |
-| `tr` | Turkish | `tr` |
-| `zh-CN` | Chinese (Simplified) | `zhCN` |
+| Code    | Language             | Named export |
+| ------- | -------------------- | ------------ |
+| `en`    | English              | `en`         |
+| `pl`    | Polish               | `pl`         |
+| `de`    | German               | `de`         |
+| `es`    | Spanish              | `es`         |
+| `fr`    | French               | `fr`         |
+| `pt-BR` | Brazilian Portuguese | `ptBR`       |
+| `he`    | Hebrew               | `he`         |
+| `hi`    | Hindi                | `hi`         |
+| `id`    | Indonesian           | `id`         |
+| `ja`    | Japanese             | `ja`         |
+| `ru`    | Russian              | `ru`         |
+| `tr`    | Turkish              | `tr`         |
+| `zh-CN` | Chinese (Simplified) | `zhCN`       |
 
-Two import shapes are supported in 1.0.1+:
+Choose an import style:
 
-- **Named exports off the root** (`import { pl } from '@docx-editor.dev/i18n'`). Use this when you ship a small static list of locales. Hyphenated codes (`pt-BR`, `zh-CN`) become camelCase exports (`ptBR`, `zhCN`).
-- **Per-locale subpath imports** (`import pl from '@docx-editor.dev/i18n/pl'`). Use this when you dynamically load locales; the per-locale subpath code-splits so users only download the language they need.
-
-The 0.x `import pl from '@eigenpal/docx-js-editor/i18n/pl.json'` JSON pattern is gone. Replace it with `import pl from '@docx-editor.dev/i18n/pl'`.
+- Use named exports for a fixed set of locales: `import { es } from '@docx-editor.dev/i18n'`. Hyphenated codes (`pt-BR`, `zh-CN`) use camelCase exports (`ptBR`, `zhCN`).
+- Use a dynamic subpath import to load a locale on demand: `(await import('@docx-editor.dev/i18n/es')).default`. A static subpath import includes that locale in your bundle.
 
 Verify what your installed version ships:
 
@@ -44,32 +61,106 @@ Verify what your installed version ships:
 ls node_modules/@docx-editor.dev/i18n/
 ```
 
-## Wiring into the editor
+## Set the editor language
 
-Pass the locale object to the `i18n` prop. React:
+Pass the catalog to `i18n`. These examples use Spanish controls and Spanish regional date input:
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import { pl } from '@docx-editor.dev/i18n';
+import { es } from '@docx-editor.dev/i18n';
 
-<DocxEditor documentBuffer={buf} i18n={pl} />;
+<DocxEditor document={bytes} i18n={es} locale="es-ES" />;
 ```
 
-Vue:
+</Framework>
+<Framework value="vue">
 
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
+import { es } from '@docx-editor.dev/i18n';
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :i18n="es" locale="es-ES" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+To share a catalog across editors, use `LocaleProvider`:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
+
+<LocaleProvider i18n={pl}>
+  <DocxEditor document={bytes} />
+</LocaleProvider>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/vue';
 import { pl } from '@docx-editor.dev/i18n';
 </script>
 
 <template>
-  <DocxEditor :document-buffer="buf" :i18n="pl" />
+  <LocaleProvider :i18n="pl">
+    <DocxEditor :document="bytes" />
+  </LocaleProvider>
 </template>
 ```
 
+</Framework>
+</FrameworkTabs>
+
+Each catalog overrides the inherited catalog one key at a time. Without an outer provider, missing or `null` values fall back to English. Nested providers keep inherited values for keys they omit or set to `null`.
+
+Custom controls read the same catalog through `useTranslation()`:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useTranslation } from '@docx-editor.dev/react';
+
+function BoldLabel() {
+  const { t } = useTranslation();
+  return <span>{t('formattingBar.bold')}</span>;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useTranslation } from '@docx-editor.dev/vue';
+
+const { t } = useTranslation();
+</script>
+
+<template>
+  <span>{{ t('formattingBar.bold') }}</span>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 ## Next steps
 
-- [Contributing a translation](/docs/1.x/i18n/contributing): add or improve a locale with one JSON file
-- [i18n API reference](/docs/1.x/api/i18n)
-- [React API reference: i18n prop](/docs/1.x/api/react)
+- [Contributing a translation](/docs/2.x/i18n/contributing): add or improve a locale with one JSON file
+- [i18n API reference](/docs/2.x/api/i18n)
+- [React API reference](/docs/2.x/api/react) and [Vue API reference](/docs/2.x/api/vue)

@@ -1,3 +1,5 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
+import type { ReactNode } from 'react';
 /**
  * Error Boundary Component
  *
@@ -14,9 +16,12 @@ import React, {
   useMemo,
   useSyncExternalStore,
 } from 'react';
-import type { ReactNode, ErrorInfo, CSSProperties } from 'react';
-import { ErrorManager } from '@docx-editor.dev/core';
-import type { ErrorSeverity, ErrorNotification } from '@docx-editor.dev/core';
+import type { ErrorInfo, CSSProperties } from 'react';
+// `ErrorManager` is UI-facing error plumbing, not engine state — the greenfield core
+// has none, so the implementation lives in the adapter beside the component
+// that uses it (see `../managers/ErrorManager`), unchanged.
+import { ErrorManager } from '../managers/ErrorManager';
+import type { ErrorSeverity, ErrorNotification } from '../managers/types';
 import { useTranslation } from '../i18n';
 
 // Re-export for backwards compat
@@ -47,7 +52,7 @@ export interface ErrorBoundaryProps {
   /** Child components to render */
   children: ReactNode;
   /** Custom fallback UI */
-  fallback?: ReactNode | ((error: Error, reset: () => void) => ReactNode);
+  fallback?: ReactNode | ((error: Error, reset: () => void) => DocxEditorChildren);
   /** Callback when error occurs */
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   /** Whether to show error details */
@@ -246,7 +251,10 @@ function NotificationToast({ notification, onDismiss }: NotificationToastProps) 
     borderRadius: '8px',
     padding: '12px 16px',
     boxShadow: '0 2px 8px var(--doc-shadow)',
-    animation: 'slideIn 0.3s ease-out',
+    // Keyframes live in the core stylesheet (editor.css) — keyframes names are
+    // document-global, so the name carries the docx- prefix and the build's
+    // namespace guard covers it.
+    animation: 'docx-notification-slide-in 0.3s ease-out',
   };
 
   const headerStyle: CSSProperties = {
@@ -349,20 +357,6 @@ function NotificationToast({ notification, onDismiss }: NotificationToastProps) 
       className={`docx-notification-toast docx-notification-${notification.severity}`}
       style={toastStyle}
     >
-      <style>
-        {`
-          @keyframes slideIn {
-            from {
-              opacity: 0;
-              transform: translateX(100%);
-            }
-            to {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          }
-        `}
-      </style>
       <div style={headerStyle}>
         <span style={iconStyle}>{getIcon(notification.severity)}</span>
         <div style={contentStyle}>

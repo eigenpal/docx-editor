@@ -10,14 +10,15 @@ interface Props {
 const wrap: React.CSSProperties = {
   display: 'inline-flex',
   background: 'var(--doc-bg-subtle)',
-  padding: '3px',
+  padding: '2px',
   borderRadius: '8px',
   border: '1px solid var(--doc-border)',
 };
 
 const pill: React.CSSProperties = {
-  padding: '4px 12px',
+  padding: '3px 10px',
   fontSize: '12px',
+  lineHeight: 1.4,
   fontWeight: 500,
   color: 'var(--doc-text-muted)',
   textDecoration: 'none',
@@ -38,8 +39,8 @@ const active: React.CSSProperties = {
 const isDev =
   typeof import.meta !== 'undefined' &&
   (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
-const reactHref = isDev ? 'http://localhost:5173/' : '/react/';
-const vueHref = isDev ? 'http://localhost:5174/' : '/vue/';
+const reactHref = isDev ? 'http://localhost:5173/react/' : '/react/';
+const vueHref = isDev ? 'http://localhost:5174/vue/' : '/vue/';
 
 export function AdapterSwitcher({ current }: Props) {
   return (

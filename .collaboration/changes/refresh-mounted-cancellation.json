@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Cancellation during a refresh change event reports failure after replacement content mounts.",
+  "after": "Cancellation during a refresh change event preserves the accepted replacement result.",
+  "reason": "The change adjusts host refresh completion without changing collaboration data or protocol fields.",
+  "tests": ["packages/core/src/editor/__tests__/document-refresh-input.test.ts"],
+  "changeset": "refresh-mounted-cancellation",
+  "migration": null
+}

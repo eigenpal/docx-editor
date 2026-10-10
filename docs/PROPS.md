@@ -1,169 +1,99 @@
-# Props & Ref Methods
+# Props and ref methods
 
-The documented root API shape is shared by the React and Vue packages:
-
-```ts
-import { DocxEditor, type DocxEditorRef, renderAsync } from '@docx-editor.dev/react';
-import '@docx-editor.dev/react/styles.css';
-```
+React and Vue share the root editor contract. Import the component and ref type for your framework.
 
 ```ts
-import { DocxEditor, type DocxEditorRef, renderAsync } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 ```
 
-Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`,
-`DocxEditorHandle`, `RenderAsyncOptions`, `EditorMode`, and `renderAsync`.
-Framework-specific customization stays in explicit subpaths such as `/ui`,
-`/hooks` or `/composables`, `/dialogs`, and `/plugin-api`.
+For Vue, use the Vue package:
 
-React still exposes a few wider host-integration props, but Vue now supports the
-common document, mode, toolbar, title-bar, i18n, plugin, error, ready, save,
-zoom, scroll, print, and programmatic load flows. Staged prop divergences are
-enforced by `bun run check:editor-contract` so they stay explicit instead of
-accidental.
+```ts
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+```
+
+Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`, and `EditorMode` from the package root. The React package also exports its provider primitives, shared hooks, and compound chrome from that same root entry. There are no `/ui`, `/hooks`, `/composables`, `/dialogs`, or `/plugin-api` public package exports.
+
+Staged React/Vue prop divergences are enforced by `bun run check:editor-contract` so they stay explicit instead of accidental.
 
 ## Props
 
-| Prop                          | Type                                        | Default     | Description                                                                                            |
-| ----------------------------- | ------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------ |
-| `documentBuffer`              | `ArrayBuffer \| Uint8Array \| Blob \| File` | —           | `.docx` file contents to load                                                                          |
-| `document`                    | `Document`                                  | —           | Pre-parsed document (alternative to buffer)                                                            |
-| `author`                      | `string`                                    | `'User'`    | Author name for comments and track changes                                                             |
-| `mode`                        | `'editing' \| 'suggesting' \| 'viewing'`    | `'editing'` | Editor mode — editing, suggesting (track changes), or viewing (read-only with toolbar)                 |
-| `onModeChange`                | `(mode: EditorMode) => void`                | —           | Called when the user changes the editing mode                                                          |
-| `readOnly`                    | `boolean`                                   | `false`     | Read-only preview (hides toolbar, rulers, panel)                                                       |
-| `externalContent`             | `boolean`                                   | `false`     | Treat `document` as schema seed only — content is provided externally (e.g. Yjs)                       |
-| `showToolbar`                 | `boolean`                                   | `true`      | Show formatting toolbar                                                                                |
-| `showFileOpen`                | `boolean`                                   | `true`      | Show File → Open and enable Cmd/Ctrl+O; set false when the host provides its own open action           |
-| `showRuler`                   | `boolean`                                   | `false`     | Show horizontal & vertical rulers                                                                      |
-| `rulerUnit`                   | `'inch' \| 'cm'`                            | `'inch'`    | Unit for ruler display                                                                                 |
-| `showZoomControl`             | `boolean`                                   | `true`      | Show zoom controls in toolbar                                                                          |
-| `showOutline`                 | `boolean`                                   | `false`     | Show document outline sidebar (table of contents)                                                      |
-| `showMarginGuides`            | `boolean`                                   | `false`     | Show page margin guide boundaries                                                                      |
-| `marginGuideColor`            | `string`                                    | `'#c0c0c0'` | Color for margin guides                                                                                |
-| `initialZoom`                 | `number`                                    | `1.0`       | Initial zoom level                                                                                     |
-| `theme`                       | `Theme \| null`                             | —           | Theme for styling                                                                                      |
-| `disableFindReplaceShortcuts` | `boolean`                                   | `false`     | Let the browser or host app handle Cmd/Ctrl+F and Cmd/Ctrl+H instead of opening the editor find dialog |
-| `toolbarExtra`                | `ReactNode`                                 | —           | Custom toolbar items appended to the toolbar                                                           |
-| `placeholder`                 | `ReactNode`                                 | —           | Placeholder when no document is loaded                                                                 |
-| `loadingIndicator`            | `ReactNode`                                 | —           | Custom loading indicator                                                                               |
-| `className`                   | `string`                                    | —           | Additional CSS class name                                                                              |
-| `style`                       | `CSSProperties`                             | —           | Additional inline styles                                                                               |
-| `onChange`                    | `(doc: Document) => void`                   | —           | Called on document change                                                                              |
-| `onSave`                      | `(buffer: ArrayBuffer) => void`             | —           | Called on save                                                                                         |
-| `onOpen`                      | `(file: File) => void \| Promise<void>`     | —           | Called with the file picked from File → Open / Cmd+O instead of running the built-in local load        |
-| `onError`                     | `(error: Error) => void`                    | —           | Called on error                                                                                        |
-| `onSelectionChange`           | `(state: SelectionState \| null) => void`   | —           | Called on selection change                                                                             |
-| `onFontsLoaded`               | `() => void`                                | —           | Called when fonts finish loading                                                                       |
-| `onPrint`                     | `() => void`                                | —           | Pass to enable File → Print and the `editor.print()` ref method; omit to hide the menu entry           |
-| `onCopy`                      | `() => void`                                | —           | Called when content is copied                                                                          |
-| `onCut`                       | `() => void`                                | —           | Called when content is cut                                                                             |
-| `onPaste`                     | `() => void`                                | —           | Called when content is pasted                                                                          |
-| `renderLogo`                  | `() => ReactNode`                           | —           | Custom logo in the title bar                                                                           |
-| `documentName`                | `string`                                    | —           | Editable document name in the title bar                                                                |
-| `onDocumentNameChange`        | `(name: string) => void`                    | —           | Called when the user edits the document name                                                           |
-| `renderTitleBarRight`         | `() => ReactNode`                           | —           | Custom right-side actions in the title bar                                                             |
-| `comments`                    | `Comment[]`                                 | —           | Controlled comments. Pair with `onCommentsChange` to sync over Yjs / Liveblocks / etc.                 |
-| `onCommentsChange`            | `(comments: Comment[]) => void`             | —           | Fires whenever the comments array changes (controlled mode)                                            |
+### Shared root props
 
-Source: [`DocxEditorProps`](../packages/react/src/components/DocxEditor.tsx)
+| Prop | Type | Package(s) | Description |
+| --- | --- | --- | --- |
+| `document` | `DocumentSource` | React, Vue | DOCX bytes, `'blank'`, or an existing `DocumentHandle`. |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | React, Vue | Font bytes or a resolver used for shaping and pagination. |
+| `author` | `string` | React, Vue | Author name for editing commands. |
+| `mode` | `'edit' \| 'view' \| 'suggesting'` | React, Vue | Editing mode; changes apply without remounting. |
+| `zoom` | `number` | React, Vue | Fixed zoom scale; changes apply without remounting. |
+| `zoomMode` | `ZoomMode \| 'auto'` | React, Vue | Automatic or fixed zoom behavior. |
+| `locale` | `string` | React, Vue | Regional date input and generated labels; defaults to `en-US`. |
+| `i18n` | `Translations` | React, Vue | UI translations, including form controls; separate from `locale`. |
+| `t` | `(key, params?) => string` | React, Vue | Host translation function for editor chrome. |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | React, Vue | Color mode for editor chrome. |
+| `rulers` | `boolean` | React, Vue | Toggles the packaged rulers. |
+| `modules` | `readonly EditorModule[]` | React, Vue | Feature modules applied at mount. |
+| `onFontError` | `(error: EditorFontError) => void` | React, Vue | Reports typed font-resolution failures. |
 
-Vue uses `VNodeChild` render functions for `toolbarExtra`, `renderLogo`, and
-`renderTitleBarRight`. In SFC templates, the equivalent named slots are
-`toolbar-extra`, `title-bar-left`, and `title-bar-right`.
+### React root chrome props
 
-## Ref Methods
+| Prop | Type | Description |
+| --- | --- | --- |
+| `chrome` | `boolean` | Toggle the packaged frame around the painted document. |
+| `title` | `string` | Title shown in the title bar. |
+| `onTitleChange` | `(title: string) => void` | Makes the title editable. |
+| `renderTitleBarLeft` / `renderTitleBarRight` | `() => ReactNode` | Host-owned title-bar slots. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggle or customize the packaged menu row. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggle or customize the packaged navigation pane. |
+| `hyperlinkPopup` | `boolean` | Toggle the packaged link popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu. |
+| `children` | `ReactNode` | Render host chrome inside the viewport. |
+| `onReady` | `(editor: Editor) => void` | Fired after the editor instance is created. |
+| `onChange` | `(change: DocumentChange) => void` | Fired after document mutations. |
+| `onSave` / `onOpen` | `() => void` | Override the packaged File → Save / Open actions. |
 
-```tsx
-const ref = useRef<DocxEditorRef>(null);
+Source: [`packages/react/src/types.ts`](../packages/react/src/types.ts) and [`packages/vue/src/types.ts`](../packages/vue/src/types.ts).
 
-await ref.current.save(); // Returns ArrayBuffer of the .docx
-ref.current.getDocument(); // Current document object
-ref.current.setZoom(1.5); // Set zoom to 150%
-ref.current.focus(); // Focus the editor
-ref.current.scrollToPage(3); // Scroll to page 3
-ref.current.print(); // Print the document
-ref.current.loadDocumentBuffer(file); // Programmatically load a new DOCX
-```
+For full details, see the [React props](https://www.docx-editor.dev/docs/2.x/react/props) and [Vue props](https://www.docx-editor.dev/docs/2.x/vue/props).
 
-## Read-Only Preview
+## Ref methods
 
-Use `readOnly` for a preview-only viewer. This disables editing, caret, and selection UI.
+The shared ref exposes these methods:
+
+| Method                    | Purpose                                                        |
+| ------------------------- | -------------------------------------------------------------- |
+| `load(document)`          | Open DOCX bytes, `'blank'`, or a document handle.              |
+| `save()`                  | Return a `Promise<ArrayBuffer \| null>` containing DOCX bytes. |
+| `getDocumentHandle()`     | Read the loaded document's identity and revision.              |
+| `getEditor()`             | Access the editor instance.                                    |
+| `focus()`                 | Focus the document surface.                                    |
+| `exec(command, options?)` | Run a command and return its result.                           |
+| `snapshot(options?)`      | Read the editor state.                                         |
+
+Attach a React ref to the editor, then call its methods from event handlers:
 
 ```tsx
-<DocxEditor documentBuffer={file} readOnly />
-```
+import { useRef } from 'react';
+import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
-## Native Browser Find
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const ref = useRef<DocxEditorRef>(null);
 
-By default, `DocxEditor` intercepts Cmd/Ctrl+F and Cmd/Ctrl+H to open its
-find/replace dialog. Set `disableFindReplaceShortcuts` when the surrounding app
-should keep browser-native find or route those shortcuts itself.
+  function undo() {
+    ref.current?.exec({ type: 'undo' }, { scope: { kind: 'body' } });
+    ref.current?.focus();
+  }
 
-```tsx
-<DocxEditor documentBuffer={file} disableFindReplaceShortcuts />
-```
-
-## External Content (Yjs and other live sources)
-
-Set `externalContent` when something other than the `document` prop is the source of truth for the editor's content — for example, `ySyncPlugin` from `y-prosemirror`, which populates ProseMirror from a Y.Doc. The `document` prop is still required as a schema seed, but the editor will not load it on mount.
-
-```tsx
-import { useMemo } from 'react';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-import { DocxEditor } from '@docx-editor.dev/react';
-import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
-
-function CollaborativeEditor({ ydoc }) {
-  const fragment = ydoc.getXmlFragment('prosemirror');
-  const plugins = useMemo(() => [ySyncPlugin(fragment), yUndoPlugin()], [fragment]);
-
-  return <DocxEditor document={createEmptyDocument()} externalPlugins={plugins} externalContent />;
-}
-```
-
-**Why this is needed:** Without `externalContent`, DocxEditor's mount-time `useEffect` calls `loadDocument()`, which resets ProseMirror state. If `ySyncPlugin` has already populated ProseMirror with Y.Doc content, that reset wipes it — and then ySync syncs the empty state back into Y.Doc, corrupting the shared document for every connected client.
-
-## Controlled Comments
-
-Comment thread metadata (text, author, replies, resolved status) lives outside the ProseMirror document — only the comment range markers sync via `ySyncPlugin`. To make threads sync across collaborators, pass `comments` and `onCommentsChange` and bridge them to your collab backend (Yjs `Y.Array`, Liveblocks storage, Automerge document, anything keyed by id).
-
-```tsx
-import { useEffect, useState, useCallback } from 'react';
-import * as Y from 'yjs';
-import type { Comment } from '@docx-editor.dev/core';
-
-function useSyncedComments(ydoc: Y.Doc): [Comment[], (next: Comment[]) => void] {
-  const yComments = ydoc.getArray<Comment>('comments');
-  const [comments, setComments] = useState<Comment[]>(() => yComments.toArray());
-
-  useEffect(() => {
-    const sync = () => setComments(yComments.toArray());
-    yComments.observeDeep(sync);
-    return () => yComments.unobserveDeep(sync);
-  }, [yComments]);
-
-  const setCommentsRemote = useCallback(
-    (next: Comment[]) => {
-      ydoc.transact(() => {
-        if (yComments.length > 0) yComments.delete(0, yComments.length);
-        if (next.length > 0) yComments.push(next);
-      });
-    },
-    [ydoc, yComments]
+  return (
+    <>
+      <button type="button" onClick={undo}>
+        Undo
+      </button>
+      <DocxEditor ref={ref} document={bytes} />
+    </>
   );
-
-  return [comments, setCommentsRemote];
 }
-
-// in the component:
-const [comments, setComments] = useSyncedComments(ydoc);
-return (
-  <DocxEditor document={...} comments={comments} onCommentsChange={setComments} />
-);
 ```
 
-When `comments` is omitted, the editor falls back to internal state — existing usages need no changes.
-
-**Tracked changes** sync automatically without any extra props: their metadata (`author`, `date`, `revisionId`) lives in `insertion`/`deletion` mark attributes on the ProseMirror document, which `ySyncPlugin` syncs as part of the doc tree.
+Use `getEditor()` and `getDocumentHandle()` after the editor mounts; either can return `null`. `save()` can also return `null` before mount.

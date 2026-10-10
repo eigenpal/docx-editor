@@ -1,20 +1,34 @@
 name: Release
 
-# Two triggers, single job:
+# Two triggers, one flow across the mode, prepublish, and release jobs:
 # 1. Every push to main → if there are pending changesets in `.changeset/`,
 #    open or update a "chore: release" PR with the version bumps and CHANGELOG
 #    entries applied. The PR sits there until a maintainer merges it.
-# 2. When that PR is merged → the same job runs again, sees no pending
+# 2. When that PR is merged → the same flow runs again, sees no pending
 #    changesets (they were drained by `changeset version`), and instead
 #    publishes the new versions to npm.
+# 3. Any later push without a changeset → every version is already on npm, so
+#    the run is idle and every job after `mode` skips.
 #
-# The heavy gate (lint, format, typecheck, tests, build, Playwright, parity)
-# only guards the PUBLISH path (mode 2). On the PR-update path (mode 1) those
-# steps are skipped: `changeset version` just rewrites versions + CHANGELOGs,
-# needs no build, and the work is already validated by each contributing PR's
-# own CI. Skipping keeps PR-update runs to ~1 min so they finish before the
-# next push to main supersedes them in the `release` concurrency group —
-# otherwise slow runs queue and get cancelled, leaving the release PR stale.
+# Job split and runner choice:
+# - `mode` decides which path this run takes (pending changesets ⇒ PR-update,
+#   none ⇒ publish, none and nothing unpublished ⇒ idle).
+# - `checks` runs lint, format, typecheck, tests, parity, license, and i18n
+#   checks in a fail-fast matrix on Blacksmith. `build` runs the package and
+#   demo builds plus consumer validation in parallel, then hands the validated
+#   artifact to `release`.
+# - `release` runs the changesets action and creates the version tag on a
+#   GitHub-hosted runner: npm rejects provenance bundles from self-hosted
+#   runners (E422 "Unsupported GitHub Actions runner environment"), and
+#   Trusted Publishing always signs provenance. Blacksmith counts as
+#   self-hosted, so the publish must not run there.
+#
+# The checks and build jobs only guard the PUBLISH path. On the PR-update path
+# they are skipped: `changeset version` just rewrites versions + CHANGELOGs, needs no
+# build, and the work is already validated by each contributing PR's own CI.
+# Skipping keeps PR-update runs short so they finish before the next push to
+# main supersedes them in the `release` concurrency group — otherwise slow
+# runs queue and get cancelled, leaving the release PR stale.
 #
 # Manual workflow_dispatch is kept for the rare case of triggering a publish
 # without a fresh push (e.g. recovering from a failed publish step).
@@ -28,19 +42,237 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Pending changesets ⇒ PR-update path (skip checks/build); none ⇒
+  # publish path (run the prepublish jobs before publishing to npm). README.md /
+  # config.json are not changesets. No changesets and every public version
+  # already on npm ⇒ idle: a merge without a changeset after a release has
+  # nothing to publish, so every later job skips (scripts/release-mode.mjs).
+  mode:
+    name: Detect release mode
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.mode.outputs.mode }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Detect pending changesets and unpublished versions
+        id: mode
+        run: node scripts/release-mode.mjs
+
+  # Independent checks run concurrently. Publish path only — contributor PRs
+  # already run the same checks, and the PR-update path only rewrites versions.
+  checks:
+    name: Prepublish ${{ matrix.label }}
+    needs: mode
+    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Setup-bound checks use the smaller runner; typecheck and tests keep four cores.
+          - label: lint
+            command: bun run lint
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - label: format
+            command: bun run format:check
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - label: typecheck
+            command: bun run typecheck
+          - label: tests
+            command: bun run test
+          - label: parity
+            command: bun run check:parity
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - label: documentation
+            command: bun run check:docs
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - label: license headers
+            command: bun run check:license-headers
+            runner: blacksmith-2vcpu-ubuntu-2404
+          - label: i18n
+            command: bun run i18n:validate
+            runner: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ${{ matrix.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run check
+        run: ${{ matrix.command }}
+
+  # Build and artifact generation run alongside the checks. The release job
+  # publishes exactly this output after all prepublish jobs pass.
+  build:
+    name: Prepublish build
+    needs: mode
+    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build packages (publish reuses the dist/)
+        run: bun run build:packages
+
+      - name: Root and example type check
+        run: bun run typecheck:root
+
+      - name: Example regression tests
+        run: bun test ./examples/shared/example-text.test.ts ./examples/vite/src/CollaborationDemo.test.tsx
+
+      - name: Build demos and parity bundle
+        run: bun run build
+
+      - name: Consumer install check
+        run: bun run check:consumer-install
+        env:
+          SKIP_CONSUMER_INSTALL_BUILD: '1'
+
+      # Generate notices from the final build before packing release artifacts.
+      - name: Generate third-party notices
+        run: bun run notices:generate
+
+      - name: Check published package artifacts
+        run: bun run check:package-artifacts
+
+      - name: PDF packed consumer check
+        run: "bun run --filter '@docx-editor.dev/docx-to-pdf' check:consumer"
+
+      - name: Check collaboration release decisions
+        run: bun run collaboration:check --release
+
+      - name: Pack collaboration release candidate
+        run: node scripts/collaboration/cli.mjs pack
+
+      - name: Upload collaboration release candidate
+        uses: actions/upload-artifact@v7
+        with:
+          name: collaboration-candidate
+          include-hidden-files: true
+          path: .cache/collaboration/publish/
+          if-no-files-found: error
+          retention-days: 30
+
+      # Hand the exact build the prepublish job validated to the release job. Both path
+      # patterns share `packages/` as their common ancestor, so the artifact
+      # keeps the `<pkg>/dist/...` layout and unpacks back into `packages/`.
+      - name: Upload publish artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: publish-dist
+          path: |
+            packages/*/dist
+            packages/*/THIRD_PARTY_NOTICES.md
+          if-no-files-found: error
+          retention-days: 3
+
+  collaboration:
+    name: Prepublish collaboration (${{ matrix.shard }})
+    needs: [mode, build]
+    if: ${{ needs.mode.outputs.mode == 'publish' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v8
+        with:
+          name: publish-dist
+          path: packages
+      - uses: actions/download-artifact@v8
+        with:
+          name: collaboration-candidate
+          path: .cache/collaboration/publish
+      - name: Test the complete release candidate
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: node scripts/collaboration/test.mjs --all --allow-current --shard "$SHARD" --candidate .cache/collaboration/publish
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-collaboration-evidence-${{ strategy.job-index }}
+          include-hidden-files: true
+          path: |
+            .cache/collaboration/report-*.json
+            .cache/collaboration/failure.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+  # Publish packages and tag the release. Verification and updates run in
+  # post-release.yml after this workflow completes. Publishing must use a
+  # GitHub-hosted runner — see the header comment.
   release:
     name: Release
+    needs: [mode, checks, build, collaboration]
+    # Run on both paths: checks/build are skipped on the PR-update path by
+    # design, so accept skipped as well as success. The idle path has no work.
+    if: ${{ !cancelled() && needs.mode.result == 'success' && (needs.mode.outputs.mode == 'pending' || needs.mode.outputs.mode == 'publish') && (needs.checks.result == 'success' || needs.checks.result == 'skipped') && (needs.build.result == 'success' || needs.build.result == 'skipped') && (needs.mode.outputs.mode != 'publish' || needs.collaboration.result == 'success') }}
     runs-on: ubuntu-latest
-    # Default job timeout is 6h; a hung step (e.g. an apt prompt) otherwise burns
-    # a runner for hours. A healthy run finishes in well under 10 min.
     timeout-minutes: 30
+    outputs:
+      # Consumed by the notify-failure job to tell "the changesets step itself
+      # failed" apart from "an earlier step failed".
+      changesets_outcome: ${{ steps.changesets.outcome }}
+      published: ${{ steps.changesets.outputs.published }}
     permissions:
       contents: write # push tags, create GitHub Releases
       pull-requests: write # changesets/action opens / updates the release PR
       id-token: write # OIDC for npm Trusted Publishing
+      actions: write # dispatch the Python wheels workflow after npm publishes
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.3
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -48,7 +280,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.11'
+          bun-version: '1.4.2'
 
       # Node 24 ships with npm 11.x; Trusted Publishing requires >=11.5.1.
       - name: Setup Node.js
@@ -74,99 +306,49 @@ jobs:
       # repo's pre-commit hook (typecheck + parity + api:check + lint-staged).
       # That hook is for local dev — it must NOT gate the bot's automated
       # `chore: release` commit, where it both fails (api:check needs a build
-      # this path skips, and breaks on any pre-existing snapshot drift on main)
-      # and is redundant: ci.yml already runs these on contributor PRs, and the
-      # publish path runs them as real steps below. Neuter hooks for the job.
+      # this job doesn't run, and breaks on any pre-existing snapshot drift on
+      # main) and is redundant: ci.yml already runs these on contributor PRs,
+      # and the publish path runs them in the prepublish jobs. Neuter hooks for the job.
       - name: Disable git hooks for automated commits
         run: git config core.hooksPath /dev/null
 
-      # Pending changesets ⇒ PR-update path (skip the heavy gate); none ⇒
-      # publish path (run the full gate before publishing to npm). README.md /
-      # config.json are not changesets. Inline check so it works even if a later
-      # step crashes.
-      - name: Detect pending changesets
-        id: pending
-        run: |
-          count=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | wc -l | tr -d ' ')
-          echo "Pending changesets: $count"
-          if [ "$count" -gt 0 ]; then
-            echo "publishing=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "publishing=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Lint
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run lint
-
-      - name: Format check
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run format:check
-
-      - name: Type check
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run typecheck
-
-      - name: Run tests
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun test
-
-      - name: Build packages (publish reuses the dist/)
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run build:packages
-        env:
-          # tsup's dts worker (rollup-plugin-dts) loads the full TS program;
-          # core's 67 entries OOM under the default 1.5 GB heap.
-          NODE_OPTIONS: --max-old-space-size=8192
-
-      # Restore the browser binaries from cache so the common path skips the
-      # download from cdn.playwright.dev. Keyed on the lockfile so a
-      # @playwright/test bump invalidates it; a miss falls through to a fresh
-      # download.
-      - name: Cache Playwright browsers
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        uses: actions/cache@v5
+      - name: Download publish artifacts
+        if: ${{ needs.mode.outputs.mode == 'publish' }}
+        uses: actions/download-artifact@v8
         with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          name: publish-dist
+          path: packages
 
-      # `--with-deps` shells out to apt-get; a post-install needrestart prompt
-      # can hang it, so NEEDRESTART_MODE=a + noninteractive suppress it.
-      # timeout-minutes turns any remaining hang into a fast failure.
-      #
-      # NB: Playwright < 1.60.0 deadlocks here on Node >= 24.16 — a vendored
-      # yauzl regression hangs extraction *after* the download hits 100%
-      # (microsoft/playwright#40724). `setup-node` pins Node 24, whose runner
-      # default crossed 24.16, so every publish-path run hung until the job
-      # timeout. The fix is the >=1.60.0 bump in package.json, not a longer
-      # timeout. Keep this pinned at >=1.60.0.
-      - name: Install Playwright browsers for parity gate
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        timeout-minutes: 10
-        run: npx playwright install --with-deps chromium
-        env:
-          DEBIAN_FRONTEND: noninteractive
-          NEEDRESTART_MODE: a
+      - name: Download tested collaboration candidate
+        if: ${{ needs.mode.outputs.mode == 'publish' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: collaboration-candidate
+          path: .cache/collaboration/publish
 
-      - name: Parity prepublish gate
-        if: ${{ steps.pending.outputs.publishing == 'true' }}
-        run: bun run parity:prepublish
+      - name: Verify the publication payload without rebuilding
+        if: ${{ needs.mode.outputs.mode == 'publish' }}
+        run: node scripts/collaboration/cli.mjs verify --candidate .cache/collaboration/publish
 
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
       #   that runs `version` (drains changesets, bumps versions, writes CHANGELOG).
+      #   `version-packages` also regenerates the Office.js conformance fixture:
+      #   `compat/generated/docxeditor.shape.json` stamps editor-api's version, and a
+      #   test asserts it equals a fresh regeneration — so a bump without this leaves
+      #   the release PR red on a file only the bump changed.
       # - If no pending changesets and current package.json versions aren't on npm yet:
       #   runs `publish` and creates per-package git tags.
       - name: Release PR or Publish
         id: changesets
-        uses: changesets/action@v1.9.0
+        uses: changesets/action@v2.1.2
         with:
-          version: bun run version-packages
-          publish: bunx changeset publish
-          title: 'chore: release'
-          commit: 'chore: release'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          version-script: bun run version-packages
+          publish-script: bunx changeset publish
+          pr-title: 'chore: release'
+          commit-message: 'chore: release'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
 
       # changesets/action creates per-package tags (e.g. `@docx-editor.dev/react@1.0.1`);
@@ -178,87 +360,23 @@ jobs:
       - name: Create umbrella version tag (vX.Y.Z)
         if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
         env:
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
         run: |
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
           git tag -a "v$version" -m "Release v$version"
           git push origin "v$version"
 
-      # Post-publish fan-out runs as the eigenpal-release-pal App rather than
-      # the default GITHUB_TOKEN, so it can comment on this repo's PRs and
-      # notify docx-editor.dev. (App permissions are managed in the org.)
-      # continue-on-error on all three post-publish steps: the release has
-      # already shipped to npm, so a transient failure here must NOT flip the
-      # run to failed, which would suppress the success Slack and fire the
-      # misleading "publish failed / partial state" alert keyed on
-      # no-pending-changesets.
-      - name: Mint release-pal App token
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        id: pal-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
-          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: docx-editor,docx-editor.dev
-
-      # Comment "🚀 Released in vX.Y.Z" on every PR that shipped in this release.
-      # The squash-merge subject GitHub writes ends in "(#N)" = the PR number;
-      # the previous umbrella tag bounds "what shipped", and chore: release
-      # commits are skipped so the release PR doesn't comment on itself.
-      - name: Comment release link on shipped PRs
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
-        run: |
-          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
-          # `|| true`: the default shell is `bash -eo pipefail`, so a grep
-          # no-match (first-ever release) or a SIGPIPE from head closing the
-          # pipe early would otherwise abort this step — which, via the implicit
-          # success() gate, would skip the landing-notify dispatch below.
-          prev=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$version" | head -n1 || true)
-          if [ -z "$prev" ]; then
-            echo "No previous v* tag found; skipping PR comments."
-            exit 0
-          fi
-          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/v$version"
-          prs=$(git log --format='%s' "$prev..HEAD" \
-            | grep -vE '^chore: release' \
-            | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9\n' | sort -u)
-          echo "Shipped PRs: ${prs:-none}"
-          for pr in $prs; do
-            gh pr comment "$pr" --repo "${{ github.repository }}" \
-              --body "🚀 Released in [v$version]($release_url)" \
-              || echo "Could not comment on #$pr (closed / cross-fork?); continuing."
-          done
-
-      # Tell the landing site a new version shipped. Its sync workflow opens an
-      # auto-merging PR that bumps the pinned editor deps to this version.
-      - name: Notify landing site of new release
-        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ steps.pal-token.outputs.token }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
-        run: |
-          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
-          gh api "repos/${{ github.repository_owner }}/docx-editor.dev/dispatches" \
-            -f event_type=upstream-release \
-            -f "client_payload[version]=$version"
-
       - name: Notify Slack — release succeeded
+        continue-on-error: true
         if: ${{ steps.changesets.outputs.published == 'true' && env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # publishedPackages is JSON like:
+          # published-packages is JSON like:
           # [{"name":"@docx-editor.dev/react","version":"1.0.0"}, ...]
           version=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[0].version')
           packages_md=$(echo "$PUBLISHED_PACKAGES" | jq -r '.[] | "• <https://www.npmjs.com/package/\(.name)/v/\(.version)|\(.name)@\(.version)>"')
@@ -287,37 +405,70 @@ jobs:
                 { type: "context", elements: [ { type: "mrkdwn", text: "<\($run_url)|Run #\($run_n)>" } ] }
               ]
             }')
-          curl -sSf -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
+          curl -sSf --connect-timeout 10 --max-time 30 -X POST -H 'Content-Type: application/json' -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null
 
-      # Distinguish three failure modes when notifying Slack:
-      #   - MODE=pre-release → an earlier step failed (lint, format check,
-      #     typecheck, tests, build, install) before the changesets step ever ran.
-      #   - MODE=release-pr  → changesets step failed AND pending changesets
-      #     exist, so the run was trying to open/update the "chore: release" PR
-      #     (no publish was attempted).
-      #   - MODE=publish     → changesets step failed AND no pending changesets,
-      #     so the run was trying to publish to npm and failed mid-publish.
-      # The pending-changeset check is inline (not a step output) so it works
-      # even when the changesets step itself crashed before producing outputs.
-      - name: Notify Slack — workflow failed
-        if: ${{ failure() && env.SLACK_WEBHOOK_URL != '' }}
+      # The Python package is versioned with the fixed group and built per platform, so
+      # it publishes from its own workflow at the release tag. That run posts its own
+      # Slack message with the PyPI link, or a failure notice.
+      - name: Publish Python wheels
+        if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+        run: |
+          version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
+          gh workflow run python-wheels.yml --ref "v$version" -f publish=true
+
+  # Distinguish three failure modes when notifying Slack:
+  #   - MODE=pre-release → a prepublish job failed, or a release-job step failed
+  #     before the changesets step ever ran (install, checkout, artifact
+  #     download).
+  #   - MODE=release-pr  → changesets step failed AND pending changesets
+  #     exist, so the run was trying to open/update the "chore: release" PR
+  #     (no publish was attempted).
+  #   - MODE=publish     → changesets step failed AND no pending changesets,
+  #     so the run was trying to publish to npm and failed mid-publish.
+  # Lives in its own job so a prepublish failure on Blacksmith still alerts — the
+  # release job never starts in that case.
+  notify-failure:
+    name: Notify Slack — workflow failed
+    needs: [mode, checks, build, release]
+    if: ${{ failure() }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 5
+    # Only curls the Slack webhook; needs no GITHUB_TOKEN access at all.
+    permissions: {}
+    steps:
+      - name: Notify Slack
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           ACTOR: ${{ github.actor }}
           RUN_NUMBER: ${{ github.run_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          CHANGESETS_OUTCOME: ${{ steps.changesets.outcome }}
+          MODE_RESULT: ${{ needs.mode.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          RELEASE_MODE: ${{ needs.mode.outputs.mode }}
+          CHANGESETS_OUTCOME: ${{ needs.release.outputs.changesets_outcome }}
+          PUBLISHED: ${{ needs.release.outputs.published }}
         run: |
-          # Count pending changesets (exclude README.md / config.json).
-          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l | tr -d ' ')
-          if [ "$CHANGESETS_OUTCOME" != "failure" ]; then
+          if [ "$PUBLISHED" = "true" ]; then
+            mode="post-publish"
+            title=":warning: docx-editor — release tagging failed after publication"
+            detail="Packages were published, but release tagging failed. Check the original run and restore its version tag before using Recover release. Do not republish to repair a tag."
+          elif [ "$MODE_RESULT" != "success" ]; then
+            mode="release-mode"
+            title=":x: docx-editor — release mode detection failed"
+            detail="The Detect release mode job failed, so no release PR was updated and no publish was attempted. Check \`.changeset/config.json\` and the job log."
+          elif [ "$CHANGESETS_OUTCOME" != "failure" ]; then
             mode="pre-release"
             title=":x: docx-editor — pre-release step failed"
-            detail="A step before the changesets action failed (install, lint, format check, typecheck, tests, or build). No release PR was updated and no publish was attempted. Check the run logs for the failing step."
-          elif [ "$pending" -gt 0 ]; then
+            detail="A parallel prepublish check or build failed (checks: $CHECKS_RESULT; build: $BUILD_RESULT), or release-job setup failed. No release PR was updated and no publish was attempted. Check the run logs for the failing step."
+          elif [ "$RELEASE_MODE" = "pending" ]; then
             mode="release-pr"
             title=":warning: docx-editor — failed to update release PR"
-            detail="The Release workflow could not assemble the \`chore: release\` PR (\`$pending\` pending changeset(s)). No publish was attempted. Likely cause: a malformed changeset file (wrong package name, bad frontmatter)."
+            detail="The Release workflow could not assemble the \`chore: release\` PR (pending changesets exist). No publish was attempted. Likely cause: a malformed changeset file (wrong package name, bad frontmatter)."
           else
             mode="publish"
             title=":x: docx-editor — release publish failed"

@@ -1,0 +1,65 @@
+{
+  "name": "@docx-editor.dev/fonts",
+  "version": "2.27.0",
+  "description": "Open-licensed substitutes for common Word fonts, packaged for @docx-editor.dev shaped measurement.",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./google": {
+      "types": "./dist/google.d.ts",
+      "import": "./dist/google.js",
+      "require": "./dist/google.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/metafile-*.json",
+    "assets",
+    "licenses",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsup && node scripts/check-built-assets.mjs",
+    "assets:check": "node scripts/check-built-assets.mjs",
+    "typecheck": "tsc --noEmit",
+    "manifest": "node scripts/generate-manifest.mjs",
+    "manifest:check": "node scripts/generate-manifest.mjs --check",
+    "google:catalog": "node scripts/generate-google-catalog.mjs",
+    "google:check": "node scripts/generate-google-catalog.mjs --check",
+    "google:verify": "node scripts/generate-google-catalog.mjs --verify",
+    "width:check": "bun scripts/check-width-fidelity.ts"
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@happy-dom/global-registrator": "^20.8.3",
+    "fflate": "^0.8.2",
+    "typescript7": "npm:typescript@^7.0.2"
+  },
+  "keywords": [
+    "docx",
+    "fonts",
+    "carlito",
+    "caladea",
+    "liberation",
+    "metric-compatible"
+  ],
+  "author": {
+    "name": "Jedr Blaszyk",
+    "email": "jedr@eigenpal.com",
+    "url": "https://github.com/jedrazb"
+  },
+  "license": "Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/fonts"
+  }
+}

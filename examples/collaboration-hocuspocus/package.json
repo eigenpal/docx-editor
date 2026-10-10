@@ -1,0 +1,32 @@
+{
+  "name": "docx-editor-example-collaboration-hocuspocus",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server/server.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test ./shared/admission.test.ts ./server/stored-room.test.ts ./server/room-migration.test.ts"
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/fonts": "workspace:*",
+    "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
+    "@hocuspocus/provider": "^4.6.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "yjs": "^13.6.32"
+  },
+  "devDependencies": {
+    "@hocuspocus/server": "^4.6.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript7": "npm:typescript@^7.0.2",
+    "vite": "^8.0.10"
+  }
+}

@@ -1,0 +1,74 @@
+name: Release downstream updates
+
+# Site updates and the collaboration catalog for a verified release. Called after Verify
+# release by the post-release workflow and by Recover release.
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  sites:
+    # Named "Site update (<repository>, <workflow>)" once the matrix expands.
+    name: Site update
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repository: docx-editor.dev
+            workflow: sync-upstream-api.yml
+          - repository: docx-to-markdown.com
+            workflow: sync-release.yml
+          - repository: docx-to-pdf.dev
+            workflow: sync-release.yml
+    runs-on: ubuntu-latest
+    # The documentation sync waits for its own PR checks before it merges.
+    timeout-minutes: 60
+    env:
+      TARGET_REPOSITORY: ${{ github.repository_owner }}/${{ matrix.repository }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      # Only this workflow's runs count, not other workflows on the same dispatch event.
+      SYNC_WORKFLOW: .github/workflows/${{ matrix.workflow }}
+      # The site names its run after this ID, so the wait finds exactly this request. It
+      # starts with the version, so after a cancel the wait follows only the same version.
+      REQUEST_ID: ${{ inputs.version }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.repository }}
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PAL_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ matrix.repository }}
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/collaboration
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      # A sent dispatch is not a finished update. This passes only when the site's own sync
+      # run passes, or when a newer release is already npm latest, so the site follows that
+      # one. The site deploys in a separate workflow that this does not follow.
+      - name: Request the site update and wait for it
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: node scripts/collaboration/site-update.mjs
+
+  catalog:
+    uses: ./.github/workflows/collaboration-catalog.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      checks: read
+      statuses: read

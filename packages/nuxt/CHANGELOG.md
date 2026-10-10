@@ -1,5 +1,215 @@
 # @docx-editor.dev/nuxt
 
+## 2.19.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.19.0
+
+## 2.18.0
+
+### Patch Changes
+
+- Updated dependencies [90ea211]
+  - @docx-editor.dev/vue@2.18.0
+
+## 2.17.0
+
+### Patch Changes
+
+- Updated dependencies [d1d8043]
+  - @docx-editor.dev/vue@2.17.0
+
+## 2.16.2
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.16.2
+
+## 2.16.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.16.1
+
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [0a75175]
+  - @docx-editor.dev/vue@2.16.0
+
+## 2.15.1
+
+### Patch changes
+
+- @docx-editor.dev/vue@2.15.1
+
+## 2.15.0
+
+### Patch changes
+
+- @docx-editor.dev/vue@2.15.0
+
+## 2.14.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.14.1
+
+## 2.14.0
+
+### Patch Changes
+
+- Updated dependencies [1afc5f2]
+  - @docx-editor.dev/vue@2.14.0
+
+## 2.13.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.13.0
+
+## 2.12.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.12.0
+
+## 2.11.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.11.0
+
+## 2.10.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.10.0
+
+## 2.9.2
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.9.2
+
+## 2.9.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.9.1
+
+## 2.9.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.9.0
+
+## 2.8.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.8.0
+
+## 2.7.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.7.0
+
+## 2.6.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.6.1
+
+## 2.6.0
+
+### Patch Changes
+
+- Updated dependencies [e9a35d0]
+  - @docx-editor.dev/vue@2.6.0
+
+## 2.5.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.5.0
+
+## 2.4.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.4.1
+
+## 2.4.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.4.0
+
+## 2.3.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.3.1
+
+## 2.3.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.3.0
+
+## 2.2.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.2.1
+
+## 2.2.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.2.0
+
+## 2.1.3
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.1.3
+
+## 2.1.2
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.1.2
+
+## 2.1.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.1.1
+
+## 2.1.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.1.0
+
+## 2.0.1
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.0.1
+
+## 2.0.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.0.0
+
 ## 1.10.0
 
 ### Patch Changes

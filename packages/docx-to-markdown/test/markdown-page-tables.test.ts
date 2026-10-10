@@ -1,0 +1,179 @@
+import { expect, test } from 'bun:test';
+import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
+import type {
+  ParagraphFragmentRecord,
+  SemanticLayout,
+  TableFragmentRecord,
+} from '@docx-editor.dev/core/layout';
+import { exportMarkdown, exportMarkdownFrom } from '../src/index.ts';
+import { docx } from './fixture.ts';
+
+function paragraph(id: string, text: string): ParagraphFragmentRecord {
+  return {
+    kind: 'paragraph',
+    id: `${id}:f0`,
+    paragraphId: id,
+    fragmentIndex: 0,
+    styleId: null,
+    outlineLevel: null,
+    alignment: 'left',
+    lines: [
+      {
+        range: { paragraphId: id, start: 0, end: text.length },
+        spans: [
+          {
+            range: { paragraphId: id, start: 0, end: text.length },
+            text,
+            style: {},
+            box: { x: 0, y: 0, width: text.length, height: 10 },
+          },
+        ],
+      },
+    ],
+  } as unknown as ParagraphFragmentRecord;
+}
+
+function session(layout: SemanticLayout): ExportSession {
+  const exportLayout = layout as ExportSemanticLayout;
+  return {
+    layout: async () => exportLayout,
+    layoutFor: async () => exportLayout,
+    validatedImageBytes: () => null,
+    dispose: () => {},
+  };
+}
+
+test('keeps nested table fragments inside their physical page projection', async () => {
+  const nested = (fragmentIndex: number, text: string, header = false): TableFragmentRecord =>
+    ({
+      kind: 'table',
+      id: `nested:f${fragmentIndex}`,
+      tableId: 'nested',
+      fragmentIndex,
+      columnEdges: [0, 50],
+      rows: [
+        {
+          id: `nested-row-${fragmentIndex}`,
+          isHeaderRow: header,
+          isHeaderRepeat: false,
+          cells: [
+            {
+              gridColumn: 0,
+              gridSpan: 1,
+              vMergeContinue: false,
+              blocks: [paragraph(`nested-p-${fragmentIndex}`, text)],
+            },
+          ],
+        },
+      ],
+    }) as unknown as TableFragmentRecord;
+  const outer = (fragmentIndex: number, text: string, header = false): TableFragmentRecord =>
+    ({
+      kind: 'table',
+      id: `outer-split:f${fragmentIndex}`,
+      tableId: 'outer-split',
+      fragmentIndex,
+      columnEdges: [0, 100],
+      rows: [
+        {
+          id: `outer-row-${fragmentIndex}`,
+          isHeaderRow: false,
+          isHeaderRepeat: false,
+          cells: [
+            {
+              gridColumn: 0,
+              gridSpan: 1,
+              vMergeContinue: false,
+              blocks: [nested(fragmentIndex, text, header)],
+            },
+          ],
+        },
+      ],
+    }) as unknown as TableFragmentRecord;
+  const layout = {
+    revision: 1,
+    pages: [
+      { index: 0, fragments: [outer(0, 'Only page one')] },
+      { index: 1, fragments: [outer(1, 'Only page two')] },
+    ],
+  } as unknown as SemanticLayout;
+
+  const result = await exportMarkdownFrom(session(layout));
+
+  expect(result.markdown).toContain('Only page one');
+  expect(result.markdown).toContain('Only page two');
+  expect(result.pages[0]?.markdown).toContain('Only page one');
+  expect(result.pages[0]?.markdown).not.toContain('Only page two');
+  expect(result.pages[1]?.markdown).toContain('Only page two');
+  expect(result.pages[1]?.markdown).not.toContain('Only page one');
+  expect(result.pages[0]?.markdown).toContain('<td>Only page one</td>');
+  expect(result.pages[1]?.markdown).toContain('<td>Only page two</td>');
+  const headerResult = await exportMarkdownFrom(
+    session({
+      revision: 2,
+      pages: [{ index: 0, fragments: [outer(0, 'Header', true)] }],
+    } as unknown as SemanticLayout)
+  );
+  expect(headerResult.markdown).toContain('<th>Header</th>');
+});
+
+test('does not append a same-page repeated header to its original row', async () => {
+  const row = (id: string, text: string, repeat = false) => ({
+    id,
+    isHeaderRow: id === 'header',
+    isHeaderRepeat: repeat,
+    isContinuation: false,
+    cells: [
+      { gridColumn: 0, gridSpan: 1, vMergeContinue: false, blocks: [paragraph(`${text}:p`, text)] },
+    ],
+  });
+  const fragment = (fragmentIndex: number, rows: ReturnType<typeof row>[]) =>
+    ({
+      kind: 'table',
+      id: `same-page:f${fragmentIndex}`,
+      tableId: 'same-page',
+      fragmentIndex,
+      columnEdges: [0, 100],
+      rows,
+    }) as unknown as TableFragmentRecord;
+  const layout = {
+    revision: 1,
+    pages: [
+      {
+        index: 0,
+        fragments: [
+          fragment(0, [row('header', 'Header'), row('a', 'A')]),
+          fragment(1, [row('header', 'Header', true), row('b', 'B')]),
+        ],
+      },
+    ],
+  } as unknown as SemanticLayout;
+
+  const result = await exportMarkdownFrom(session(layout));
+
+  expect(result.pages[0]?.markdown.match(/Header/g)).toHaveLength(1);
+  expect(result.pages[0]?.markdown).toContain('| A |');
+  expect(result.pages[0]?.markdown).toContain('| B |');
+});
+
+test('keeps row cells past the declared w:tblGrid width', async () => {
+  const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+  const table =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr>${cell('One')}${cell('Two')}${cell('Overflow')}</w:tr>` +
+    `<w:tr>${cell('A')}${cell('B')}${cell('C')}</w:tr></w:tbl>`;
+  const result = await exportMarkdown(docx(table));
+  expect(result.markdown).toContain('| One | Two | Overflow |');
+  expect(result.markdown).toContain('| A | B | C |');
+});
+
+test('RTL table export retains logical cell order despite mirrored layout columns', async () => {
+  const cell = (text: string) => `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+  const table =
+    '<w:tbl><w:tblPr><w:bidiVisual/></w:tblPr><w:tblGrid><w:gridCol w:w="1200"/><w:gridCol w:w="2400"/></w:tblGrid>' +
+    `<w:tr>${cell('First')}${cell('Second')}</w:tr>` +
+    `<w:tr>${cell('A')}${cell('B')}</w:tr></w:tbl>`;
+  const result = await exportMarkdown(docx(table));
+  expect(result.markdown).toContain('| First | Second |');
+  expect(result.markdown).toContain('| A | B |');
+});

@@ -1,0 +1,14 @@
+{
+  "title": "Pro",
+  "pages": [
+    "index",
+    "tracked-changes",
+    "revision-markup",
+    "review-styling",
+    "comments",
+    "custom-nodes",
+    "custom-nodes-reference",
+    "collaboration",
+    "collaboration-versions"
+  ]
+}

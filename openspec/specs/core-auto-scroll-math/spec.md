@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change unify-orchestration-tier1. Update Purpose after archive.
+Defines framework-neutral contracts for behavior shared by supported adapters.
 
 ## Requirements
 
@@ -13,7 +13,7 @@ TBD - created by archiving change unify-orchestration-tier1. Update Purpose afte
 #### Scenario: Delta computed near an edge
 
 - **WHEN** the pointer is within the edge zone of the scroll container during a drag
-- **THEN** the computed scroll delta follows the same non-linear speed curve as React's prior implementation
+- **THEN** the computed scroll delta follows a monotonic non-linear speed curve, remains zero outside the edge zone, and is bounded by `MAX_SPEED`
 
 #### Scenario: Vue auto-scrolls during drag-select
 

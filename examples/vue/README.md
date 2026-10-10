@@ -1,63 +1,45 @@
-# Vue example
+# Vue DOCX editor example
 
-`@docx-editor.dev/vue` in a plain Vue 3 + Vite SPA. Same editor and same
-surface as the React adapter, with Vue components and refs. No SSR, so the
-editor mounts directly.
+This Vue 3 and Vite app uses the Vue adapter and the shared editor engine.
 
-## Run it
+The demo combines `packagedFonts()` with `googleFonts()`. Packaged substitutes load first. A document can cause CDN requests for other declared font families.
 
-From the repo root:
+## Run the example
+
+From the repository root, run:
 
 ```bash
 bun install
-bun run dev:vue        # http://localhost:5174
+bun run dev:vue
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:5174`.
 
-## Files
+`src/main.ts` starts the app and loads `src/ComposedEditorDemo.vue`. `src/styles.css` imports the editor stylesheet and adds demo styles.
 
-| File             | What it does                                            |
-| ---------------- | ------------------------------------------------------- |
-| `src/App.vue`    | The editor: open `.docx`, edit, agent panel             |
-| `src/main.ts`    | Vue app root + `@docx-editor.dev/vue/styles.css`        |
-| `index.html`     | Loads the Material Symbols font for toolbar icons       |
-| `vite.config.ts` | Aliases `@docx-editor.dev/*` to workspace source in dev |
+## Add the editor to Vue
 
-## Minimal integration
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-
-const doc = createEmptyDocument();
-</script>
-
-<template>
-  <DocxEditor :document="doc" :show-toolbar="true" />
-</template>
-```
-
-To open a real file, read it as an `ArrayBuffer` and pass it as
-`:document-buffer` instead of `:document`.
-
-## Use it in your own Vue app
+Install the adapter and its engine peer:
 
 ```bash
 npm install @docx-editor.dev/vue @docx-editor.dev/core
 ```
 
-Unlike the React adapter, the Vue adapter ships a stylesheet you must import
-once: `@docx-editor.dev/vue/styles.css`. Add the Material Symbols font
-to `index.html`:
+Import the stylesheet once. Then pass `"blank"` to create an empty document:
 
-```html
-<link
-  rel="stylesheet"
-  href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
-/>
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/vue/styles.css';
+</script>
+
+<template>
+  <DocxEditor document="blank" />
+</template>
 ```
 
-Docs: https://www.docx-editor.dev/docs/1.x/vue
+To open a real file, read it as an `ArrayBuffer` or `Uint8Array` and pass it as `:document`.
+
+Pass usable font bytes for Word-accurate measurement. Without them, fallback measurement does not guarantee Word-compatible layout. Use `packagedFonts()` for local substitutes. `googleFonts()` opts your application into CDN requests.
+
+For more information, see the [Vue adapter guide](https://www.docx-editor.dev/docs/2.x/vue).

@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Inserted text refuses \\v, and automation hosts refuse Line breaks.",
+  "after": "Inserted text writes each \\v as an inline w:br element, and automation hosts plan a Line break as an insertion of \\v, tracked when an author is tracking.",
+  "reason": "The w:br element is the one the editor already writes and replicates for a soft return. Replicas exchange the resulting tree content, not the inserted string, so no shared field, operation shape, or protocol message changes.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-line-break-automation.test.ts",
+    "packages/core/src/automation/__tests__/automation-line-breaks.test.ts",
+    "packages/core/src/editor/__tests__/automation-line-break-parity.test.ts"
+  ],
+  "changeset": "automation-line-break",
+  "migration": null
+}

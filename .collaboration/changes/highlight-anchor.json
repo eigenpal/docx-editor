@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The editor scrolls to a paragraph reference without a highlight or scroll settings.",
+  "after": "A local presentation overlay highlights a referenced paragraph, and scrollToAnchor accepts local scroll settings.",
+  "reason": "Highlights and scrolling are local presentation. They do not enter shared state, operations, snapshots, or protocol messages, and they do not change document content.",
+  "tests": ["packages/core/src/editor/__tests__/highlight-anchor.test.ts"],
+  "changeset": "highlight-anchor",
+  "migration": null
+}

@@ -1,0 +1,154 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+import { useId, useMemo } from 'react';
+import type { CollaborationFailure } from '@docx-editor.dev/core/collaboration';
+import type { EditorModule } from '@docx-editor.dev/core/editor';
+import type { CollaborationSession } from '../collaboration/types.ts';
+import type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
+import {
+  EMPTY_MODULES,
+  useCollaborationRoom,
+  type CollaborationRoomHandle,
+} from './collaboration-room.ts';
+
+/**
+ * Arguments for {@link UseDocumentCollaborationReturn.connect}: the
+ * `createDocumentCollaboration` options. The consumer owns `ydoc`, `awareness`, and
+ * whatever provider replicates them.
+ *
+ * @public
+ */
+export type UseDocumentCollaborationConnectOptions = CreateDocumentCollaborationOptions;
+
+type DocumentCreateRoom = (
+  options: UseDocumentCollaborationConnectOptions
+) => Promise<CollaborationRoomHandle>;
+
+/**
+ * Test-only room factory. Not re-exported from `@docx-editor.dev/pro/react`.
+ *
+ * @internal
+ */
+export const DOCUMENT_CREATE_ROOM_FOR_TESTS: unique symbol = Symbol(
+  'useDocumentCollaboration.createRoom'
+);
+
+interface InjectedDocumentCollaborationOptions extends UseDocumentCollaborationOptions {
+  readonly [DOCUMENT_CREATE_ROOM_FOR_TESTS]?: DocumentCreateRoom;
+}
+
+/** Input for {@link useDocumentCollaboration}. @public */
+export interface UseDocumentCollaborationOptions {
+  /**
+   * Host modules. The hook adds `collaborationModule` when a room is ready.
+   * A host collaboration contribution is a configuration error and throws.
+   */
+  readonly modules?: readonly EditorModule[];
+  /**
+   * Connect this room on mount. Omit it and call
+   * {@link UseDocumentCollaborationReturn.connect} after the host has a `ydoc` and a room.
+   * A different room, server, bootstrap kind, or `actorId` leaves the old room and
+   * connects the new one, and `null` leaves. A room opened with `connect` stays.
+   */
+  readonly room?: UseDocumentCollaborationConnectOptions | null;
+}
+
+/** Values {@link useDocumentCollaboration} returns. @public */
+export interface UseDocumentCollaborationReturn {
+  /** The room's document as `.docx` bytes to mount. Null until the room is ready. */
+  readonly document: Uint8Array | null;
+  /** Modules to pass to the editor. They include the collaboration module once ready. */
+  readonly modules: readonly EditorModule[];
+  /** The live session for status and presence. Null while no room is connected. */
+  readonly session: CollaborationSession | null;
+  /** True while a connect is in progress. */
+  readonly pending: boolean;
+  /** The connect failure or session failure, or null. Check it before `document`. */
+  readonly error: CollaborationFailure | null;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `onClick={() => connect(options)}` produced an unhandled rejection
+   * on every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (
+    options: UseDocumentCollaborationConnectOptions
+  ) => Promise<CollaborationFailure | null>;
+  /**
+   * Destroy the session and carry on editing locally.
+   *
+   * The current bytes live in the editor, not in this hook, so the argument is required:
+   * pass `await editor.save()` to keep what the room typed. The consumer still owns `ydoc`
+   * and its provider; the hook destroys only the session it created.
+   */
+  readonly leave: (nextDocument: Uint8Array) => void;
+}
+
+async function defaultCreateRoom(
+  options: UseDocumentCollaborationConnectOptions
+): Promise<CollaborationRoomHandle> {
+  const { createDocumentCollaboration } = await import('../collaboration/document-session.ts');
+  return createDocumentCollaboration(options);
+}
+
+function createRoomOf(options: UseDocumentCollaborationOptions): DocumentCreateRoom {
+  return (
+    (options as InjectedDocumentCollaborationOptions)[DOCUMENT_CREATE_ROOM_FOR_TESTS] ??
+    defaultCreateRoom
+  );
+}
+
+function roomKeyOf(room: UseDocumentCollaborationConnectOptions | null | undefined): string {
+  if (!room) return '';
+  return `${room.documentId}:${room.bootstrap.kind}:${room.identity.actorId}`;
+}
+
+/**
+ * Own a provider-agnostic collaboration session for a React host.
+ *
+ * The consumer creates the `ydoc`, the awareness, and whatever provider replicates them
+ * (WebSocket, WebRTC, offline persistence); this hook owns only the document session over
+ * them, with the same StrictMode-safe lifecycle as `useWebrtcCollaboration`. It imports no
+ * network provider.
+ *
+ * @public
+ */
+export function useDocumentCollaboration(
+  options: UseDocumentCollaborationOptions = {}
+): UseDocumentCollaborationReturn {
+  const id = useId();
+  const state = useCollaborationRoom<
+    UseDocumentCollaborationConnectOptions,
+    CollaborationRoomHandle
+  >({
+    ownerKey: `react-document:${id}`,
+    hookName: 'useDocumentCollaboration',
+    createRoom: createRoomOf(options),
+    hostModules: options.modules ?? EMPTY_MODULES,
+    autoRoom: options.room ?? null,
+    autoKey: roomKeyOf(options.room ?? null),
+    // This hook does not expose rejoin: the consumer owns `ydoc`, `awareness`, and the
+    // provider, and a replica that errored needs fresh resources the hook cannot create.
+    // The shared machinery still requires the mapping, so pin it to a join — a recovery
+    // must never re-seed the room from stale local bytes.
+    rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
+    identityOf: (options) => options.identity,
+  });
+
+  return useMemo(
+    () => ({
+      document: state.document,
+      modules: state.modules,
+      session: state.session,
+      pending: state.pending,
+      error: state.error,
+      connect: state.connect,
+      leave: state.leave,
+    }),
+    [state]
+  );
+}

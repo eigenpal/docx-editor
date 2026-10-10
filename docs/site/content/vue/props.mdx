@@ -1,297 +1,259 @@
 ---
-title: "Props"
-description: "DocxEditorProps for the Vue 3 adapter: the shared prop shape, Vue's kebab-case binding, named slots, and the events the component emits."
-category: "Vue"
-order: 41
+title: 'Props'
+description: 'Reference for Vue document props, chrome, emits, slots, and the seven ref methods.'
+category: 'Vue'
+order: 36
 ---
 
-The Vue adapter accepts the paired subset of the React props; the differences are Vue's kebab-case attribute binding, named slots and emitted events in place of some render props and callbacks, and a few React-only props that Vue defers (listed below). Anything in the paired bucket of the parity contract behaves exactly as documented under [React props](/docs/1.x/react/props). Full generated reference: [/docs/1.x/api/vue](/docs/1.x/api/vue).
+`<DocxEditor>` supplies the packaged host. This page groups its public props by use. See the [Vue API reference](/docs/2.x/api/vue) for generated signatures.
 
-## Binding props
+## Document and mount state
 
-Camel-case in TS, kebab-case in the template. Bind with `:` for non-string values:
+Use `document` for the document source.
 
-```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { DocxEditor, type EditorMode } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/vue/styles.css';
+| Prop | Type | Description |
+| --- | --- | --- |
+| `document` | `DocumentSource` | DOCX bytes, `'blank'`, or a `DocumentHandle`. |
+| `author` | `string` | Author for later comments, replies, and tracked changes. |
+| `locale` | `string` | BCP-47 locale for regional date input and generated labels. Defaults to `en-US`; updates without a remount. |
+| `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. The packaged `<DocxEditor>` defaults to `'edit'`. |
+| `zoom` | `number` | Numeric display scale. |
+| `zoomMode` | `ZoomMode \| 'auto'` | Zoom source. `'auto'` fits the page width. |
 
-const buf = ref<ArrayBuffer | null>(null);
-const mode = ref<EditorMode>('editing');
-</script>
-
-<template>
-  <DocxEditor
-    :document-buffer="buf"
-    :mode="mode"
-    author="Jess Lin"
-    :show-zoom-control="true"
-    @mode-change="(m) => (mode = m)"
-  />
-</template>
-```
-
-Props that are React callbacks become Vue events. So `onModeChange` in React is `@mode-change` in Vue. Same payload shape.
-
-## Template ref
-
-Capture the editor ref with `useTemplateRef` (Vue 3.5+) or `ref="..."` + a `ref()`:
-
-```vue
-<script setup lang="ts">
-import { useTemplateRef } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-
-const editor = useTemplateRef<DocxEditorRef>('editor');
-
-async function save() {
-  const buf = await editor.value?.save(); // Promise<ArrayBuffer | null>
-  if (buf) await fetch('/api/documents/1', { method: 'PUT', body: buf });
-}
-</script>
-
-<template>
-  <button @click="save">Save</button>
-  <DocxEditor ref="editor" :document-buffer="null" />
-</template>
-```
-
-Methods on `DocxEditorRef` match React one-to-one (`save`, `addComment`, `proposeChange`, `findInDocument`, `scrollToParaId`, `scrollToPosition`, `getDocument`, and the rest). See [React props](/docs/1.x/react/props#ref-methods) for the signature table.
-
-## Props by group
-
-The paired groups under [React props](/docs/1.x/react/props) apply identically. Quick map of the binding syntax for each group, plus the Vue-specific differences.
-
-### Document input
-
-```vue
-<DocxEditor :document-buffer="buf" />
-<!-- or, pre-parsed -->
-<DocxEditor :document="parsed" />
-```
-
-`document-buffer` accepts the same `DocxInput` union as React (`File`, `Blob`, `ArrayBuffer`, `Uint8Array`), so a `File` from an `<input type="file" accept=".docx">` binds directly.
-
-### Mode and read-only
-
-```vue
-<DocxEditor :document-buffer="buf" :mode="mode" @mode-change="(m) => (mode = m)" />
-<DocxEditor :document-buffer="buf" read-only />
-```
-
-<ModeToggleDemo />
-
-### Comments and collaboration
-
-The Vue adapter has no controlled `comments` prop (it is React-only, listed as deferred in the parity contract). Comment state lives inside the editor; observe mutations through `@comments-change` and the granular comment events, and create comments imperatively through the ref:
+`DocumentSource` accepts `Uint8Array`, `ArrayBuffer`, `'blank'`, or an existing `DocumentHandle`. Resolve URLs and paths with [`useDocxSource()`](/docs/2.x/vue/composables#usedocxsource).
 
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
-import type { Comment } from '@docx-editor.dev/core';
-
-async function persist(next: Comment[]) {
-  await fetch('/api/comments', {
-    method: 'PUT',
-    body: JSON.stringify(next),
-    headers: { 'content-type': 'application/json' },
-  });
-}
 </script>
 
 <template>
-  <DocxEditor :document-buffer="buf" author="Jess Lin" @comments-change="persist" />
+  <DocxEditor document="blank" mode="edit" zoom-mode="auto" />
 </template>
 ```
 
-To add a comment from your own UI, call `editor.value?.addComment({ paraId, text, author })` on the template ref. Pushing an external comment array into the editor is not possible in Vue today.
+`<DocxEditor>` rebuilds when the `document` identity changes. It applies later `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and catalog changes without a rebuild. Existing revisions keep their authors.
 
-<AuthorDemo />
+For regional date input, pass `locale="en-GB"` for day/month input or `locale="pl-PL"` for Polish dates such as `01.02.2030`. The same prop works on `DocxEditor.Root`. It preserves dates already in the document. Use `i18n` separately to customize UI strings; see [date input behavior](/docs/2.x/guides/fields) for details.
 
-### Toolbar UI
+## Viewing mode
 
-```vue
-<DocxEditor
-  :document-buffer="buf"
-  :show-toolbar="false"
-  :show-zoom-control="false"
-  :initial-zoom="1.25"
-/>
-```
+Set `mode="view"` to display the document without content edits. Clicks, drags, repeated clicks, and caret keys preserve the selection. The editor hides the caret and uses the arrow pointer over text. Toolbar values remain tied to the preserved selection.
 
-Vue also has `:show-menu-bar` (default `true`) for the menu bar above the toolbar; React has no menu-bar concept. `:show-help-menu` (default `true`) controls Help menu visibility; set `false` to hide it, matching React's `showHelpMenu`. The React-only toolbar/layout props `showMarginGuides`, `marginGuideColor`, and `rulerUnit` are not available in Vue.
+Links, equation previews, and **Show/Hide** remain available. Search and programmatic selection can still move the selection. Search highlights remain visible without a caret.
 
-<UIControlsDemo />
+## Modules
 
-### Appearance (dark mode)
+`modules` registers capability modules when the editor is created.
 
-`:color-mode` (`'light' | 'dark' | 'system'`, default `'light'`) sets the editor theme; `'system'` follows the OS `prefers-color-scheme`. There is no internal toggle; drive it from your own UI by binding a ref:
+| Prop      | Type                      | Description                         |
+| --------- | ------------------------- | ----------------------------------- |
+| `modules` | `readonly EditorModule[]` | Modules registered at construction. |
 
-```vue
-<script setup>
-import { ref } from 'vue';
-const colorMode = ref('light');
-</script>
-
-<template>
-  <button @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">Toggle theme</button>
-  <DocxEditor :document-buffer="buf" :color-mode="colorMode" />
-</template>
-```
-
-Behaviour matches React. See the [Dark mode](/docs/1.x/guides/dark-mode) guide for the full details.
-
-### Fonts
-
-`:fonts` registers custom font faces and `:font-families` constrains the picker; the full rules (FontDefinition shape, weights, stable references, error routing) are under [React props → Fonts](/docs/1.x/react/props#fonts) and apply unchanged.
+The editor ignores later `modules` array changes. Change the Vue `:key` to remount the editor with another module set.
 
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro/vue';
 
-const fonts = [
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Regular.woff2' },
-  { family: 'Custom Sans', src: '/fonts/CustomSans-Bold.woff2', weight: 700 },
-];
+const modules = [reviewModule()];
 </script>
 
 <template>
-  <DocxEditor
-    :document-buffer="buf"
-    :fonts="fonts"
-    :font-families="['Custom Sans', 'Arial']"
-  />
+  <DocxEditor :key="moduleSet" :document="bytes" :modules="modules" author="Jess Lin" />
 </template>
 ```
 
-Keep the array reference stable (declared once in `setup`, not rebuilt inline). Font-load failures surface through the `@error` event; with no listener attached they fall back to `console.warn`. Note that React's `onFontsLoaded` callback has no Vue equivalent yet.
+The review module lets you show and manage tracked changes and comments. The Vue Pro entry also exports custom-node chip and context-menu chrome.
 
-### Title bar slots
+## Chrome and layout
 
-Vue exposes three named slots: `title-bar-left`, `title-bar-right`, and `toolbar-extra`.
+These props control the packaged frame:
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `chrome` | `boolean` | Toggles the packaged frame. |
+| `menu` | `boolean \| DocxEditorMenuProps` | Toggles or configures the menu bar. |
+| `navigation` | `boolean \| DocxEditorNavigationProps` | Toggles or configures the navigation pane. |
+| `rulers` | `boolean` | Toggles both packaged rulers. |
+| `hyperlinkPopup` | `boolean` | Toggles the hyperlink popover. |
+| `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
+| `t` | `(key, params?) => string` | Resolves live chrome and drawing labels. |
+| `i18n` | `Translations` | Supplies a live catalog to this editor. |
+
+Set `chrome` to `false` for the document surface without packaged chrome. You can then build the frame from the [composition primitives](/docs/2.x/vue/composition).
+
+## Appearance
+
+The appearance prop name is `colorMode`.
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `colorMode` | `'light' \| 'dark' \| 'system'` | `'light'` | Sets the chrome and document color mode. |
+
+`colorMode` applies a display transform to the document canvas. The setting does not change authored document colors or saved output. Printing ignores `colorMode` and preserves authored document colors.
 
 ```vue
-<DocxEditor :document-buffer="buf" document-name="Q3 Memo">
-  <template #title-bar-left>
-    <img src="/logo.svg" alt="Logo" width="24" height="24" />
+<script setup lang="ts">
+import { ref } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+
+const colorMode = ref<'light' | 'dark'>('light');
+</script>
+
+<template>
+  <button type="button" @click="colorMode = colorMode === 'dark' ? 'light' : 'dark'">
+    Toggle theme
+  </button>
+  <DocxEditor :document="bytes" :color-mode="colorMode" />
+</template>
+```
+
+See [Dark mode](/docs/2.x/guides/dark-mode) for canvas behavior.
+
+## Fonts
+
+`fonts` supplies bytes for text shaping, line wrapping, and pagination.
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or an on-demand resolver. |
+
+Embedded fonts load from the document. Configured fonts extend that set.
+
+Use `packagedFonts()` for the Word default substitutes. It resolves per document, loading a family when that document names it, or when that family is the document's default face. It loads only requested families and the default font. It makes no third-party requests.
+
+The resolver also requests the configured default font. With the default Calibri configuration, it loads Carlito for text without an explicit font.
+
+`useFonts()` keeps one resolver identity, which the `fonts` prop needs.
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+const fonts = useFonts(packagedFonts());
+
+function reportFontError(error: { code: string }) {
+  report(error.code);
+}
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :fonts="fonts" @font-error="reportFontError" />
+</template>
+```
+
+Add an origin by adding an argument. Arguments compose first-wins:
+
+```ts
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const fonts = useFonts(packagedFonts(), googleFonts());
+```
+
+`packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+
+See [Fonts and measurement](/docs/2.x/guides/fonts) for font sources and on-demand loading.
+
+## Title bar customization
+
+Use `title` and the two named slots to customize the title bar.
+
+| API              | Type                      | Description                         |
+| ---------------- | ------------------------- | ----------------------------------- |
+| `title`          | `string`                  | Shows the document name.            |
+| `@title-change`  | `(title: string) => void` | Enables and receives title editing. |
+| `#titleBarLeft`  | slot                      | Adds host content before the title. |
+| `#titleBarRight` | slot                      | Adds host content after the title.  |
+
+```vue
+<DocxEditor :document="bytes" :title="title" @title-change="title = $event">
+  <template #titleBarLeft>
+    <MyLogo />
   </template>
-  <template #title-bar-right>
+  <template #titleBarRight>
     <SaveIndicator :dirty="dirty" />
-  </template>
-  <template #toolbar-extra>
-    <button @click="wordCount">Word count</button>
   </template>
 </DocxEditor>
 ```
 
-Mapping from the React render props: `renderLogo` → `#title-bar-left`, `renderTitleBarRight` → `#title-bar-right`, `toolbarExtra` → `#toolbar-extra`. The `renderLogo` / `renderTitleBarRight` props also exist on the Vue component as render functions if you prefer props over slots.
+The title becomes editable when you listen for `@title-change`.
 
-### Callbacks and events
+## Emits
 
-The component emits these events:
+`<DocxEditor>` emits these six events:
 
-| Event | Payload | Fires when |
-|---|---|---|
-| `@change` | `Document` | Any document mutation. |
-| `@update:document` | `Document \| null` | The parsed document changes (pairs with `v-model:document` style usage). |
-| `@error` | `Error` | Parse, render, or font-load errors. |
-| `@ready` | none | The editor finished mounting. |
-| `@rename` | `string` | The user edits the document name in the title bar. |
-| `@menu-action` | `string` | A menu-bar action is triggered. |
-| `@mode-change` | `EditorMode` | The editing mode changes. |
+| Emit            | Payload                  | Description                             |
+| --------------- | ------------------------ | --------------------------------------- |
+| `@ready`        | `editor: Editor`         | The editor and content mount are ready. |
+| `@change`       | `change: DocumentChange` | A document mutation completed.          |
+| `@save`         | none                     | The packaged Save action ran.           |
+| `@open`         | none                     | The packaged Open action ran.           |
+| `@title-change` | `title: string`          | The editable title changed.             |
+| `@font-error`   | `error: EditorFontError` | Font resolution failed.                 |
 
-These React callbacks are also available as props, so the `@kebab-case` listener syntax works for them too:
-
-| React prop | Vue listener |
-|---|---|
-| `onSelectionChange` | `@selection-change` |
-| `onCommentsChange` | `@comments-change` |
-| `onCommentAdd` / `onCommentResolve` / `onCommentDelete` / `onCommentReply` | `@comment-add` / `@comment-resolve` / `@comment-delete` / `@comment-reply` |
-| `onDocumentNameChange` | `@document-name-change` |
-| `onEditorViewReady` | `@editor-view-ready` |
-| `onPrint` | `@print` |
-
-There is no `@save`, `@fonts-loaded`, `@copy`, `@cut`, or `@paste` in Vue. For saving, call `save()` on the template ref; for clipboard hooks, use the `useClipboard` composable from `/composables`.
+`DocumentChange` contains revision and identity changes. It does not contain saved bytes.
 
 ```vue
 <DocxEditor
-  :document-buffer="buf"
-  @change="onChange"
-  @error="reportError"
+  :document="bytes"
+  title="Proposal.docx"
   @ready="onReady"
+  @change="reportChange"
+  @save="save"
+  @open="open"
+  @title-change="title = $event"
+  @font-error="reportFontError"
 />
 ```
 
-### Customize File > Open
+`DocxEditorRoot` emits `ready`, `change`, and `font-error`. File and title events belong to `<DocxEditor>`.
 
-Like React, the built-in `File > Open` item and Cmd/Ctrl+O load a picked `.docx` into the local editor. Pass `on-open` to keep the native file picker but route the selected `File` through your own import pipeline, and `:show-file-open="false"` to hide the built-in item (Cmd/Ctrl+O is then left for your own menu or toolbar):
+## Ref methods
 
-```vue
-<DocxEditor
-  :document="doc"
-  :external-plugins="plugins"
-  :show-file-open="false"
-  :on-open="(file) => importIntoBackend(file)"
-/>
-```
-
-`on-open` is useful when a collaborative binding owns the document state. Omit it to keep the built-in local load.
-
-### Styling
-
-```vue
-<DocxEditor
-  :document-buffer="buf"
-  class="rounded-lg shadow-md"
-  :style="{ height: '80vh' }"
-/>
-```
-
-The React-only `placeholder` and `loadingIndicator` props have no Vue equivalent; there is no `#placeholder` slot.
-
-### i18n
+Capture a `DocxEditorRef` for imperative document operations.
 
 ```vue
 <script setup lang="ts">
-import pl from '@docx-editor.dev/i18n/pl';
-import { DocxEditor } from '@docx-editor.dev/vue';
-</script>
-
-<template>
-  <DocxEditor :document-buffer="buf" :i18n="pl" />
-</template>
-```
-
-### Agents
-
-The React `agentPanel` prop has no Vue equivalent (deferred in the parity contract), and there is no `#agentPanel` slot. Wire the agent toolkit with the `useAgentBridge` composable and render your chat UI beside the editor:
-
-```vue
-<script setup lang="ts">
-import { useTemplateRef } from 'vue';
+import { ref } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
-import { useAgentBridge } from '@docx-editor.dev/agents/vue';
 
-const editor = useTemplateRef<DocxEditorRef>('editor');
-const { executeToolCall, toolSchemas } = useAgentBridge({
-  editorRef: editor,
-  author: 'Assistant',
-});
+const editorRef = ref<DocxEditorRef | null>(null);
+
+async function save() {
+  const buffer = await editorRef.value?.save();
+  if (buffer) await upload(buffer);
+}
 </script>
 
 <template>
-  <div style="display: flex">
-    <DocxEditor ref="editor" :document-buffer="buf" />
-    <!-- your chat pane next to the editor -->
-  </div>
+  <DocxEditor ref="editorRef" :document="bytes" />
 </template>
 ```
 
-Full agent wiring in [Agents → Live editor](/docs/1.x/agents/live-editor).
+The ref exposes seven methods:
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `load(document)` | `void` | Loads bytes, `'blank'`, or a `DocumentHandle`. |
+| `save()` | `Promise<ArrayBuffer \| null>` | Serializes the current document. |
+| `getDocumentHandle()` | `DocumentHandle \| null` | Returns the current handle and revision. |
+| `getEditor()` | `Editor \| null` | Returns the full editor facade. |
+| `focus()` | `void` | Focuses the mounted document surface. |
+| `exec(command, options?)` | `ExecResult` | Runs a typed command; see `EditorExecOptions`. |
+| `snapshot(options?)` | `EditorSnapshot` | Reads state from an optional scope. |
+
+Use `exec()` for commands that must use the same validation as packaged chrome. Use `snapshot()` for a synchronous state read.
+
+## `popups`
+
+Use `definePopup(MyPopup)` to customize an automatic popup with your component. Forward its typed props to the default component to retain editor behavior. Render callbacks also work. Set an entry to `false` to manage its trigger and visibility yourself. For supported popups and defaults, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ## Next steps
 
-- [React props](/docs/1.x/react/props) for the full per-prop reference (identical semantics for paired props)
-- [Vue examples](/docs/1.x/vue/examples)
-- [Vue API reference](/docs/1.x/api/vue)
+- [Vue quickstart](/docs/2.x/vue)
+- [Vue examples](/docs/2.x/vue/examples)
+- [Vue composition](/docs/2.x/vue/composition)
+- [Vue API reference](/docs/2.x/api/vue)
