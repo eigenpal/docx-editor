@@ -109,6 +109,14 @@ describe('the suffix after an empty list marker', () => {
     expect(firstX('w:left="720" w:hanging="360"', 'tab', { levelTabs })).toBe(27);
   });
 
+  test('a tab after an empty marker at the indent does not move the first line', () => {
+    expect(firstX('w:left="0"', 'tab')).toBe(0);
+    expect(firstX('w:left="0" w:firstLine="0"', 'tab')).toBe(0);
+    expect(firstX('w:left="720"', 'tab')).toBe(36);
+    const levelTabs = '<w:tabs><w:tab w:val="left" w:pos="540"/></w:tabs>';
+    expect(firstX('w:left="0"', 'tab', { levelTabs })).toBe(0);
+  });
+
   test('a space after an empty marker starts the text one space past the slot', () => {
     expect(firstX('w:left="720" w:hanging="360"', 'space')).toBe(24);
     expect(firstX('w:left="0" w:firstLine="720"', 'space')).toBe(42);

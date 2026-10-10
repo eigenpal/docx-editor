@@ -31,11 +31,11 @@ const NUMBERING =
   '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
   '<w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num></w:numbering>';
 
-const paragraph = (numId: number | undefined, text: string) =>
-  '<w:p>' +
-  (numId === undefined
-    ? ''
-    : `<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr></w:pPr>`) +
+const paragraph = (numId: number | undefined, text: string, bidi = false) =>
+  '<w:p><w:pPr>' +
+  (numId === undefined ? '' : `<w:numPr><w:ilvl w:val="0"/><w:numId w:val="${numId}"/></w:numPr>`) +
+  (bidi ? '<w:bidi/>' : '') +
+  '</w:pPr>' +
   (text ? `<w:r><w:t>${text}</w:t></w:r>` : '') +
   '</w:p>';
 
@@ -105,6 +105,22 @@ describe('the caret in an empty list item with an empty marker', () => {
         withSurface(surface.session.save(), (reopened) => {
           expect(startX(reopened, 1)).toBe(72);
           expect(startX(reopened, 2)).toBe(36);
+        });
+      }
+    );
+  });
+
+  test('mirrors to the right edge in a right-to-left item', () => {
+    withSurface(
+      docx(paragraph(undefined, '', true) + paragraph(1, '', true) + paragraph(2, '', true)),
+      (surface) => {
+        // Relative to an unindented right-to-left paragraph, whose caret is at the right edge.
+        expect(startX(surface, 1)).toBe(-72);
+        expect(startX(surface, 2)).toBe(-36);
+
+        withSurface(surface.session.save(), (reopened) => {
+          expect(startX(reopened, 1)).toBe(-72);
+          expect(startX(reopened, 2)).toBe(-36);
         });
       }
     );
