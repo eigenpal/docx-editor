@@ -47,6 +47,8 @@ export interface DeferredLayoutHost {
   publish(layout: SemanticLayout): void;
   /** Save the layout session's state before a pass; the answer puts it back. */
   snapshot(): () => void;
+  /** Told when a pass starts or stops finishing in the background. */
+  pendingChanged?(pending: boolean): void;
 }
 
 export interface DeferredLayout {
@@ -88,11 +90,17 @@ function afterPaint(run: () => void): void {
 }
 
 export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
-  let paused: {
+  type Paused = {
     readonly steps: LayoutSteps<SemanticLayout>;
     readonly revision: number;
     readonly restore: () => void;
-  } | null = null;
+  };
+  let paused: Paused | null = null;
+  const setPaused = (next: Paused | null): void => {
+    const changed = (paused === null) !== (next === null);
+    paused = next;
+    if (changed) host.pendingChanged?.(next !== null);
+  };
 
   const settle = (layout: SemanticLayout, revision: number): void => {
     if (host.revision() === revision) host.publish(layout);
@@ -105,7 +113,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     for (;;) {
       const next = pass.steps.next();
       if (next.done) {
-        paused = null;
+        setPaused(null);
         settle(next.value, pass.revision);
         return;
       }
@@ -137,7 +145,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
         // The completed pages, then the previous layout's pages after them, until the pass
         // ends. Each keeps the index it is painted at.
         const pages = [...progress.pages, ...previous.pages.slice(progress.pages.length)];
-        paused = { steps, revision, restore };
+        setPaused({ steps, revision, restore });
         afterPaint(drive);
         return progress.finalize(pages);
       }
@@ -145,18 +153,18 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     finish() {
       const pass = paused;
       if (!pass) return;
-      paused = null;
+      setPaused(null);
       settle(drainLayoutSteps(pass.steps), pass.revision);
     },
     abandon() {
       const pass = paused;
       if (!pass) return;
-      paused = null;
+      setPaused(null);
       pass.restore();
     },
     pending: () => paused !== null,
     cancel() {
-      paused = null;
+      setPaused(null);
     },
   };
 }

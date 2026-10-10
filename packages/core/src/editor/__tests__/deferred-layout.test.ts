@@ -54,13 +54,18 @@ function linesOf(surface: PaginatedSurface): string[] {
   return out;
 }
 
-function mount(bytes: Uint8Array): { surface: PaginatedSurface; dispose(): void } {
+function mount(bytes: Uint8Array): {
+  surface: PaginatedSurface;
+  container: HTMLElement;
+  dispose(): void;
+} {
   const container = document.createElement('div');
   document.body.append(container);
   const opened = mountPaginatedSurface(container, bytes);
   if (!opened.ok) throw new Error(opened.reason);
   return {
     surface: opened.surface,
+    container,
     dispose() {
       opened.surface.destroy();
       container.remove();
@@ -115,6 +120,19 @@ describe('pages after the screen finish in the background', () => {
       expect(interim).not.toEqual(cold);
       expect(interim.slice(0, 10)).toEqual(cold.slice(0, 10));
       expect(await settled(surface, cold)).toEqual(cold);
+    } finally {
+      dispose();
+    }
+  });
+
+  test('the container is marked while later pages still show the previous layout', async () => {
+    const { surface, container, dispose } = mount(docx());
+    try {
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
+      splitFirst(surface);
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(true);
+      await settled(surface, coldLines(surface));
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
     } finally {
       dispose();
     }

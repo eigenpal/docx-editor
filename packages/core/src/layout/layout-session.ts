@@ -84,6 +84,8 @@ export interface SectionStackSpan {
 /** Orchestrator state for multi-section incremental layout. */
 export interface MultiSectionLayoutState {
   structureKey: string;
+  /** Each section's part of {@link structureKey}, so an added section keeps the others. */
+  sectionKeys: readonly string[];
   sections: LayoutSession[];
   spans: SectionStackSpan[];
   previousRemapped: readonly PageRecord[];

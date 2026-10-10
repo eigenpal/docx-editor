@@ -89,6 +89,7 @@ import {
   adjustedBreakIndex,
   composeFlowKeys,
   keepNextChains,
+  markJoinFlowKeys,
   paragraphKeeps,
   KEEP_BREAK_RETRY_ALLOWANCE,
 } from './pagination-keeps.ts';
@@ -586,7 +587,6 @@ function* layoutBlocksPass(
     columnRegionBottom,
     sectionPageBorders: options.sectionPageBorders,
     sectionMarkCollapses: options.sectionMarkCollapses,
-    markJoinsBreakSheet: options.markJoinsBreakSheet,
   });
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
@@ -1080,8 +1080,8 @@ function* layoutBlocksPass(
   if (session && drawingEpoch !== null && projectionEpoch !== null && !prepassValid) {
     session.prepass = prepass;
   }
-  const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys, terminalTextTables } =
-    prepass;
+  const { prepared, keys, paragraphDocumentOrder, keepsNext, terminalTextTables } = prepass;
+  const flowKeys = markJoinFlowKeys(prepass.flowKeys, options.markJoinsBreakSheet === true);
   const { positionedTables, positionedTablePolicy } = prepass.positioned;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {

@@ -1078,6 +1078,8 @@ export function mountPaginatedSurface(
       const saved = { ...layoutSession };
       return () => void Object.assign(layoutSession, saved);
     },
+    // Marks the container while later pages still show the previous layout.
+    pendingChanged: (pending) => container.toggleAttribute('data-docx-layout-pending', pending),
   });
   let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
     ? PROGRESSIVE_OPEN_FIRST_BLOCKS

@@ -168,7 +168,14 @@ export async function runEdit(
     (before) => window.__EDIT_BROWSER_BENCH__!.samples.length > before,
     sampleCount
   );
-  const sample = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.samples.at(-1)!);
+  const measured = await page.evaluate(() => window.__EDIT_BROWSER_BENCH__!.samples.at(-1)!);
+  // A large edit finishes its later pages in background tasks; the work counters describe
+  // the whole pass only once those have run. The timings stay the ones taken at the frame.
+  await page.waitForFunction(() => !document.querySelector('[data-docx-layout-pending]'));
+  const sample = {
+    ...measured,
+    engine: await page.evaluate(() => window.__DOCX_EDITOR_E2E__!.benchmarkPerf()!),
+  };
   expect(sample.engine.fullPasses, 'typing must not add a full layout pass').toBe(fullPassesBefore);
   // Both benchmark fixtures are long documents; the plain one holds 3,200
   // paragraphs and the tracked/numbered one 620 much larger clauses.

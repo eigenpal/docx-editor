@@ -17,6 +17,7 @@ import type { ContinuedPageHost } from './continued-page-zones.ts';
 import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
+  replaceLayoutSession,
   type LayoutSession,
   type MultiSectionLayoutState,
   type SectionStackSpan,
@@ -159,7 +160,15 @@ export function multiSectionStructureKey(
   sections: readonly DocumentSection[],
   options: SemanticLayoutOptions
 ): string {
-  const entries = sections.map((section, index) => {
+  return framedTokenJoin(multiSectionKeys(sections, options));
+}
+
+/** Each section's part of {@link multiSectionStructureKey}, in section order. */
+function multiSectionKeys(
+  sections: readonly DocumentSection[],
+  options: SemanticLayoutOptions
+): string[] {
+  return sections.map((section, index) => {
     const geometry = geometryOfSection(section.properties);
     const furniture = furnitureForSection(options, index, sections.length);
     const pn = section.properties.pageNumbering;
@@ -194,26 +203,26 @@ export function multiSectionStructureKey(
       ].map(String)
     );
   });
-  return framedTokenJoin(entries);
 }
 
 function ensureMultiState(
   session: LayoutSession | undefined,
-  structureKey: string,
-  sectionCount: number
+  sectionKeys: readonly string[]
 ): MultiSectionLayoutState | null {
   if (!session) return null;
+  const structureKey = framedTokenJoin(sectionKeys);
   const existing = session.multi;
   if (
     existing &&
     existing.structureKey === structureKey &&
-    existing.sections.length === sectionCount
+    existing.sections.length === sectionKeys.length
   ) {
     return existing;
   }
   const fresh: MultiSectionLayoutState = {
     structureKey,
-    sections: Array.from({ length: sectionCount }, () => createLayoutSession()),
+    sectionKeys,
+    sections: sectionKeys.map((key, index) => carriedSectionSession(session, existing, key, index)),
     spans: [],
     previousRemapped: [],
     previousFinalized: null,
@@ -221,6 +230,33 @@ function ensureMultiState(
     previousPageRefToken: '',
   };
   session.multi = fresh;
+  return fresh;
+}
+
+/**
+ * The child session section `index` starts from when the section list changes.
+ *
+ * A sliced open reveals sections one slice at a time, and an edit can add or remove one: in
+ * both cases the sections before the change keep their geometry, so their previous sessions
+ * still answer. A section whose own key moved starts fresh. Before the first multi-section
+ * pass, section 0 adopts the single-section session it was laid out with. Every reused
+ * session is still checked by its own per-block keys and context, so a stale one only misses.
+ */
+function carriedSectionSession(
+  session: LayoutSession,
+  existing: MultiSectionLayoutState | null,
+  key: string,
+  index: number
+): LayoutSession {
+  if (existing) {
+    const previous = existing.sections[index];
+    return previous && existing.sectionKeys[index] === key ? previous : createLayoutSession();
+  }
+  const fresh = createLayoutSession();
+  if (index === 0 && session.prepass !== null) {
+    replaceLayoutSession(fresh, session);
+    fresh.multi = null;
+  }
   return fresh;
 }
 
@@ -388,8 +424,7 @@ export function layoutMultiSectionDocument(
   layoutSection: LayoutSectionFn
 ): SemanticLayout {
   const { session, ...rest } = options;
-  const structureKey = multiSectionStructureKey(sections, options);
-  const multi = ensureMultiState(session, structureKey, sections.length);
+  const multi = ensureMultiState(session, multiSectionKeys(sections, options));
   // One retention pass over the UNION of every section's live keys. Retaining inside each
   // section's pass evicted every other section's entries — the multi-section break cache
   // was empty on every pass. The sweep runs on the retention stride; skipped passes hand

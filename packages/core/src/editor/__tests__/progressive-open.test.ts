@@ -221,6 +221,47 @@ describe('a large open laid out in slices', () => {
     return mounted.surface;
   }
 
+  /** Sections whose text ends in a page break before an empty section mark. */
+  function breakSectionsDocx(): Uint8Array {
+    const parts: string[] = [];
+    for (let section = 0; section < 4; section += 1) {
+      for (let index = 0; index < 150; index += 1) {
+        parts.push(paragraph(`Section ${section} paragraph ${index}`));
+      }
+      parts.push(`<w:p><w:r><w:t>Section ${section} end</w:t><w:br w:type="page"/></w:r></w:p>`);
+      if (section < 3) parts.push('<w:p><w:pPr><w:sectPr/></w:pPr></w:p>');
+    }
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+  }
+
+  test('a section the slices completed is not laid out again when the next one starts', () => {
+    const bytes = breakSectionsDocx();
+    const surface = slicedMount(bytes);
+    try {
+      while (!continueProgressiveOpen(surface, 0)) {
+        // One prefix pass per step.
+      }
+      // The first slice is the open's one full pass. Once the next section exists, the first
+      // section's closing break keeps its empty mark on the break's sheet; that used to lay
+      // the whole section out again from its first block, a second full pass.
+      expect(surface.state().perf.fullPasses).toBe(1);
+      expect(signature(surface.layout())).toEqual(unslicedSignature(bytes));
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a long table is laid out across many slices, pausing between its rows', () => {
     const bytes = longTableDocx();
     const surface = slicedMount(bytes);
