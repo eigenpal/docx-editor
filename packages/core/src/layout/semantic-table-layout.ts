@@ -235,6 +235,8 @@ export interface TableFlowDeps {
   readonly outOfCellFloatParagraphs?: ReadonlySet<string>; // see table-out-of-cell-floats.ts
   /** Story boxes start their first table at traversal depth one. */
   readonly tableNestingOffset?: 1;
+  /** The story is a text box's content. */
+  readonly textBoxStory?: true;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
