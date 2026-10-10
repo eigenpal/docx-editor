@@ -135,6 +135,9 @@ function boundedTextContent(root: OoxmlElement): string {
  */
 const ASSUME_AVAILABLE = (): boolean => true;
 
+/** East Asian blocks a list marker can draw in the East Asian face. */
+const EAST_ASIAN_MARKER_TEXT = /[ᄀ-ᇿ⺀-鿿ꥠ-꥿가-퟿豈-﫿︰-﹏＀-￯]/u;
+
 export function usedNumberingFontFamilies(
   storyRoots: readonly OoxmlElement[],
   numberingRoot: OoxmlElement | null,
@@ -158,6 +161,7 @@ export function usedNumberingFontFamilies(
           | ReadonlyMap<
               string,
               {
+                readonly markerText?: string;
                 readonly markerStyle: {
                   readonly fontFamily?: string | null;
                   readonly fontFamilyEastAsia?: string | null;
@@ -168,9 +172,13 @@ export function usedNumberingFontFamilies(
       ): void => {
         if (!items) return;
         for (const item of items.values()) {
+          // The East Asian face draws only East Asian marker text; every run carries a default
+          // East Asian face, so asking for it on a Latin marker loads a face nothing uses.
+          const eastAsianMarker =
+            item.markerText === undefined || EAST_ASIAN_MARKER_TEXT.test(item.markerText);
           for (const candidate of [
             item.markerStyle.fontFamily,
-            item.markerStyle.fontFamilyEastAsia,
+            eastAsianMarker ? item.markerStyle.fontFamilyEastAsia : null,
           ]) {
             const family = validFontFamily(candidate ?? undefined);
             if (family === null) continue;
