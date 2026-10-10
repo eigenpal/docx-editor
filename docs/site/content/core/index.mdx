@@ -74,6 +74,16 @@ if (match) editor.selectMatch(match);
 
 For more information, see [Navigate a document](/docs/2.x/guides/navigation).
 
+### Keep the caret on the selected line
+
+Wrapped line boundaries can share one text offset. For a custom surface, keep the optional `lineId` returned by `moveCaret`. Pass it to the next move through `MoveCaretOptions.lineId` and to `caretAt` through `preferredLineId`. These layout functions come from `@docx-editor.dev/core/layout`.
+
+### Indent selected paragraphs
+
+Press Tab to increase the indent of selected paragraphs. Press Shift+Tab to decrease it. The selection stays intact. Tab also indents when a selection starts at a paragraph's beginning.
+
+In a list, Tab changes the list level. Form-fill mode uses Tab to move between enabled fields. Elsewhere, Tab inserts a tab character when the selection does not support paragraph indentation.
+
 ### Typing and undo
 
 Typing uses short undo groups. A pause of at least 1 second starts a new group on the next keystroke. Continuous typing starts a new group after 2 seconds. These actions also start a new step:

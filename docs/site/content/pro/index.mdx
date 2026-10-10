@@ -125,9 +125,17 @@ The review pane settings decide when the pane opens and where review items appea
 | `commentMarkers` | `initials`, `icon`              | `initials` |
 | `overflow`       | `float`, `shrinkPage`, `scroll` | `float`    |
 
-With `opening: 'auto'`, the editor opens the pane when a document loads with items that the pane lists. It also opens the pane when you make a tracked change while the pane is closed, and when **Next Change** or **Previous Change** reaches a card. With `opening: 'manual'`, the pane stays closed until your app or the user opens it. Use `'manual'` if your app shows review items in its own way, such as in balloons or margin markers.
+With `opening: 'auto'`, the editor opens the pane when a document loads with items that the pane lists. It also opens the pane when you make a tracked change while the pane is closed, and when **Next Change** or **Previous Change** reaches a card. With `opening: 'manual'`, the pane stays closed until your app or the user opens it. Use `'manual'` if your app shows review items in its own way, such as in tracked change balloons or margin markers.
 
-With `revisionsIn: 'pane'`, the pane lists comments and tracked changes as cards. With `revisionsIn: 'balloons'`, the pane lists comments only, and a tracked change opens in a balloon at its text. The balloon opens when you click the change, or when **Next Change** or **Previous Change** reaches it. Moving the caret into a change does not open it. The balloon shows the author, the date, and the changed words, lists replies, and has a reply field. A deletion followed by an insertion from the same author appears as one replacement. **Accept** and **Reject** resolve the change and close the balloon. Escape, typing in the document, or a click elsewhere in the page also closes it. A balloon that **Next Change** opens takes the keyboard focus, so you can press Tab to reach **Accept** and **Reject**. A screen reader announces each balloon that opens. If another participant resolves the change while you type a reply, the balloon keeps your text and tells you that the reply was not posted. Balloons open only in **All Markup**. With `revisionsIn: 'balloons'`, a document with tracked changes and no comments does not open the pane. A comment that replies to a tracked change appears in the change's balloon, so it does not open the pane either.
+With `revisionsIn: 'pane'`, the sidebar lists comments and tracked changes. With `revisionsIn: 'balloons'`, it lists comments only. Each tracked change opens beside its text in a tracked change balloon. Replies to tracked changes stay with those changes.
+
+Click a change or use **Next Change** or **Previous Change** to open it. Moving the caret alone does not open it. Tracked change balloons appear only in **All Markup**.
+
+Each tracked change balloon includes the author, date, changed text, replies, and review controls. An adjacent deletion and insertion from one author appear as one replacement. **Accept** and **Reject** resolve the change. Escape, typing, or clicking elsewhere closes the component.
+
+Keyboard navigation moves focus into the tracked change balloon. Screen readers announce it. If another participant resolves the change during a reply, your draft remains available.
+
+For styling and custom components, see [Tracked changes customization](/docs/2.x/customization/tracked-changes).
 
 With `commentMarkers: 'initials'`, a collapsed comment marker shows the thread author's initials in their color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. With `commentMarkers: 'icon'`, the marker shows the comment icon. A `DocxEditorReview.Markers` part with an `icon` function overrides both values.
 

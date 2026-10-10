@@ -13,6 +13,7 @@ Use `document` for the document source. Use `fonts` to supply font metrics for m
 
 | Prop | Type | Description |
 | --- | --- | --- |
+| `fieldResults` | `'atomic' \| 'editable'` | Saved field result editing. Defaults to `'atomic'`; fixed when the editor starts. |
 | `document` | `DocumentSource` | DOCX bytes, `'blank'`, or an existing `DocumentHandle`. |
 | `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination. |
 | `author` | `string` | Author for later comments, replies, and tracked changes. Changes apply without a remount. |
@@ -33,6 +34,12 @@ const bytes = new Uint8Array(await response.arrayBuffer());
 ```
 
 For regional date input, pass `locale="en-GB"` for day/month input or `locale="pl-PL"` for Polish dates such as `01.02.2030`. The same prop works on `DocxEditor.Root`. It preserves dates already in the document. Use `i18n` separately to customize UI strings; see [date input behavior](/docs/2.x/guides/fields) for details.
+
+## Saved field result editing
+
+Set `fieldResults` to `'editable'` to let users edit supported saved field results, such as `MERGEFIELD` or `HYPERLINK` text. The same prop works on `DocxEditor.Root`. Later prop changes have no effect. Remount the editor to change this setting.
+
+Computed fields remain one unit. Collaboration refuses `'editable'` with a `TypeError`. For supported fields and editing rules, see [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results).
 
 ## Viewing mode
 
@@ -88,12 +95,24 @@ These props control the packaged frame around the document.
 This example controls the editor color mode:
 
 ```tsx
-const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+import { useState } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
 
-<button onClick={() => setColorMode((m) => (m === 'dark' ? 'light' : 'dark'))}>
-  Toggle theme
-</button>
-<DocxEditor document={bytes} colorMode={colorMode} />
+export function ThemedEditor({ bytes }: { bytes: Uint8Array }) {
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setColorMode((mode) => (mode === 'dark' ? 'light' : 'dark'))}
+      >
+        Toggle theme
+      </button>
+      <DocxEditor document={bytes} colorMode={colorMode} />
+    </>
+  );
+}
 ```
 
 For theme behavior, see the [Dark mode guide](/docs/2.x/guides/dark-mode).
