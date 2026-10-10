@@ -52,6 +52,26 @@ function simpleRulePt(
 }
 
 /**
+ * The leading content inset of a legacy content-aligned left-to-right table: its first cell's
+ * margin, or its centred outer rule's inner half where the margin is narrower. A right-to-left
+ * table keeps the margin.
+ */
+export function legacyLeadingInsetPt(structure: SemanticTableStructure): number {
+  const leading = structure.rows[0]?.cells[0];
+  const margin = leading?.margins.left ?? 0;
+  if (structure.bidiVisual) return margin;
+  return Math.max(margin, simpleRulePt((leading?.contentBorders ?? leading?.borders)?.left) / 2);
+}
+
+/** The trailing counterpart of {@link legacyLeadingInsetPt}, for the reference box width. */
+export function legacyTrailingInsetPt(structure: SemanticTableStructure): number {
+  const trailing = structure.rows[0]?.cells.at(-1);
+  const margin = trailing?.margins.right ?? 0;
+  if (structure.bidiVisual) return margin;
+  return Math.max(margin, simpleRulePt((trailing?.contentBorders ?? trailing?.borders)?.right) / 2);
+}
+
+/**
  * Where a table's left edge sits inside the box that contains it.
  *
  * Ordinary left-aligned tables start at their indent, which may be negative and is not
@@ -69,16 +89,8 @@ export function tableOriginX(structure: SemanticTableStructure, containerWidthPt
   if (structure.legacyContentAlignment && structure.alignment !== 'center') {
     // The leading or trailing cell's content edge sits on the aligned text edge. The indent
     // moves the table from its leading edge.
-    const leading = structure.rows[0]?.cells[0];
     const last = structure.rows[0]?.cells.at(-1)?.margins.right ?? 0;
-    // A left-to-right table's content starts at the margin, or at its centred outer rule's
-    // inner half where the margin is narrower.
-    const first = Math.max(
-      leading?.margins.left ?? 0,
-      structure.bidiVisual
-        ? 0
-        : simpleRulePt((leading?.contentBorders ?? leading?.borders)?.left) / 2
-    );
+    const first = legacyLeadingInsetPt(structure);
     if (structure.alignment === 'left')
       return structure.bidiVisual ? -first : structure.indentPt - first;
     if (structure.bidiVisual) return slack + last - structure.indentPt;

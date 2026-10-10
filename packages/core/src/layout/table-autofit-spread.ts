@@ -4,6 +4,7 @@ import type { SemanticTableCell, SemanticTableStructure } from './semantic-table
 import { spreadPreferredColumns } from './table-autofit-distribution.ts';
 import type { AutofitColumnContent } from './table-autofit-widths.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
+import { legacyLeadingInsetPt, legacyTrailingInsetPt } from './table-origin.ts';
 
 /**
  * The cell's horizontal insets after widening. A narrow table may share its grid lines or
@@ -24,8 +25,11 @@ export function widenedCellInsets(
   };
 }
 
-/** How far the resolved columns may stray from the shape of the preferred widths. */
-const SHAPE_TOLERANCE = 0.002;
+/**
+ * How far a resolved column may stray from its scaled preferred width: one twip, the unit
+ * both the authored grid and the cell preferences are stated in, so their rounding agrees.
+ */
+const ONE_TWIP_PT = 1 / 20;
 
 /** The table indent, which moves only a table aligned to its leading edge. */
 function leadingIndentPt(structure: SemanticTableStructure): number {
@@ -74,23 +78,23 @@ export function preferredSpreadWidths(
   }
   // The preferred widths must share the shape of the resolved grid; a grid that disagrees
   // with them keeps the resolver's geometry.
-  let low = Number.POSITIVE_INFINITY;
-  let high = 0;
-  for (let column = 0; column < count; column++) {
-    const ratio = columnWidthsPt[column]! / preferred[column]!;
-    low = Math.min(low, ratio);
-    high = Math.max(high, ratio);
-  }
-  if (!(low > 0) || high > low * (1 + SHAPE_TOLERANCE)) return undefined;
-  // A table without a width of its own keeps a grid wider than its cells ask for.
-  if (tableWidth.type === 'auto' && low > 1)
-    for (let column = 0; column < count; column++) preferred[column] = columnWidthsPt[column]!;
   let totalPt = 0;
-  for (const width of columnWidthsPt) totalPt += width;
-  // A legacy content-aligned table spans the text column plus its outer cell margins.
-  const cells = structure.rows[0]?.cells;
+  let preferredPt = 0;
+  for (let column = 0; column < count; column++) {
+    totalPt += columnWidthsPt[column]!;
+    preferredPt += preferred[column]!;
+  }
+  const scale = totalPt / preferredPt;
+  if (!(scale > 0) || !Number.isFinite(scale)) return undefined;
+  const slack = ONE_TWIP_PT * Math.max(1, scale);
+  for (let column = 0; column < count; column++)
+    if (Math.abs(columnWidthsPt[column]! - preferred[column]! * scale) > slack) return undefined;
+  // A table without a width of its own keeps a grid wider than its cells ask for.
+  if (tableWidth.type === 'auto' && scale > 1)
+    for (let column = 0; column < count; column++) preferred[column] = columnWidthsPt[column]!;
+  // A legacy content-aligned table spans the text column plus its outer content insets.
   const outerMargins = structure.legacyContentAlignment
-    ? (cells?.[0]?.margins.left ?? 0) + (cells?.at(-1)?.margins.right ?? 0)
+    ? legacyLeadingInsetPt(structure) + legacyTrailingInsetPt(structure)
     : 0;
   const roomPt = Math.max(0, contentWidthPt + outerMargins - leadingIndentPt(structure));
   // Minimums wider than the table keep their width, up to its room or the width it already

@@ -77,8 +77,11 @@ export interface LegacyTableContentWidth {
 
 /**
  * How much wider than its room a text box's percentage reference box is: a top-level
- * percentage table in a text box takes its share of the room plus 15 twips, whatever the
- * box's size, insets, outline or cell margins.
+ * percentage table in a text box takes its share of the room plus 15 twips. Measured on
+ * reference renderings of inline text boxes 2880 and 4320 twips wide, with insets of 0, 144
+ * and 288 twips, cell margins of 0, 108 and 216 twips, with and without a 0.75pt outline, at
+ * 50%, 100% and 150%: the implied share was the room plus 0.69 to 0.97pt, at the renderer's
+ * 0.24pt position resolution. The outline narrows the room, not the extra.
  */
 const TEXT_BOX_PERCENT_EXTRA_PT = 0.75;
 
@@ -185,11 +188,10 @@ export function legacyTableContentWidth(input: {
   if (!statesOuterMargins([properties, ...input.propertyNodes])) return undefined;
   const left = first.margins.left;
   const right = last.margins.right;
-  // A percentage table's content starts at the margin, or at a centred side rule's inner
-  // half where the margin is narrower than that half.
-  const rules = input.tableWidth.type === 'pct' ? input.outerRulesPt : undefined;
-  const insetLeft = Math.max(left, (rules?.left ?? 0) / 2);
-  const insetRight = Math.max(right, (rules?.right ?? 0) / 2);
+  // Content starts at the margin, or at a centred side rule's inner half where the margin is
+  // narrower than that half, with or without a percentage width.
+  const insetLeft = Math.max(left, (input.outerRulesPt?.left ?? 0) / 2);
+  const insetRight = Math.max(right, (input.outerRulesPt?.right ?? 0) / 2);
   const target = contentWidthPt + insetLeft + insetRight;
   if (
     !Number.isFinite(target) ||

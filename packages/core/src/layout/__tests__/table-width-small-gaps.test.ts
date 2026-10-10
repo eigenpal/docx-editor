@@ -103,18 +103,58 @@ function structure(xml: string, mode: number | undefined, depth = 0, textBox = f
 describe('autofit columns settle from their preferred widths', () => {
   const texts = ['aaaa', 'bbbbbbbbbb'];
   // Columns far narrower than their words settle at their minimums.
-  const minimums = (mode: number) => cellWidths(table({ grid: [20, 20], texts, margin: 0 }), mode);
+  const minimums = (mode: number | undefined) =>
+    cellWidths(table({ grid: [20, 20], texts, margin: 0 }), mode);
+  // Every compatibility mode, and a file without one, shares the rule.
+  const modes = [undefined, 11, 12, 14, 15];
+  const bySlack = (mode: number | undefined, xml: string) => {
+    const [low, high] = minimums(mode);
+    const slack = 200 - low! + (300 - high!);
+    const [first, second] = cellWidths(xml, mode);
+    // 200 + 300 preferred in 300pt: the 200pt excess splits by each column's slack.
+    expect(first).toBeCloseTo(200 - (200 * (200 - low!)) / slack, 6);
+    expect(second).toBeCloseTo(300 - (200 * (300 - high!)) / slack, 6);
+  };
 
   test('columns wider than the room give way by what they hold above their minimums', () => {
     const xml = table({ grid: [4000, 6000], texts, margin: 0 });
-    for (const mode of [14, 15]) {
-      const [low, high] = minimums(mode);
-      const slack = 200 - low! + (300 - high!);
-      const [first, second] = cellWidths(xml, mode);
-      // 200 + 300 preferred in a 300pt room: the 200pt excess splits by each column's slack.
-      expect(first).toBeCloseTo(200 - (200 * (200 - low!)) / slack, 6);
-      expect(second).toBeCloseTo(300 - (200 * (300 - high!)) / slack, 6);
-    }
+    for (const mode of modes) bySlack(mode, xml);
+  });
+
+  test('a percentage share narrower than the preferred widths takes back the same slack', () => {
+    // No column is narrower than its minimum here; the share still shrinks by slack.
+    const xml = table({
+      width: '<w:tblW w:w="5000" w:type="pct"/>',
+      grid: [4000, 6000],
+      texts,
+      margin: 0,
+    });
+    for (const mode of modes) bySlack(mode, xml);
+  });
+
+  test('minimums wider than the room keep their proportions at the room', () => {
+    const xml = table({ grid: [4000, 6000], texts: ['a'.repeat(40), 'b'.repeat(20)], margin: 0 });
+    const [first, second] = cellWidths(xml, 14);
+    expect(first! + second!).toBeCloseTo(CONTENT_PT, 6);
+    expect(first! / second!).toBeCloseTo(2, 1);
+  });
+
+  test('fixed tables and tables with spanning cells keep the proportional geometry', () => {
+    const fixed = table({
+      grid: [4000, 6000],
+      texts,
+      margin: 0,
+      extra: '<w:tblLayout w:type="fixed"/>',
+    });
+    expect(cellWidths(fixed, 14)).toEqual([200, 300]);
+    const cell = (twips: number, text: string, span = '') =>
+      `<w:tc><w:tcPr><w:tcW w:w="${twips}" w:type="dxa"/>${span}</w:tcPr><w:p>${run(text)}</w:p></w:tc>`;
+    const spanned =
+      '<w:tbl><w:tblPr><w:tblCellMar><w:left w:w="0" w:type="dxa"/><w:right w:w="0" w:type="dxa"/>' +
+      '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/><w:gridCol w:w="6000"/></w:tblGrid>' +
+      `<w:tr>${cell(10000, 'c', '<w:gridSpan w:val="2"/>')}</w:tr>` +
+      `<w:tr>${cell(4000, texts[0]!)}${cell(6000, texts[1]!)}</w:tr></w:tbl>`;
+    expect(structure(spanned, 14).read.columnWidthsPt).toEqual([120, 180]);
   });
 
   test('a percentage table widens a column to its minimum before it stretches', () => {
@@ -160,6 +200,16 @@ describe('legacy percentage reference box', () => {
     ).toBeUndefined();
   });
 
+  test('a table without a width reaches to the inner half of a single outer rule too', () => {
+    const { read, width, x } = structure(
+      table({ grid: [4000, 6000], extra: indent, margin: 0, rules: true }),
+      14
+    );
+    expect(read.legacyContentAlignment).toBe(true);
+    expect(width).toBeCloseTo(CONTENT_PT + 0.5, 6);
+    expect(x).toBeCloseTo(-0.25, 6);
+  });
+
   test('a text-box table takes 0.75pt more and puts its outer trailing edge on the text edge', () => {
     const xml = table({
       width: '<w:tblW w:w="5000" w:type="pct"/>',
@@ -191,4 +241,19 @@ test('a mode-15 right-to-left table moves half its outer rule toward its visual 
   expect(modern.read.outerRuleOffsetPt).toBe(-0.25);
   expect(modern.x).toBeCloseTo(CONTENT_PT - modern.width - 0.25, 6);
   expect(structure(xml, 14).read.outerRuleOffsetPt).toBeUndefined();
+  const aligned = (jc: string) =>
+    structure(
+      table({
+        width: '<w:tblW w:w="2500" w:type="pct"/>',
+        extra: `<w:bidiVisual/><w:jc w:val="${jc}"/>`,
+        rules: true,
+      }),
+      15
+    );
+  // Centered, and aligned to either edge, every placement moves by the same half rule.
+  const centered = aligned('center');
+  expect(centered.x).toBeCloseTo((CONTENT_PT - centered.width) / 2 - 0.25, 6);
+  const leading = aligned('left');
+  expect(leading.x).toBeCloseTo(CONTENT_PT - leading.width - 0.25, 6);
+  expect(aligned('right').x).toBeCloseTo(-0.25, 6);
 });
