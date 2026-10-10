@@ -346,17 +346,25 @@ If you own the Yjs resources, use `useDocumentCollaboration` from the same entri
 
 The messages come from the editor's translations. The part keeps an empty region with `role="status"` mounted, so screen readers announce each message when it appears.
 
-To show the **Rejoin** button, save the editor and pass the bytes to the `rejoin` function of your provider hook:
+To show the **Rejoin** button, preserve a recovery copy, then pass saved bytes to your provider hook’s `rejoin` function:
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
+// Implement a confirmed download or durable application storage.
+// Reject if the recovery copy cannot be preserved.
+declare function preserveRecoveryCopy(bytes: Uint8Array): Promise<void>;
+
 const { rejoin } = useHocuspocusCollaboration({ room });
 
 async function rejoinRoom() {
   const saved = await editorRef.current?.save();
-  if (saved) await rejoin(new Uint8Array(saved));
+  if (saved) {
+    const bytes = new Uint8Array(saved);
+    await preserveRecoveryCopy(bytes);
+    await rejoin(bytes);
+  }
 }
 
 <DocxEditorCollaboration.Status onRejoin={rejoinRoom} />;
@@ -458,17 +466,23 @@ For `collaboration-format-mismatch`, `protocol-version-mismatch`, or `schema-ver
 For other failures, resolve the cause before calling `rejoin`:
 
 ```tsx
+// Implement a confirmed download or durable application storage.
+// Reject if the recovery copy cannot be preserved.
+declare function preserveRecoveryCopy(bytes: Uint8Array): Promise<void>;
+
 const { rejoin } = useHocuspocusCollaboration({ room });
 
 async function rejoinRoom() {
   const saved = await editorRef.current?.save();
   if (saved) {
-    await rejoin(new Uint8Array(saved));
+    const bytes = new Uint8Array(saved);
+    await preserveRecoveryCopy(bytes);
+    await rejoin(bytes);
   }
 }
 ```
 
-Save the editor bytes before you call `rejoin`. It leaves with those bytes, then joins the same room with `{ kind: 'join' }`. A successful join uses the room copy. It can drop unreplicated changes that existed when the session failed. After a failed join, the saved bytes stay mounted locally.
+Preserve a recovery copy outside the editor before you call `rejoin`. `preserveRecoveryCopy` represents your application’s confirmed download or durable storage. If it fails, keep the existing editor mounted and stop recovery. `rejoin` leaves with the saved bytes, then joins the same room with `{ kind: 'join' }`. A successful join uses the room copy. It can drop unreplicated changes that existed when the session failed. After a failed join, the saved bytes stay mounted locally.
 
 ## Edit offline
 
@@ -573,7 +587,13 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
-import { prepareCollaborationServerDocument } from '@docx-editor.dev/pro/collaboration';
+import {
+  assertCollaborationFormatCompatibility,
+  checkCollaborationRoomGeneration,
+  prepareCollaborationServerDocument,
+  readCollaborationDocument,
+  readCollaborationFormatVersion,
+} from '@docx-editor.dev/pro/collaboration';
 
 const ROOMS_DIR = '/var/lib/rooms';
 // No `.`, `/`, or `\`, so a room name cannot leave ROOMS_DIR.
@@ -584,16 +604,43 @@ function roomFile(documentName: string): string {
   return path.join(ROOMS_DIR, `${documentName}.ydoc`);
 }
 
+async function readSavedRoom(file: string): Promise<Uint8Array | null> {
+  try {
+    return new Uint8Array(await readFile(file));
+  } catch (error) {
+    if (error !== null && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
 const server = new Server({
   async onLoadDocument({ documentName, document }) {
     prepareCollaborationServerDocument(document);
     // Load the saved state after the preparation.
-    const saved = await readFile(roomFile(documentName)).catch(() => null);
-    if (saved) Y.applyUpdate(document, new Uint8Array(saved));
+    const saved = await readSavedRoom(roomFile(documentName));
+    if (saved) {
+      const candidate = new Y.Doc();
+      try {
+        prepareCollaborationServerDocument(candidate);
+        Y.applyUpdate(candidate, saved);
+        assertCollaborationFormatCompatibility(readCollaborationFormatVersion(candidate));
+        readCollaborationDocument(candidate);
+        Y.applyUpdate(document, saved);
+      } finally {
+        candidate.destroy();
+      }
+    }
     return document;
+  },
+  async beforeHandleMessage(payload) {
+    checkCollaborationRoomGeneration(payload);
   },
 });
 ```
+
+Preparation preserves formatting markers; it does not validate a room or authenticate a client. The example validates saved data in a temporary document before loading it. Storage and validation failures stop loading. Keep the saved state for recovery. Add [client admission checks](/docs/2.x/pro/collaboration-versions#check-clients-before-synchronization) before production use.
 
 Hocuspocus runs the hooks of its extensions before the server's own hooks. If an extension loads the saved state, such as `@hocuspocus/extension-database`, prepare the document in an extension that runs first. The following extension has a higher priority than the default of 100:
 
@@ -619,12 +666,12 @@ Yjs state only grows. Deleted text and records, formatting history, and media th
 
 Compact a room when the server loads it, before any participant syncs. Pass the stored state to `compactCollaborationState`. It returns the new generation's state, or `null` when compaction would not gain enough. By default, a room is compacted when its stored state is at least twice the size of a fresh build of its current content, which also covers content that participants deleted. Store the new state in place of the old one.
 
-Every server that holds rooms must also call `checkCollaborationRoomGeneration` from `beforeHandleMessage`. A participant that still holds the previous generation is refused before any of its state merges into the new one.
+Every Hocuspocus server that holds rooms must also call `checkCollaborationRoomGeneration` from `beforeHandleMessage`. A participant that still holds the previous generation is refused before any of its state merges into the new one.
 
-The example uses the `roomFile` function from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). It writes the new state to a temporary file and renames it, so a crash during the write keeps the old state.
+The example uses the `roomFile` and `readSavedRoom` functions from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). It writes the new state to a temporary file and renames it, so a crash during the write keeps the old state.
 
 ```ts
-import { readFile, rename, writeFile } from 'node:fs/promises';
+import { rename, writeFile } from 'node:fs/promises';
 import { Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import {
@@ -637,10 +684,10 @@ const server = new Server({
   async onLoadDocument({ documentName, document }) {
     prepareCollaborationServerDocument(document);
     const file = roomFile(documentName);
-    const saved = await readFile(file).catch(() => null);
+    const saved = await readSavedRoom(file);
     if (!saved) return document;
-    // A damaged room throws CollaborationSchemaError. Keep the stored state unchanged.
-    const compacted = await compactCollaborationState(new Uint8Array(saved)).catch(() => null);
+    // Stop on validation failure. Keep the stored state unchanged.
+    const compacted = await compactCollaborationState(saved);
     if (compacted) {
       await writeFile(`${file}.tmp`, compacted);
       await rename(`${file}.tmp`, file);
@@ -654,25 +701,30 @@ const server = new Server({
 });
 ```
 
-A check reads the whole room and builds it again. `compactCollaborationState` remembers each stored state that it found not worth compacting, so a client that opens a room again and again causes one check. A room that changed is checked again.
+A check reads the whole room and builds it again. `compactCollaborationState` caches up to 1,024 states that do not need compaction in each server process. It checks changed states again. Cache eviction or a server restart also causes another check.
 
-`compactCollaborationState` throws `CollaborationSchemaError` when it cannot read the stored state as a room, as `readCollaborationDocument` does. The example catches the error and keeps the stored state unchanged, so the server never overwrites its only copy of a damaged room.
+`compactCollaborationState` throws when it cannot read the saved state. A room validation failure produces `CollaborationSchemaError`. Invalid Yjs bytes can produce another error. The example stops loading on failure and keeps the saved state unchanged. Investigate the error before admitting clients. Only `ENOENT` means that no saved room exists; permission and storage errors also stop loading.
 
 The new generation keeps the document, its comments, and its tracked changes. Participants who connect after the compaction join it as usual. Undo history does not carry over.
 
 A participant whose replica held the previous generation, because it stayed open while everyone left and the room was compacted, gets status `error` with reason `room-generation-changed`. Its document stays in the editor. Call `rejoin` to continue in the new generation. If the participant edited while disconnected, those edits are not in the room: save the editor's document first and offer it to the participant as a copy.
 
 ```ts
+// Reject if the recovery copy cannot be preserved.
+declare function preserveRecoveryCopy(bytes: Uint8Array): Promise<void>;
+
 if (session.statusSnapshot().reason?.code === 'room-generation-changed') {
   const saved = await editor.save();
   if (saved) {
-    const failure = await rejoin(new Uint8Array(saved));
+    const bytes = new Uint8Array(saved);
+    await preserveRecoveryCopy(bytes);
+    const failure = await rejoin(bytes);
     if (failure) showRecoveryMessage(failure.code);
   }
 }
 ```
 
-`save()` resolves with `null` when the editor has no document to save. `rejoin` resolves with the failure, or `null` after a successful join; it does not reject. `showRecoveryMessage` stands for your application's own recovery UI.
+`save()` resolves with `null` when the editor has no document to save. `rejoin` resolves with the failure, or `null` after a successful join; it does not reject. `showRecoveryMessage` stands for your application's own recovery UI. `preserveRecoveryCopy` must finish before `rejoin` replaces the local document. Keep that copy until you reconcile unsynchronized edits.
 
 `readCollaborationRoomGeneration(ydoc)` returns the generation a room holds, or an empty string for a room that was never compacted.
 
@@ -743,14 +795,18 @@ For status, participant, and remote selection types, import `@docx-editor.dev/co
 
 If you own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the complete canonical package. You must destroy these resources.
 
-Four rules make a bring-your-own-provider integration work:
+Implement transport admission before connecting a custom provider. Authenticate document access, compare the complete collaboration format, and check the room generation before applying any updates. Repeat these checks when reconnecting. A session’s validation runs after synchronization and cannot replace transport admission.
+
+`checkCollaborationRoomGeneration` reads Hocuspocus wire messages. It does not accept `y-websocket` messages. A custom transport needs its own generation handshake and refusal behavior. For compatibility requirements, see [Collaboration versions and upgrades](/docs/2.x/pro/collaboration-versions).
+
+After admission, follow these integration rules:
 
 1. Connect the provider before you use `bootstrap: { kind: 'join' }`. The factory reads synchronized shared state. Without a connection, the join fails with `initialization-timeout` after 30 seconds.
 2. Pass an `Awareness` instance from `y-protocols/awareness`. It carries presence and remote selections.
 3. Send provider connection events to `session.setTransportStatus`. Without this call, the status remains `ready` during an outage.
 4. Some transports limit message size. The WebRTC wrapper provides message framing. A WebSocket provider does not need it.
 
-This example wires `y-websocket`:
+This example wires `y-websocket` after your transport implements admission. It shows session setup; it does not implement server authentication or generation checks:
 
 ```ts
 import * as Y from 'yjs';
@@ -939,7 +995,7 @@ Two concurrent editing limits remain:
 
 ### Concurrent line breaks and tabs
 
-Text insertion and deletion survive a concurrent line break or tab in the same text run. Two concurrent splits of the same text keep one replacement, including only one participant's break or tab. Undo of the other split can restore the original text over both splits. A concurrent formatting change in the same run can still remove an inserted line break. For that limitation, see [Concurrent formatting and line breaks](https://github.com/eigenpal/docx-editor/issues/1133).
+Text insertion and deletion survive a concurrent line break or tab in the same text run. Concurrent splits keep each text character once. Undo after concurrent splits also keeps the text synchronized without duplicate characters. A concurrent formatting change preserves an inserted line break.
 
 ### Numeric limits
 
