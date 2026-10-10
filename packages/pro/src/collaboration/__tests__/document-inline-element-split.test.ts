@@ -6,7 +6,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // A line break or tab inserted inside a run splits that run's text, and typing another peer did
 // at the same time in that text survives the split (issue #1129).
 import { afterEach, expect, test } from 'bun:test';
-import { serializeOoxmlPart, type TreeDocOp } from '@docx-editor.dev/core/store';
+import {
+  canonicalOoxmlFingerprint,
+  serializeOoxmlPart,
+  type OoxmlNode,
+  type TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support.ts';
 
 const harness = createPeerHarness('inline-element-split', { offlineEditing: true });
@@ -140,18 +145,26 @@ for (const op of ['insertHardBreak', 'insertTab', 'insertPageField'] as const) {
       ? { op, paragraphId, offset: 9, field: 'PAGE' }
       : element(op, paragraphId);
   // The paragraph's text with the element as `|`, or a field as `[...]` around its result.
-  const placed = (xml: string): string =>
-    xml
-      .replace(/<w:instrText[^>]*>.*?<\/w:instrText>/g, '')
-      .replace(/<[^>]*>/g, (tag) =>
-        tag === mark
-          ? '|'
-          : /w:fldCharType="begin"/.test(tag)
-            ? '['
-            : /w:fldCharType="end"/.test(tag)
-              ? ']'
-              : ''
-      );
+  const placed = (peer: Peer): string => {
+    const out: string[] = [];
+    const visit = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      if (node.localName === 't') {
+        for (const child of node.children) if (child.kind === 'textValue') out.push(child.value);
+        return;
+      }
+      if (node.localName === 'instrText') return;
+      if (node.localName === 'br' || node.localName === 'tab') out.push('|');
+      if (node.localName === 'fldChar') {
+        const type = canonicalOoxmlFingerprint(node);
+        if (type.includes('"begin"')) out.push('[');
+        if (type.includes('"end"')) out.push(']');
+      }
+      for (const child of node.children) visit(child);
+    };
+    visit(peer.store.bodyStore().part.root);
+    return out.join('');
+  };
   for (const formatFirst of [false, true]) {
     test(`${op} and formatting of the same run made at once both survive (${formatFirst ? 'format' : 'element'} first)`, async () => {
       const { alice, bob, pause, resume } = await harness.pair(bytes);
@@ -184,7 +197,7 @@ for (const op of ['insertHardBreak', 'insertTab', 'insertPageField'] as const) {
       expect(merged).toContain('<w:b/>');
       expect(merged).toContain('<w:i/>');
       // The element still sits after "Acme Ltd ".
-      expect(placed(merged)).toMatch(/^Acme Ltd (\||\[[^\]]*\])1 Main Street$/);
+      expect(placed(alice)).toMatch(/^Acme Ltd (\||\[[^\]]*\])1 Main Street$/);
       expect(alice.room.session.undo()).toBe(true);
       harness.expectConverged(alice, bob);
       expect(body(alice)).not.toContain(mark);
