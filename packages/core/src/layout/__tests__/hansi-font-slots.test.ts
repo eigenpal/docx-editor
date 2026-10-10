@@ -154,6 +154,28 @@ test('projected atoms change face only for a uniform slot and controls remain in
   }
 });
 
+test('a cached atomic field result splits by face and keeps its one model range', () => {
+  const atom: FieldAwarePiece = {
+    ...piece('café über'),
+    projected: true,
+    fieldAtom: { formField: false },
+    start: 7,
+    end: 8,
+  };
+  const out = applyHAnsiFontSlots([atom]);
+  expect(out.map((p) => [p.text, p.start, p.end, p.style.fontFamily])).toEqual([
+    ['caf', 7, 8, 'Times New Roman'],
+    ['é', 7, 8, 'Arial'],
+    [' ', 7, 8, 'Times New Roman'],
+    ['ü', 7, 8, 'Arial'],
+    ['ber', 7, 8, 'Times New Roman'],
+  ]);
+  expect(out.every((p) => p.fieldAtom === atom.fieldAtom)).toBe(true);
+  // A measurement reservation stays whole.
+  const reserved = { ...atom, measureText: 'café über' };
+  expect(applyHAnsiFontSlots([reserved])[0]).toBe(reserved);
+});
+
 test('a changed hAnsi face invalidates cached measurements without changing text or ascii', () => {
   const cache = createParagraphLayoutCache(),
     base = createFixedMeasurer(7, 14),

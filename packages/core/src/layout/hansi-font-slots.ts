@@ -161,15 +161,22 @@ export function applyHAnsiFontSlots(
       !piece.noteNav &&
       piece.measureText === undefined &&
       piece.end - piece.start === piece.text.length;
+    // A cached atomic field result draws its text per face like literal text, but every slice
+    // keeps the atom's one model range.
+    const atom =
+      piece.projected === true &&
+      piece.fieldAtom != null &&
+      !piece.noteNav &&
+      piece.measureText === undefined;
     if (
       !ranges.some((range) => range.family && range.family !== piece.style.fontFamily) ||
-      (!literal && ranges.length !== 1)
+      (!literal && !atom && ranges.length !== 1)
     ) {
       out?.push(piece);
       continue;
     }
     out ??= pieces.slice(0, index);
-    if (!literal) {
+    if (!literal && !atom) {
       out.push({
         ...piece,
         style: withFontFamily(piece.style, ranges[0]!.family!),
@@ -181,8 +188,7 @@ export function applyHAnsiFontSlots(
       out.push({
         ...piece,
         text: piece.text.slice(range.from, range.to),
-        start: piece.start + range.from,
-        end: piece.start + range.to,
+        ...(literal ? { start: piece.start + range.from, end: piece.start + range.to } : {}),
         ...(range.family
           ? { style: withFontFamily(piece.style, range.family), fontSlot: 'hAnsi' as const }
           : {}),
