@@ -16,6 +16,7 @@ import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/sto
 import {
   canApplyLocalReviewPatch,
   localReviewPatchParagraphId,
+  reviewQueueKeptByStructure,
   patchLocalReviewItems,
 } from './review-patch.ts';
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
@@ -241,7 +242,8 @@ export function openTreeSessionFromPackage(
     /** Package revision when this queue was last fully derived or patched. */
     packageRevision: number;
     items: readonly ReviewItem[];
-    paragraphOrder: ReadonlyMap<string, number>;
+    /** The body's paragraph order for `items`, or null when it is read on demand. */
+    paragraphOrder: ReadonlyMap<string, number> | null;
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
     pkg: OoxmlPackage;
@@ -1046,51 +1048,10 @@ export function openTreeSessionFromPackage(
         const commentsExtendedPart = pkg.parts.get(
           commentsExtendedPartNameOf(pkg, store.part.name)
         );
-        const furnitureParts = furnitureAndNoteParts();
-
-        const patchParagraphId =
-          reviewCache && lastChange
-            ? localReviewPatchParagraphId(
-                lastChange,
-                reviewCache,
-                reviewCache.items,
-                store.part,
-                commentsPart,
-                commentsExtendedPart,
-                packageStore.packageRevision,
-                pkg,
-                lastChangePackage
-              )
-            : null;
-
-        let items: readonly ReviewItem[];
-        let paragraphOrder: ReadonlyMap<string, number>;
-        if (patchParagraphId && reviewCache) {
-          const localRevisions = derive.revisionItemsOfParagraph(store.part, patchParagraphId);
-          if (canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)) {
-            items = patchLocalReviewItems(
-              reviewCache.items,
-              reviewCache.paragraphOrder,
-              patchParagraphId,
-              localRevisions
-            );
-            paragraphOrder = reviewCache.paragraphOrder;
-          } else {
-            paragraphOrder = paragraphOrderOfPart(store.part);
-            items = derive.collectReviewItems({
-              storyPart: store.part,
-              furnitureParts,
-              stylesPart: stylesPartOf(pkg),
-              commentsPart,
-              commentsExtendedPart,
-              customNodePayloads: customNodePayloadsAcrossStories(),
-            });
-          }
-        } else {
-          paragraphOrder = paragraphOrderOfPart(store.part);
-          items = derive.collectReviewItems({
+        const derived = (): readonly ReviewItem[] =>
+          derive.collectReviewItems({
             storyPart: store.part,
-            furnitureParts,
+            furnitureParts: furnitureAndNoteParts(),
             stylesPart: stylesPartOf(pkg),
             commentsPart,
             commentsExtendedPart,
@@ -1099,6 +1060,50 @@ export function openTreeSessionFromPackage(
             // capability module can do.
             customNodePayloads: customNodePayloadsAcrossStories(),
           });
+        const inputs = {
+          part: store.part,
+          commentsPart,
+          commentsExtendedPart,
+          currentPackageRevision: packageStore.packageRevision,
+          currentPackage: pkg,
+          changePackage: lastChangePackage,
+        };
+
+        let items: readonly ReviewItem[];
+        // Null until a patch needs it: a split keeps the queue but moves the order.
+        let paragraphOrder: ReadonlyMap<string, number> | null = null;
+        if (
+          reviewCache &&
+          lastChange &&
+          reviewQueueKeptByStructure(lastChange, reviewCache, reviewCache.items, inputs)
+        ) {
+          items = reviewCache.items;
+        } else {
+          const patchParagraphId =
+            reviewCache && lastChange
+              ? localReviewPatchParagraphId(lastChange, reviewCache, reviewCache.items, inputs)
+              : null;
+          const localRevisions =
+            patchParagraphId && reviewCache
+              ? derive.revisionItemsOfParagraph(store.part, patchParagraphId)
+              : null;
+          if (
+            patchParagraphId &&
+            reviewCache &&
+            localRevisions &&
+            canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)
+          ) {
+            paragraphOrder = reviewCache.paragraphOrder ?? paragraphOrderOfPart(store.part);
+            items = patchLocalReviewItems(
+              reviewCache.items,
+              paragraphOrder,
+              patchParagraphId,
+              localRevisions
+            );
+          } else {
+            paragraphOrder = paragraphOrderOfPart(store.part);
+            items = derived();
+          }
         }
 
         reviewCache = {

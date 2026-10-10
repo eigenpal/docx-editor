@@ -788,7 +788,7 @@ function* layoutBlocksPass(
     // aggregate itself contains NULs), so no separator join stays injective.
     const ownListToken =
       block.kind === 'table'
-        ? listTokenForTableBlock(block, listItems)
+        ? listTokenForTableBlock(block, listItems, styleCascade)
         : listItemToken(listItems?.get(block.id));
     const listToken =
       ownListToken === '' && hostedListToken === ''
@@ -993,6 +993,7 @@ function* layoutBlocksPass(
       prepassInputsValid && columns.count === 1 && !options.disabledParagraphFrameIds
         ? prepassMemo
         : null;
+    const orderSource = reusable ?? (autofitInputsEqual ? prepassMemo : null);
     const prepared = resolveListAutoSpacing(
       sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
         prepareBlock(block, contentWidth)
@@ -1072,14 +1073,15 @@ function* layoutBlocksPass(
       projectionEpoch: projectionEpoch ?? '',
       prepared,
       keys,
+      // Paragraph order reads no list state, so a list edit keeps it.
       paragraphDocumentOrder:
-        reusable &&
+        orderSource &&
         sectionPrep.sameSectionParagraphOrder(
-          reusable.bodies,
+          orderSource.bodies,
           bodies,
           drawingInputsUnchangedByTextEdit
         )
-          ? reusable.paragraphDocumentOrder
+          ? orderSource.paragraphDocumentOrder
           : paragraphDocumentOrderOf(
               prepared,
               contentWidth,

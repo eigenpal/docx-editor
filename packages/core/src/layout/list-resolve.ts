@@ -815,6 +815,17 @@ interface NumberedBlockMemo {
 const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
 const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
 
+/**
+ * Whether any paragraph in `block` can carry a list item under `styleCascade`. Both list
+ * resolves give items only to these paragraphs, so a block without one has no list token.
+ */
+export function blockHasNumberedParagraphs(
+  block: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): boolean {
+  return numberedParagraphsOfBlock(block, styleCascade).length > 0;
+}
+
 function numberedParagraphsOfBlock(
   block: OoxmlElement,
   styleCascade: StyleCascadeTable | undefined

@@ -3,6 +3,9 @@
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   deepParagraphOrderOfPart,
+  findNode,
+  WML_NAMESPACE_URI,
+  type OoxmlNode,
   type OoxmlPart,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
@@ -19,6 +22,9 @@ import {
  * order descends into `w:txbxContent`. Containment only ever compares positions within
  * one story, and furniture ranks after the body, so the merge cannot invent a cover.
  */
+/** A paragraph this large is rebuilt from scratch rather than walked here. */
+const MAX_FLAT_CHECK_NODES = 10_000;
+
 export function createReviewOrderIndex(
   session: Pick<
     TreeDocxSessionView,
@@ -60,6 +66,62 @@ export function createReviewOrderIndex(
   };
   const sameParts = (left: readonly OoxmlPart[], right: readonly OoxmlPart[]): boolean =>
     left.length === right.length && left.every((part, index) => part === right[index]);
+  /** Whether the body paragraph `id` exists and holds no paragraph of its own (a text box). */
+  const flatParagraph = (id: string): boolean => {
+    const paragraph = findNode(session.part(), id);
+    if (!paragraph || paragraph.kind !== 'paragraph') return false;
+    let visited = 0;
+    const stack: OoxmlNode[] = [...paragraph.children];
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      if (++visited > MAX_FLAT_CHECK_NODES) return false;
+      if (node.kind === 'textValue') continue;
+      if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'p') return false;
+      for (const child of node.children) stack.push(child);
+    }
+    return true;
+  };
+  /**
+   * Move `index` across one body split or join, in place. A split's tail follows its first
+   * half directly, so every later position moves up by one; a join leaves a gap, which no
+   * comparison can see. A paragraph that holds a text box is not carried, because its
+   * nested paragraphs sit between it and the next one.
+   */
+  const carryStructure = (change: TreeModelChange, index: Map<string, number>): boolean => {
+    if (change.splitJoin.length !== 1) return false;
+    if (change.story !== undefined && change.story.kind !== 'body') return false;
+    const entry = change.splitJoin[0]!;
+    if ('split' in entry) {
+      const { from, tail } = entry.split;
+      const position = index.get(from);
+      if (
+        position === undefined ||
+        index.has(tail) ||
+        change.deleted.length > 0 ||
+        change.created.length !== 1 ||
+        change.created[0] !== tail ||
+        !flatParagraph(from) ||
+        !flatParagraph(tail)
+      ) {
+        return false;
+      }
+      for (const [id, at] of index) if (at > position) index.set(id, at + 1);
+      index.set(tail, position + 1);
+      return true;
+    }
+    const { kept, removed } = entry.join;
+    if (
+      !index.has(kept) ||
+      change.created.length > 0 ||
+      change.deleted.length !== 1 ||
+      change.deleted[0] !== removed ||
+      !flatParagraph(kept)
+    ) {
+      return false;
+    }
+    index.delete(removed);
+    return true;
+  };
   return {
     /**
      * Carry the index across a commit that cannot reorder paragraphs.
@@ -70,19 +132,22 @@ export function createReviewOrderIndex(
      * preserves every paragraph id and their order in every story, so the index is re-stamped
      * to the values the next read will key on. A property or list commit keeps every paragraph
      * too, but a list commit follows a package-shell write of its definition, so it is carried
-     * only while every other story part is still the same object. Anything wider drops it, and
+     * only while every other story part is still the same object. One split or join moves the
+     * index in place under the same condition (`carryStructure`). Anything wider drops it, and
      * commits that bypass the subscription (a package-shell edit) leave a stale key the
      * read-side check rebuilds — the safe direction.
      */
     retain(change) {
       if (!cache) return;
-      const otherParts = change.impact === 'text-local' ? cache.otherParts : otherStoryParts();
+      const reorders =
+        change.created.length > 0 || change.deleted.length > 0 || change.splitJoin.length > 0;
+      const otherParts =
+        change.impact === 'text-local' && !reorders ? cache.otherParts : otherStoryParts();
       if (
         change.impact !== 'global' &&
-        change.created.length === 0 &&
-        change.deleted.length === 0 &&
-        change.splitJoin.length === 0 &&
-        (change.impact === 'text-local' || sameParts(cache.otherParts, otherParts))
+        (change.impact === 'text-local' || sameParts(cache.otherParts, otherParts)) &&
+        (!reorders ||
+          (sameParts(cache.otherParts, otherParts) && carryStructure(change, cache.index)))
       ) {
         cache = {
           packageRevision: session.packageRevision(),

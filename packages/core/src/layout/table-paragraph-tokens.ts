@@ -6,7 +6,8 @@
 // result is the same string the flat paragraph walk produces.
 
 import { listLayoutToken } from './list-marker-reuse.ts';
-import type { ResolvedListItem } from './list-resolve.ts';
+import { blockHasNumberedParagraphs, type ResolvedListItem } from './list-resolve.ts';
+import type { StyleCascadeTable } from './style-cascade.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { framedTokenJoin } from './framed-token.ts';
 
@@ -245,9 +246,19 @@ const tableListTokens = new WeakMap<object, WeakMap<object, string>>();
 const rowListTokens = createTableRowTokenStore();
 export function listTokenForTableBlock(
   table: OoxmlNode,
-  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
+  styleCascade?: StyleCascadeTable
 ): string {
   if (!listItems || listItems.size === 0) return '';
+  // With the cascade the resolve used, a table with no numbered paragraph has no item: a list
+  // edit elsewhere mints a new map, and this skips walking every row of such a table.
+  if (
+    styleCascade !== undefined &&
+    table.kind !== 'textValue' &&
+    !blockHasNumberedParagraphs(table, styleCascade)
+  ) {
+    return '';
+  }
   // Nested weak keying: neither the table nor the list map is retained by the memo, and two
   // consumers preparing one table under different list maps both stay warm.
   let byListItems = tableListTokens.get(table);

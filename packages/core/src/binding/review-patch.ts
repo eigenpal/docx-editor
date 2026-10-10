@@ -181,40 +181,113 @@ function revisionCrossesParagraphBoundary(item: ReviewRevisionItem, paragraphId:
   );
 }
 
-/** The one paragraph a patch may rebuild, or null to fall back to the full derivation. */
-export function localReviewPatchParagraphId(
+/** The inputs a carried queue depends on, at the time of `change`. */
+export interface ReviewPatchInputs {
+  readonly part: OoxmlPart;
+  readonly commentsPart: OoxmlPart | undefined;
+  readonly commentsExtendedPart: OoxmlPart | undefined;
+  readonly currentPackageRevision: number;
+  readonly currentPackage: OoxmlPackage;
+  readonly changePackage: OoxmlPackage | null;
+}
+
+/** Whether `change` is one body commit after `cache`, with every other queue input unchanged. */
+function onlyBodyChanged(
   change: TreeModelChange,
   cache: LocalReviewPatchCache,
-  items: readonly ReviewItem[],
-  part: OoxmlPart,
-  commentsPart: OoxmlPart | undefined,
-  commentsExtendedPart: OoxmlPart | undefined,
-  currentPackageRevision: number,
-  currentPackage: OoxmlPackage,
-  changePackage: OoxmlPackage | null
-): string | null {
-  if (change.fromRevision !== cache.bodyRevision) return null;
+  inputs: ReviewPatchInputs
+): boolean {
+  if (change.fromRevision !== cache.bodyRevision) return false;
   // Body text-local edits bump package revision by exactly one. A header/footer or package
   // write can move package revision without moving the body revision — patching against a
   // queue derived before that would keep stale furniture cards by reference. A list
   // definition written just before the edit moves it too; that write is allowed only when
   // the edit was the last write and every other input is the same object.
   if (
-    currentPackageRevision !== cache.packageRevision + 1 &&
-    (changePackage !== currentPackage ||
-      !reviewInputsUnchanged(cache.pkg, currentPackage, part.name))
+    inputs.currentPackageRevision !== cache.packageRevision + 1 &&
+    (inputs.changePackage !== inputs.currentPackage ||
+      !reviewInputsUnchanged(cache.pkg, inputs.currentPackage, inputs.part.name))
   ) {
-    return null;
+    return false;
   }
-  if (change.story !== undefined && change.story.kind !== 'body') return null;
-  if (change.impact === 'global') return null;
+  if (change.story !== undefined && change.story.kind !== 'body') return false;
+  if (change.impact === 'global') return false;
+  return (
+    cache.commentsPart === inputs.commentsPart &&
+    cache.commentsExtendedPart === inputs.commentsExtendedPart
+  );
+}
+
+/** Whether the paragraph before `paragraphId` holds a paragraph-mark revision. */
+function previousHoldsMarkRevision(part: OoxmlPart, paragraphId: string): boolean {
+  const owner = parentNodeOf(part, paragraphId);
+  if (!owner) return false;
+  const index = owner.children.findIndex((child) => child.id === paragraphId);
+  const previous = owner.children[index - 1];
+  return (
+    previous?.kind === 'paragraph' &&
+    collectRevisionSites({ ...part, root: previous }).some((site) => site.paragraphMark)
+  );
+}
+
+/**
+ * Whether a paragraph split or join leaves the cached queue exactly as it is.
+ *
+ * Enter and a join move no review markup when neither paragraph holds any and no card starts
+ * or ends in them: every card keeps its paragraphs and offsets. A tracked split writes a
+ * paragraph-mark revision into the first paragraph, so it fails this check.
+ */
+export function reviewQueueKeptByStructure(
+  change: TreeModelChange,
+  cache: LocalReviewPatchCache,
+  items: readonly ReviewItem[],
+  inputs: ReviewPatchInputs
+): boolean {
+  if (!onlyBodyChanged(change, cache, inputs)) return false;
+  if (change.splitJoin.length !== 1) return false;
+  const entry = change.splitJoin[0]!;
+  let involved: readonly string[];
+  let survivors: readonly string[];
+  if ('split' in entry) {
+    if (change.deleted.length > 0) return false;
+    if (change.created.length !== 1 || change.created[0] !== entry.split.tail) return false;
+    involved = survivors = [entry.split.from, entry.split.tail];
+  } else {
+    if (change.created.length > 0) return false;
+    if (change.deleted.length !== 1 || change.deleted[0] !== entry.join.removed) return false;
+    involved = [entry.join.kept, entry.join.removed];
+    survivors = [entry.join.kept];
+  }
+  for (const id of survivors) {
+    const paragraph = findNode(inputs.part, id);
+    if (!paragraph || paragraph.kind !== 'paragraph') return false;
+    if (collectRevisionSites({ ...inputs.part, root: paragraph }).length > 0) return false;
+  }
+  if (previousHoldsMarkRevision(inputs.part, survivors[0]!)) return false;
+  const touches = (paragraphId: string | undefined) =>
+    paragraphId !== undefined && involved.includes(paragraphId);
+  for (const item of items) {
+    const ranges = item.kind === 'revision' ? item.ranges : item.range ? [item.range] : [];
+    for (const range of ranges) {
+      if (touches(range.start.paragraphId) || touches(range.end.paragraphId)) return false;
+    }
+  }
+  return true;
+}
+
+/** The one paragraph a patch may rebuild, or null to fall back to the full derivation. */
+export function localReviewPatchParagraphId(
+  change: TreeModelChange,
+  cache: LocalReviewPatchCache,
+  items: readonly ReviewItem[],
+  inputs: ReviewPatchInputs
+): string | null {
+  if (!onlyBodyChanged(change, cache, inputs)) return null;
   if (change.dirty.length !== 1) return null;
   if (change.created.length > 0 || change.deleted.length > 0 || change.splitJoin.length > 0) {
     return null;
   }
-  if (cache.commentsPart !== commentsPart || cache.commentsExtendedPart !== commentsExtendedPart) {
-    return null;
-  }
+  const { part } = inputs;
   const paragraphId = change.dirty[0]!;
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
@@ -234,16 +307,7 @@ export function localReviewPatchParagraphId(
 
   // A local edit can CREATE a cross-paragraph group. The cached queue cannot prove
   // that boundary safe: before typing after Enter, only the preceding mark exists.
-  const owner = parentNodeOf(part, paragraphId);
-  if (owner) {
-    const index = owner.children.findIndex((child) => child.id === paragraphId);
-    const previous = owner.children[index - 1];
-    if (
-      previous?.kind === 'paragraph' &&
-      collectRevisionSites({ ...part, root: previous }).some((site) => site.paragraphMark)
-    )
-      return null;
-  }
+  if (previousHoldsMarkRevision(part, paragraphId)) return null;
 
   for (const item of items) {
     if (item.kind === 'comment') {

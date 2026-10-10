@@ -18,7 +18,14 @@ const OD = `${R}/officeDocument`;
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-function docx(): Uint8Array {
+const PLAIN_BODY = `${p('One')}${p('Two')}${p('Three')}`;
+/** A paragraph whose text box holds a paragraph of its own. */
+const TEXT_BOX_BODY =
+  '<w:p><w:r><w:t>Host</w:t></w:r><w:r><w:pict><v:shape><v:textbox><w:txbxContent>' +
+  `${p('In the box')}</w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>` +
+  p('After');
+
+function docx(body: string): Uint8Array {
   const type = (name: string) =>
     `application/vnd.openxmlformats-officedocument.wordprocessingml.${name}+xml`;
   return zipSync({
@@ -43,23 +50,28 @@ function docx(): Uint8Array {
         '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>'
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${p('One')}${p('Two')}${p('Three')}` +
+      `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:v="urn:schemas-microsoft-com:vml"><w:body>${body}` +
         '<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr></w:body></w:document>'
     ),
   });
 }
 
-function setup() {
-  const opened = openTreeSession(docx());
+function setup(body = PLAIN_BODY) {
+  const opened = openTreeSession(docx(body));
   if (!opened.ok) throw new Error(opened.reason);
   const session = opened.session;
   const order = createReviewOrderIndex(session);
   session.subscribe((change) => order.retain(change));
-  const fresh = () => createReviewOrderIndex(session).index();
+  const fresh = () => sequence(createReviewOrderIndex(session).index());
   return { session, order, fresh };
 }
 
 type Session = ReturnType<typeof setup>['session'];
+
+/** Paragraph ids in index order: positions are only ever compared. */
+function sequence(index: ReadonlyMap<string, number>): string[] {
+  return [...index].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+}
 
 function toggleList(session: Session, index: number): void {
   const numId = session.ensureListDefinition('bullet');
@@ -75,7 +87,7 @@ describe('review order index across list edits', () => {
     const before = order.index();
     toggleList(session, 1);
     expect(order.index()).toBe(before);
-    expect(order.index()).toEqual(fresh());
+    expect(sequence(order.index())).toEqual(fresh());
   });
 
   test('a header split beside a list toggle rebuilds the index', () => {
@@ -91,17 +103,33 @@ describe('review order index across list edits', () => {
     toggleList(session, 1);
     const after = order.index();
     expect(after).not.toBe(before);
-    expect(after).toEqual(fresh());
+    expect(sequence(after)).toEqual(fresh());
   });
 
-  test('a split rebuilds the index', () => {
+  test('a split and a join move the index they already built', () => {
     const { session, order, fresh } = setup();
+    const before = order.index();
+    for (const offset of [1, 0, 3]) {
+      session.applyTreeOps([
+        { op: 'splitParagraph', paragraphId: session.paragraphIds()[1]!, offset },
+      ]);
+      expect(order.index()).toBe(before);
+      expect(sequence(order.index())).toEqual(fresh());
+    }
+    const ids = session.paragraphIds();
+    session.applyTreeOps([{ op: 'joinParagraphs', firstId: ids[1]!, secondId: ids[2]! }]);
+    expect(order.index()).toBe(before);
+    expect(sequence(order.index())).toEqual(fresh());
+  });
+
+  test('a split of a paragraph holding a text box rebuilds the index', () => {
+    const { session, order, fresh } = setup(TEXT_BOX_BODY);
     const before = order.index();
     session.applyTreeOps([
       { op: 'splitParagraph', paragraphId: session.paragraphIds()[0]!, offset: 1 },
     ]);
     const after = order.index();
     expect(after).not.toBe(before);
-    expect(after).toEqual(fresh());
+    expect(sequence(after)).toEqual(fresh());
   });
 });

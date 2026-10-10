@@ -27,6 +27,8 @@ import {
   type RefFieldContext,
 } from '../field-ref.ts';
 import { storyRowParagraphs, walkStoryParagraphs } from '../story-paragraph-walk.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
+import type { ResolvedListItem } from '../list-resolve.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -229,6 +231,36 @@ describe('table aggregates through their owners', () => {
     expect(token).toBe(flat(after, renumbered));
     expect(token).toContain('item:2');
     expect(token).not.toContain('item:1');
+  });
+
+  test('with the cascade, a table with no numbered paragraph skips its rows', () => {
+    const stylesRead = readOoxmlPart(`<w:styles xmlns:w="${W}"/>`, {
+      name: '/word/styles.xml',
+      contentType: 'app/xml',
+    });
+    if (!stylesRead.ok) throw new Error(stylesRead.reason);
+    const cascade = buildStyleCascadeTable(stylesRead.part.root);
+    const plain = fixtureTable('plain-');
+    const numberedXml = table(
+      row(
+        cell(p('first')),
+        cell('<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>')
+      )
+    );
+    const numbered = firstTable(numberedXml);
+    const item = (token: string) => ({ cacheToken: token }) as unknown as ResolvedListItem;
+    const listedId = walkStoryParagraphs([numbered])[1]!.id;
+    const items = new Map([
+      [listedId, item('item:1')],
+      [walkStoryParagraphs([plain])[0]!.id, item('stray')],
+    ]);
+    // No paragraph of the plain table can hold an item, so its token is empty either way.
+    expect(listTokenForTableBlock(plain, items, cascade)).toBe('');
+    // A numbered table answers exactly as the walk without the cascade does.
+    expect(listTokenForTableBlock(numbered, items, cascade)).toBe(
+      listTokenForTableBlock(numbered, items)
+    );
+    expect(listTokenForTableBlock(numbered, items, cascade)).toContain('item:1');
   });
 
   test('drawing tokens re-read only the edited row under one epoch', () => {

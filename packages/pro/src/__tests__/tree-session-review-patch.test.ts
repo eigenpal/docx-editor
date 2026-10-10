@@ -631,6 +631,73 @@ describe('local review patch after one-paragraph text-local edits', () => {
     expect(after[0]).not.toBe(before[0]);
   });
 
+  describe('a split or join that moves no review markup keeps the queue', () => {
+    const body =
+      TWO_PARAGRAPH_TRACKED + `<w:p>${run('plain words here')}</w:p>` + `<w:p>${run('more')}</w:p>`;
+    const split = (session: TreeDocxSession, index: number, offset: number, tracked = false) => {
+      const paragraphId = session.paragraphIds()[index]!;
+      const revision = { author: 'Ada', date: '2026-01-01T00:00:00Z' };
+      return session.applyTreeOps([
+        { op: 'splitParagraph', paragraphId, offset },
+        ...(tracked
+          ? [
+              {
+                op: 'setParagraphMarkRevision' as const,
+                paragraphId,
+                kind: 'ins' as const,
+                revision,
+              },
+            ]
+          : []),
+      ]);
+    };
+
+    test('Enter and a join in plain paragraphs keep every card', () => {
+      const session = open(docx(body));
+      const before = session.reviewItems();
+      expect(split(session, 2, 5).committed).toBe(true);
+      expect(session.reviewItems()).toBe(before);
+      expect(session.reviewItems()).toEqual(oracle(session));
+      const ids = session.paragraphIds();
+      session.applyTreeOps([{ op: 'joinParagraphs', firstId: ids[3]!, secondId: ids[4]! }]);
+      expect(session.reviewItems()).toBe(before);
+      expect(session.reviewItems()).toEqual(oracle(session));
+      // A later patch reads the paragraph order the carried queue left unread.
+      retype(session, 1, 'SECOND ');
+      expect(session.reviewItems()).toEqual(oracle(session));
+    });
+
+    test('a split inside a tracked paragraph derives the queue again', () => {
+      const session = open(docx(body));
+      const before = session.reviewItems();
+      split(session, 0, 3);
+      const after = session.reviewItems();
+      expect(after).toEqual(oracle(session));
+      expect(after).not.toBe(before);
+    });
+
+    test('a tracked split derives the queue again', () => {
+      const session = open(docx(body));
+      const before = session.reviewItems();
+      split(session, 2, 5, true);
+      const after = session.reviewItems();
+      expect(after).toEqual(oracle(session));
+      expect(after).not.toBe(before);
+    });
+
+    test('a split where a comment ends derives the queue again', () => {
+      const commented =
+        TWO_PARAGRAPH_TRACKED + `<w:p>${cStart('c1')}${run('noted words')}${cEnd('c1')}</w:p>`;
+      const comments = `<w:comment w:id="c1" w:author="QA" w:date="D"><w:p>${run('note')}</w:p></w:comment>`;
+      const session = open(docx(commented, comments));
+      const before = session.reviewItems();
+      split(session, 2, 3);
+      const after = session.reviewItems();
+      expect(after).toEqual(oracle(session));
+      expect(after).not.toBe(before);
+    });
+  });
+
   test('structural edits fall back and still match the oracle', () => {
     const session = open(docx(TWO_PARAGRAPH_TRACKED));
     session.reviewItems();

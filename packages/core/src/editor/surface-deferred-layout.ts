@@ -18,8 +18,8 @@ import type { SemanticLayout } from '../layout/semantic-records.ts';
 
 /** The foreground budget before a pass may hand its later pages to the background. */
 let foregroundMs = 40;
-/** Background slice length, in milliseconds. */
-const BACKGROUND_SLICE_MS = 40;
+/** Background slice length, in milliseconds: short enough to leave room for a frame. */
+const BACKGROUND_SLICE_MS = 12;
 /** Fewer pages than this left after the screen are cheaper to finish now. */
 const MIN_DEFERRED_PAGES = 8;
 
@@ -78,6 +78,15 @@ function queueTask(run: () => void): void {
   setTimeout(run, 0);
 }
 
+/** Run after the next frame paints, so the edit shows before any background work. */
+function afterPaint(run: () => void): void {
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => queueTask(run));
+    return;
+  }
+  queueTask(run);
+}
+
 export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
   let paused: {
     readonly steps: LayoutSteps<SemanticLayout>;
@@ -129,7 +138,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
         // ends. Each keeps the index it is painted at.
         const pages = [...progress.pages, ...previous.pages.slice(progress.pages.length)];
         paused = { steps, revision, restore };
-        queueTask(drive);
+        afterPaint(drive);
         return progress.finalize(pages);
       }
     },
