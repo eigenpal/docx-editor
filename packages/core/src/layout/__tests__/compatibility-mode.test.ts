@@ -1,6 +1,9 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart, type HeadlessDocumentView } from '@docx-editor.dev/core/store';
-import { compatibilityModeFromSettings } from '../compatibility/compatibility-profile.ts';
+import {
+  compatibilityModeFromSettings,
+  compatibilityProfileFromSettings,
+} from '../compatibility/compatibility-profile.ts';
 import { createDocumentStyleDependencies } from '../document-style-deps.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -34,10 +37,35 @@ test('projects every explicitly authored Word compatibility mode', () => {
   expect(compatibilityModeFromSettings(settings(''))).toBeUndefined();
 });
 
+test('a valid mode declared directly under settings applies when compat holds none', () => {
+  const profile = (body: string) => compatibilityProfileFromSettings(settings(body));
+  expect(profile(setting('16')).modeValue).toBe(16);
+  expect(profile(setting('14')).modeValue).toBe(14);
+  // A valid declaration inside compat wins over one outside it.
+  expect(profile(`${setting('16')}<w:compat>${setting('14')}</w:compat>`).modeValue).toBe(14);
+  // An invalid declaration inside compat yields to a valid one outside it.
+  const rescued = profile(`<w:compat>${setting('abc')}</w:compat>${setting('15')}`);
+  expect(rescued.modeValue).toBe(15);
+  expect(rescued.modeRefused).toBe(false);
+  // An invalid declaration outside compat is ignored: it neither sets nor refuses a mode.
+  for (const value of ['abc', '13a', '10']) {
+    const ignored = profile(setting(value));
+    expect(ignored.modeValue).toBeUndefined();
+    expect(ignored.modeRefused).toBe(false);
+  }
+  // An invalid declaration inside compat still refuses the mode.
+  expect(profile(`<w:compat>${setting('abc')}</w:compat>`).modeRefused).toBe(true);
+  // Two valid declarations outside compat are as ambiguous as two inside it.
+  expect(profile(setting('14') + setting('15')).modeValue).toBeUndefined();
+});
+
 test('requires the settings/compat path and expanded names, not a matching local name alone', () => {
   const valid = setting('14');
   const bodies = [
-    valid,
+    // Outside compat, only a valid Word declaration counts.
+    valid.replace(URI, 'urn:other'),
+    valid.replace('compatibilityMode', 'other'),
+    valid.replaceAll('w:compatSetting', 'x:compatSetting'),
     `<x:compat>${valid}</x:compat>`,
     `<w:compat>${valid.replaceAll('w:compatSetting', 'x:compatSetting')}</w:compat>`,
     ...['name', 'uri', 'val'].map(
