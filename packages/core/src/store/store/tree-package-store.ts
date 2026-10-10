@@ -60,6 +60,7 @@ import {
   locateHeaderFooterPart,
 } from './tree-package-gates.ts';
 import { cascadeEmptiedComments } from '../package/comment-lifecycle.ts';
+import { hasAnyComment } from './comment-reads.ts';
 import {
   TreeDocumentStore,
   type SelectionMark,
@@ -398,6 +399,7 @@ export class TreePackageStore {
     // characters. Word deletes a comment whose words are deleted, and the reap that does it is
     // a before/after diff, so it needs the same "was it even possible" gate.
     let mayEmptyComments = false;
+    let anyComment: boolean | undefined;
     const commentTargets = new Set<string>();
     let turnsListOn = false;
     let listStyleId: string | undefined;
@@ -468,8 +470,9 @@ export class TreePackageStore {
             }
             if (!mayEmptyComments) {
               if (op.op === 'deleteText' || op.op === 'deleteBlock') {
+                // The package as the transaction found it: one walk answers every op.
                 mayEmptyComments = deleteMayEmptyCommentRange(
-                  this.pkg,
+                  () => (anyComment ??= hasAnyComment(this.pkg)),
                   store.part,
                   op,
                   commentTargets

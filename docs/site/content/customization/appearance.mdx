@@ -1,0 +1,234 @@
+---
+title: 'Appearance'
+description: 'Customize DOCX editor appearance with CSS color tokens, dark mode, interface fonts, borders, spacing, and control states.'
+category: 'Customization'
+---
+
+Set `--doc-*` properties on your `.docx-editor` wrapper. Load application CSS after the editor stylesheet.
+
+Add the `dark` class to a composed wrapper for dark controls. Use `colorMode` on the packaged editor. Dark mode also adjusts the document preview. Saved document colors remain unchanged.
+
+<CustomizationDemo topic="appearance" />
+
+## Apply an application color theme
+
+Connect your application tokens to both editor palettes. The application defines the values of `--app-*`; this example defines their editor mappings. Use color values for `--app-brand` and HSL components for `--app-brand-hsl`.
+
+```css
+.docx-editor.contract-workspace,
+.docx-editor.contract-workspace.dark {
+  --doc-primary: var(--app-brand);
+  --doc-primary-hover: var(--app-brand-hover);
+  --doc-primary-light: var(--app-brand-surface);
+  --doc-on-primary: var(--app-on-brand);
+  --doc-focus-ring: var(--app-focus-ring);
+  --primary: var(--app-brand-hsl);
+  --primary-foreground: var(--app-on-brand-hsl);
+  --ring: var(--app-brand-hsl);
+}
+```
+
+Define light and dark application values for the mapped tokens. The shared rule keeps both editor themes connected to your application's active palette.
+
+## Style your controls
+
+Keep CSS under your wrapper. These tokens and selectors work in both frameworks.
+
+```css
+.docx-editor.contract-workspace {
+  --doc-dialog-radius: 16px;
+  --doc-dialog-control-radius: 8px;
+  --doc-dialog-padding: 24px;
+}
+.docx-editor.contract-workspace .contract-toolbar {
+  margin: 0;
+  border-radius: 0;
+  padding: 8px 12px;
+  background: var(--doc-surface);
+  border-bottom: 1px solid var(--doc-border);
+}
+.docx-editor.contract-workspace .contract-card {
+  border-radius: 12px;
+  background: var(--doc-surface);
+}
+```
+
+## Appearance options
+
+Use these controls to adapt the DOCX editor interface to your application. Interface settings change the viewer. They do not replace styles stored in the DOCX file.
+
+| Area | Configuration | Scope |
+| --- | --- | --- |
+| Interface palette | Override `--doc-*` properties on your wrapper. | Controls, panels, menus, and review cards. |
+| Utility palette | Override the HSL properties used by the controls. | Utility classes such as `bg-primary` and `text-foreground`. |
+| Dark mode | Add `.dark`, or set packaged `colorMode`. | Interface and document preview. |
+| Typography | Set `--doc-font-ui` and dialog font properties. | Supported interface parts, not document fonts. |
+| Control shape | Add `className` to named parts. | The selected part and its interaction states. |
+| Custom elements | Use a supported part's `asChild`. | Your element receives the part's behavior. |
+| Document appearance | Use a DOCX template, fonts, and formatting commands. | Document content and saved formatting. |
+
+### Interface palette reference
+
+Set CSS color values for these properties. Override related foreground and background properties together. The default stylesheet defines separate light and dark palettes.
+
+| Purpose | Properties |
+| --- | --- |
+| Main surfaces | `--doc-surface`, `--doc-popover-bg`, `--doc-card`, `--doc-bg`, `--doc-bg-subtle` |
+| Hover and input surfaces | `--doc-bg-hover`, `--doc-bg-input` |
+| Primary actions | `--doc-primary`, `--doc-primary-hover`, `--doc-primary-light`, `--doc-on-primary` |
+| Assistant accents | `--doc-accent`, `--doc-accent-bg` |
+| Active toggles | `--doc-toggle-active-bg`, `--doc-toggle-active-fg` |
+| Text and icons | `--doc-text`, `--doc-popover-fg`, `--doc-text-muted`, `--doc-text-subtle`, `--doc-text-placeholder` |
+| Borders | `--doc-border`, `--doc-border-light`, `--doc-border-dark`, `--doc-border-input` |
+| Errors and destructive actions | `--doc-error`, `--doc-error-bg`, `--doc-danger`, `--doc-destructive`, `--doc-destructive-hover-bg` |
+| Success | `--doc-success`, `--doc-success-bg` |
+| Warnings | `--doc-warning`, `--doc-warning-bg`, `--doc-warning-text` |
+| Links | `--doc-link` |
+| Focus and selection | `--doc-focus-ring`, `--doc-selection`, `--doc-cell-selection` |
+| Search and application highlights | `--doc-text-highlight-color`, `--doc-text-highlight-active-color`, `--doc-refresh-highlight-color`, `--doc-anchor-highlight-color` |
+| Caret | `--doc-caret`, `--doc-caret-contrast` |
+| Field shading | `--doc-field-shading` |
+| Shadow colors and overlay | `--doc-shadow`, `--doc-shadow-strong`, `--doc-shadow-subtle`, `--doc-overlay` |
+| Complete shadow values | `--doc-card-shadow`, `--doc-card-shadow-strong`, `--doc-shadow-lg` |
+| Scrollbars | `--doc-scrollbar-thumb`, `--doc-scrollbar-thumb-hover`, `--doc-scrollbar-track` |
+
+The shadow color properties accept colors. The complete shadow properties accept CSS `box-shadow` values. Use [Tracked changes](/docs/2.x/customization/tracked-changes) for revision and author color properties. Use [Comments and review cards](/docs/2.x/customization/review-cards) for comment highlights and active card properties.
+
+### Utility palette reference
+
+The controls also use these scoped HSL properties. Their values contain HSL components, such as `221.2 83.2% 53.3%`, without an `hsl()` wrapper.
+
+| Purpose | Properties |
+| --- | --- |
+| Base interface | `--background`, `--foreground` |
+| Cards and popovers | `--card`, `--card-foreground`, `--popover`, `--popover-foreground` |
+| Actions | `--primary`, `--primary-foreground`, `--secondary`, `--secondary-foreground` |
+| Secondary surfaces | `--muted`, `--muted-foreground`, `--accent`, `--accent-foreground` |
+| Destructive actions | `--destructive`, `--destructive-foreground` |
+| Inputs and focus | `--border`, `--input`, `--ring` |
+| Utility corner radius | `--radius` |
+
+Set both palettes when your application changes the complete interface theme. For example, `--doc-primary` controls editor-specific parts, while `--primary` controls utility-based parts.
+
+### Size, typography, and layer reference
+
+| Property | Value type | Default or behavior |
+| --- | --- | --- |
+| `--doc-font-ui` | Font stack | Parts use a system font fallback. |
+| `--doc-dialog-font-family` | Font stack | Falls back to `--doc-font-ui`. |
+| `--doc-dialog-font-size` | CSS length | `13px`. |
+| `--doc-dialog-radius` | CSS length | Standard dialog panel: `8px`. |
+| `--doc-dialog-control-radius` | CSS length | Standard dialog controls: `4px`. |
+| `--doc-dialog-padding` | One CSS length | Standard dialog inset: `24px`. |
+| `--doc-dialog-gap` | CSS length | Standard dialog row gap: `12px`. |
+| `--doc-scrollbar-size` | CSS length | `14px`. |
+| `--doc-hf-dim-opacity` | Number | Inactive content during header or footer editing: `0.45` in light mode. |
+| `--doc-motion-ease-out` | Timing function | Shared interface transition curve. |
+| `--doc-z-chrome` | Integer | Persistent interface elements: `40`. |
+| `--doc-z-overlay` | Integer | Menus and other temporary surfaces: `50`. |
+| `--doc-z-context` | Integer | Context menu: `55`. |
+
+Keep the layer order when you change these values. An ancestor's stacking context can still limit an editor overlay. Some specialized popups use their own fallback sizes. A wrapper override gives them the same explicit value.
+
+### Theme scope and interaction states
+
+Put your theme class on the element that carries `.docx-editor`. A nested `.docx-editor` can declare its own defaults and override inherited properties. If you add another scope, apply your theme properties there too.
+
+Add classes through component props instead of removing the library's classes. Use your own class with `:hover`, `:focus-visible`, `:disabled`, and supported `data-*` attributes. Toolbar buttons expose `data-active` and `data-disabled` presence attributes. Review cards expose their own item and state attributes.
+
+Keep visible focus indicators and readable text in each theme. Use text, icons, or decorations with colors to distinguish review states.
+
+### Dark mode behavior
+
+The packaged DOCX editor accepts `colorMode="light"`, `"dark"`, or `"system"`. Its default is `"light"`. The `"system"` value follows changes to the operating system preference.
+
+For a composed editor, your application controls the `.dark` class on the `.docx-editor` wrapper. Declare dark theme overrides with `.docx-editor.contract-workspace.dark` after the editor stylesheet. This selector also lets your application override the library's dark palette.
+
+Dark mode changes the on-screen page background and content presentation. It does not write these display colors into the DOCX file. Use document formatting commands when you need a saved document color.
+
+## React and Vue reference
+
+Pass your DOCX bytes and loaded fonts to this component. The preview uses a fictional contract.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { DocxEditor, type DocxEditorRootProps } from '@docx-editor.dev/react';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+const modules = [reviewModule()];
+
+export function ContractEditor({
+  bytes,
+  fonts,
+}: {
+  bytes: Uint8Array;
+  fonts: DocxEditorRootProps['fonts'];
+}) {
+  return (
+    <div className="docx-editor contract-workspace">
+      <DocxEditor.Root
+        document={bytes}
+        fonts={fonts}
+        modules={modules}
+        author="Demo reviewer"
+        mode="suggesting"
+        reviewDisplayMode="all-markup"
+      >
+        <DocxEditor.Toolbar className="contract-toolbar" />
+        <DocxEditor.Viewport style={{ height: 520 }}>
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule, DocxEditorReview } from '@docx-editor.dev/pro/vue';
+import type { FontConfigurationFragment } from '@docx-editor.dev/vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ bytes: Uint8Array; fonts: FontConfigurationFragment }>();
+const modules = [reviewModule()];
+</script>
+
+<template>
+  <div class="docx-editor contract-workspace">
+    <DocxEditor.Root
+      :document="bytes"
+      :fonts="fonts"
+      :modules="modules"
+      author="Demo reviewer"
+      mode="suggesting"
+      review-display-mode="all-markup"
+    >
+      <DocxEditor.Toolbar class-name="contract-toolbar" />
+      <DocxEditor.Viewport :style="{ height: '520px' }">
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+        <DocxEditorReview />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## More control
+
+See [Dark mode](/docs/2.x/guides/dark-mode) for supported parts, types, and additional examples.

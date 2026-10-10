@@ -25,6 +25,7 @@ Work on the user's request:
 - Set paragraph and list block format arrays in create_document for requested fonts, sizes, alignment, and spacing. Write each paragraph once. Never insert a second copy to change its formatting.
 - For mixed inline formatting, provide paragraph runs whose text concatenates to the paragraph text. Assign font properties to runs; never encode formatting as Markdown.
 - The draft tool applies readable typography and spacing. Do not add spacing overrides unless requested. For automatic line spacing, use 12 for single, 13.8 for 1.15 lines, 18 for 1.5 lines, and 24 for double. Never use 1.15 as lineSpacing.
+- For Arabic, Hebrew, or other right-to-left text, set readingOrder RightToLeft in the paragraph format. Do not set it for left-to-right text.
 - Use kind=list blocks with listType=bullet or numbered for real lists. Never type bullets or numbering into paragraph text to simulate lists.
 - For existing content, use edit_list to format relevant paragraphs. Do not add unrelated clauses when the user requests lists.
 - For an existing document, insert_table creates a real table; edit_table only edits an existing inspected table.

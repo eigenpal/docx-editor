@@ -57,6 +57,13 @@ export type ParagraphAlignment =
   | 'Justified';
 
 /**
+ * A paragraph's base direction, as {@link Paragraph.readingOrder} reads and writes it.
+ *
+ * @public
+ */
+export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
+
+/**
  * One paragraph: what it says, what it is, and the ways it can be changed.
  *
  * Identity is the document's own. {@link Paragraph.uniqueLocalId} is the `w14:paraId` the file
@@ -166,6 +173,30 @@ export class Paragraph extends ModelObject implements PromisedItem {
 
   set alignment(value: ParagraphAlignment) {
     this.#authorFormat('alignment', requireAlignment(value, `${this.path.label}.alignment`));
+  }
+
+  /**
+   * The direction the paragraph reads in: `LeftToRight` or `RightToLeft`.
+   *
+   * A DocxEditor addition: Office.js has no paragraph direction member. The values follow
+   * `Word.SectionDirection`. The read resolves the paragraph's own `w:bidi`, then its style, its
+   * list level, an enclosing cell's table style, and the document defaults, as the page shows them.
+   *
+   * A write changes nothing when the paragraph already reads that way. Otherwise it removes the
+   * paragraph's own direction when that alone set the other one, or states the asked direction,
+   * which also overrides a style. The write keeps `alignment` as authored: in a right-to-left
+   * paragraph, `Left` and `Right` name the start and end edges. With change tracking on, a write
+   * that changes the direction is recorded as a paragraph formatting revision.
+   */
+  get readingOrder(): ParagraphReadingOrder {
+    return this.loadedProperty<ParagraphReadingOrder>('readingOrder');
+  }
+
+  set readingOrder(value: ParagraphReadingOrder) {
+    this.#authorFormat(
+      'readingOrder',
+      requireReadingOrder(value, `${this.path.label}.readingOrder`)
+    );
   }
 
   /** Points. Negative for a hanging indent — the first line starting left of the rest. */
@@ -319,9 +350,33 @@ export class Paragraph extends ModelObject implements PromisedItem {
     }));
   }
 
-  /** Remove this paragraph and everything in it. */
+  /**
+   * Remove this paragraph and everything in it.
+   *
+   * With `document.changeTrackingMode = 'TrackMineOnly'`, this records a tracked deletion of the
+   * paragraph's text and its paragraph mark. Accepting it removes the paragraph; rejecting it
+   * restores the paragraph.
+   *
+   * A tracked deletion refuses with `NotSupported` for the last paragraph of a story, table
+   * cell, or content control; a paragraph directly before a table or block content control; a
+   * paragraph whose mark ends a section; a paragraph with an inline content control; a
+   * paragraph that a complex field crosses; and a paragraph that nests inline content more than
+   * 64 levels deep. It refuses with `NotImplemented` when the paragraph or the start of the next
+   * paragraph has a pending change, including your own. Delete adjacent paragraphs in one sync:
+   * a later sync beside your own pending deletion refuses, because the two would review as one
+   * decision. A refusal refuses the whole sync.
+   */
   delete(): void {
-    this.command('delete', () => ({ op: 'deleteParagraph', paragraph: this.#handle() }));
+    const target = `${this.path.label}.delete`;
+    this.commandAnswering(
+      target,
+      () => ({ op: 'deleteParagraph', paragraph: this.#handle() }),
+      // A permanent deletion answers `applied`; a tracked one answers the struck span.
+      (value) => {
+        if (value.kind !== 'applied' && value.kind !== 'span')
+          fail({ code: 'GeneralException', target });
+      }
+    );
   }
 
   /** Write text over this paragraph or at either edge of it. Answers the written text's range. */
@@ -503,6 +558,7 @@ const FORMAT_FIELDS = [
   'lineSpacing',
   'spaceBefore',
   'spaceAfter',
+  'readingOrder',
 ] as const;
 
 type FormatField = (typeof FORMAT_FIELDS)[number];
@@ -525,6 +581,14 @@ function requireAlignment(value: unknown, target: string): ParagraphAlignment {
     fail({ code: 'InvalidArgument', target });
   }
   return value as ParagraphAlignment;
+}
+
+/** A direction a write may name. Any other value is refused before anything is sent. */
+function requireReadingOrder(value: unknown, target: string): ParagraphReadingOrder {
+  if (value !== 'LeftToRight' && value !== 'RightToLeft') {
+    fail({ code: 'InvalidArgument', target });
+  }
+  return value;
 }
 
 function requirePoints(value: unknown, target: string): number {

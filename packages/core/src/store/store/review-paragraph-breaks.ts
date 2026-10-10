@@ -8,6 +8,7 @@ import {
   type ReviewRange,
 } from './review-items.ts';
 import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
+import { isInertMarker } from './revision-marker-content.ts';
 
 export function mergeParagraphBreakEdits(
   items: readonly ReviewRevisionItem[],
@@ -17,15 +18,17 @@ export function mergeParagraphBreakEdits(
 ): readonly ReviewRevisionItem[] {
   if (!items.some((item) => item.revisionKind === 'paragraphMark')) return items;
   // Only sibling paragraphs share a break. Deep document order alone would join edits
-  // across table cells, text boxes, or intervening tables.
+  // across table cells, text boxes, or intervening tables. Position markers between two
+  // paragraphs, such as a bookmark end, do not separate them.
   const following = new Map<string, string>();
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
-    for (let i = 0; i < node.children.length; i += 1) {
-      const child = node.children[i]!;
-      const next = node.children[i + 1];
-      if (child.kind === 'paragraph' && next?.kind === 'paragraph')
-        following.set(child.id, next.id);
+    let previous: string | null = null;
+    for (const child of node.children) {
+      if (child.kind === 'paragraph') {
+        if (previous !== null) following.set(previous, child.id);
+        previous = child.id;
+      } else if (!isInertMarker(child)) previous = null;
       visit(child, depth + 1);
     }
   };

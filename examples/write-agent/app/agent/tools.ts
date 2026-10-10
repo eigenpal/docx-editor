@@ -190,7 +190,7 @@ export const WRITER_TOOLS = {
   }),
   edit_table: tool({
     description:
-      'Edit an inspected table: values, cell properties, style, header rows, rows, or columns. Use insertRows with a row index and Before/After for middle insertion. One structural operation per call. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration. Merged and protected structures can refuse.',
+      'Edit an inspected table: values, cell properties, style, header rows, rows, or columns. Use insertRows with a row index and Before/After for middle insertion. One structural operation per call. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and replacements across paragraphs refuse in collaboration. Merged and protected structures can refuse.',
     inputSchema: editing.tableSchema,
   }),
   edit_list: tool({

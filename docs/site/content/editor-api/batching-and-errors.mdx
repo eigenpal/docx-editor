@@ -48,7 +48,7 @@ Each loop queues item loads, then syncs once. The result contains plain data you
 
 ## Separate dependent work
 
-Each `sync(): Promise<void>` commits its writes atomically. Calling `sync()` captures the queued operations immediately, including coalesced property writes. Setters called while that sync awaits prerequisite reads belong to the next sync. Await each sync before starting another sync on the same context. Supported read-derived proxies can require additional read-only transport batches before the write transaction. These phases share a document revision. A concurrent edit produces `StaleDocument`, without replaying the write.
+Each `sync(): Promise<void>` commits its writes atomically. Calling `sync()` captures the queued operations immediately, including coalesced property writes. A property load queued in the same sync as a write to that property returns the value from before the write. To read a written value, load it in a later sync. Setters called while that sync awaits prerequisite reads belong to the next sync. Await each sync before starting another sync on the same context. Supported read-derived proxies can require additional read-only transport batches before the write transaction. These phases share a document revision. A concurrent edit produces `StaleDocument`, without replaying the write.
 
 Objects returned by insertions need a completed sync before dependent edits:
 

@@ -61,7 +61,7 @@
   },
   "Word.Document#changeTrackingMode": {
     "status": "partial",
-    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked table value replacement and ranges across paragraphs refuse in collaboration."
+    "notes": "Off and TrackMineOnly control this automation runtime only; the mode is not saved as a document-wide policy. TrackMineOnly requires a configured author and supports inline text, font, paragraph-format, and paragraph-style edits, and tracked deletion of whole paragraphs, in collaboration too. Browser tracked writes require the review module and remain subject to the editor UI mode. TrackAll refuses. Paragraph insertion and list membership changes support native revisions. Table row additions and partial deletions support native row revisions. Existing list definitions and page layout still refuse. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. Complete table insertion, table value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require direct edits. Tracked deletion across paragraphs and Paragraph.delete strike text and paragraph marks, in collaboration too. Tracked table value replacement and tracked replacement across paragraphs refuse in collaboration."
   },
   "Word.Comment#creationDate": {
     "status": "partial",
@@ -521,11 +521,11 @@
   },
   "Word.Range#delete": {
     "status": "partial",
-    "notes": "Deletes the addressed range contents. TrackMineOnly proposes inline text deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content. Tracked range replacement supports adjacent sibling paragraphs. Table and wrapper boundaries and foreign revisions refuse. Ranges across paragraphs refuse in collaboration. Within one paragraph, a tracked deletion can start where the author's own pending inserted text ends; other boundaries with the author's pending changes, or covering their pending text, refuse. A range refuses with StaleDocument when a later batch changed text before its end in its paragraph."
+    "notes": "Deletes the addressed range contents. TrackMineOnly proposes the deletion: text becomes deleted runs, and each paragraph mark the range covers becomes a deleted paragraph mark, so accept removes whole paragraphs and reject restores them. Tracked deletion supports adjacent sibling paragraphs, in collaboration too; text another participant types into struck text joins the deletion. Cross-structure, protected, and unsupported revision targets refuse instead of flattening preserved content. Table and wrapper boundaries and foreign revisions refuse. Within one paragraph, a tracked deletion can start where the author's own pending inserted text ends; other boundaries with the author's pending changes, or covering their pending text, refuse. A range refuses with StaleDocument when a later batch changed text before its end in its paragraph. Each paragraph mark a tracked range deletion covers follows the Paragraph.delete rules: a mark that ends a section, an inline content control, or a complex field crossing the mark refuses with NotSupported. A tracked deletion or replacement that starts a paragraph whose previous mark the author already proposed deleting refuses with NotImplemented, because it would review as one decision with it."
   },
   "Word.Paragraph#delete": {
     "status": "partial",
-    "notes": "Deletes this paragraph through the canonical store; protected or unsupported structural boundaries refuse. Tracked paragraph deletion is outside the runtime-local tracking profile."
+    "notes": "Deletes this paragraph through the canonical store; protected or unsupported structural boundaries refuse. TrackMineOnly records the paragraph's text as deleted runs and its paragraph mark as a deleted paragraph mark, in collaboration too. Accept removes the paragraph; reject restores it. Several adjacent paragraphs can be deleted in one sync. Position markers between them stay in place until accept, which moves them to the join point. After a reopen, or when another participant rejects, an empty w:pPr or w:rPr that the proposal added can remain. NotSupported: the last paragraph of a story, table cell, or content control; a paragraph directly before a table or block content control; a mark that ends a section; an inline content control in the paragraph; a complex field crossing the mark; inline content nested more than 64 levels deep. NotImplemented: a pending change in the paragraph or at the start of the next paragraph, including the author's own, or a previous paragraph whose mark the author already proposed deleting; any tracked deletion or replacement that starts a paragraph after such a mark refuses the same way. Delete adjacent paragraphs in one sync; a later sync beside the author's own pending deletion refuses, because it would review as one decision. One refusal refuses the whole sync. In collaboration, text another participant types into struck text joins the deletion; accept removes it with no separate revision."
   },
   "Word.Range#hyperlink": {
     "status": "partial",
@@ -533,35 +533,35 @@
   },
   "Word.Paragraph#style": {
     "status": "partial",
-    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved."
+    "notes": "Writes a paragraph style by its display name from the document styles part. Unknown style names refuse; load before reading. Other paragraph properties are preserved. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#alignment": {
     "status": "partial",
-    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin."
+    "notes": "Writes Left, Centered, Right, or Justified. Mixed and Unknown describe reads and are refused on writes. Unspecified or mixed authored values can read as null or a mixed marker. Values are the stored w:jc: in a right-to-left paragraph, Left and Right name the leading and trailing edges, so Left sits at the right margin. Setting the DocxEditor addition Paragraph.readingOrder keeps w:jc as authored. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#leftIndent": {
     "status": "partial",
-    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph leftIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#rightIndent": {
     "status": "partial",
-    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph rightIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#firstLineIndent": {
     "status": "partial",
-    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph firstLineIndent in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#lineSpacing": {
     "status": "partial",
-    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph lineSpacing in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#spaceBefore": {
     "status": "partial",
-    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph spaceBefore in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Paragraph#spaceAfter": {
     "status": "partial",
-    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions."
+    "notes": "Writes paragraph spaceAfter in points, subject to the supported finite range. Assignments on one proxy coalesce per sync. Aliases targeting the same paragraph may conflict; TrackMineOnly records paragraph-property revisions. A load queued in the same sync as a write returns the value from before the write."
   },
   "Word.Comment#resolved": {
     "status": "partial",

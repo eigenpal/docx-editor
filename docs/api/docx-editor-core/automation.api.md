@@ -1135,6 +1135,7 @@ export interface AutomationParagraphFormatRead {
     readonly leftIndent: number | null;
     // (undocumented)
     readonly lineSpacing: number | null;
+    readonly readingOrder: AutomationReadingOrder;
     // (undocumented)
     readonly rightIndent: number | null;
     // (undocumented)
@@ -1156,6 +1157,7 @@ export interface AutomationParagraphFormatWrite {
     readonly leftIndent?: number;
     // (undocumented)
     readonly lineSpacing?: number;
+    readonly readingOrder?: AutomationReadingOrder;
     // (undocumented)
     readonly rightIndent?: number;
     // (undocumented)
@@ -1183,6 +1185,9 @@ export type AutomationPoint = AutomationEndpoint | {
     readonly at: 'start' | 'end';
     readonly body: AutomationHandle;
 };
+
+// @public
+export type AutomationReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 // @public
 export type AutomationSaveResult = {

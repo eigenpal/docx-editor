@@ -43,7 +43,7 @@ This maintenance command downloads the pinned npm tarball and verifies its integ
 
 ## DocxEditor additions
 
-Some public members have no Office.js equivalent, such as `RevisionCollection.resolve()` and `RevisionCollection.setAuthor()`. They are outside `manifest.json`, the reports, and the conformance checks, so no score counts them. The public [Office.js API page](../../../docs/site/content/editor-api/office-js-api.mdx) lists them under common DocxEditor additions. Add a new addition there, never to the manifest.
+Some public members have no Office.js equivalent, such as `RevisionCollection.resolve()` and `RevisionCollection.setAuthor()`. They are outside the manifest selection, the reports, and the conformance checks, so no score counts them. The public [Office.js API page](../../../docs/site/content/editor-api/office-js-api.mdx) lists them under common DocxEditor additions. Add a new addition there, never to `manifest.symbols`. If an addition fills a gap where Office.js has no member for the operation, also record the decision as an `omissions` entry, as `Word.Body#bookmarks` and `Word.Paragraph#readingOrder` do.
 
 ## Selected subset conformance
 

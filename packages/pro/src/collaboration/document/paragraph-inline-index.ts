@@ -21,6 +21,7 @@ import * as Y from 'yjs';
 import { asLogicalId, parseClientClock, type LogicalId } from './identity.ts';
 import { keyId } from './registry-node-reads.ts';
 import { isNodeMap } from './schema.ts';
+import { relocatedMarkerLineage } from './relocated-markers.ts';
 import type { DocumentLimits } from './limits.ts';
 import { decodeAttributes, INLINE_FIELD } from './paragraph-text.ts';
 import { TextFollow, type DocumentOrder, type ShownText } from './paragraph-text-follow.ts';
@@ -37,6 +38,10 @@ export interface ParagraphView {
   noteDrift(): void;
   /** Whether an embedded node shows here: a node two texts embed shows in the first by ID. */
   showsEmbed(id: string): boolean;
+  /** The marker a relocated marker copy replaced, or null (`relocated-markers.ts`). */
+  lineageOf?(id: string): string | null;
+  /** Whether a node shows where a parent lists it, as a restored original does. */
+  listed?(id: string): boolean;
 }
 
 /**
@@ -259,6 +264,8 @@ export class InlineIndex {
       },
       shown: (text) => this.follow.shown(paragraphId, text),
       textOf: (id) => this.textOf(id),
+      lineageOf: (id) => relocatedMarkerLineage(this.nodes.get(id)),
+      listed: (id) => !this.isDeleted(asLogicalId(id)),
     };
   }
 

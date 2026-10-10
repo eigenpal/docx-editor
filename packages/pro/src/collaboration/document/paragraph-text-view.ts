@@ -168,6 +168,7 @@ export function inlineChildren(
   onCharacter?: (character: SharedCharacter | null) => void
 ): readonly OoxmlNode[] {
   const embedded = new Set<string>();
+  const lineages = new Set<string>();
   const items = inlineItems(
     text,
     (id) => {
@@ -175,6 +176,17 @@ export function inlineChildren(
       if (view && !view.showsEmbed(id)) {
         view.noteDrift();
         return null;
+      }
+      // Copies of one relocated marker, written by peers that accepted the same join, show
+      // once: the first in the text, which every replica reads in the same order. None shows
+      // while the original is listed again, as an undo of one of the accepts restores it.
+      const lineage = view?.lineageOf?.(id) ?? null;
+      if (lineage !== null && lineage !== id) {
+        if (lineages.has(lineage) || view!.listed?.(lineage)) {
+          view!.noteDrift();
+          return null;
+        }
+        lineages.add(lineage);
       }
       const node = embedOf(id);
       if (node) embedded.add(id);

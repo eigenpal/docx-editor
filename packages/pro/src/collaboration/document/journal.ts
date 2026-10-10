@@ -5,6 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { projectedTextTarget } from './projected-text-target.ts';
 import { routeInlineEffects, type InlinePlan } from './paragraph-text-writer.ts';
+import { recordRelocatedMarkers } from './relocated-markers.ts';
 import { writeTypedInsert, type TypedInsert } from './paragraph-text-typing.ts';
 import {
   applyInlinePlan,
@@ -634,6 +635,13 @@ export function applyPrimitiveJournal(
     const written: InlineWritten = plan
       ? applyInlinePlan(registry, plan, tokens)
       : { copied: new Set<string>(), deleted: new Set<string>(), embedded: new Set<string>() };
+    recordRelocatedMarkers(
+      registry,
+      planned.removed,
+      written.embedded,
+      planned.mintedNodes,
+      plan?.paragraphs.map(({ after }) => after) ?? []
+    );
     deleteHeldOriginals(registry, removed.held, written.copied);
     recordDeletions(registry, written, removed.shown);
     deleteEmbedsOfRemoved(registry, removed.embeds, planned.removed, written);

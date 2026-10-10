@@ -138,7 +138,9 @@ export function packageDivergence(left: OoxmlPackage, right: OoxmlPackage): stri
 
 export function createPeerHarness(
   documentId: string,
-  sessionOptions?: { readonly offlineEditing?: boolean }
+  sessionOptions?: { readonly offlineEditing?: boolean },
+  /** Fixed Yjs client ids by peer name, so a test can run both concurrent insert orders. */
+  clientIds?: Readonly<Record<string, number>>
 ): {
   readonly pair: (
     bytes: Uint8Array
@@ -175,7 +177,7 @@ export function createPeerHarness(
     for (const char of `${process.env.COLLABORATION_TEST_CLIENT_SALT ?? ''}:${name}`) {
       hash = Math.imul(hash ^ char.charCodeAt(0), 0x01000193) >>> 0;
     }
-    ydoc.clientID = (hash % 0x3fffffff) + 1;
+    ydoc.clientID = clientIds?.[name] ?? (hash % 0x3fffffff) + 1;
     return ydoc;
   }
 
