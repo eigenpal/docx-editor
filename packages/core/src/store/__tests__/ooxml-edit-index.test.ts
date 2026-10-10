@@ -24,8 +24,13 @@ import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
-function load(paragraphs: readonly string[]): OoxmlPart {
-  const body = paragraphs.map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`).join('');
+/** With `formatted`, every paragraph and run carries property leaves the index reads through. */
+function load(paragraphs: readonly string[], formatted = false): OoxmlPart {
+  const pPr = formatted ? '<w:pPr><w:jc w:val="left"/><w:spacing w:after="0"/></w:pPr>' : '';
+  const rPr = formatted ? '<w:rPr><w:b/><w:sz w:val="20"/></w:rPr>' : '';
+  const body = paragraphs
+    .map((text) => `<w:p>${pPr}<w:r>${rPr}<w:t>${text}</w:t></w:r></w:p>`)
+    .join('');
   const xml = `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`;
   const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
   if (!result.ok) throw new Error(`read failed: ${result.reason}`);
@@ -141,10 +146,19 @@ function randomOp(part: OoxmlPart, random: () => number): TreeDocOp | null {
 }
 
 describe('the patched node index is indistinguishable from a fresh walk', () => {
-  for (const seed of [1, 42, 20260730]) {
-    test(`400 random ops, seed ${seed}`, () => {
+  for (const [seed, formatted] of [
+    [1, false],
+    [42, false],
+    [20260730, false],
+    [7, true],
+    [99, true],
+  ] as const) {
+    test(`400 random ops, seed ${seed}${formatted ? ', property leaves' : ''}`, () => {
       const random = mulberry32(seed);
-      let part = load(['alpha bravo charlie', 'delta echo', 'foxtrot golf hotel india', '']);
+      let part = load(
+        ['alpha bravo charlie', 'delta echo', 'foxtrot golf hotel india', ''],
+        formatted
+      );
       // Prime the index through the public reads, so every later op patches rather than
       // rebuilding — the case under test.
       expectIndexMatchesTree(part, 'initial');

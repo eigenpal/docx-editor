@@ -110,7 +110,8 @@ function subtreeParaIds(node: OoxmlNode): readonly string[] {
     for (const id of ids) found.push(id);
   }
   const result: readonly string[] = found ?? EMPTY_PARA_IDS;
-  if (keepsSubtreeMemo(node)) subtreeParaIdsCache.set(node, result);
+  // A run answers from its few children again: an entry per run is most of the memo.
+  if (node.kind !== 'run' && keepsSubtreeMemo(node)) subtreeParaIdsCache.set(node, result);
   return result;
 }
 

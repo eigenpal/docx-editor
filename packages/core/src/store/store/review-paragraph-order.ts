@@ -50,7 +50,8 @@ export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, numbe
   return order;
 }
 
-const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
+// The current root, plus the ones undo and redo restore: each map holds every paragraph.
+const paragraphOrderCache = createRecentRootCache<Map<string, number>>(3);
 
 /**
  * Like {@link paragraphOrderOfPart}, but descends into paragraphs so textbox paragraphs rank
@@ -104,7 +105,8 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
     found ??= [];
     for (const id of ids) found.push(id);
   }
-  if (keepsSubtreeMemo(node))
+  // A run answers from its few children again: an entry per run is most of the memo.
+  if (node.kind !== 'run' && keepsSubtreeMemo(node))
     subtreeDeepParagraphIdsCache.set(
       node,
       found ? { depth, ids: found } : EMPTY_DEEP_PARAGRAPH_ENTRIES[depth]!
@@ -112,5 +114,5 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
   return found ?? EMPTY_DEEP_PARAGRAPH_IDS;
 }
 
-const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);
+const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(3);
 const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();

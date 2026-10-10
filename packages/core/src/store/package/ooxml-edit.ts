@@ -119,6 +119,10 @@ interface PartIndex {
    * the thousands of untouched siblings under it keep valid parent entries with no work
    * at all; storing the parent object meant every rebuild of a wide element (the body,
    * on every paragraph edit) had to rewrite one entry per child.
+   *
+   * Only parents a node's id does not already name are stored: a parsed id is a path
+   * (`…#0.1.2` sits in `…#0.1`), so most nodes need no entry. Read through `parentIdOf`,
+   * write through `setParentId`.
    */
   readonly parents: Map<string, string>;
   /**
@@ -135,6 +139,53 @@ interface PartIndex {
 }
 
 const partIndexes = new WeakMap<OoxmlElement, PartIndex>();
+
+/** The parent a path id names (`…#0.1.2` → `…#0.1`), or undefined for any other id. */
+function derivedParentId(id: string): string | undefined {
+  const dot = id.lastIndexOf('.');
+  return dot > id.lastIndexOf('#') && id.lastIndexOf('#') >= 0 ? id.slice(0, dot) : undefined;
+}
+
+/** A parent narrower than this answers its leaves by a scan, so they need no entry. */
+const LEAF_SCAN_WIDTH = 16;
+
+/**
+ * Whether `node` needs no entry of its own: a leaf whose id names `parent`, which is narrow
+ * enough to scan. Such a node is found through its parent (`indexedNode`), and most nodes of
+ * a parsed part are such leaves: run and paragraph property elements, and text.
+ */
+function readThroughParent(node: OoxmlNode, parent: OoxmlNode): boolean {
+  return (
+    (node.kind === 'textValue' || node.children.length === 0) &&
+    parent.kind !== 'textValue' &&
+    parent.children.length < LEAF_SCAN_WIDTH &&
+    derivedParentId(node.id) === parent.id
+  );
+}
+
+/** The indexed node with `id`: its own entry, or a leaf read through its named parent. */
+function indexedNode(index: PartIndex, id: string): OoxmlNode | undefined {
+  const stored = index.nodes.get(id);
+  if (stored !== undefined) return stored;
+  const parentId = derivedParentId(id);
+  const parent = parentId === undefined ? undefined : index.nodes.get(parentId);
+  if (!parent || parent.kind === 'textValue') return undefined;
+  for (const child of parent.children) if (child.id === id) return child;
+  return undefined;
+}
+
+/** The parent id of an indexed node, or undefined for the root and unknown ids. */
+function parentIdOf(index: PartIndex, id: string): string | undefined {
+  const stored = index.parents.get(id);
+  if (stored !== undefined) return stored;
+  return indexedNode(index, id) ? derivedParentId(id) : undefined;
+}
+
+/** Record `parentId` as `id`'s parent, storing it only when the id does not name it. */
+function setParentId(index: PartIndex, id: string, parentId: string): void {
+  if (derivedParentId(id) === parentId) index.parents.delete(id);
+  else index.parents.set(id, parentId);
+}
 // Preview edits and undo can revisit an old root after its index moved. Keep allocations
 // monotone across that lineage: collaboration retains identities for removed nodes too.
 const mintStates = new WeakMap<OoxmlElement, { frontier: number }>();
@@ -186,21 +237,22 @@ function nodeIndexBuilder(root: OoxmlElement): (stop: () => boolean) => boolean 
   let uniqueIds = true;
   // Parallel stacks, children pushed in reverse: the same order a recursive walk visits.
   const pending: OoxmlNode[] = [root];
-  const pendingParents: (string | null)[] = [null];
+  const pendingParents: (OoxmlNode | null)[] = [null];
   return (stop) => {
     let visits = 0;
     while (pending.length > 0) {
       const node = pending.pop()!;
-      const parentId = pendingParents.pop()!;
+      const parent = pendingParents.pop()!;
       nodeIndexCompleteVisits += 1;
-      if (!nodes.has(node.id)) {
+      if (nodes.has(node.id)) uniqueIds = false;
+      else if (!parent || !readThroughParent(node, parent)) {
         nodes.set(node.id, node);
-        if (parentId !== null) parents.set(node.id, parentId);
-      } else uniqueIds = false;
+        if (parent && derivedParentId(node.id) !== parent.id) parents.set(node.id, parent.id);
+      }
       if (node.kind !== 'textValue') {
         for (let index = node.children.length - 1; index >= 0; index -= 1) {
           pending.push(node.children[index]!);
-          pendingParents.push(node.id);
+          pendingParents.push(node);
         }
       }
       if ((++visits & 1023) === 0 && stop()) return false;
@@ -215,7 +267,13 @@ function nodeIndexBuilder(root: OoxmlElement): (stop: () => boolean) => boolean 
 
 /** Every node id currently present in the part. */
 export function collectNodeIds(part: OoxmlPart): Set<string> {
-  return new Set(nodeIndexFor(part.root).nodes.keys());
+  const ids = new Set<string>();
+  const visit = (node: OoxmlNode): void => {
+    ids.add(node.id);
+    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
 }
 
 /**
@@ -242,7 +300,7 @@ export function createNodeIdAllocator(
   return () => {
     counter = Math.max(counter, index.mintState.frontier);
     let id = `${part.name}#${family}:${counter}`;
-    while (index.nodes.has(id) || minted.has(id)) {
+    while (indexedNode(index, id) || minted.has(id)) {
       counter += 1;
       id = `${part.name}#${family}:${counter}`;
     }
@@ -261,13 +319,13 @@ function pathToNode(root: OoxmlNode, nodeId: string): OoxmlNode[] | null {
   // The recursive walk this replaces visited every node in every preceding subtree on
   // every lookup, which multiplied by ops-per-transaction made big pastes quadratic.
   const index = nodeIndexFor(root as OoxmlElement);
-  const target = index.nodes.get(nodeId);
+  const target = indexedNode(index, nodeId);
   if (!target) return null;
   const path: OoxmlNode[] = [target];
   let current: OoxmlNode | undefined = target;
   while (current && current !== root) {
-    const parentId = index.parents.get(current.id);
-    current = parentId === undefined ? undefined : index.nodes.get(parentId);
+    const parentId = parentIdOf(index, current.id);
+    current = parentId === undefined ? undefined : indexedNode(index, parentId);
     if (current) path.push(current);
   }
   if (current !== root) return null;
@@ -277,26 +335,26 @@ function pathToNode(root: OoxmlNode, nodeId: string): OoxmlNode[] | null {
 
 /** Whether a node id exists in the part. */
 export function hasNode(part: OoxmlPart, nodeId: string): boolean {
-  return nodeIndexFor(part.root).nodes.has(nodeId);
+  return indexedNode(nodeIndexFor(part.root), nodeId) !== undefined;
 }
 
 /** Read a node back out of a part by id. */
 export function findNode(part: OoxmlPart, nodeId: string): OoxmlNode | null {
-  return nodeIndexFor(part.root).nodes.get(nodeId) ?? null;
+  return indexedNode(nodeIndexFor(part.root), nodeId) ?? null;
 }
 
 /** Use an existing unique-id index without allocating one for untrusted input. */
 export function cachedUniqueNode(root: OoxmlElement, nodeId: string): OoxmlNode | null | undefined {
   const index = partIndexes.get(root);
-  return index?.uniqueIds ? (index.nodes.get(nodeId) ?? null) : undefined;
+  return index?.uniqueIds ? (indexedNode(index, nodeId) ?? null) : undefined;
 }
 
 /** The element that holds a node, or null for the root and for unknown ids. */
 export function parentNodeOf(part: OoxmlPart, nodeId: string): OoxmlElement | null {
   const index = nodeIndexFor(part.root);
-  if (!index.nodes.has(nodeId)) return null;
-  const parentId = index.parents.get(nodeId);
-  const parent = parentId === undefined ? undefined : index.nodes.get(parentId);
+  if (!indexedNode(index, nodeId)) return null;
+  const parentId = parentIdOf(index, nodeId);
+  const parent = parentId === undefined ? undefined : indexedNode(index, parentId);
   return parent && parent.kind !== 'textValue' ? (parent as OoxmlElement) : null;
 }
 
@@ -375,7 +433,7 @@ function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {
 function addIndexedSubtree(index: PartIndex, node: OoxmlNode, parentId: string): void {
   if (index.nodes.has(node.id)) index.uniqueIds = false;
   index.nodes.set(node.id, node);
-  index.parents.set(node.id, parentId);
+  setParentId(index, node.id, parentId);
   if (node.kind === 'textValue') return;
   for (const child of node.children) addIndexedSubtree(index, child, node.id);
 }
@@ -390,8 +448,8 @@ function diffPatch(
     // Identical subtree: every entry inside it is already right. Even its own parent EDGE
     // usually is — the parent kept its id through the rebuild — so only a genuine move to a
     // differently-identified parent writes anything.
-    if (newParentId !== null && index.parents.get(newNode.id) !== newParentId) {
-      index.parents.set(newNode.id, newParentId);
+    if (newParentId !== null && parentIdOf(index, newNode.id) !== newParentId) {
+      setParentId(index, newNode.id, newParentId);
     }
     return;
   }
@@ -401,8 +459,8 @@ function diffPatch(
     return;
   }
   index.nodes.set(newNode.id, newNode);
-  if (newParentId !== null && index.parents.get(newNode.id) !== newParentId) {
-    index.parents.set(newNode.id, newParentId);
+  if (newParentId !== null && parentIdOf(index, newNode.id) !== newParentId) {
+    setParentId(index, newNode.id, newParentId);
   }
   const oldChildren = oldNode.kind === 'textValue' ? [] : oldNode.children;
   const newChildren = newNode.kind === 'textValue' ? [] : newNode.children;

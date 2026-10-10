@@ -43,6 +43,7 @@ import {
 import { paragraphOffsetIndex, transientParagraphOffsetIndex } from './tree-op-segments.ts';
 import { contentControlContentOf, isContentControlNode } from './tree-op-nodes.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
+import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
 export const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
@@ -346,6 +347,10 @@ const markedParagraphsCache = new WeakMap<
   OoxmlNode,
   { readonly depth: number; readonly paragraphs: readonly OoxmlParagraphNode[] }
 >();
+/** One shared entry per depth for the subtrees with no marked paragraph, which is most. */
+const NO_MARKED_ENTRIES = Array.from({ length: MAX_STORY_WALK_DEPTH + 1 }, (_, depth) =>
+  Object.freeze({ depth, paragraphs: NO_PARAGRAPHS })
+);
 
 function markedParagraphsIn(
   node: OoxmlNode,
@@ -353,7 +358,8 @@ function markedParagraphsIn(
   insideParagraph: boolean
 ): readonly OoxmlParagraphNode[] {
   if (node.kind === 'textValue' || depth > MAX_STORY_WALK_DEPTH) return NO_PARAGRAPHS;
-  const memoize = !insideParagraph && depth >= MIN_MEMOIZED_DEPTH;
+  // A node of leaves answers from its children again; an entry per one costs more.
+  const memoize = !insideParagraph && depth >= MIN_MEMOIZED_DEPTH && keepsSubtreeMemo(node);
   const cached = memoize ? markedParagraphsCache.get(node) : undefined;
   if (cached && cached.depth === depth) return cached.paragraphs;
   let found: OoxmlParagraphNode[] | null = null;
@@ -371,7 +377,12 @@ function markedParagraphsIn(
     for (const paragraph of inner) found.push(paragraph);
   }
   const paragraphs = found ?? NO_PARAGRAPHS;
-  if (memoize) markedParagraphsCache.set(node, { depth, paragraphs });
+  if (memoize) {
+    markedParagraphsCache.set(
+      node,
+      paragraphs === NO_PARAGRAPHS ? NO_MARKED_ENTRIES[depth]! : { depth, paragraphs }
+    );
+  }
   return paragraphs;
 }
 
