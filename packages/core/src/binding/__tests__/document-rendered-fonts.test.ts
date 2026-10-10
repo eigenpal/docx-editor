@@ -124,8 +124,9 @@ describe('collectRenderedFontFamilies', () => {
         .slice();
     expect(text('Latin')).toEqual(['Garamond']);
     expect(text('Café')).toEqual(['Garamond', 'Tahoma']);
-    // The no-break space keeps the ascii face; Hebrew is not drawn through hAnsi.
-    expect(text('1 2 ש')).toEqual(['Garamond']);
+    // The no-break space advances in the hAnsi face; Hebrew is not drawn through it.
+    expect(text('1 2')).toEqual(['Garamond', 'Tahoma']);
+    expect(text('1 ש')).toEqual(['Garamond']);
 
     // The slot inherits on its own: a nearer ascii-only rFonts does not hide a style's hAnsi.
     const inherited = open(
@@ -142,6 +143,53 @@ describe('collectRenderedFontFamilies', () => {
       })
     );
     expect(inherited.renderedFontFamilies()).toEqual(['Garamond', 'Tahoma']);
+  });
+
+  test('slots no level names report the format default faces under an authored rPrDefault', () => {
+    const formatDefaults = styles(
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>'
+    );
+    const families = (text: string) =>
+      open(
+        docx({
+          body: `<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`,
+          styles: formatDefaults,
+        })
+      )
+        .renderedFontFamilies()
+        .slice();
+    expect(families('Latin')).toEqual(['Garamond']);
+    expect(families('Café')).toEqual(['Garamond', 'Times New Roman']);
+    expect(families('漢字')).toEqual(['Garamond', 'SimSun']);
+    // Full-width forms draw in the East Asian face.
+    expect(families('Ａ１')).toEqual(['Garamond', 'SimSun']);
+  });
+
+  test('a run hinted East Asian reports its East Asian face for hinted Latin-1 text', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond" w:hAnsi="Garamond" w:eastAsia="DengXian" ' +
+          'w:hint="eastAsia"/></w:rPr><w:t>§ é</w:t></w:r></w:p>',
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
+  });
+
+  test('a hint and East Asian face from a paragraph style report that face too', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Hinted"/></w:pPr><w:r><w:rPr>' +
+          '<w:rFonts w:ascii="Garamond" w:hAnsi="Garamond"/></w:rPr><w:t>§</w:t></w:r></w:p>',
+        styles: styles(
+          '<w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+            '<w:style w:type="paragraph" w:styleId="Hinted"><w:rPr>' +
+            '<w:rFonts w:eastAsia="DengXian" w:hint="eastAsia"/></w:rPr></w:style>'
+        ),
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
   });
 
   test('a w:sym face is not a rendered text face', () => {

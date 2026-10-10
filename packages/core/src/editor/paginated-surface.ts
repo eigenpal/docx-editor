@@ -162,6 +162,9 @@ import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
+import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
+import { withSavedFieldResults } from './surface-saved-field-results.ts';
+import { frameCoalescer } from './frame-coalescer.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
@@ -363,6 +366,7 @@ export function mountPaginatedSurface(
   options: PaginatedSurfaceOptions = {}
 ): OpenPaginatedResult {
   const runtimeOptions = options as PaginatedSurfaceRuntimeOptions;
+  const fieldScope = surfaceFieldResultsScope(options);
   const opened =
     runtimeOptions.openedSession ??
     openTreeSession(bytes, options.reviewModel ? { reviewModel: options.reviewModel } : {});
@@ -373,7 +377,7 @@ export function mountPaginatedSurface(
       ...(opened.detail ? { detail: opened.detail } : {}),
     };
   }
-  const session = opened.session;
+  const session = scopeSession(opened.session, fieldScope);
   const reviewOrder = createReviewOrderIndex(session);
   const reviewOrderIndex = reviewOrder.index;
   const collaborationSession = options.collaborationModel?.session;
@@ -414,6 +418,7 @@ export function mountPaginatedSurface(
   const pagesLayer = document.createElement('div');
   pagesLayer.className = 'docx-pages';
   pagesLayer.style.position = 'relative';
+  fieldScope.listeners(pagesLayer);
 
   // THE PAINTED PAGES ARE THE EDITABLE SURFACE.
   //
@@ -1067,7 +1072,7 @@ export function mountPaginatedSurface(
     },
     current: () => currentLayout,
     revision: () => session.packageRevision(),
-    publish: (layout) => publishLayout(layout),
+    publish: (layout) => fieldScope.wrap(() => publishLayout(layout))(),
     // A pass replaces the session's fields and never mutates them, so a shallow copy restores it.
     snapshot: () => {
       const saved = { ...layoutSession };
@@ -1393,8 +1398,7 @@ export function mountPaginatedSurface(
       // constructed `proposed` never shares cached pages with an `all-markup` one.
       displayMode: revisionDisplayMode(),
       showFieldCodes: context ? false : showFieldCodes,
-      // Saved field results stay one unit until the editor offers the editable mode.
-      fieldResults: 'atomic',
+      fieldResults: fieldScope.mode,
       revisionAuthorFilter: activeAuthorFilter,
       bodyBlockLimit,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
@@ -1467,16 +1471,19 @@ export function mountPaginatedSurface(
     // browser's input queue. One task catches the view up to the newest published layout;
     // ordinary isolated edits still render synchronously through the branch above.
     if (deferredPublishRender !== null) return;
-    deferredPublishRender = setTimeout(() => {
-      deferredPublishRender = null;
-      // Superseded: a newer commit is already pending, so this layout is not the one the
-      // user will see — its own publish paints and reports. Painting here anyway spent one
-      // full render per flush batch on a frame one commit behind, and mirrored the newer
-      // model selection into the older spans.
-      if (scheduler.pending() !== null) return;
-      render();
-      armDerivationPrewarmOnce();
-    }, 0);
+    deferredPublishRender = setTimeout(
+      fieldScope.wrap(() => {
+        deferredPublishRender = null;
+        // Superseded: a newer commit is already pending, so this layout is not the one the
+        // user will see — its own publish paints and reports. Painting here anyway spent one
+        // full render per flush batch on a frame one commit behind, and mirrored the newer
+        // model selection into the older spans.
+        if (scheduler.pending() !== null) return;
+        render();
+        armDerivationPrewarmOnce();
+      }),
+      0
+    );
   }
 
   // ---- Batched typing ----------------------------------------------------
@@ -1532,10 +1539,13 @@ export function mountPaginatedSurface(
   function enqueueType(text: string): void {
     typeBuffer += text;
     if (typeFlushTimer !== null) return;
-    typeFlushTimer = setTimeout(() => {
-      typeFlushTimer = null;
-      flushTypeBuffer();
-    }, 0);
+    typeFlushTimer = setTimeout(
+      fieldScope.wrap(() => {
+        typeFlushTimer = null;
+        flushTypeBuffer();
+      }),
+      0
+    );
   }
 
   function commitProposedTextChange(
@@ -1639,7 +1649,7 @@ export function mountPaginatedSurface(
     // in a background tab, and a document that stops repainting when the tab is hidden is
     // the same stale-paint failure by another route.
     schedule: (run) => {
-      const handle = setTimeout(run, 0);
+      const handle = setTimeout(fieldScope.wrap(run), 0);
       return () => clearTimeout(handle);
     },
     publish: (layout) => publishLayout(layout),
@@ -1674,10 +1684,13 @@ export function mountPaginatedSurface(
     scheduler.invalidateAll(session.packageRevision(), 'drawing-resources');
     if (resourceFlushQueued) return;
     resourceFlushQueued = true;
-    setTimeout(() => {
-      resourceFlushQueued = false;
-      flushLayout();
-    }, 0);
+    setTimeout(
+      fieldScope.wrap(() => {
+        resourceFlushQueued = false;
+        flushLayout();
+      }),
+      0
+    );
   };
 
   // Every committed transaction, whatever produced it — this surface, undo, or another
@@ -5803,7 +5816,8 @@ export function mountPaginatedSurface(
   // identical behaviour instead of three hand-written keymaps that drift. The handlers
   // themselves are factories over the surface interface: keys, clipboard and `beforeinput` in
   // surface-input.ts, the selection mirror and the IME lane in surface-selection-sync.ts.
-  const { onSelectionChange, onCompositionEnd } = selectionSync;
+  // The document-level selection listener runs in this editor's field-result mode too.
+  const { onSelectionChange, onCompositionEnd } = fieldScope.methods({ ...selectionSync });
   // The IME owns the DOM from compositionstart on; buffered plain typing must
   // be in the document before that handover, not woven into the readback. The
   // handover is of the PAINTED DOM, so a layout pass or paint a commit deferred
@@ -5825,7 +5839,7 @@ export function mountPaginatedSurface(
 
   // The selection mirror uses this handle to avoid adopting selection mid-drag.
   let pointer: PointerController | null = null;
-  textFormInteraction = createTextFormFieldInteraction(
+  const textFormRules = createTextFormFieldInteraction(
     {
       onRequest: options.onRequestTextFormField,
       onInvalidRequest: options.onRequestInvalidTextFormField,
@@ -5859,6 +5873,17 @@ export function mountPaginatedSurface(
         }),
     },
     runtimeOptions.initialTextFormInput
+  );
+  textFormInteraction = withSavedFieldResults(
+    textFormRules,
+    {
+      part: (paragraphId) => partOfNodeId(session, paragraphId),
+      selection: () => selection,
+      select: (next) => setSelection(next),
+      writable: () => editingMode !== 'view' && !showFieldCodes,
+      compare: comparePositions,
+    },
+    fieldScope
   );
   registerFormFieldIdentity(surface, textFormInteraction.fieldId);
   legacyCheckboxInteraction = createLegacyCheckboxInteraction({
@@ -5961,19 +5986,7 @@ export function mountPaginatedSurface(
   // first screenful stayed blank until some unrelated commit forced a repaint.
   // Also covers StrictMode / provider-first attach before the Content node sits under the
   // scroll container (footnotes and later sheets must rematerialize).
-  let rematerializeScheduled = false;
-  /** Coalesce to a frame: twenty events and one event cost the same repaint. */
-  function scheduleRematerialize(): void {
-    if (rematerializeScheduled) return;
-    rematerializeScheduled = true;
-    const raf = container.ownerDocument.defaultView?.requestAnimationFrame;
-    const run = (): void => {
-      rematerializeScheduled = false;
-      rematerialize();
-    };
-    if (raf) raf(run);
-    else queueMicrotask(run);
-  }
+  const scheduleRematerialize = frameCoalescer(document, fieldScope.wrap(rematerialize));
 
   const onScroll = (event: Event): void => {
     const scroller = surfaceScroller(container);
@@ -6222,13 +6235,13 @@ export function mountPaginatedSurface(
       bodyBlockCount: () => bodyBlockCountOf(layoutSession),
       prefixPass: (limit) =>
         layoutDocumentSteps(session.packageRevision(), undefined, undefined, limit),
-      finish: () => {
+      finish: fieldScope.wrap(() => {
         scheduler.invalidateAll(session.packageRevision(), 'opening');
         scheduler.flush();
         openingBlockLimit = null;
-      },
+      }),
     },
     PROGRESSIVE_OPEN_FIRST_BLOCKS
   );
-  return { ok: true, surface };
+  return { ok: true, surface: fieldScope.methods(surface) };
 }

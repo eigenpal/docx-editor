@@ -108,16 +108,18 @@ test('empty theme faces select and request the inherited language face before ex
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
   try {
+    // Without a theme language the empty slot takes the Simplified Chinese supplemental face,
+    // for the Japanese-language run too: the run language selects no theme face (probes
+    // z01-z04 in local/evidence/hansi-font-slots).
     expect(requested).toContain('Chinese Body');
-    expect(requested).toContain('Japanese Body');
+    expect(requested).not.toContain('Japanese Body');
     expect(requested).not.toContain('Chinese Heading');
     expect(requested).not.toContain('SimSun');
     const faces: Array<string | null> = [];
     forEachSemanticSpan(await opened.session.layout(), ({ span }) =>
       faces.push(span.style.fontFamilyEastAsia)
     );
-    expect(faces).toContain('Chinese Body');
-    expect(faces).toContain('Japanese Body');
+    expect(new Set(faces)).toEqual(new Set(['Chinese Body']));
   } finally {
     opened.session.dispose();
   }
@@ -221,12 +223,15 @@ test.each([
     );
     expect([...families]).toEqual([family]);
     if (token === 'minorHAnsi') {
-      expect(requested).toContain('Songti SC');
+      // No level names an East Asian face, so CJK text takes the format default face, not
+      // the theme's supplemental face (probes z09 and z11).
+      expect(requested).toContain('SimSun');
+      expect(requested).not.toContain('Songti SC');
       const eastAsianFamilies = new Set<string | null>();
       forEachSemanticSpan(await opened.session.layout(), ({ span }) => {
         if (span.fontSlot === 'eastAsia') eastAsianFamilies.add(span.style.fontFamilyEastAsia);
       });
-      expect([...eastAsianFamilies]).toEqual(['Songti SC']);
+      expect([...eastAsianFamilies]).toEqual(['SimSun']);
     }
   } finally {
     opened.session.dispose();

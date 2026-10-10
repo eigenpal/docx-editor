@@ -137,3 +137,61 @@ test('hAnsi faces remain local through two-editor edits and reconnect', async ()
     harness.cleanup();
   }
 });
+
+test('hinted letters and full-width forms keep the same faces on both editors', async () => {
+  const bytes = zipDocument(
+    '<w:p><w:r><w:rPr>' +
+      '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Arial" w:eastAsia="SimSun" w:hint="eastAsia"/>' +
+      '<w:lang w:eastAsia="ja-JP"/></w:rPr><w:t>AéąＡ</w:t></w:r></w:p>'
+  );
+  const harness = createPeerHarness('font-slot-defaults', { offlineEditing: true });
+  const views: { editor: DocxEditorInstance; container: HTMLElement }[] = [];
+  const mount = (peer: Peer) => {
+    peer.detach();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    views.push({ editor, container });
+    return editor;
+  };
+  const faces = (editor: DocxEditorInstance) =>
+    linesOf(editor.surface!.layout())
+      .flatMap((line) => line.spans)
+      .map((span) => [span.text, styleForFontSlot(span.style, span.fontSlot).fontFamily]);
+  try {
+    const { alice, bob, pause, resume } = await harness.pair(bytes);
+    const left = mount(alice),
+      right = mount(bob);
+    // Japanese language: é takes hAnsi; the Chinese face still claims ą; Ａ is East Asian.
+    expect(faces(left)).toEqual([
+      ['A', 'Times New Roman'],
+      ['é', 'Arial'],
+      ['ąＡ', 'SimSun'],
+    ]);
+    expect(faces(right)).toEqual(faces(left));
+    const paragraphId = linesOf(left.surface!.layout())[0]!.spans[0]!.range.paragraphId;
+    const at = (editor: DocxEditorInstance, offset: number) =>
+      editor.exec({
+        type: 'setSelection',
+        range: { anchor: { paragraphId, offset }, head: { paragraphId, offset } },
+      });
+    pause();
+    at(left, 1);
+    at(right, 4);
+    expect(left.exec({ type: 'insertText', text: 'Ｂ' }).ok).toBe(true);
+    expect(right.exec({ type: 'insertText', text: 'ü' }).ok).toBe(true);
+    resume();
+    expect(faces(right)).toEqual(faces(left));
+    expect(faces(left).find(([text]) => text?.includes('Ｂ'))?.[1]).toBe('SimSun');
+  } finally {
+    for (const view of views) {
+      view.editor.destroy();
+      view.container.remove();
+    }
+    harness.cleanup();
+  }
+});

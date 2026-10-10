@@ -80,6 +80,7 @@ const REL = Object.freeze({
   numbering: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering',
   settings: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings',
   theme: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme',
+  fontTable: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable',
   coreProperties:
     'http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties',
   extendedProperties:
@@ -160,7 +161,8 @@ export function headlessViewOfStore(store: TreePackageStore): HeadlessDocumentVi
         themeFonts = Object.freeze(
           collectThemeSchemeFaces(
             rootOf(REL.theme, '/word/theme/theme1.xml'),
-            rootOf(REL.settings, '/word/settings.xml')
+            rootOf(REL.settings, '/word/settings.xml'),
+            rootOf(REL.fontTable, '/word/fontTable.xml')
           )
         );
         themeFontsPackage = pkg;

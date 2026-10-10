@@ -31,12 +31,23 @@ test('missing run defaults receive application kerning, explicit empty defaults 
       { localName: 'kern', attributes: { val: '2' } },
       { localName: 'sz', attributes: { val: '24' } },
       { localName: 'szCs', attributes: { val: '24' } },
+      {
+        localName: 'runFontDefaults',
+        attributes: { hAnsiTheme: 'minorHAnsi', eastAsiaTheme: 'minorEastAsia' },
+      },
     ]);
     expect(isRunKerningEnabled(resolveRunStyle(table.docDefaultsRun))).toBe(true);
   }
   for (const xml of ['<w:rPrDefault/>', '<w:rPrDefault><w:rPr/></w:rPrDefault>']) {
     const table = cascade(`<w:docDefaults>${xml}</w:docDefaults>`);
-    expect(table.docDefaultsRun).toEqual([]);
+    // An authored rPrDefault keeps the format defaults: no kerning, and the format faces
+    // (probes d04, d06, d07, z06 and z09-z12 in local/evidence/hansi-font-slots).
+    expect(table.docDefaultsRun).toEqual([
+      {
+        localName: 'runFontDefaults',
+        attributes: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', eastAsia: 'SimSun' },
+      },
+    ]);
     expect(isRunKerningEnabled(resolveRunStyle(table.docDefaultsRun))).toBe(false);
     expect(table.cacheToken).not.toBe(cascade('').cacheToken);
   }
@@ -65,4 +76,24 @@ test('authored defaults, paragraph/character styles and direct zero retain kerni
     '<w:docDefaults><w:rPrDefault><w:rPr><w:kern w:val="40"/></w:rPr></w:rPrDefault></w:docDefaults>'
   );
   expect(resolveRunStyle(authored.docDefaultsRun).kerningMinPt).toBe(20);
+});
+
+test('slots no level names take the format faces, or the theme under the application profile', () => {
+  const theme = { major: 'Heading', minor: 'Body', majorEastAsia: null, minorEastAsia: 'Body EA' };
+  const parsed = readOoxmlPart(
+    `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:sz w:val="24"/>` +
+      '</w:rPr></w:rPrDefault></w:docDefaults></w:styles>',
+    { name: '/word/styles.xml', contentType: 'app/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const authored = buildStyleCascadeTable(parsed.part.root, theme);
+  // Probes d06, d07 and z09-z12: every unnamed slot takes the format face, not the theme.
+  const formatted = resolveRunStyle(authored.docDefaultsRun, theme);
+  expect([formatted.fontFamily, formatted.fontFamilyEastAsia]).toEqual([
+    'Times New Roman',
+    'SimSun',
+  ]);
+  // Probe d09: without an rPrDefault the application profile uses the theme body faces.
+  const profiled = resolveRunStyle(buildStyleCascadeTable(null, theme).docDefaultsRun, theme);
+  expect([profiled.fontFamily, profiled.fontFamilyEastAsia]).toEqual(['Body', 'Body EA']);
 });

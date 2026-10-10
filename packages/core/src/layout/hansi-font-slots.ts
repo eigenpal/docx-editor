@@ -7,23 +7,48 @@ import type { FieldAwarePiece } from './field-pieces.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { withFontFamily, type ThemeFonts } from './run-style.ts';
 import { isSymbolEncodedFamily } from './symbol-encoding.ts';
+import { RUN_FONT_DEFAULTS } from './application-run-defaults.ts';
 
-function hAnsiFamily(props: readonly OoxmlProperty[], theme?: ThemeFonts): string | undefined {
-  let family: string | undefined;
-  for (const prop of props) {
-    if (prop.localName !== 'rFonts') continue;
-    const attrs = prop.attributes;
-    if (attrs?.hAnsi === undefined && attrs?.hAnsiTheme === undefined) continue;
-    const face = (theme ? themeFontFamilyOf(attrs?.hAnsiTheme, theme) : null) ?? attrs?.hAnsi;
-    if (face && face.length <= 128) family = face;
-  }
-  return family;
+const LATIN_FACE_ATTRIBUTES = ['ascii', 'asciiTheme', 'hAnsi', 'hAnsiTheme'] as const;
+
+function slotFace(
+  attrs: Readonly<Record<string, string>> | undefined,
+  theme: ThemeFonts | undefined
+): string | undefined {
+  const face = (theme ? themeFontFamilyOf(attrs?.hAnsiTheme, theme) : null) ?? attrs?.hAnsi;
+  return face && face.length <= 128 ? face : undefined;
 }
 
-/** The definite hAnsi ranges. Conditional East Asian characters stay in their existing lane. */
-function usesHAnsi(code: number, hint: boolean, chinese: boolean): boolean {
-  // The no-break space keeps the ascii face, like the space it stands for.
-  if (code < 0x80 || code === 0xa0 || code > 0xffff) return false;
+/**
+ * The run's hAnsi face. A run that names an ascii face but no hAnsi face at any level takes
+ * the document's slot default (`RUN_FONT_DEFAULTS`); one that names no Latin face at all keeps
+ * its ascii face for both slots.
+ */
+function hAnsiFamily(props: readonly OoxmlProperty[], theme?: ThemeFonts): string | undefined {
+  let family: string | undefined;
+  let slotDefault: string | undefined;
+  let namesLatin = false;
+  let namesHAnsi = false;
+  for (const prop of props) {
+    const attrs = prop.attributes;
+    if (prop.localName === RUN_FONT_DEFAULTS) {
+      slotDefault = slotFace(attrs, theme) ?? slotDefault;
+      continue;
+    }
+    if (prop.localName !== 'rFonts') continue;
+    namesLatin ||= LATIN_FACE_ATTRIBUTES.some((name) => attrs?.[name] !== undefined);
+    if (attrs?.hAnsi === undefined && attrs?.hAnsiTheme === undefined) continue;
+    namesHAnsi = true;
+    family = slotFace(attrs, theme) ?? family;
+  }
+  // A named hAnsi slot that resolves to no face keeps the run's ascii face, never the default.
+  return family ?? (namesLatin && !namesHAnsi ? slotDefault : undefined);
+}
+
+/** The hAnsi ranges, after the East Asian pass has claimed the characters it draws. */
+function usesHAnsi(code: number, hint: boolean): boolean {
+  // The no-break space and the fixed-width spaces advance in the hAnsi face too.
+  if (code < 0x80 || code > 0xffff) return false;
   if (
     (code >= 0x590 && code <= 0x7bf) ||
     (code >= 0xfb1d && code <= 0xfdff) ||
@@ -53,16 +78,8 @@ function usesHAnsi(code: number, hint: boolean, chinese: boolean): boolean {
       (code >= 0xfb00 && code <= 0xfb1c))
   )
     return false;
-  // Font-table charset alone cannot establish this condition in the layout lane.
-  // Leave the conditional range alone under an East Asian hint.
-  if (hint && code >= 0x100 && code <= 0x2af) return false;
-  if (
-    hint &&
-    chinese &&
-    ((code >= 0x1e00 && code <= 0x1eff) ||
-      [0xe0, 0xe1, 0xe8, 0xe9, 0xea, 0xec, 0xed, 0xf2, 0xf3, 0xf9, 0xfa, 0xfc].includes(code))
-  )
-    return false;
+  // The hint's conditional ranges reach this pass only when the East Asian pass declined
+  // them for the run's language and face, so they draw in the hAnsi face.
   return true;
 }
 
@@ -88,10 +105,6 @@ export function applyHAnsiFontSlots(
   const segments = pieces.map((piece) => {
     const participates = eligible(piece);
     const segment = participates && piece.text ? piece.text : '\u0000';
-    let language: string | undefined;
-    for (const prop of piece.props)
-      if (prop.localName === 'lang')
-        language = prop.attributes?.eastAsia ?? prop.attributes?.val ?? language;
     const from = offset;
     offset += segment.length;
     text.push(segment);
@@ -101,7 +114,6 @@ export function applyHAnsiFontSlots(
       eligible: participates,
       family: hAnsiFamily(piece.props, theme),
       hint: hasEastAsiaSymbolHint(piece.props),
-      chinese: /^zh(?:-|$)/i.test(language ?? ''),
     };
   });
   if (!segments.some((segment) => segment.eligible && segment.family)) return pieces;
@@ -126,9 +138,7 @@ export function applyHAnsiFontSlots(
     while (first < segments.length && segments[first]!.to <= cluster.utf16From) first++;
     const base = segments[first];
     if (!base || !base.eligible) continue;
-    const family = usesHAnsi(cluster.text.codePointAt(0)!, base.hint, base.chinese)
-      ? base.family
-      : undefined;
+    const family = usesHAnsi(cluster.text.codePointAt(0)!, base.hint) ? base.family : undefined;
     for (
       let index = first;
       index < segments.length && segments[index]!.from < cluster.utf16To;
@@ -154,15 +164,22 @@ export function applyHAnsiFontSlots(
       !piece.noteNav &&
       piece.measureText === undefined &&
       piece.end - piece.start === piece.text.length;
+    // A cached atomic field result draws its text per face like literal text, but every slice
+    // keeps the atom's one model range.
+    const atom =
+      piece.projected === true &&
+      piece.fieldAtom != null &&
+      !piece.noteNav &&
+      piece.measureText === undefined;
     if (
       !ranges.some((range) => range.family && range.family !== piece.style.fontFamily) ||
-      (!literal && ranges.length !== 1)
+      (!literal && !atom && ranges.length !== 1)
     ) {
       out?.push(piece);
       continue;
     }
     out ??= pieces.slice(0, index);
-    if (!literal) {
+    if (!literal && !atom) {
       out.push({
         ...piece,
         style: withFontFamily(piece.style, ranges[0]!.family!),
@@ -174,8 +191,7 @@ export function applyHAnsiFontSlots(
       out.push({
         ...piece,
         text: piece.text.slice(range.from, range.to),
-        start: piece.start + range.from,
-        end: piece.start + range.to,
+        ...(literal ? { start: piece.start + range.from, end: piece.start + range.to } : {}),
         ...(range.family
           ? { style: withFontFamily(piece.style, range.family), fontSlot: 'hAnsi' as const }
           : {}),

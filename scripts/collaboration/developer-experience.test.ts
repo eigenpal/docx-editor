@@ -1,3 +1,8 @@
+import {
+  resolvePosixBash,
+  quotePosixShellArgument,
+  createPosixFixtureIsolation,
+} from './posix-bash-provider.mjs';
 import { afterEach, expect, test } from 'bun:test';
 import {
   chmodSync,
@@ -10,6 +15,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './common.mjs';
@@ -78,33 +84,41 @@ test('candidate setup failure records an explicit context and reproduction comma
   expect(result.stderr).toContain(report.reproduce);
 });
 
-test('catalog retry reuses a pushed baseline after PR creation fails', () => {
-  const dir = workspace();
-  const bin = join(dir, 'bin');
-  mkdirSync(bin);
-  const executable = (name: string, source: string) => {
-    const file = join(bin, name);
-    writeFileSync(file, '#!/bin/bash\nset -euo pipefail\n' + source);
-    chmodSync(file, 0o755);
-  };
-  executable(
-    'node',
-    `
+const POSIX_BASH = resolvePosixBash();
+if (POSIX_BASH.path === null) console.warn(POSIX_BASH.reason);
+
+test.skipIf(POSIX_BASH.path === null)(
+  'catalog retry reuses a pushed baseline after PR creation fails',
+  () => {
+    const bashPath = POSIX_BASH.path;
+    if (bashPath === null) throw new Error(POSIX_BASH.reason ?? 'This test requires Bash.');
+
+    const dir = workspace();
+    const bin = join(dir, 'bin');
+    mkdirSync(bin);
+    const executable = (name: string, source: string) => {
+      const file = join(bin, name);
+      writeFileSync(file, '#!/bin/bash\nset -euo pipefail\n' + source);
+      chmodSync(file, 0o755);
+    };
+    executable(
+      'node',
+      `
 if [[ "$1" = --input-type=module ]]; then exit 1; fi
 if [[ "$*" = *--capture* ]]; then echo capture >> "$STATE/captures"; fi
 `
-  );
-  executable(
-    'git',
-    `
+    );
+    executable(
+      'git',
+      `
 echo "$*" >> "$STATE/git-calls"
 if [[ "$1" = ls-remote && -f "$STATE/pushed" ]]; then echo 'abc refs/heads/automation/collaboration-catalog-2.19.0'; fi
 if [[ "$1" = push ]]; then echo pushed > "$STATE/pushed"; fi
 `
-  );
-  executable(
-    'gh',
-    `
+    );
+    executable(
+      'gh',
+      `
 if [[ "$2" = list ]]; then
   if [[ "$*" = *"--json number"* ]]; then echo 123; exit 0; fi
   if [[ -f "$STATE/closed" ]]; then echo CLOSED; elif [[ -f "$STATE/created" ]]; then echo OPEN; fi
@@ -113,38 +127,55 @@ elif [[ "$2" = create ]]; then
   echo created > "$STATE/created"
 fi
 `
-  );
-  const workflow = readFileSync(join(ROOT, '.github/workflows/collaboration-catalog.yml'), 'utf8');
-  const parsed = Bun.YAML.parse(workflow) as any;
-  const script = parsed.jobs.capture.steps.find((step: any) => step.id === 'capture').run;
-  // Keep the workflow's generated PR body inside the test's isolated directory.
-  const isolated = script.replaceAll('/tmp/collaboration-catalog-pr.md', join(dir, 'pr.md'));
-  const run = () =>
-    spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', isolated], {
-      cwd: dir,
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${bin}:/usr/bin:/bin`,
-        STATE: dir,
-        REQUESTED_VERSION: '2.19.0',
-        GITHUB_OUTPUT: join(dir, 'outputs'),
-      },
-    });
-  expect(run().status).toBe(1);
-  expect(existsSync(join(dir, 'pushed'))).toBe(true);
-  expect(run().status).toBe(0);
-  expect(existsSync(join(dir, 'created'))).toBe(true);
-  expect(readFileSync(join(dir, 'outputs'), 'utf8')).toContain('pr=123');
-  expect(readFileSync(join(dir, 'captures'), 'utf8')).toBe('capture\n');
-  expect(readFileSync(join(dir, 'git-calls'), 'utf8')).toContain('switch --track');
-  expect(run().status).toBe(0);
-  expect(readFileSync(join(dir, 'git-calls'), 'utf8').match(/^push /gm)).toHaveLength(1);
-  writeFileSync(join(dir, 'closed'), 'closed');
-  const closed = run();
-  expect(closed.status).toBe(1);
-  expect(closed.stdout).toContain('Restore or reopen');
-});
+    );
+    const workflow = readFileSync(
+      join(ROOT, '.github/workflows/collaboration-catalog.yml'),
+      'utf8'
+    );
+    const parsed = Bun.YAML.parse(workflow) as any;
+    const script = parsed.jobs.capture.steps.find((step: any) => step.id === 'capture').run;
+    // Keep the workflow's generated PR body inside the test's isolated directory.
+    const fixtureIsolation = createPosixFixtureIsolation({ directory: dir, bin, bashPath });
+    const isolated = script.replaceAll(
+      '/tmp/collaboration-catalog-pr.md',
+      quotePosixShellArgument(fixtureIsolation.cwd + '/pr.md')
+    );
+
+    const guardedIsolated = fixtureIsolation.script + isolated;
+    const run = () =>
+      spawnSync(bashPath, ['-e', '-o', 'pipefail', '-c', guardedIsolated], {
+        cwd: dir,
+
+        timeout: 10_000,
+        encoding: 'utf8',
+        env: {
+          ...Object.fromEntries(
+            Object.entries(process.env).filter(
+              ([key]) => !['path', 'bash_env', 'env'].includes(key.toLowerCase())
+            )
+          ),
+          PATH: `${fixtureIsolation.bin}:/usr/bin:/bin`,
+          STATE: fixtureIsolation.cwd,
+          REQUESTED_VERSION: '2.19.0',
+          GITHUB_OUTPUT: fixtureIsolation.cwd + '/outputs',
+        },
+      });
+    expect(run().status).toBe(1);
+    expect(existsSync(join(dir, 'pushed'))).toBe(true);
+    expect(run().status).toBe(0);
+    expect(existsSync(join(dir, 'created'))).toBe(true);
+    expect(readFileSync(join(dir, 'outputs'), 'utf8')).toContain('pr=123');
+    expect(readFileSync(join(dir, 'captures'), 'utf8')).toBe('capture\n');
+    expect(readFileSync(join(dir, 'git-calls'), 'utf8')).toContain('switch --track');
+    expect(run().status).toBe(0);
+    expect(readFileSync(join(dir, 'git-calls'), 'utf8').match(/^push /gm)).toHaveLength(1);
+    writeFileSync(join(dir, 'closed'), 'closed');
+    const closed = run();
+    expect(closed.status).toBe(1);
+    expect(closed.stdout).toContain('Restore or reopen');
+  },
+  process.platform === 'win32' ? 45_000 : 5_000
+);
 
 test('single-release runs reject edited fixture bytes before packing or installing', () => {
   const dir = workspace();
@@ -190,25 +221,31 @@ test('a closed worker input rejects the request without crashing the parent', ()
     join(dir, 'worker.mjs'),
     `
     import { closeSync } from 'node:fs';
-    closeSync(0);
+    if (process.platform !== 'win32') closeSync(0);
     console.log(JSON.stringify({ id: 0, value: 'ready' }));
     setTimeout(() => {}, 2000);
   `
   );
   const source = `
-    import { Peer } from ${JSON.stringify(join(dir, 'scripts/collaboration/peer.mjs'))};
+    import { Peer } from ${JSON.stringify(pathToFileURL(join(dir, 'scripts/collaboration/peer.mjs')).href)};
     const peer = new Peer(${JSON.stringify(dir)}, 'broken-input');
+    peer.child.stdin.on('error', error => console.log('input-error-code:', error.code));
     await new Promise(resolve => peer.child.stdout.once('data', resolve));
+    // On Windows, close the writable stream to exercise Node's real
+    // asynchronous write-after-end error.
+    // POSIX still exercises the worker's closed read-end (EPIPE).
+    if (process.platform === 'win32') peer.child.stdin.end();
     try {
       await peer.request('info');
       process.exitCode = 1;
     } catch (error) {
       console.log('caught:', error.message);
+      console.log('worker-alive:', peer.child.exitCode === null && peer.child.signalCode === null);
     } finally {
       await peer.close();
     }
   `;
-  // Exercise Node's real pipe-error event in a subprocess, so a regression is
+  // Exercise Node's real input-stream error event in a subprocess, so a regression is
   // observed as a failing exit status rather than taking down the test runner.
   const result = spawnSync('node', ['--input-type=module', '-e', source], {
     encoding: 'utf8',
@@ -217,4 +254,8 @@ test('a closed worker input rejects the request without crashing the parent', ()
   expect(result.status).toBe(0);
   expect(result.stderr).toBe('');
   expect(result.stdout).toContain('caught: broken-input: worker input failed:');
+  expect(result.stdout).toContain('worker-alive: true');
+  if (process.platform === 'win32') {
+    expect(result.stdout).toContain('input-error-code: ERR_STREAM_WRITE_AFTER_END');
+  }
 });

@@ -493,21 +493,22 @@ export function openTreeSessionFromPackage(
   const FONT_TABLE_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
   let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
-  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
-    if (embeddedFontsCache) return embeddedFontsCache;
+  const resolveFontTablePart = (): OoxmlPart | undefined => {
     const live = currentPackage();
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === FONT_TABLE_REL_TYPE
     );
-    let part: OoxmlPart | undefined;
-    if (record) {
-      const resolved = resolveRelationship(record);
-      if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = live.parts.get(resolved.target.partName);
-      }
-    }
-    part ??= live.parts.get('/word/fontTable.xml');
-    embeddedFontsCache = Object.freeze(readEmbeddedFonts(live, part));
+    const resolved = record ? resolveRelationship(record) : null;
+    const named =
+      resolved?.mode === 'Internal' && resolved.target.ok
+        ? live.parts.get(resolved.target.partName)
+        : undefined;
+    return named ?? live.parts.get('/word/fontTable.xml');
+  };
+  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
+    embeddedFontsCache ??= Object.freeze(
+      readEmbeddedFonts(currentPackage(), resolveFontTablePart())
+    );
     return embeddedFontsCache;
   };
 
@@ -909,7 +910,11 @@ export function openTreeSessionFromPackage(
       documentThemeFonts() {
         const root = resolveThemeRoot();
         const settings = resolveSettingsRoot();
-        themeFontsCache ??= collectDocumentThemeFonts(root, settings);
+        themeFontsCache ??= collectDocumentThemeFonts(
+          root,
+          settings,
+          resolveFontTablePart()?.root ?? null
+        );
         return themeFontsCache;
       },
 

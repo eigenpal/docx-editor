@@ -13,8 +13,9 @@
 // mode without each signature carrying it. Nothing outside such a call ever sees `editable`:
 // store subscribers run in `atomic`.
 //
-// TODO(#1197, editor change): the editor turns `editable` on only without a collaboration
-// module, and refuses a host request for both. Until then nothing in the editor uses it.
+// The editor enters `editable` only when a host asks for it (`fieldResults` on
+// `createDocxEditor`), never with a collaboration module, and refuses a request for both
+// (`editor/field-results-scope.ts`).
 
 /**
  * How saved field results are addressed.
@@ -45,6 +46,30 @@ export function withFieldResultsMode<T>(mode: FieldResultsMode | undefined, run:
     return run();
   } finally {
     current = outer;
+  }
+}
+
+let wholeFields = false;
+
+/**
+ * Whether a deletion whose edges are exactly a saved result's edges removes the whole field.
+ *
+ * Off by default: selecting a result's text and deleting it keeps the field with an empty
+ * result. An editor turns it on while its selection is the whole FIELD (the selection a
+ * Backspace after a field makes), where the same offsets mean the field and its markers.
+ */
+export function wholeFieldDeletion(): boolean {
+  return wholeFields;
+}
+
+/** Run `run` with {@link wholeFieldDeletion} on, then restore it, also when `run` throws. */
+export function withWholeFieldDeletion<T>(run: () => T): T {
+  if (wholeFields) return run();
+  wholeFields = true;
+  try {
+    return run();
+  } finally {
+    wholeFields = false;
   }
 }
 

@@ -1,7 +1,7 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
 import { withFontFamily, type ResolvedRunStyle } from './run-style.ts';
-import { isEastAsiaHintSymbol } from './east-asia-symbol-hint.ts';
+import { isEastAsiaHinted, type EastAsiaHintScope } from './east-asia-symbol-hint.ts';
 import { segmentGraphemes } from './grapheme.ts';
 
 /**
@@ -65,8 +65,13 @@ export class UnsupportedScriptError extends Error {
  * strong item on conflicts, and the following strong item only for leading Common text.
  */
 const classify = (codePoint: number): Classified => {
+  // Full-width forms draw in the East Asian face, letters and digits included. The letters
+  // keep their Latin script for shaping; the rest are punctuation, symbols and digits.
   if (inRange(codePoint, 0xff21, 0xff3a) || inRange(codePoint, 0xff41, 0xff5a)) {
-    return { slot: 'hAnsi', script: 'Latn' };
+    return { slot: 'eastAsia', script: 'Latn' };
+  }
+  if (inRange(codePoint, 0xff01, 0xff65) || inRange(codePoint, 0xffe0, 0xffe6)) {
+    return { slot: 'eastAsia', script: 'Zyyy' };
   }
   if (inRange(codePoint, 0x0590, 0x05ff) || inRange(codePoint, 0xfb1d, 0xfb4f)) {
     return { slot: 'cs', script: 'Hebr' };
@@ -318,7 +323,7 @@ const pureAscii = (text: string): boolean => {
  */
 export function eastAsiaRunsOfSegments(
   segments: readonly string[],
-  hintedSegments: readonly boolean[] = []
+  hintedSegments: readonly (boolean | EastAsiaHintScope)[] = []
 ): readonly SegmentSlotRange[] {
   const out: SegmentSlotRange[] = [];
   const addEastAsia = (segment: number, from: number, to: number): void => {
@@ -337,7 +342,7 @@ export function eastAsiaRunsOfSegments(
   const needsGraphemes = segments.some((text, index) => {
     if (!hintedSegments[index] || pureAscii(text)) return false;
     for (const character of text) {
-      if (isEastAsiaHintSymbol(character.codePointAt(0)!)) return true;
+      if (isEastAsiaHinted(character.codePointAt(0)!, hintedSegments[index])) return true;
     }
     return false;
   });
@@ -378,7 +383,7 @@ export function eastAsiaRunsOfSegments(
         codePoint = cluster.text.codePointAt(0)!;
         to = Math.min(text.length, cluster.utf16To - offset);
         if (position === cluster.utf16From) {
-          clusterHinted = !!hintedSegments[segment] && isEastAsiaHintSymbol(codePoint);
+          clusterHinted = isEastAsiaHinted(codePoint, hintedSegments[segment]);
         }
         hinted = clusterHinted;
       }

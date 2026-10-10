@@ -6,6 +6,7 @@ import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 // from the contract, which re-exports it.
 
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
+import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
 import type {
@@ -34,6 +35,12 @@ export interface PaginatedSurfaceOptions {
    * authority.
    */
   readonly collaborationModel?: CollaborationModuleContribution;
+  /**
+   * How saved field results are edited. `atomic` (the default) keeps every field one unit.
+   * `editable` lets the reader type, delete, and select inside the saved result of a DATE,
+   * MERGEFIELD, HYPERLINK, or similar field. Refused with a {@link collaborationModel}.
+   */
+  readonly fieldResults?: FieldResultsMode;
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
   readonly author?: string;

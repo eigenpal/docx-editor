@@ -50,6 +50,7 @@ export type {
   ChromeMenuItemEntry,
   ChromeMenuSeparatorEntry,
   ChromeMenuSubmenuEntry,
+  FieldResultsMode,
   FontLoadFailureReason,
   FontResolutionRequest,
   FontMeasurementState,

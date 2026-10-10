@@ -41,6 +41,10 @@ import {
   hAnsiFamilyFromRFonts,
   validStyleId,
 } from './run-defaults.ts';
+import {
+  FORMAT_DEFAULT_EAST_ASIAN_FAMILY,
+  FORMAT_DEFAULT_LATIN_FAMILY,
+} from './default-font-faces.ts';
 
 /** `basedOn` walk cap, matching `run-defaults`. */
 const CHAIN_CAP = 16;
@@ -92,6 +96,8 @@ interface RunProfile {
   readonly hAnsi: string | null;
   /** Whether the run's text has a character layout can draw in the `w:hAnsi` face. */
   readonly hasHAnsi: boolean;
+  /** The run's own `w:rFonts/@w:hint`, or null; styles and defaults can supply one too. */
+  readonly hint: string | null;
   readonly runStyle: string | null;
   readonly paragraphStyle?: string | null;
   readonly tableStyle?: string | null | false;
@@ -118,6 +124,7 @@ function profileKey(profile: RunProfile): string {
     profile.hasEastAsian,
     profile.hAnsi,
     profile.hasHAnsi,
+    profile.hint,
     profile.runStyle,
     profile.paragraphStyle === undefined ? 0 : profile.paragraphStyle,
     profile.tableStyle === undefined ? 0 : profile.tableStyle,
@@ -274,12 +281,12 @@ function isEastAsianCodePoint(codePoint: number): boolean {
 
 /**
  * Whether a code point can draw in the `w:hAnsi` face: a non-ASCII BMP character outside
- * the East Asian blocks above, Hebrew and Arabic, and the no-break space (which keeps the
- * `w:ascii` face). Over-reports the hint-dependent ranges, never hides a drawn face.
+ * the East Asian blocks above, Hebrew and Arabic. The no-break space counts, because it
+ * advances in that face. Over-reports the hint-dependent ranges, never hides a drawn face.
  */
 function isHAnsiCodePoint(codePoint: number): boolean {
   return (
-    codePoint > 0xa0 &&
+    codePoint >= 0xa0 &&
     codePoint <= 0xffff &&
     !(codePoint >= 0x590 && codePoint <= 0x7bf) &&
     !(codePoint >= 0xfb1d && codePoint <= 0xfdff) &&
@@ -323,8 +330,11 @@ function applyRun(
   const rStyle = rPr ? childElement(rPr, 'rStyle') : undefined;
   addProfile(summary, {
     latin: rFonts ? familyFromRFonts(rFonts, themeFonts) : null,
-    eastAsia: rFonts && hasEastAsian ? eastAsiaFamilyFromRFonts(rFonts, themeFonts) : null,
+    // Hinted non-ASCII text can draw in the East Asian face too (see `resolveProfile`).
+    eastAsia:
+      rFonts && (hasEastAsian || slots.hAnsi) ? eastAsiaFamilyFromRFonts(rFonts, themeFonts) : null,
     hasEastAsian,
+    hint: (rFonts && attributeValue(rFonts, 'hint')) ?? null,
     hAnsi: rFonts && slots.hAnsi ? hAnsiFamilyFromRFonts(rFonts, themeFonts) : null,
     hasHAnsi: slots.hAnsi,
     runStyle: validStyleId(rStyle ? attributeValue(rStyle, 'val') : undefined),
@@ -344,6 +354,7 @@ const PROJECTED_FIELD_PROFILE: RunProfile = {
   hasEastAsian: false,
   hAnsi: null,
   hasHAnsi: false,
+  hint: null,
   runStyle: null,
 };
 
@@ -450,6 +461,7 @@ interface StyleIndexEntry {
   readonly family: string | null;
   readonly eastAsiaFamily: string | null;
   readonly hAnsiFamily: string | null;
+  readonly hint: string | null;
   /** Latin families named by `w:tblStylePr` conditional-format `w:rPr/w:rFonts`. */
   readonly conditionalFamilies: readonly string[];
   /** East Asian families named the same way. */
@@ -464,6 +476,8 @@ interface StyleChain {
   readonly eastAsia: string | null;
   /** The nearest `w:hAnsi` family on the chain. */
   readonly hAnsi: string | null;
+  /** The nearest `w:rFonts/@w:hint` on the chain. */
+  readonly hint: string | null;
   /** Every conditional-format family on the chain (table styles only). */
   readonly conditional: readonly string[];
   readonly conditionalEastAsia: readonly string[];
@@ -473,6 +487,7 @@ const EMPTY_CHAIN: StyleChain = {
   latin: null,
   eastAsia: null,
   hAnsi: null,
+  hint: null,
   conditional: [],
   conditionalEastAsia: [],
 };
@@ -481,6 +496,13 @@ interface StyleIndex {
   readonly docDefaultLatin: string | null;
   readonly docDefaultEastAsia: string | null;
   readonly docDefaultHAnsi: string | null;
+  readonly docDefaultHint: string | null;
+  /** Whether the document defaults name a Latin face. */
+  readonly docDefaultsNameLatin: boolean;
+  /** The hAnsi face of a run that names a Latin face but no hAnsi face at any level. */
+  readonly hAnsiSlotDefault: string | null;
+  /** The East Asian face of East Asian text that no level names one for. */
+  readonly fallbackEastAsia: string | null;
   readonly defaultParagraph: string | null;
   readonly defaultCharacter: string | null;
   readonly defaultTable: string | null;
@@ -492,6 +514,10 @@ const EMPTY_STYLE_INDEX: StyleIndex = {
   docDefaultLatin: null,
   docDefaultEastAsia: null,
   docDefaultHAnsi: null,
+  docDefaultHint: null,
+  docDefaultsNameLatin: false,
+  hAnsiSlotDefault: null,
+  fallbackEastAsia: null,
   defaultParagraph: null,
   defaultCharacter: null,
   defaultTable: null,
@@ -519,6 +545,12 @@ function rPrEastAsiaFamily(container: OoxmlElement, themeFonts: DocumentThemeFon
   const rPr = childElement(container, 'rPr');
   const rFonts = rPr ? childElement(rPr, 'rFonts') : undefined;
   return rFonts ? eastAsiaFamilyFromRFonts(rFonts, themeFonts) : null;
+}
+
+function rPrHint(container: OoxmlElement): string | null {
+  const rPr = childElement(container, 'rPr');
+  const rFonts = rPr ? childElement(rPr, 'rFonts') : undefined;
+  return (rFonts && attributeValue(rFonts, 'hint')) ?? null;
 }
 
 function rPrHAnsiFamily(container: OoxmlElement, themeFonts: DocumentThemeFonts): string | null {
@@ -551,7 +583,13 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
       Boolean(attributeValue(defaultRFonts, name))
     );
-  if (!hasLatinReference) docDefaultFamily ??= themeFonts.minor;
+  // A slot no level names: the format default under an authored rPrDefault, the body theme
+  // face under the application profile. `resolveRunStyle` and the hAnsi pass agree.
+  // A text that names no Latin face at any level keeps the body or surface default for both
+  // Latin slots; one that names only an ascii face takes the slot default for hAnsi.
+  const hAnsiSlotDefault = rPrDefault ? FORMAT_DEFAULT_LATIN_FAMILY : themeFonts.minor;
+  if (!hasLatinReference) docDefaultFamily ??= hAnsiSlotDefault;
+  const fallbackEastAsia = rPrDefault ? FORMAT_DEFAULT_EAST_ASIAN_FAMILY : themeFonts.minorEastAsia;
 
   let counted = 0;
   for (const child of stylesRoot.children as readonly OoxmlNode[]) {
@@ -578,6 +616,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       family: rPrFamily(child, themeFonts),
       eastAsiaFamily: rPrEastAsiaFamily(child, themeFonts),
       hAnsiFamily: rPrHAnsiFamily(child, themeFonts),
+      hint: rPrHint(child),
       conditionalFamilies,
       conditionalEastAsiaFamilies,
     });
@@ -603,6 +642,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     let latin: string | null = null;
     let eastAsia: string | null = null;
     let hAnsi: string | null = null;
+    let hint: string | null = null;
     const conditional: string[] = [];
     const conditionalEastAsia: string[] = [];
     const seen = new Set<string>();
@@ -614,11 +654,12 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       latin ??= entry.family;
       eastAsia ??= entry.eastAsiaFamily;
       hAnsi ??= entry.hAnsiFamily;
+      hint ??= entry.hint;
       for (const family of entry.conditionalFamilies) conditional.push(family);
       for (const family of entry.conditionalEastAsiaFamilies) conditionalEastAsia.push(family);
       at = entry.basedOn;
     }
-    const resolved = { latin, eastAsia, hAnsi, conditional, conditionalEastAsia };
+    const resolved = { latin, eastAsia, hAnsi, hint, conditional, conditionalEastAsia };
     chainMemo.set(styleId, resolved);
     return resolved;
   };
@@ -627,6 +668,10 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     docDefaultLatin: docDefaultFamily,
     docDefaultEastAsia: docDefaultEastAsiaFamily,
     docDefaultHAnsi: docDefaultHAnsiFamily,
+    docDefaultHint: rPrDefault ? rPrHint(rPrDefault) : null,
+    docDefaultsNameLatin: Boolean(hasLatinReference),
+    hAnsiSlotDefault,
+    fallbackEastAsia,
     defaultParagraph,
     defaultCharacter,
     defaultTable,
@@ -635,7 +680,14 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
 }
 
 function styleIndexOf(stylesRoot: OoxmlElement | null, themeFonts: DocumentThemeFonts): StyleIndex {
-  if (!stylesRoot) return { ...EMPTY_STYLE_INDEX, docDefaultLatin: themeFonts.minor };
+  if (!stylesRoot) {
+    return {
+      ...EMPTY_STYLE_INDEX,
+      docDefaultLatin: themeFonts.minor,
+      hAnsiSlotDefault: themeFonts.minor,
+      fallbackEastAsia: themeFonts.minorEastAsia,
+    };
+  }
   const cached = styleIndexMemos.get(stylesRoot);
   if (
     cached &&
@@ -706,6 +758,19 @@ function addBroadFamilies(
   if (profile.hasHAnsi) addFamily(inherited, index.docDefaultHAnsi);
 }
 
+/** Whether any level of a run's cascade names a Latin face. */
+function namesLatin(
+  profile: RunProfile,
+  chains: readonly StyleChain[],
+  index: StyleIndex
+): boolean {
+  return (
+    profile.latin !== null ||
+    chains.some((chain) => chain.latin !== null) ||
+    index.docDefaultsNameLatin
+  );
+}
+
 /** The families one run profile renders in, nearest level first. */
 function resolveProfile(
   profile: RunProfile,
@@ -735,11 +800,22 @@ function resolveProfile(
     else {
       addFamily(
         inherited,
-        runChain.hAnsi ?? paragraphChain.hAnsi ?? tableChain.hAnsi ?? index.docDefaultHAnsi
+        runChain.hAnsi ??
+          paragraphChain.hAnsi ??
+          tableChain.hAnsi ??
+          index.docDefaultHAnsi ??
+          (namesLatin(profile, [runChain, paragraphChain, tableChain], index)
+            ? index.hAnsiSlotDefault
+            : null)
       );
     }
   }
-  if (!profile.hasEastAsian) return;
+  // Under a cascaded `w:hint="eastAsia"` hinted non-ASCII text draws in the East Asian face
+  // too, as layout resolves it (`hasEastAsiaSymbolHint`). Over-reported for the conditional
+  // ranges, never hidden.
+  const hint =
+    profile.hint ?? runChain.hint ?? paragraphChain.hint ?? tableChain.hint ?? index.docDefaultHint;
+  if (!profile.hasEastAsian && !(profile.hasHAnsi && hint === 'eastAsia')) return;
   if (profile.eastAsia !== null) addFamily(direct, profile.eastAsia);
   else {
     addFamily(
@@ -747,7 +823,8 @@ function resolveProfile(
       runChain.eastAsia ??
         paragraphChain.eastAsia ??
         tableChain.eastAsia ??
-        index.docDefaultEastAsia
+        index.docDefaultEastAsia ??
+        index.fallbackEastAsia
     );
   }
   for (const family of tableChain.conditionalEastAsia) addFamily(inherited, family);

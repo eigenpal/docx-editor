@@ -13,7 +13,8 @@ import { revisionMarkupSourcesEqual } from './revision-markup-style.ts';
 
 import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
-import { eastAsianDefaultFamily, themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import { RUN_FONT_DEFAULTS } from './application-run-defaults.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 import { resolveTextOutline } from './run-text-outline.ts';
 import { resolveRunLigatures } from './run-ligatures.ts';
@@ -202,6 +203,8 @@ export interface ThemeFonts {
   /** Language-specific theme faces, keyed by ISO 15924 script. */
   readonly majorSupplemental?: Readonly<Record<string, string>>;
   readonly minorSupplemental?: Readonly<Record<string, string>>;
+  /** Lower-cased font table names that declare a Chinese character set. */
+  readonly chineseFontTableFaces?: readonly string[];
 }
 
 /** A document with no theme part: every theme reference falls back to its explicit name. */
@@ -259,18 +262,25 @@ export function resolveRunStyle(
     -readonly [K in keyof ResolvedRunStyle]: ResolvedRunStyle[K];
   } = { ...DEFAULT_RUN_STYLE };
 
-  // Resolve language first: rFonts commonly precedes lang, and an inherited theme
-  // reference must use the final run language, including a character-style override.
-  let eastAsiaLanguage: string | undefined;
+  // Theme references resolve through the document's theme language only; the run's own
+  // language never selects a theme face.
   let hasLatinFontReference = false;
   // The complex-script lane, resolved beside the Latin one and chosen at the end.
   const complex: ComplexScriptLane = { ...COMPLEX_SCRIPT_DEFAULTS };
   for (const property of props) {
-    if (property.localName === 'lang' && property.attributes?.eastAsia !== undefined)
-      eastAsiaLanguage = property.attributes.eastAsia;
-  }
-  for (const property of props) {
     switch (property.localName) {
+      case RUN_FONT_DEFAULTS: {
+        // The document's slot defaults, beneath every authored level. Only the ascii and East
+        // Asian slots are read here; `applyHAnsiFontSlots` reads the hAnsi one.
+        const attributes = property.attributes;
+        const family =
+          (themeFonts ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts) : null) ??
+          attributes?.eastAsia;
+        if (family && family.length <= 128) style.fontFamilyEastAsia = family;
+        if (attributes?.ascii && attributes.ascii.length <= 128)
+          style.fontFamily = attributes.ascii;
+        break;
+      }
       case 'rFonts': {
         // `w:ascii` is the Latin face; `w:hAnsi` is the fallback this lane uses when it is
         // the only one authored. A theme attribute OVERRIDES the explicit one beside it
@@ -282,25 +292,34 @@ export function resolveRunStyle(
         hasLatinFontReference ||= ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
           Boolean(attributes?.[name])
         );
-        const themed = themeFonts
-          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts, eastAsiaLanguage) ??
-            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts, eastAsiaLanguage))
-          : null;
-        const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
+        // Each theme attribute overrides only its own slot: an explicit `w:ascii` keeps the
+        // ascii face beside an `w:hAnsiTheme`, which `applyHAnsiFontSlots` applies.
+        const theme = (token: string | undefined) =>
+          themeFonts ? themeFontFamilyOf(token, themeFonts) : null;
+        const family =
+          theme(attributes?.asciiTheme) ??
+          attributes?.ascii ??
+          theme(attributes?.hAnsiTheme) ??
+          attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
+        // A theme reference with no theme face to resolve to still replaces the format
+        // default beneath it, so the run takes the surface default face. (The reference
+        // application uses its built-in theme here, Aptos; probe n01.)
+        else if (attributes?.asciiTheme !== undefined || attributes?.hAnsiTheme !== undefined)
+          style.fontFamily = null;
         // The eastAsia slot resolves independently, on the same theme-over-explicit rule.
         // An rFonts that authors only Latin faces leaves an inherited eastAsia face alone,
         // which is how the docDefaults' `w:eastAsiaTheme` survives a style chain that only
         // ever re-states `w:ascii`.
         const themedEastAsia = themeFonts
-          ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts, eastAsiaLanguage)
+          ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts)
           : null;
         const familyEastAsia = themedEastAsia ?? attributes?.eastAsia;
         if (familyEastAsia && familyEastAsia.length <= 128) {
           style.fontFamilyEastAsia = familyEastAsia;
         }
         const themedComplex = themeFonts
-          ? themeFontFamilyOf(attributes?.cstheme, themeFonts, eastAsiaLanguage)
+          ? themeFontFamilyOf(attributes?.cstheme, themeFonts)
           : null;
         // `||`: an Office theme's `a:cs` is usually empty, which names no face.
         const familyComplex = themedComplex || attributes?.cs;
@@ -432,11 +451,9 @@ export function resolveRunStyle(
   // An omitted Latin slot inherits the body theme after all authored defaults/styles.
   // Preserve the existing fallback for an authored but unresolved theme reference.
   if (!hasLatinFontReference) style.fontFamily ??= themeFonts?.minor ?? null;
-  // Word uses the document body East Asian face when the entire style cascade
-  // omits this slot, including runs whose Latin font uses a heading theme token.
-  // Only use a concrete theme face here; absent theme languages remain host-independent.
-  style.fontFamilyEastAsia ??=
-    themeFonts?.minorEastAsia ?? eastAsianDefaultFamily(eastAsiaLanguage);
+  // A cascade that never names this slot, not even through the document defaults, takes
+  // the document body East Asian face.
+  style.fontFamilyEastAsia ??= themeFonts?.minorEastAsia ?? null;
   style.complexLane = {
     fontFamily: complex.fontFamilyAuthored ? complex.fontFamily : null,
     fontSizePt: complex.fontSizePt,

@@ -32,11 +32,11 @@ test('the hint table accepts exactly the unconditional symbols, not accented let
     0xba, 0xbc, 0xbd, 0xbe, 0xbf, 0xd7, 0xf7,
   ];
   // Combining marks and format characters stay with their base character, so a grapheme
-  // cluster is never split across two faces.
+  // cluster is never split across two faces. The narrow no-break space is a space.
   const excluded = (code: number) =>
     (code >= 0x300 && code <= 0x36f) ||
     (code >= 0x200b && code <= 0x200f) ||
-    (code >= 0x2028 && code <= 0x202f) ||
+    (code >= 0x2028 && code <= 0x202e) ||
     (code >= 0x2060 && code <= 0x206f) ||
     (code >= 0x20d0 && code <= 0x20ff);
   const inTable = (code: number) =>
@@ -422,4 +422,37 @@ test('hinted cluster segmentation runs once and skips ordinary paragraphs', () =
   } finally {
     resetGraphemeBoundary();
   }
+});
+
+test('hinted accented letters follow the East Asian language; Latin Extended also the face', () => {
+  // é and ạ need a Chinese or absent East Asian language; ą and ƒ also go East Asian when the
+  // face is a Chinese font. À never does.
+  const eastAsian = (face: string, language?: string) => {
+    const props: OoxmlProperty[] = [
+      {
+        localName: 'rFonts',
+        attributes: { ascii: 'Georgia', hAnsi: 'Tahoma', eastAsia: face, hint: 'eastAsia' },
+      },
+      ...(language ? [{ localName: 'lang', attributes: { eastAsia: language } }] : []),
+    ];
+    return applyEastAsiaFontSlots([piece('éạąƒÀ', props)])
+      .filter((p) => p.fontSlot === 'eastAsia')
+      .map((p) => p.text)
+      .join('');
+  };
+  expect(eastAsian('Meiryo')).toBe('éạąƒ');
+  expect(eastAsian('Meiryo', 'zh-TW')).toBe('éạąƒ');
+  expect(eastAsian('Meiryo', 'ja-JP')).toBe('');
+  expect(eastAsian('Microsoft YaHei', 'ja-JP')).toBe('ąƒ');
+  expect(eastAsian('SimSun', 'ko-KR')).toBe('ąƒ');
+  expect(eastAsian('Malgun Gothic', 'en-US')).toBe('');
+  // Only the East Asian language counts, not the Latin one.
+  const latinLanguage = piece('é', [fonts, { localName: 'lang', attributes: { val: 'ja-JP' } }]);
+  expect(applyEastAsiaFontSlots([latinLanguage])[0]!.fontSlot).toBe('eastAsia');
+});
+
+test('the narrow no-break space follows the hint like the other spaces', () => {
+  expect(isEastAsiaHintSymbol(0x202f)).toBe(true);
+  expect(isEastAsiaHintSymbol(0x2003)).toBe(true);
+  expect(isEastAsiaHintSymbol(0xa0)).toBe(false);
 });

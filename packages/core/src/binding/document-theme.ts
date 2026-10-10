@@ -50,9 +50,10 @@ import type { DocumentThemeFonts } from '../store/package/theme-font-scheme.ts';
  */
 export function collectDocumentThemeFonts(
   themeRoot: OoxmlElement | null,
-  settingsRoot: OoxmlElement | null = null
+  settingsRoot: OoxmlElement | null = null,
+  fontTableRoot: OoxmlElement | null = null
 ): DocumentThemeFonts {
-  return collectThemeSchemeFaces(themeRoot, settingsRoot);
+  return collectThemeSchemeFaces(themeRoot, settingsRoot, fontTableRoot);
 }
 
 /**

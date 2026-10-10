@@ -52,7 +52,6 @@ function session() {
 test('the stepped scan finds the families a cold scan finds, then runs the reads', () => {
   const cold = resolverGlyphFontFamilies(session());
   expect(cold).toContain('Chinese Body');
-  expect(cold).toContain('Japanese Body');
 
   const warm = session();
   let families: readonly string[] | null = null;

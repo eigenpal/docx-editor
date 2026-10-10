@@ -9,6 +9,12 @@
 // that table does: theme resolution is package material both lanes may read.
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
+import {
+  BUILT_IN_EAST_ASIAN_FACES,
+  DEFAULT_EAST_ASIAN_SCRIPT,
+  fontTableChineseFaces,
+  THEME_EAST_ASIAN_DEFAULTS,
+} from './default-font-faces.ts';
 
 /**
  * The faces a theme's font scheme offers, per script slot.
@@ -33,6 +39,8 @@ export interface ThemeSchemeFaces {
   /** Language-specific theme faces, keyed by ISO 15924 script. */
   readonly majorSupplemental?: Readonly<Record<string, string>>;
   readonly minorSupplemental?: Readonly<Record<string, string>>;
+  /** Lower-cased font table names that declare a Chinese character set. */
+  readonly chineseFontTableFaces?: readonly string[];
 }
 
 /** The theme's font slots, fully resolved, for resolving `w:rFonts` theme attributes. */
@@ -121,24 +129,58 @@ const EMPTY_THEME_FACES: DocumentThemeFonts = Object.freeze({
   minorEastAsia: null,
 });
 
+// Theme faces resolved without a themeFontLang element, per raw face set.
+const noLanguageFacesMemo = new WeakMap<DocumentThemeFonts, DocumentThemeFonts>();
+// Resolved faces with the font table's Chinese faces attached, per font table root.
+const fontTableFacesMemo = new WeakMap<
+  OoxmlElement,
+  WeakMap<DocumentThemeFonts, DocumentThemeFonts>
+>();
+
 /**
- * Resolve document theme languages before run-language fallback is considered.
- * ISO/IEC 29500-1 themeFontLang maps val, eastAsia, and bidi to separate theme slots.
+ * Resolve document theme languages. ISO/IEC 29500-1 themeFontLang maps val, eastAsia, and
+ * bidi to separate theme slots.
  * https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.themefontlanguages
+ *
+ * The East Asian slots resolve through the theme language only, never the run's own
+ * language: Simplified Chinese when the theme language names no East Asian script. A slot
+ * the theme leaves empty takes the script's default face (`default-font-faces.ts`), or the
+ * built-in theme's face when the package has no theme part. The font table's Chinese faces
+ * ride along for the East Asian hint (`isChineseFace`).
  */
 export function collectThemeSchemeFaces(
   themeRoot: OoxmlElement | null,
-  settingsRoot: OoxmlElement | null = null
+  settingsRoot: OoxmlElement | null = null,
+  fontTableRoot: OoxmlElement | null = null
+): DocumentThemeFonts {
+  const resolved = resolveThemeLanguages(themeRoot, settingsRoot);
+  if (!fontTableRoot) return resolved;
+  const chinese = fontTableChineseFaces(fontTableRoot);
+  if (chinese.length === 0) return resolved;
+  let byFaces = fontTableFacesMemo.get(fontTableRoot);
+  if (!byFaces) fontTableFacesMemo.set(fontTableRoot, (byFaces = new WeakMap()));
+  const cached = byFaces.get(resolved);
+  if (cached) return cached;
+  const withTable = Object.freeze({ ...resolved, chineseFontTableFaces: chinese });
+  byFaces.set(resolved, withTable);
+  return withTable;
+}
+
+function resolveThemeLanguages(
+  themeRoot: OoxmlElement | null,
+  settingsRoot: OoxmlElement | null
 ): DocumentThemeFonts {
   const faces = themeRoot ? collectRawThemeSchemeFaces(themeRoot) : EMPTY_THEME_FACES;
   const languages = settingsRoot ? child(settingsRoot, 'themeFontLang') : null;
-  if (!languages || !settingsRoot) return faces;
-  let byTheme = languageFacesMemo.get(settingsRoot);
-  if (!byTheme) languageFacesMemo.set(settingsRoot, (byTheme = new WeakMap()));
+  let byTheme = noLanguageFacesMemo;
+  if (languages && settingsRoot) {
+    byTheme = languageFacesMemo.get(settingsRoot) ?? new WeakMap();
+    languageFacesMemo.set(settingsRoot, byTheme);
+  }
   const cached = byTheme.get(faces);
   if (cached) return cached;
   const language = (slot: string) =>
-    languages.attributes.find((attribute) => attribute.localName === slot)?.value;
+    languages?.attributes.find((attribute) => attribute.localName === slot)?.value;
   const latinScript = themeLanguageScript(language('val'));
   const bidiScript = themeLanguageScript(language('bidi'));
   const eastAsiaLanguage = language('eastAsia');
@@ -147,13 +189,24 @@ export function collectThemeSchemeFaces(
     (script && (major ? faces.majorSupplemental : faces.minorSupplemental)?.[script]) ||
     fallback ||
     null;
+  const defaults =
+    faces === EMPTY_THEME_FACES ? BUILT_IN_EAST_ASIAN_FACES : THEME_EAST_ASIAN_DEFAULTS;
+  const script = eastAsiaScript ?? DEFAULT_EAST_ASIAN_SCRIPT;
+  // Without a theme language the authored `a:ea` face comes first, then the Simplified
+  // Chinese supplemental face.
+  const eastAsia = (major: boolean, face: string | null | undefined) =>
+    (eastAsiaScript
+      ? selected(major, eastAsiaScript, face)
+      : face || selected(major, DEFAULT_EAST_ASIAN_SCRIPT, null)) ||
+    (major ? defaults.major : defaults.minor).get(script) ||
+    null;
   // Each setting selects its own token slot, independent of the run attribute
-  // carrying that token. An absent East Asian setting keeps the run-language fallback.
+  // carrying that token.
   const resolved = Object.freeze({
     major: selected(true, latinScript, faces.major),
     minor: selected(false, latinScript, faces.minor),
-    majorEastAsia: selected(true, eastAsiaScript, faces.majorEastAsia),
-    minorEastAsia: selected(false, eastAsiaScript, faces.minorEastAsia),
+    majorEastAsia: eastAsia(true, faces.majorEastAsia),
+    minorEastAsia: eastAsia(false, faces.minorEastAsia),
     majorBidi: selected(true, bidiScript, faces.majorBidi),
     minorBidi: selected(false, bidiScript, faces.minorBidi),
     ...(eastAsiaLanguage === undefined
@@ -233,18 +286,6 @@ function themeLanguageScript(language: string | undefined): string | null {
   if (parts[1] && /^[a-z]{4}$/.test(parts[1]))
     return parts[1][0]!.toUpperCase() + parts[1].slice(1);
   return eastAsianScript(language) ?? THEME_LANGUAGE_SCRIPTS.get(parts[0]!) ?? null;
-}
-
-const EAST_ASIAN_DEFAULTS = new Map([
-  ['Hans', 'SimSun'],
-  ['Hant', 'PMingLiU'],
-  ['Jpan', 'MS Mincho'],
-  ['Hang', 'Batang'],
-]);
-
-/** Last-resort named CJK face; an unavailable face takes the CJK-aware measurer fallback. */
-export function eastAsianDefaultFamily(language: string | undefined): string | null {
-  return EAST_ASIAN_DEFAULTS.get(eastAsianScript(language) ?? '') ?? null;
 }
 
 function supplementalFaces(scheme: OoxmlElement): Partial<ThemeSchemeFaces> {

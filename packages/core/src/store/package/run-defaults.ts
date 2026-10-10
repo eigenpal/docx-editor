@@ -75,11 +75,13 @@ export function familyFromRFonts(
   // The shared token table (`theme-font-scheme.ts`) resolves the East Asian tokens too:
   // `w:asciiTheme="minorEastAsia"` is Word's "use East Asian fonts on Latin text", and
   // this reader must answer the same face the layout lane paints.
-  const themed =
+  // Each theme attribute overrides only its own slot, so an explicit `w:ascii` outranks a
+  // `w:hAnsiTheme` beside it.
+  const direct =
     themeFontFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
-    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
-  if (themed !== null) return themed;
-  const direct = attributeValue(rFonts, 'ascii') ?? attributeValue(rFonts, 'hAnsi');
+    attributeValue(rFonts, 'ascii') ??
+    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts) ??
+    attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
   return FONT_NAME.test(direct) ? direct : null;
 }
@@ -236,7 +238,9 @@ export function createRunDefaultsResolver(
     const rFonts = runProperties?.find((property) => property.localName === 'rFonts');
     const runTheme = rFonts
       ? (themeFontFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??
-        themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts))
+        (rFonts.attributes?.ascii === undefined
+          ? themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts)
+          : null))
       : null;
     const hasRunReference = ['ascii', 'hAnsi', 'asciiTheme', 'hAnsiTheme'].some((name) =>
       Boolean(rFonts?.attributes?.[name])

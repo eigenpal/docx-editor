@@ -9,6 +9,8 @@ import {
   withFontFamily,
 } from '../run-style.ts';
 import { styleForFontSlot } from '../script-itemization.ts';
+import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { collectThemeSchemeFaces } from '../../store/package/theme-font-scheme.ts';
 
 const resolve = (localName: string, attributes?: Record<string, string>) =>
   resolveRunStyle([attributes ? { localName, attributes } : { localName }]);
@@ -300,28 +302,31 @@ describe('style equality drives span merging', () => {
   });
 });
 
-describe('empty East Asian theme faces use the final run language (#787)', () => {
-  const emptyTheme = {
-    major: 'Cambria',
-    minor: 'Calibri',
-    majorEastAsia: null,
-    minorEastAsia: null,
+// Probes e03, e06-e08, x07 and z01-z03 in local/evidence/hansi-font-slots: the run's
+// East Asian language never selects a theme face; the theme language does (e02, e09, x03).
+describe('empty East Asian theme faces follow the theme language, not the run language', () => {
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const root = (xml: string, name: string) => {
+    const parsed = readOoxmlPart(xml, { name, contentType: 'application/xml' });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    return parsed.part.root;
   };
-  test.each([
-    ['zh-CN', 'SimSun'],
-    ['ZH-sg', 'SimSun'],
-    ['zh-TW', 'PMingLiU'],
-    ['zh-HK', 'PMingLiU'],
-    ['zh-MO', 'PMingLiU'],
-    ['zh-Hans-TW', 'SimSun'],
-    ['zh-Hant-CN', 'PMingLiU'],
-    ['ja-JP', 'MS Mincho'],
-    ['ko-KR', 'Batang'],
-    ['en-US', null],
-    ['und', null],
-    ['', null],
-  ])('%s selects %s without changing Latin', (language, family) => {
-    const style = resolveRunStyle(
+  const theme = (supplemental = '') =>
+    root(
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:fontScheme name="T">` +
+        `<a:majorFont><a:latin typeface="Cambria"/><a:ea typeface=""/>${supplemental}</a:majorFont>` +
+        `<a:minorFont><a:latin typeface="Calibri"/><a:ea typeface=""/>${supplemental}</a:minorFont>` +
+        '</a:fontScheme></a:themeElements></a:theme>',
+      '/word/theme/theme1.xml'
+    );
+  const settings = (language: string) =>
+    root(
+      `<w:settings xmlns:w="${W}"><w:themeFontLang w:eastAsia="${language}"/></w:settings>`,
+      '/word/settings.xml'
+    );
+  const face = (fonts: ReturnType<typeof collectThemeSchemeFaces>, language: string) =>
+    resolveRunStyle(
       [
         {
           localName: 'rFonts',
@@ -329,51 +334,39 @@ describe('empty East Asian theme faces use the final run language (#787)', () =>
         },
         { localName: 'lang', attributes: { val: 'en-US', eastAsia: language } },
       ],
-      emptyTheme
+      fonts
     );
-    expect(style.fontFamilyEastAsia).toBe(family);
-    expect(style.fontFamily).toBe('Calibri');
+  test.each(['zh-CN', 'zh-TW', 'ja-JP', 'ko-KR', 'en-US', ''])(
+    'a %s run takes the Simplified Chinese default',
+    (language) => {
+      const style = face(collectThemeSchemeFaces(theme()), language);
+      expect(style.fontFamilyEastAsia).toBe('SimSun');
+      expect(style.fontFamily).toBe('Calibri');
+    }
+  );
+  test.each([
+    ['zh-CN', 'SimSun'],
+    ['zh-TW', 'PMingLiU'],
+    ['ja-JP', 'MS Mincho'],
+    ['ko-KR', 'Batang'],
+  ])('a %s theme language selects %s', (language, family) => {
+    const fonts = collectThemeSchemeFaces(theme(), settings(language));
+    expect(face(fonts, 'en-US').fontFamilyEastAsia).toBe(family);
   });
-  test('language overrides cross rFonts order and preserve an inherited eastAsia attribute', () => {
-    const props = [
-      { localName: 'rFonts', attributes: { eastAsiaTheme: 'minorEastAsia' } },
-      { localName: 'lang', attributes: { eastAsia: 'zh-CN' } },
-      { localName: 'lang', attributes: { eastAsia: 'ja-JP' } },
-      { localName: 'lang', attributes: { val: 'en-US' } },
-      { localName: 'rFonts', attributes: { ascii: 'Arial' } },
-    ];
-    const theme = {
-      ...emptyTheme,
-      minorSupplemental: { Hans: 'Chinese Body', Jpan: 'Japanese Body' },
-    };
-    expect(resolveRunStyle(props, theme).fontFamilyEastAsia).toBe('Japanese Body');
-    expect(
-      resolveRunStyle(
-        [...props, { localName: 'rFonts', attributes: { eastAsia: 'Explicit' } }],
-        theme
-      ).fontFamilyEastAsia
-    ).toBe('Explicit');
+  test('the Simplified Chinese supplemental face applies whatever the run language', () => {
+    const fonts = collectThemeSchemeFaces(
+      theme(
+        '<a:font script="Hans" typeface="Chinese Body"/><a:font script="Jpan" typeface="Japanese Body"/>'
+      )
+    );
+    expect(face(fonts, 'ja-JP').fontFamilyEastAsia).toBe('Chinese Body');
   });
-  test('named theme and explicit faces win over language defaults', () => {
-    const lang = { localName: 'lang', attributes: { eastAsia: 'zh-CN' } };
-    expect(
-      resolveRunStyle(
-        [lang, { localName: 'rFonts', attributes: { eastAsia: 'Named' } }],
-        emptyTheme
-      ).fontFamilyEastAsia
-    ).toBe('Named');
-    expect(
-      resolveRunStyle(
-        [
-          lang,
-          {
-            localName: 'rFonts',
-            attributes: { eastAsiaTheme: 'majorEastAsia', eastAsia: 'Named' },
-          },
-        ],
-        { ...emptyTheme, majorEastAsia: 'Theme', majorSupplemental: { Hans: 'Supplemental' } }
-      ).fontFamilyEastAsia
-    ).toBe('Theme');
+  test('an empty slot replaces the explicit face beside its token (probe e04)', () => {
+    const style = resolveRunStyle(
+      [{ localName: 'rFonts', attributes: { eastAsiaTheme: 'minorEastAsia', eastAsia: 'Named' } }],
+      collectThemeSchemeFaces(theme())
+    );
+    expect(style.fontFamilyEastAsia).toBe('SimSun');
   });
 });
 

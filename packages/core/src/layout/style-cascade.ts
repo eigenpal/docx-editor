@@ -447,6 +447,7 @@ function themeCacheMaterial(themeFonts: ThemeFonts): Record<string, unknown> {
     minorBidi: themeFonts.minorBidi ?? null,
     majorSupplemental: themeFonts.majorSupplemental ?? null,
     minorSupplemental: themeFonts.minorSupplemental ?? null,
+    chineseFontTableFaces: themeFonts.chineseFontTableFaces ?? null,
   };
 }
 

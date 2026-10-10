@@ -15,8 +15,10 @@ import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
 import {
+  eastAsiaHintScope,
   hasEastAsiaSymbolHint,
   hasTimesNewRomanEastAsiaException,
+  type EastAsiaHintScope,
 } from './east-asia-symbol-hint.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
@@ -599,7 +601,7 @@ export function applyEastAsiaFontSlots(
   /** Indices of the pieces whose text joins the classification, in paragraph order. */
   const streamed: number[] = [];
   const segments: string[] = [];
-  const hintedSegments: boolean[] = [];
+  const hintedSegments: (false | EastAsiaHintScope)[] = [];
   for (let index = 0; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     if (piece.positionalTab || piece.breakKind || piece.inlineDrawing) continue;
@@ -610,10 +612,12 @@ export function applyEastAsiaFontSlots(
     // Leave the special Times New Roman East Asian fallback to existing resolution, and never
     // move a symbol-encoded face (Wingdings, Symbol, a `w:sym` piece): its glyphs live in
     // the symbol font, and the East Asian face would paint them as notdef boxes.
-    hintedSegments.push(
+    const hinted =
       hasEastAsiaSymbolHint(piece.props) &&
-        !isSymbolEncodedFamily(piece.style.fontFamily) &&
-        !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia, themeFonts)
+      !isSymbolEncodedFamily(piece.style.fontFamily) &&
+      !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia, themeFonts);
+    hintedSegments.push(
+      hinted ? eastAsiaHintScope(piece.props, piece.style.fontFamilyEastAsia, themeFonts) : false
     );
   }
   const ranges = eastAsiaRunsOfSegments(segments, hintedSegments);
