@@ -101,9 +101,13 @@ export function paragraphHoldsNothing(
 const lineHoldsContent = (line: PendingLine): boolean =>
   line.drawings.length > 0 || line.spans.some((span) => /[^\f\n]/.test(span.text));
 
+/** Whether a line after the opening break starts a sheet of its own: text, picture, or break. */
+const lineFollowsBreak = (line: PendingLine): boolean =>
+  line.pageBreakAfter === true || lineHoldsContent(line);
+
 /**
- * Whether a paragraph opens with a page break and has content after it: its first line holds
- * nothing but the break. That line never takes a sheet of its own. It stays at the bottom of
+ * Whether a paragraph opens with a page break and has content or another page break after it:
+ * its first line holds nothing but the break. That line never takes a sheet of its own. It stays at the bottom of
  * the page it starts on, and the break then starts the content on the next sheet.
  *
  * A list marker is not content there: it moves to the first line after the break. Borders,
@@ -111,7 +115,8 @@ const lineHoldsContent = (line: PendingLine): boolean =>
  * and the top rule open the text on the next sheet, and shading fills the break line where
  * it would sit. An anchored drawing is content, so those paragraphs keep the ordinary fit
  * rule. So does a paragraph with nothing after the break, and one that anchors floating
- * tables or text frames.
+ * tables or text frames. A paragraph with only one break keeps the ordinary fit: after a full
+ * page, its break line takes the next sheet and the content after it starts one sheet later.
  */
 export function opensWithPageBreak(
   entry: PaintableParagraph,
@@ -123,7 +128,7 @@ export function opensWithPageBreak(
     first !== undefined &&
     first.start === 0 &&
     holdsOnlyPageBreak(first) &&
-    lines.some((line, index) => index > 0 && lineHoldsContent(line)) &&
+    lines.some((line, index) => index > 0 && lineFollowsBreak(line)) &&
     !(drawingContext && anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0)
   );
 }
