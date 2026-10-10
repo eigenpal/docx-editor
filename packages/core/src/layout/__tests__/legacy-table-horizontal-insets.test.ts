@@ -42,15 +42,22 @@ describe('narrow legacy collapsed-cell horizontal inset policy', () => {
       });
       expect(calculate(margins(1, 2), borders(), true).left).toBe(1);
       expect(calculate(margins(1, 2), borders(), true).right).toBe(2);
-      expect(calculate(margins(0.25), borders(), true).left).toBe(0.5);
       expect(calculate(margins(), borders(edge(6, 'thick')), true).left).toBe(8.4);
     });
-    test(`${name}: uncovered thick, zero, asymmetric and compound margins use ordinary collapsed clearance`, () => {
+    test(`${name}: a single rule wider than its margin starts content at its inner half`, () => {
+      expect(calculate(margins(0.25), borders(), true).left).toBe(0.25);
+      expect(calculate(margins(0), borders(), true)).toMatchObject({ left: 0.25, right: 0.25 });
+      expect(calculate(margins(0.1, 5.4), borders(), true)).toMatchObject({
+        left: 0.25,
+        right: 5.4,
+      });
+      expect(calculate(margins(0.75), borders(edge(3)), true).left).toBe(1.5);
+      expect(calculate(margins(), borders(edge(12)), true).left).toBe(6);
+    });
+    test(`${name}: uncovered thick and compound rules use ordinary collapsed clearance`, () => {
       for (const [pad, rules] of [
-        [margins(), borders(edge(12))],
-        [margins(0), borders()],
-        [margins(0.1, 5.4), borders()],
-        [margins(5.4, 0.1), borders()],
+        [margins(), borders(edge(12, 'thick'))],
+        [margins(0), borders(edge(0.5, 'thick'))],
         [margins(), borders(edge(0.5, 'double'))],
       ] as const) {
         expect(calculate(pad, rules, true)).toEqual(calculate(pad, rules));
