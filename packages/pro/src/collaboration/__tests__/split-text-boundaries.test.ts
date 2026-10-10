@@ -6,27 +6,34 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import * as Y from 'yjs';
 import { expect, test } from 'bun:test';
 import { DocumentRegistry } from '../document/registry.ts';
+import { asLogicalId } from '../document/identity.ts';
 
 for (const collapsed of [false, true]) {
   test(`right boundary insertion preserves text when target is ${collapsed ? 'empty' : 'nonempty'}`, () => {
     const doc = new Y.Doc();
     const registry = new DocumentRegistry(doc);
     try {
-      registry.putText('source', 'ABCDEFGHIJ');
-      registry.putText('left', 'ABCDE');
-      registry.putText('right', 'FGHIJ');
-      registry.registerSplitText('left', 'source', 0, 5);
-      registry.registerSplitText('right', 'source', 5, 10);
-      if (collapsed) registry.spliceText('right', 0, 5, '');
-      registry.spliceText('right', 0, 0, 'XXX');
-      expect(registry.projectedTextValue('left')).toBe('ABCDE');
-      expect(registry.projectedTextValue('right')).toBe(collapsed ? 'XXX' : 'XXXFGHIJ');
+      registry.putText(asLogicalId('source'), 'ABCDEFGHIJ');
+      registry.putText(asLogicalId('left'), 'ABCDE');
+      registry.putText(asLogicalId('right'), 'FGHIJ');
+      registry.registerSplitText(asLogicalId('left'), asLogicalId('source'), 0, 5);
+      registry.registerSplitText(asLogicalId('right'), asLogicalId('source'), 5, 10);
+      if (collapsed) registry.spliceText(asLogicalId('right'), 0, 5, '');
+      registry.spliceText(asLogicalId('right'), 0, 0, 'XXX');
+      expect(registry.projectedTextValue(asLogicalId('left'))).toBe('ABCDE');
+      expect(registry.projectedTextValue(asLogicalId('right'))).toBe(
+        collapsed ? 'XXX' : 'XXXFGHIJ'
+      );
       const cold = new Y.Doc();
       Y.applyUpdate(cold, Y.encodeStateAsUpdate(doc));
       const joined = new DocumentRegistry(cold);
       try {
-        expect(joined.projectedTextValue('left')).toBe(registry.projectedTextValue('left'));
-        expect(joined.projectedTextValue('right')).toBe(registry.projectedTextValue('right'));
+        expect(joined.projectedTextValue(asLogicalId('left'))).toBe(
+          registry.projectedTextValue(asLogicalId('left'))
+        );
+        expect(joined.projectedTextValue(asLogicalId('right'))).toBe(
+          registry.projectedTextValue(asLogicalId('right'))
+        );
       } finally {
         joined.destroy();
         cold.destroy();
@@ -41,15 +48,15 @@ test('left boundary insertion stays left after deleting its following anchor cha
   const doc = new Y.Doc();
   const registry = new DocumentRegistry(doc);
   try {
-    registry.putText('source', 'ABCDEFGHIJ');
-    registry.putText('left', 'ABCDE');
-    registry.putText('right', 'FGHIJ');
-    registry.registerSplitText('left', 'source', 0, 5);
-    registry.registerSplitText('right', 'source', 5, 10);
-    registry.spliceText('right', 0, 1, '');
-    registry.spliceText('left', 5, 0, 'XXX');
-    expect(registry.projectedTextValue('left')).toBe('ABCDEXXX');
-    expect(registry.projectedTextValue('right')).toBe('GHIJ');
+    registry.putText(asLogicalId('source'), 'ABCDEFGHIJ');
+    registry.putText(asLogicalId('left'), 'ABCDE');
+    registry.putText(asLogicalId('right'), 'FGHIJ');
+    registry.registerSplitText(asLogicalId('left'), asLogicalId('source'), 0, 5);
+    registry.registerSplitText(asLogicalId('right'), asLogicalId('source'), 5, 10);
+    registry.spliceText(asLogicalId('right'), 0, 1, '');
+    registry.spliceText(asLogicalId('left'), 5, 0, 'XXX');
+    expect(registry.projectedTextValue(asLogicalId('left'))).toBe('ABCDEXXX');
+    expect(registry.projectedTextValue(asLogicalId('right'))).toBe('GHIJ');
   } finally {
     registry.destroy();
     doc.destroy();
@@ -59,21 +66,19 @@ test('an initially empty internal slice does not duplicate inserted text in its 
   const doc = new Y.Doc();
   const registry = new DocumentRegistry(doc);
   try {
-    registry.putText('source', 'ABCDEFGHIJ');
+    registry.putText(asLogicalId('source'), 'ABCDEFGHIJ');
     for (const [id, start, end] of [
       ['left', 0, 5],
       ['middle', 5, 5],
       ['right', 5, 10],
     ] as const) {
-      registry.putText(id, '');
-      registry.registerSplitText(id, 'source', start, end);
+      registry.putText(asLogicalId(id), '');
+      registry.registerSplitText(asLogicalId(id), asLogicalId('source'), start, end);
     }
-    registry.spliceText('middle', 0, 0, 'XXX');
-    expect(['left', 'middle', 'right'].map((id) => registry.projectedTextValue(id))).toEqual([
-      'ABCDE',
-      'XXX',
-      'FGHIJ',
-    ]);
+    registry.spliceText(asLogicalId('middle'), 0, 0, 'XXX');
+    expect(
+      ['left', 'middle', 'right'].map((id) => registry.projectedTextValue(asLogicalId(id)))
+    ).toEqual(['ABCDE', 'XXX', 'FGHIJ']);
   } finally {
     registry.destroy();
     doc.destroy();

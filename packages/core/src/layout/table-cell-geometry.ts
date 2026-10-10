@@ -133,14 +133,17 @@ export function contentInsets(
   const simpleRules = [borders.left, borders.right].every(
     (edge) => edge.state !== 'edge' || edge.style === 'single' || edge.style === 'thick'
   );
-  // The admitted legacy table's margins already start at the collapsed grid lines. Only
-  // reuse that budget when BOTH margins clear their full painted strokes; thick/asymmetric cases
-  // keep the existing conservative inset. This is not a general Word border-box model.
-  const marginCoversRules =
+  // The admitted legacy table centres its simple side rules on the grid lines: content starts
+  // at the margin, or at a single rule's inner half where the margin is narrower than that.
+  // A thick rule wider than its margin keeps the ordinary collapsed clearance.
+  const centredLegacy =
     legacyCollapsedContentAlignment &&
     simpleRules &&
-    margins.left >= leftExtent &&
-    margins.right >= rightExtent;
+    ((margins.left >= leftExtent && margins.right >= rightExtent) ||
+      [borders.left, borders.right].every(
+        (edge) => edge.state !== 'edge' || edge.style === 'single'
+      ));
+  const centred = (centeredSideRules && collapsedBorders) || centredLegacy;
   // Collapsed horizontal rules are shared by adjacent rows. Each row reserves half
   // the authored thickness; separated cells reserve an independent full border.
   // A captured reference charges a collapsed horizontal band ENTIRELY to the row below it,
@@ -153,20 +156,14 @@ export function contentInsets(
     top: bandTop
       ? margins.top + topBandClearancePt
       : borderContentInset(margins.top, borders.top, collapsedBorders, false, true),
-    right:
-      centeredSideRules && collapsedBorders
-        ? Math.max(margins.right, rightExtent / 2)
-        : marginCoversRules
-          ? margins.right
-          : borderContentInset(margins.right, borders.right, false, collapsedBorders),
+    right: centred
+      ? Math.max(margins.right, rightExtent / 2)
+      : borderContentInset(margins.right, borders.right, false, collapsedBorders),
     bottom: bandBottom
       ? margins.bottom
       : borderContentInset(margins.bottom, borders.bottom, collapsedBorders && !bottomIsOuter),
-    left:
-      centeredSideRules && collapsedBorders
-        ? Math.max(margins.left, leftExtent / 2)
-        : marginCoversRules
-          ? margins.left
-          : borderContentInset(margins.left, borders.left, false, collapsedBorders),
+    left: centred
+      ? Math.max(margins.left, leftExtent / 2)
+      : borderContentInset(margins.left, borders.left, false, collapsedBorders),
   };
 }

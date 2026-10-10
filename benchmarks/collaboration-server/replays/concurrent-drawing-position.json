@@ -1,0 +1,52 @@
+{
+  "config": "textbox",
+  "seed": 4,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "positionDrawing",
+          "drawingNodeId": "",
+          "position": {
+            "horizontalEmu": 2239080,
+            "verticalEmu": 3694774
+          }
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 0
+          }
+        ]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "node",
+        "op": {
+          "op": "positionDrawing",
+          "drawingNodeId": "",
+          "position": {
+            "horizontalEmu": 2458588,
+            "verticalEmu": 2119440
+          }
+        },
+        "targets": [
+          {
+            "field": "drawingNodeId",
+            "localName": "drawing",
+            "index": 0
+          }
+        ]
+      }
+    }
+  ]
+}

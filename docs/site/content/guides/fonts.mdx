@@ -521,6 +521,14 @@ Return `{ left, right }` as conservative horizontal ink coordinates for one grap
 
 For canvas metrics, measure left-aligned text and negate `actualBoundingBoxLeft`. Convert both coordinates from pixels to points before applying the horizontal scale. Supplying bounds enables supported optical CJK fits, so line breaks can change.
 
+## Independent ascii and hAnsi faces
+
+A Word run can name separate `ascii`, `hAnsi`, and `eastAsia` fonts. For example, `Aé文` can use Times New Roman, Arial, and SimSun within one source run. The editor selects the eligible `hAnsi` face before measurement and painting. It preserves font attributes, source offsets, font size, bold, and italic on save.
+
+The selection follows the definite ranges in Microsoft's [Word run-font rules](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/aef3c9a6-5d6c-434b-90b7-85e761fd8e62). Basic Latin and the no-break space stay in `ascii`; existing East Asian pieces retain their face. PDF export and the font substitution notice include the `hAnsi` face when the text uses it. Explicit `cs` and `rtl` runs retain their complex-script selection. Symbol fonts and layout controls retain their existing selection. Combining marks keep their base character's face across source runs.
+
+East Asian hints keep their existing symbol behavior. Conditional Latin ranges under those hints retain the existing face, including language and font-charset conditions. This selection does not add font-charset matching or replace the existing East Asian classifier. Projected field text changes face only when its whole result selects one face. A mixed projected result retains its base face and single model range.
+
 ## Arabic and bidirectional paragraphs
 
 Text paragraphs use the inherited `w:bidi` setting for default alignment and visual order. Arabic and Latin text keep their logical document offsets when the editor places words from right to left. List markers and suffix spacing follow the paragraph direction in body text and table cells. Logical list indents resolve after inherited and direct paragraph direction.

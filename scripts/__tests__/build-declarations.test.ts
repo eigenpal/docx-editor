@@ -6,6 +6,7 @@ import {
   declarationExtensions,
   entryMap,
   jsonType,
+  packageDocumentationOf,
   publishedDeclaration,
   typesCondition,
   withDeclarations,
@@ -149,4 +150,29 @@ test('tsup --no-dts skips declarations, and other flags keep the previous onSucc
   expect(() => withDeclarations(configUrl, { ...config, onSuccess: 'echo' })({})).toThrow(
     'needs `onSuccess` as a function'
   );
+});
+
+test('an entry keeps its package documentation, and only that comment', () => {
+  const source = [
+    '/* license */',
+    '/** A helper, not the package. */',
+    'const x = 1;',
+    '/**',
+    ' * The package.',
+    ' *',
+    ' * @packageDocumentation',
+    ' */',
+    'export { x };',
+  ].join('\n');
+  expect(packageDocumentationOf(source)).toBe(
+    ['/**', ' * The package.', ' *', ' * @packageDocumentation', ' */'].join('\n')
+  );
+  expect(packageDocumentationOf('/** No tag. */\nexport {};')).toBeNull();
+  expect(packageDocumentationOf('/** First. */\n/** @packageDocumentation */')).toBe(
+    '/** @packageDocumentation */'
+  );
+  // Many unclosed comment openers are read once each.
+  const started = performance.now();
+  expect(packageDocumentationOf(`${'/**'.repeat(50_000)}@packageDocumentation`)).toBeNull();
+  expect(performance.now() - started).toBeLessThan(1000);
 });

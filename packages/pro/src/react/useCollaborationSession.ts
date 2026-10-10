@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 
 /** Module-level so the selector identity is stable across renders. */
 const selectCollaborationStatus = (state: EditorSnapshot): string => state.collaborationStatus;

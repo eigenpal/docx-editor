@@ -6,7 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { computed, type ComputedRef } from 'vue';
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 
 /** Values {@link useCollaborationSession} returns. @public */
 export interface UseCollaborationSessionReturn {

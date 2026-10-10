@@ -18,7 +18,7 @@ import {
 } from '../document-session.ts';
 import { SEED_RECORDS_KEY } from '../document-bootstrap.ts';
 import { PACKAGE_META_KEY } from '../document/schema.ts';
-import type { CollaborationBootstrap } from '../session.ts';
+import type { CollaborationBootstrap } from '../types.ts';
 import { collaborationDocx } from './support.ts';
 import { packageFingerprint } from './document-support.ts';
 
@@ -127,6 +127,25 @@ describe('create-or-join bootstrap', () => {
     expect(Date.now() - started).toBeLessThan(3_000);
   });
 
+  test('two create seeds that merge are reported, not silently doubled', async () => {
+    // Two `create` calls that never saw each other each seed the whole document. Before the
+    // seed record, the merge doubled every paragraph and every replica still said `ready`.
+    const alice = replica();
+    const bob = replica();
+    const left = await open(alice, 'alice', { kind: 'create', document: collaborationDocx() });
+    const right = await open(bob, 'bob', { kind: 'create', document: collaborationDocx() });
+    expect(seedCount(alice)).toBe(1);
+    link(alice, bob);
+    expect(left.session.statusSnapshot()).toMatchObject({
+      status: 'error',
+      reason: { code: 'concurrent-seed' },
+    });
+    expect(right.session.statusSnapshot()).toMatchObject({
+      status: 'error',
+      reason: { code: 'concurrent-seed' },
+    });
+  });
+
   test('joins an initialized create-or-join room without a second seed', async () => {
     const alice = replica();
     const bob = replica();
@@ -155,6 +174,9 @@ describe('create-or-join bootstrap', () => {
       kind: 'create',
       document: collaborationDocx(),
     });
+    // `create` records its seed now; a room from before seed records existed has none.
+    const records = alice.ydoc.getArray(SEED_RECORDS_KEY);
+    records.delete(0, records.length);
     link(alice, bob);
     const joined = await open(bob, 'bob', {
       kind: 'create-or-join',

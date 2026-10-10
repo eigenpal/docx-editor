@@ -9,6 +9,7 @@
 // promise about styles.xml this op cannot keep — a document that defines no `TableGrid`
 // would get an invisible table, which reads as "insert did nothing".
 
+import { actorScopedSeed } from '../package/actor-scoped-ids.ts';
 import {
   createNodeIdAllocator,
   findNode,
@@ -185,7 +186,7 @@ function emptyParagraph(
 ): OoxmlParagraphNode {
   const identity: OoxmlAttribute[] = [];
   if (w14Prefix !== null) {
-    const paraId = mintParaId(seed, usedParagraphIds);
+    const paraId = mintParaId(actorScopedSeed(seed), usedParagraphIds);
     usedParagraphIds.add(paraId);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraId));
   }

@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { readonly, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
-import type { CollaborationSession } from '../collaboration/session.ts';
+import type { CollaborationSession } from '../collaboration/types.ts';
 import { useCollaborationSession } from './useCollaborationSession.ts';
 
 const NO_PARTICIPANTS: readonly CollaborationParticipant[] = Object.freeze([]);
@@ -34,6 +34,7 @@ function participantsEqual(
 
 /** Reactive participant roster for Vue hosts. @public */
 export interface UseCollaborationParticipantsReturn {
+  /** Everyone in the room, this participant included, in a stable order. */
   readonly participants: Readonly<Ref<readonly CollaborationParticipant[]>>;
 }
 

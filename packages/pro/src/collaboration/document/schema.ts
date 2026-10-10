@@ -5,8 +5,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
+import { itemIdOf, mapEntry, pendingUpdate } from './yjs-items.ts';
 import { rejectDangerousKey, rejectString } from './limits.ts';
-import type { LogicalId } from './identity.ts';
+import { asLogicalId, type LogicalId } from './identity.ts';
 
 import {
   DOCUMENT_COLLABORATION_VERSIONS,
@@ -39,6 +40,11 @@ export const NODE_CHILDREN_FIELD = 'children';
 export const NODE_DELETED_FIELD = 'deleted';
 export const NODE_REPLACED_BY_FIELD = 'replacedBy';
 /**
+ * Set on a comment or note an undo took out of its part (`history-undone.ts`): no repair
+ * gives it an edge back, and the redo that lists it again clears the mark.
+ */
+export const NODE_UNDONE_FIELD = 'undone';
+/**
  * The run this run was split off from — the original run id a format split superseded.
  *
  * Written once by the peer that minted the run, so two peers splitting the same original
@@ -52,13 +58,11 @@ export const NODE_SPLIT_FROM_FIELD = 'splitFrom';
 export const NODE_SPLIT_LINEAGE_FIELD = 'splitLineage';
 /** Source text when a run split, used to rebase a concurrent text edit onto its products. */
 export const NODE_SPLIT_BASE_TEXT_FIELD = 'splitBaseText';
-/** UTF-16 start of one split product in {@link NODE_SPLIT_BASE_TEXT_FIELD}. */
-export const NODE_SPLIT_START_FIELD = 'splitStart';
 
 /** Unit separator. XML names and NCName prefixes cannot hold this character. */
 export const FIELD_SEP = '\u001f';
 
-export const EMPTY_NAMESPACE_ID = '-';
+const EMPTY_NAMESPACE_ID = '-';
 
 export const BOOTSTRAP_ORIGIN = Object.freeze({ kind: 'docx-package-bootstrap' });
 export const JOURNAL_ORIGIN = Object.freeze({ kind: 'docx-package-journal' });
@@ -176,7 +180,7 @@ export interface RepairIssue {
  * What remains cannot arise from healthy editing: each one means a parent names a child this
  * replica cannot produce, so the document is short of something shared state says is there.
  */
-export const DROPPED_CONTENT_REPAIR_CODES: ReadonlySet<RepairIssueCode> = Object.freeze(
+const DROPPED_CONTENT_REPAIR_CODES: ReadonlySet<RepairIssueCode> = Object.freeze(
   new Set<RepairIssueCode>(['missing-node', 'child-id-not-in-registry', 'cycle'])
 );
 
@@ -350,16 +354,18 @@ export function attributeMapKey(logicalId: string, namespaceId: string, localNam
   return `${logicalId}${FIELD_SEP}${namespaceId}${FIELD_SEP}${localName}`;
 }
 
-export function parseAttributeMapKey(
-  key: string
-): { readonly logicalId: string; readonly namespaceId: string; readonly localName: string } | null {
+export function parseAttributeMapKey(key: string): {
+  readonly logicalId: LogicalId;
+  readonly namespaceId: string;
+  readonly localName: string;
+} | null {
   const parts = key.split(FIELD_SEP);
   if (parts.length !== 3) return null;
   const logicalId = parts[0]!;
   const namespaceId = parts[1]!;
   const localName = parts[2]!;
   if (logicalId.length === 0 || localName.length === 0) return null;
-  return { logicalId, namespaceId, localName };
+  return { logicalId: asLogicalId(logicalId), namespaceId, localName };
 }
 
 export function bindingMapKey(logicalId: string, prefix: string): string {
@@ -368,13 +374,13 @@ export function bindingMapKey(logicalId: string, prefix: string): string {
 
 export function parseBindingMapKey(
   key: string
-): { readonly logicalId: string; readonly prefix: string } | null {
+): { readonly logicalId: LogicalId; readonly prefix: string } | null {
   const parts = key.split(FIELD_SEP);
   if (parts.length !== 2) return null;
   const logicalId = parts[0]!;
   const prefix = parts[1]!;
   if (logicalId.length === 0) return null;
-  return { logicalId, prefix };
+  return { logicalId: asLogicalId(logicalId), prefix };
 }
 
 export function packAttributeValue(prefix: string, value: string): string {
@@ -466,6 +472,93 @@ export function writeSchemaVersions(meta: Y.Map<unknown>): void {
   meta.set('initialized', true);
 }
 
+/**
+ * Whether the nodes map once held `id` and the entry was deleted.
+ *
+ * Yjs keeps a deleted map entry as a deleted item, while a key whose update has not arrived
+ * has no item at all. A listed child with no record is therefore one of two things: pending
+ * — a peer listed it before its record reached this replica, which Yjs's per-author ordering
+ * allows — or removed, which no honest edit does, because a delete is a tombstone. Only the
+ * second is lost content. Reads Yjs's internal `_map`, stable across Yjs 13.
+ */
+export function nodeRecordRemoved<Value>(nodes: Y.Map<Value>, id: string): boolean {
+  const item = mapEntry(nodes, id);
+  return item !== undefined && item.deleted;
+}
+
+/** Whether Yjs holds updates it cannot integrate yet, waiting on ones that have not arrived. */
+export function hasPendingUpdates(doc: Y.Doc): boolean {
+  return pendingUpdate(doc) !== null;
+}
+
+/** Origins of the items a pending update holds, keyed by that update's bytes. */
+/** What a held-back update will add: the items it names as origins, and the map keys it sets. */
+interface PendingStructs {
+  /** `client:clock` of each item a pending item was typed after. */
+  readonly origins: ReadonlySet<string>;
+  /** `client:clock:key` of each key a pending item sets in a map whose own item exists. */
+  readonly fields: ReadonlySet<string>;
+}
+
+const pendingStructs = new WeakMap<Uint8Array, PendingStructs>();
+const NOTHING_PENDING: PendingStructs = { origins: new Set(), fields: new Set() };
+
+function pendingStructsOf(doc: Y.Doc): PendingStructs {
+  const pending = pendingUpdate(doc);
+  if (pending === null) return NOTHING_PENDING;
+  const known = pendingStructs.get(pending);
+  if (known) return known;
+  const origins = new Set<string>();
+  const fields = new Set<string>();
+  try {
+    // Yjs keeps the pending structs in the version 2 update encoding.
+    for (const struct of Y.decodeUpdateV2(pending).structs) {
+      if (!(struct instanceof Y.Item)) continue;
+      if (struct.origin) origins.add(`${struct.origin.client}:${struct.origin.clock}`);
+      if (struct.parent instanceof Y.ID && struct.parentSub !== null) {
+        fields.add(`${struct.parent.client}:${struct.parent.clock}:${struct.parentSub}`);
+      }
+    }
+  } catch {
+    // An update Yjs itself parked is well formed; a failure here means nothing is known.
+  }
+  const summary = { origins, fields };
+  pendingStructs.set(pending, summary);
+  return summary;
+}
+
+/**
+ * Whether a map has no value for `key` yet because a held-back update sets it.
+ *
+ * Yjs integrates one author's items in clock order, so a record can arrive while a key the same
+ * author set later waits on another peer's update. Writing a value for that key now would
+ * replace the author's when it arrives.
+ */
+export function mapFieldArriving<Value>(map: Y.Map<Value>, key: string): boolean {
+  if (map.has(key) || map.doc === null) return false;
+  const id = itemIdOf(map);
+  return id !== null && pendingStructsOf(map.doc).fields.has(`${id.client}:${id.clock}:${key}`);
+}
+
+/**
+ * Whether a map key lost its value to an overwrite whose new value has not integrated yet.
+ *
+ * Yjs applies a delete as soon as its target exists, but holds an insert until everything it
+ * depends on has arrived. So a peer's overwrite can land as "old value gone, new value not
+ * yet". The new value of a key names the value it replaced as its origin, so the gap is
+ * exactly a pending item whose origin is the deleted one. Any other pending update says
+ * nothing about this key: a deleted value with no such successor was really removed, for
+ * example by an undo, even while a peer holds an unrelated update back forever.
+ */
+export function mapFieldPending(map: Y.Map<unknown>, key: string): boolean {
+  if (map.has(key) || map.doc === null || !hasPendingUpdates(map.doc)) return false;
+  const item = mapEntry(map, key);
+  if (item === undefined || !item.deleted) return false;
+  // A value written as several items is named by its last one, which a successor follows.
+  const last = { client: item.id.client, clock: item.id.clock + Math.max(1, item.length) - 1 };
+  return pendingStructsOf(map.doc).origins.has(`${last.client}:${last.clock}`);
+}
+
 export function isNodeMap(value: unknown): value is Y.Map<unknown> {
   return value instanceof Y.Map;
 }
@@ -475,10 +568,11 @@ export function isNodeMap(value: unknown): value is Y.Map<unknown> {
 // treats a non-map as "no such node", so a crafted shape degrades to an absent node rather
 // than crashing the observer or the materializer mid-`applyUpdate`.
 
-export function childArrayOf(record: unknown): Y.Array<string> | null {
+/** A node's child array. Its entries are logical IDs by the schema; readers screen each one. */
+export function childArrayOf(record: unknown): Y.Array<LogicalId> | null {
   if (!isNodeMap(record)) return null;
-  const children = record.get(NODE_CHILDREN_FIELD);
-  return children instanceof Y.Array ? children : null;
+  const children: unknown = record.get(NODE_CHILDREN_FIELD);
+  return children instanceof Y.Array ? (children as Y.Array<LogicalId>) : null;
 }
 
 export function isTextNodeMap(record: unknown): boolean {
@@ -490,34 +584,59 @@ export function nodeRecordTombstoned(record: unknown): boolean {
   return isNodeMap(record) && record.get(NODE_DELETED_FIELD) === true;
 }
 
+/** Whether an undo took this record out of its part. */
+export function nodeRecordUndone(record: unknown): boolean {
+  return isNodeMap(record) && record.get(NODE_UNDONE_FIELD) === true;
+}
+
 /** The survivor a tombstone names, or null when `record` is not a node map or names none. */
-export function nodeRecordReplacedBy(record: unknown): string | null {
+export function nodeRecordReplacedBy(record: unknown): LogicalId | null {
+  return idField(record, NODE_REPLACED_BY_FIELD);
+}
+
+/** A field that names another node, or null when `record` is not a node map or names none. */
+function idField(record: unknown, field: string): LogicalId | null {
   if (!isNodeMap(record)) return null;
-  const value = record.get(NODE_REPLACED_BY_FIELD);
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  const value = record.get(field);
+  return typeof value === 'string' && value.length > 0 ? asLogicalId(value) : null;
+}
+
+/**
+ * Tombstones in the order their joins were written, the same on every replica.
+ *
+ * A survivor shows each joined paragraph's children after its own. Walking the tombstones in
+ * the order this replica happened to process them showed one paragraph's pieces in different
+ * orders on different replicas, all `ready`. The Yjs id of each `replacedBy` write orders one
+ * author's joins causally (a later join has a higher clock) and breaks ties between authors
+ * by client, so live and cold replicas agree.
+ */
+export function bySurvivorEdge<Id extends string, Value>(
+  nodes: Y.Map<Value>,
+  ids: Iterable<Id> | undefined
+): Id[] {
+  const edge = (id: Id): { client: number; clock: number } => {
+    const record = nodes.get(id);
+    if (!isNodeMap(record)) return { client: 0, clock: 0 };
+    return mapEntry(record, NODE_REPLACED_BY_FIELD)?.id ?? { client: 0, clock: 0 };
+  };
+  return [...(ids ?? [])].sort((left, right) => {
+    const a = edge(left);
+    const b = edge(right);
+    return a.clock - b.clock || a.client - b.client || (left < right ? -1 : left > right ? 1 : 0);
+  });
 }
 
 /** The original run a split produced this one from, guarded against peer-planted shapes. */
-export function nodeRecordSplitFrom(record: unknown): string | null {
-  if (!isNodeMap(record)) return null;
-  const value = record.get(NODE_SPLIT_FROM_FIELD);
-  return typeof value === 'string' && value.length > 0 ? value : null;
+export function nodeRecordSplitFrom(record: unknown): LogicalId | null {
+  return idField(record, NODE_SPLIT_FROM_FIELD);
 }
 
-export function nodeRecordSplitLineage(record: unknown): string | null {
-  if (!isNodeMap(record)) return null;
-  const value = record.get(NODE_SPLIT_LINEAGE_FIELD);
-  return typeof value === 'string' && value.length > 0 ? value : nodeRecordSplitFrom(record);
+export function nodeRecordSplitLineage(record: unknown): LogicalId | null {
+  return idField(record, NODE_SPLIT_LINEAGE_FIELD) ?? nodeRecordSplitFrom(record);
 }
 
 export function nodeRecordSplitBaseText(record: unknown, maxLength: number): string | null {
   if (!isNodeMap(record)) return null;
   const value = record.get(NODE_SPLIT_BASE_TEXT_FIELD);
   return typeof value === 'string' && value.length <= maxLength ? value : null;
-}
-
-export function nodeRecordSplitStart(record: unknown): number | null {
-  if (!isNodeMap(record)) return null;
-  const value = record.get(NODE_SPLIT_START_FIELD);
-  return Number.isSafeInteger(value) && (value as number) >= 0 ? (value as number) : null;
 }

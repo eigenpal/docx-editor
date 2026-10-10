@@ -8,8 +8,9 @@ import * as Y from 'yjs';
 import { DEFAULT_DOCUMENT_LIMITS } from '../document/limits.ts';
 import { makeTextRecord, NODE_TEXT_FIELD } from '../document/schema.ts';
 import { SplitTextSources, NODE_SPLIT_TEXT_SOURCE_FIELD } from '../document/split-text-sources.ts';
+import { asLogicalId } from '../document/identity.ts';
 
-const IDS = ['left', 'middle', 'right'];
+const IDS = ['left', 'middle', 'right'].map(asLogicalId);
 
 function setup(value = 'abcdefghij', cuts = [4, 6]) {
   const doc = new Y.Doc();
@@ -19,7 +20,7 @@ function setup(value = 'abcdefghij', cuts = [4, 6]) {
   const text = nodes.get('source')!.get(NODE_TEXT_FIELD) as Y.Text;
   const edges = [0, ...cuts, value.length];
   for (let i = 0; i < IDS.length; i++)
-    sources.register(IDS[i]!, 'source', edges[i]!, edges[i + 1]!);
+    sources.register(IDS[i]!, asLogicalId('source'), edges[i]!, edges[i + 1]!);
   // The real session tracks node maps too. Derived anchor rewrites must not enter that
   // history or clear redo, so this deliberately tracks the wider scope rather than text alone.
   const undo = new Y.UndoManager(nodes);

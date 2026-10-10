@@ -49,6 +49,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
+import { preferredSpreadWidths, widenedCellInsets } from './table-autofit-spread.ts';
 import type { PreferredWidth } from './table-widths.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 
@@ -493,25 +494,6 @@ export function paragraphContentWidthsPt(
   return widths;
 }
 
-/**
- * The cell's horizontal insets after widening. A narrow table may share its grid lines or
- * keep legacy content alignment, and widening can end either; the larger insets of the two
- * geometries keep the word that widened the column whole in both.
- */
-function widenedCellInsets(
-  cell: SemanticTableCell,
-  collapsed: boolean,
-  current: { readonly left: number; readonly right: number }
-) {
-  if (!cell.centeredSideRules && !cell.legacyContentAlignment) return current;
-  const { centeredSideRules: _centered, legacyContentAlignment: _legacy, ...plain } = cell;
-  const fullStroke = cellContentInsets(plain, collapsed);
-  return {
-    left: Math.max(current.left, fullStroke.left),
-    right: Math.max(current.right, fullStroke.right),
-  };
-}
-
 /** The width a nested table needs from the column that holds it. */
 function nestedTableMinimumPt(
   table: OoxmlElement,
@@ -934,9 +916,20 @@ export function autofitColumnWidthsPt(
   const widens = current.some(
     (minimum, column) => minimum > cellWidths[column]! + WIDTH_EPSILON_PT
   );
-  if (!widens && !sizedByContent) {
-    byStructure.set(structure, { contentWidthPt, widths: structure.columnWidthsPt });
-    return structure.columnWidthsPt;
+  // Widening may end shared grid lines, but not legacy content alignment, whose minimums hold.
+  const spread = sizedByContent
+    ? undefined
+    : preferredSpreadWidths(
+        structure,
+        content,
+        widens && !structure.legacyContentAlignment ? ifWidened : minimumsNow,
+        contentWidthPt,
+        view.depth ?? 0
+      );
+  if (spread || (!widens && !sizedByContent)) {
+    const widths = spread ? sameOrComputed(structure, spread) : structure.columnWidthsPt;
+    byStructure.set(structure, { contentWidthPt, widths });
+    return widths;
   }
   let minimums = spanAdjustedMinimums(preferredWidths, ifWidened, content.maximums, content.spans);
   // The table indent moves a leading-aligned table into the text column's room; a legacy
@@ -980,13 +973,19 @@ export function autofitColumnWidthsPt(
     minimums = raised;
     cells = settle();
   }
-  const computed = gaps > 0 ? columnsAroundCells(cells, gaps) : cells;
-  // Widths that match the resolved ones come back by identity, so the shared base stays.
-  const widths = computed.every(
+  const widths = sameOrComputed(structure, gaps > 0 ? columnsAroundCells(cells, gaps) : cells);
+  byStructure.set(structure, { contentWidthPt, widths });
+  return widths;
+}
+
+/** Widths that match the resolved ones come back by identity, so the shared base stays. */
+function sameOrComputed(
+  structure: SemanticTableStructure,
+  computed: readonly number[]
+): readonly number[] {
+  return computed.every(
     (width, column) => Math.abs(width - structure.columnWidthsPt[column]!) <= WIDTH_EPSILON_PT
   )
     ? structure.columnWidthsPt
     : computed;
-  byStructure.set(structure, { contentWidthPt, widths });
-  return widths;
 }

@@ -15,7 +15,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration, readCollaborationDocument } from '../document-session.ts';
-import { CollaborationSchemaError } from '../schema.ts';
+import { CollaborationSchemaError } from '../errors.ts';
 import { DOCUMENT_COLLABORATION_VERSIONS } from '../document-compatibility.ts';
 import { SEED_RECORDS_KEY } from '../document-bootstrap.ts';
 import {
@@ -85,10 +85,11 @@ async function seededRoom(text: string): Promise<{ ydoc: Y.Doc; destroy: () => v
 
 describe('readCollaborationDocument', () => {
   for (const [field, version, code] of [
-    ['sharedSchemaVersion', 2, 'schema-version-mismatch'],
-    ['sharedSchemaVersion', 4, 'schema-version-mismatch'],
+    ['sharedSchemaVersion', 3, 'schema-version-mismatch'],
+    ['sharedSchemaVersion', 5, 'schema-version-mismatch'],
     ['protocolVersion', 0, 'protocol-version-mismatch'],
-    ['repairVersion', 2, 'schema-version-mismatch'],
+    ['repairVersion', 1, 'schema-version-mismatch'],
+    ['repairVersion', 3, 'schema-version-mismatch'],
     ['canonicalModelVersion', 2, 'schema-version-mismatch'],
   ] as const) {
     test(`refuses ${field} ${version} before interpreting persisted split metadata`, async () => {
@@ -139,40 +140,52 @@ describe('readCollaborationDocument', () => {
     });
   }
 
-  for (const corruption of ['missing-child', 'missing-run'] as const) {
-    test(`refuses export when repair would drop ${corruption} content`, async () => {
-      const host = await seededRoom('must survive');
-      const observer = new Y.Doc();
+  test('refuses export when a record shared state removed would drop content', async () => {
+    const host = await seededRoom('must survive');
+    const observer = new Y.Doc();
+    try {
+      Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+      const nodes = observer.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
+      // Runs live in their paragraph's shared text, so the removed record is a paragraph.
+      const entry = [...nodes].find(([, record]) => readNodeShell(record).kind === 'paragraph');
+      expect(entry).toBeDefined();
+      nodes.delete(entry![0]);
+      const before = Y.encodeStateVector(observer);
       try {
-        Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
-        const nodes = observer.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
-        if (corruption === 'missing-run') {
-          const entry = [...nodes].find(([, record]) => readNodeShell(record).kind === 'run');
-          expect(entry).toBeDefined();
-          nodes.delete(entry![0]);
-        } else {
-          const paragraph = [...nodes.values()].find(
-            (record) => readNodeShell(record).kind === 'paragraph'
-          );
-          expect(paragraph).toBeDefined();
-          (paragraph!.get(NODE_CHILDREN_FIELD) as Y.Array<string>).insert(0, ['missing-record']);
-        }
-        const before = Y.encodeStateVector(observer);
-        try {
-          readCollaborationDocument(observer);
-          throw new Error('export unexpectedly accepted dropped content');
-        } catch (error) {
-          expect(error).toBeInstanceOf(CollaborationSchemaError);
-          expect((error as CollaborationSchemaError).code).toBe('materialize-dropped-content');
-          expect((error as CollaborationSchemaError).detail).toContain('child-id-not-in-registry');
-        }
-        expect(Y.encodeStateVector(observer)).toEqual(before);
-      } finally {
-        host.destroy();
-        observer.destroy();
+        readCollaborationDocument(observer);
+        throw new Error('export unexpectedly accepted dropped content');
+      } catch (error) {
+        expect(error).toBeInstanceOf(CollaborationSchemaError);
+        expect((error as CollaborationSchemaError).code).toBe('materialize-dropped-content');
+        expect((error as CollaborationSchemaError).detail).toContain('child-id-not-in-registry');
       }
-    });
-  }
+      expect(Y.encodeStateVector(observer)).toEqual(before);
+    } finally {
+      host.destroy();
+      observer.destroy();
+    }
+  });
+
+  test('exports around a listed child whose record has not arrived', async () => {
+    // Yjs keeps an update with missing dependencies pending. A child listed before its record
+    // arrives is the same one level up: nothing of it is known yet, so nothing is dropped.
+    const host = await seededRoom('must survive');
+    const observer = new Y.Doc();
+    try {
+      Y.applyUpdate(observer, Y.encodeStateAsUpdate(host.ydoc));
+      const nodes = observer.getMap<Y.Map<unknown>>(PACKAGE_NODES_KEY);
+      const paragraph = [...nodes.values()].find(
+        (record) => readNodeShell(record).kind === 'paragraph'
+      );
+      expect(paragraph).toBeDefined();
+      (paragraph!.get(NODE_CHILDREN_FIELD) as Y.Array<string>).insert(0, ['not-arrived-yet']);
+      const exported = readOoxmlPackage(readCollaborationDocument(observer));
+      expect(exported.ok).toBe(true);
+    } finally {
+      host.destroy();
+      observer.destroy();
+    }
+  });
 
   test('compatible metadata without document parts cannot export an empty archive', () => {
     const observer = new Y.Doc();
