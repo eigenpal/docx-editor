@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getLeafPaths } from './lib/i18n-keys.mjs';
 import { deleteNestedValue, setNestedValue } from './lib/nested-object.mjs';
+import { checkLocaleIntegrity } from '../packages/i18n/i18n-integrity.mjs';
 import { BCP47_FILENAME, readLocaleCodes } from '../packages/i18n/locale-files.mjs';
 
 // Locale files live in the shared @docx-editor.dev/i18n package — both
@@ -85,7 +86,15 @@ const LOCALE_NAME_OVERRIDES = {
 };
 
 function localeDisplayName(code) {
-  return LOCALE_NAME_OVERRIDES[code] ?? LANG_DISPLAY.of(code) ?? code;
+  if (LOCALE_NAME_OVERRIDES[code]) return LOCALE_NAME_OVERRIDES[code];
+  try {
+    return LANG_DISPLAY.of(code) ?? code;
+  } catch {
+    // `Intl.DisplayNames` throws on BCP47-shaped tags with unknown subtags
+    // (e.g. `zz-tmp` — `tmp` is not a valid region). Fall back to the raw
+    // code, which is what the `?? code` arm was meant to cover.
+    return code;
+  }
 }
 
 /** BCP-47 tag (e.g. `pt-BR`) → JS identifier (e.g. `ptBR`). */
@@ -135,7 +144,20 @@ function renderGeneratedBlock(codes) {
   lines.push(' *');
   lines.push(' * @public');
   lines.push(' */');
-  lines.push(`export type LocaleCode = ${sorted.map((c) => `'${c}'`).join(' | ')};`);
+  // Render the union the way prettier (printWidth 100, `.prettierrc`) would:
+  // single line while it fits, one member per line once it doesn't. The 11th
+  // locale crosses that threshold, so `bun run format` and `i18n:validate`
+  // must agree on the wrapped form.
+  const localeUnion = sorted.map((c) => `'${c}'`).join(' | ');
+  const oneLineUnion = `export type LocaleCode = ${localeUnion};`;
+  if (oneLineUnion.length <= 100) {
+    lines.push(oneLineUnion);
+  } else {
+    lines.push('export type LocaleCode =');
+    sorted.forEach((code, index) => {
+      lines.push(`  | '${code}'${index === sorted.length - 1 ? ';' : ''}`);
+    });
+  }
   lines.push('');
   for (const code of sorted) {
     const id = toIdentifier(code);
@@ -349,6 +371,47 @@ function cmdCodegen() {
 // Commands
 // ---------------------------------------------------------------------------
 
+/**
+ * Placeholder / ICU integrity pass — runs after the key-sync and codegen
+ * checks in both `validate` and `--fix` modes. Violations are never
+ * auto-fixable (the checker cannot invent translation structure), so `--fix`
+ * reports them for manual repair and still exits non-zero.
+ */
+function reportIntegrityViolations(en, localeFiles, fix) {
+  let hasViolations = false;
+  let checked = 0;
+
+  for (const file of localeFiles) {
+    const filePath = join(I18N_DIR, file);
+    let locale;
+    try {
+      locale = JSON.parse(readFileSync(filePath, 'utf-8'));
+    } catch {
+      continue; // invalid JSON already reported by the key-sync pass
+    }
+    checked++;
+
+    const code = file.replace(/\.json$/, '');
+    const { violations } = checkLocaleIntegrity(en, locale, code);
+    if (violations.length === 0) continue;
+
+    hasViolations = true;
+    const suffix = fix ? ' — manual fix required' : '';
+    console.error(
+      `✗ ${file} — ${violations.length} placeholder/ICU violation${violations.length === 1 ? '' : 's'}${suffix}:`,
+    );
+    for (const v of violations) {
+      console.error(`    ${v.key} [${v.code}] ${v.message}`);
+    }
+  }
+
+  if (!hasViolations && checked > 0) {
+    console.log(`✓ placeholder/ICU integrity — all ${checked} locale files clean`);
+  }
+
+  return hasViolations;
+}
+
 function cmdValidate(fix) {
   const en = JSON.parse(readFileSync(EN_PATH, 'utf-8'));
   const enPaths = getLeafPaths(en);
@@ -453,8 +516,19 @@ function cmdValidate(fix) {
     }
   }
 
-  if (hasErrors) {
-    console.error('\nRun `bun run i18n:fix` to auto-repair locale files.');
+  // Placeholder / ICU integrity for every locale (skipped only for files
+  // that already failed to parse above).
+  const hasIntegrityViolations = reportIntegrityViolations(en, localeFiles, fix);
+
+  if (hasErrors || hasIntegrityViolations) {
+    if (hasErrors) {
+      console.error('\nRun `bun run i18n:fix` to auto-repair locale files.');
+    }
+    if (hasIntegrityViolations) {
+      console.error(
+        '\nPlaceholder/ICU integrity violations above require manual fixes — `i18n:fix` cannot repair them.',
+      );
+    }
     process.exit(1);
   }
 }

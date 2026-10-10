@@ -65,9 +65,13 @@ Keys set to `null` in any locale fall back to English.
 | ------- | ------ | ------------------- |
 | `en`    | `en`   | English (source)    |
 | `de`    | `de`   | German              |
+| `fr`    | `fr`   | French              |
 | `he`    | `he`   | Hebrew              |
+| `hi`    | `hi`   | Hindi               |
+| `id`    | `id`   | Indonesian          |
 | `pl`    | `pl`   | Polish              |
 | `pt-BR` | `ptBR` | Portuguese (Brazil) |
+| `ru`    | `ru`   | Russian             |
 | `tr`    | `tr`   | Turkish             |
 | `zh-CN` | `zhCN` | Simplified Chinese  |
 
@@ -92,7 +96,7 @@ import pl from '@docx-editor.dev/i18n/pl';
 const pl = (await import('@docx-editor.dev/i18n/pl')).default;
 ```
 
-Subpaths ship for every locale: `/en`, `/de`, `/he`, `/pl`, `/pt-BR`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
+Subpaths ship for every locale: `/en`, `/de`, `/fr`, `/he`, `/hi`, `/id`, `/pl`, `/pt-BR`, `/ru`, `/tr`, `/zh-CN`. Each also exports its locale as a named binding (`import { pl } from '@docx-editor.dev/i18n/pl'`) for callers that prefer non-default imports.
 
 ## Types
 
