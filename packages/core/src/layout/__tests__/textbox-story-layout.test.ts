@@ -900,7 +900,8 @@ test('text-box tables follow compatibility mode with a shared paragraph cache', 
       compatibilityMode: mode,
     });
     const found = result?.fragments.find((fragment) => fragment.kind === 'table');
-    expect(found?.box.width).toBeCloseTo(mode === 14 ? 210.8 : 200, 7);
+    // Mode 14: the box, its outer cell margins, and the text-box share's extra 0.75pt.
+    expect(found?.box.width).toBeCloseTo(mode === 14 ? 211.55 : 200, 7);
     expect(found?.box.x).toBeCloseTo(mode === 14 ? -5.4 : 0, 7);
   }
 });

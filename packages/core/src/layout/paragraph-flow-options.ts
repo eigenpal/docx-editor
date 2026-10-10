@@ -152,6 +152,4 @@ export interface ParagraphFlowOptions {
    * When omitted, falls back to the content `inheritedRunProperties` argument.
    */
   readonly markRunProperties?: readonly OoxmlProperty[];
-  /** A nonempty cell terminator reserves a cell-height floor instead of last-line leading. */
-  readonly paragraphMarkIsCellEnd?: boolean;
 }
