@@ -1,0 +1,165 @@
+{
+  "config": "concurrent",
+  "seed": 2,
+  "replicas": 4,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertPageBreak",
+          "offset": 0
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 34,
+          "text": "l"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [2, 3]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [2, 3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 0,
+          "end": 1
+        },
+        "paragraphs": [3]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 2,
+          "text": "l"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteBlock",
+          "blockId": ""
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 44,
+          "text": "l"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "setRunProperties",
+          "start": 52,
+          "end": 62,
+          "properties": [
+            {
+              "localName": "b"
+            }
+          ]
+        },
+        "paragraphs": [1]
+      }
+    }
+  ]
+}

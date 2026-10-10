@@ -11,7 +11,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * generations, the leave contract, rejoin, and module composition — lives here once, so
  * the two composables cannot drift.
  */
-import { onMounted, onUnmounted, shallowRef, watch, type ShallowRef } from 'vue';
+import {
+  getCurrentInstance,
+  getCurrentScope,
+  onMounted,
+  onScopeDispose,
+  shallowRef,
+  watch,
+  type ShallowRef,
+} from 'vue';
 import {
   isCollaborationFailureCode,
   type CollaborationFailure,
@@ -108,10 +116,16 @@ export interface CollaborationRoomState<TConnect, THandle extends CollaborationR
   readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
+/** Composable calls on this page, so two callers never share a room owner. */
+let ownerCalls = 0;
+
 export function useCollaborationRoom<TConnect, THandle extends CollaborationRoomHandle>(
   config: CollaborationRoomConfig<TConnect, THandle>
 ): CollaborationRoomState<TConnect, THandle> {
-  const owner = webrtcRoomOwnerFor<THandle>(config.ownerKey);
+  // A composable called outside a component, as in a store or an `effectScope`, has no
+  // instance uid, so every such call shared one key and took over the others' rooms. Setup
+  // runs once per call, so a count of calls tells them apart.
+  const owner = webrtcRoomOwnerFor<THandle>(`${config.ownerKey}#${(ownerCalls += 1)}`);
   const held = owner.current();
   const modulesFor = (
     hostModules: readonly EditorModule[],
@@ -144,7 +158,10 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     modules.value = modulesFor(config.hostModulesOf(), next?.session ?? null);
   };
 
-  const connect = async (next: TConnect): Promise<CollaborationFailure | null> => {
+  // The key of the room the `room` option connected. Only that room follows `room` changes;
+  // `connect` and `leave` hand the room to the host, so they clear it.
+
+  const connectRoom = async (next: TConnect): Promise<CollaborationFailure | null> => {
     const token = ++generation;
     // Record the attempt, not the success: rejoin after a FAILED connect must retry
     // with these options rather than refuse with "call connect first".
@@ -172,7 +189,12 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     }
   };
 
-  const leave = (nextDocument: Uint8Array): void => {
+  const connect = (next: TConnect): Promise<CollaborationFailure | null> => {
+    owner.autoKey = null;
+    return connectRoom(next);
+  };
+
+  const leaveRoom = (nextDocument: Uint8Array): void => {
     requireLeaveBytes(config.hookName, nextDocument);
     generation += 1;
     owner.leave();
@@ -184,6 +206,11 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     modules.value = modulesFor(config.hostModulesOf(), null);
   };
 
+  const leave = (nextDocument: Uint8Array): void => {
+    owner.autoKey = null;
+    leaveRoom(nextDocument);
+  };
+
   const rejoin = async (nextDocument: Uint8Array): Promise<CollaborationFailure | null> => {
     const last = lastConnect;
     // Still a THROW, and deliberately: this one is a programming error, not a room that would
@@ -193,8 +220,9 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
         `${config.hookName}: rejoin needs a room this composable connected before. Call connect first.`
       );
     }
-    leave(nextDocument);
-    return connect(config.rejoinOptionsOf(last));
+    // Rejoining keeps whoever owns the room: an auto room stays under the `room` option.
+    leaveRoom(nextDocument);
+    return connectRoom(config.rejoinOptionsOf(last));
   };
 
   watch(
@@ -220,10 +248,17 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     session,
     (next, _previous, onCleanup) => {
       if (!next) return;
+      // The failure this watcher reported, so a session that heals clears it and nothing else.
+      let reported: CollaborationFailure | null = null;
       const apply = (): void => {
         const snapshot = next.statusSnapshot();
-        if (snapshot.status !== 'error') return;
-        error.value = snapshot.reason ?? snapshot.lastFailure ?? { code: 'transport' };
+        if (snapshot.status !== 'error') {
+          if (reported && error.value === reported) error.value = null;
+          reported = null;
+          return;
+        }
+        reported = snapshot.reason ?? snapshot.lastFailure ?? { code: 'transport' };
+        error.value = reported;
       };
       apply();
       onCleanup(next.subscribeStatus(() => apply()));
@@ -256,33 +291,53 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     }
   );
 
-  watch(
-    () => config.autoKeyOf(),
-    (key) => {
-      const next = config.autoRoomOf();
-      if (!key || !next) return;
-      if (owner.current()) {
-        publish(owner.current());
-        return;
-      }
-      pending.value = true;
-      // `connect` rejects so that an awaiting caller can branch on the failure. This path has
-      // no caller, and the failure already reaches the host through `error`, so swallow it
-      // rather than raise an unhandled rejection for a room the host already renders as failed.
-      void connect(next).catch(() => {});
-    },
-    { immediate: true }
-  );
+  const followAutoRoom = (key: string | null): void => {
+    const next = config.autoRoomOf();
+    if (owner.autoKey !== null && owner.autoKey !== key) {
+      // A new room, server, bootstrap, or actor, or no room: leave the old one, and supersede a
+      // connect to it that is still in flight. Its document belongs to that room.
+      generation += 1;
+      owner.autoKey = null;
+      if (owner.current()) owner.leave();
+      publish(null);
+      pending.value = false;
+      error.value = null;
+    }
+    if (!key || !next) return;
+    if (owner.current()) {
+      publish(owner.current());
+      return;
+    }
+    pending.value = true;
+    owner.autoKey = key;
+    // `connect` rejects so that an awaiting caller can branch on the failure. This path has
+    // no caller, and the failure already reaches the host through `error`, so swallow it
+    // rather than raise an unhandled rejection for a room the host already renders as failed.
+    void connectRoom(next).catch(() => {});
+  };
+  watch(() => config.autoKeyOf(), followAutoRoom);
 
-  onMounted(() => {
-    owner.reclaimOwner();
-    const current = owner.current();
-    if (current) publish(current);
-  });
-  onUnmounted(() => {
-    generation += 1;
-    owner.disposeOwner();
-  });
+  // A component connects its room when it mounts. A server render never mounts and has no
+  // unmount to close a room, so a room opened during setup there stayed open for the life of
+  // the process; the page that hydrates connects its own. A call outside a component, as in
+  // a store, has no mount and connects at once, in a browser only.
+  if (getCurrentInstance()) {
+    onMounted(() => {
+      owner.reclaimOwner();
+      const current = owner.current();
+      if (current) publish(current);
+      followAutoRoom(config.autoKeyOf());
+    });
+  } else if (typeof window !== 'undefined') {
+    followAutoRoom(config.autoKeyOf());
+  }
+  // The scope of a component or of an `effectScope` a store runs in: both release the room.
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      generation += 1;
+      owner.disposeOwner();
+    });
+  }
 
   return { room, document, modules, session, pending, error, connect, leave, rejoin };
 }

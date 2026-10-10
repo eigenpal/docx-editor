@@ -3824,6 +3824,4 @@ export const ZOOM_MAX = 5;
 // @public
 export const ZOOM_MIN = 0.1;
 
-// (No @packageDocumentation comment for this package)
-
 ```

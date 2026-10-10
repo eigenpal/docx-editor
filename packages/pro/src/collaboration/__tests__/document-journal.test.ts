@@ -9,18 +9,22 @@ import type { CanonicalPrimitiveJournal } from '@docx-editor.dev/core/collaborat
 import { collaborationDocx } from './support.ts';
 import {
   applyJournal,
+  childIdsOf,
   collectKind,
   destroyReplica,
   findText,
+  findTextContaining,
   joinReplica,
   loadPackage,
   nodeText,
   packageOf,
   parentOf,
   seedReplica,
+  shownParentOf,
   WML,
 } from './document-support.ts';
 import { applyPrimitiveJournal, isElementRecord } from '../document/index.ts';
+import { idOf } from '../document/identity.ts';
 
 const W15 = 'http://schemas.microsoft.com/office/word/2012/wordml';
 
@@ -256,7 +260,9 @@ describe('primitive journal application', () => {
         ],
       });
       expect(result.ok).toBe(true);
-      expect(replica.registry.textOf(text.id).toString()).toBe('XAlpha paragraph');
+      expect(findTextContaining(packageOf(replica), 'Alpha paragraph').value).toBe(
+        'XAlpha paragraph'
+      );
     } finally {
       destroyReplica(replica);
     }
@@ -270,11 +276,8 @@ describe('primitive journal application', () => {
     const replica = await seedReplica(loadPackage(collaborationDocx()));
     try {
       const text = findText(packageOf(replica), 'Alpha paragraph');
-      const textElement = parentOf(replica.registry, text.id, 'text');
-      const run = parentOf(replica.registry, textElement, 'run');
-      const runRecord = replica.registry.record(run);
-      if (!runRecord || !isElementRecord(runRecord)) throw new Error('run missing');
-      const childCount = runRecord.childIds.length;
+      const run = shownParentOf(replica, text.id, 'run');
+      const childCount = childIdsOf(replica, run).length;
       const scratchElement = replica.mint.take();
       const scratchText = replica.mint.take();
 
@@ -329,9 +332,7 @@ describe('primitive journal application', () => {
 
       expect(result).toEqual({ ok: true });
       expect(findText(packageOf(replica), 'Alpha paragraphX').value).toBe('Alpha paragraphX');
-      const after = replica.registry.record(run);
-      if (!after || !isElementRecord(after)) throw new Error('run missing');
-      expect(after.childIds).toHaveLength(childCount);
+      expect(childIdsOf(replica, run)).toHaveLength(childCount);
     } finally {
       destroyReplica(replica);
     }
@@ -341,11 +342,9 @@ describe('primitive journal application', () => {
     const replica = await seedReplica(loadPackage(collaborationDocx()));
     try {
       const text = findText(packageOf(replica), 'Alpha paragraph');
-      const paragraph = parentOf(replica.registry, text.id, 'paragraph');
-      const run = parentOf(replica.registry, text.id, 'run');
-      const para = replica.registry.record(paragraph);
-      if (!para || !isElementRecord(para)) throw new Error('paragraph missing');
-      const runIndex = para.childIds.indexOf(run);
+      const paragraph = shownParentOf(replica, text.id, 'paragraph');
+      const run = shownParentOf(replica, text.id, 'run');
+      const runIndex = childIdsOf(replica, paragraph).indexOf(run);
       const startId = replica.mint.take();
       const endId = replica.mint.take();
       applyJournal(replica, {
@@ -401,7 +400,7 @@ describe('primitive journal application', () => {
         ],
       });
       expect(findText(packageOf(replica), 'Alpha paragraph').value).toBe('Alpha paragraph');
-      expect(replica.registry.isTombstoned(run)).toBe(false);
+      expect(childIdsOf(replica, paragraph)).toContain(run);
       expect(replica.registry.isTombstoned(startId)).toBe(true);
       expect(replica.registry.isTombstoned(endId)).toBe(true);
     } finally {
@@ -492,7 +491,7 @@ describe('primitive journal application', () => {
     const right = joinReplica(left);
     try {
       const paragraph = collectKind(packageOf(left), 'paragraph')[0]!;
-      const paraRecord = left.registry.record(paragraph.id);
+      const paraRecord = left.registry.record(idOf(paragraph));
       if (!paraRecord || !isElementRecord(paraRecord)) throw new Error('paragraph missing');
       const nodeId = left.mint.take();
       applyJournal(left, {

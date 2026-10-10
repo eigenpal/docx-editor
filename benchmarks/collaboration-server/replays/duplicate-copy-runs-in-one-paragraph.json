@@ -1,0 +1,151 @@
+{
+  "config": "join",
+  "seed": 6,
+  "replicas": 2,
+  "delivery": "peer",
+  "actions": [
+    {
+      "kind": "join",
+      "from": 0
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 5,
+          "text": "lo"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 0
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 1,
+          "text": "lo"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": 2
+    },
+    {
+      "kind": "join",
+      "from": 1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 3,
+          "text": "lore"
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 2
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": 1
+    },
+    {
+      "kind": "join",
+      "from": 3
+    },
+    {
+      "kind": "deliver",
+      "to": 4,
+      "from": 0
+    },
+    {
+      "kind": "deliver",
+      "to": 4,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "splitParagraph",
+          "offset": 6
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 4,
+      "from": 2
+    },
+    {
+      "kind": "edit",
+      "replica": 4,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "joinParagraphs",
+          "firstId": "",
+          "secondId": ""
+        },
+        "paragraphs": [0, 1]
+      }
+    }
+  ]
+}

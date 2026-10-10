@@ -12,16 +12,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // representation spike measured edit and materialize TIME, not encoded SIZE, which is why
 // this gate exists separately.
 //
-// The budget sits above the measured floor, not at an invented round number. A tree of
-// 12,196 nodes costs 74 bytes per node in the cheapest shape Yjs can express while keeping a
-// per-node Y.Array for concurrent child ordering, which the registry design requires. A
-// budget below that floor is unreachable.
+// The budget counts the nodes of the canonical tree, whatever shared state keeps them as:
+// block nodes are records with their own child arrays, and a paragraph's runs, text and
+// properties are formatting of one shared text. It was set when every node was a record,
+// at 74 bytes per node in the cheapest record shape Yjs can express, so it holds the
+// shared text to at least what records cost.
 
 import { describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { strToU8, zipSync } from 'fflate';
 import { seedPackage, DocumentRegistry, MemoryBlobStore } from '../document/index.ts';
-import { loadPackage } from './document-support.ts';
+import { loadPackage, walk } from './document-support.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -29,11 +30,10 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
 
 /**
- * Budget per node record in one full state update.
+ * Budget per canonical tree node in one full state update.
  *
- * The floor is 74 bytes per node, so this leaves room for the schema the registry actually
- * carries. The demo document holds 12,196 nodes, which puts a join at a few megabytes at this
- * budget and a few hundred frames on the wire.
+ * The demo document holds 12,196 nodes, which puts a join at a few megabytes at this budget
+ * and a few hundred frames on the wire.
  */
 const MAX_BYTES_PER_NODE = 160;
 
@@ -75,9 +75,11 @@ async function measure(bytes: Uint8Array): Promise<{
   const doc = new Y.Doc();
   try {
     const registry = new DocumentRegistry(doc);
-    const seeded = await seedPackage(registry, loadPackage(bytes), new MemoryBlobStore());
+    const pkg = loadPackage(bytes);
+    const seeded = await seedPackage(registry, pkg, new MemoryBlobStore());
     if (!seeded.ok) throw new Error(seeded.code);
-    const nodes = registry.schema.nodes.size;
+    let nodes = 0;
+    for (const part of pkg.parts.values()) walk(part.root, () => (nodes += 1));
     const updateBytes = Y.encodeStateAsUpdate(doc).byteLength;
     return { nodes, updateBytes, bytesPerNode: updateBytes / Math.max(1, nodes) };
   } finally {

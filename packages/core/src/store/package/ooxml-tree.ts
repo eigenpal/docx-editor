@@ -32,6 +32,7 @@ import {
   validateDrawingNode,
   type DrawingParentContext,
 } from './ooxml-drawing-rules.ts';
+import { keepLeadingParagraphProperties } from './ooxml-paragraph-properties.ts';
 
 export {
   W14_NAMESPACE_URI,
@@ -1859,7 +1860,7 @@ function convertElement(
     localName: name.localName,
     attributes,
   };
-  const children = retainedChildren.map((child, index): OoxmlNode => {
+  const converted = retainedChildren.map((child, index): OoxmlNode => {
     const childPath = `${path}.${index}`;
     if (child.type === 'text')
       return {
@@ -1878,6 +1879,8 @@ function convertElement(
       childParent
     );
   });
+  const children =
+    candidateKind === 'paragraph' ? keepLeadingParagraphProperties(converted) : converted;
   const attributesOk =
     resolvedAttributes.compatibleWithKnownNode &&
     (!resolvedAttributes.hasWmlVal ||

@@ -32,7 +32,7 @@ import type { LogicalId } from './identity.ts';
 export type AttributeIndex = Map<LogicalId, Map<string, EncodedAttribute>>;
 export type BindingIndex = Map<LogicalId, Map<string, EncodedBinding>>;
 
-export function attrIdentity(namespaceId: string, localName: string): string {
+function attrIdentity(namespaceId: string, localName: string): string {
   return `${namespaceId}${FIELD_SEP}${localName}`;
 }
 
@@ -85,7 +85,7 @@ export function deleteSharedBinding(
   schema.bindings.delete(bindingMapKey(logicalId, prefix));
 }
 
-export function upsertIndexedAttribute(
+function upsertIndexedAttribute(
   schema: PackageSchema,
   index: AttributeIndex,
   logicalId: LogicalId,
@@ -107,7 +107,7 @@ export function upsertIndexedAttribute(
   });
 }
 
-export function removeIndexedAttribute(
+function removeIndexedAttribute(
   index: AttributeIndex,
   logicalId: LogicalId,
   namespaceId: string,
@@ -119,7 +119,7 @@ export function removeIndexedAttribute(
   if (bucket.size === 0) index.delete(logicalId);
 }
 
-export function upsertIndexedBinding(
+function upsertIndexedBinding(
   schema: PackageSchema,
   index: BindingIndex,
   logicalId: LogicalId,
@@ -137,11 +137,7 @@ export function upsertIndexedBinding(
   });
 }
 
-export function removeIndexedBinding(
-  index: BindingIndex,
-  logicalId: LogicalId,
-  prefix: string
-): void {
+function removeIndexedBinding(index: BindingIndex, logicalId: LogicalId, prefix: string): void {
   const bucket = index.get(logicalId);
   if (!bucket) return;
   bucket.delete(prefix);
@@ -195,4 +191,35 @@ export function applyBindingMapEvent(
     if (typeof namespaceId !== 'string') continue;
     upsertIndexedBinding(schema, index, parsed.logicalId, parsed.prefix, namespaceId);
   }
+}
+
+/** Fill both side indexes from shared state, as a whole-index rebuild needs. */
+export function indexSideMaps(
+  schema: PackageSchema,
+  attributes: AttributeIndex,
+  bindings: BindingIndex
+): void {
+  schema.attributes.forEach((packed, key) => {
+    if (typeof packed !== 'string' || rejectDangerousKey(key)) return;
+    const parsed = parseAttributeMapKey(key);
+    if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.localName)) {
+      return;
+    }
+    upsertIndexedAttribute(
+      schema,
+      attributes,
+      parsed.logicalId,
+      parsed.namespaceId,
+      parsed.localName,
+      packed
+    );
+  });
+  schema.bindings.forEach((namespaceId, key) => {
+    if (typeof namespaceId !== 'string' || rejectDangerousKey(key)) return;
+    const parsed = parseBindingMapKey(key);
+    if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.prefix)) {
+      return;
+    }
+    upsertIndexedBinding(schema, bindings, parsed.logicalId, parsed.prefix, namespaceId);
+  });
 }

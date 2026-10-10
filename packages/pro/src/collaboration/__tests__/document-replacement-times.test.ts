@@ -241,12 +241,15 @@ test('deleting a revision while another participant edits its text converges', a
     });
     sync(a, b);
     await converged(a, b);
+    // A deletion removes only the text its author saw: the replacement typed meanwhile stays
+    // whole, still inside the insertion it was typed in.
     expect(
       b.editor
         .getReviewItems()
         .some((item) => item.kind === 'revision' && item.revisionKind === 'insert')
-    ).toBe(false);
-    expect(b.editor.surface!.session.bodyText()).toBe('old tail');
+    ).toBe(true);
+    expect(a.editor.surface!.session.bodyText()).toBe('oldchanged tail');
+    expect(b.editor.surface!.session.bodyText()).toBe('oldchanged tail');
   } finally {
     b.close();
     a.close();

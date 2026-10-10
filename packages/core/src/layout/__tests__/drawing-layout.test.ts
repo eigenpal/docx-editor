@@ -789,15 +789,15 @@ describe('places anchors in story and cell context', () => {
       })
         .replace(
           '<w:body>',
-          '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="' +
+          '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblInd w:w="0" w:type="dxa"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="3000" w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:vAlign w:val="' +
             align +
             '"/></w:tcPr>'
         )
         .replace('</w:body>', '</w:tc></w:tr></w:tbl></w:body>');
       const part = load(source);
       // Mode 15 keeps the table at the text column, so the column starts after the 12pt
-      // padding. Without a declared mode, the fixed table aligns that content edge with the
-      // text column instead (`fixedTableContentEdgeOrigin`).
+      // padding. Without a declared mode, the fixed table with a stated indent aligns that
+      // content edge with the text column instead (`fixedTableContentEdgeOrigin`).
       for (const [compatibilityMode, x] of [
         [15, 12],
         [undefined, 0],
@@ -811,6 +811,28 @@ describe('places anchors in story and cell context', () => {
           expect(layout.pages[0]!.anchoredDrawings![0]!.x).toBeCloseTo(x, 5);
         }
       }
+    }
+  });
+  test('a legacy fixed table without a style or indent starts its outer edge at the column', () => {
+    const source = anchoredPictureXml({
+      positionH:
+        '<wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>',
+    })
+      .replace(
+        '<w:body>',
+        '<w:body><w:tbl><w:tblPr><w:tblLayout w:type="fixed"/><w:tblCellMar><w:left w:w="240" w:type="dxa"/><w:right w:w="360" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid><w:tr><w:tc>'
+      )
+      .replace('</w:body>', '</w:tc></w:tr></w:tbl></w:body>');
+    const part = load(source);
+    // With neither a table style nor a stated indent, the table sits as if indented by its
+    // leading cell margin, so the cell column starts one 12pt margin inside the text column.
+    for (const compatibilityMode of [undefined, 11, 14, 15]) {
+      const layout = layoutSemanticDocument(part, 1, {
+        measurer,
+        inlineDrawingLayout: layoutContext(part),
+        compatibilityMode,
+      });
+      expect(layout.pages[0]!.anchoredDrawings![0]!.x).toBeCloseTo(12, 5);
     }
   });
   test('body anchor publishes on the page with owner part context', () => {

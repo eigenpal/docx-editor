@@ -33,6 +33,7 @@ import {
   absolutePaths,
   declarationCandidates,
   emitOptions,
+  packageDocumentationOf,
   packageName,
   runTypeScript7,
 } from './lib/declaration-files.mjs';
@@ -164,9 +165,17 @@ async function bundleDeclarations(entries, outDir) {
   });
   try {
     removeDeclarations(dist);
+    const packageDocs = new Map(
+      entries.map((entry) => [
+        entry.name,
+        packageDocumentationOf(readFileSync(entry.source, 'utf8')),
+      ])
+    );
     await bundle.write({
       dir: dist,
       format: 'es',
+      // API Extractor reads the first doc comment of an entry as the package's own.
+      banner: (chunk) => (chunk.isEntry ? (packageDocs.get(chunk.name) ?? '') : ''),
       entryFileNames: '[name].d.ts',
       // A chunk takes its name from its first module, `types-barrel.d.ts`, so drop the `.d`.
       chunkFileNames: (chunk) => `${chunk.name.replace(/\.d$/, '')}-[hash].d.ts`,

@@ -544,6 +544,7 @@ export function layoutTextboxStory(
       showFieldCodes: options.showFieldCodes,
       compatibilityMode: options.compatibilityMode,
       tableNestingOffset: 1,
+      textBoxStory: true,
       ...(options.defaultTabStopPt !== undefined
         ? { defaultTabStopPt: options.defaultTabStopPt }
         : {}),

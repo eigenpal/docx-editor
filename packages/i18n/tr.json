@@ -860,7 +860,20 @@
   },
   "collaboration": {
     "moreParticipants": "{count, plural, one {# kişi daha} other {# kişi daha}}",
-    "participants": "Bu belgedeki kişiler"
+    "participants": "Bu belgedeki kişiler",
+    "status": {
+      "connecting": "Belgeye bağlanılıyor…",
+      "editRefused": "Son değişikliğiniz paylaşılamadığı için geri alındı.",
+      "offline": "Çevrimdışı. Düzenlemeye devam edebilirsiniz; değişiklikleriniz bağlantı geri geldiğinde eşitlenir.",
+      "outOfSync": "Bu kopya paylaşılan belgeyle eşitlenmiş değil.",
+      "rejoin": "Yeniden katıl",
+      "syncing": "Son değişiklikler alınıyor…",
+      "waiting": "Son değişiklikler bekleniyor…",
+      "stalled": "Son değişiklikler gelmedi. Paylaşılan belgeyi yüklemek için yeniden katılın.",
+      "offlinePaused": "Çevrimdışı. Bağlantı geri geldiğinde düzenleme devam eder.",
+      "upgradeRequired": "Bu uygulama ile paylaşılan belge farklı ortak çalışma sürümleri kullanıyor. Bir kopya kaydedin ve yöneticinizle iletişime geçin.",
+      "newRoomRequired": "Bu paylaşılan belge devam edemiyor. Bir kopyasını kaydedip yeniden paylaşın."
+    }
   },
   "textFormField": {
     "apply": "Tamam",

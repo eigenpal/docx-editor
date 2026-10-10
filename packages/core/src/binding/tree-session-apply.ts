@@ -1,5 +1,4 @@
 import { normalizeCollaborationTextPackage } from '../collaboration/document-port.ts';
-import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { isHeaderFooterLifecycleOp } from '../store/package/hf-lifecycle.ts';
 import { isNoteLifecycleOp } from '../store/package/note-lifecycle.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -102,9 +101,7 @@ export function commitSessionTreeOps(
     ) {
       return refused(ops.length, 'invalidArgs');
     }
-    const result = runWithTransactionActor(options.actorId, () =>
-      packageStore.applyLifecycleOp(ops[0]!)
-    );
+    const result = packageStore.applyLifecycleOp(ops[0]!, { actorId: options.actorId });
     if (!result.ok) return refused(1, result.detail ?? result.reason);
     return { committed: true, rejected: false, opCount: 1 };
   }

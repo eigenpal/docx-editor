@@ -316,6 +316,4 @@ export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMar
     readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
 }
 
-// (No @packageDocumentation comment for this package)
-
 ```

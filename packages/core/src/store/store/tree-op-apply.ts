@@ -3035,7 +3035,7 @@ function emptyCellParagraph(
   const identity: OoxmlAttribute[] = [];
   const w14Prefix = w14PrefixInScopeAt(part, anchorTable);
   if (w14Prefix !== null) {
-    const paraIdValue = mintParaId(seed, used);
+    const paraIdValue = mintParaId(actorScopedSeed(seed), used);
     identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraIdValue));
   }
   return {

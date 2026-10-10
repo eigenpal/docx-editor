@@ -41,7 +41,126 @@ export function changedPaths(base) {
   const untracked = git('ls-files', '--others', '--exclude-standard').split('\n');
   return [...new Set([...changes, ...working, ...untracked])].filter(Boolean);
 }
-export function validateRecord(record, file) {
+/** A repository test path a record may name: under scripts/, packages/, or e2e/. */
+function testPath(path) {
+  return typeof path === 'string' && /^(scripts|packages|e2e)\//.test(path) && !path.includes('..');
+}
+
+/** Why a test can go without a replacement, when `by` is absent. */
+export const SUPERSEDE_CATEGORIES = ['duplicate', 'feature-removed', 'moved-to-unit'];
+
+/**
+ * Check the tests a record retires. Decision records are immutable once merged, so a test an
+ * earlier record lists cannot be edited out of it. A new record declares the removal or the
+ * rename instead: `supersedesTests: [{ path, by?, reasonCategory?, reason }]`. `path` is the
+ * retired test, which must be gone. `by` is the test that replaces it, which must exist; without
+ * one, `reasonCategory` says why no replacement is needed.
+ */
+export function validateSupersedes(record, file) {
+  if (record.supersedesTests === undefined) return;
+  assert.ok(
+    Array.isArray(record.supersedesTests) && record.supersedesTests.length,
+    `${file}: supersedesTests must be a non-empty array`
+  );
+  const seen = new Set();
+  for (const entry of record.supersedesTests) {
+    assert.ok(
+      entry !== null && typeof entry === 'object' && !Array.isArray(entry),
+      `${file}: each supersedesTests entry is an object`
+    );
+    const extra = Object.keys(entry).filter(
+      (key) => !['path', 'by', 'reasonCategory', 'reason'].includes(key)
+    );
+    assert.equal(extra.length, 0, `${file}: unknown supersedesTests keys: ${extra.join(', ')}`);
+    assert.ok(testPath(entry.path), `${file}: invalid superseded test path ${entry.path}`);
+    assert.ok(!seen.has(entry.path), `${file}: ${entry.path} is superseded twice`);
+    seen.add(entry.path);
+    assert.ok(
+      !existsSync(resolve(ROOT, entry.path)),
+      `${file}: superseded test still exists: ${entry.path}`
+    );
+    assert.ok(
+      !record.tests.includes(entry.path),
+      `${file}: a record cannot list and supersede ${entry.path}`
+    );
+    if (entry.by !== undefined)
+      assert.ok(
+        testPath(entry.by) && existsSync(resolve(ROOT, entry.by)),
+        `${file}: missing replacement test ${entry.by}`
+      );
+    if (entry.reasonCategory !== undefined)
+      assert.ok(
+        SUPERSEDE_CATEGORIES.includes(entry.reasonCategory),
+        `${file}: reasonCategory must be one of ${SUPERSEDE_CATEGORIES.join(', ')}`
+      );
+    assert.ok(
+      entry.by !== undefined || entry.reasonCategory !== undefined,
+      `${file}: ${entry.path} needs a replacement test (by) or a reasonCategory ` +
+        `(${SUPERSEDE_CATEGORIES.join(', ')})`
+    );
+    assert.ok(
+      typeof entry.reason === 'string' && entry.reason.trim().length >= 12,
+      `${file}: explain why ${entry.path} is superseded`
+    );
+  }
+}
+
+/** The fix for a missing test, for the error that reports it. */
+export function missingTestMessage(file, test, merged) {
+  if (!merged)
+    return (
+      `${file}: missing test ${test}. A record in this change must list tests that exist. ` +
+      'Correct the path or remove it from the record.'
+    );
+  return (
+    `${file}: missing test ${test}. This merged record cannot change. If you removed or ` +
+    'renamed the test, supersede it from a new record:\n' +
+    `  bun run collaboration:change --id <new-id> --impact no-impact --before "..." ` +
+    `--after "..." --reason "..." --supersedes "${test}=><replacement test>" ` +
+    '--supersedes-reason "..."\n' +
+    `For a test with no replacement, use --supersedes "${test}" with --supersedes-category ` +
+    `${SUPERSEDE_CATEGORIES.join('|')}.`
+  );
+}
+
+/**
+ * Validate a set of decision records, as `[{ file, record }]`.
+ *
+ * `merged` names the records that were already merged where this check starts: the PR base,
+ * or the checked-out history in a release check. A missing test is accepted only when a merged
+ * record lists it and a different record supersedes it, and a record supersedes only tests
+ * that merged records list. A PR therefore cannot list a missing test and supersede it in the
+ * same change. `checked` selects the records to validate; the rest only inform supersession.
+ */
+export function validateRecordSet(entries, merged, checked = entries.map((entry) => entry.file)) {
+  const supersededBy = new Map();
+  const mergedListers = new Map();
+  for (const { file, record } of entries) {
+    for (const entry of Array.isArray(record.supersedesTests) ? record.supersedesTests : [])
+      supersededBy.set(entry?.path, [...(supersededBy.get(entry?.path) ?? []), file]);
+    if (merged.has(file) && Array.isArray(record.tests))
+      for (const test of record.tests)
+        mergedListers.set(test, [...(mergedListers.get(test) ?? []), file]);
+  }
+  const wanted = new Set(checked);
+  for (const { file, record } of entries) {
+    if (!wanted.has(file)) continue;
+    const isMerged = merged.has(file);
+    validateRecord(record, file, {
+      merged: isMerged,
+      superseded: (test) =>
+        isMerged && (supersededBy.get(test) ?? []).some((other) => other !== file),
+    });
+    for (const entry of record.supersedesTests ?? [])
+      assert.ok(
+        (mergedListers.get(entry.path) ?? []).some((other) => other !== file),
+        `${file}: supersedesTests names ${entry.path}, which no merged record lists. ` +
+          'Supersede only tests that merged records list.'
+      );
+  }
+}
+
+export function validateRecord(record, file, { superseded = () => false, merged = true } = {}) {
   assert.ok(
     ['no-impact', 'compatible', 'migration-required'].includes(record.impact),
     `${file}: invalid impact`
@@ -65,12 +184,10 @@ export function validateRecord(record, file) {
     assert.ok(record.tests.length, `${file}: regression test evidence required`);
   for (const test of record.tests)
     assert.ok(
-      typeof test === 'string' &&
-        /^(scripts|packages|e2e)\//.test(test) &&
-        !test.includes('..') &&
-        existsSync(resolve(ROOT, test)),
-      `${file}: missing test ${test}`
+      testPath(test) && (existsSync(resolve(ROOT, test)) || superseded(test)),
+      testPath(test) ? missingTestMessage(file, test, merged) : `${file}: invalid test path ${test}`
     );
+  validateSupersedes(record, file);
   if (record.impact === 'migration-required') {
     assert.ok(record.fields.length, `${file}: identify affected version fields`);
     assert.ok(
@@ -158,13 +275,21 @@ export function check(base, release = false) {
   const recordFiles = readdirSync(resolve(ROOT, '.collaboration/changes'))
     .filter((name) => name.endsWith('.json'))
     .map((name) => `.collaboration/changes/${name}`);
-  const records = recordFiles
-    .filter((file) => !oldFiles.has(file))
-    .map((file) => {
-      const record = json(file);
-      validateRecord(record, file);
-      return record;
-    });
+  // Records already merged where this check starts. A PR check uses its base; a release check
+  // runs on merged history, where every committed record has passed its own PR check.
+  const merged = release
+    ? new Set(
+        git('ls-tree', '-r', '--name-only', 'HEAD', '.collaboration/changes')
+          .split('\n')
+          .filter(Boolean)
+      )
+    : oldFiles;
+  const entries = recordFiles.map((file) => ({ file, record: json(file) }));
+  const validate = (files) => {
+    validateRecordSet(entries, merged, files);
+    return files.map((file) => json(file));
+  };
+  const records = validate(recordFiles.filter((file) => !oldFiles.has(file)));
   const affected = paths
     .filter(relevant)
     .filter(
@@ -181,13 +306,8 @@ export function check(base, release = false) {
   const releasedFiles = new Set(
     git('ls-tree', '-r', '--name-only', publishedBase.commit, '.collaboration/changes').split('\n')
   );
-  const releaseRecords = recordFiles
-    .filter((file) => !releasedFiles.has(file))
-    .map((file) => {
-      const record = json(file);
-      validateRecord(record, file);
-      return record;
-    });
+  // Released records are not checked again: their tests may since have been superseded.
+  const releaseRecords = validate(recordFiles.filter((file) => !releasedFiles.has(file)));
   const baseVersions = versions(git('show', `${base}:${VERSION_SOURCE}`));
   for (const field of FIELDS)
     assert.ok(

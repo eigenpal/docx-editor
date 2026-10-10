@@ -426,3 +426,65 @@ function resolveFurnitureByRId(
   }
   return null;
 }
+
+type SectionResolutions = ReturnType<TreeDocxSessionView['headerFooterResolutionBySection']>;
+
+/**
+ * Open the header or footer that a press on a page's blank band asks for, and create the part
+ * first when the page has none. The variant is the one the page DISPLAYS: `even` on an even page
+ * only when the document separates them, `first` on a section's first page only when it
+ * declares a title page.
+ */
+export function openBlankHeaderFooter(
+  deps: {
+    readonly session: TreeDocxSessionView;
+    readonly layout: SemanticLayout;
+    sectionAtPage(pageIndex: number): { sectionIndex: number; sectionStart: number };
+    create(op: {
+      readonly op: 'createHeaderFooter';
+      readonly sectionIndex: number;
+      readonly kind: 'header' | 'footer';
+      readonly variant: 'default' | 'first' | 'even';
+      readonly titlePage?: boolean;
+      readonly evenAndOddHeaders?: boolean;
+    }): { readonly ok: boolean } | undefined;
+    /** The band only exists in the post-create layout, and the create may defer its pass. */
+    flushLayout(): void;
+    enter: HeaderFooterScopeController['enterHeaderFooter'];
+  },
+  kind: 'header' | 'footer',
+  pageIndex: number
+): void {
+  // A single-section document has no spans, and every page belongs to section 0.
+  const { sectionIndex, sectionStart } = deps.sectionAtPage(pageIndex);
+  const sectionOf = (resolution: SectionResolutions) =>
+    resolution[Math.min(sectionIndex, Math.max(0, resolution.length - 1))];
+  const slotsOf = (resolution: SectionResolutions) => {
+    const section = sectionOf(resolution);
+    return kind === 'header' ? section?.headers : section?.footers;
+  };
+  const resolution = deps.session.headerFooterResolutionBySection();
+  const section = sectionOf(resolution);
+  const pageNumber = deps.layout.pages[pageIndex]?.pageFieldSource?.pageNumber ?? pageIndex + 1;
+  const variant: 'default' | 'first' | 'even' =
+    section?.evenAndOddHeaders && pageNumber % 2 === 0
+      ? 'even'
+      : section?.titlePage && pageIndex === sectionStart
+        ? 'first'
+        : 'default';
+  let rId = slotsOf(resolution)?.get(variant)?.rId;
+  if (!rId) {
+    const created = deps.create({
+      op: 'createHeaderFooter',
+      sectionIndex,
+      kind,
+      variant,
+      ...(variant === 'first' ? { titlePage: true } : {}),
+      ...(variant === 'even' ? { evenAndOddHeaders: true } : {}),
+    });
+    if (!created?.ok) return;
+    rId = slotsOf(deps.session.headerFooterResolutionBySection())?.get(variant)?.rId;
+    deps.flushLayout();
+  }
+  if (rId) deps.enter({ rId, pageIndex, sectionIndex, kind, variant });
+}
