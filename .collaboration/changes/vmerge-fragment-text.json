@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Long text in a protected vertical merge can be clipped to its first physical row.",
+  "after": "Supported protected merges carry native text and field ranges between page fragments under the authored head cell.",
+  "reason": "The change only derives layout rows and native continuation cursors. Canonical OOXML, source offsets, replicated operations, and awareness messages remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-fragment-carry.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fragment-carry.test.ts"
+  ],
+  "changeset": "vmerge-fragment-text",
+  "migration": null
+}

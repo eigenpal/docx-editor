@@ -313,7 +313,9 @@ function continuationRecord(
 }
 
 /** A zero-height cell without the bottom edge it shares with the row below. */
-function withoutZeroHeightBottomEdge(cell: TableCellFragmentRecord): TableCellFragmentRecord {
+export function withoutZeroHeightBottomEdge(
+  cell: TableCellFragmentRecord
+): TableCellFragmentRecord {
   const borders = cell.borders;
   if (cell.box.height > 0 || !borders) return cell;
   const { bottom: _bottom, ...kept } = borders;

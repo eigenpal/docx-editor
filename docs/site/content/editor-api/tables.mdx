@@ -7,6 +7,8 @@ order: 57
 
 Use `Body.tables` or `Range.tables` to discover tables in the addressed scope. `Table`, `TableRow`, and `TableCell` are proxies with separate collections. You can edit rectangular tables. Structural edits can fail on merged or otherwise unsupported tables.
 
+Text in a vertical merge over three or more protected body rows can continue across pages. Each row retains its own fixed or minimum height. The text and cached field values retain the original head cell address on every page. Center and bottom alignment apply within each page fragment. This path supports nonoverlapping merges over the same rows, horizontal text, and supported paragraph and run formatting. Drawings, notes, nested tables, manual breaks, floating tables, and unknown content retain their existing layout. Exact spans that cannot hold the complete text retain clipping. When text fits the complete span, its page fragments preserve the text within the page content area.
+
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 
 ## Insert a table
