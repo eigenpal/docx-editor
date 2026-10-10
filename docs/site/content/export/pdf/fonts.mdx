@@ -29,6 +29,8 @@ Sources resolve in this order:
 
 Earlier sources take priority. Each option accepts one source or an ordered array of sources.
 
+Document font names remain whole, including commas and semicolons. `Georgia;Verdana` names one face, not two candidates. When that face is unavailable, export requests the whole `w:altName` value from the font table. An admitted alternate precedes a generic substitute. Otherwise, available script defaults can supply unambiguous replacements. If one name needs different script defaults, it retains the existing fallback path. Measurement and PDF font evidence use the selected admitted face. Saved font names remain unchanged.
+
 Export rejects font faces that exceed the shaping byte limit. Later sources can supply usable faces for those requests. The resolution report records the rejection. `fontPolicy: 'strict'` refuses rejected document fonts and the configured default font. A shaping-limit rejection for an optional glyph fallback alone does not cause strict refusal. Other source failures still cause strict refusal.
 
 Use `defineFontResolver` to read the document's requested families. The `PdfFontOrigin` and `PdfFontsSource` types describe font inputs.

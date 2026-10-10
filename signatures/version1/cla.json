@@ -269,6 +269,12 @@
       "id": 1565956,
       "signed_at": "2026-09-25T12:20:53Z",
       "pull_request_no": 1003
+    },
+    {
+      "name": "ramil-zakirov-dev",
+      "id": 206472764,
+      "signed_at": "2026-10-10T15:30:41Z",
+      "pull_request_no": 1232
     }
   ]
 }

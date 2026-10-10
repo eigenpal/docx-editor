@@ -29,7 +29,7 @@ test('Google support respects target restrictions and custom aliases without fet
 test('catalogs survive origin composition and sanitize names without claiming loaded faces', async () => {
   const fragment = await composeFontOrigins(
     [
-      defineFontResolver(() => ({ supportedFamilies: ['Brand Face', 'bad;name'] })),
+      defineFontResolver(() => ({ supportedFamilies: ['Brand Face', "bad'name"] })),
       googleFonts({ allow: ['Lato'], fetcher: noFetch }),
     ],
     request
@@ -38,3 +38,22 @@ test('catalogs survive origin composition and sanitize names without claiming lo
   expect(fragment?.sources).toEqual([]);
   expect(availableFontFamilies(fragment, [])).toContain('Brand Face');
 });
+
+test.each(['Brand One;Brand Two', 'Brand One,Brand Two'])(
+  'catalog composition retains a complete font name: %s',
+  async (family) => {
+    const fragment = await composeFontOrigins(
+      [
+        defineFontResolver(() => ({ supportedFamilies: [family] })),
+        googleFonts({ allow: ['Lato'], fetcher: noFetch }),
+      ],
+      request
+    );
+    expect(fragment?.supportedFamilies).toEqual([family, 'Lato']);
+    expect(fragment?.sources).toEqual([]);
+    const available = availableFontFamilies(fragment, []);
+    expect(available).toContain(family);
+    expect(available).not.toContain('Brand One');
+    expect(available).not.toContain('Brand Two');
+  }
+);

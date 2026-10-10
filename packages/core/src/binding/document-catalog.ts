@@ -15,12 +15,13 @@ import { symbolFontFamily } from '../store/package/run-defaults.ts';
 /**
  * The same shape `semantic-paint.ts` enforces at the CSS sink (its `FONT_NAME`):
  * Unicode letters/digits/marks plus the join punctuation real family names use,
- * bounded to 64 characters. Control characters, quotes, backslashes, semicolons and
- * the empty string all fail. Kept in sync by value rather than import because the
+ * bounded to 64 characters. Controls, quotes, backslashes, and empty names fail.
+ * Commas and semicolons belong to one name, never a list of fallback faces.
+ * Kept in sync by value rather than import because the
  * paint module is a different lane (output) and deliberately re-validates at its own
  * sink either way.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** `w:rFonts` attributes that name a font family (theme* attributes name theme SLOTS). */
 const RFONTS_FAMILY_ATTRS = ['ascii', 'hAnsi', 'cs', 'eastAsia'] as const;

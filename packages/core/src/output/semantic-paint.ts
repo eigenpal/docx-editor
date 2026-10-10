@@ -481,7 +481,7 @@ const HEX = /^[0-9A-Fa-f]{6}$/;
 // validation and the run silently fell back to the inherited face, losing the typeface of an
 // entire document. Quote, backslash, semicolon, comma and control characters stay excluded,
 // which is what keeps the quoted CSS string unbreakable.
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** ST_Underline to the nearest CSS decoration style. */
 // MAPS, not object literals. These are indexed by a value that came out of a document, so

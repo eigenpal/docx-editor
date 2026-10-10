@@ -210,7 +210,7 @@ export function composeFontConfiguration(
  * sync by value because each module re-validates at its own boundary. Every name this
  * module emits can end up in a CSS `font-family` declaration.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /** A configuration in either public spelling — full or fragment-with-defaults. */
 export type FontCatalogConfiguration = FontConfiguration | FontConfigurationBase;

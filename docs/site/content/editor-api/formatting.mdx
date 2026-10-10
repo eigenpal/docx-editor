@@ -50,6 +50,8 @@ await runtime.run(async (context) => {
 
 Every font getter can return `null`. That means mixed values, no authored value, or formatting supplied through inheritance. These reads do not calculate the rendered style cascade. Do not convert `null` into a formatting write.
 
+In the editor, Format Painter copies resolved authored spacing. Line-fitting adjustments stay in layout and do not become formatting writes.
+
 | `Font` property | Write domain |
 | --- | --- |
 | `bold`, `italic`, `strikeThrough` | Boolean |

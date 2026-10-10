@@ -109,7 +109,7 @@ test('supplemental CJK theme faces remain independent and validate authored font
     fontThemeRoot(
       '<a:majorFont><a:ea typeface=""/><a:font script="Hans" typeface="Heading"/></a:majorFont>' +
         '<a:minorFont><a:ea typeface=""/><a:font script="Hans" typeface="Body"/><a:font script="Jpan" typeface="ＭＳ 明朝"/>' +
-        '<a:font script="Hant" typeface="bad;face"/><a:font script="__proto__" typeface="Invalid"/></a:minorFont>'
+        '<a:font script="Hant" typeface="bad&quot;;face"/><a:font script="__proto__" typeface="Invalid"/></a:minorFont>'
     )
   );
   // Without a theme language, an empty East Asian slot takes the Simplified Chinese
@@ -118,4 +118,14 @@ test('supplemental CJK theme faces remain independent and validate authored font
   expect(theme.minorEastAsia).toBe('Body');
   expect(theme.majorSupplemental).toEqual({ Hans: 'Heading' });
   expect(theme.minorSupplemental).toEqual({ Hans: 'Body', Jpan: 'ＭＳ 明朝' });
+});
+
+test('supplemental theme names retain safe punctuation as one whole family', () => {
+  const theme = collectDocumentThemeFonts(
+    fontThemeRoot(
+      '<a:minorFont><a:font script="Hans" typeface="Georgia;Verdana"/>' +
+        '<a:font script="Hant" typeface="Georgia,Verdana"/></a:minorFont>'
+    )
+  );
+  expect(theme.minorSupplemental).toEqual({ Hans: 'Georgia;Verdana', Hant: 'Georgia,Verdana' });
 });

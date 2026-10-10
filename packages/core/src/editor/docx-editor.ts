@@ -175,6 +175,11 @@ import {
 } from './font-composition.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
 import {
+  documentFontResolutionRequest,
+  admittedDocumentSubstitutions,
+  applyDocumentFontSubstitutions,
+} from '../layout/document-font-substitution.ts';
+import {
   boundedExplicitFontSources,
   embeddedFontDropError,
   embeddedFontSourcesAfterExplicit,
@@ -443,25 +448,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * document has asked.
    */
   let coveredFontFamilies: ReadonlySet<string> = new Set();
+  let documentSubstitutedFamilies: ReadonlySet<string> = new Set();
   const fontFamilyCovered = (family: string): boolean =>
     coveredFontFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
   /**
    * While font work is still in flight the answer would flicker: embedded faces register
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
    *
-   * The notice reads `renderedFontFamilies()`, never `documentFonts()`: a family joins it
-   * only when a rendered glyph resolves to it through the style cascade, so a declaration
-   * with no glyph behind it (a blank document's `w:docDefaults` Calibri, a latent Balloon
-   * Text style) answers `[]` and the first typed character moves the answer. No
-   * `rendersText()` gate on top: it counts only literal `w:t` and would hide a document
-   * whose only glyphs are marks (note references, tab leaders) in a substitute face.
+   * Report rendered glyph families, including projected marks. The detection helper
+   * combines admitted document aliases with platform and metric-twin checks.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
     return detectFontSubstitutions(
       surface.session.renderedFontFamilies(),
       fontFamilyCovered,
-      probeLocalFont
+      probeLocalFont,
+      documentSubstitutedFamilies
     );
   };
 
@@ -791,6 +794,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // next one would offer the previous file's families in this file's font picker.
     resolvedFontConfiguration = undefined;
     coveredFontFamilies = new Set();
+    documentSubstitutedFamilies = new Set();
     disposeEmbeddedFaces();
     disposeShapedFonts();
     disposeShapedFonts = () => {};
@@ -868,7 +872,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // the resolver is told what the file actually asks for and can skip everything
       // else. A resolver that throws lands in this function's catch and degrades to the
       // fixed measurer, exactly like a failed byte source.
-      const request = { families, defaultFamily: configuredDefaultFontFamily(fontConfiguration()) };
+      const { plan: documentFonts, request } = documentFontResolutionRequest(
+        mounted.session,
+        families,
+        fontConfiguration()
+      );
       const raw =
         typeof configured !== 'function'
           ? configured
@@ -923,9 +931,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           reportFontError(embeddedFontDropError(drop));
         }
       };
-      let fonts = composeFontConfiguration(
-        { epoch: seq, ...explicit, sources: initialExplicitSources },
-        fromDocument
+      let fonts = applyDocumentFontSubstitutions(
+        composeFontConfiguration(
+          { epoch: seq, ...explicit, sources: initialExplicitSources },
+          fromDocument
+        ),
+        documentFonts
       );
       // Nothing to shape: the fixed measurer stays. An app that DID supply a
       // configuration deserves to hear that it contributed no usable source (every
@@ -999,9 +1010,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             (source) => rejectedExplicit || !refusedRequests.has(fontRequestKey(source.request))
           );
           const superseded = shaping;
-          fonts = composeFontConfiguration(
-            { epoch: seq, ...explicit, sources: explicitSurvivors },
-            { sources: embeddedSurvivors }
+          fonts = applyDocumentFontSubstitutions(
+            composeFontConfiguration(
+              { epoch: seq, ...explicit, sources: explicitSurvivors },
+              { sources: embeddedSurvivors }
+            ),
+            documentFonts
           );
           if (fonts.sources.length === 0) return bailToFixed(superseded);
           shaping = await createLayoutShaping(fonts);
@@ -1016,9 +1030,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
             );
             const rejected = shaping;
-            fonts = composeFontConfiguration(
-              { epoch: seq, ...explicit, sources: admittedExplicit },
-              { sources: admittedEmbedded }
+            fonts = applyDocumentFontSubstitutions(
+              composeFontConfiguration(
+                { epoch: seq, ...explicit, sources: admittedExplicit },
+                { sources: admittedEmbedded }
+              ),
+              documentFonts
             );
             if (fonts.sources.length === 0) return bailToFixed(rejected);
             shaping = await createLayoutShaping(fonts);
@@ -1066,6 +1083,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const previous = {
         embeddedFaces,
         coveredFontFamilies,
+        documentSubstitutedFamilies,
         shapedMeasurer,
         shapedProducer,
         disposeShapedFonts,
@@ -1073,6 +1091,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       try {
         embeddedFaces = registration;
         coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
+        documentSubstitutedFamilies = admittedDocumentSubstitutions(
+          fonts,
+          documentFonts,
+          shaping.fonts
+        );
         // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
         // still name a locally installed browser face (Helvetica is the common macOS case):
         // paint resolves that face through CSS, so falling back to the deterministic monospace
@@ -1111,6 +1134,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           ({
             embeddedFaces,
             coveredFontFamilies,
+            documentSubstitutedFamilies,
             shapedMeasurer,
             shapedProducer,
             disposeShapedFonts,

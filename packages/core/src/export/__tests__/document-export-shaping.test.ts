@@ -238,6 +238,7 @@ test('the public export opener requests run, style, story, symbol, and equation 
     'Note Face',
     'Note Ref Marker',
     'Note Auto Marker',
+    'DengXian',
   ]);
   expect(request?.families).not.toContain('Note Page Marker');
   expect(request?.families).not.toContain('Note PageRef Marker');

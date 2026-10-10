@@ -7,6 +7,7 @@ import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
+import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
 
 const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
@@ -242,7 +243,7 @@ export function compressCjkPieces(
       }
       let compressed = bySpacing.get(spacing);
       if (!compressed) {
-        compressed = { ...piece.style, characterSpacingPt: spacing };
+        compressed = withLayoutDerivedSpacing(piece.style, spacing);
         bySpacing.set(spacing, compressed);
       }
       result.push({

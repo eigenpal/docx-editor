@@ -556,6 +556,16 @@ The shaper uses the resolved script and direction. Adjacent source runs with ide
 
 Bidirectional paragraphs with tabs or inline atoms retain the existing placement path. Complex-script font selection and joining across formatting boundaries remain partial.
 
+## Whole Word font names
+
+`Georgia;Verdana` names one font. It does not request Georgia followed by Verdana. Comma-separated names also remain one name. The editor preserves the original name when it saves the document.
+
+An available primary face wins over its font-table `w:altName`. Otherwise, Core requests the complete alternate name and uses its admitted face. Word treats the complete alternate as one name, including commas and semicolons. See [Word alternate-name behavior](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/f7c44a60-3d38-4925-8934-57d77c277e84).
+
+The browser and font-backed exports use the same substitute face for geometry. The browser registers that face under its private alias before painting. The font notice retains the unavailable original name. Export evidence identifies the admitted substitute and its bytes.
+
+When the alternate is unavailable, supplied script defaults can provide a substitute. Core applies a default only when the whole name has one unambiguous script target. A shared unknown name needing different script defaults remains unresolved. The existing fallback path remains active for those unresolved cases. The host must supply the selected face and each required weight and style.
+
 ## Next steps
 
 - [CJK fonts for PDF export](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text): Install the optional Node.js package and review its font limits.

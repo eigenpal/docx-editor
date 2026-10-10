@@ -79,7 +79,7 @@ function firstDescendant(root: OoxmlElement, localName: string): OoxmlElement | 
   return null;
 }
 
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 function schemeTypeface(
   scheme: OoxmlElement,

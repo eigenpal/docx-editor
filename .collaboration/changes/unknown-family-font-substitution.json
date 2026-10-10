@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Some complete Word font names disappear from demand requests and use unrelated fallback geometry.",
+  "after": "Whole font names request whole table aliases. Admitted alternatives drive derived measurement and paint.",
+  "reason": "The change preserves canonical XML, model offsets, replicated operations, selections, and awareness. It changes only font resolution.",
+  "tests": ["packages/core/src/layout/__tests__/unknown-family-font-substitution.test.ts"],
+  "changeset": "unknown-family-font-substitution",
+  "migration": null
+}

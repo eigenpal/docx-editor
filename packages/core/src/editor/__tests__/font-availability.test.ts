@@ -25,6 +25,14 @@ function fakeContext(resolvedFamilies: readonly string[]) {
 }
 
 describe('createLocalFontProbe', () => {
+  test('a punctuated whole name is probed as one quoted family', () => {
+    const context = fakeContext(['Georgia;Verdana']);
+    expect(createLocalFontProbe(context)('Georgia;Verdana')).toBe(true);
+    expect(context.font).toContain('"Georgia;Verdana"');
+    expect(createLocalFontProbe(fakeContext(['Georgia', 'Verdana']))('Georgia;Verdana')).toBe(
+      false
+    );
+  });
   test('a family that changes the measurement resolves; one that does not is substituted', () => {
     const probe = createLocalFontProbe(fakeContext(['Calibri']));
     expect(probe('Calibri')).toBe(true);
