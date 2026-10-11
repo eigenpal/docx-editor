@@ -210,6 +210,29 @@ describe('marks a tracked deletion does not strike', () => {
     expect(savedMainXml(host)).not.toContain('fldChar');
   });
 
+  test('an interior field-result paragraph can be deleted and reviewed', () => {
+    const fieldStart =
+      '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> QUOTE "x" </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>Head</w:t></w:r></w:p>';
+    const fieldEnd =
+      '<w:p><w:r><w:t>Tail</w:t></w:r>' + '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
+    const bytes = docx(fieldStart + p('Middle') + fieldEnd + p('Last'));
+    for (const accept of [true, false]) {
+      const host = open(bytes);
+      const { body } = roots(host);
+      run2(host, body, 1);
+      decide(host, body, accept);
+      const xml = savedMainXml(host);
+      expect(xml.includes('<w:t>Middle</w:t>')).toBe(!accept);
+      for (const boundary of ['begin', 'separate', 'end']) {
+        expect(xml.match(new RegExp(`w:fldCharType="${boundary}"`, 'g'))).toHaveLength(1);
+      }
+      expect(oracles(reopen(host).host)).toEqual(oracles(host));
+    }
+  });
+
   test('content nested deeper than the checks reach refuses', () => {
     const open70 = '<w:smartTag w:uri="u" w:element="e">'.repeat(70);
     const close70 = '</w:smartTag>'.repeat(70);

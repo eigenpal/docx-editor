@@ -92,7 +92,7 @@ defineProps<{ bytes: Uint8Array }>();
 </Framework>
 </FrameworkTabs>
 
-This mode applies to fields that show their saved result: `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, and `SEQ`. Fields that the editor computes, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, and `DOCPROPERTY`, stay one unit. A field whose saved result contains another field also stays one unit.
+This mode applies to fields that show their saved result: `DATE`, `TIME`, `CREATEDATE`, `SAVEDATE`, `PRINTDATE`, `MERGEFIELD`, `HYPERLINK`, `QUOTE`, `FILENAME`, `FILLIN`, and `SEQ`. Fields that the editor computes, such as `PAGE`, `NUMPAGES`, `REF`, `PAGEREF`, and `DOCPROPERTY`, stay one unit. Editable mode supports saved results without nested fields. A simple field (`w:fldSimple`) inside a complex field result is not supported. Do not enable editable mode for documents with this structure. Other nested results keep their existing addressing behavior.
 
 In this mode:
 

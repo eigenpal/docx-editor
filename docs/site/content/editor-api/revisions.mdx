@@ -100,13 +100,15 @@ These tracked deletions refuse and change nothing:
 | A paragraph directly before a table or a block content control | `NotSupported` |
 | A paragraph whose mark ends a section | `NotSupported` |
 | A paragraph that contains an inline content control | `NotSupported` |
-| A paragraph where a complex field starts and the next paragraph ends it, or the reverse | `NotSupported` |
+| A paragraph that contains a complex field start or end whose matching boundary is in another paragraph | `NotSupported` |
 | A paragraph that nests inline content more than 64 levels deep | `NotSupported` |
 | A paragraph with a pending change, including your own | `NotImplemented` |
 | A paragraph whose next paragraph starts with a pending change, including your own | `NotImplemented` |
 | A paragraph whose previous paragraph mark you already proposed deleting, including a deletion or replacement at its start | `NotImplemented` |
 
 A `range.delete()` that covers any of these paragraph marks refuses with the same codes.
+
+A paragraph inside a multi-paragraph field can be deleted if it contains no field boundaries and meets the other requirements. Accept removes that paragraph from the saved field result. Reject restores it.
 
 In collaboration, text typed into the proposed deletion joins that deletion. Reject restores the text. Accept removes it with the paragraph, including untracked text from another participant. Text typed outside the proposed deletion remains ordinary text.
 

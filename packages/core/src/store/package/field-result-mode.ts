@@ -22,8 +22,9 @@
  *
  * - `atomic`: every closed field is one offset unit.
  * - `editable`: the results of CREATEDATE, DATE, FILENAME, FILLIN, HYPERLINK, MERGEFIELD,
- *   PRINTDATE, QUOTE, SAVEDATE, SEQ, and TIME fields are text. Every other field type, a
- *   field whose result holds another field, and a legacy FORMTEXT input keep their own rules.
+ *   PRINTDATE, QUOTE, SAVEDATE, SEQ, and TIME fields are text when their results are unnested.
+ *   Simple fields inside complex field results are not supported in this mode. Other nested
+ *   results, other field types, and legacy FORMTEXT inputs keep their existing addressing.
  */
 export type FieldResultsMode = 'atomic' | 'editable';
 

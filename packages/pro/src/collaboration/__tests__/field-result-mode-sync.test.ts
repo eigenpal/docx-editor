@@ -47,3 +47,38 @@ test('an editable-mode result edit reaches a default-mode peer as run text', asy
     harness.cleanup();
   }
 });
+
+for (const [name, field] of [
+  ['simple', '<w:fldSimple w:instr=" MERGEFIELD Name "><w:r><w:t/></w:r></w:fldSimple>'],
+  [
+    'complex',
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> MERGEFIELD Name </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>',
+  ],
+]) {
+  test(`an empty ${name} field keeps its atomic offset across peers`, async () => {
+    const harness = createPeerHarness(`empty-${name}-field-sync`);
+    try {
+      const bytes = zipDocument(
+        '<w:p><w:r><w:t xml:space="preserve">ab </w:t></w:r>' +
+          field +
+          '<w:r><w:t xml:space="preserve"> cd</w:t></w:r></w:p>'
+      );
+      const { alice, bob } = await harness.pair(bytes);
+      const paragraphId = harness.paragraphIdAt(alice, 0);
+      const result = alice.store.transact(BODY, (context) => {
+        context.apply({ op: 'insertText', paragraphId, offset: 4, text: '!' });
+      });
+      expect(result.ok).toBe(true);
+      alice.port.flushPendingJournals();
+      await Promise.resolve();
+      harness.expectConverged(alice, bob);
+      const part = harness.packageOf(bob).parts.get('/word/document.xml')!;
+      expect(paragraphTextOf(part, paragraphId)).toBe(`ab ${FIELD_ATOM_CHAR}! cd`);
+    } finally {
+      harness.cleanup();
+    }
+  });
+}

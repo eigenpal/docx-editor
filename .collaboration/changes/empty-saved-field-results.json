@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Empty text elements make saved fields occupy no addressable position in editable field-result mode.",
+  "after": "Saved fields with empty text elements retain one addressable position in editable field-result mode.",
+  "reason": "Collaboration uses atomic field addressing and refuses editable field-result mode. Shared offsets and synchronization formats stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/editable-field-results.test.ts",
+    "packages/core/src/editor/__tests__/editable-field-results-editor.test.ts",
+    "packages/pro/src/collaboration/__tests__/field-result-mode-sync.test.ts"
+  ],
+  "changeset": "empty-saved-field-results",
+  "migration": null
+}

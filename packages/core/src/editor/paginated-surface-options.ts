@@ -38,7 +38,8 @@ export interface PaginatedSurfaceOptions {
   /**
    * How saved field results are edited. `atomic` (the default) keeps every field one unit.
    * `editable` lets the reader type, delete, and select inside the saved result of a DATE,
-   * MERGEFIELD, HYPERLINK, or similar field. Refused with a {@link collaborationModel}.
+   * MERGEFIELD, HYPERLINK, or similar field. Results must be unnested; simple fields inside
+   * complex field results are not supported. Refused with a {@link collaborationModel}.
    */
   readonly fieldResults?: FieldResultsMode;
   readonly measurer?: TextMeasurer;

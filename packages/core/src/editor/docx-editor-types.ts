@@ -142,6 +142,9 @@ export interface DocxEditorConfig {
    *   accept typing, deletion, and selection inside the result. Fields the engine computes
    *   live (PAGE, NUMPAGES, REF, PAGEREF, DOCPROPERTY, and others) stay one unit.
    *
+   * Editable results must be unnested. Simple fields inside complex field results are not
+   * supported in editable mode.
+   *
    * Fixed for the instance. `'editable'` with a collaboration module throws a `TypeError`:
    * shared paragraph text keeps every field one unit.
    */
