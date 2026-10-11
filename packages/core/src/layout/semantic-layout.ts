@@ -183,6 +183,7 @@ import {
   sectionLineGridPt,
 } from './section-properties.ts';
 import { pageBreakBeforeRules } from './page-break-before.ts';
+import { marginInset } from './page-body-margins.ts';
 import { columnSeparatorBoxes, resolveSectionColumns } from './section-columns.ts';
 import {
   inheritNotesLayoutInput,
@@ -1493,10 +1494,15 @@ function* layoutBlocksPass(
     columnCount,
   });
 
-  const { breaksBeforeAt, keepsBeforeAtPageStart } = pageBreakBeforeRules(
+  const { breaksBeforeAt, keepsBeforeAtPageStart, spaceBeforeAt } = pageBreakBeforeRules(
     prepared.length,
     options.compatibilityMode,
-    () => firstParagraphOfSection
+    () => firstParagraphOfSection,
+    // The HTML automatic gap only: the fixed 5pt setting keeps its value.
+    styleCascade?.fixedParagraphSpacing !== true &&
+      pageIndexStart === 0 &&
+      flowStartY === 0 &&
+      insetsFor(0).top <= marginInset(geometry.margin.top)
   );
 
   // Placement and keep-with-next lookahead share cached line breaks.
@@ -1526,7 +1532,10 @@ function* layoutBlocksPass(
       const sameStyle =
         entry.styleId !== null &&
         flowNeighbourStyle(entry.paragraph, -1, previous, styleCascade) === entry.styleId;
-      const before = entry.contextualSpacing && sameStyle ? 0 : entry.spacing.before;
+      const before =
+        entry.contextualSpacing && sameStyle
+          ? 0
+          : spaceBeforeAt(entryIndex, entry, entry.spacing.before);
       const continuesBorder = leadingBreakGroups.joins(previous, entry);
       paragraphSpaceBefore = appliedSpaceBefore(
         before,
@@ -2001,8 +2010,13 @@ function* layoutBlocksPass(
     const { paragraph, props, contextualSpacing, styleId, borders, shading, keeps } = entry;
     // Width-specific preparation owns line inputs; the prepass owns neighbor spacing.
     const preparedEntry = prepared[index]!;
-    const authoredSpacing =
+    const preparedSpacing =
       preparedEntry.kind === 'paragraph' ? preparedEntry.spacing : entry.spacing;
+    const startBefore = spaceBeforeAt(index, entry, preparedSpacing.before);
+    const authoredSpacing =
+      startBefore === preparedSpacing.before
+        ? preparedSpacing
+        : { ...preparedSpacing, before: startBefore };
     let { indent, alignment, markRunProperties } = entry;
     const rtl = paragraphIsRtl(entry.props);
     let available = entry.available;
