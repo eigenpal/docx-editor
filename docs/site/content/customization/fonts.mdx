@@ -8,7 +8,7 @@ Pass a font configuration through `fonts`. Use `loadFonts()` for application fon
 
 CSS `@font-face` rules supply browser rendering only. The editor also needs font bytes to measure text.
 
-The contract preview starts with packaged fonts. Choose Lato, Arvo, or PT Serif, then select **Apply to contract**. The editor downloads the selected Google font and updates the contract.
+The preview starts with **Default fonts**. Select **Default + Google Fonts** to add Lato, Arvo, and PT Serif to the toolbar font picker. Select document text, then choose a font. Changing the font source resets the preview.
 
 Embedded DOCX fonts load automatically. Font names from the document do not authorize remote font requests.
 
@@ -136,7 +136,7 @@ const fonts = useFonts(packagedFonts(), googleFonts({ allow: ['Lato', 'Arvo', 'P
 </Framework>
 </FrameworkTabs>
 
-The preview applies the selected family to the complete contract. Your application can use the font picker to format selected text instead.
+The toolbar font picker applies the selected family to selected text. Google Fonts download when the editor needs their font bytes.
 
 ## React and Vue reference
 
