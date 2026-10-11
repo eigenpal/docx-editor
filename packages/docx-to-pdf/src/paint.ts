@@ -527,8 +527,12 @@ export async function paint(
     const key = groupMemberStoryOf(visit.textboxOwner, visit.paragraph) ?? visit.textboxOwner;
     return textboxBuffer(visit.page.index, key);
   };
-  // PDF extractors expect glyphs in visual order within each physical line.
-  // Retain logical Unicode separately in one ActualText region for the complete line.
+  // PDF extractors expect glyphs in visual order within each physical line. Each painted
+  // span keeps its logical Unicode in its own ActualText region.
+  //
+  // Per span, not per line: extractors give ActualText characters to the region's glyphs in
+  // order. A character without a painted glyph (a tab, hidden text, a marker separator) in a
+  // line-wide region moved every later character of the line onto the next glyph.
   //
   // Not for a line with right-to-left text. MuPDF and Poppler lay ActualText characters out
   // over the glyphs as if they were visual and reverse them, so a logical Arabic or Hebrew
@@ -548,22 +552,22 @@ export async function paint(
     }
     group.push(visit);
   }
-  const lineStarts = new Map<SemanticSpanVisit, string | null>();
+  // The first span of each line, and whether that line keeps logical text per span.
+  const lineStarts = new Map<SemanticSpanVisit, boolean>();
   spans.length = 0;
   for (const lines of pageGroups.values())
     for (const group of lines.values()) {
-      const first = group[0]!;
-      const markerText =
-        first.paragraph.lines[0] === first.line ? first.paragraph.marker?.text : undefined;
-      const logical =
-        (markerText ? markerText + ' ' : '') +
-        group.map((v) => v.span.equation?.fallbackText ?? extractedText(v.span)).join('');
       const rightToLeft = group.some((v) => (v.span.style.shaping?.level ?? 0) % 2 === 1);
       group.sort((a, b) => a.absoluteBox.x - b.absoluteBox.x);
-      lineStarts.set(group[0]!, rightToLeft ? null : logical);
+      lineStarts.set(group[0]!, !rightToLeft);
       for (const visit of group) spans.push(visit);
     }
-  let activeOut: string[] | undefined;
+  let logicalText = false;
+  /** Painted operators, with their logical text when the line keeps it. */
+  const withActualText = (painted: string, logical: string): string =>
+    logicalText && painted && logical
+      ? `/Span << /ActualText <FEFF${unicodeHex(logical)}> >> BDC\n${painted}\nEMC`
+      : painted;
   // The buffer of the line being painted, which receives that line's outline glyphs.
   let lineOut: string[] | undefined;
   const placeOutlines = (): void => {
@@ -579,11 +583,7 @@ export async function paint(
     if (lineStarts.has(visit)) {
       placeOutlines();
       lineOut = out;
-      if (activeOut) activeOut.push('EMC');
-      const logical = lineStarts.get(visit);
-      activeOut = logical === null ? undefined : out;
-      if (logical !== null)
-        out.push(`/Span << /ActualText <FEFF${unicodeHex(logical ?? '')}> >> BDC`);
+      logicalText = lineStarts.get(visit)!;
     }
     let markers = markersByPage.get(visit.page.index);
     if (!markers) {
@@ -611,27 +611,31 @@ export async function paint(
       if (picture) out.push(picture);
       else
         // A right-to-left paragraph's marker comes as visual pieces, one per direction run.
-        for (const piece of marker.pieces ?? [marker])
+        for (const [index, piece] of (marker.pieces ?? [marker]).entries())
           out.push(
-            text.paint(
-              {
-                ...visit,
-                span: {
-                  ...visit.span,
-                  text: piece.text,
-                  style: piece.style,
-                  box: piece.box,
-                  link: undefined,
-                  revisions: undefined,
+            // The trailing space keeps the marker apart from the text in extraction.
+            withActualText(
+              text.paint(
+                {
+                  ...visit,
+                  span: {
+                    ...visit.span,
+                    text: piece.text,
+                    style: piece.style,
+                    box: piece.box,
+                    link: undefined,
+                    revisions: undefined,
+                  },
+                  absoluteBox: {
+                    ...piece.box,
+                    x: piece.box.x + visit.storyOrigin.x,
+                    y: piece.box.y + visit.storyOrigin.y,
+                  },
                 },
-                absoluteBox: {
-                  ...piece.box,
-                  x: piece.box.x + visit.storyOrigin.x,
-                  y: piece.box.y + visit.storyOrigin.y,
-                },
-              },
-              page,
-              true
+                page,
+                true
+              ),
+              piece.text + (index === (marker.pieces?.length ?? 1) - 1 ? ' ' : '')
             )
           );
     }
@@ -653,13 +657,16 @@ export async function paint(
         `q ${rect(visit.paragraph.box, visit.storyOrigin.x - visit.page.box.x, visit.storyOrigin.y - visit.page.box.y, pageHeight(page))} W n`
       );
     out.push(
-      visit.span.equation ? paintEquation(visit, page, text, work) : text.paint(visit, page)
+      withActualText(
+        visit.span.equation ? paintEquation(visit, page, text, work) : text.paint(visit, page),
+        // Tabs and breaks paint no glyph, so they have no character in the region.
+        (visit.span.equation?.fallbackText ?? extractedText(visit.span)).replace(/[\t\n\r\f]/g, '')
+      )
     );
     if (clipping) out.push('Q');
     linkAnnotation(doc, page, visit, names);
   }
   placeOutlines();
-  if (activeOut) activeOut.push('EMC');
   // Draw grouped character borders after highlights, which may otherwise cover an
   // earlier run's edge. Geometry and grouping are shared with the screen painter.
   for (const lines of pageGroups.values()) {
