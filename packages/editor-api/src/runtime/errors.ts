@@ -24,6 +24,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // fixed sentence, and `target` — the consumer-facing path of the object or property involved,
 // which is the only identifier they wrote themselves.
 
+import type { DiagnosticCode } from '@docx-editor.dev/core/automation';
+import { explainDiagnostic } from '@docx-editor.dev/core/automation';
+
 /** What went wrong, as a value a consumer may branch on. */
 export type DocxEditorErrorCode =
   /** A property was read before a `load(...)` for it completed in a `sync()`. */
@@ -143,6 +146,42 @@ export interface DocxEditorErrorInit {
   readonly expectedRevision?: number;
   /** The revision the document was actually at, for `StaleDocument`. */
   readonly actualRevision?: number;
+  /**
+   * The engine's public diagnostic code for this refusal, when it has one. It becomes
+   * `debugInfo.innerError`.
+   */
+  readonly diagnostic?: DiagnosticCode;
+}
+
+/**
+ * Why the engine refused, as a public diagnostic code with its fixed hint.
+ *
+ * @public
+ */
+export interface DocxEditorInnerError {
+  /** A stable public diagnostic code, such as `edit.tracked-drawing-delete-unsupported`. */
+  readonly code: DiagnosticCode;
+  /** The fixed hint for the code: the cause, then the action. Never document content. */
+  readonly message: string;
+}
+
+/**
+ * Debug details in the shape of Office.js `OfficeExtension.DebugInfo`.
+ *
+ * @public
+ */
+export interface DocxEditorDebugInfo {
+  /** The same code as {@link DocxEditorError.code}. */
+  readonly code: DocxEditorErrorCode;
+  /** The same message as the error's own. */
+  readonly message: string;
+  /** The consumer-facing path of the object or property involved, when there is one. */
+  readonly errorLocation?: string;
+  /**
+   * Why the engine refused, when it knows a specific reason. Handle the outer `code`; read
+   * `innerError.message` to tell a person or a model what to change.
+   */
+  readonly innerError?: DocxEditorInnerError;
 }
 
 /**
@@ -191,12 +230,39 @@ export class DocxEditorError extends Error {
   readonly expectedRevision?: number;
   /** For `StaleDocument`: the revision the document was actually at. */
   readonly actualRevision?: number;
+  /**
+   * Debug details, as Office.js `OfficeExtension.Error.debugInfo` has them. `innerError` names
+   * the engine's reason with a stable diagnostic code and a fixed hint, when there is one.
+   *
+   * @example
+   * ```ts
+   * catch (error) {
+   *   if (isDocxEditorError(error) && error.debugInfo.innerError) {
+   *     console.warn(error.debugInfo.innerError.code, error.debugInfo.innerError.message);
+   *   }
+   * }
+   * ```
+   */
+  readonly debugInfo: DocxEditorDebugInfo;
 
   constructor(init: DocxEditorErrorInit) {
     const message = init.target ? `${MESSAGES[init.code]} (${init.target})` : MESSAGES[init.code];
     super(message);
     this.name = 'DocxEditorError';
     this.code = init.code;
+    this.debugInfo = Object.freeze({
+      code: init.code,
+      message,
+      ...(init.target === undefined ? {} : { errorLocation: init.target }),
+      ...(init.diagnostic === undefined
+        ? {}
+        : {
+            innerError: Object.freeze({
+              code: init.diagnostic,
+              message: explainDiagnostic(init.diagnostic).hint,
+            }),
+          }),
+    });
     if (init.limit !== undefined) this.limit = init.limit;
     if (init.target !== undefined) this.target = init.target;
     if (init.expectedRevision !== undefined) this.expectedRevision = init.expectedRevision;

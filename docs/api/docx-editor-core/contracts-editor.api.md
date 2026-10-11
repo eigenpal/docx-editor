@@ -58,6 +58,28 @@ export interface ClearAnchorHighlightOptions {
 }
 
 // @public
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+// @public
+export interface CollaborationParticipantsDiagnostic extends DiagnosticBase {
+    readonly count: number;
+    // (undocumented)
+    readonly kind: 'collab.participants';
+}
+
+// @public
+export interface CollaborationStatusDiagnostic extends DiagnosticBase {
+    readonly code?: CollaborationDiagnosticCode;
+    readonly connectMs?: number;
+    // (undocumented)
+    readonly kind: 'collab.status';
+    readonly previous: CollaborationStatus | 'none';
+    readonly recovering: boolean;
+    // (undocumented)
+    readonly status: CollaborationStatus;
+}
+
+// @public
 export type ColorValue = {
     readonly kind: 'hex';
     readonly value: string;
@@ -155,10 +177,7 @@ export interface DiagnosticBase {
 }
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode;
-
-// @public
-export function diagnosticCodes(): readonly DiagnosticCode[];
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export interface DiagnosticExplanation {
@@ -455,7 +474,7 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
 } & ({
     readonly durationMs: number;
     readonly outcome: 'opened';
-    readonly pagesBucket: CountBucket;
+    readonly pagesBucket?: CountBucket;
     readonly sizeBucket: ByteSizeBucket;
 } | {
     readonly code: DocumentOpenDiagnosticCode;
@@ -524,7 +543,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.revision-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.internal-invariant' | 'edit.refused';
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
@@ -958,7 +977,7 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
-export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic;
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic;
 
 // @public
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
@@ -1254,7 +1273,7 @@ export interface EditRejectedDiagnostic extends DiagnosticBase {
 }
 
 // @public
-export type EditRejectionOrigin = 'command' | 'input';
+export type EditRejectionOrigin = 'command' | 'input' | 'automation';
 
 // @public
 export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typeMismatch' | 'kindMismatch' | 'outOfBounds' | 'unsupported' | 'invalidArgs';
@@ -1274,9 +1293,6 @@ export type ExecResult = {
     revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
-
-// @public
-export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
 export interface Extent {

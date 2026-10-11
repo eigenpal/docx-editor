@@ -191,6 +191,27 @@ Read-only batches omit `expectedRevision`. For resource failures, `limit` identi
 
 After `StaleDocument`, obtain fresh ranges and reconsider the edit. Never disable change tracking to bypass a refusal.
 
+## Read why the engine refused
+
+`error.debugInfo` has the shape of Office.js `OfficeExtension.DebugInfo`: `code`, `message`, and `errorLocation`, the path of the refused call. When the engine knows a specific reason, `debugInfo.innerError` holds a stable diagnostic code and a fixed hint. Branch on `error.code`, and give `innerError.message` to the person or model that chose the edit. The hint never contains document content.
+
+```ts
+import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+try {
+  await context.sync();
+} catch (error) {
+  if (!isDocxEditorError(error)) throw error;
+  const reason = error.debugInfo.innerError;
+  // For example: { code: 'edit.tracked-operation-unsupported', message: 'This editing API ...' }
+  if (reason) feedback.push(`${reason.code}: ${reason.message}`);
+}
+```
+
+For the full list of codes, see [Diagnostics](/docs/2.x/guides/diagnostics). To record refusals as anonymous telemetry, add a telemetry module to `createServer({ modules })`. For more information, see [Telemetry](/docs/2.x/pro/telemetry).
+
+## Recover from a stale range
+
 The following example recovers from a stale range in a loop that writes one suggestion per sync:
 
 ```ts

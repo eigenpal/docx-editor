@@ -322,6 +322,31 @@ export const PACKAGES = [
       },
     },
   },
+  {
+    name: '@docx-editor.dev/telemetry',
+    root: 'packages/telemetry',
+    pkgSlug: 'docx-editor-telemetry',
+    tsconfigPath: 'packages/telemetry/tsconfig.api.json',
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        // Owned by `core` and imported from there, like the pro entries above.
+        index: [
+          'CollaborationFailureCode',
+          'CollaborationStatus',
+          'EditorCommand',
+          'EditorModule',
+        ],
+        // The exporter contract lives in the main entry, which every exporter's user already
+        // imports `createTelemetry` from; each entry re-exports only what its calls take.
+        otel: ['MetricRecord', 'TelemetryEvent'],
+        sentry: ['EditorDiagnostic', 'MetricRecord', 'TelemetryEventContext'],
+        prometheus: ['MetricRecord', 'TelemetryEvent'],
+        server: ['Attributes', 'MetricRecord', 'TelemetryEvent'],
+        hocuspocus: ['Attributes', 'MetricRecord', 'TelemetryEvent'],
+      },
+    },
+  },
 ];
 
 // Derived: build invocation hint shown in `api:check` drift error

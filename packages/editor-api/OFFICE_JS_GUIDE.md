@@ -131,6 +131,25 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
 | `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
 
+### Read why the engine refused
+
+`error.debugInfo` has the shape of Office.js `OfficeExtension.DebugInfo`: `code`, `message`, and `errorLocation`, the path of the refused call. When the engine knows a specific reason, `debugInfo.innerError` holds a stable diagnostic code and a fixed hint. Branch on `error.code`, and give `innerError.message` to the person or model that chose the edit. The hint never contains document content.
+
+```ts
+import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+try {
+  await context.sync();
+} catch (error) {
+  if (!isDocxEditorError(error)) throw error;
+  const reason = error.debugInfo.innerError;
+  // For example: { code: 'edit.tracked-operation-unsupported', message: 'This editing API ...' }
+  if (reason) feedback.push(`${reason.code}: ${reason.message}`);
+}
+```
+
+For the full list of codes, see [Diagnostics](/docs/2.x/guides/diagnostics). To record refusals as anonymous telemetry, add a telemetry module to `createServer({ modules })`. For more information, see [Telemetry](/docs/2.x/pro/telemetry).
+
 ### Recover from a stale range
 
 A range addresses text by paragraph identity and offsets. When text before its end changes, including through an earlier sync of the same run, using the range fails with `StaleDocument` and nothing is applied. When `error.expectedRevision` equals `error.actualRevision`, the range moved; when they differ, another writer changed the document. In both cases, search again and reconsider the proposal before writing. Never replay the failed write unchanged.

@@ -12,7 +12,11 @@ import { AutomationPaginationOptions } from '@docx-editor.dev/core/automation';
 import { AutomationSpan } from '@docx-editor.dev/core/automation';
 import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
+import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
+import { DiagnosticCode } from '@docx-editor.dev/core/automation';
+import { DocumentOpenDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { EditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { RevisionAuthorEntry } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorResult } from '@docx-editor.dev/core/automation';
@@ -437,10 +441,19 @@ export interface DocumentZipLimits {
 export const DocxEditor: DocxEditorNamespace;
 
 // @public
+export interface DocxEditorDebugInfo {
+    readonly code: DocxEditorErrorCode;
+    readonly errorLocation?: string;
+    readonly innerError?: DocxEditorInnerError;
+    readonly message: string;
+}
+
+// @public
 export class DocxEditorError extends Error {
     constructor(init: DocxEditorErrorInit);
     readonly actualRevision?: number;
     readonly code: DocxEditorErrorCode;
+    readonly debugInfo: DocxEditorDebugInfo;
     readonly expectedRevision?: number;
     readonly limit?: DocxEditorErrorInit['limit'];
     readonly target?: string;
@@ -506,9 +519,16 @@ export type DocxEditorErrorCode =
 export interface DocxEditorErrorInit {
     readonly actualRevision?: number;
     readonly code: DocxEditorErrorCode;
+    readonly diagnostic?: DiagnosticCode;
     readonly expectedRevision?: number;
     readonly limit?: 'zip.maxEntries' | 'zip.maxTotalBytes' | 'zip.maxRatio' | 'xml.maxBytes' | 'xml.maxElements' | 'xml.maxDepth' | 'maxXmlParts' | 'maxRelationships';
     readonly target?: string;
+}
+
+// @public
+export interface DocxEditorInnerError {
+    readonly code: DiagnosticCode;
+    readonly message: string;
 }
 
 // @public
@@ -536,6 +556,7 @@ export interface EditorModule {
     readonly collaboration?: CollaborationModuleContribution;
     // (undocumented)
     readonly id: string;
+    readonly onDiagnostic?: (event: RuntimeDiagnostic) => void;
 }
 
 // @public
@@ -1299,6 +1320,28 @@ export type RevisionType = 'None' | 'Insert' | 'Delete' | 'Property' | 'Paragrap
 
 // @public
 export type RunCallback<T> = (context: RequestContext) => Promise<T>;
+
+// @public
+export type RuntimeDiagnostic = {
+    readonly editorSessionId: string;
+    readonly schemaVersion: number;
+    readonly time: number;
+} & ({
+    readonly durationMs: number;
+    readonly kind: 'document.open';
+    readonly outcome: 'opened';
+    readonly sizeBucket: ByteSizeBucket;
+} | {
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly kind: 'document.open';
+    readonly outcome: 'rejected';
+    readonly sizeBucket?: ByteSizeBucket;
+} | {
+    readonly code: EditDiagnosticCode;
+    readonly kind: 'edit.rejected';
+    readonly origin: 'automation';
+    readonly tracked: boolean;
+});
 
 // @public
 export interface SearchOptions {

@@ -64,6 +64,7 @@
     "pro/custom-nodes-reference",
     "pro/collaboration",
     "pro/collaboration-versions",
+    "pro/telemetry",
     "---Editing API---",
     "editor-api/index",
     "editor-api/runtime",

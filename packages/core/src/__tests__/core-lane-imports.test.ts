@@ -51,6 +51,12 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   { file: 'contracts/modules.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'collaboration' },
   { file: 'store/store/tree-op-types.ts', to: 'contracts' },
+  // The public diagnostic vocabulary names the session's own public failure codes
+  // (`collab.<CollaborationFailureCode>`) and status union. Compile-time only.
+  { file: 'contracts/diagnostics.ts', to: 'collaboration' },
+  // The public diagnostic codes live in the neutral automation lane, so a headless runtime can
+  // name a refusal; the contract re-exports them beside the editor's event types. Erased.
+  { file: 'contracts/diagnostics.ts', to: 'automation' },
 ];
 
 /**

@@ -121,3 +121,30 @@ export type {
   RevisionAuthorResult,
   RevisionAuthorSkipReason,
 } from '../store/store/revision-author-change.ts';
+
+// Anonymous diagnostics: the store reasons' public codes and the delivery path both hosts share.
+export {
+  byteSizeBucket,
+  countBucket,
+  createDiagnosticEmitter,
+  openDiagnosticCode,
+  reviewDiagnosticCode,
+  storeEditDiagnosticCode,
+  type DiagnosticEmitter,
+  type DiagnosticPayload,
+} from './diagnostics.ts';
+export {
+  diagnosticCodes,
+  explainDiagnostic,
+  type DiagnosticExplanation,
+} from './diagnostic-hints.ts';
+export type {
+  ByteSizeBucket,
+  CollaborationDiagnosticCode,
+  CountBucket,
+  DiagnosticCode,
+  DocumentOpenDiagnosticCode,
+  EditDiagnosticCode,
+  FontDiagnosticCode,
+  ReviewDiagnosticCode,
+} from './diagnostic-vocabulary.ts';

@@ -9,6 +9,7 @@
     "custom-nodes",
     "custom-nodes-reference",
     "collaboration",
-    "collaboration-versions"
+    "collaboration-versions",
+    "telemetry"
   ]
 }

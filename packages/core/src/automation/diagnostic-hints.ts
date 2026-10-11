@@ -1,4 +1,4 @@
-import type { DiagnosticCode } from './diagnostics.ts';
+import type { CollaborationDiagnosticCode, DiagnosticCode } from './diagnostic-vocabulary.ts';
 
 /**
  * What a diagnostic code means and what to do about it.
@@ -17,13 +17,19 @@ export interface DiagnosticExplanation {
 
 const DOCS = 'https://docx-editor.dev/docs/2.x/guides/diagnostics';
 /** The docs section of each code family; `open.zip-corrupt` is in `#open`. */
-const SECTIONS = { open: 'open', edit: 'edit', review: 'review', font: 'font' } as const;
+const SECTIONS = {
+  open: 'open',
+  edit: 'edit',
+  review: 'review',
+  font: 'font',
+  collab: 'collaboration',
+} as const;
 
 /**
  * A `Record` over the whole union, so a new code without a hint fails the type check.
  * Kept in English: these are developer messages, not interface strings.
  */
-const HINTS: Readonly<Record<DiagnosticCode, string>> = {
+const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode>, string>> = {
   'open.unsupported-source':
     "The editor was given something that is not DOCX bytes. Pass a Uint8Array or an ArrayBuffer of a .docx file, or 'blank'.",
   'open.zip-corrupt':
@@ -70,9 +76,17 @@ const HINTS: Readonly<Record<DiagnosticCode, string>> = {
   'edit.review-module-required':
     'This operation needs the review module. Register reviewModule() from @docx-editor.dev/pro in modules.',
   'edit.tracked-drawing-delete-unsupported':
-    'Deleting a drawing is not supported while changes are tracked. Delete the text around it, or switch tracking off for this edit.',
+    'Deleting a drawing is not supported while changes are tracked, so nothing was deleted. Leave the drawing, or ask a person to delete it with tracking off.',
   'edit.tracked-structure-unsupported':
-    'This structural edit cannot be recorded as a tracked change. Make it with tracking off, or edit the text inside the structure instead.',
+    'This structural edit cannot be recorded as a tracked change. Edit the text inside the structure instead, or ask a person to make the change with tracking off.',
+  'edit.tracked-operation-unsupported':
+    'This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed.',
+  'edit.tracking-mode-unsupported':
+    'TrackAll needs every collaborator to enforce tracking, which this runtime cannot guarantee. Use TrackMineOnly instead.',
+  'edit.tracking-author-required':
+    'TrackMineOnly needs an author for each tracked change. Pass the author option to createServer, or set a non-empty author on the editor.',
+  'edit.tracking-unsupported-host':
+    'This automation host does not support change tracking. The runtimes from createServer and from a mounted editor both support TrackMineOnly.',
   'edit.revision-unsupported':
     'The edit overlaps a tracked change of a kind the editor cannot change. Accept or reject that change first.',
   'edit.cross-structure-join':
@@ -133,6 +147,103 @@ const HINTS: Readonly<Record<DiagnosticCode, string>> = {
     'A font face uses a format or face index the editor does not support. The editor uses a substitute.',
 };
 
+/** Collaboration codes share hints by cause, as the failure code groups do. */
+const COLLAB_GATE =
+  'The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry.';
+const COLLAB_INPUT =
+  'The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed.';
+const COLLAB_JOIN =
+  'Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin.';
+const COLLAB_SEED =
+  'The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy.';
+const COLLAB_FORMAT =
+  'This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room.';
+const COLLAB_ROOM =
+  'The room is unusable. Save a copy, then create a new room from saved document bytes.';
+const COLLAB_REMOTE =
+  'A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists.';
+const COLLAB_LIMIT =
+  'Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy.';
+const COLLAB_RESERVED =
+  'The room server refused the saved room. Check the server storage, then rejoin.';
+const COLLAB_DEPRECATED =
+  'This collaboration code is no longer emitted. Upgrade the packages on every client and server.';
+
+const COLLABORATION_HINTS: Readonly<Record<CollaborationDiagnosticCode, string>> = {
+  'collab.collaboration-session-destroyed': COLLAB_GATE,
+  'collab.collaboration-session-not-attached': COLLAB_GATE,
+  'collab.collaboration-session-not-ready': COLLAB_GATE,
+  'collab.collaboration-text-limit': COLLAB_GATE,
+  'collab.experimental-collaboration-body-text-only': COLLAB_GATE,
+  'collab.invalid-document-id': COLLAB_INPUT,
+  'collab.invalid-identity': COLLAB_INPUT,
+  'collab.invalid-identity-color': COLLAB_INPUT,
+  'collab.invalid-session-id': COLLAB_INPUT,
+  'collab.already-initialized': COLLAB_JOIN,
+  'collab.document-id-mismatch': COLLAB_JOIN,
+  'collab.initialization-aborted': COLLAB_JOIN,
+  'collab.not-initialized': COLLAB_JOIN,
+  'collab.baseline-too-large': COLLAB_SEED,
+  'collab.blob-read': COLLAB_SEED,
+  'collab.invalid-baseline': COLLAB_SEED,
+  'collab.missing-local-blob': COLLAB_SEED,
+  'collab.no-main-document-part': COLLAB_SEED,
+  'collab.collaboration-format-mismatch': COLLAB_FORMAT,
+  'collab.protocol-version-mismatch': COLLAB_FORMAT,
+  'collab.schema-version-mismatch': COLLAB_FORMAT,
+  'collab.blob-digest-mismatch': COLLAB_ROOM,
+  'collab.concurrent-seed': COLLAB_ROOM,
+  'collab.port-already-attached': COLLAB_ROOM,
+  'collab.duplicate-paragraph-id': COLLAB_REMOTE,
+  'collab.invalid-relationships': COLLAB_REMOTE,
+  'collab.materialize-dropped-content': COLLAB_REMOTE,
+  'collab.missing-blob': COLLAB_REMOTE,
+  'collab.missing-root': COLLAB_REMOTE,
+  'collab.remote-apply-failed': COLLAB_REMOTE,
+  'collab.unknown-paragraph-id': COLLAB_REMOTE,
+  'collab.blob-store-full': COLLAB_LIMIT,
+  'collab.blob-too-large': COLLAB_LIMIT,
+  'collab.invalid-blob-descriptor': COLLAB_LIMIT,
+  'collab.invalid-bound': COLLAB_LIMIT,
+  'collab.invalid-logical-id': COLLAB_LIMIT,
+  'collab.invalid-string': COLLAB_LIMIT,
+  'collab.prototype-key': COLLAB_LIMIT,
+  'collab.text-too-long': COLLAB_LIMIT,
+  'collab.too-many-attributes': COLLAB_LIMIT,
+  'collab.too-many-children': COLLAB_LIMIT,
+  'collab.too-many-nodes': COLLAB_LIMIT,
+  'collab.too-many-parts': COLLAB_LIMIT,
+  'collab.too-many-relationships': COLLAB_LIMIT,
+  'collab.tree-too-deep': COLLAB_LIMIT,
+  'collab.unknown-logical-id': COLLAB_LIMIT,
+  'collab.unsafe-part-name': COLLAB_LIMIT,
+  'collab.invalid-saved-room': COLLAB_RESERVED,
+  'collab.saved-room-unavailable': COLLAB_RESERVED,
+  'collab.baseline-digest-mismatch': COLLAB_DEPRECATED,
+  'collab.experimental-collaboration-existing-paragraphs-only': COLLAB_DEPRECATED,
+  'collab.experimental-collaboration-text-only': COLLAB_DEPRECATED,
+  'collab.experimental-collaboration-untracked-text-only': COLLAB_DEPRECATED,
+  'collab.immutable-baseline-changed': COLLAB_DEPRECATED,
+  'collab.immutable-metadata-changed': COLLAB_DEPRECATED,
+  'collab.invalid-shared-metadata': COLLAB_DEPRECATED,
+  'collab.local-mirror-failed': COLLAB_DEPRECATED,
+  'collab.paragraph-set-mismatch': COLLAB_DEPRECATED,
+  'collab.shared-schema-invalid': COLLAB_DEPRECATED,
+  'collab.unsupported-root-key': COLLAB_DEPRECATED,
+  'collab.initialization-timeout':
+    'Joining the room timed out. Check that the collaboration server is reachable, then rejoin.',
+  'collab.authentication-failed':
+    'The collaboration server refused the credential. Refresh the token, then rejoin. Reconnecting with the same token fails again.',
+  'collab.room-generation-changed':
+    'The server compacted the room while this client was away. Save a copy if it holds unsent changes, then rejoin.',
+  'collab.transport':
+    'The collaboration transport failed. Check the network and the server, then rejoin.',
+  'collab.transport-disconnected':
+    'The connection to the collaboration server dropped. The session reconnects on its own; edits continue offline when offline editing is on.',
+};
+
+const ALL_HINTS: Readonly<Record<DiagnosticCode, string>> = { ...HINTS, ...COLLABORATION_HINTS };
+
 /**
  * What a diagnostic code means and what to do about it.
  *
@@ -147,10 +258,13 @@ const HINTS: Readonly<Record<DiagnosticCode, string>> = {
  */
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation {
   const family = code.slice(0, code.indexOf('.')) as keyof typeof SECTIONS;
-  return { hint: HINTS[code] ?? HINTS['edit.refused'], docs: `${DOCS}#${SECTIONS[family]}` };
+  return {
+    hint: ALL_HINTS[code] ?? HINTS['edit.refused'],
+    docs: `${DOCS}#${SECTIONS[family]}`,
+  };
 }
 
 /** Every public code, in declaration order. For coverage tests and catalogs. @public */
 export function diagnosticCodes(): readonly DiagnosticCode[] {
-  return Object.keys(HINTS) as DiagnosticCode[];
+  return Object.keys(ALL_HINTS) as DiagnosticCode[];
 }

@@ -4,7 +4,7 @@ description: 'Find out why a document failed to open, an edit was refused, or a 
 category: 'Guides'
 ---
 
-The editor reports anonymous diagnostics when a document opens or fails to open, when an edit or a tracked change is refused, and when a font fails to load. Each diagnostic carries a stable code and a fixed hint that explains the cause and the action to take.
+The editor reports anonymous diagnostics when a document opens or fails to open, when an edit or a tracked change is refused, when a font fails to load, and when a collaboration session changes status. Each diagnostic carries a stable code and a fixed hint that explains the cause and the action to take.
 
 Diagnostics never contain document content. The editor builds them from closed lists of codes, booleans, and bucketed numbers. Document text, part names, relationship targets, author names, and font names are never included. You can send a diagnostic to an error tracker or a metrics backend without filtering it.
 
@@ -41,16 +41,18 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 
 | Kind | When | Fields |
 | --- | --- | --- |
-| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` when rejected. |
-| `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command` or `input`), `tracked`, and `command` for a refused `exec` call. |
+| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. |
+| `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command`, `input`, or `automation`), `tracked`, and `command` for a refused `exec` call. |
 | `review.skipped` | Accepting, rejecting, or reassigning tracked changes skipped some of them. | `code` and `count`. |
 | `font.failed` | A font did not load, and the editor used a substitute. | `code`. |
+| `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, `code` when something is wrong, and `connectMs` on the first `ready`. |
+| `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
 
 Sizes and counts are buckets, such as `4-8MiB` or `10-99`, so a combination of values cannot identify one document.
 
 ## Codes
 
-Codes are stable. New codes can be added, but existing codes are never renamed. To get the hint for a code in your own code, call `explainDiagnostic(code)`.
+Codes are stable. New codes can be added, but existing codes are never renamed. To get the hint for a code in your own code, call `explainDiagnostic(code)`. To get the code for the local refusal message in `snapshot().lastRejection`, call `diagnosticCodeOfRefusal(reason)`.
 
 ### Open
 
@@ -83,8 +85,12 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | `edit.protected-content` | The edit touches content that document protection or a locked content control does not allow you to change. |
 | `edit.suggesting-needs-author` | Suggesting (tracking changes) needs an author to attribute each change to. Pass the author option or call setAuthor. |
 | `edit.review-module-required` | This operation needs the review module. Register reviewModule() from @docx-editor.dev/pro in modules. |
-| `edit.tracked-drawing-delete-unsupported` | Deleting a drawing is not supported while changes are tracked. Delete the text around it, or switch tracking off for this edit. |
-| `edit.tracked-structure-unsupported` | This structural edit cannot be recorded as a tracked change. Make it with tracking off, or edit the text inside the structure instead. |
+| `edit.tracked-drawing-delete-unsupported` | Deleting a drawing is not supported while changes are tracked, so nothing was deleted. Leave the drawing, or ask a person to delete it with tracking off. |
+| `edit.tracked-structure-unsupported` | This structural edit cannot be recorded as a tracked change. Edit the text inside the structure instead, or ask a person to make the change with tracking off. |
+| `edit.tracked-operation-unsupported` | This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed. |
+| `edit.tracking-mode-unsupported` | TrackAll needs every collaborator to enforce tracking, which this runtime cannot guarantee. Use TrackMineOnly instead. |
+| `edit.tracking-author-required` | TrackMineOnly needs an author for each tracked change. Pass the author option to createServer, or set a non-empty author on the editor. |
+| `edit.tracking-unsupported-host` | This automation host does not support change tracking. The runtimes from createServer and from a mounted editor both support TrackMineOnly. |
 | `edit.revision-unsupported` | The edit overlaps a tracked change of a kind the editor cannot change. Accept or reject that change first. |
 | `edit.cross-structure-join` | The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately. |
 | `edit.indivisible-content` | The edit would split content that must stay whole, such as an equation or a field. Select the whole item instead. |
@@ -123,3 +129,75 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | `font.malformed` | A font file is not a valid font, so the editor refused it and used a substitute. Check the file the font source points at. |
 | `font.size-limit` | A font file is larger than the font byte budget, so the editor used a substitute. Subset the font, or serve a smaller face. |
 | `font.unsupported-face` | A font face uses a format or face index the editor does not support. The editor uses a substitute. |
+
+### Collaboration
+
+A collaboration code is `collab.` followed by the session's own failure code.
+
+| Code | Cause and action |
+| --- | --- |
+| `collab.collaboration-session-destroyed` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
+| `collab.collaboration-session-not-attached` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
+| `collab.collaboration-session-not-ready` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
+| `collab.collaboration-text-limit` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
+| `collab.experimental-collaboration-body-text-only` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
+| `collab.invalid-document-id` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| `collab.invalid-identity` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| `collab.invalid-identity-color` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| `collab.invalid-session-id` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| `collab.already-initialized` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| `collab.document-id-mismatch` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| `collab.initialization-aborted` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| `collab.not-initialized` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| `collab.baseline-too-large` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| `collab.blob-read` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| `collab.invalid-baseline` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| `collab.missing-local-blob` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| `collab.no-main-document-part` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| `collab.collaboration-format-mismatch` | This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room. |
+| `collab.protocol-version-mismatch` | This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room. |
+| `collab.schema-version-mismatch` | This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room. |
+| `collab.blob-digest-mismatch` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
+| `collab.concurrent-seed` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
+| `collab.port-already-attached` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
+| `collab.duplicate-paragraph-id` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.invalid-relationships` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.materialize-dropped-content` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.missing-blob` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.missing-root` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.remote-apply-failed` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.unknown-paragraph-id` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
+| `collab.blob-store-full` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.blob-too-large` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.invalid-blob-descriptor` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.invalid-bound` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.invalid-logical-id` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.invalid-string` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.prototype-key` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.text-too-long` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.too-many-attributes` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.too-many-children` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.too-many-nodes` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.too-many-parts` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.too-many-relationships` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.tree-too-deep` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.unknown-logical-id` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.unsafe-part-name` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.invalid-saved-room` | The room server refused the saved room. Check the server storage, then rejoin. |
+| `collab.saved-room-unavailable` | The room server refused the saved room. Check the server storage, then rejoin. |
+| `collab.baseline-digest-mismatch` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.experimental-collaboration-existing-paragraphs-only` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.experimental-collaboration-text-only` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.experimental-collaboration-untracked-text-only` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.immutable-baseline-changed` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.immutable-metadata-changed` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.invalid-shared-metadata` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.local-mirror-failed` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.paragraph-set-mismatch` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.shared-schema-invalid` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.unsupported-root-key` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| `collab.initialization-timeout` | Joining the room timed out. Check that the collaboration server is reachable, then rejoin. |
+| `collab.authentication-failed` | The collaboration server refused the credential. Refresh the token, then rejoin. Reconnecting with the same token fails again. |
+| `collab.room-generation-changed` | The server compacted the room while this client was away. Save a copy if it holds unsent changes, then rejoin. |
+| `collab.transport` | The collaboration transport failed. Check the network and the server, then rejoin. |
+| `collab.transport-disconnected` | The connection to the collaboration server dropped. The session reconnects on its own; edits continue offline when offline editing is on. |

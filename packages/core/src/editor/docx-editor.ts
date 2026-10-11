@@ -832,9 +832,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   function reportFontError(error: EditorFontError): void {
-    const { onFontError } = config;
-    const hasErrorHandlers = events.hasErrorHandlers;
-    reportEditorFontError(error, { onFontError, hasErrorHandlers, emitError, diagnostics });
+    reportEditorFontError(error, { config, events, diagnostics });
   }
 
   // Fonts resolve asynchronously (HarfBuzz init + validation) PER LOAD, composing the
@@ -2648,6 +2646,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       mountGeneration += 1;
       bump();
       events.clear();
+      diagnostics.dispose();
     },
 
     on: events.on,

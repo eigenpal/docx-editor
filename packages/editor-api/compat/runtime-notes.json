@@ -730,5 +730,13 @@
   "Word.Paragraph#getRange": {
     "status": "partial",
     "notes": "Answers a range through the paragraph identity and offsets. The range refuses with StaleDocument after an edit before its end in that paragraph. Get the range again after such an edit."
+  },
+  "OfficeExtension.Error#debugInfo": {
+    "status": "partial",
+    "notes": "DocxEditorError.debugInfo has code, message, errorLocation, and innerError. errorLocation is the consumer-facing path of the refused call. statement, surroundingStatements, and fullStatements are not provided."
+  },
+  "OfficeExtension.DebugInfo#innerError": {
+    "status": "different",
+    "notes": "innerError is present only when the engine names a specific reason. It is an object with a stable public diagnostic code, such as edit.tracked-operation-unsupported, and the fixed hint for that code as message. It never contains document content."
   }
 }

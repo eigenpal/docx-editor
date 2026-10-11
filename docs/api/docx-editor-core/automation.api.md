@@ -1353,10 +1353,61 @@ export type AutomationValue = {
 };
 
 // @public
+export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
+
+// @public
+export function byteSizeBucket(bytes: number): ByteSizeBucket;
+
+// @public
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+// @public
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+// @public
+export function countBucket(count: number): CountBucket;
+
+// @public
 export function createAutomationPaginationProvider(options: AutomationPaginationOptions): AutomationPaginationProvider;
 
 // @public
+export function createDiagnosticEmitter<E>(listeners: () => Iterable<(event: E) => unknown>, now?: () => number): DiagnosticEmitter<E>;
+
+// @public
 export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAutomationHostOptions): ServerAutomationHostResult;
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | CollaborationDiagnosticCode;
+
+// @public
+export function diagnosticCodes(): readonly DiagnosticCode[];
+
+// @public
+export interface DiagnosticEmitter<E> {
+    deliver(payload: DiagnosticPayload<E>): void;
+    readonly editorSessionId: string;
+}
+
+// @public
+export interface DiagnosticExplanation {
+    readonly docs: string;
+    readonly hint: string;
+}
+
+// @public
+export type DiagnosticPayload<T> = T extends unknown ? Omit<T, 'schemaVersion' | 'editorSessionId' | 'time'> : never;
+
+// @public
+export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.internal-invariant' | 'edit.refused';
+
+// @public
+export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
+
+// @public
+export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
 
 // @public
 export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
@@ -1368,7 +1419,16 @@ export function isAutomationCommand(operation: AutomationOperation): boolean;
 export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean;
 
 // @public
+export function openDiagnosticCode(reason: string, limit?: string): DocumentOpenDiagnosticCode;
+
+// @public
 export function paginationSnapshotOf(layout: SemanticLayout): AutomationPaginationSnapshot;
+
+// @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+
+// @public
+export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | null;
 
 // @public
 export interface RevisionAuthorEntry extends RevisionBatchEntry {
@@ -1440,5 +1500,8 @@ export type ServerAutomationHostResult = {
     readonly ok: false;
     readonly reason: ServerAutomationHostRejection;
 };
+
+// @public
+export function storeEditDiagnosticCode(reason: string): EditDiagnosticCode | null;
 
 ```

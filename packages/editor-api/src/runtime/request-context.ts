@@ -50,6 +50,8 @@ export interface RuntimeSession {
   readonly author?: string;
   /** Revision view used by standard Office-compatible text reads and searches. */
   readonly revisionTextView: RevisionTextView;
+  /** Told about each refused batch before it is thrown. A listener that throws is ignored. */
+  readonly onRefusal?: (error: DocxEditorError) => void;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
   roots(): RootHandles;
@@ -228,15 +230,24 @@ export class RequestContext {
       };
       await this.#session.host.prepare(pinned);
       const response = this.#session.host.execute(pinned);
-      if (!response.ok) throw batchFailure(response, actions, reportedRevision);
+      if (!response.ok) throw this.#refused(batchFailure(response, actions, reportedRevision));
       settleBatch(actions, response);
       this.#readRevision = response.revision;
       return;
     }
     const response = this.#session.host.execute(request);
-    if (!response.ok) throw batchFailure(response, actions, reportedRevision);
+    if (!response.ok) throw this.#refused(batchFailure(response, actions, reportedRevision));
     settleBatch(actions, response);
     if (planned.hasRead || planned.hasWrite) this.#readRevision = response.revision;
+  }
+
+  #refused(error: DocxEditorError): DocxEditorError {
+    try {
+      this.#session.onRefusal?.(error);
+    } catch {
+      /* an observer must never change what the caller sees */
+    }
+    return error;
   }
 
   /** @internal The seam proxies reach the context through. */

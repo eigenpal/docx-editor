@@ -1,0 +1,116 @@
+/**
+ * The public diagnostic vocabulary: stable codes and the buckets sizes and counts are reported
+ * in. It lives in this neutral lane so a headless runtime can name a refusal without the editor
+ * contracts; `contracts/diagnostics.ts` re-exports it for the editor's own types.
+ */
+import type { CollaborationFailureCode } from '../collaboration/index.ts';
+
+/** Why a document could not be opened. @public */
+export type DocumentOpenDiagnosticCode =
+  | 'open.unsupported-source'
+  | 'open.zip-corrupt'
+  | 'open.zip-invalid-entry-name'
+  | 'open.zip-entry-limit'
+  | 'open.zip-size-limit'
+  | 'open.zip-ratio-limit'
+  | 'open.xml-malformed'
+  | 'open.xml-dtd-forbidden'
+  | 'open.xml-part-size-limit'
+  | 'open.xml-depth-limit'
+  | 'open.xml-element-limit'
+  | 'open.invalid-limits'
+  | 'open.content-types-invalid'
+  | 'open.missing-main-document'
+  | 'open.relationships-invalid'
+  | 'open.relationship-limit'
+  | 'open.part-limit'
+  | 'open.failed';
+
+/** Why an edit, a command or a tracked change was refused. @public */
+export type EditDiagnosticCode =
+  | 'edit.read-only'
+  | 'edit.protected-content'
+  | 'edit.suggesting-needs-author'
+  | 'edit.review-module-required'
+  | 'edit.tracked-drawing-delete-unsupported'
+  | 'edit.tracked-structure-unsupported'
+  | 'edit.tracked-operation-unsupported'
+  | 'edit.tracking-mode-unsupported'
+  | 'edit.tracking-author-required'
+  | 'edit.tracking-unsupported-host'
+  | 'edit.revision-unsupported'
+  | 'edit.cross-structure-join'
+  | 'edit.indivisible-content'
+  | 'edit.field-structure'
+  | 'edit.section-mark'
+  | 'edit.table-structure-unsupported'
+  | 'edit.table-insert-refused'
+  | 'edit.table-of-contents-refused'
+  | 'edit.unsupported-content'
+  | 'edit.unsupported-story'
+  | 'edit.unmapped-change'
+  | 'edit.stale-target'
+  | 'edit.invalid-argument'
+  | 'edit.resource-limit'
+  | 'edit.refresh-in-progress'
+  | 'edit.internal-invariant'
+  | 'edit.refused';
+
+/** Why accepting, rejecting or re-authoring a tracked change skipped an item. @public */
+export type ReviewDiagnosticCode =
+  | 'review.revision-unsupported'
+  | 'review.incomplete-group'
+  | 'review.retained-structure'
+  | 'review.stale-revision';
+
+/** Why a font did not load. The family name is never reported. @public */
+export type FontDiagnosticCode =
+  | 'font.shaper-unavailable'
+  | 'font.load-failed'
+  | 'font.missing'
+  | 'font.integrity-mismatch'
+  | 'font.malformed'
+  | 'font.size-limit'
+  | 'font.unsupported-face';
+
+/**
+ * Why a collaboration session failed or refused work: `collab.` and the session's own public
+ * {@link CollaborationFailureCode}, such as `collab.authentication-failed`.
+ *
+ * @public
+ */
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+/** Every public diagnostic code. Codes are stable: a new one is additive, none is renamed. @public */
+export type DiagnosticCode =
+  | DocumentOpenDiagnosticCode
+  | EditDiagnosticCode
+  | ReviewDiagnosticCode
+  | FontDiagnosticCode
+  | CollaborationDiagnosticCode;
+
+/**
+ * A coarse size, in powers of two, so a size cannot single out one document.
+ * `'0-64KiB'` covers everything under 64 KiB; `'512MiB+'` everything above.
+ *
+ * @public
+ */
+export type ByteSizeBucket =
+  | '0-64KiB'
+  | '64-128KiB'
+  | '128-256KiB'
+  | '256-512KiB'
+  | '512KiB-1MiB'
+  | '1-2MiB'
+  | '2-4MiB'
+  | '4-8MiB'
+  | '8-16MiB'
+  | '16-32MiB'
+  | '32-64MiB'
+  | '64-128MiB'
+  | '128-256MiB'
+  | '256-512MiB'
+  | '512MiB+';
+
+/** A coarse count: `'0'`, `'1'`, `'2-9'`, `'10-99'`, `'100-999'`, `'1000+'`. @public */
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';

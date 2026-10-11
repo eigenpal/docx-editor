@@ -18,13 +18,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { serverPagination, type ServerPaginationOptions } from './pagination.ts';
 export type { ServerPaginationOptions } from './pagination.ts';
-import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
+import { createServerAutomationHost, openDiagnosticCode } from '@docx-editor.dev/core/automation';
 import type {
   CollaborationModuleContribution,
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import { fail, type DocxEditorErrorInit } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } from './runtime.ts';
+import { runtimeDiagnostics, type RuntimeDiagnostic } from './diagnostics.ts';
 
 /**
  * Capability module accepted by {@link createServer}. Collaboration attaches
@@ -35,6 +36,11 @@ import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } fr
 export interface EditorModule {
   readonly id: string;
   readonly collaboration?: CollaborationModuleContribution;
+  /**
+   * Told about this runtime's anonymous diagnostics: the open, and each refused batch with a
+   * known reason. A telemetry module's listener fits here unchanged.
+   */
+  readonly onDiagnostic?: (event: RuntimeDiagnostic) => void;
 }
 
 function collaborationModelOf(
@@ -102,7 +108,9 @@ export interface CreateServerOptions {
   readonly pagination?: ServerPaginationOptions;
   /**
    * Capability modules to register. Collaboration attaches only through a
-   * collaboration contribution on this list.
+   * collaboration contribution on this list. A module with `onDiagnostic`, such as a telemetry
+   * module, receives the anonymous diagnostics of this runtime: the open, and each refused
+   * batch with a known reason.
    */
   readonly modules?: readonly EditorModule[];
   /**
@@ -153,6 +161,10 @@ export async function createServer(
   options: CreateServerOptions = {}
 ): Promise<DocxEditorServerRuntime> {
   validateDocumentLimits(options.limits);
+  const diagnostics = runtimeDiagnostics(
+    (options.modules ?? []).flatMap((module) => (module.onDiagnostic ? [module.onDiagnostic] : []))
+  );
+  const started = Date.now();
   const collaborationModel = collaborationModelOf(options.modules);
   const opened = createServerAutomationHost(bytes, {
     ...(options.pagination ? { pagination: serverPagination(options.pagination) } : {}),
@@ -169,12 +181,15 @@ export async function createServer(
       'too-many-relationships': 'maxRelationships',
     };
     const limit = opened.limit ?? limits[opened.reason];
+    diagnostics?.openRejected(bytes, opened.reason, opened.limit);
     fail({
       code: limit === undefined ? 'InvalidArgument' : 'ResourceLimitExceeded',
       target: 'createServer',
       ...(limit === undefined ? {} : { limit }),
+      diagnostic: openDiagnosticCode(opened.reason, opened.limit),
     });
   }
+  diagnostics?.opened(bytes, Date.now() - started);
   return createRuntime({
     host: opened.host,
     save: true,
@@ -182,6 +197,7 @@ export async function createServer(
     ...(options.revisionTextView === undefined
       ? {}
       : { revisionTextView: options.revisionTextView }),
+    ...(diagnostics ? { onRefusal: (error) => diagnostics.refused(error, opened.host) } : {}),
   });
 }
 

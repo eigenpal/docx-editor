@@ -1,0 +1,288 @@
+---
+title: 'Telemetry'
+description: 'Send anonymous diagnostics and metrics from editors and collaboration servers to OpenTelemetry, Prometheus, Sentry, or your own logger, without sending document content.'
+category: 'Pro'
+---
+
+`@docx-editor.dev/telemetry` sends the editor's anonymous [diagnostics](/docs/2.x/guides/diagnostics) and metrics to the observability tools that you already run. It covers single-user editors, collaboration clients, and collaboration servers.
+
+The package sends nothing by itself. You choose the exporters, and you choose the areas to record. Every event contains only codes, booleans, and bucketed numbers. Document text, file names, part names, author names, font names, and room names are never sent.
+
+```mermaid
+flowchart LR
+  E[Editor] -- diagnostics --> T[createTelemetry]
+  S[Collaboration server] --> R[withCollaborationTelemetry or roomTelemetry]
+  T --> X[Exporters]
+  R --> X
+  X --> O[OpenTelemetry SDK]
+  X --> P[Prometheus /metrics]
+  X --> Y[Sentry]
+  X --> C[Your callback]
+```
+
+## Choose a standard
+
+| Need | Use | Entry point |
+| --- | --- | --- |
+| Metrics and traces in any backend that accepts OTLP, such as Datadog, Grafana, Honeycomb, or New Relic | OpenTelemetry, through your own SDK | `@docx-editor.dev/telemetry/otel` |
+| A scrape endpoint for Prometheus or Grafana Agent | Prometheus text format | `@docx-editor.dev/telemetry/prometheus` |
+| Grouped error issues for browser and server failures | Sentry | `@docx-editor.dev/telemetry/sentry` |
+| Any other tool, such as Datadog RUM, PostHog, or your logger | A callback | `@docx-editor.dev/telemetry` |
+
+OpenTelemetry is the source model. Prometheus names come from the OpenTelemetry names: `docx_editor.collab.room.load.duration` in seconds becomes `docx_editor_collab_room_load_duration_seconds`.
+
+## Install
+
+```bash
+npm install @docx-editor.dev/telemetry
+```
+
+Install the peer dependency for each exporter that you use: `@opentelemetry/api` for OpenTelemetry, and `yjs` with `@docx-editor.dev/pro` for room telemetry. The Sentry and Prometheus exporters have no dependencies.
+
+## Set up an editor
+
+Create the telemetry client once, outside your components, and register its module. The module receives the diagnostics of the first document that the editor opens.
+
+```tsx
+// telemetry.ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { sentryExporter } from '@docx-editor.dev/telemetry/sentry';
+import * as Sentry from '@sentry/react';
+
+export const telemetry = createTelemetry({
+  exporters: [sentryExporter(Sentry)],
+  include: { documentOpen: true, trackedChanges: true, editing: true },
+  consent: () => window.cookieConsent?.analytics === true,
+  resource: { 'service.name': 'contracts-app' },
+});
+```
+
+```tsx
+// Editor.tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { telemetry } from './telemetry';
+
+const MODULES = [reviewModule(), telemetry.module];
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return <DocxEditor document={bytes} modules={MODULES} />;
+}
+```
+
+In Vue, pass the same array: `<DocxEditor :document="bytes" :modules="MODULES" />`.
+
+If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs only when an event is recorded, so the client is safe to create during server rendering.
+
+Register `telemetry.module`, or call `telemetry.record(event)` yourself, but not both. If you do both, every event is recorded twice.
+
+### Choose what to record
+
+The `include` option turns areas on. If you omit `include`, every area is on.
+
+| Area | Records |
+| --- | --- |
+| `documentOpen` | Documents that opened, with size and page buckets and the open time, and documents that were refused, with the reason. |
+| `editing` | Edits and commands that were refused while changes were not tracked. |
+| `trackedChanges` | Edits that were refused while suggesting, and tracked changes that accept, reject, or reassign requests skipped. |
+| `fonts` | Fonts that failed to load and were substituted. |
+| `collaborationClient` | Collaboration status changes, failure codes, connect time, and the number of people in the room. |
+
+Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event.
+
+Identical refusals within 10 seconds are sent once. When the window closes, one summary event repeats the first event with `repeated` set to the number of extra events. Count a summary; do not treat it as a new failure. For the number of people in a room, only the latest count in the window is sent. To change the window, set `dedupeWindowMs`.
+
+### See why an edit failed during development
+
+Add `consoleExporter()` to print each event with its hint and documentation link:
+
+```ts
+import { createTelemetry, consoleExporter } from '@docx-editor.dev/telemetry';
+
+export const telemetry = createTelemetry({ exporters: [consoleExporter()] });
+```
+
+A refused tracked change prints the following output:
+
+```text
+[docx-editor] edit refused: edit.tracked-drawing-delete-unsupported (input, tracked)
+  Deleting a drawing is not supported while changes are tracked, so nothing was deleted. Leave the drawing, or ask a person to delete it with tracking off.
+  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit
+```
+
+## Send to Sentry
+
+`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. A refused open, a collaboration error that does not heal, a text shaper that did not load, and an engine invariant become Sentry issues. The fingerprint is the diagnostic code, so issues group by cause. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
+
+To change which events become issues, pass `issue: (event) => boolean`.
+
+Session Replay records the page, and the page shows the document. Mask the editor:
+
+```ts
+Sentry.init({
+  dsn: '...',
+  integrations: [Sentry.replayIntegration({ mask: ['.docx-editor'] })],
+});
+```
+
+Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`.
+
+## Send to OpenTelemetry
+
+Start your OpenTelemetry SDK first, and then create the exporter. The exporter uses the global meter and tracer providers unless you pass your own.
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({ exporters: [otelExporter()] });
+```
+
+Each document open becomes a `docx_editor.document.open` span. The span has an error status when the open is refused. Other failures become events on the active span. In development, the exporter warns once if no SDK is registered.
+
+## Send to another tool
+
+Use `callbackExporter` to forward events to any function:
+
+```ts
+import { callbackExporter, createTelemetry } from '@docx-editor.dev/telemetry';
+
+export const telemetry = createTelemetry({
+  exporters: [callbackExporter((event) => datadogRum.addError(event.kind, event))],
+});
+```
+
+To write your own exporter, implement `TelemetryExporter` with an `event` method, a `metric` method, or both.
+
+## Set up a collaboration server
+
+### Hocuspocus
+
+Wrap your Hocuspocus configuration. The wrapper times your hooks and records why they refused a connection or a message. Your hooks keep their arguments, return values, and errors.
+
+```ts
+import { Server } from '@hocuspocus/server';
+import { withCollaborationTelemetry } from '@docx-editor.dev/telemetry/hocuspocus';
+import { metricsHandler, prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
+
+const metrics = prometheusRegistry();
+const { config, rooms } = withCollaborationTelemetry(
+  { port: 1234, onAuthenticate, onLoadDocument, beforeHandleMessage, onStoreDocument },
+  { exporters: [metrics] }
+);
+const server = new Server(config);
+
+app.get('/metrics', metricsHandler(metrics));
+app.get('/admin/rooms', requireAdmin, (_request, response) => response.json(rooms.list()));
+process.on('SIGTERM', () => void rooms.shutdown());
+```
+
+If the server has no web framework, serve the metrics from the Hocuspocus HTTP server with `serveMetrics`:
+
+```ts
+import { serveMetrics } from '@docx-editor.dev/telemetry/hocuspocus';
+
+const server = new Server({
+  ...config,
+  onRequest: serveMetrics(metrics, {
+    rooms: { telemetry: rooms, path: '/rooms' },
+    authorize: (request) => request.headers['x-metrics-token'] === process.env.METRICS_TOKEN,
+  }),
+});
+```
+
+The wrapper records the refusals that your own hooks throw. A refusal thrown by a Hocuspocus extension in `config.extensions` stops Hocuspocus before your hooks run, so the wrapper does not see it. A refusal reason becomes a metric label only when it is a collaboration failure code, a common reason such as `unauthorized`, or a reason you list in the `reasons` option; any other reason is counted as `other`, so free text never becomes a label.
+
+### Other Yjs servers
+
+Use `roomTelemetry` and call it from your own room lifecycle:
+
+```ts
+import { roomTelemetry } from '@docx-editor.dev/telemetry/server';
+
+const rooms = roomTelemetry({ exporters: [metrics] });
+
+const room = rooms.open(ydoc, { name: roomName, awareness });
+await room.time('load', () => loadRoom(ydoc));
+room.connected();
+// When a connection is refused at admission:
+rooms.rejected(error);
+// When the server unloads the room:
+room.close();
+```
+
+### People and memory in each room
+
+The number of people in a room comes from the room's awareness states. One person with two tabs counts twice. Connections are counted separately.
+
+JavaScript cannot measure the heap used by one room. The metrics report what each room holds instead: the encoded Yjs state, the stored images and other files, and the updates not yet stored. To see whether process memory grows with the rooms, compare these metrics with your process memory metrics, such as `prom-client` default metrics.
+
+The state is encoded once per sample, and only for rooms that changed. The default sample interval is 60 seconds. To sample once per scrape instead, set `sampleInterval: false` and call `rooms.sample()` before you render the metrics, or pass `sampleBeforeScrape: true` to `serveMetrics`.
+
+### Per-room detail
+
+Metrics carry no room name, so the number of series stays bounded and names stay private. To find a large room, call `rooms.list()` from an endpoint that only administrators can reach. Each row has the room label, people, connections, state bytes, file bytes, pending bytes, node count, the largest share of any room limit, age, and idle time.
+
+By default, the room label is an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, use `roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET)`. It throws at startup when the secret is empty. To show real names, use `roomLabel: (name) => name`.
+
+### Serve Prometheus metrics
+
+`metricsHandler` serves Node-style servers, such as Node `http` and Express. `fetchMetricsHandler` serves Fetch-style servers, such as Next.js route handlers, Hono, Bun, and Deno. To serve your `prom-client` metrics from the same endpoint, pass `merge: [register]` to either one.
+
+```ts
+// Next.js: app/metrics/route.ts
+import { fetchMetricsHandler } from '@docx-editor.dev/telemetry/prometheus';
+import { metrics } from '@/lib/metrics';
+
+export const GET = fetchMetricsHandler(metrics);
+```
+
+For Fastify, call `reply.hijack()` and pass the raw Node objects. Without `hijack()`, Fastify tries to send a second response after the handler ends it.
+
+```ts
+fastify.get('/metrics', (request, reply) => {
+  reply.hijack();
+  return metricsHandler(metrics)(request.raw, reply.raw);
+});
+```
+
+## Privacy
+
+- Every diagnostic is built from closed lists of codes, booleans, and bucketed numbers. The engine creates it this way, and the package checks each event again before an exporter receives it.
+- Hints and documentation links are fixed text for each code.
+- Sizes and counts are buckets, such as `4-8MiB` or `10-99`.
+- The `editorSessionId` value is random for each editor instance and is never stored.
+- Metric labels accept only short identifier values. Any other value becomes `other`.
+- Room names never appear in metrics.
+- The `resource` values are yours. Do not put a user, a document, or a room name in them.
+
+## Metrics
+
+| Prometheus name | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `docx_editor_document_opens_total` | counter | `outcome`, `code` | Documents opened or refused, by outcome and refusal code. |
+| `docx_editor_document_open_duration_seconds` | histogram | none | Time from the start of an open to the laid-out document. |
+| `docx_editor_edit_rejections_total` | counter | `code`, `origin`, `tracked` | Edits, commands, and tracked changes refused, by public code. |
+| `docx_editor_review_skipped_total` | counter | `code` | Tracked changes skipped by accept, reject, or reassign requests. |
+| `docx_editor_font_failures_total` | counter | `code` | Font faces that failed to load and were substituted. |
+| `docx_editor_collab_client_status_transitions_total` | counter | `status`, `code` | Collaboration status changes on clients, by new status and failure code. |
+| `docx_editor_collab_client_connect_duration_seconds` | histogram | none | Time from joining a room to the first ready status. |
+| `docx_editor_collab_client_participants` | histogram | none | People in the room, as each client sees it when the count changes. |
+| `docx_editor_collab_rooms_active` | gauge | none | Rooms loaded. |
+| `docx_editor_collab_connections_active` | gauge | none | Open client connections. One person with two tabs is two connections. |
+| `docx_editor_collab_participants_active` | gauge | none | People present in all rooms, from awareness states. |
+| `docx_editor_collab_room_participants` | histogram | none | People present in each room, sampled once per room per interval. |
+| `docx_editor_collab_room_participants_max` | gauge | none | People in the fullest room at the last sample. |
+| `docx_editor_collab_room_memory_bytes` | histogram | `kind` | Bytes each room holds, sampled per room: encoded state, blobs, and updates not yet stored. |
+| `docx_editor_collab_rooms_memory_bytes` | gauge | `kind` | Bytes all rooms hold together at the last sample. |
+| `docx_editor_collab_room_nodes` | histogram | `state` | Shared document nodes per room, live and tombstoned. |
+| `docx_editor_collab_room_resource_usage_ratio` | histogram | `resource` | Share of each room resource limit in use, from 0 to 1. |
+| `docx_editor_collab_room_age_seconds` | histogram | none | How long each room has been loaded. |
+| `docx_editor_collab_room_idle_seconds` | histogram | none | Time since each room last changed. |
+| `docx_editor_collab_room_load_duration_seconds` | histogram | `outcome` | Time to load a room, by outcome. |
+| `docx_editor_collab_room_store_duration_seconds` | histogram | `outcome` | Time to store a room, by outcome. |
+| `docx_editor_collab_admission_rejections_total` | counter | `reason` | Connections refused at admission, by reason. |
+| `docx_editor_collab_message_refusals_total` | counter | `reason` | Messages refused before they applied, by reason, such as room-generation-changed. |
+| `docx_editor_collab_updates_total` | counter | none | Document updates applied to rooms. |
+| `docx_editor_collab_update_bytes_total` | counter | none | Bytes of document updates applied to rooms. |
+| `docx_editor_collab_migrations_total` | counter | `outcome` | Room migrations, by outcome. |

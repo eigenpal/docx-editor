@@ -889,11 +889,13 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
     case 'setImageProperties':
       return { supported: true, mutating: true };
     default:
-      return {
-        supported: false,
-        reason: `command '${command.type}' is not supported by the tree editor`,
-      };
+      return { supported: false, reason: unknownCommandReason(command.type) };
   }
+}
+
+/** The classifier's refusal for a command type it has no case for. */
+export function unknownCommandReason(type: string): string {
+  return `command '${type}' is not supported by the tree editor`;
 }
 
 // ---------------------------------------------------------------------------------------

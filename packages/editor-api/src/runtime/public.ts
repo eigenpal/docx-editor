@@ -98,8 +98,10 @@ export { ClientResult } from './client-result.ts';
 export {
   DocxEditorError,
   isDocxEditorError,
+  type DocxEditorDebugInfo,
   type DocxEditorErrorCode,
   type DocxEditorErrorInit,
+  type DocxEditorInnerError,
 } from './errors.ts';
 export type { LoadOption, LoadQueryOptions } from './load-options.ts';
 export { RequestContext } from './request-context.ts';
@@ -119,4 +121,5 @@ export type {
   DocumentZipLimits,
   EditorModule,
 } from './server.ts';
+export type { RuntimeDiagnostic } from './diagnostics.ts';
 export { TrackedObjects } from './tracked-objects.ts';

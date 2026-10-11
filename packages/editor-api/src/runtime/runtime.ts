@@ -133,6 +133,8 @@ export interface CreateRuntimeOptions {
   readonly author?: string;
   /** Revision view for standard `text` loads and `search()` calls. Omitted means `allMarkup`. */
   readonly revisionTextView?: RevisionTextView;
+  /** Told about each refused batch before it is thrown, for anonymous diagnostics. */
+  readonly onRefusal?: (error: DocxEditorError) => void;
 }
 
 export function createRuntime(
@@ -184,6 +186,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     capabilities,
     ...(author === undefined ? {} : { author }),
     revisionTextView,
+    ...(options.onRefusal ? { onRefusal: options.onRefusal } : {}),
     id: {},
     roots: resolveRoots,
     assertLive,

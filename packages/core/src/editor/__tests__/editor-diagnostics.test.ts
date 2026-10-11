@@ -10,10 +10,14 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import type { EditorDiagnostic } from '../../contracts/diagnostics.ts';
 import { DIAGNOSTIC_SCHEMA_VERSION } from '../../contracts/diagnostics.ts';
-import { diagnosticCodes, explainDiagnostic } from '../../contracts/diagnostic-hints.ts';
+import { diagnosticCodes, explainDiagnostic } from '../../automation/diagnostic-hints.ts';
 import { createDocxEditor } from '../docx-editor.ts';
-import { byteSizeBucket, countBucket } from '../editor-diagnostics.ts';
-import { editDiagnosticCode, fontDiagnosticCode, openDiagnosticCode } from '../diagnostic-codes.ts';
+import { byteSizeBucket, countBucket } from '../../automation/diagnostics.ts';
+import {
+  diagnosticCodeOfRefusal,
+  fontDiagnosticCode,
+  openDiagnosticCode,
+} from '../diagnostic-codes.ts';
 import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -171,6 +175,25 @@ describe('edit.rejected', () => {
     }
   });
 
+  test('a built-in command refused for its arguments keeps its name; a custom one has none', () => {
+    const { events, module } = observe();
+    const editor = createDocxEditor({
+      container: mount(),
+      document: docx(paragraph('a')),
+      modules: [module],
+    });
+    try {
+      editor.exec({ type: 'toggleMark', mark: 'not-a-mark' } as never);
+      editor.exec({ type: 'customerCommandWithASurname' } as never);
+      const rejected = events.filter((event) => event.kind === 'edit.rejected');
+      expect(rejected).toHaveLength(2);
+      expect(rejected[0]).toMatchObject({ command: 'toggleMark' });
+      expect(rejected[1]).not.toHaveProperty('command');
+    } finally {
+      editor.destroy();
+    }
+  });
+
   test('a listener that throws does not break the editor', () => {
     const editor = createDocxEditor({
       container: mount(),
@@ -218,13 +241,20 @@ describe('review.skipped', () => {
 
 describe('codes and hints', () => {
   test('every public code has a hint and a docs link', () => {
+    const SECTION: Record<string, string> = {
+      open: 'open',
+      edit: 'edit',
+      review: 'review',
+      font: 'font',
+      collab: 'collaboration',
+    };
     const codes = diagnosticCodes();
     expect(codes.length).toBeGreaterThan(40);
     for (const code of codes) {
       const { hint, docs } = explainDiagnostic(code);
       expect(hint.length).toBeGreaterThan(20);
       expect(docs).toBe(
-        `https://docx-editor.dev/docs/2.x/guides/diagnostics#${code.split('.')[0]}`
+        `https://docx-editor.dev/docs/2.x/guides/diagnostics#${SECTION[code.split('.')[0]!]}`
       );
     }
   });
@@ -235,15 +265,17 @@ describe('codes and hints', () => {
     expect(openDiagnosticCode('too-large')).toBe('open.xml-part-size-limit');
     expect(openDiagnosticCode('no-main-document')).toBe('open.missing-main-document');
     expect(openDiagnosticCode('constructor')).toBe('open.failed');
-    expect(editDiagnosticCode('trackedDrawingDeletionUnsupported')).toBe(
+    expect(diagnosticCodeOfRefusal('trackedDrawingDeletionUnsupported')).toBe(
       'edit.tracked-drawing-delete-unsupported'
     );
-    expect(editDiagnosticCode('not-adjacent-siblings')).toBe('edit.cross-structure-join');
-    expect(editDiagnosticCode('unsupported-revision:moveFrom')).toBe('edit.revision-unsupported');
-    expect(editDiagnosticCode('the document is open for viewing')).toBe('edit.read-only');
-    expect(editDiagnosticCode(`a sentence about ${SECRET_TEXT}`)).toBe('edit.refused');
-    expect(editDiagnosticCode('a sentence', 'notFound')).toBe('edit.stale-target');
-    expect(editDiagnosticCode('__proto__')).toBe('edit.refused');
+    expect(diagnosticCodeOfRefusal('not-adjacent-siblings')).toBe('edit.cross-structure-join');
+    expect(diagnosticCodeOfRefusal('unsupported-revision:moveFrom')).toBe(
+      'edit.revision-unsupported'
+    );
+    expect(diagnosticCodeOfRefusal('the document is open for viewing')).toBe('edit.read-only');
+    expect(diagnosticCodeOfRefusal(`a sentence about ${SECRET_TEXT}`)).toBe('edit.refused');
+    expect(diagnosticCodeOfRefusal('a sentence', 'notFound')).toBe('edit.stale-target');
+    expect(diagnosticCodeOfRefusal('__proto__')).toBe('edit.refused');
     expect(fontDiagnosticCode('wasmUnavailable')).toBe('font.shaper-unavailable');
     expect(fontDiagnosticCode(undefined)).toBe('font.load-failed');
   });

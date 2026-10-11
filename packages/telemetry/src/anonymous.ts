@@ -1,0 +1,129 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/telemetry/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+
+/**
+ * The second privacy check. The engine already builds every diagnostic from codes and
+ * numbers; this guard makes sure that stays true at the boundary, whatever version of the
+ * engine produced the event. A string that is not a known enum value is dropped, never sent.
+ */
+import { diagnosticCodes, explainDiagnostic } from '@docx-editor.dev/core';
+import type { DiagnosticCode } from '@docx-editor.dev/core';
+import type { Attributes, AttributeValue, TelemetryEvent } from './pipeline.ts';
+
+const CODES: ReadonlySet<string> = new Set(diagnosticCodes());
+
+/** Allowed string values for each enum field of a diagnostic. */
+const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
+  kind: new Set([
+    'document.open',
+    'edit.rejected',
+    'review.skipped',
+    'font.failed',
+    'collab.status',
+    'collab.participants',
+  ]),
+  code: CODES,
+  outcome: new Set(['opened', 'rejected']),
+  origin: new Set(['command', 'input', 'automation']),
+  // A command type is a public enum value such as `insertTable`.
+  command: /^[a-zA-Z][a-zA-Z0-9]{0,63}$/,
+  sizeBucket: /^(?:\d+(?:KiB|MiB)?-\d+(?:KiB|MiB)|512MiB\+)$/,
+  pagesBucket: new Set(['0', '1', '2-9', '10-99', '100-999', '1000+']),
+  editorSessionId: /^e_[A-Za-z0-9-]{8,64}$/,
+  engineVersion: /^[0-9A-Za-z.+-]{1,40}$/,
+  status: new Set(['initializing', 'ready', 'disconnected', 'error', 'destroyed']),
+  previous: new Set(['none', 'initializing', 'ready', 'disconnected', 'error', 'destroyed']),
+};
+
+const NUMBERS = new Set([
+  'schemaVersion',
+  'time',
+  'durationMs',
+  'count',
+  'repeated',
+  'connectMs',
+  'participants',
+]);
+const BOOLEANS = new Set(['tracked', 'recovering']);
+
+let warned = false;
+function devWarn(message: string): void {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env?.NODE_ENV;
+  if (warned || env === 'production') return;
+  warned = true;
+  console.warn(`[docx-editor telemetry] ${message}`);
+}
+
+function allowed(field: string, value: string): boolean {
+  const rule = Object.hasOwn(ENUMS, field) ? ENUMS[field] : undefined;
+  if (!rule) return false;
+  return rule instanceof RegExp ? rule.test(value) : rule.has(value);
+}
+
+/**
+ * The event with every field checked, or `null` when its kind or code is unknown. Unknown
+ * fields and strings outside their enum are dropped. `hint` and `docs` must be the constants
+ * for the event's own code.
+ */
+export function checkEvent(event: TelemetryEvent): TelemetryEvent | null {
+  const source = event as unknown as Record<string, unknown>;
+  if (typeof source.kind !== 'string' || !allowed('kind', source.kind)) {
+    devWarn(`dropped an event of unknown kind "${String(source.kind).slice(0, 40)}"`);
+    return null;
+  }
+  const code = typeof source.code === 'string' ? source.code : undefined;
+  if (code !== undefined && !CODES.has(code)) {
+    devWarn('dropped an event with an unknown code');
+    return null;
+  }
+  const explained = code ? explainDiagnostic(code as DiagnosticCode) : undefined;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'resource') continue;
+    if (key === 'hint' || key === 'docs') {
+      if (explained && value === explained[key]) out[key] = value;
+      continue;
+    }
+    const known = Object.hasOwn(ENUMS, key) || NUMBERS.has(key) || BOOLEANS.has(key);
+    if (typeof value === 'number' && NUMBERS.has(key) && Number.isFinite(value)) out[key] = value;
+    else if (typeof value === 'boolean' && BOOLEANS.has(key)) out[key] = value;
+    else if (typeof value === 'string' && allowed(key, value)) out[key] = value;
+    else if (known) {
+      // A known field that fails its check would leave a typed event with a hole in it.
+      devWarn(`dropped an event whose "${key}" is not a valid value`);
+      return null;
+    } else devWarn(`dropped the field "${key}", which is not an anonymous diagnostic field`);
+  }
+  out.resource = event.resource;
+  return Object.freeze(out) as unknown as TelemetryEvent;
+}
+
+const KEY = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/;
+const LABEL_VALUE = /^[A-Za-z0-9_.:+-]{0,64}$/;
+
+/**
+ * Attributes with only primitive values and well-formed keys. With `labels`, a metric's own
+ * label list, other keys are dropped and string values outside the label alphabet become
+ * `other`, so no free text becomes a time series.
+ */
+export function checkAttributes(
+  attributes: Attributes,
+  context: string,
+  labels?: readonly string[]
+): Attributes {
+  const out: Record<string, AttributeValue> = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    if (!KEY.test(key) || (labels && !labels.includes(key))) {
+      devWarn(`dropped the attribute "${key.slice(0, 40)}" on ${context}`);
+      continue;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') out[key] = value;
+    else if (typeof value === 'string')
+      out[key] = labels && !LABEL_VALUE.test(value) ? 'other' : value.slice(0, 256);
+  }
+  return out;
+}

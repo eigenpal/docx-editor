@@ -16,6 +16,7 @@
     "@docx-editor.dev/i18n": "workspace:*",
     "@docx-editor.dev/pro": "workspace:*",
     "@docx-editor.dev/react": "workspace:*",
+    "@docx-editor.dev/telemetry": "workspace:*",
     "@hocuspocus/provider": "^4.6.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

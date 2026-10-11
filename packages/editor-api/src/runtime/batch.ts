@@ -21,6 +21,7 @@ import type {
   AutomationErrorCode,
   AutomationOperation,
 } from '@docx-editor.dev/core/automation';
+import { storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { DocxEditorError, type DocxEditorErrorCode } from './errors.ts';
 import type { QueuedAction } from './queue.ts';
 
@@ -79,15 +80,20 @@ export interface HostFailureContext {
   readonly actualRevision?: number;
 }
 
-/** One host error as one of ours. Nothing from `error.message`/`error.detail` survives. */
+/**
+ * One host error as one of ours. Nothing from `error.message`/`error.detail` survives: the
+ * detail only selects a public diagnostic code, whose fixed hint becomes `debugInfo.innerError`.
+ */
 export function hostFailure(
   error: AutomationError,
   context: HostFailureContext = {}
 ): DocxEditorError {
   const code = HOST_CODES[error.code] ?? 'GeneralException';
   const stale = code === 'StaleDocument';
+  const diagnostic = error.detail === undefined ? null : storeEditDiagnosticCode(error.detail);
   return new DocxEditorError({
     code,
+    ...(diagnostic === null ? {} : { diagnostic }),
     ...(context.target === undefined ? {} : { target: context.target }),
     ...(stale && context.expectedRevision !== undefined
       ? { expectedRevision: context.expectedRevision }
