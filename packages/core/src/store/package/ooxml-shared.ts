@@ -79,6 +79,54 @@ export function splitQName(name: string): ExpandedName {
   return { prefix, localName };
 }
 
+/**
+ * {@link splitQName} for names that repeat across a part. A long document repeats a few
+ * hundred element and attribute names millions of times, and each one was validated again.
+ * Bounded, so a part of unique names cannot grow it without limit. Results are frozen and
+ * shared; a failing name still throws every time, because it is never stored.
+ */
+const qNames = new Map<string, ExpandedName>();
+const MAX_SHARED_QNAMES = 4096;
+
+export function splitQNameShared(authoredName: string): ExpandedName {
+  let name = qNames.get(authoredName);
+  if (name) return name;
+  name = Object.freeze(splitQName(authoredName));
+  if (qNames.size < MAX_SHARED_QNAMES) qNames.set(authoredName, name);
+  return name;
+}
+
+/** Attribute lists shorter than this find duplicates by a scan instead of a set. */
+const SCANNED_ATTRIBUTES = 8;
+
+/**
+ * Throw when `attributes` already holds the expanded name. Most lists are short, and a scan
+ * beats a set and a key string per element. A long list (file input is untrusted) switches to
+ * a set kept in `state`, so the whole check stays linear.
+ */
+export function rejectDuplicateAttribute(
+  attributes: readonly { readonly namespaceUri: string; readonly localName: string }[],
+  namespaceUri: string,
+  localName: string,
+  state: { seen: Set<string> | undefined }
+): void {
+  if (attributes.length < SCANNED_ATTRIBUTES) {
+    for (const earlier of attributes) {
+      if (earlier.localName === localName && earlier.namespaceUri === namespaceUri)
+        throw new TreeReadError('duplicate-expanded-attribute');
+    }
+    return;
+  }
+  if (!state.seen) {
+    state.seen = new Set();
+    for (const earlier of attributes)
+      state.seen.add(expandedKey(earlier.namespaceUri, earlier.localName));
+  }
+  const key = expandedKey(namespaceUri, localName);
+  if (state.seen.has(key)) throw new TreeReadError('duplicate-expanded-attribute');
+  state.seen.add(key);
+}
+
 export function expandedKey(namespaceUri: string, localName: string): string {
   return `${namespaceUri}\u0000${localName}`;
 }

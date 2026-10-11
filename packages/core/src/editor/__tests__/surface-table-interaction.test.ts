@@ -485,6 +485,30 @@ describe('surface table interaction furniture', () => {
     }
   });
 
+  test('a body divider resizes columns below a horizontally merged header', () => {
+    const xml = TABLE.replace(
+      '<w:tr>',
+      '<w:tr><w:trPr><w:tblHeader/></w:trPr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>' +
+        p('Heading') +
+        '</w:tc></w:tr><w:tr>'
+    );
+    const mounted = mount(xml);
+    const table = tableOnPage(mounted.surface.layout());
+    const row = table.rows[1]!;
+    const x = table.box.x + table.columnEdges[1]!;
+    const y = row.box.y + row.box.height / 2;
+    mounted.pages.dispatchEvent(pointer('pointermove', x, y));
+    const handle = mounted.furniture.querySelector<HTMLElement>('.docx-table-divider-handle');
+    expect(handle).not.toBeNull();
+    handle!.dispatchEvent(pointer('pointerdown', x, y));
+    document.dispatchEvent(pointer('pointermove', x + 12, y, { buttons: 1 }));
+    document.dispatchEvent(pointer('pointerup', x + 12, y));
+    const changed = tableOnPage(mounted.surface.layout());
+    expect(changed.columnEdges[1]).toBeCloseTo(table.columnEdges[1]! + 12, 4);
+    expect(changed.rows[0]!.cells[0]!.box.width).toBeCloseTo(table.rows[0]!.cells[0]!.box.width, 4);
+    mounted.surface.destroy();
+  });
+
   test('moving between same-kind targets refreshes furniture identity', async () => {
     const mounted = mount(TABLE);
     const layout = mounted.surface.layout();

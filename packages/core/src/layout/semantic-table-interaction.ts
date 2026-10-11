@@ -150,7 +150,10 @@ function tablesWithMergedCells(index: TableInteractionIndex): ReadonlySet<string
   for (const occurrence of index.occurrences) {
     if (
       occurrence.row.cells.some(
-        (cell) => cell.gridSpan > 1 || cell.vMergeContinue || (cell.rowSpan ?? 1) > 1
+        (cell) =>
+          (cell.gridSpan > 1 && cell.logicalGridColumn !== undefined) ||
+          cell.vMergeContinue ||
+          (cell.rowSpan ?? 1) > 1
       )
     )
       merged.add(occurrence.table.tableId);
@@ -437,7 +440,7 @@ function dividerHit(
   ) {
     return null;
   }
-  // Column resize commands refuse merged tables. In RTL, a merged cell's physical
+  // Vertical merges remain unsupported. In RTL, a merged cell's physical
   // start can expose its logical leading ID on the wrong grid boundary. Do not
   // advertise a divider that the command cannot execute, including on other rows.
   if (tablesWithMergedCells(index).has(table.tableId)) return null;

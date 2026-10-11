@@ -56,8 +56,16 @@ export function cellAnchorScope(
     compatibilityMode: story.compatibilityMode,
     anchorsWrapText: story.anchorsWrapText !== false || inTableCell === true,
     rowsClearOutOfCellFloats:
-      paragraphId !== undefined && story.outOfCellFloatParagraphs?.has(paragraphId) === true,
+      paragraphId !== undefined && rowsClearOutOfCellFloats(story, paragraphId),
   });
+}
+
+/** Whether rows clear this paragraph's out-of-cell floats; the scope's own reading. */
+export function rowsClearOutOfCellFloats(
+  story: { readonly outOfCellFloatParagraphs?: ReadonlySet<string> },
+  paragraphId: string
+): boolean {
+  return story.outOfCellFloatParagraphs?.has(paragraphId) === true;
 }
 
 /**

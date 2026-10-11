@@ -2,13 +2,24 @@ import type { LayoutCacheStats, ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
 
 export interface ParagraphCacheDiagnostics extends LayoutCacheStats {
+  /** Entry-count limits; infinite unless the cache was created with `maxEntries`. */
   readonly softLimit: number;
   readonly hardLimit: number;
+  /** Estimated retained bytes of every entry, the measure the byte budgets bound. */
+  readonly estimatedBytes: number;
+  /** Estimated bytes of the entries the latest retain named as live. */
+  readonly namedBytes: number;
+  readonly softLimitBytes: number;
+  readonly hardLimitBytes: number;
   /** UTF-16 payload estimate, excluding engine headers, interning and backing storage. */
   readonly keyTextBytes: number;
   readonly softLimitEvictions: number;
   readonly hardLimitEvictions: number;
   readonly staleEvictions: number;
+  /** Entries a retain stopped naming, evicted while the cache was over its soft budget. */
+  readonly supersededEvictions: number;
+  /** Writes refused because one entry alone exceeded the hard byte budget. */
+  readonly oversizedRefusals: number;
   readonly releasedEntries: number;
   readonly clearedEntries: number;
 }

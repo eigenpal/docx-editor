@@ -2938,10 +2938,10 @@ export interface DocxEditorLoadingComponent {
 
 // @public
 export interface DocxEditorLoadingProps {
-    // (undocumented)
     children?: DocxEditorChildren;
     // (undocumented)
     className?: string;
+    indicator?: DocxEditorChildren;
     // (undocumented)
     overlay?: boolean;
     // (undocumented)

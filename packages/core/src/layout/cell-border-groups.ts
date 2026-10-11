@@ -13,7 +13,9 @@
 // paragraph — nearly every paragraph in a document — costs one map write and no extra work,
 // and only a paragraph that actually carries `w:pBdr` ever makes a neighbour resolve.
 
-import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { paragraphBoxOutdent } from './paragraph-indent.ts';
+import { paragraphIsRtl } from './rtl-paragraph.ts';
 import { paragraphBordersFingerprint, type ParagraphBorders } from './paragraph-style.ts';
 import {
   resolveParagraphLayoutInputs,
@@ -39,7 +41,8 @@ interface CellBorderGroupMemo {
 const memos = new WeakMap<OoxmlElement, CellBorderGroupMemo>();
 
 /**
- * The group identity of one paragraph: its border set plus its own box INSETS.
+ * The group identity of one paragraph: its border set plus its own box INSETS, measured to
+ * the box edges (see `paragraphBoxOutdent`).
  *
  * ONE definition for both flows. Body flow and cell flow have to spell this key identically
  * or the same authored callout groups in a `w:tc` and not in the body, which is the drift
@@ -53,16 +56,28 @@ const memos = new WeakMap<OoxmlElement, CellBorderGroupMemo>();
  * NEIGHBOUR at a content width of 1 while `placeCellParagraph` seeds the memo at the real
  * cell width, so a width-dependent field would make grouping asymmetric — A would group with
  * B while B did not group with A, and which of the two ran first would decide what was
- * painted. `borders` and `w:ind` are both width-independent today.
+ * painted. `borders`, `w:ind` and `w:bidi` are all width-independent today.
  *
  * Empty string means "no borders", which groups with nothing.
  */
 export function paragraphBorderGroupKey(inputs: {
   readonly borders: ParagraphBorders;
-  readonly indent: { readonly left: number; readonly right: number };
+  readonly indent: {
+    readonly left: number;
+    readonly right: number;
+    readonly hanging: number;
+    readonly firstLine: number;
+  };
+  readonly props: readonly OoxmlProperty[];
 }): string {
   const token = paragraphBordersFingerprint(inputs.borders);
-  return token === '' ? '' : `${token}@${inputs.indent.left},${inputs.indent.right}`;
+  if (token === '') return '';
+  // The box edges, not the text indents: a hanging paragraph whose first line starts at the
+  // margin shares a box with a flush one, and two paragraphs with equal `w:left` whose first
+  // lines start apart do not.
+  const outdent = paragraphBoxOutdent(inputs.indent, paragraphIsRtl(inputs.props));
+  const { left, right } = inputs.indent;
+  return `${token}@${left - outdent.left},${right - outdent.right}`;
 }
 
 /** Record the key a caller already resolved, so a neighbour lookup is a map read. */

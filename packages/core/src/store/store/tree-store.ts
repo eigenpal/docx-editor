@@ -1,4 +1,5 @@
 import { createFormsTextReplacementContext } from './forms-text-replacement.ts';
+import { restoreHistoryPackage } from './history-package-index.ts';
 import { reportHistoryGroup, type HistoryGroup } from './history-group.ts';
 import { withFieldResultsMode } from '../package/field-result-mode.ts';
 import type { TransactOptions, TreeDocumentStoreOptions } from './tree-store-options.ts';
@@ -18,9 +19,8 @@ import { applyProtectedTextFormEdit } from './tree-op-field-results.ts';
 // transaction is one entry, a composition is one entry however many transactions it
 // contains, and a projection-origin commit is none.
 //
-// Entries are snapshots, which is affordable because the tree is persistent and
-// structurally shared: an entry retains the previous part by reference rather than cloning
-// it, so undo is a pointer swap and history costs nothing per entry.
+// Entries retain package snapshots and share unchanged tree nodes. History restores the
+// package reference and transfers its node index instead of rebuilding complete lookup maps.
 
 import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
@@ -870,7 +870,7 @@ export class TreeDocumentStore {
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
     });
-    this.current = entry.pkg;
+    this.current = restoreHistoryPackage(this.current, entry.pkg);
     this.rev += 1;
     return this.publish(ORIGIN_IDS.mutationUndo, beforeRevision, null, this.storyRef ?? undefined);
   }
@@ -886,7 +886,7 @@ export class TreeDocumentStore {
       selectionBefore: entry.selectionBefore,
       selectionAfter: entry.selectionAfter,
     });
-    this.current = entry.pkg;
+    this.current = restoreHistoryPackage(this.current, entry.pkg);
     this.rev += 1;
     return this.publish(ORIGIN_IDS.mutationRedo, beforeRevision, null, this.storyRef ?? undefined);
   }

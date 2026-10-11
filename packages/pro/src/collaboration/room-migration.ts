@@ -231,9 +231,10 @@ export async function migrateCollaborationRoom(
     );
   }
   const documentId = validateDocumentId(given);
-  const before = await migrationContentsOf(options.exported);
+  // One step at a time, so a step's memory is free before the next step needs its own.
   const state = await seedGeneration(options.exported, documentId);
   const after = withRoom(state, (room) => readCollaborationDocument(room));
+  const before = await migrationContentsOf(options.exported);
   const report = compareMigrationContents(before, await migrationContentsOf(after), {
     from: earlier.format ?? 'unversioned',
     to: COLLABORATION_FORMAT_VERSION,

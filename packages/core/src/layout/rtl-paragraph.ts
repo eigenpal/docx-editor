@@ -1,3 +1,4 @@
+import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import { coalesceBidiPieces } from './bidi-piece-coalescing.ts';
 import { bidiAlgorithm } from './bidi.ts';
@@ -576,6 +577,7 @@ export function reorderBidiSpans(
   paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
   pageBreaksIgnored = false
 ): readonly StyleSpanRecord[] {
+  if (!paragraphRtl && unchangedLtrLine(spans)) return spans;
   if (!spans.some((s) => s.style.shaping)) return spans;
   // Exclusion passages have fixed physical gaps. Reorder only within each passage.
   if (spans.some((span, index) => index > 0 && (span.wrapAdvanceBefore ?? 0) > 0)) {

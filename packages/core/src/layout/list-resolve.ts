@@ -1,3 +1,5 @@
+import { registerListGeometry, rememberListItemShape } from './list-marker-reuse.ts';
+import { walkStoryParagraphs } from './story-paragraph-walk.ts';
 import { readTwipsMeasure } from '@docx-editor.dev/core/store';
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
 import { markerMeasureToken } from './list-marker-measure-key.ts';
@@ -9,13 +11,13 @@ import {
 // Resolve numbering into marker text, indentation, and font inputs for one story walk.
 
 import { paragraphIsRtl } from './rtl-paragraph.ts';
-import { flattenContentControls } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import {
   createListCounterState,
   expandCountersOf,
+  numberLevelsOf,
   type FullContextNumberSource,
 } from './list-counters.ts';
 import { resolvePictureBullet, type ResolvedPictureBullet } from './numbering-picture-bullet.ts';
@@ -35,13 +37,12 @@ import {
   type StyleCascadeTable,
   type StyleDefinition,
 } from './style-cascade.ts';
-import { hasSymbolPua, mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
+import { mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
 import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { paragraphIndent, propertiesOf } from './paragraph-flow.ts';
 import { numberingLevelTiers } from './numbering-level-tier.ts';
-import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { DEPENDENCY_KEY_IDS } from '../store/registry/frozen-ids.ts';
 import type { LayoutScope } from './layout-scheduler.ts';
 import type { LayoutSession } from './layout-session.ts';
@@ -430,33 +431,7 @@ export function mergeListIndent(
  *
  * Caps nesting so a hostile nested-table document cannot recurse without bound.
  */
-export function walkStoryParagraphs(
-  blocks: readonly OoxmlElement[],
-  maxTableDepth = 8
-): OoxmlElement[] {
-  const out: OoxmlElement[] = [];
-  const visit = (blockList: readonly OoxmlElement[], depth: number): void => {
-    for (const block of blockList) {
-      if (block.kind === 'paragraph') {
-        out.push(block);
-        continue;
-      }
-      if (block.kind !== 'table' || depth >= maxTableDepth) continue;
-      for (const row of flattenContentControls(block.children)) {
-        if (row.kind !== 'tableRow') continue;
-        for (const cell of flattenContentControls(row.children)) {
-          if (cell.kind !== 'tableCell') continue;
-          // Flatten cell SDTs under the shared content-control budget; table nesting still
-          // uses `maxTableDepth` for the table walk itself.
-          const inner = collectFlowBlocks(cell.children);
-          visit(inner, depth + 1);
-        }
-      }
-    }
-  };
-  visit(blocks, 0);
-  return out;
-}
+export { walkStoryParagraphs } from './story-paragraph-walk.ts';
 
 /**
  * Per-paragraph prelude for the story walk below, memoized on the paragraph NODE: which
@@ -574,14 +549,11 @@ export function resolveStoryListItems(
       authoredMarkerStyle.fontFamily,
       isFontAvailable
     );
-    // A translated marker needs a Unicode face, not the unavailable byte-encoded face.
-    // Resolve the substrate's default in both measurement and painting. Preserve the
-    // authored face when any unknown private-use character remains, or when the host
-    // explicitly admits the original font. Never mutate the cached level style.
-    const markerStyle =
-      markerText !== advanced.markerText && !hasSymbolPua(markerText)
-        ? { ...authoredMarkerStyle, fontFamily: null, fontFamilyEastAsia: null }
-        : authoredMarkerStyle;
+    // The marker keeps its authored face even when its glyph was translated to Unicode. An
+    // unavailable symbol face still sizes the line and the marker by its own metrics
+    // (`symbol-face-metrics.ts`), and paint draws the Unicode twin in a face that has it.
+    // Never mutate the cached level style.
+    const markerStyle = authoredMarkerStyle;
     // `w:lvlPicBulletId` names a `w:numPicBullet` of the SAME part. A level naming one the
     // part never declared, or one whose VML this projection could not read, keeps its
     // `w:lvlText` — a missing image must never cost the reader the marker entirely.
@@ -595,33 +567,32 @@ export function resolveStoryListItems(
     // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
     // carry any printable separator, so a separator join lets two different level
     // geometries serialize to one token and share a break-cache entry.
-    const cacheToken = framedTokenJoin(
-      [
-        advanced.numId,
-        advanced.ilvl,
-        advanced.level.numFmt,
-        advanced.level.lvlText,
-        indent.left,
-        indent.right,
-        indent.hanging,
-        indent.firstLine,
-        advanced.level.lvlJc,
-        advanced.level.suff,
-        advanced.level.vanish ? 1 : 0,
-        numberingParagraphToken(advanced.level),
-        // The MARKER ITSELF, not its length. The first line starts where the marker ends
-        // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
-        // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
-        // served the previous marker's width to the new one, and the line wrapped a word late.
-        markerText,
-        // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
-        // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
-        markerMeasureToken(markerStyle),
-        // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
-        // it decides both the first line's start and the first line's height.
-        picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
-      ].map(String)
-    );
+    const tokenParts = [
+      advanced.numId,
+      advanced.ilvl,
+      advanced.level.numFmt,
+      advanced.level.lvlText,
+      indent.left,
+      indent.right,
+      indent.hanging,
+      indent.firstLine,
+      advanced.level.lvlJc,
+      advanced.level.suff,
+      advanced.level.vanish ? 1 : 0,
+      numberingParagraphToken(advanced.level),
+      // The MARKER ITSELF, not its length. The first line starts where the marker ends
+      // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
+      // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
+      // served the previous marker's width to the new one, and the line wrapped a word late.
+      markerText,
+      // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
+      // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
+      markerMeasureToken(markerStyle),
+      // The picture marker's identity and DRAWN extent. It replaces the marker glyph, so
+      // it decides both the first line's start and the first line's height.
+      picBullet ? `${picBullet.relationshipId}:${picBullet.width}:${picBullet.height}` : '',
+    ].map(String);
+    const cacheToken = framedTokenJoin(tokenParts);
 
     const item: ResolvedListItem = {
       numId: advanced.numId,
@@ -640,9 +611,13 @@ export function resolveStoryListItems(
       cacheToken,
     };
     withNumberingParagraphProperties(item, numberingParagraphProperties(advanced.level));
+    // Everything but the marker text (part 12), for keys that read its geometry instead.
+    rememberListItemShape(
+      item,
+      framedTokenJoin([...tokenParts.slice(0, 12), ...tokenParts.slice(13)])
+    );
     listItemNumberSources.set(item, {
-      index: linked,
-      numId: advanced.numId,
+      levels: numberLevelsOf(linked, advanced.numId),
       ilvl: advanced.ilvl,
       expandCounters: expandCountersOf(advanced),
     });
@@ -824,7 +799,9 @@ export function withResolvedListItemsForSession<T extends WithResolvedListItemsO
   readonly numberingIndex: NumberingIndex;
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
 } {
-  return withResolvedListItemsInternal(options, blocks, session);
+  const resolved = withResolvedListItemsInternal(options, blocks, session);
+  registerListGeometry(resolved.listItems, options.measurer);
+  return resolved;
 }
 
 /** Numbered paragraphs of one top-level block, memoized per (immutable block, cascade). */
@@ -834,6 +811,17 @@ interface NumberedBlockMemo {
 }
 const numberedBlockMemos = new WeakMap<OoxmlElement, NumberedBlockMemo>();
 const NO_NUMBERED_PARAGRAPHS: readonly OoxmlElement[] = Object.freeze([]);
+
+/**
+ * Whether any paragraph in `block` can carry a list item under `styleCascade`. Both list
+ * resolves give items only to these paragraphs, so a block without one has no list token.
+ */
+export function blockHasNumberedParagraphs(
+  block: OoxmlElement,
+  styleCascade: StyleCascadeTable | undefined
+): boolean {
+  return numberedParagraphsOfBlock(block, styleCascade).length > 0;
+}
 
 function numberedParagraphsOfBlock(
   block: OoxmlElement,

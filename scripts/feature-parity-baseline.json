@@ -227,12 +227,6 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
-    "editor/DocxEditorLoading": {
-      "propsAddedInReact": [],
-      "propsAddedInVue": ["ariaHidden", "class", "name", "props"],
-      "emitsAddedInReact": [],
-      "emitsAddedInVue": []
-    },
     "editor/DocxEditorOutline": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name"],

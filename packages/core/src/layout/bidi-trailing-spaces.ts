@@ -1,3 +1,4 @@
+import { unchangedLtrLine } from './unchanged-ltr-line.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 import { reorderBidiSpans } from './rtl-paragraph.ts';
@@ -58,6 +59,7 @@ export function bidiTrailingSpaces(
   isLastLine: boolean,
   pageBreaksIgnored: boolean
 ): TrailingSpaces | undefined {
+  if (!paragraphRtl && unchangedLtrLine(spans)) return undefined;
   if (!spans.some((span) => span.style.shaping)) return undefined;
   const from = trailingSpacesStart(spans);
   if (from === spans.length) return undefined;

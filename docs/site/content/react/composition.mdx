@@ -408,6 +408,19 @@ Pass `overlay` to position the loading screen over its nearest positioned ancest
 </div>
 ```
 
+With `overlay`, the indicator moves onto the first page once the first pages of a large document show. It stays there, and scrolls with the page, until the editor lays out the remaining pages. To replace only the spinner in both places, pass `indicator`. Keep the packaged page and its position:
+
+```tsx
+<div style={{ position: 'relative' }}>
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+  <DocxEditor.Loading overlay indicator={<MyLogoSpinner label="Opening document" />} />
+</div>
+```
+
+Children replace the whole first screen, and the first page then shows `indicator`, or the packaged spinner without it. `<DocxEditor loadingIndicator={...} />` passes its value to `indicator`.
+
 Use `DocxEditor.Loading.Spinner` with `className` to style the packaged spinner. If you conditionally mount content, use `snapshot().isLoading`. Do not use `isOpening` for that condition. `DocxEditor.Content` must remain mounted while the scheduled open completes.
 
 ## Custom link popover

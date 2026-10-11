@@ -32,6 +32,9 @@ import type { FollowAnchor } from './paragraph-text-moves.ts';
 
 const EMPTY: ReadonlySet<LogicalId> = new Set();
 
+/** The paragraphs whose identities stay cached after a read. */
+const MAX_CACHED_IDENTITIES = 64;
+
 /** The identities of the copies one text holds: moved, or put back by an undo. */
 function copiesIn(identities: TextIdentities): Set<Identity> {
   const copies = new Set<Identity>();
@@ -231,9 +234,13 @@ export class TextFollow {
   private typedBuilt = false;
   /**
    * Identities as the last read left them. A read happens when a paragraph changes, and a
-   * writer that changes a text inside a transaction drops its entry (`invalidate`).
+   * writer that changes a text inside a transaction drops its entry (`invalidate`). An entry
+   * holds several values for each character, and a cold build reads every paragraph, so only
+   * the sources and the paragraphs read last keep theirs (`touch`).
    */
   private readonly identities = new Map<LogicalId, { text: Y.Text; identities: TextIdentities }>();
+  /** The cached paragraphs that are not sources, read last at the end. */
+  private readonly recent = new Set<LogicalId>();
 
   constructor(
     private readonly textOf: (paragraphId: LogicalId) => Y.Text | null,
@@ -259,8 +266,7 @@ export class TextFollow {
   paragraphChanged(paragraphId: LogicalId): Set<LogicalId> {
     const text = this.textOf(paragraphId);
     const deleted = this.isDeleted(paragraphId);
-    this.identities.delete(paragraphId);
-    this.typedStale.add(paragraphId);
+    this.invalidate(paragraphId);
     const identities = text ? this.identitiesOf(paragraphId, text) : null;
     const { affected, changed } = this.index.update(
       paragraphId,
@@ -270,6 +276,7 @@ export class TextFollow {
     const isSource = !!text && !!identities && (deleted ? text.length > 0 : identities.hasAnchors);
     if (isSource) this.sources.add(paragraphId);
     else this.sources.delete(paragraphId);
+    if (this.identities.has(paragraphId)) this.touch(paragraphId);
     // Following text depends on where characters show, so a source that reads a character
     // that came or went places its text again. A source's own change places its own, and a
     // change of its formatting changes what its targets show.
@@ -537,19 +544,39 @@ export class TextFollow {
   /** Forget a text's identities: a writer changed it inside a transaction. */
   invalidate(paragraphId: LogicalId): void {
     this.identities.delete(paragraphId);
+    this.recent.delete(paragraphId);
     this.typedStale.add(paragraphId);
   }
 
   private identitiesOf(paragraphId: LogicalId, text: Y.Text): TextIdentities {
     const cached = this.identities.get(paragraphId);
-    if (cached?.text === text) return cached.identities;
+    if (cached?.text === text) {
+      this.touch(paragraphId);
+      return cached.identities;
+    }
     const identities = textIdentities(text);
     this.identities.set(paragraphId, { text, identities });
+    this.touch(paragraphId);
     return identities;
+  }
+
+  /**
+   * Keep a source's identities: placing following text reads every source again. Of the
+   * other paragraphs, keep the ones read last.
+   */
+  private touch(paragraphId: LogicalId): void {
+    this.recent.delete(paragraphId);
+    if (this.sources.has(paragraphId)) return;
+    this.recent.add(paragraphId);
+    if (this.recent.size <= MAX_CACHED_IDENTITIES) return;
+    const oldest = this.recent.values().next().value!;
+    this.recent.delete(oldest);
+    this.identities.delete(oldest);
   }
 
   clear(): void {
     this.identities.clear();
+    this.recent.clear();
     this.index.clear();
     this.sources.clear();
     this.outgoingOf.clear();

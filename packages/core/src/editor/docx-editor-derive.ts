@@ -81,6 +81,25 @@ export function runFormattingOf(surface: PaginatedSurface | null): RunFormatting
   };
 }
 
+/** The last page setup each editor published, keyed by the editor's open scheduler. */
+const lastPageSetups = new WeakMap<object, PageSetup>();
+
+/**
+ * {@link pageSetupOf}, but while a replacement document opens with no surface mounted, the
+ * previous document's setup. The rulers and the loading page keep that page's geometry
+ * until the new document mounts, instead of the ruler vanishing for the open.
+ */
+export function pageSetupWhileOpening(
+  owner: { isScheduled(): boolean },
+  surface: PaginatedSurface | null
+): PageSetup | null {
+  const opening = owner.isScheduled();
+  const setup = pageSetupOf(surface);
+  if (setup) lastPageSetups.set(owner, setup);
+  else if (!opening) lastPageSetups.delete(owner);
+  return setup ?? (opening ? (lastPageSetups.get(owner) ?? null) : null);
+}
+
 /**
  * THE page-setup derivation — `getPageSetup()` and `snapshot().pageSetup` both read
  * this shape, so the dialog and the rulers can never disagree about the section. In a

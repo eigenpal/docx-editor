@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The text follow index kept the character identities of every paragraph it read, and a migration checked the export before it seeded the room.",
+  "after": "The index keeps the identities of source paragraphs and of the 64 paragraphs read last, and reads others again when needed. A migration seeds the room before it checks the export.",
+  "reason": "The cache only stores values that a read computes again from the same shared state, and the migration order does not change its inputs or result. Shared state and synchronization stay the same.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/paragraph-text-follow-memory.test.ts",
+    "packages/pro/src/collaboration/__tests__/room-migration.test.ts"
+  ],
+  "changeset": "identity-cache-bound",
+  "migration": null
+}

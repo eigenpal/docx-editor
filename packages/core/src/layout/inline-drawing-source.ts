@@ -1,5 +1,8 @@
+import { sameResourceSubstrate } from './package-resource-substrate.ts';
+import { createSubtreeAggregateMemo } from '../store/package/subtree-memo-policy.ts';
 import { groupTextboxesLayoutToken } from './group-textbox-layout.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { drawingInputsUnchangedByParagraphEdit } from './drawing-paragraph-change.ts';
 // Package-backed inline drawing layout source (typed-drawings-and-images task 6).
 //
 // Precomputes run-level drawing / MC atom projections from a bounded part traversal with
@@ -44,7 +47,11 @@ import { createPictureBulletResourceResolver } from './numbering-picture-bullet-
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { walkDrawingAtoms } from './drawing-inline-walk.ts';
-import { aggregateParagraphTokensForTableBlock, framedTokenJoin } from './layout-cache.ts';
+import { framedTokenJoin } from './framed-token.ts';
+import {
+  aggregateParagraphTokensForTableBlock,
+  createTableRowTokenStore,
+} from './table-paragraph-tokens.ts';
 
 /** Layout-owned read surface for inline drawing package state (no binding/session lane). */
 export interface InlineDrawingPackageReader {
@@ -198,6 +205,10 @@ const drawingSourceOrdersByRoot = new WeakMap<
   OoxmlNode,
   WeakMap<InlineDrawingLayoutContext, ReadonlyMap<string, number>>
 >();
+const lastDrawingSourceOrder = new WeakMap<
+  InlineDrawingLayoutContext,
+  { readonly part: OoxmlPart; readonly order: ReadonlyMap<string, number> }
+>();
 
 /**
  * Canonical drawing traversal order for one immutable story root.
@@ -219,7 +230,17 @@ export function drawingSourceOrderInPart(
 ): ReadonlyMap<string, number> {
   let byContext = drawingSourceOrdersByRoot.get(part.root);
   const cached = byContext?.get(context);
-  if (cached) return cached;
+  if (cached) {
+    lastDrawingSourceOrder.set(context, { part, order: cached });
+    return cached;
+  }
+  const previous = lastDrawingSourceOrder.get(context);
+  if (previous && drawingInputsUnchangedByParagraphEdit(previous.part.root, part.root)) {
+    if (!byContext) drawingSourceOrdersByRoot.set(part.root, (byContext = new WeakMap()));
+    byContext.set(context, previous.order);
+    lastDrawingSourceOrder.set(context, { part, order: previous.order });
+    return previous.order;
+  }
   const identities = drawingAtomIdentities(part);
   const order = new Map<string, number>();
   let index = 0;
@@ -240,6 +261,7 @@ export function drawingSourceOrderInPart(
     drawingSourceOrdersByRoot.set(part.root, byContext);
   }
   byContext.set(context, order);
+  lastDrawingSourceOrder.set(context, { part, order });
   return order;
 }
 
@@ -458,6 +480,7 @@ function createPartDrawingContextSlot(options: {
   >();
   const atomsByParagraph = new WeakMap<OoxmlNode, readonly string[]>();
   let resourceEpoch = 0;
+  let lastCompatiblePart = part;
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
   const theme = createPackageShapeThemeResolvers(pkg);
@@ -636,7 +659,17 @@ function createPartDrawingContextSlot(options: {
     isCompatibleWith: (nextPart, nextPkg) => {
       const nextTheme = createPackageShapeThemeResolvers(nextPkg);
       if (nextTheme.cacheToken !== theme.cacheToken) return false;
-      if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) return true;
+      if (nextPart === part && stylesPartOf(nextPkg) === stylesPart) {
+        lastCompatiblePart = nextPart;
+        return true;
+      }
+      if (
+        stylesPartOf(nextPkg) === stylesPart &&
+        drawingInputsUnchangedByParagraphEdit(lastCompatiblePart.root, nextPart.root)
+      ) {
+        lastCompatiblePart = nextPart;
+        return true;
+      }
       const nextAtomIdentities = drawingAtomIdentities(nextPart);
       if (
         !hasObjects &&
@@ -651,7 +684,10 @@ function createPartDrawingContextSlot(options: {
             break;
           }
         }
-        if (unchanged) return true;
+        if (unchanged) {
+          lastCompatiblePart = nextPart;
+          return true;
+        }
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
         stylesPart: stylesPartOf(nextPkg),
@@ -669,6 +705,7 @@ function createPartDrawingContextSlot(options: {
           return false;
         }
       }
+      lastCompatiblePart = nextPart;
       return true;
     },
     dispose: () => {
@@ -771,10 +808,7 @@ export function createInlineDrawingLayoutBundle(
 
   const resetPackage = (reader: InlineDrawingPackageReader): void => {
     const nextPkg = reader.currentPackage();
-    const resourceSubstrateUnchanged =
-      nextPkg.partBytes === pkgSnapshot.partBytes &&
-      nextPkg.relationships === pkgSnapshot.relationships &&
-      nextPkg.contentTypes === pkgSnapshot.contentTypes;
+    const resourceSubstrateUnchanged = sameResourceSubstrate(nextPkg, pkgSnapshot);
     if (resourceSubstrateUnchanged) {
       // The numbering part's bytes and rels are unchanged too, so resolved bullets stand.
       for (const [ownerPartName, slot] of slots) {
@@ -929,16 +963,20 @@ export function drawingTokenForTableBlockMemo(
   if (epoch === undefined) return drawingTokenForTableBlock(table, drawingTokenForParagraph);
   const cached = tableDrawingTokenCache.get(table);
   if (cached && cached.epoch === epoch) return cached.token;
-  const token = drawingTokenForTableBlock(table, drawingTokenForParagraph);
-  tableDrawingTokenCache.set(table, { epoch, token });
+  // Rows keep their identity across a cell edit, so their segments answer under the same epoch.
+  const reuse = { rows: rowDrawingTokens, scope: undefined, epoch };
+  const token = aggregateParagraphTokensForTableBlock(table, drawingTokenForParagraph, reuse);
+  // A token grows with the table: about one item per 64 characters.
+  tableDrawingTokenCache.set(table, { epoch, token }, token.length >> 6);
   return token;
 }
 
 /** Aggregated drawing token per immutable table node, valid for one drawing epoch. */
-const tableDrawingTokenCache = new WeakMap<
-  OoxmlNode,
-  { readonly epoch: string; readonly token: string }
->();
+const tableDrawingTokenCache = createSubtreeAggregateMemo<{
+  readonly epoch: string;
+  readonly token: string;
+}>();
+const rowDrawingTokens = createTableRowTokenStore();
 
 /**
  * Aggregate per-paragraph drawing tokens for a table subtree (cache + incremental keys).

@@ -54,6 +54,30 @@ export const LARGE_SOURCE = zipSync({
   'word/media/filler.bin': compressibleText(1024 * 1024),
 });
 
+/** Past the yield threshold AND long enough that the open lays its pages out in slices. */
+export function slicedSource(): Uint8Array {
+  const paragraphs: string[] = [];
+  for (let index = 0; index < 3000; index += 1) {
+    paragraphs.push(`<w:p><w:r><w:t>Sliced paragraph ${index}</w:t></w:r></w:p>`);
+  }
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="bin" ContentType="application/octet-stream"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${paragraphs.join('')}<w:sectPr/></w:body></w:document>`
+    ),
+    'word/media/filler.bin': compressibleText(1024 * 1024),
+  });
+}
+
 /** Flush Vue updates and engine paint ticks. */
 export async function flush(): Promise<void> {
   const { nextTick } = await import('vue');

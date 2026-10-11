@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A native selection around a field-only paragraph collapsed to the paragraph start.",
+  "after": "Native selections use the field's source boundaries. The displayed cache remains inert.",
+  "reason": "Only the local DOM selection mapping changes. Canonical fields, document operations, and synchronization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/computed-field-dom-boundaries.test.ts",
+    "packages/core/src/editor/__tests__/dom-selection.test.ts",
+    "packages/core/src/editor/__tests__/repaint-selection-authority.test.ts",
+    "packages/core/src/editor/__tests__/header-repeat-selection.test.ts"
+  ],
+  "changeset": "computed-field-dom-boundaries",
+  "migration": null
+}

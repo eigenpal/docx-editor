@@ -227,7 +227,7 @@ describe('w:bidiVisual table grid', () => {
     }
   });
   test.each([false, true])(
-    'merged tables do not expose unsupported column resize handles (RTL=%s)',
+    'horizontal merged tables expose resize handles only for supported direction (RTL=%s)',
     (rtl) => {
       const result = layout(
         table(
@@ -246,8 +246,12 @@ describe('w:bidiVisual table grid', () => {
             10 + r.box.y + r.box.height / 2,
             result
           );
-          expect(hit?.kind).not.toBe('columnDivider');
-          expect(hit?.kind).not.toBe('rightEdge');
+          if (rtl) {
+            expect(hit?.kind).not.toBe('columnDivider');
+            expect(hit?.kind).not.toBe('rightEdge');
+          } else if (r.cells.length === 3) {
+            expect(['columnDivider', 'rightEdge']).toContain(hit?.kind);
+          }
         }
       }
     }

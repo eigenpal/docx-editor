@@ -8,14 +8,11 @@
 // because a row cannot know its merged neighbour's box until every row of the span is down.
 
 import { shiftInlineDrawingRecord } from './drawing-layout.ts';
+import { rememberMovableCopy } from './table-row-geometry-reuse.ts';
 import { relayOutMergedBottomToTop } from './table-cell-text-direction.ts';
 import { republishAnchoredParagraphsInBlocks } from './table-anchor-republish.ts';
-import {
-  borderContentInset,
-  cellContentInsets,
-  type CellContentInsets,
-} from './table-cell-geometry.ts';
-import { effectiveBorderSide } from './table-border-cascade.ts';
+import type { CellContentInsets } from './table-cell-geometry.ts';
+import { outerBottomInsetFloor, sharedCellContentInsets } from './cell-content-insets-memo.ts';
 import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
@@ -84,7 +81,7 @@ export function shiftBlocks(
         })),
       };
     }
-    return {
+    return rememberMovableCopy(block, {
       ...block,
       box: { ...block.box, y: block.box.y + dy },
       ...(block.shadingBox
@@ -139,7 +136,7 @@ export function shiftBlocks(
             }
           : {}),
       })),
-    };
+    });
   });
 }
 
@@ -156,7 +153,13 @@ export function finalizeTableRows(
   vMergeWork?: TableVMergeResolveWork,
   onAnchorShift?: (paragraphId: string, dy: number) => void,
   anchorDeps?: TableFlowDeps,
-  occurrenceInsets?: ReadonlyMap<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>
+  occurrenceInsets?: ReadonlyMap<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>,
+  /**
+   * Rows taken whole from an earlier finalize of the same rows, with only x geometry changed.
+   * Their merges, heights and vertical alignment are already final, so only their borders are
+   * resolved again. A row with any merge is finalized as usual.
+   */
+  settledRows?: ReadonlySet<TableRowFragmentRecord>
 ): TableRowFragmentRecord[] {
   if (rows.length === 0) return [];
 
@@ -174,94 +177,105 @@ export function finalizeTableRows(
   });
 
   // Expand restart heights and shift content for vAlign over the full span.
-  const expanded: TableRowFragmentRecord[] = rows.map((row, rowIndex) => ({
-    ...row,
-    cells: row.cells.map((cell) => {
-      const resolvedSpan = mergeSpanById.get(cell.id);
-      if (cell.vMergeContinue && resolvedSpan === undefined) {
-        return { ...cell, paintInert: true, rowSpan: 1, borders: {}, blocks: [] };
-      }
-      // A carried-in continuation paints like the restart it continues: Word draws the
-      // merged cell's rules, fill and box on every page the merge crosses. Its content
-      // stayed with the restart on the earlier page, so `blocks` is empty either way.
-      const carried = cell.vMergeContinue;
-      const span = resolvedSpan ?? 1;
-      let height = cell.box.height;
-      if (span > 1) {
-        const last = rows[rowIndex + span - 1]!;
-        height = last.box.y + last.box.height - cell.box.y;
-      }
-      const authored = authoredById.get(cell.id);
-      // A merged `btLr` head lays its text along the rows its merge covers in this fragment.
-      let blocks = (span > 1 && relayOutMergedBottomToTop(cell.blocks, height)) || cell.blocks;
-      if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
-        const insets =
-          occurrenceInsets?.get(row)?.get(cell.id) ??
-          cellContentInsets(authored, structure.cellSpacingPt === 0);
-        // Content was placed relative to the first row; measure current content band.
-        let contentTop = Number.POSITIVE_INFINITY;
-        let contentBottom = Number.NEGATIVE_INFINITY;
-        for (const block of blocks) {
-          contentTop = Math.min(contentTop, block.box.y);
-          contentBottom = Math.max(contentBottom, block.box.y + block.box.height);
-        }
-        if (Number.isFinite(contentTop) && Number.isFinite(contentBottom)) {
-          const vertical = authored.textDirection === 'btLr';
-          const available =
-            (vertical
-              ? cell.box.width - insets.left - insets.right
-              : height - insets.top - insets.bottom) -
-            (contentBottom - contentTop);
-          // Reset any per-row shift by measuring from cell top + inset.
-          const desiredTop =
-            cell.box.y +
-            (vertical ? insets.left : insets.top) +
-            (available > 0 ? (authored.vAlign === 'center' ? available / 2 : available) : 0);
-          const dy = desiredTop - contentTop;
-          if (Math.abs(dy) > 0.001) {
-            blocks = shiftBlocks(blocks, dy);
-            for (const block of blocks) {
-              if (block.kind === 'paragraph') onAnchorShift?.(block.paragraphId, dy);
+  const settled = (row: TableRowFragmentRecord): boolean =>
+    settledRows?.has(row) === true &&
+    row.cells.every(
+      (cell) =>
+        !cell.vMergeContinue && cell.rowSpan === 1 && (mergeSpanById.get(cell.id) ?? 1) === 1
+    );
+  const expanded: TableRowFragmentRecord[] = rows.map((row, rowIndex) =>
+    settled(row)
+      ? row
+      : {
+          ...row,
+          cells: row.cells.map((cell) => {
+            const resolvedSpan = mergeSpanById.get(cell.id);
+            if (cell.vMergeContinue && resolvedSpan === undefined) {
+              return { ...cell, paintInert: true, rowSpan: 1, borders: {}, blocks: [] };
             }
-          }
+            // A carried-in continuation paints like the restart it continues: Word draws the
+            // merged cell's rules, fill and box on every page the merge crosses. Its content
+            // stayed with the restart on the earlier page, so `blocks` is empty either way.
+            const carried = cell.vMergeContinue;
+            const span = resolvedSpan ?? 1;
+            let height = cell.box.height;
+            if (span > 1) {
+              const last = rows[rowIndex + span - 1]!;
+              height = last.box.y + last.box.height - cell.box.y;
+            }
+            const authored = authoredById.get(cell.id);
+            // A merged `btLr` head lays its text along the rows its merge covers in this fragment.
+            let blocks =
+              (span > 1 && relayOutMergedBottomToTop(cell.blocks, height)) || cell.blocks;
+            if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
+              const insets =
+                occurrenceInsets?.get(row)?.get(cell.id) ??
+                sharedCellContentInsets(authored, structure.cellSpacingPt === 0);
+              // Content was placed relative to the first row; measure current content band.
+              let contentTop = Number.POSITIVE_INFINITY;
+              let contentBottom = Number.NEGATIVE_INFINITY;
+              for (const block of blocks) {
+                contentTop = Math.min(contentTop, block.box.y);
+                contentBottom = Math.max(contentBottom, block.box.y + block.box.height);
+              }
+              if (Number.isFinite(contentTop) && Number.isFinite(contentBottom)) {
+                const vertical = authored.textDirection === 'btLr';
+                const available =
+                  (vertical
+                    ? cell.box.width - insets.left - insets.right
+                    : height - insets.top - insets.bottom) -
+                  (contentBottom - contentTop);
+                // Reset any per-row shift by measuring from cell top + inset.
+                const desiredTop =
+                  cell.box.y +
+                  (vertical ? insets.left : insets.top) +
+                  (available > 0 ? (authored.vAlign === 'center' ? available / 2 : available) : 0);
+                const dy = desiredTop - contentTop;
+                if (Math.abs(dy) > 0.001) {
+                  blocks = shiftBlocks(blocks, dy);
+                  for (const block of blocks) {
+                    if (block.kind === 'paragraph') onAnchorShift?.(block.paragraphId, dy);
+                  }
+                }
+              }
+            }
+            const finalizedCellBox = Object.freeze({
+              x: cell.box.x,
+              y: cell.box.y,
+              width: cell.box.width,
+              height,
+            });
+            if (
+              authored &&
+              anchorDeps &&
+              (span > 1 || (authored.vAlign !== 'top' && blocks.length > 0))
+            ) {
+              const insets =
+                occurrenceInsets?.get(row)?.get(cell.id) ??
+                sharedCellContentInsets(authored, structure.cellSpacingPt === 0);
+              const cellContentBox = {
+                ...finalizedCellBox,
+                x: finalizedCellBox.x + insets.left,
+                width: Math.max(1, finalizedCellBox.width - insets.left - insets.right),
+              };
+              republishAnchoredParagraphsInBlocks(
+                blocks,
+                authored.blocks,
+                finalizedCellBox,
+                anchorDeps,
+                cellContentBox
+              );
+            }
+            return {
+              ...cell,
+              ...(carried ? { vMergeContinue: false, paintInert: false } : {}),
+              rowSpan: span,
+              blocks,
+              box: { ...cell.box, height },
+            };
+          }),
         }
-      }
-      const finalizedCellBox = Object.freeze({
-        x: cell.box.x,
-        y: cell.box.y,
-        width: cell.box.width,
-        height,
-      });
-      if (
-        authored &&
-        anchorDeps &&
-        (span > 1 || (authored.vAlign !== 'top' && blocks.length > 0))
-      ) {
-        const insets =
-          occurrenceInsets?.get(row)?.get(cell.id) ??
-          cellContentInsets(authored, structure.cellSpacingPt === 0);
-        const cellContentBox = {
-          ...finalizedCellBox,
-          x: finalizedCellBox.x + insets.left,
-          width: Math.max(1, finalizedCellBox.width - insets.left - insets.right),
-        };
-        republishAnchoredParagraphsInBlocks(
-          blocks,
-          authored.blocks,
-          finalizedCellBox,
-          anchorDeps,
-          cellContentBox
-        );
-      }
-      return {
-        ...cell,
-        ...(carried ? { vMergeContinue: false, paintInert: false } : {}),
-        rowSpan: span,
-        blocks,
-        box: { ...cell.box, height },
-      };
-    }),
-  }));
+  );
 
   // Border grid from authored structure (same row/cell order as laid-out fragment rows).
   // Header repeats use the same authored header row; match by cell id.
@@ -279,6 +293,7 @@ export function finalizeTableRows(
           right: { state: 'omitted' as const },
         },
         mergeRowSpan: cell.rowSpan ?? 1,
+        ...(authored?.rowTableBorders ? { rowTableBorders: authored.rowTableBorders } : {}),
       };
     })
   );
@@ -295,15 +310,15 @@ export function finalizeTableRows(
         const insets =
           authored &&
           (occurrenceInsets?.get(rows[rowIndex]!)?.get(cell.id) ??
-            cellContentInsets(authored, structure.cellSpacingPt === 0));
+            sharedCellContentInsets(authored, structure.cellSpacingPt === 0));
         // Split/merged occurrences can decline the terminal re-probe. Do not move their
         // stroke into content until admission has reserved the complete outer inset.
         const outerBottomInsetReserved =
           authored && insets
             ? insets.bottom >=
-              borderContentInset(
-                authored.margins.bottom,
-                effectiveBorderSide(authored.borders.bottom, structure.tableBorders.bottom)
+              outerBottomInsetFloor(
+                authored,
+                (authored.rowTableBorders ?? structure.tableBorders).bottom
               ) -
                 0.001
             : false;

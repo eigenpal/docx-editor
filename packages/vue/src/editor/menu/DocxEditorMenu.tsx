@@ -27,6 +27,8 @@ import {
   type ChromeMenuId,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
+import { useEditorState } from '../useEditorState';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
@@ -162,6 +164,8 @@ function anyMenuIdOfChild(child: unknown, includeHidden = false): string | null 
   return null;
 }
 
+const selectOpening = (snapshot: EditorSnapshot): boolean => snapshot.isOpening === true;
+
 const DocxEditorMenuRoot = defineComponent({
   name: 'DocxEditorMenu',
   props: {
@@ -189,6 +193,11 @@ const DocxEditorMenuRoot = defineComponent({
     const editorRef = useDocxEditor();
     const { t: catalogT } = useTranslation();
     const openMenu = ref<MenuId | null>(null);
+    // The previous document stays mounted while the next one opens; no menu acts on it.
+    const opening = useEditorState(selectOpening);
+    watch(opening, (now) => {
+      if (now) openMenu.value = null;
+    });
     const openedName = ref<string | null>(null);
     const exportState = useMenuExport(
       editorRef,
@@ -356,6 +365,7 @@ const DocxEditorMenuRoot = defineComponent({
       onParagraphDialog: editorRef.value ? packagedParagraphDialog : undefined,
       onReportIssue: props.onReportIssue,
       reportIssue: props.reportIssue,
+      opening: opening.value,
     }));
 
     provide(MenuContext, context);

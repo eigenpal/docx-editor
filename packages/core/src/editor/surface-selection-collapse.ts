@@ -1,6 +1,6 @@
 import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
 import { caretAt, type SemanticPosition } from '../layout/semantic-interaction.ts';
-import { paragraphLinesIndex } from '../layout/paragraph-lines.ts';
+import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import { bidiDirectionOfStop } from '../layout/visual-caret-navigation.ts';
 
 /** Collapse onto the outermost canonical endpoint or run boundary within the selection. */
@@ -18,9 +18,9 @@ export function collapseHorizontalSelection(
   const fallback = direction * base === -1 ? range.from : range.to;
   // Across lines, preserve the selected logical endpoint in the paragraph's reading direction.
   if (!from || !to || from.lineId !== to.lineId || from.pageIndex !== to.pageIndex) return fallback;
-  const line = paragraphLinesIndex(layout)
-    .get(range.from.paragraphId)
-    ?.find(({ line }) => line.id === from.lineId)?.line;
+  const line = paragraphLinesFor(layout, range.from.paragraphId)?.find(
+    ({ line }) => line.id === from.lineId
+  )?.line;
   if (!line?.spans.some((span) => span.style.shaping)) return fallback;
   const startIndex = order.indexOf(range.from.paragraphId),
     endIndex = order.indexOf(range.to.paragraphId);

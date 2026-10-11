@@ -10,7 +10,9 @@ import { useScopeClassName } from './scope-context';
 import { useViewportOverlayHost } from './viewport-context';
 
 const HIDE_DELAY_MS = 600;
-const selectTotalPages = (snapshot: EditorSnapshot): number => snapshot.page.total;
+// No count while a document opens: its layout is still partial, so a total would be wrong.
+const selectTotalPages = (snapshot: EditorSnapshot): number =>
+  snapshot.isOpening === true ? 0 : snapshot.page.total;
 
 /** Internal bridge from the batteries-included editor's `t` prop to this composition part. */
 export const PageNumberTranslationContext = createContext<((key: string) => string) | null>(null);

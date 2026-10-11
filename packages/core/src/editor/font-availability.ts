@@ -33,7 +33,7 @@ const GENERIC_BASELINES = ['monospace', 'serif'] as const;
  * The same family-name shape every other font sink enforces. Re-validated here because a
  * probe builds a CSS shorthand out of a file-derived name.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /**
  * A local-resolution probe over a canvas 2d context, memoized per family.
@@ -134,14 +134,23 @@ export function fontResolverFamilies(
  * an embedded or app-supplied face, not resolvable by the platform, and with no
  * metric-compatible twin in the surface fallback stack either. Order follows `families`
  * (already sorted by the catalog).
+ *
+ * Pass rendered families, never every declared family. Unused styles and blank document
+ * defaults do not join the notice. Projected marks still count as rendered glyphs.
+ * Admitted document aliases remain reportable even when their supplied target covers them.
  */
 export function detectFontSubstitutions(
   families: readonly string[],
   covered: (family: string) => boolean,
-  resolves: (family: string) => boolean
+  resolves: (family: string) => boolean,
+  documentAliases: ReadonlySet<string> = new Set()
 ): readonly string[] {
   const substituted: string[] = [];
   for (const family of families) {
+    if (documentAliases.has(family.toLowerCase())) {
+      substituted.push(family);
+      continue;
+    }
     if (covered(family)) continue;
     if (resolves(family)) continue;
     // The declared face is missing, but the stack may still fall through to its metric

@@ -208,7 +208,13 @@ export function mergedPropertyChildren(
   const taken = new Map<string, number>();
   const children: OoxmlNode[] = [];
   for (const child of prior) {
-    if (child.kind === 'textValue' || !vocabulary.authorable.has(child.localName)) {
+    // A foreign extension that shares a local name (`e:b`) is not the property, so it
+    // survives untouched rather than being rewritten or removed as one.
+    if (
+      child.kind === 'textValue' ||
+      child.namespaceUri !== WML_NAMESPACE_URI ||
+      !vocabulary.authorable.has(child.localName)
+    ) {
       children.push(child);
       continue;
     }

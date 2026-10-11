@@ -9,7 +9,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test, afterEach } from 'bun:test';
+import { describe, expect, test, afterEach, spyOn } from 'bun:test';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
 import { mount, paragraph, putCaret } from './paginated-surface-fixtures.ts';
 
@@ -103,6 +103,24 @@ describe('painted pages, semantic interaction', () => {
     // The caret is in the tail, ready for the next keystroke.
     expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[1]);
     expect(surface.state().selection.head.offset).toBe(0);
+  });
+
+  test('repeated Enter locates the new caret without enumerating story paragraphs', () => {
+    const { surface } = mount(paragraph('hello') + paragraph('untouched'));
+    putCaret(surface, 3);
+    const reads = spyOn(surface.session, 'paragraphIdsIn');
+    try {
+      for (let index = 0; index < 3; index++) {
+        surface.splitParagraph();
+        expect(surface.state().selection.head.paragraphId).toBe(
+          surface.session.paragraphIds()[index + 1]
+        );
+      }
+      expect(reads).not.toHaveBeenCalled();
+    } finally {
+      reads.mockRestore();
+      surface.destroy();
+    }
   });
 
   test('navigation moves the caret without touching the document', () => {

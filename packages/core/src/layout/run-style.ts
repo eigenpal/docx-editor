@@ -1,4 +1,5 @@
 import { revisionMarkupSourcesEqual } from './revision-markup-style.ts';
+import { layoutDerivedSpacingSourcesEqual } from './layout-derived-spacing.ts';
 // The accepted run property boundary, resolved for layout (task 7.2).
 //
 // Raw `w:rPr` children are authored OOXML: half-points, twips, percentages, toggle elements
@@ -536,6 +537,7 @@ export function measureDisplayText(
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean {
   return (
     revisionMarkupSourcesEqual(a, b) &&
+    layoutDerivedSpacingSourcesEqual(a, b) &&
     a.shaping?.script === b.shaping?.script &&
     a.shaping?.direction === b.shaping?.direction &&
     a.shaping?.level === b.shaping?.level &&

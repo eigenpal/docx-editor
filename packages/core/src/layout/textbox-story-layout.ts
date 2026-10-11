@@ -159,11 +159,29 @@ export function textboxLineIdPrefix(drawingNodeId: string): string {
   return `txbx-${drawingNodeId}`;
 }
 
+/** Stable per-object ids for memo inputs, so a memo never keeps an older input alive. */
+let nextInputId = 1;
+const inputIds = new WeakMap<object, number>();
+function inputId(input: object | undefined): number {
+  if (input === undefined) return 0;
+  let id = inputIds.get(input);
+  if (id === undefined) {
+    id = nextInputId;
+    nextInputId += 1;
+    inputIds.set(input, id);
+  }
+  return id;
+}
+
+/**
+ * Inputs are held as ids, not objects: the undo history keeps old nodes alive, and a memo on
+ * each holding its numbering index kept one whole index per revision.
+ */
 interface TextboxStoryListResolve {
-  readonly rawIndex: NumberingIndex;
-  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly rawIndex: number;
+  readonly styleCascade: number;
   readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
+  readonly authorFilter: number;
   readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
 }
 
@@ -193,10 +211,10 @@ export function textboxStoryListItems(
   const memo = textboxStoryListResolves.get(content);
   if (
     memo &&
-    memo.rawIndex === numberingIndex &&
-    memo.styleCascade === styleCascade &&
+    memo.rawIndex === inputId(numberingIndex) &&
+    memo.styleCascade === inputId(styleCascade) &&
     memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter
+    memo.authorFilter === inputId(authorFilter)
   ) {
     return memo.listItems;
   }
@@ -205,10 +223,10 @@ export function textboxStoryListItems(
   const resolved = resolveStoryListItems(blocks, linked, styleCascade);
   const listItems = resolved.size > 0 ? resolved : undefined;
   textboxStoryListResolves.set(content, {
-    rawIndex: numberingIndex,
-    styleCascade,
+    rawIndex: inputId(numberingIndex),
+    styleCascade: inputId(styleCascade),
     displayMode,
-    authorFilter,
+    authorFilter: inputId(authorFilter),
     listItems,
   });
   return listItems;
@@ -364,11 +382,12 @@ function numberingIndexTokenId(index: NumberingIndex): number {
   return id;
 }
 
+/** Inputs are held as ids, like {@link TextboxStoryListResolve}. */
 interface HostedListTokenMemo {
-  readonly rawIndex: NumberingIndex;
-  readonly styleCascade: StyleCascadeTable | undefined;
+  readonly rawIndex: number;
+  readonly styleCascade: number;
   readonly displayMode: RevisionDisplayMode;
-  readonly authorFilter: RevisionAuthorFilter | undefined;
+  readonly authorFilter: number;
   readonly token: string;
 }
 
@@ -397,10 +416,10 @@ function hostedTextboxListToken(
   const memo = hostedListTokensByBlock.get(block);
   if (
     memo &&
-    memo.rawIndex === numberingIndex &&
-    memo.styleCascade === styleCascade &&
+    memo.rawIndex === inputId(numberingIndex) &&
+    memo.styleCascade === inputId(styleCascade) &&
     memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter
+    memo.authorFilter === inputId(authorFilter)
   ) {
     return memo.token;
   }
@@ -426,10 +445,10 @@ function hostedTextboxListToken(
   // to one token and hold a break key still across a numbering edit.
   const token = parts.length === 0 ? '' : `|txbxlist:${framedTokenJoin(parts)}`;
   hostedListTokensByBlock.set(block, {
-    rawIndex: numberingIndex,
-    styleCascade,
+    rawIndex: inputId(numberingIndex),
+    styleCascade: inputId(styleCascade),
     displayMode,
-    authorFilter,
+    authorFilter: inputId(authorFilter),
     token,
   });
   return token;

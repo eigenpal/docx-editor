@@ -28,6 +28,12 @@ const everyStoryOrderCache = new WeakMap<SemanticLayout, string[]>();
  */
 const pageOrderCache = new WeakMap<PageRecord, readonly string[]>();
 
+/** @internal `to` draws the same lines as `from`; only list marker labels moved. */
+export function carryPageOrder(from: PageRecord, to: PageRecord): void {
+  const order = pageOrderCache.get(from);
+  if (order) pageOrderCache.set(to, order);
+}
+
 function pageOrder(page: PageRecord): readonly string[] {
   const cached = pageOrderCache.get(page);
   if (cached) return cached;

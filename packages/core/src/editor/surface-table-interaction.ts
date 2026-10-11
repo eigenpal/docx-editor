@@ -6,6 +6,7 @@
 import type { ExecResult } from '../contracts/editor.ts';
 import type { SemanticLayout, SemanticSelection } from '@docx-editor.dev/core/layout';
 import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { validateTableResizeGrid } from '../store/store/table-resize-grid.ts';
 import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
@@ -511,7 +512,11 @@ export function createSurfaceTableInteraction(
       partOfTableIn(host.session(), target.tableId).root,
       target.tableId
     );
-    if (!topo.ok || (target.kind !== 'rowDivider' && topo.topology.hasMerge)) return;
+    if (
+      !topo.ok ||
+      (target.kind !== 'rowDivider' && validateTableResizeGrid(topo.topology) !== null)
+    )
+      return;
 
     let leftTwips = 0;
     let rightTwips = 0;
@@ -703,7 +708,8 @@ export function createSurfaceTableInteraction(
   }
 
   function hitAtLastPointer(input: SurfaceTableInteractionInput): TableInteractionHit | null {
-    if (!index || !lastPointerSheet) return null;
+    if (!lastPointerSheet) return null;
+    index ??= tableInteractionIndex(input.layout);
     const pageOffsetX = host.pageOffsetX(lastPointerSheet.pageIndex);
     return findTableInteractionAt(
       index,
@@ -751,10 +757,7 @@ export function createSurfaceTableInteraction(
     }
     insertButton = retained;
     if (!insertHit || (insertHit.kind !== 'insertRow' && insertHit.kind !== 'insertColumn')) return;
-    if (!index) {
-      retireRetainedInsertButton();
-      return;
-    }
+    index ??= tableInteractionIndex(input.layout);
 
     const priorTarget = tableInteractionTargetIdentity(insertHit);
     const resolved = resolveTableInteractionInsertHit(index, insertHit);
@@ -796,6 +799,7 @@ export function createSurfaceTableInteraction(
       lastPointerSheet = { x: sheet.x, y: sheet.y, pageIndex };
     }
     const pageOffsetX = pageIndex >= 0 ? host.pageOffsetX(pageIndex) : 0;
+    index ??= tableInteractionIndex(input.layout);
     const hit = index
       ? findTableInteractionAt(
           index,
@@ -862,7 +866,7 @@ export function createSurfaceTableInteraction(
       const input = host.read();
       const previousLayoutRevision = indexedLayoutRevision;
       const previousStoreRevision = indexedStoreRevision;
-      index = tableInteractionIndex(input.layout);
+      index = null;
       indexedLayoutRevision = input.layout.revision;
       indexedStoreRevision = input.storeRevision;
       if (input.editingMode === 'view') {

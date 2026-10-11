@@ -880,7 +880,7 @@ export function Menu({
   preset = true,
   children,
 }: MenuProps) {
-  const { openMenu, setOpenMenu, activeMenu } = useMenuContext();
+  const { openMenu, setOpenMenu, activeMenu, opening } = useMenuContext();
   const menuOverflow = useMenuOverflow();
   const label = useMenuLabel();
   const panelId = useId();
@@ -942,6 +942,7 @@ export function Menu({
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         className="docx-menubar__trigger"
+        disabled={opening === true}
         // Roving tabindex: the bar is ONE tab stop, and arrows move within it. Without
         // this every trigger is a stop and a keyboard user tabs through four of them to
         // get past the editor's chrome.

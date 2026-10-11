@@ -431,3 +431,47 @@ describe('the caret on an empty paragraph', () => {
     expect(caretElement(container)).not.toBeNull();
   });
 });
+
+for (const alignment of ['top', 'center', 'bottom']) {
+  test(`Enter and typing keep the caret inside a ${alignment}-aligned cell with hideMark`, () => {
+    const { surface, container } = mount(
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="1200"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:trHeight w:val="20"/></w:trPr>' +
+        `<w:tc><w:tcPr><w:vAlign w:val="${alignment}"/><w:hideMark/></w:tcPr>` +
+        paragraph('Example') +
+        '</w:tc></w:tr><w:tr><w:tc>' +
+        paragraph('Next row') +
+        '</w:tc></w:tr></w:tbl>'
+    );
+    try {
+      putCaret(surface, 7);
+      const check = () => {
+        const layout = surface.layout();
+        const caret = caretAt(layout, surface.state().selection.head)!;
+        const table = layout.pages[caret.pageIndex]!.fragments.find((f) => f.kind === 'table')!;
+        if (table.kind !== 'table') throw new Error('Expected table');
+        const cell = table.rows[0]!.cells[0]!;
+        expect(caret.height).toBeGreaterThan(0);
+        expect(caret.y).toBeGreaterThanOrEqual(cell.box.y);
+        expect(caret.y + caret.height).toBeLessThanOrEqual(cell.box.y + cell.box.height + 0.001);
+        const painted = caretElement(container)!;
+        expect(painted).not.toBeNull();
+        expect(
+          parseFloat(painted.style.top) + parseFloat(painted.style.height)
+        ).toBeLessThanOrEqual(cell.box.y + cell.box.height + 0.001);
+      };
+      for (let index = 0; index < 3; index += 1) {
+        surface.splitParagraph();
+        check();
+      }
+      for (const character of 'More text that wraps onto several lines') {
+        surface.type(character);
+        check();
+      }
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+}

@@ -1,6 +1,10 @@
 // Document-aware font resolution shared by every headless exporter.
 
 import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
+import {
+  documentFontSubstitutionPlan,
+  applyDocumentFontSubstitutions,
+} from '../layout/document-font-substitution.ts';
 import { symbolFontFamily, validFontFamily } from '../store/package/run-defaults.ts';
 import {
   DEFAULT_FONT,
@@ -385,6 +389,7 @@ export async function acquireDocumentExportShaping(
         // documentFontFamilies orders body before furniture before notes, which makes the cut
         // safe: a hostile header cannot crowd the body's faces out. The editor caps the same way.
         const families = documentFontFamilies(view).slice(0, MAX_RESOLVER_FAMILIES);
+        const documentFonts = documentFontSubstitutionPlan(view, families);
         const originFailures: FontOriginFailure[] = [];
         const embeddedFontDiagnostics: DocumentEmbeddedFontDiagnostics = { dropped: [] };
         const embeddedOrigin = documentEmbeddedFontOrigin(view, embeddedFontDiagnostics);
@@ -401,7 +406,7 @@ export async function acquireDocumentExportShaping(
             families: [
               ...new Set([
                 ...(options.glyphFallbacks ?? []).map((face) => face.family),
-                ...families,
+                ...documentFonts.families,
               ]),
             ].slice(0, MAX_RESOLVER_FAMILIES),
             defaultFamily: DEFAULT_FONT.family,
@@ -414,7 +419,10 @@ export async function acquireDocumentExportShaping(
           }
         );
         throwIfAborted(controller.signal);
-        const configuration = composeFontConfiguration(resolved ?? {});
+        const configuration = applyDocumentFontSubstitutions(
+          composeFontConfiguration(resolved ?? {}),
+          documentFonts
+        );
         if (configuration.sources.length === 0) {
           const report = fontResolutionReport(
             families,

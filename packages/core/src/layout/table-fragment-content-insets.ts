@@ -15,7 +15,7 @@ export function firstRowContentDeps(
   for (const cell of row.cells) {
     const top = borderContentInset(
       cell.margins.top,
-      effectiveBorderSide(cell.borders.top, structure.tableBorders.top)
+      effectiveBorderSide(cell.borders.top, (cell.rowTableBorders ?? structure.tableBorders).top)
     );
     insets.set(cell.id, {
       ...(insets.get(cell.id) ?? cellContentInsets(cell, true)),
@@ -46,7 +46,10 @@ export function lastRowContentDeps(
     const before = insets.get(cell.id) ?? cellContentInsets(cell, true);
     const bottom = borderContentInset(
       cell.margins.bottom,
-      effectiveBorderSide(cell.borders.bottom, structure.tableBorders.bottom)
+      effectiveBorderSide(
+        cell.borders.bottom,
+        (cell.rowTableBorders ?? structure.tableBorders).bottom
+      )
     );
     if (before.bottom !== bottom) changed = true;
     insets.set(cell.id, { ...before, bottom });

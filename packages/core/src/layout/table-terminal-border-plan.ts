@@ -2,6 +2,7 @@
 import { canProbeBorderRows, hasTableMerge } from './table-border-probe.ts';
 import { lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
+import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
 import {
   MAX_TABLE_COLUMNS,
@@ -39,7 +40,8 @@ export function prepareTerminalBorderPlan(
   let line = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(terminalDeps),
-    cache: undefined,
+    // Reads only: a probe never retains a break, but it may reuse one placement measured.
+    cache: readOnlyBreakCache(terminalDeps.cache),
     borderOwnershipBudget: undefined,
     vMergeResolveBudget: undefined,
     onCellBreakKey: undefined,

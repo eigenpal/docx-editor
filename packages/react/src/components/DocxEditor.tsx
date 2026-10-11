@@ -17,7 +17,7 @@ import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
-import { DocxEditorLoading } from '../editor/DocxEditorLoading';
+import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import {
   DocxEditorAuthorStyle,
   DocxEditorColorByChangeType,
@@ -242,6 +242,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       onTitleChange,
       renderTitleBarLeft,
       renderTitleBarRight,
+      loadingIndicator,
       colorMode = 'light',
       author,
       locale,
@@ -267,6 +268,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       navigation = true,
       rulers = true,
     } = props;
+    if (!chrome && loadingIndicator !== undefined) warnLoadingIndicatorWithoutChrome();
 
     // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
     // root's `.dark` class moves — the
@@ -409,7 +411,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
             one opens — the engine mounts big files behind one painted frame so this
             overlay can paint instead of the page freezing — and renders nothing
             otherwise, so it costs the loaded editor nothing. */}
-          <DocxEditorLoading overlay />
+          <DocxEditorLoading overlay indicator={loadingIndicator} />
         </div>
       </div>
     ) : (

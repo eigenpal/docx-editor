@@ -452,7 +452,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           },
           deps.selectedCells?.(),
           deps.defaultParagraphStyleId?.() ?? null,
-          deps.paragraphOrder(),
+          selectionNow.value.anchor.paragraphId === selectionNow.value.head.paragraphId
+            ? [selectionNow.value.head.paragraphId]
+            : deps.paragraphOrder(),
           deps.defaultFontFamily?.() ?? null
         ),
         deps.pendingFormats()

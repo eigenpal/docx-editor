@@ -765,6 +765,22 @@ export function sectionMarkFlowKeys(keys: string[], endsWithSectionMark: boolean
 }
 
 /**
+ * Flow keys for a pass where a later section opens the next sheet (`markJoinsBreakSheet`).
+ *
+ * Only the block before the closing mark and the mark itself read the flag: the break that
+ * ends the first keeps the empty mark on its sheet. Folding it into those two keys, not the
+ * pass context, lets a section that gains a successor resume from its checkpoints.
+ */
+export function markJoinFlowKeys(keys: string[], joins: boolean): string[] {
+  if (!joins || keys.length === 0) return keys;
+  const flow = [...keys];
+  for (let at = Math.max(0, flow.length - 2); at < flow.length; at += 1) {
+    flow[at] = `${flow[at]}~mjb`;
+  }
+  return flow;
+}
+
+/**
  * Fold complete keep-chain dependencies last, after all other flow-key folds.
  * Two backwards digest lanes cover ordinary chains and chains through one table.
  * Fixed-size SHA-256 digests bound storage and construction work to the input size.

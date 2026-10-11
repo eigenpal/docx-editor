@@ -14,6 +14,7 @@
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { themeFontFamilyOf, type DocumentThemeFonts } from './theme-font-scheme.ts';
+import { fontFamilyName } from './font-family-name.ts';
 
 /** What a run inherits at one point of the chain — null means "nothing authored". */
 export interface StyleRunDefaults {
@@ -83,7 +84,7 @@ export function familyFromRFonts(
     themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts) ??
     attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
-  return FONT_NAME.test(direct) ? direct : null;
+  return fontFamilyName(direct);
 }
 
 /** The independently resolved East Asian family named by an `w:rFonts` element. */
@@ -95,7 +96,7 @@ export function eastAsiaFamilyFromRFonts(
   if (themed !== null) return themed;
   const direct = attributeValue(rFonts, 'eastAsia');
   if (direct === undefined) return null;
-  return FONT_NAME.test(direct) ? direct : null;
+  return fontFamilyName(direct);
 }
 
 /**
@@ -110,7 +111,7 @@ export function hAnsiFamilyFromRFonts(
   if (themed !== null) return themed;
   const direct = attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
-  return FONT_NAME.test(direct) ? direct : null;
+  return fontFamilyName(direct);
 }
 
 /** A validated literal family name from another Word font-bearing attribute such as `w:sym`. */

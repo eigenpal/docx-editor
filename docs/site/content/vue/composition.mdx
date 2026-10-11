@@ -386,7 +386,24 @@ Set `overlay` to cover the previous document while the next document opens.
 </div>
 ```
 
-Give `.workspace` a positioning context. Use `DocxEditorLoading.Spinner` or `DocxEditorLoadingSpinner` to style the packaged spinner.
+Give `.workspace` a positioning context. With `overlay`, the indicator moves onto the first page once the first pages of a large document show. It stays there, and scrolls with the page, until the editor lays out the remaining pages. To replace only the spinner in both places, use the `indicator` slot. Keep the packaged page and its position:
+
+```vue
+<div class="workspace">
+  <DocxEditorViewport>
+    <DocxEditorContent />
+  </DocxEditorViewport>
+  <DocxEditorLoading overlay>
+    <template #indicator>
+      <MyLogoSpinner label="Opening document" />
+    </template>
+  </DocxEditorLoading>
+</div>
+```
+
+The default slot replaces the whole first screen, and the first page then shows the `indicator` slot, or the packaged spinner without it. The `loadingIndicator` slot of `DocxEditor` fills the `indicator` slot.
+
+Use `DocxEditorLoading.Spinner` or `DocxEditorLoadingSpinner` to style the packaged spinner.
 
 ## Custom hyperlink popover
 

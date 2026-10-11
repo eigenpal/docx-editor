@@ -23,6 +23,27 @@ interface ScanContext {
   readonly depth: number;
 }
 
+/**
+ * One string and one context per distinct cell scope. Every cell built its own key string
+ * and context, and the subtree cache kept them, one per cell of every table.
+ */
+const cellContexts = new WeakMap<ScanContext, Map<string, ScanContext>>();
+const MAX_CELL_CONTEXTS = 4096;
+
+function cellContext(
+  context: ScanContext,
+  cellStyle: TableCellStyleFormatting | undefined
+): ScanContext {
+  const key = `${context.baseKey}|${context.depth + 1}|${JSON.stringify(cellStyle)}`;
+  let known = cellContexts.get(context);
+  if (!known) cellContexts.set(context, (known = new Map()));
+  const cached = known.get(key);
+  if (cached) return cached;
+  const next = { ...context, depth: context.depth + 1, cellStyle, key };
+  if (known.size < MAX_CELL_CONTEXTS) known.set(key, next);
+  return next;
+}
+
 function inspectFontNode(node: OoxmlElement, context: ScanContext) {
   const { styles, theme, supplementalFamilies, depth } = context;
   if (node.kind === 'table') {
@@ -30,12 +51,7 @@ function inspectFontNode(node: OoxmlElement, context: ScanContext) {
     const children = [];
     for (const row of structure?.rows ?? []) {
       for (const cell of row.cells) {
-        const next = {
-          ...context,
-          depth: depth + 1,
-          cellStyle: cell.styleFormatting,
-          key: `${context.baseKey}|${depth + 1}|${JSON.stringify(cell.styleFormatting)}`,
-        };
+        const next = cellContext(context, cell.styleFormatting);
         for (const block of cell.blocks) children.push({ node: block, context: next });
       }
     }
@@ -74,12 +90,31 @@ function inspectFontNode(node: OoxmlElement, context: ScanContext) {
   return { families: [...families], children: fontScanChildren(node, next).reverse() };
 }
 
+/** A live scanner, plus a warm-up for one long table a few rows at a time. */
+export type EastAsianLanguageFontScanner = ((
+  roots: readonly OoxmlElement[],
+  stylesRoot: OoxmlElement | null,
+  theme: ThemeFonts
+) => readonly string[]) & {
+  /**
+   * Scan rows `[from, to)` of the top-level `table` into the cache a full read uses, with the
+   * same cell scopes. Answers the row count, so a caller knows when it is done.
+   */
+  warmTableRows(
+    table: OoxmlElement,
+    from: number,
+    to: number,
+    stylesRoot: OoxmlElement | null,
+    theme: ThemeFonts
+  ): number;
+};
+
 /** Reusable discovery belongs to the live editor session that needs incremental updates. */
-export function createEastAsianLanguageFontScanner(): typeof eastAsianLanguageFontFamilies {
+export function createEastAsianLanguageFontScanner(): EastAsianLanguageFontScanner {
   const scan = createFontFamilyTreeCache(inspectFontNode);
   let previousContext: ScanContext | undefined;
   let previousStylesRoot: OoxmlElement | null | undefined;
-  return (roots, stylesRoot, theme) => {
+  const contextFor = (stylesRoot: OoxmlElement | null, theme: ThemeFonts): ScanContext => {
     if (!previousContext || previousStylesRoot !== stylesRoot || previousContext.theme !== theme) {
       const styles = buildStyleCascadeTable(stylesRoot, theme);
       previousStylesRoot = stylesRoot;
@@ -95,8 +130,30 @@ export function createEastAsianLanguageFontScanner(): typeof eastAsianLanguageFo
         ]),
       };
     }
-    return scan([...roots].reverse(), previousContext);
+    return previousContext;
   };
+  const scanner = (
+    roots: readonly OoxmlElement[],
+    stylesRoot: OoxmlElement | null,
+    theme: ThemeFonts
+  ) => scan([...roots].reverse(), contextFor(stylesRoot, theme));
+  return Object.assign(scanner, {
+    warmTableRows(
+      table: OoxmlElement,
+      from: number,
+      to: number,
+      stylesRoot: OoxmlElement | null,
+      theme: ThemeFonts
+    ): number {
+      const context = contextFor(stylesRoot, theme);
+      // The same structure and cell scopes `inspectFontNode` gives a table at the top level.
+      const rows = readTableStructure(table, 468, context.depth, context.styles)?.rows ?? [];
+      for (const row of rows.slice(from, to)) {
+        for (const cell of row.cells) scan(cell.blocks, cellContext(context, cell.styleFormatting));
+      }
+      return rows.length;
+    },
+  });
 }
 
 /** One-shot export discovery releases its subtree cache before layout allocates its live set. */

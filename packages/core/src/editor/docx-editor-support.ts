@@ -19,6 +19,7 @@ import {
   MAX_INSERT_TABLE_COLUMNS,
   MAX_INSERT_TABLE_ROWS,
 } from '../store/store/table-constraints.ts';
+import { fontFamilyName } from '../store/package/font-family-name.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { blankDocumentBytes } from './blank-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
@@ -100,10 +101,6 @@ export const HIGHLIGHT_NAMES: ReadonlySet<string> = new Set([
   'white',
 ]);
 
-/** The shape the CSS sink enforces on family names (semantic-paint.ts's `FONT_NAME`);
- *  applying it at the command boundary keeps an invalid name out of the tree entirely. */
-const FONT_FAMILY_VALUE = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
-
 const HEX_COLOR_VALUE = /^[0-9A-Fa-f]{6}$/;
 
 export type ResolvedMarkAttr =
@@ -131,11 +128,14 @@ export function resolveMarkAttr(command: { mark: string; value: unknown }): Reso
   const { mark, value } = command;
   switch (mark) {
     case 'fontFamily': {
-      if (typeof value !== 'string' || !FONT_FAMILY_VALUE.test(value)) {
+      // The same shape the font list and the CSS sink accept (semantic-paint.ts's
+      // `FONT_NAME`), so every listed name is selectable and an invalid name never
+      // reaches the tree. No quote, backslash, or control character; at most 64.
+      if (typeof value !== 'string' || fontFamilyName(value) === null) {
         return {
           ok: false,
           code: 'invalidArgs',
-          reason: 'fontFamily requires a family name of 1-64 letters, digits, or [ -.+_]',
+          reason: 'fontFamily requires a family name of 1-64 letters, digits, or [ -.+_,;]',
         };
       }
       return { ok: true, localName: 'rFonts', attributes: { ascii: value, hAnsi: value } };

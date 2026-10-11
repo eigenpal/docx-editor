@@ -5,7 +5,12 @@
 // a disagreement is an offset bug. Keeping the vocabulary in one module keeps them agreeing
 // by construction.
 
-import { hardBreakText, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
+import {
+  hardBreakText,
+  WML_NAMESPACE_URI,
+  type OoxmlNode,
+  type OoxmlProperty,
+} from '@docx-editor.dev/core/store';
 import { runTextOutlineProperty } from './run-text-outline.ts';
 import {
   hyphenDisplayText,
@@ -54,6 +59,7 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
+    // `w14` children have namespace-checked readers of their own.
     if (child.localName === 'ligatures') {
       const value = runLigaturesValue(child);
       if (value !== undefined) props.push({ localName: 'ligatures', attributes: { val: value } });
@@ -64,21 +70,56 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
       if (outline) props.push(outline);
       continue;
     }
-    const attributes: Record<string, string> = {};
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
-    const hasAttributes = Object.keys(attributes).length > 0;
-    if (child.localName === 'rPrChange' || child.localName === 'pPrChange') {
-      const revisionProperty: OoxmlProperty & { readonly revisionNodeId: string } = hasAttributes
-        ? { localName: child.localName, attributes, revisionNodeId: child.id }
-        : { localName: child.localName, revisionNodeId: child.id };
-      props.push(revisionProperty);
+    // Only `w:` qualified children and attributes set properties. Foreign extensions stay in
+    // the canonical tree and are written back on save.
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (child.localName !== 'rPrChange' && child.localName !== 'pPrChange') {
+      props.push(sharedProperty(child.localName, child.attributes));
       continue;
     }
-    props.push(
-      hasAttributes ? { localName: child.localName, attributes } : { localName: child.localName }
-    );
+    const attributes: Record<string, string> = {};
+    for (const entry of child.attributes) {
+      if (entry.namespaceUri === WML_NAMESPACE_URI) attributes[entry.localName] = entry.value;
+    }
+    const hasAttributes = Object.keys(attributes).length > 0;
+    const revisionProperty: OoxmlProperty & { readonly revisionNodeId: string } = hasAttributes
+      ? { localName: child.localName, attributes, revisionNodeId: child.id }
+      : { localName: child.localName, revisionNodeId: child.id };
+    props.push(revisionProperty);
   }
   return props;
+}
+
+/**
+ * One frozen property per element name and attribute list. A part read shares equal
+ * attribute lists, so the many equal property elements of a long document (`w:sz`, `w:b`,
+ * `w:rFonts`) answer with one object instead of one each, which layout caches then kept.
+ */
+const sharedProperties = new WeakMap<readonly OoxmlAttributeLike[], Map<string, OoxmlProperty>>();
+
+interface OoxmlAttributeLike {
+  readonly localName: string;
+  readonly namespaceUri?: string;
+  readonly value: string;
+}
+
+function sharedProperty(localName: string, list: readonly OoxmlAttributeLike[]): OoxmlProperty {
+  let byName = sharedProperties.get(list);
+  if (!byName) sharedProperties.set(list, (byName = new Map()));
+  const known = byName.get(localName);
+  if (known) return known;
+  const attributes: Record<string, string> = {};
+  let hasAttributes = false;
+  for (const entry of list) {
+    if (entry.namespaceUri !== WML_NAMESPACE_URI) continue;
+    attributes[entry.localName] = entry.value;
+    hasAttributes = true;
+  }
+  const property: OoxmlProperty = Object.freeze(
+    hasAttributes ? { localName, attributes: Object.freeze(attributes) } : { localName }
+  );
+  byName.set(localName, property);
+  return property;
 }
 
 export function runPropertiesOf(

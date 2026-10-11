@@ -7,6 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { availableFontFamilies, configuredDefaultFontFamily } from '../font-catalog.ts';
+import { resolveMarkAttr } from '../docx-editor-support.ts';
 
 const face = (family: string, weight = 400, style: 'normal' | 'italic' = 'normal') => ({
   family,
@@ -93,7 +94,7 @@ describe('availableFontFamilies', () => {
   });
 
   test('invalid document names are dropped, never repaired', () => {
-    const catalog = availableFontFamilies(undefined, ['Georgia', 'x'.repeat(65), 'bad;name']);
+    const catalog = availableFontFamilies(undefined, ['Georgia', 'x'.repeat(65), 'bad";name']);
     expect(catalog).toEqual(STANDARD_FONTS);
   });
 
@@ -109,7 +110,36 @@ describe('availableFontFamilies', () => {
 });
 
 test('document-only families still join the standard catalog', () => {
-  expect(availableFontFamilies(undefined, ['Sagona', 'sagona', 'bad;name'])).toEqual(
+  expect(availableFontFamilies(undefined, ['Sagona', 'sagona', 'bad";name'])).toEqual(
     withStandardFonts('Sagona')
   );
+});
+
+test('punctuated font references remain one catalog entry', () => {
+  const catalog = availableFontFamilies(undefined, ['Georgia;Verdana', 'Georgia,Verdana']);
+  expect(catalog).toContain('Georgia;Verdana');
+  expect(catalog).toContain('Georgia,Verdana');
+  expect(catalog.filter((family) => family === 'Georgia')).toHaveLength(1);
+});
+
+test('every listed punctuated name is a valid font family command value', () => {
+  const catalog = availableFontFamilies(undefined, [
+    'Georgia;Verdana',
+    'Georgia,Verdana',
+    '宋体;SimSun',
+  ]);
+  expect(catalog).toContain('宋体;SimSun');
+  for (const family of catalog) {
+    expect(resolveMarkAttr({ mark: 'fontFamily', value: family })).toEqual({
+      ok: true,
+      localName: 'rFonts',
+      attributes: { ascii: family, hAnsi: family },
+    });
+  }
+  for (const value of ['', ' ', 'A";color:red', 'A\\B', 'A\nB', 'A\u0000B', 'A'.repeat(65), 7]) {
+    expect(resolveMarkAttr({ mark: 'fontFamily', value })).toMatchObject({
+      ok: false,
+      code: 'invalidArgs',
+    });
+  }
 });

@@ -57,23 +57,22 @@ import { rowBreaksPageBefore } from './table-row-page-break.ts';
 import { planHeaderGroup } from './table-header-vmerge.ts';
 import { measureKeptMergeRows } from './table-kept-merge-measure.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
+import { noteRowFactRead, rowFacts } from './table-row-facts.ts';
 
 /** Maximum rows measured for one table keep decision; paragraph lookahead is independent. */
 const MAX_TABLE_KEEP_ROWS = 256;
 
 // Rows come from `readTableStructure`, which is memoized per style cascade, so one row
-// object always resolves against the same cascade.
-const rowKeeps = new WeakMap<SemanticTableRow, boolean>();
-const rowBreaks = new WeakMap<SemanticTableRow, boolean>();
+// object, and each side-rule copy of it (`table-row-facts.ts`), resolves against one cascade.
 
 /** {@link rowBreaksPageBefore}, memoized per row as {@link rowKeepsWithNext} is. */
 function rowBreaksPage(row: SemanticTableRow, styleCascade: StyleCascadeTable | undefined) {
-  let breaks = rowBreaks.get(row);
-  if (breaks === undefined) {
-    breaks = rowBreaksPageBefore(row, styleCascade);
-    rowBreaks.set(row, breaks);
+  const facts = rowFacts(row);
+  if (facts.breaksPageBefore === undefined) {
+    noteRowFactRead('breaksPageBefore');
+    facts.breaksPageBefore = rowBreaksPageBefore(row, styleCascade);
   }
-  return breaks;
+  return facts.breaksPageBefore;
 }
 
 /**
@@ -102,12 +101,12 @@ export function rowKeepsWithNext(
   row: SemanticTableRow,
   styleCascade: StyleCascadeTable | undefined
 ): boolean {
-  let keeps = rowKeeps.get(row);
-  if (keeps === undefined) {
-    keeps = resolveRowKeep(row, styleCascade);
-    rowKeeps.set(row, keeps);
+  const facts = rowFacts(row);
+  if (facts.keepsWithNext === undefined) {
+    noteRowFactRead('keepsWithNext');
+    facts.keepsWithNext = resolveRowKeep(row, styleCascade);
   }
-  return keeps;
+  return facts.keepsWithNext;
 }
 
 function resolveRowKeep(row: SemanticTableRow, styleCascade: StyleCascadeTable | undefined) {

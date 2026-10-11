@@ -27,6 +27,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorHorizontalRuler } from '../src/editor/DocxEditorRulers.tsx';
 import { useEditorState } from '../src/editor/useEditorState.ts';
+import { DocxEditorMenu } from '../src/editor/menu/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -88,6 +89,45 @@ const LARGE_SOURCE = zipSync({
   ),
   'word/media/filler.bin': compressibleText(1024 * 1024),
 });
+
+/** Past the yield threshold AND long enough that the open lays its pages out in slices. */
+function slicedSource(): Uint8Array {
+  const paragraphs: string[] = [];
+  for (let index = 0; index < 3000; index += 1) {
+    paragraphs.push(`<w:p><w:r><w:t>Sliced paragraph ${index}</w:t></w:r></w:p>`);
+  }
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="bin" ContentType="application/octet-stream"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${paragraphs.join('')}<w:sectPr/></w:body></w:document>`
+    ),
+    'word/media/filler.bin': compressibleText(1024 * 1024),
+  });
+}
+
+/** Records where each mount of the indicator landed: the first screen or the first page. */
+function trackedIndicator(places: string[]) {
+  return (
+    <span
+      className="mine"
+      ref={(element) => {
+        if (!element) return;
+        places.push(element.closest('.docx-opening-indicator') ? 'first page' : 'screen');
+      }}
+    >
+      Opening document
+    </span>
+  );
+}
 
 const LOADING = '.docx-editor__loading';
 const SPINNER = '.docx-editor__loading-spinner';
@@ -291,6 +331,42 @@ describe('DocxEditor.Loading', () => {
     });
   });
 
+  test('the menu bar is disabled and closed while the next document opens', async () => {
+    // The previous document stays mounted under the overlay, so a menu command in that
+    // window would act on the document about to be replaced. The toolbar already refuses.
+    let editor: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={SOURCE}
+        onReady={(ready) => {
+          editor = ready as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorMenu />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    const triggers = () => [
+      ...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger'),
+    ];
+    expect(triggers().length).toBeGreaterThan(0);
+    act(() => triggers()[0]!.click());
+    expect(view.container.querySelector('[role="menu"]')).not.toBeNull();
+
+    act(() => {
+      editor!.load(LARGE_SOURCE);
+    });
+    await act(async () => {});
+    expect(triggers().every((trigger) => trigger.disabled)).toBe(true);
+    expect(view.container.querySelector('[role="menu"]')).toBeNull();
+
+    await waitFor(() => expect(view.container.textContent).toContain('large body'));
+    await waitFor(() => expect(triggers().every((trigger) => !trigger.disabled)).toBe(true));
+  });
+
   test('a ruler snaps to the centred loading page before a deferred replacement', async () => {
     let editor: DocxEditorInstance | null = null;
     const view = render(
@@ -418,6 +494,37 @@ describe('DocxEditor.Loading', () => {
     expect(el.querySelector(SPINNER)).toBeNull();
   });
 
+  test('indicator replaces only the spinner and keeps the packaged page', () => {
+    const view = render(<DocxEditorLoading when indicator={<span className="mine" />} />);
+    const status = view.container.querySelector('.docx-editor__loading-page-status')!;
+
+    expect(status.querySelector('.mine')).not.toBeNull();
+    expect(view.container.querySelector(SPINNER)).toBeNull();
+    expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
+  });
+
+  test('with overlay, the indicator moves onto the first page while the pages are laid out', async () => {
+    const places: string[] = [];
+    const view = render(
+      <DocxEditorRoot document={slicedSource()}>
+        <div style={{ position: 'relative' }}>
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+          <DocxEditorLoading overlay indicator={trackedIndicator(places)} />
+        </div>
+      </DocxEditorRoot>
+    );
+
+    await waitFor(() => expect(places).toContain('first page'), { timeout: 20_000 });
+    expect(places[0]).toBe('screen');
+    await waitFor(() => expect(view.container.querySelector(LOADING)).toBeNull(), {
+      timeout: 20_000,
+    });
+    expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
+    expect(view.container.querySelector('.mine')).toBeNull();
+  });
+
   test('className is appended after the load-bearing class, not instead of it', () => {
     const view = render(<DocxEditorLoading when className="demo-loading" />);
     const el = view.container.querySelector(LOADING)!;
@@ -464,6 +571,34 @@ describe('packaged DocxEditor loading screen', () => {
       (view.container.querySelector('[data-testid="editing-mode-trigger"]') as HTMLButtonElement)
         .disabled
     ).toBe(true);
+  });
+
+  test('loadingIndicator shows on the loading page, then on the first page', async () => {
+    const places: string[] = [];
+    const view = render(
+      <DocxEditor document={slicedSource()} loadingIndicator={trackedIndicator(places)} />
+    );
+
+    await act(async () => {});
+    expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
+    expect(view.container.querySelector(SPINNER)).toBeNull();
+    await waitFor(() => expect(places).toContain('first page'), { timeout: 20_000 });
+    await waitFor(() => expect(view.container.querySelector('.mine')).toBeNull(), {
+      timeout: 20_000,
+    });
+  });
+
+  test('loadingIndicator without chrome warns once in development', () => {
+    const warn = console.warn;
+    const messages: string[] = [];
+    console.warn = (message: string) => messages.push(message);
+    try {
+      render(<DocxEditor chrome={false} loadingIndicator={<span />} />);
+      render(<DocxEditor chrome={false} loadingIndicator={<span />} />);
+    } finally {
+      console.warn = warn;
+    }
+    expect(messages.filter((message) => message.includes('loadingIndicator'))).toHaveLength(1);
   });
 
   test('keeps the default loading page up while a large document opens', async () => {

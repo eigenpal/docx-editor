@@ -8,6 +8,7 @@ import { layoutFaceHasSmallCaps, shapeLayoutStyleRun } from '../layout/layout-ru
 import type { ShapedRun } from '../layout/shaped-run.ts';
 import type { LayoutShapingOptions } from '../layout/shaped-measurer.ts';
 import type { StyleSpanRecord } from '../layout/semantic-records.ts';
+import { isSymbolEncodedFamily } from '../store/package/symbol-encoding.ts';
 import {
   describeAdmittedFontIdentity,
   type ExportAdmittedFontIdentity,
@@ -53,6 +54,23 @@ export function hasExportLaidOutText<T extends object>(
 }
 
 /**
+ * Whether symbol-face text holds only Unicode twins, which any face with the glyph can draw.
+ *
+ * An unavailable symbol face keeps its own geometry in layout, while its glyphs are the
+ * Unicode twins that `mapSymbolPuaText` produced. Those paint in the default face and its
+ * glyph fallbacks. A private-use code or a bare byte (U+0021 to U+00FF) still means a glyph of
+ * the symbol face, so a text face would draw a wrong letter; such text stays unpainted.
+ */
+function isUnicodeTwinText(text: string): boolean {
+  for (const glyph of text) {
+    const code = glyph.codePointAt(0)!;
+    if (code === 0x20) continue;
+    if (code <= 0xff || (code >= 0xf000 && code <= 0xf0ff)) return false;
+  }
+  return true;
+}
+
+/**
  * Bind one shaping substrate to the exporter-neutral laid-out text API.
  * @internal
  */
@@ -69,7 +87,11 @@ export function bindExportLaidOutText(
       : displayText(span.text, faceStyle);
     if (text.length === 0) return null;
     const family = faceStyle.fontFamily ?? shaping.defaultFont.family;
-    const font = resolveShapingFontFace(shaping, resolved, family, faceStyle);
+    const font =
+      resolveShapingFontFace(shaping, resolved, family, faceStyle) ??
+      (isSymbolEncodedFamily(family) && isUnicodeTwinText(text)
+        ? resolveShapingFontFace(shaping, resolved, shaping.defaultFont.family, faceStyle)
+        : null);
     if (!font) return null;
     try {
       if (

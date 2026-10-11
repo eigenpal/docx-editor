@@ -67,12 +67,71 @@ function zipContentExceeds(bytes: Uint8Array, limit: number): boolean {
   return false;
 }
 
+/**
+ * The longest a mount waits for its prepare work. The page stays responsive while it waits,
+ * and a mount that starts without the work still completes; it only pays for it later.
+ */
+export const PREPARED_WORK_WAIT_MS = 2000;
+
+/** What one prepare step leaves: nothing, work to wait for, or the next step. */
+type PrepareResult = void | Promise<unknown> | PrepareStep;
+type PrepareStep = () => void | Promise<unknown> | PrepareStep;
+
 /** What the facade hands the scheduler; both close over facade-owned state. */
 export interface OpenSchedulerHooks {
   /** The real synchronous mount (`mountBytes`). */
   readonly mount: (bytes: Uint8Array) => void;
-  /** Called once when a mount is scheduled — the facade bumps and emits here. */
+  /**
+   * Optional first half of the mount, run in its own task before `mount`. Parsing a long
+   * document and laying it out in ONE task froze the page for long enough to get it
+   * reported as unresponsive. `mount` must still work when this has not run, because
+   * `flush` mounts at once.
+   *
+   * A returned promise is work the mount would rather start after, such as font resolution
+   * that would otherwise lay the document out a second time. The mount waits for it, but
+   * never longer than {@link PREPARED_WORK_WAIT_MS}. A returned function is more work for a
+   * task of its own, such as a whole-document scan; its result is what the mount waits for,
+   * and the wait starts only once it returns.
+   */
+  readonly prepare?: (bytes: Uint8Array) => PrepareResult;
+  /**
+   * Called when a mount is scheduled, and again when a sliced open finishes — the facade
+   * bumps and emits here, because `isOpening` moved.
+   */
   readonly scheduled: () => void;
+  /**
+   * Optional slices after `mount`: advance the opening layout for a short while and answer
+   * whether it is complete. Each runs in its own task, and the open stays scheduled
+   * (`isOpening`) until one answers true. `flush` runs the rest at once.
+   */
+  readonly continueOpen?: (budgetMs: number) => boolean;
+}
+
+/** One scheduled open: its bytes, whether `mount` already ran, and how to stop it. */
+interface ScheduledOpen {
+  readonly bytes: Uint8Array;
+  mounted(): boolean;
+  cancel(): void;
+}
+
+/** The work one opening slice aims to do, in milliseconds. */
+const OPEN_SLICE_MS = 40;
+
+/**
+ * Queue `run` as a new task. A message port, not a timer: nested timers are clamped to 4 ms
+ * each, which a few hundred slices would turn into idle seconds.
+ */
+function queueTask(run: () => void): void {
+  if (typeof MessageChannel !== 'function') {
+    setTimeout(run, 0);
+    return;
+  }
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => {
+    channel.port1.close();
+    run();
+  };
+  channel.port2.postMessage(null);
 }
 
 /** The deferred-mount window, owned by the facade. See the module comment. */
@@ -94,7 +153,7 @@ export interface OpenScheduler {
 }
 
 export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
-  let scheduled: { readonly bytes: Uint8Array; cancel(): void } | null = null;
+  let scheduled: ScheduledOpen | null = null;
 
   const cancel = (): Uint8Array | null => {
     if (!scheduled) return null;
@@ -122,9 +181,56 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
     schedule(bytes) {
       let timer: ReturnType<typeof setTimeout> | null = null;
       let fallback: ReturnType<typeof setTimeout> | null = null;
+      /** The next prepare step, each in a task of its own; null once preparing is done. */
+      let step: PrepareStep | null = hooks.prepare ? () => hooks.prepare!(bytes) : null;
+      let cancelled = false;
+      let mounted = false;
       const run = () => {
-        scheduled = null;
+        if (cancelled) return;
+        if (step) {
+          const current = step;
+          step = null;
+          let work: PrepareResult = undefined;
+          try {
+            work = current();
+          } catch {
+            // The mount opens the bytes again and reports the failure itself.
+          }
+          if (typeof work === 'function') {
+            step = work;
+            // A message task, not a timer: a chain of nested timers waits 4 ms between steps.
+            queueTask(run);
+            return;
+          }
+          if (!work) {
+            // The mount gets its own task, so input and paint can run in between.
+            timer = setTimeout(run, 0);
+            return;
+          }
+          let waiting = true;
+          const proceed = () => {
+            if (!waiting) return;
+            waiting = false;
+            if (timer !== null) clearTimeout(timer);
+            timer = setTimeout(run, 0);
+          };
+          timer = setTimeout(proceed, PREPARED_WORK_WAIT_MS);
+          work.then(proceed, proceed);
+          return;
+        }
+        mounted = true;
         hooks.mount(bytes);
+        const slice = () => {
+          if (cancelled || scheduled !== entry) return;
+          if (hooks.continueOpen && !hooks.continueOpen(OPEN_SLICE_MS)) {
+            queueTask(slice);
+            return;
+          }
+          scheduled = null;
+          if (hooks.continueOpen) hooks.scheduled();
+        };
+        if (hooks.continueOpen) queueTask(slice);
+        else scheduled = null;
       };
       const raf = requestAnimationFrame(() => {
         if (fallback !== null) clearTimeout(fallback);
@@ -135,22 +241,30 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
         cancelAnimationFrame(raf);
         run();
       }, 250);
-      scheduled = {
+      const entry: ScheduledOpen = {
         bytes,
+        mounted: () => mounted,
         cancel: () => {
+          cancelled = true;
           cancelAnimationFrame(raf);
           if (timer !== null) clearTimeout(timer);
           if (fallback !== null) clearTimeout(fallback);
         },
       };
+      scheduled = entry;
       hooks.scheduled();
     },
 
     cancel,
 
     flush() {
-      const bytes = cancel();
-      if (bytes) hooks.mount(bytes);
+      const entry = scheduled;
+      if (!entry) return;
+      const alreadyMounted = entry.mounted();
+      cancel();
+      if (!alreadyMounted) hooks.mount(entry.bytes);
+      if (hooks.continueOpen) while (!hooks.continueOpen(Number.POSITIVE_INFINITY));
+      if (alreadyMounted) hooks.scheduled();
     },
 
     isScheduled: () => scheduled !== null,

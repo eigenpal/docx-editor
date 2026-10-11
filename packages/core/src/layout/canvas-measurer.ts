@@ -143,7 +143,7 @@ function createBoundedLruCache<K, V>(capacity: number): BoundedLruCache<K, V> {
  * Kept in sync by value rather than import: layout must not depend on the output lane, and
  * the paint module re-validates at its own sink either way.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /**
  * The canvas text-metrics surface the editor injects.

@@ -556,6 +556,18 @@ The shaper uses the resolved script and direction. Adjacent source runs with ide
 
 Bidirectional paragraphs with tabs or inline atoms retain the existing placement path. Complex-script font selection and joining across formatting boundaries remain partial.
 
+## Font names with punctuation
+
+The editor requests a run font name as one family, even when it contains a semicolon or a comma. For example, `Georgia;Verdana` requests one family. It does not request Georgia followed by Verdana. The editor preserves the original name when it saves the document.
+
+The editor does not split a comma-separated name into candidates. If a run names `Georgia,Verdana` and the font table has no `w:altName` for it, the editor does not use Georgia. Instead, the editor uses an available script default or the existing fallback path.
+
+An available primary face wins over its font-table `w:altName`. Otherwise, Core requests the complete alternate name as one family and uses its admitted face. Core ignores a `w:altName` value that is longer than 31 characters.
+
+The browser and font-backed exports use the same substitute face for geometry. The browser registers that face under its private alias before painting. The font notice retains the unavailable original name. Export evidence identifies the admitted substitute and its bytes.
+
+When the alternate is unavailable, supplied script defaults can provide a substitute. Core applies a default only when the whole name has one unambiguous script target. A shared unknown name needing different script defaults remains unresolved. The existing fallback path remains active for those unresolved cases. The host must supply the selected face and each required weight and style.
+
 ## Next steps
 
 - [CJK fonts for PDF export](/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text): Install the optional Node.js package and review its font limits.

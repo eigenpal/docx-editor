@@ -125,6 +125,12 @@ export function paragraphRangeRects(
  * only the pages it changed.
  */
 const pagePlacedCache = new WeakMap<PageRecord, readonly string[]>();
+
+/** @internal `to` draws the same lines as `from`; only list marker labels moved. */
+export function carryPagePlacedIds(from: PageRecord, to: PageRecord): void {
+  const ids = pagePlacedCache.get(from);
+  if (ids) pagePlacedCache.set(to, ids);
+}
 function pagePlacedIds(page: PageRecord): readonly string[] {
   const cached = pagePlacedCache.get(page);
   if (cached) return cached;

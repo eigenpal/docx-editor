@@ -39,7 +39,8 @@
     "reactRenderPropsAsVueSlots": {
       "children": "default",
       "renderTitleBarLeft": "titleBarLeft",
-      "renderTitleBarRight": "titleBarRight"
+      "renderTitleBarRight": "titleBarRight",
+      "loadingIndicator": "loadingIndicator"
     },
     "reactClassNameAsVueClass": {
       "className": "class"

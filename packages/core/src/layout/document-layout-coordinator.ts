@@ -15,7 +15,8 @@ import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import { layoutSemanticDocument, type SemanticLayoutOptions } from './semantic-layout.ts';
+import { layoutSemanticDocumentSteps, type SemanticLayoutOptions } from './semantic-layout.ts';
+import { drainLayoutSteps, stepsInFieldResultsMode, type LayoutSteps } from './layout-steps.ts';
 import type { SemanticLayout, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 
@@ -74,6 +75,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   tocLinkStyleRanges: 'layout-internal',
   emptyTocPlaceholderParagraphIds: 'layout-internal',
   emptyTocSuppressedResultParagraphIds: 'layout-internal',
+  bodyBlockLimit: 'document-coordinator',
 } satisfies Readonly<Record<keyof SemanticLayoutOptions, SemanticLayoutOptionRole>>);
 
 type SemanticOptionsWithRole<Role extends SemanticLayoutOptionRole> = {
@@ -114,6 +116,8 @@ export interface LayoutDocumentViewOptions {
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  /** Lay out only this many body blocks; see `SemanticLayoutOptions.bodyBlockLimit`. */
+  readonly bodyBlockLimit?: number;
 }
 
 type LayoutDocumentViewSink = 'notes' | 'semantic-layout' | 'both';
@@ -144,6 +148,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   drawingLayoutEpochForPart: 'notes',
   displayMode: 'both',
   revisionAuthorFilter: 'both',
+  bodyBlockLimit: 'semantic-layout',
 } as const satisfies Readonly<Record<keyof LayoutDocumentViewOptions, LayoutDocumentViewSink>>;
 
 type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> = {
@@ -161,10 +166,25 @@ type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> 
  * @internal
  */
 export function layoutDocumentView(options: LayoutDocumentViewOptions): SemanticLayout {
-  return withFieldResultsMode(options.fieldResults, () => layoutDocumentViewInMode(options));
+  return withFieldResultsMode(options.fieldResults, () =>
+    drainLayoutSteps(layoutDocumentViewSteps(options))
+  );
 }
 
-function layoutDocumentViewInMode(options: LayoutDocumentViewOptions): SemanticLayout {
+/**
+ * {@link layoutDocumentView} as steps that may pause inside a long table; see
+ * `layout-steps.ts`. A sliced open runs its prefix passes this way.
+ * @internal
+ */
+export function layoutDocumentViewSteps(
+  options: LayoutDocumentViewOptions
+): LayoutSteps<SemanticLayout> {
+  return stepsInFieldResultsMode(options.fieldResults, layoutDocumentViewInModeSteps(options));
+}
+
+function* layoutDocumentViewInModeSteps(
+  options: LayoutDocumentViewOptions
+): LayoutSteps<SemanticLayout> {
   const defaultTabStopPt = options.defaultTabStopPt?.();
   const bodyPartName = options.view.part().name;
   const noteOptions = {
@@ -209,6 +229,7 @@ function layoutDocumentViewInMode(options: LayoutDocumentViewOptions): SemanticL
     drawingLayoutEpoch: options.drawingLayoutEpoch,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
+    bodyBlockLimit: options.bodyBlockLimit,
   } satisfies Record<CoordinatorInputsFor<'semantic-layout'>, unknown>;
   const semanticOptions = {
     measurer: semanticInputs.measurer,
@@ -240,8 +261,9 @@ function layoutDocumentViewInMode(options: LayoutDocumentViewOptions): SemanticL
     notes,
     displayMode: semanticInputs.displayMode,
     revisionAuthorFilter: semanticInputs.revisionAuthorFilter,
+    bodyBlockLimit: semanticInputs.bodyBlockLimit,
   } satisfies SemanticLayoutOptions & Record<DocumentCoordinatedSemanticOption, unknown>;
-  return layoutSemanticDocument(
+  return yield* layoutSemanticDocumentSteps(
     semanticInputs.view.part(),
     semanticInputs.revision,
     semanticOptions

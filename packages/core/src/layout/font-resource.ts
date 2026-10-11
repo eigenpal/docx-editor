@@ -121,6 +121,10 @@ export class FontResolutionError extends Error {
     this.diagnostic = details.diagnostic;
     this.expectedHash = details.expectedHash;
     this.actualHash = details.actualHash;
+    // Resolution caches keep this refusal for the life of a measurer. Until its stack is read,
+    // the engine holds the captured call frames, and with them every closure on the stack of
+    // the first lookup (a whole layout pass). Formatting it once keeps a string instead.
+    void this.stack;
   }
 }
 

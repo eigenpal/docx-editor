@@ -20,7 +20,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate';
 import { readFileSync } from 'node:fs';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { blankDocumentBytes } from '../blank-document.ts';
@@ -102,6 +102,46 @@ function docxWithStyles(body: string, styleElements: string): Uint8Array {
 }
 
 describe('font substitution notice', () => {
+  test('a whole table alias drives shaped measurement and retains the original notice name', async () => {
+    installed = [];
+    const parts = unzipSync(docx(runIn('Georgia;Verdana', 'PUBLIC TEXT')));
+    parts['[Content_Types].xml'] = strToU8(
+      strFromU8(parts['[Content_Types].xml']!).replace(
+        '</Types>',
+        '<Default Extension="xml" ContentType="application/xml"/></Types>'
+      )
+    );
+    parts['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL_NS}"><Relationship Id="f" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/></Relationships>`
+    );
+    parts['word/fontTable.xml'] = strToU8(
+      `<w:fonts xmlns:w="${W}"><w:font w:name="Georgia;Verdana"><w:altName w:val="DejaVu Sans"/></w:font></w:fonts>`
+    );
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: zipSync(parts),
+      fonts: {
+        sources: [
+          {
+            request: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+            id: 'whole-alternate',
+            bytes: regularBytes,
+            hash: sha256FontBytes(regularBytes),
+            faceIndex: 0,
+          },
+        ],
+      },
+    });
+    try {
+      expect(await noticeAfterFonts(editor)).toContain('Georgia;Verdana');
+      expect(editor.fontMeasurement().measurer).toBe('shaped');
+      const saved = unzipSync(new Uint8Array(await editor.save()));
+      expect(strFromU8(saved['word/document.xml']!)).toContain('Georgia;Verdana');
+      expect(strFromU8(saved['word/fontTable.xml']!)).toContain('w:val="DejaVu Sans"');
+    } finally {
+      editor.destroy();
+    }
+  });
   test('a brand-new blank document reports no substitution', () => {
     installed = [];
     const editor = createDocxEditor({

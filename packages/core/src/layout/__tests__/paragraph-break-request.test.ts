@@ -6,6 +6,7 @@ import { breakParagraph, type PendingLine } from '../paragraph-flow.ts';
 import {
   bodyParagraphBreakKey,
   breakPreparedParagraph,
+  breakPreparedParagraphLazily,
   positionedParagraphExclusionToken,
   prepareParagraphBreakInputs,
   type ParagraphBreakDependencies,
@@ -165,5 +166,28 @@ describe('shared paragraph break dependencies', () => {
     const cached = breakPreparedParagraph(request);
     expect(cached).toEqual(lines);
     expect(breakPreparedParagraph(request)).toBe(cached);
+    for (const retainAcrossPasses of [true, false]) {
+      const lazyCache = createParagraphLayoutCache<readonly PendingLine[]>({ retainAcrossPasses });
+      let preparations = 0;
+      const prepare = () => {
+        preparations += 1;
+        return request;
+      };
+      const initial = breakPreparedParagraphLazily(lazyCache, key, prepare);
+      expect(initial).toEqual(legacy);
+      const reused = breakPreparedParagraphLazily(lazyCache, key, prepare);
+      expect(reused).toEqual(initial);
+      expect(preparations).toBe(1);
+      expect(lazyCache.stats.hits).toBe(1);
+      expect(lazyCache.stats.misses).toBe(1);
+      if (retainAcrossPasses) {
+        expect(reused).not.toBe(initial);
+        expect(reused[0]).not.toBe(initial[0]);
+      } else expect(reused).toBe(initial);
+      expect(breakPreparedParagraphLazily(lazyCache, null, prepare)).toEqual(legacy);
+      expect(preparations).toBe(2);
+      expect(lazyCache.stats.hits).toBe(1);
+      expect(lazyCache.stats.misses).toBe(1);
+    }
   });
 });

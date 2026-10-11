@@ -41,7 +41,7 @@ const STANDARD_FONT_FAMILIES: readonly string[] = Object.freeze([
  * sync by value because each module re-validates at its own boundary (see the note
  * there). Every name this module emits can end up in a CSS `font-family` declaration.
  */
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_,;]{1,64}$/u;
 
 /**
  * Every family a font picker can offer: standard choices plus the configured catalog

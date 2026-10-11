@@ -194,7 +194,7 @@ test('includes fields in headers, footers, notes, and nested text boxes', () => 
 test('does not interpret arbitrary instruction text and rejects unsafe or overlong names', async () => {
   const result = await requested(
     docx(
-      symbolField('Bad;Face') +
+      symbolField('Bad&apos;;Face') +
         symbolField('X'.repeat(129)) +
         `<w:p><w:r><w:instrText>SYMBOL 65 \\f "Not A Field"</w:instrText></w:r></w:p>` +
         `<w:p><w:fldSimple w:instr='SYMBOL ${' '.repeat(257)}65 \\f "Overflow Face"'/></w:p>` +
@@ -203,6 +203,17 @@ test('does not interpret arbitrary instruction text and rejects unsafe or overlo
   );
   expect(result.families).toEqual([]);
 });
+
+test.each(['Georgia;Verdana', 'Georgia,Verdana'])(
+  'requests a quoted SYMBOL font as one complete name: %s',
+  async (family) => {
+    const result = await requested(docx(symbolField(family)));
+    expect(result.families).toEqual([family]);
+    expect(result.families).not.toContain('Georgia');
+    expect(result.families).not.toContain('Verdana');
+    expect(result.declared).not.toContain(family);
+  }
+);
 
 test('keeps field and bullet faces in the reserved share of a crowded request', async () => {
   const declarations = Array.from(

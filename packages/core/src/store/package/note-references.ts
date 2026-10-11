@@ -443,7 +443,13 @@ function collectNoteReferencesWithProjection(
     if (budget.truncated || hits.length >= maxHits || prunes > startPrunes) return;
     const visited = budget.visited - startVisited;
     const gotHits = hits.length > startHits;
-    if (depth > 0 && node.kind !== 'paragraph' && !gotHits && visited < MEMO_MIN_SUBTREE_VISITED) {
+    if (
+      depth > 0 &&
+      node.kind !== 'paragraph' &&
+      node.kind !== 'tableRow' &&
+      !gotHits &&
+      visited < MEMO_MIN_SUBTREE_VISITED
+    ) {
       return;
     }
     const entry = {

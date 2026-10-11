@@ -120,7 +120,13 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // and layout the typed text produced — including a layout pass a commit
     // deferred under input pressure. (No-op mid-flush and when empty.)
     deps.flushPendingInputAndLayout();
-    return orderedRangeOf(deps.layout(), deps.selection(), deps.paragraphOrder());
+    const selection = deps.selection();
+    // One paragraph is ordered by offset alone; skip the document-wide order walk.
+    const order =
+      selection.anchor.paragraphId === selection.head.paragraphId
+        ? undefined
+        : deps.paragraphOrder();
+    return orderedRangeOf(deps.layout(), selection, order);
   }
 
   function orderedStart(): SemanticPosition {

@@ -1,6 +1,7 @@
 // Section-column balancing over the neutral semantic block-flow pass.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
+import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import type { RefFieldContext } from './field-ref.ts';
 import type { ContinuedPageHost } from './continued-page-zones.ts';
 import type { LayoutSession } from './layout-session.ts';
@@ -58,6 +59,13 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly session?: ColumnBalanceSession;
 };
 
+/** {@link BlockLayoutPass} as steps that may pause. @internal */
+export type BlockLayoutPassSteps<HostOptions extends object> = (
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions<HostOptions>
+) => LayoutSteps<BlockLayoutResult>;
+
 /** One ordinary block-flow attempt supplied by semantic layout. @internal */
 export type BlockLayoutPass<HostOptions extends object> = (
   bodies: readonly OoxmlElement[],
@@ -106,13 +114,27 @@ export function layoutBlocksWithColumnBalance<HostOptions extends object>(
   options: BlockLayoutOptions<HostOptions>,
   layoutPass: BlockLayoutPass<HostOptions>
 ): BlockLayoutResult {
+  return drainLayoutSteps(
+    layoutBlocksWithColumnBalanceSteps(bodies, revision, options, function* (b, r, o) {
+      return layoutPass(b, r, o);
+    })
+  );
+}
+
+/** {@link layoutBlocksWithColumnBalance} over a pass that may pause; see `layout-steps.ts`. */
+export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
+  bodies: readonly OoxmlElement[],
+  revision: number,
+  options: BlockLayoutOptions<HostOptions>,
+  layoutPass: BlockLayoutPassSteps<HostOptions>
+): LayoutSteps<BlockLayoutResult> {
   const columns = resolveSectionColumns(
     options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
     options.geometry.width - options.geometry.margin.left - options.geometry.margin.right
   );
   if (!options.balanceColumns || columns.count < 2 || options.columnRegionBottom !== undefined) {
     if (options.session) options.session.balanceLimit = null;
-    return layoutPass(bodies, revision, options);
+    return yield* layoutPass(bodies, revision, options);
   }
 
   const session = options.session;
@@ -133,7 +155,7 @@ export function layoutBlocksWithColumnBalance<HostOptions extends object>(
   // the bounded search below then refreshes it.
   if (session && session.balanceLimit !== null) {
     const remembered = session.balanceLimit;
-    const attempt = layoutPass(bodies, revision, {
+    const attempt = yield* layoutPass(bodies, revision, {
       ...options,
       columnRegionBottom: remembered,
     });
@@ -143,24 +165,24 @@ export function layoutBlocksWithColumnBalance<HostOptions extends object>(
     }
   }
 
-  const natural = layoutPass(bodies, revision, trialOptions);
+  const natural = yield* layoutPass(bodies, revision, trialOptions);
   if (natural.pages.length !== 1 || !natural.endsOpenPage) {
     if (session) session.balanceLimit = null;
-    return layoutPass(bodies, revision, options);
+    return yield* layoutPass(bodies, revision, options);
   }
 
   const naturalBottoms = columnBottomsOf(natural.pages[0]!, columns, regionTop);
   const total = naturalBottoms.reduce((sum, bottom) => sum + Math.max(0, bottom - regionTop), 0);
   if (total <= 0) {
     if (session) session.balanceLimit = null;
-    return layoutPass(bodies, revision, options);
+    return yield* layoutPass(bodies, revision, options);
   }
 
   let low = regionTop + total / columns.count;
   let high = Math.max(...naturalBottoms) + 0.01;
-  const fits = (limit: number): boolean => {
+  function* fits(limit: number): LayoutSteps<boolean> {
     try {
-      const trial = layoutPass(bodies, revision, {
+      const trial = yield* layoutPass(bodies, revision, {
         ...trialOptions,
         columnRegionBottom: limit,
       });
@@ -169,14 +191,14 @@ export function layoutBlocksWithColumnBalance<HostOptions extends object>(
       // Keep rules or atomic rows can refuse a short band; that is simply "does not fit".
       return false;
     }
-  };
+  }
   for (let step = 0; step < MAX_BALANCE_STEPS && high - low > BALANCE_TOLERANCE_PT; step += 1) {
     const mid = (low + high) / 2;
-    if (fits(mid)) high = mid;
+    if (yield* fits(mid)) high = mid;
     else low = mid;
   }
 
-  const final = layoutPass(bodies, revision, { ...options, columnRegionBottom: high });
+  const final = yield* layoutPass(bodies, revision, { ...options, columnRegionBottom: high });
   if (session) session.balanceLimit = high;
   return balancedResult(final);
 }

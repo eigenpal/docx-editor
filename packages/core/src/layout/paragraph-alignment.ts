@@ -347,6 +347,8 @@ export function boxLineSetsLikeLastLine(
   compatibility?: Parameters<typeof setsLikeLastLine>[3]
 ): boolean {
   if (isLastLine) return true;
+  // A line that no break closes aligns as an inner line.
+  if (line.pageBreakAfter !== true && line.manualBreakAfter !== true) return false;
   const closing = {
     ...(line.pageBreakAfter === true ? { pageBreakAfter: true } : {}),
     ...(line.manualBreakAfter === true ? { manualBreakAfter: true as const } : {}),

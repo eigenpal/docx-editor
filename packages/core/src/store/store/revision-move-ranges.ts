@@ -1,4 +1,5 @@
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '../package/ooxml-tree.ts';
+import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import type { RevisionSite } from './tree-op-revisions.ts';
 
 const attr = (node: OoxmlElement, name: string) =>
@@ -14,6 +15,7 @@ export interface OrdinaryMoveRange {
   orphanDestination?: boolean;
 }
 const cache = new WeakMap<OoxmlNode, readonly OrdinaryMoveRange[]>();
+/** Entries only for nodes `keepsSubtreeMemo` admits; leaf-only nodes answer from children. */
 const containsRangeCache = new WeakMap<OoxmlNode, boolean>();
 function containsRange(node: OoxmlNode): boolean {
   if (node.kind === 'textValue') return false;
@@ -23,7 +25,7 @@ function containsRange(node: OoxmlNode): boolean {
     node.kind === 'moveFromRangeStart' ||
     node.kind === 'moveToRangeStart' ||
     node.children.some(containsRange);
-  containsRangeCache.set(node, result);
+  if (keepsSubtreeMemo(node)) containsRangeCache.set(node, result);
   return result;
 }
 

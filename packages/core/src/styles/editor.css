@@ -5000,8 +5000,9 @@ a.docx-hyperlink:focus-visible {
 
 /* The overlay variant (`<DocxEditor.Loading overlay />`): pinned over the nearest
    positioned ancestor — the workspace row in the packaged frame — and opaque, so it
-   covers the previous document while the next one opens. The 150ms appearance delay
-   keeps an open that finishes inside a few frames from flashing a spinner.
+   covers the previous document while the next one opens. It takes every pointer event
+   until the open completes. The 150ms appearance delay keeps an open that finishes
+   inside a few frames from flashing a spinner.
 
    The fade MUST be a real compositor animation. The engine paints exactly one frame
    (overlay committed, still in its delay) and then blocks the main thread with the
@@ -5037,6 +5038,41 @@ a.docx-hyperlink:focus-visible {
   height: 100%;
 }
 
+/* Once the opening document has mounted and lays out its remaining pages, the engine marks
+   its container for exactly that phase. The overlay steps aside, so the scroll container
+   scrolls. The pages show muted and take no pointer input, and the indicator sits on the
+   FIRST PAGE (`.docx-opening-indicator`), so it scrolls with the document instead of
+   floating over it. */
+:where(:has([data-docx-opening-preview])) > .docx-editor__loading--overlay {
+  display: none;
+}
+
+[data-docx-opening-preview] .docx-pages {
+  pointer-events: none;
+}
+
+[data-docx-opening-preview] .docx-page::before {
+  position: absolute;
+  inset: 0;
+  z-index: var(--doc-z-overlay);
+  background: color-mix(in srgb, var(--doc-page-bg-rendered) 55%, transparent);
+  content: '';
+}
+
+/* The loading indicator over the first page: a real element the engine positions on the
+   page's own box, so a host can render its own content into it. Only its content takes
+   pointer input, so a host can offer a button there. */
+.docx-opening-indicator {
+  position: absolute;
+  z-index: var(--doc-z-overlay);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.docx-opening-indicator > .docx-editor__loading-page-status > * {
+  pointer-events: auto;
+}
+
 .docx-editor__loading-page {
   position: absolute;
   inset: 0;
@@ -5046,9 +5082,11 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
+/* At most 30% of the window height below the page top, so a tall page at a high zoom still
+   shows the indicator without scrolling. */
 .docx-editor__loading-page-status {
   position: absolute;
-  top: 50%;
+  top: min(50%, 30vh);
   right: 0;
   left: 0;
   display: flex;
@@ -7015,6 +7053,13 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-menubar__trigger:hover,
 .docx-editor .docx-menubar__trigger[data-open] {
   background: var(--doc-bg-hover);
+}
+
+/* Disabled while a document opens, like the toolbar. */
+.docx-editor .docx-menubar__trigger:disabled {
+  background: transparent;
+  color: var(--doc-text-subtle);
+  cursor: default;
 }
 
 /* The panel: the shared card, dropped below its trigger. */

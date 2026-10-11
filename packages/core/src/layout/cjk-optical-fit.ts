@@ -9,6 +9,7 @@ import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { canHangCjkPunctuation } from './cjk-spacing.ts';
 import { formatRevisionOf } from './revision-projection.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
 
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
 const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
@@ -249,11 +250,10 @@ function fitCjkOptically(
       ...source,
       ...(reduced
         ? {
-            style: {
-              ...source.style,
-              characterSpacingPt:
-                source.style.characterSpacingPt - cell.reduction / source.text.length,
-            },
+            style: withLayoutDerivedSpacing(
+              source.style,
+              source.style.characterSpacingPt - cell.reduction / source.text.length
+            ),
             glyphOffsetPt: (source.glyphOffsetPt ?? 0) + cell.shift,
           }
         : {}),

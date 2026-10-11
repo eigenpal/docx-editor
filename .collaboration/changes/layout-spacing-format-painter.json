@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Format Painter can copy spacing from compressed layout spans into document run properties.",
+  "after": "Format Painter copies the authored spacing from those spans. Layout retains its measured spacing and source offsets.",
+  "reason": "The change adds private layout metadata. It does not change document schemas, operation fields, or collaboration messages.",
+  "tests": [
+    "packages/core/src/editor/__tests__/format-painter-layout-spacing.test.ts",
+    "packages/core/src/layout/__tests__/layout-derived-spacing.test.ts"
+  ],
+  "changeset": "layout-spacing-format-painter",
+  "migration": null
+}

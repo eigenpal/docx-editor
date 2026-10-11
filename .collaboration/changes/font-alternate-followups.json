@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The font family command refuses listed names with commas or semicolons. Large documents lose script default fonts. Long font-table alternate names are requested.",
+  "after": "The font family command accepts every listed font name. The script default scan reads only run-font parts and keeps partial results. Alternate names over 31 characters are ignored.",
+  "reason": "The command writes the same w:rFonts attributes that documents already carry. Replicated operations, canonical XML, model offsets, selections, and awareness are unchanged. Only local font resolution changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/font-catalog.test.ts",
+    "packages/core/src/layout/__tests__/unknown-family-font-substitution.test.ts"
+  ],
+  "changeset": "font-alternate-followups",
+  "migration": null
+}

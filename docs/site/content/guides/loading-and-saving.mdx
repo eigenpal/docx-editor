@@ -51,6 +51,49 @@ Pass `'blank'` to start with an empty page using Calibri at 11 points. It includ
 
 Omitting `document` shows the loading screen and disables every control. Use `undefined` while fetching bytes, or `'blank'` for an empty document.
 
+### Show your own loading indicator
+
+The loading screen shows a spinner on a blank page. A large document then opens in two stages:
+
+1. The spinner shows on the blank page while the editor reads the file.
+1. The first pages show, muted, while the editor lays out the remaining pages. The spinner moves onto the first page and scrolls with it.
+
+To replace the spinner in both stages, pass your own indicator. The editor keeps the page and centers your indicator on it. Include text for screen readers, as the packaged spinner does.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor
+  document={bytes}
+  loadingIndicator={
+    <div role="status">
+      <MyLogoSpinner />
+      <span className="sr-only">Opening document</span>
+    </div>
+  }
+/>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditor :document="bytes">
+  <template #loadingIndicator>
+    <div role="status">
+      <MyLogoSpinner />
+      <span class="sr-only">Opening document</span>
+    </div>
+  </template>
+</DocxEditor>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The indicator needs the packaged chrome. With `chrome` set to `false`, compose the loading part yourself. For more information, see [Custom loading screen](/docs/2.x/react/composition#custom-loading-screen).
+
 Use `blankDocumentBytes()` for a repeatable **File > New** command. Repeating `'blank'` keeps the existing document because its value does not change. Fresh bytes replace it:
 
 <FrameworkTabs>

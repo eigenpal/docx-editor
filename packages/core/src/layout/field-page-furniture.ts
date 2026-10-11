@@ -632,9 +632,8 @@ interface RetainedStoryProjection {
  * the reused footer kept the old `of Y` text. Retaining the projector on the side (with the
  * context it last ran under) lets finalize keep an unchanged-context story by identity and
  * re-project it when the pagination moved underneath it. Weak on the story record, so a story
- * that falls out of the layout takes its projector with it. The retained closure keeps its
- * minting pass's scope alive for as long as the sheet is reused — the same retention profile
- * the multi-section span cache already has for LIVE projectors on `previousRemapped` pages.
+ * that falls out of the layout takes its projector with it. The projector holds only its
+ * story's placement (`section-page-furniture.ts`), not the pass that placed the sheet.
  *
  * INVARIANT: anything that CLONES a published field-bearing story record must carry this
  * entry onto the clone ({@link carryStrippedPageFieldProjection}) — a published story leaves

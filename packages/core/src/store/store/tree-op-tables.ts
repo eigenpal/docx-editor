@@ -50,6 +50,7 @@ import {
   patchTcPrChild,
   patchTrPrChild,
 } from './tree-op-table-properties.ts';
+import { resizedGridCells, validateTableResizeGrid } from './table-resize-grid.ts';
 import { readTwipsMeasure } from '../units.ts';
 import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
@@ -1621,7 +1622,7 @@ export function validateTableResizeOp(
     return topology.rows.some((entry) => entry.row.id === op.rowId) ? null : 'unknown-row';
   }
 
-  const regular = validateRegularColumnTable(topology);
+  const regular = validateTableResizeGrid(topology);
   if (regular) return regular;
 
   const readable = validateResizeGridReadable(topology);
@@ -1726,15 +1727,16 @@ function applySetTableColumnWidths(
   const tblPrRejection = queueTblPrResizeEdits(edits, targetTable, nextId, wml, options);
   if (tblPrRejection) return { ok: false, reason: tblPrRejection };
 
-  for (const { cells } of topology.rows) {
-    const leftCell = patchCellTcWidthDxa(cells[leftIndex]!, op.leftWidthTwips, nextId, wml);
-    const rightCell = patchCellTcWidthDxa(cells[rightIndex]!, op.rightWidthTwips, nextId, wml);
-    if (leftCell !== cells[leftIndex]!) {
-      edits.push((current) => replaceNode(current, leftCell.id, leftCell, options));
-    }
-    if (rightCell !== cells[rightIndex]!) {
-      edits.push((current) => replaceNode(current, rightCell.id, rightCell, options));
-    }
+  for (const { cell, width } of resizedGridCells(
+    topology,
+    new Map([
+      [leftIndex, op.leftWidthTwips],
+      [rightIndex, op.rightWidthTwips],
+    ])
+  )) {
+    const patched = patchCellTcWidthDxa(cell, width, nextId, wml);
+    if (patched !== cell)
+      edits.push((current) => replaceNode(current, patched.id, patched, options));
   }
 
   const dirty = [
@@ -1805,11 +1807,13 @@ function applySetTableRightEdgeWidth(
   );
   if (tblPrRejection) return { ok: false, reason: tblPrRejection };
 
-  for (const { cells } of topology.rows) {
-    const patchedCell = patchCellTcWidthDxa(cells[lastIndex]!, op.columnWidthTwips, nextId, wml);
-    if (patchedCell !== cells[lastIndex]!) {
-      edits.push((current) => replaceNode(current, patchedCell.id, patchedCell, options));
-    }
+  for (const { cell, width } of resizedGridCells(
+    topology,
+    new Map([[lastIndex, op.columnWidthTwips]])
+  )) {
+    const patched = patchCellTcWidthDxa(cell, width, nextId, wml);
+    if (patched !== cell)
+      edits.push((current) => replaceNode(current, patched.id, patched, options));
   }
 
   const dirty = [

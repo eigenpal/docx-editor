@@ -1,4 +1,5 @@
 import { inlineCharacterTextOf } from '../store/package/hyphen-text.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 // Canonical tree <-> ProseMirror binding (tasks 6.1, 6.2, 6.3).
 //
@@ -14,6 +15,7 @@ import { isRunLevelMcAlternateContent } from '../store/package/drawing-projectio
 
 import type { OoxmlProperty, TreeDocOp } from '../store/store/tree-op-types.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
+import { createSubtreeAggregateMemo } from '../store/package/subtree-memo-policy.ts';
 import { Node as PMNode } from 'prosemirror-model';
 import {
   collectStoryParagraphs,
@@ -117,9 +119,15 @@ function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
+    // Only `w:` qualified children and attributes are properties. Foreign extensions stay on
+    // the node, so a projected edit can neither read them as properties nor write them back.
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName === 'rPrChange' || child.localName === 'pPrChange') continue;
     const attributes: Record<string, string> = {};
-    for (const attribute of child.attributes) attributes[attribute.localName] = attribute.value;
+    for (const attribute of child.attributes) {
+      if (attribute.namespaceUri === WML_NAMESPACE_URI)
+        attributes[attribute.localName] = attribute.value;
+    }
     props.push(
       Object.keys(attributes).length > 0
         ? { localName: child.localName, attributes }
@@ -271,7 +279,7 @@ export function bodyParagraphs(part: OoxmlPart): OoxmlNode[] {
  * revision, so a bare map would grow with the history rather than with the document.
  */
 const paragraphsByPart = createRecentRootCache<OoxmlNode[]>(16);
-const paragraphsByStoryChild = new WeakMap<OoxmlNode, readonly OoxmlNode[]>();
+const paragraphsByStoryChild = createSubtreeAggregateMemo<readonly OoxmlNode[]>();
 
 function appendStoryChildParagraphs(child: OoxmlNode, into: OoxmlNode[]): void {
   let paragraphs = paragraphsByStoryChild.get(child);
@@ -279,7 +287,7 @@ function appendStoryChildParagraphs(child: OoxmlNode, into: OoxmlNode[]): void {
     const collected: OoxmlNode[] = [];
     collectStoryParagraphs([child], collected, 0);
     paragraphs = Object.freeze(collected);
-    paragraphsByStoryChild.set(child, paragraphs);
+    paragraphsByStoryChild.set(child, paragraphs, paragraphs.length);
   }
   for (const paragraph of paragraphs) into.push(paragraph);
 }

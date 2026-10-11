@@ -109,7 +109,7 @@ describe('an admitted symbol face reaching a numbering marker', () => {
     const byte = fragments(faceMeasurer([]), 'o')[1]!;
     const pua = fragments(faceMeasurer([]), '\uf06f')[1]!;
     expect(byte.marker?.text).toBe('□');
-    expect(byte.marker?.style.fontFamily).toBeNull();
+    expect(byte.marker?.style.fontFamily).toBe('Wingdings');
     expect(byte.marker).toEqual(pua.marker);
     expect(byte.lines).toEqual(pua.lines);
   });
@@ -137,7 +137,8 @@ describe('an admitted symbol face reaching a numbering marker', () => {
   test('no symbol face keeps the Unicode translation and the plain line', () => {
     const [symbol, wingdings, plain] = fragments(faceMeasurer([]));
     expect(symbol!.marker?.text).toBe(UNICODE_BULLET);
-    expect(symbol!.marker?.style.fontFamily).toBeNull();
+    // The authored face stays on the marker, so it sizes the marker by its own metrics.
+    expect(symbol!.marker?.style.fontFamily).toBe('Symbol');
     expect(wingdings!.marker?.text).toBe(UNICODE_SMALL_SQUARE);
     expect(symbol!.lines[0]!.box.height).toBe(plain!.lines[0]!.box.height);
     expect(wingdings!.lines[0]!.box.height).toBe(plain!.lines[0]!.box.height);
@@ -166,7 +167,7 @@ describe('an admitted symbol face reaching a numbering marker', () => {
     const [symbol, wingdings] = fragments(faceMeasurer(['Symbol']));
     expect(symbol!.marker?.text).toBe(SYMBOL_PUA_BULLET);
     expect(wingdings!.marker?.text).toBe(UNICODE_SMALL_SQUARE);
-    expect(wingdings!.marker?.style.fontFamily).toBeNull();
+    expect(wingdings!.marker?.style.fontFamily).toBe('Wingdings');
   });
 });
 

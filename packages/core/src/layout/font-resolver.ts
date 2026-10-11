@@ -869,6 +869,13 @@ function reportOriginFailure(
   } catch {
     // Hostile function proxies do not get to turn diagnostics into another failure.
   }
+  try {
+    // Format the stack now. Until it is read, the error keeps every frame's closure, which
+    // reaches the document being laid out; a report that outlives the export kept it all.
+    if (cause instanceof Error) void cause.stack;
+  } catch {
+    // A hostile error proxy cannot make reporting the original origin failure throw.
+  }
   const failure: FontOriginFailure = Object.freeze({
     originIndex,
     ...(originName !== undefined ? { originName } : {}),

@@ -24,6 +24,7 @@ import {
   wmlAttributeValue,
   wmlChildNamed,
 } from './tree-op-table-shared.ts';
+import { cachedUniqueNode } from '../package/ooxml-edit.ts';
 
 export interface EditableTableTopology {
   readonly table: OoxmlTableNode;
@@ -181,7 +182,15 @@ export function readEditableTableTopology(
   limits: TableTopologyLimits = DEFAULT_TABLE_TOPOLOGY_LIMITS
 ): EditableTableTopologyResult {
   const resolved = resolveTableTopologyLimits(limits);
-  const lookup = lookupNodeById(root, tableId, resolved.maxTraversalNodes);
+  // The editor already indexes the whole part. Bound the addressed subtree instead
+  // of rejecting a small table because unrelated document content exceeds the budget.
+  const cached = cachedUniqueNode(root, tableId);
+  if (cached === null) return reject('unknown-table', tableId);
+  const lookup = lookupNodeById(
+    cached && cached.kind !== 'textValue' ? cached : root,
+    tableId,
+    resolved.maxTraversalNodes
+  );
   if (!lookup.ok) return reject(lookup.reason, lookup.detail);
 
   const target = lookup.node;

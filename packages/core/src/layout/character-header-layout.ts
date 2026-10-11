@@ -1,5 +1,6 @@
 // Character-style header values and body pagination settle together in a bounded pass.
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { characterStyleFields, type CharacterStyleField } from './field-character-style.ts';
 import { characterStyleIndex, characterStylePageValues } from './character-style-index.ts';
@@ -38,32 +39,9 @@ export function layoutWithCharacterHeaders(
   options: SemanticLayoutOptions,
   run: (options: SemanticLayoutOptions) => SemanticLayout
 ): SemanticLayout {
-  if (options.showFieldCodes) return run(options);
-  const furniture = new Set<PageFurniture>();
-  if (options.furniture) furniture.add(options.furniture);
-  for (const value of options.sectionFurniture ?? []) if (value) furniture.add(value);
-  const queries = new Map<string, CharacterStyleField>();
-  const dynamic = new Set<HeaderFooterStoryLayout>();
-  for (const value of furniture) {
-    for (const story of value.headers.values()) {
-      if (!story.part) continue;
-      const found = fields(story.part);
-      if (found.length) dynamic.add(story);
-      for (const query of found) queries.set(query.key, query);
-    }
-  }
-  const styles = options.styleCascade;
-  if (!styles) return run(options);
-  const supportedNames = new Set<string>();
-  for (const style of styles.styles.values()) {
-    if (style.type !== 'character') continue;
-    if (style.name) supportedNames.add(style.name.toLowerCase());
-  }
-  for (const [key, query] of queries) if (!supportedNames.has(query.name)) queries.delete(key);
-  if (!queries.size) return run(options);
-  if (queries.size > 128) throw new Error('character-style header queries exceed their bound');
-  const index = characterStyleIndex(part, options);
-  if (!index) return run(options);
+  const setup = characterHeaderSetup(part, options);
+  if (!setup) return run(options);
+  const { furniture, dynamic, queries, index } = setup;
   const candidateSeed = options.session ? sessionSeeds.get(options.session) : undefined;
   const sameOptions = (previous: SemanticLayoutOptions): boolean => {
     const keys = new Set([...Object.keys(previous), ...Object.keys(options)]);
@@ -197,4 +175,48 @@ export function layoutWithCharacterHeaders(
     current = run(project(values, contexts, token));
   }
   throw new Error('character-style header layout exceeded its pass limit');
+}
+
+/** The header queries a pass must project, or null when none apply and one pass suffices. */
+function characterHeaderSetup(part: OoxmlPart, options: SemanticLayoutOptions) {
+  if (options.showFieldCodes) return null;
+  const furniture = new Set<PageFurniture>();
+  if (options.furniture) furniture.add(options.furniture);
+  for (const value of options.sectionFurniture ?? []) if (value) furniture.add(value);
+  const queries = new Map<string, CharacterStyleField>();
+  const dynamic = new Set<HeaderFooterStoryLayout>();
+  for (const value of furniture) {
+    for (const story of value.headers.values()) {
+      if (!story.part) continue;
+      const found = fields(story.part);
+      if (found.length) dynamic.add(story);
+      for (const query of found) queries.set(query.key, query);
+    }
+  }
+  const styles = options.styleCascade;
+  if (!styles) return null;
+  const supportedNames = new Set<string>();
+  for (const style of styles.styles.values()) {
+    if (style.type !== 'character') continue;
+    if (style.name) supportedNames.add(style.name.toLowerCase());
+  }
+  for (const [key, query] of queries) if (!supportedNames.has(query.name)) queries.delete(key);
+  if (!queries.size) return null;
+  if (queries.size > 128) throw new Error('character-style header queries exceed their bound');
+  const index = characterStyleIndex(part, options);
+  if (!index) return null;
+  return { furniture, dynamic, queries, index };
+}
+
+/**
+ * {@link layoutWithCharacterHeaders} over a body run that may pause. A document whose headers
+ * project character styles keeps the synchronous passes; see `layout-steps.ts`.
+ */
+export function* layoutWithCharacterHeadersSteps(
+  part: OoxmlPart,
+  options: SemanticLayoutOptions,
+  run: (options: SemanticLayoutOptions) => LayoutSteps<SemanticLayout>
+): LayoutSteps<SemanticLayout> {
+  if (!characterHeaderSetup(part, options)) return yield* run(options);
+  return layoutWithCharacterHeaders(part, options, (opts) => drainLayoutSteps(run(opts)));
 }

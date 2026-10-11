@@ -632,7 +632,6 @@ function planResizeDivider(
     const reason = topo.reason === 'duplicate-node-id' ? 'unknown-table' : topo.reason;
     return mapStoreRejection(reason);
   }
-  if (topo.topology.hasMerge) return refusal('unsupported', 'this table has merged cells');
   const left = topo.topology.gridColumns.find((c) => c.id === target.leftGridColumnId);
   const right = topo.topology.gridColumns.find((c) => c.id === target.rightGridColumnId);
   if (!left || !right) return refusal('invalidArgs', 'the table target is no longer valid');
@@ -675,7 +674,6 @@ function planResizeRightEdge(
     const reason = topo.reason === 'duplicate-node-id' ? 'unknown-table' : topo.reason;
     return mapStoreRejection(reason);
   }
-  if (topo.topology.hasMerge) return refusal('unsupported', 'this table has merged cells');
   const last = topo.topology.gridColumns[topo.topology.gridColumns.length - 1];
   if (!last || last.id !== target.gridColumnId) {
     return refusal('invalidArgs', 'the resize target is not the table right edge');
