@@ -15,6 +15,7 @@ import './dom-setup.ts';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+import { MenuParagraphDialog } from '../src/editor/menu/parts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
@@ -864,4 +865,42 @@ test('Markdown export shows a dismissible dialog and reports a later failure', a
     fireEvent.click(view.getByRole('button', { name: 'Close' }));
   });
   expect(view.queryByRole('alertdialog')).toBeNull();
+});
+
+describe('direct menu actions', () => {
+  test('remain tabbable and update command state without reopening a menu', async () => {
+    const { view, editor } = mountMenu(
+      <DocxEditorMenu preset={false}>
+        <DocxEditorMenu.PageSetup />
+        <MenuParagraphDialog />
+        <DocxEditorMenu.File />
+      </DocxEditorMenu>
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const page = row(view, 'file.pageSetup');
+    const paragraph = row(view, 'paragraph.dialog');
+    for (const action of [page, paragraph]) {
+      expect(action.tabIndex).toBe(0);
+      expect(action.getAttribute('aria-disabled')).not.toBe('true');
+    }
+    await act(async () => {
+      editor().exec({ type: 'setEditingMode', mode: 'viewing' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    for (const action of [page, paragraph])
+      expect(action.getAttribute('aria-disabled')).toBe('true');
+    await act(async () => {
+      editor().exec({ type: 'setEditingMode', mode: 'editing' });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    for (const action of [page, paragraph])
+      expect(action.getAttribute('aria-disabled')).not.toBe('true');
+    openMenu(view, 'toolbar.file');
+    const popup = view.container.querySelector('[role="menu"]')!;
+    expect(popup.querySelector<HTMLButtonElement>('[data-slot="file.pageSetup"]')!.tabIndex).toBe(
+      -1
+    );
+  });
 });

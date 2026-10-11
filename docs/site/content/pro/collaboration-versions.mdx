@@ -88,9 +88,9 @@ Check both the connecting client and the saved room. A compatible client does no
 
 `createTextCollaboration` is removed. Use `createDocumentCollaboration` to synchronize the complete DOCX document. For setup, see [Collaboration](/docs/2.x/pro/collaboration).
 
-The removed types are `CreateTextCollaborationOptions`, `TextCollaborationHandle`, and `TextCollaborationSession`. Use `CreateDocumentCollaborationOptions`, `DocumentCollaborationHandle`, and `DocumentCollaborationSession` instead.
+The removed experimental types are `CreateTextCollaborationOptions` and `TextCollaborationHandle`. Use `CreateDocumentCollaborationOptions` and `DocumentCollaborationHandle` instead. The public `TextCollaborationSession` type remains deprecated; use `DocumentCollaborationSession` for full-document sessions.
 
-`PROTOCOL_VERSION`, `SCHEMA_VERSION`, and `MAX_BASELINE_BYTES` are also removed from the collaboration entry. Import `COLLABORATION_FORMAT_VERSION` for connection compatibility checks. Do not replace shared limits with hard-coded copies of removed constants.
+`PROTOCOL_VERSION`, `SCHEMA_VERSION`, and `MAX_BASELINE_BYTES` remain exported for compatibility, with deprecation notices. Their values describe the retired text-only factory. They do not identify or configure full-document collaboration. Import `COLLABORATION_FORMAT_VERSION` for connection compatibility checks.
 
 Join each text-only room with its compatible earlier editor, wait for synchronization, and save a DOCX. The factory’s baseline bytes omit later shared text edits. `readCollaborationDocument` and `migrateCollaborationRoom` require full-document room state; do not pass text-only state to them.
 

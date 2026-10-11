@@ -1,10 +1,10 @@
 import { warnMissingSubmenuLabel } from './menu-warnings';
-import { defineComponent, ref, watch, type PropType } from 'vue';
+import { defineComponent, provide, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { type ChromeMenuItemEntry, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { useMenuContext, useMenuLabel } from './menu-context';
+import { MenuRowTabIndexContext, useMenuContext, useMenuLabel } from './menu-context';
 import { useStableDocxId } from '../../lib/stable-id';
 import { formatPx } from '../../lib/units';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
@@ -54,6 +54,7 @@ export const MenuSubmenu = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
+    provide(MenuRowTabIndexContext, -1);
     const label = useMenuLabel();
     const open = ref(false);
     const parentRef = ref<HTMLButtonElement | null>(null);

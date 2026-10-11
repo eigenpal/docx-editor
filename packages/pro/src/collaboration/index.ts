@@ -62,3 +62,10 @@ export {
   assertCollaborationFormatCompatibility,
   readCollaborationFormatVersion,
 } from './document-format.ts';
+
+export {
+  PROTOCOL_VERSION,
+  SCHEMA_VERSION,
+  MAX_BASELINE_BYTES,
+  type TextCollaborationSession,
+} from './legacy-compatibility.ts';

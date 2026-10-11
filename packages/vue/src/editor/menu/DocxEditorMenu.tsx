@@ -38,6 +38,7 @@ import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
 import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
 import {
   MENU_OVERFLOW_ID,
+  MenuRowTabIndexContext,
   MenuContext,
   MenuOverflowContext,
   MenuOverflowScope,
@@ -187,6 +188,7 @@ const DocxEditorMenuRoot = defineComponent({
     overflow: { type: Boolean, default: true },
   },
   setup(props, { slots }) {
+    provide(MenuRowTabIndexContext, 0);
     const dialogs = useDialogHost();
     const popups = usePopupConfig();
     const scopeClassName = useScopeClassName();
