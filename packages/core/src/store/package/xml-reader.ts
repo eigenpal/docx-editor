@@ -63,6 +63,15 @@ export const XML_HARD_MAX_ELEMENTS = HARD_CEILINGS.maxElementCount;
  * Without this, run text keeps its escaped lexical form and a re-serialize
  * double-escapes it.
  */
+/**
+ * A copy of `value` that does not point into the part's XML text. V8 keeps a substring of 13 or
+ * more characters as a view of its parent, so one long attribute or run kept the whole decoded
+ * part alive for as long as the tree. Shorter strings are already copies.
+ */
+function ownString(value: string): string {
+  return value.length < 13 ? value : (value + ' ').slice(0, -1);
+}
+
 function decodeXmlEntities(s: string): string {
   const decoded =
     s.indexOf('&') < 0
@@ -97,7 +106,7 @@ function decodeXmlEntities(s: string): string {
             }
           }
         });
-  return validateXmlText(decoded);
+  return ownString(validateXmlText(decoded));
 }
 
 function validateXmlText(value: string): string {
@@ -483,7 +492,7 @@ function convert(items: FxpNode[], depth: number, budget: XmlElementBudget): Xml
       continue;
     }
     if ('#cdata' in item) {
-      out.push({ type: 'text', value: validateXmlText(cdataText(item['#cdata'])) });
+      out.push({ type: 'text', value: ownString(validateXmlText(cdataText(item['#cdata']))) });
       continue;
     }
     const attrs = item[':@'] as Record<string, unknown> | undefined;

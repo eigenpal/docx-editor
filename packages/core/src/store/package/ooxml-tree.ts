@@ -1885,7 +1885,7 @@ export function openChildOf(
     opened.metadata,
     opened.declarations.bindings,
     opened.partName,
-    `${opened.path}.${index}`,
+    childPath(opened.path, index),
     opened.preserve,
     childParent.wmlLocalName,
     childParent.kind === 'generic' ? undefined : (childParent.kind as KnownKind),
@@ -1893,11 +1893,16 @@ export function openChildOf(
   );
 }
 
+// Ids and paths are built with `join`, which gives a flat string. A template literal gives a
+// rope that points at the parent's path, and a large document kept millions of those.
+const childPath = (path: string, index: number): string => [path, index].join('.');
+const nodeId = (partName: string, path: string): string => [partName, path].join('#');
+
 /** @internal The read of `child`, the `index`th retained child of `opened`. */
 export function convertChildOf(opened: OpenedElement, child: XmlNode, index: number): OoxmlNode {
   if (child.type === 'text')
     return {
-      id: `${opened.partName}#${opened.path}.${index}`,
+      id: nodeId(opened.partName, childPath(opened.path, index)),
       kind: 'textValue',
       value: child.value,
     };
@@ -1952,7 +1957,7 @@ export function closeElement(opened: OpenedElement, converted: readonly OoxmlNod
       ? demoteDrawingKindsInSubtree(children, name)
       : children;
   return {
-    id: `${partName}#${path}`,
+    id: nodeId(partName, path),
     kind,
     namespaceUri: name.namespaceUri,
     localName: name.localName,
