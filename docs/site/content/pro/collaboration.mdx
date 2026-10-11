@@ -32,6 +32,19 @@ flowchart LR
   end
 ```
 
+## Find your integration path
+
+| Task | Guide |
+| --- | --- |
+| Connect two editors | [Collaboration quickstart](/docs/2.x/collaboration) |
+| Use a room server | [Hocuspocus setup](#connect-to-a-hocuspocus-server) and [server document preparation](#prepare-the-room-document-on-a-server) |
+| Show connection state and participants | [Status and participants](#show-status-and-participants) |
+| Recover local work | [Replica recovery](#recover-a-diverged-replica) and [offline editing](#edit-offline) |
+| Connect a server agent | [Server agent redlines](#let-a-server-agent-propose-redlines) |
+| Upgrade a deployment | [Client checks and saved-room migration](/docs/2.x/pro/collaboration-versions) |
+
+Check client compatibility before synchronization. Validate saved rooms before loading them into a live document. Prepare each server document before applying updates. Keep the editor mounted after connection failures so users can save local work.
+
 ## Prerequisites
 
 Install the Pro package, Yjs, and the provider for your transport.

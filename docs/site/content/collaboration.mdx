@@ -9,6 +9,14 @@ This quickstart uses `useWebrtcCollaboration` to add real-time DOCX collaboratio
 
 Start with a working editor from the [Quickstart](/docs/2.x/quickstart). For provider options and failure states, see the [collaboration reference](/docs/2.x/pro/collaboration).
 
+## What to verify
+
+Use the same room ID and a different `actorId` for each editor. Open two tabs to verify synchronized edits.
+
+Keep the editor mounted if the connection fails. Let users save local work before reconnecting.
+
+For a server deployment, follow [Hocuspocus setup](/docs/2.x/pro/collaboration#connect-to-a-hocuspocus-server). Before upgrading, check [collaboration compatibility](/docs/2.x/pro/collaboration-versions#choose-the-upgrade-path).
+
 ## Install the packages
 
 Install the Pro package, Yjs, and the WebRTC provider:

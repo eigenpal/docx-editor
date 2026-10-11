@@ -10,6 +10,14 @@ Collaboration has its own compatibility version, separate from the editor packag
 
 The installed package supplies the collaboration version. Changing that value does not upgrade a saved room. Ordinary DOCX files do not need a collaboration upgrade.
 
+## Start with your deployment
+
+For an existing deployment, [choose the upgrade path](#choose-the-upgrade-path) before changing packages. Check browsers, servers, export workers, and agents together.
+
+For a new deployment, add [client admission checks](#check-clients-before-synchronization) and [saved-room validation](#check-saved-rooms-before-loading).
+
+If a user has unsynchronized edits, [preserve offline work](#preserve-offline-work-across-upgrades) before replacing the room. Finish with [deployment verification](#verify-a-deployment).
+
 ## Understand the terms
 
 A collaboration deployment includes every program that reads or writes shared room state. Include browsers, servers, export workers, and background agents when you plan an upgrade.
@@ -39,6 +47,8 @@ A fix requires a format change when it changes the meaning of shared data or upd
 Package versions and room compatibility have separate policies. A minor package release can require a saved-room migration. Check the release notes for a `Breaking collaboration upgrade` notice and its release-specific instructions. The public document API retains its own compatibility policy.
 
 ## Published collaboration formats
+
+This table lists published package releases. For deployments that use format `docx-collaboration:1.4.2.1`, see [Upgrade rooms to format 1.4.2.1](#upgrade-rooms-to-format-1421).
 
 The upgrade column describes moving from the previous stable release. Matching formats allow synchronization; older releases can still have bugs fixed in newer releases.
 
