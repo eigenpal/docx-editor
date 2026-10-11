@@ -339,7 +339,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Paragraph shading (w:shd) is editable. Borders render the common ST_Border styles: single, double, dashed, and dotted. Thick, 3-D, inset, and outset styles use CSS approximations, and art borders paint as a solid rule. Borders round-trip, but you cannot add, change, or remove them in the editor yet.',
+      'Paragraph shading (w:shd) is editable. Borders render the common ST_Border styles: single, double, dashed, and dotted. Thick, 3-D, inset, and outset styles use CSS approximations, and art borders paint as a solid rule. A border box starts where the first line starts, so a hanging indent moves its edge outward. Adjacent paragraphs with identical borders draw one box when their box edges match. Borders round-trip, but you cannot add, change, or remove them in the editor yet.',
   },
   {
     id: 'paragraphs.tabs',

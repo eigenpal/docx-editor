@@ -29,6 +29,8 @@ export interface ParagraphFragmentBorderInput {
   readonly regionX: number;
   readonly indentLeft: number;
   readonly available: number;
+  /** How far the box reaches past the text column on each side (`paragraphBoxOutdent`). */
+  readonly outdent?: { readonly left: number; readonly right: number };
   /**
    * False for a fragment that paints no rule at all. The empty line in front of a leading
    * page break is one: its paragraph's rules frame the text after the break.
@@ -69,12 +71,10 @@ export function paragraphFragmentBorders(
   const frame = input.borders;
   const leftStroke = frame.left ? paragraphBorderStrokeWidthPt(frame.left) : 0;
   const rightStroke = frame.right ? paragraphBorderStrokeWidthPt(frame.right) : 0;
-  const boxLeft = frame.left
-    ? regionX + indentLeft - frame.left.spacePt - leftStroke
-    : regionX + indentLeft;
-  const boxRight = frame.right
-    ? regionX + indentLeft + available + frame.right.spacePt + rightStroke
-    : regionX + indentLeft + available;
+  const columnLeft = regionX + indentLeft - (input.outdent?.left ?? 0);
+  const columnRight = regionX + indentLeft + available + (input.outdent?.right ?? 0);
+  const boxLeft = frame.left ? columnLeft - frame.left.spacePt - leftStroke : columnLeft;
+  const boxRight = frame.right ? columnRight + frame.right.spacePt + rightStroke : columnRight;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (input.drawn && input.topExtent > 0 && topEdge) {
     const topStroke = paragraphBorderStrokeWidthPt(topEdge);
@@ -121,7 +121,7 @@ export function paragraphFragmentBorders(
     strokes.push({ side: 'left', edge: borders.left, box: sideBox(boxLeft, leftStroke) });
   }
   if (borders.right) {
-    const x = regionX + indentLeft + available + borders.right.spacePt;
+    const x = columnRight + borders.right.spacePt;
     strokes.push({ side: 'right', edge: borders.right, box: sideBox(x, rightStroke) });
   }
   // `w:bar` is the change-bar rule beside the paragraph. It belongs to the paragraph, not

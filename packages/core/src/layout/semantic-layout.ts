@@ -101,6 +101,7 @@ import {
 } from './paragraph-break-request.ts';
 import { collapsingSpaceAfter, resolveParagraphLayoutInputs } from './style-cascade.ts';
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
+import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
 import { holdsOnlyPageBreak, lineContentX } from './pending-line.ts';
@@ -888,7 +889,7 @@ function* layoutBlocksPass(
         // collapsed outside column 0 and every paragraph there drew its own box. Which
         // column a paragraph lands in is a layout outcome; the group is an authored
         // relationship between neighbours, and only the authored insets may decide it.
-        borderGroupKey: paragraphBorderGroupKey({ borders, indent }),
+        borderGroupKey: paragraphBorderGroupKey({ borders, indent, props }),
         shading,
         inheritedRunProperties,
         markRunProperties,
@@ -2277,6 +2278,7 @@ function* layoutBlocksPass(
         regionX,
         indentLeft: indent.left,
         available,
+        outdent: paragraphBoxOutdent(indent, rtl),
         drawn: !breakLinesOnly,
       });
       if (isLast) cursorY = Math.max(cursorY, bottom);

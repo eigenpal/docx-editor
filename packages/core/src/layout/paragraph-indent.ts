@@ -50,3 +50,20 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
   }
   return { left, right };
 }
+
+/**
+ * How far a paragraph's border box reaches past its text column on each physical side.
+ *
+ * The box opens where the first line starts when a hanging indent moves that line outward:
+ * `w:left="1701" w:hanging="1701"` boxes from the margin, not from 1701 twips. A first-line
+ * indent moves the line inward and leaves the box at the indent. The first line starts on
+ * the paragraph's leading side, so a right-to-left paragraph reaches past its right edge,
+ * also past the margin. The other side stays at its indent.
+ */
+export function paragraphBoxOutdent(
+  indent: { readonly hanging: number; readonly firstLine: number },
+  rtl: boolean
+): { readonly left: number; readonly right: number } {
+  const outward = Math.max(0, indent.hanging - indent.firstLine);
+  return rtl ? { left: 0, right: outward } : { left: outward, right: 0 };
+}

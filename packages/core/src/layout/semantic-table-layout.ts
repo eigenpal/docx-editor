@@ -7,6 +7,7 @@ import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { cellContextualSpacing, contextualCellNeighbours } from './contextual-paragraph-spacing.ts';
 import { emitNestedTable } from './nested-table-layout.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
+import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { lineContentX, pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
@@ -752,10 +753,11 @@ function placeCellParagraph(
   // Stroke thickness uses the inflated compound band for `double`/etc. (shared with body).
   const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
   const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
-  const boxLeft = borders.left ? fragmentX - borders.left.spacePt - leftStroke : fragmentX;
-  const boxRight = borders.right
-    ? fragmentX + available + borders.right.spacePt + rightStroke
-    : fragmentX + available;
+  const outdent = paragraphBoxOutdent(indent, rtl);
+  const columnLeft = fragmentX - outdent.left;
+  const columnRight = fragmentX + available + outdent.right;
+  const boxLeft = borders.left ? columnLeft - borders.left.spacePt - leftStroke : columnLeft;
+  const boxRight = borders.right ? columnRight + borders.right.spacePt + rightStroke : columnRight;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (topExtent > 0 && topEdge) {
     const topStroke = paragraphBorderStrokeWidthPt(topEdge);
@@ -802,7 +804,7 @@ function placeCellParagraph(
       side: 'left',
       edge: borders.left,
       box: {
-        x: fragmentX - borders.left.spacePt - leftStroke,
+        x: boxLeft,
         y: sideTop,
         width: leftStroke,
         height: sideHeight,
@@ -814,7 +816,7 @@ function placeCellParagraph(
       side: 'right',
       edge: borders.right,
       box: {
-        x: fragmentX + available + borders.right.spacePt,
+        x: columnRight + borders.right.spacePt,
         y: sideTop,
         width: rightStroke,
         height: sideHeight,
