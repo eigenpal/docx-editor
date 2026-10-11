@@ -8,7 +8,7 @@ Pass a font configuration through `fonts`. Use `loadFonts()` for application fon
 
 CSS `@font-face` rules supply browser rendering only. The editor also needs font bytes to measure text.
 
-The contract preview uses packaged fonts. Select text and use the font picker to apply a family or size.
+The contract preview starts with packaged fonts. Choose Lato, Arvo, or PT Serif, then select **Apply to contract**. The editor downloads the selected Google font and updates the contract.
 
 Embedded DOCX fonts load automatically. Font names from the document do not authorize remote font requests.
 
@@ -83,6 +83,58 @@ A selectable family does not prove that its bytes are loaded. The font catalog i
 Embedded document fonts enter the font pipeline automatically when usable. Opening a document does not automatically fetch remote font declarations. A CSS `@font-face` rule changes browser rendering but does not supply the shaping pipeline with bytes. Missing font coverage can change line breaks and page layout. Use `onFontError` for initialization failures and the loader's failure list for individual URL failures.
 
 Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.
+
+## Load Google Fonts on demand
+
+Combine packaged fonts with the Google Fonts provider. The `allow` list limits which Google families the editor can download.
+
+The provider fetches font files from a pinned Google Fonts catalog. It supplies bytes for text layout and browser rendering. A font change can change line breaks and pagination.
+
+Create the configuration once. Pass it to `DocxEditor.Root` through `fonts`.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const local = packagedFonts();
+const remote = googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] });
+
+export function useContractFonts() {
+  return useFonts(local, remote);
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+defineProps<{ bytes: Uint8Array }>();
+const fonts = useFonts(packagedFonts(), googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] }));
+</script>
+
+<template>
+  <DocxEditor.Root :document="bytes" :fonts="fonts">
+    <DocxEditor.Toolbar />
+    <DocxEditor.Viewport :style="{ height: '520px' }">
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The preview applies the selected family to the complete contract. Your application can use the font picker to format selected text instead.
 
 ## React and Vue reference
 

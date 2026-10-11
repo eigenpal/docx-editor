@@ -45,6 +45,8 @@ Your application must receive or fetch each result; the editor does not watch a 
 
 See [Document refresh API](/docs/2.x/guides/document-refresh#api-overview) for methods, options, and failure handling. Try its [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects) to see scroll preservation, navigation, and fading highlights.
 
+For a complete integration, see [Edit DOCX files with Vespper MCP](https://www.docx-editor.dev/blog/vespper-docx-agent). The example uses document refresh to show agent edits and tracked changes.
+
 ## Show edits as review suggestions
 
 For API-driven text review, set `document.changeTrackingMode = 'TrackMineOnly'` and use ordinary range edits. Commit each completed suggestion separately so readers can review it while the agent continues.
