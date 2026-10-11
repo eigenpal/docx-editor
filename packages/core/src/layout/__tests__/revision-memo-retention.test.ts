@@ -60,6 +60,18 @@ test('a large answer stays only for the latest revision of its node', () => {
   expect(memo.get(small)).toEqual({ ids: ['a'] });
 });
 
+test('a large answer that holds its own node does not keep the node alive', () => {
+  const memo = createSubtreeAggregateMemo<object>();
+  // A prepared table holds the table node it was prepared from. Once the document closes,
+  // nothing else holds the node, and the memo must not either.
+  const gone = released(() => {
+    const table = { kind: 'table', id: 'part#0.1', children: [] } as unknown as OoxmlNode;
+    memo.set(table, { table, rows: new Array(LARGE_SUBTREE_ANSWER) }, LARGE_SUBTREE_ANSWER);
+    return table;
+  });
+  expect(gone()).toBe(true);
+});
+
 function tableXml(rows: number, text: string): string {
   let xml =
     '<w:tbl><w:tblPr><w:tblW w:w="4000" w:type="dxa"/></w:tblPr>' +

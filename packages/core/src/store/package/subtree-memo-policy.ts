@@ -56,30 +56,29 @@ declare const WeakRef: new (target: OoxmlNode) => NodeWeakRef;
  * node id instead: node ids survive edits, so the current tree still answers every untouched
  * table in one read, and the history keeps nothing. Small answers keep a plain weak entry.
  * `set` takes the answer's size in items.
+ *
+ * Every answer stays in a `WeakMap`, so an answer that holds its own node, such as a prepared
+ * table, does not keep that node alive. The id map holds only weak references to the latest
+ * node: a strong answer there kept the last document's tables after it closed.
  */
 export function createSubtreeAggregateMemo<V>(): {
   get(node: OoxmlNode): V | undefined;
   set(node: OoxmlNode, value: V, size: number): void;
 } {
-  const small = new WeakMap<OoxmlNode, V>();
-  const latest = new Map<string, { readonly node: NodeWeakRef; readonly value: V }>();
+  const answers = new WeakMap<OoxmlNode, V>();
+  const latest = new Map<string, NodeWeakRef>();
   let pruneAt = 64;
   return {
-    get(node) {
-      const hit = small.get(node);
-      if (hit !== undefined) return hit;
-      const entry = latest.get(node.id);
-      return entry && entry.node.deref() === node ? entry.value : undefined;
-    },
+    get: (node) => answers.get(node),
     set(node, value, size) {
-      if (size < LARGE_SUBTREE_ANSWER) {
-        small.set(node, value);
-        return;
-      }
-      latest.set(node.id, { node: new WeakRef(node), value });
-      // Drop entries whose node is gone, such as a deleted table's.
+      answers.set(node, value);
+      if (size < LARGE_SUBTREE_ANSWER) return;
+      const previous = latest.get(node.id)?.deref();
+      if (previous && previous !== node) answers.delete(previous);
+      latest.set(node.id, new WeakRef(node));
+      // Drop ids whose node is gone, such as a deleted table's.
       if (latest.size < pruneAt) return;
-      for (const [id, entry] of latest) if (!entry.node.deref()) latest.delete(id);
+      for (const [id, ref] of latest) if (!ref.deref()) latest.delete(id);
       pruneAt = Math.max(64, latest.size * 2);
     },
   };

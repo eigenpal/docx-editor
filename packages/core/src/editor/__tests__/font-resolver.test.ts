@@ -44,6 +44,27 @@ test('partial font failures are bounded snapshots and do not discard usable sour
   expect(merged?.failures).toHaveLength(HARD_MAX_FONT_SOURCES + 1);
 });
 
+test('a reported font failure has its stack formatted before anyone keeps it', async () => {
+  // An unread stack keeps every frame's closure alive, and those reach the document. A
+  // report that outlives the export, such as a PDF result's font resolution, kept it all.
+  const cause = new Error('Missing bold face');
+  const stack = cause.stack;
+  let reads = 0;
+  Object.defineProperty(cause, 'stack', {
+    get: () => {
+      reads += 1;
+      return stack;
+    },
+  });
+  let readsAtReport = -1;
+  await composeFontOrigins([{ sources: [], failures: [cause] }], REQUEST, {
+    onOriginFailure: () => {
+      readsAtReport = reads;
+    },
+  });
+  expect(readsAtReport).toBeGreaterThan(0);
+});
+
 test('concurrent font compositions keep partial failure reports independent', async () => {
   const first = new Error('First export'),
     second = new Error('Second export');
