@@ -15,6 +15,7 @@ import {
   warmResolverGlyphFontTableRows,
 } from './resolver-glyph-font-families.ts';
 import { warmLayoutNodeDigests } from '../layout/layout-cache.ts';
+import { setOpeningIndicatorHost, type OpeningIndicatorHost } from './surface-opening-indicator.ts';
 
 /** About how long one font warm-up step runs, in milliseconds. */
 const FONT_WARM_STEP_MS = 40;
@@ -107,6 +108,19 @@ export {
   continueProgressiveOpen as continueOpen,
   progressiveOpenPending as stillOpening,
 } from './surface-progressive-open.ts';
+
+/** The host's opening indicator, kept across the surfaces the facade mounts. */
+export function openingIndicatorChrome(current: () => object | null) {
+  let host: OpeningIndicatorHost | null = null;
+  return {
+    set(next: OpeningIndicatorHost | null): void {
+      host = next;
+      const surface = current();
+      if (surface) setOpeningIndicatorHost(surface, next);
+    },
+    adopt: (surface: object): void => setOpeningIndicatorHost(surface, host),
+  };
+}
 
 type Step = () => void | Promise<unknown> | Step;
 

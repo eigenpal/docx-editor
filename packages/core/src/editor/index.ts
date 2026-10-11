@@ -201,6 +201,7 @@ export {
   type ReviewWriteIntent,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
+export type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
 export {
   createDocxEditor,
   type DocxEditorInstance,

@@ -1342,6 +1342,7 @@ export interface DocxEditorInstance extends Editor {
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
+    setOpeningIndicatorHost(host: OpeningIndicatorHost | null): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;

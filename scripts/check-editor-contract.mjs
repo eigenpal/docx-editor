@@ -36,6 +36,8 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   // Title-bar render props; Vue uses named slots with the same names.
   'renderTitleBarLeft',
   'renderTitleBarRight',
+  // The loading indicator; Vue uses a named slot with the same name.
+  'loadingIndicator',
 ]);
 
 function extractInterfaceBody(source, name) {

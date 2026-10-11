@@ -34,7 +34,7 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
-import { DocxEditorLoading } from '../editor/DocxEditorLoading';
+import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
 import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/DocxEditorRulers';
@@ -367,6 +367,7 @@ const DocxEditorFrame = defineComponent({
     });
 
     return () => {
+      if (!chrome.value && slots.loadingIndicator) warnLoadingIndicatorWithoutChrome();
       const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;
@@ -450,7 +451,11 @@ const DocxEditorFrame = defineComponent({
                     }),
                 viewport,
                 h(DocxEditorPageNumber),
-                h(DocxEditorLoading, { overlay: true }),
+                h(
+                  DocxEditorLoading,
+                  { overlay: true },
+                  slots.loadingIndicator ? { indicator: slots.loadingIndicator } : undefined
+                ),
               ]),
             ]
           )
@@ -578,6 +583,7 @@ const DocxEditorImpl = defineComponent({
               default: slots.default,
               titleBarLeft: slots.titleBarLeft,
               titleBarRight: slots.titleBarRight,
+              loadingIndicator: slots.loadingIndicator,
             }
           ),
       });

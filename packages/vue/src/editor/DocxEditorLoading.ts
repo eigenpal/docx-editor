@@ -1,7 +1,19 @@
-import { defineComponent, h, type CSSProperties, type PropType, type VNode } from 'vue';
+import {
+  defineComponent,
+  h,
+  onBeforeUnmount,
+  shallowRef,
+  Teleport,
+  watch,
+  type CSSProperties,
+  type PropType,
+  type VNode,
+} from 'vue';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
+import { isDevelopment } from '../lib/is-development';
+import { useDocxEditor } from './context';
 import { twipsToPixels } from '../lib/units';
 import { useEditorState } from './useEditorState';
 
@@ -12,13 +24,67 @@ const selectLoadingPageSize = (snapshot: EditorSnapshot) => ({
   height: twipsToPixels(snapshot.pageSetup?.pageHeightTwips ?? 15_840) * snapshot.zoom,
 });
 
-/** Props for `DocxEditor.Loading`. @public */
+/**
+ * Props for `DocxEditor.Loading`. Two slots replace parts of the packaged screen: `indicator`
+ * replaces only the spinner and, with `overlay`, moves onto the document's first page while a
+ * large document lays out its remaining pages; `default` replaces the whole first screen.
+ *
+ * ```vue
+ * <DocxEditor.Loading overlay>
+ *   <template #indicator><MyLogoSpinner label="Opening document" /></template>
+ * </DocxEditor.Loading>
+ * ```
+ *
+ * @public
+ */
 export interface DocxEditorLoadingProps {
   when?: boolean;
   overlay?: boolean;
   className?: string;
   style?: CSSProperties;
+  /** The `indicator` slot: your own indicator, in place of the packaged spinner. */
+  indicator?: DocxEditorChildren;
+  /** The default slot: the whole first loading screen. */
   children?: DocxEditorChildren;
+}
+
+let warnedWithoutChrome = false;
+
+/** Warn once that the `loadingIndicator` slot does nothing under `chrome: false`. */
+export function warnLoadingIndicatorWithoutChrome(): void {
+  if (warnedWithoutChrome || !isDevelopment()) return;
+  warnedWithoutChrome = true;
+  console.warn(
+    '[docx-editor] the loadingIndicator slot is ignored with chrome set to false, which ' +
+      'renders no loading screen. Compose DocxEditor.Loading with overlay and an indicator ' +
+      'slot in a positioned box instead.'
+  );
+}
+
+/**
+ * The element on the first page that holds the indicator while a large document lays out
+ * its remaining pages, or null. Only the overlay registers: the packaged frame has one.
+ */
+function useFirstPageIndicator(enabled: () => boolean) {
+  const editor = useDocxEditor();
+  const element = shallowRef<HTMLElement | null>(null);
+  const setElement = (next: HTMLElement | null): void => {
+    element.value = next;
+  };
+  const stop = watch(
+    [editor, enabled],
+    ([current, on], _previous, onCleanup) => {
+      if (!current || !on) return;
+      current.setOpeningIndicatorHost({ publish: setElement });
+      onCleanup(() => {
+        current.setOpeningIndicatorHost(null);
+        element.value = null;
+      });
+    },
+    { immediate: true }
+  );
+  onBeforeUnmount(stop);
+  return element;
 }
 
 /** Props for `DocxEditor.Loading.Spinner`. @public */
@@ -52,10 +118,18 @@ const DocxEditorLoadingImpl = defineComponent({
   setup(props, { slots }) {
     const showLoading = useEditorState(selectShowLoading);
     const pageSize = useEditorState(selectLoadingPageSize);
+    const firstPage = useFirstPageIndicator(() => props.overlay);
     const { t } = useTranslation();
 
     return () => {
       if (!props.when && !showLoading.value) return null;
+      const status = () =>
+        slots.indicator?.() ?? [
+          h(DocxEditorLoadingSpinner),
+          h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
+        ];
+      // The first pages show: the indicator moves onto the first page, and the overlay steps aside.
+      if (firstPage.value) return h(Teleport, { to: firstPage.value }, status());
       const classes = `docx-editor docx-editor__loading${
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;
@@ -75,10 +149,7 @@ const DocxEditorLoadingImpl = defineComponent({
             [
               h('div', { class: 'docx-pages' }, [
                 h('div', { class: 'docx-page docx-editor__loading-page' }, [
-                  h('div', { class: 'docx-editor__loading-page-status' }, [
-                    h(DocxEditorLoadingSpinner),
-                    h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
-                  ]),
+                  h('div', { class: 'docx-editor__loading-page-status' }, status()),
                 ]),
               ]),
             ]

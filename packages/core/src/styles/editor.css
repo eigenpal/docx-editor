@@ -5041,7 +5041,8 @@ a.docx-hyperlink:focus-visible {
 /* Once the opening document has mounted and lays out its remaining pages, the engine marks
    its container for exactly that phase. The overlay steps aside, so the scroll container
    scrolls. The pages show muted and take no pointer input, and the indicator sits on the
-   FIRST PAGE, so it scrolls with the document instead of floating over it. */
+   FIRST PAGE (`.docx-opening-indicator`), so it scrolls with the document instead of
+   floating over it. */
 :where(:has([data-docx-opening-preview])) > .docx-editor__loading--overlay {
   display: none;
 }
@@ -5058,28 +5059,18 @@ a.docx-hyperlink:focus-visible {
   content: '';
 }
 
-/* The packaged spinner, drawn by the page itself. Compositor-driven, like the overlay's. */
-[data-docx-opening-preview] .docx-page[data-page-index='0']::after {
+/* The loading indicator over the first page: a real element the engine positions on the
+   page's own box, so a host can render its own content into it. Only its content takes
+   pointer input, so a host can offer a button there. */
+.docx-opening-indicator {
   position: absolute;
-  top: min(50%, 30vh);
-  left: 50%;
   z-index: var(--doc-z-overlay);
-  box-sizing: border-box;
-  width: 36px;
-  height: 36px;
-  margin: -18px 0 0 -18px;
-  border: 3px solid var(--doc-border);
-  border-top-color: var(--doc-primary);
-  border-radius: 50%;
-  will-change: transform;
-  animation: docx-editor-loading-spin 0.8s linear infinite;
-  content: '';
+  overflow: hidden;
+  pointer-events: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  [data-docx-opening-preview] .docx-page[data-page-index='0']::after {
-    animation: none;
-  }
+.docx-opening-indicator > .docx-editor__loading-page-status > * {
+  pointer-events: auto;
 }
 
 .docx-editor__loading-page {

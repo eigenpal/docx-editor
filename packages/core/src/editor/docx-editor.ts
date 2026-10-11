@@ -373,9 +373,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   suggestingReporter.report(openingModeDecision.rejection);
 
   let surface: PaginatedSurface | null = null;
-  // The facade's copy of the host's remote-caret label host: registered before attach,
-  // re-applied to every rebuilt surface (reload, font remount, re-attach).
+  // Host chrome registered before attach, re-applied to every rebuilt surface (see mount).
   let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
+  const openingIndicator = preparedOpen.openingIndicatorChrome(() => surface);
   let parseError: string | null = null;
   let unsubscribeSession: Unsubscribe | null = null;
   // What the last emitted tick reported, so a publish that moved nothing observable stays
@@ -715,11 +715,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // and still told a screen reader it was writable. Reads the CURRENT mode, not just the
     // constructed one, so a remount after `setEditingMode('viewing')` comes up right.
     surface.setEditable(editingMode !== 'viewing');
-    // Same remount rule for the host's caret-label host: registered once, and a rebuilt
-    // surface that forgot it would fall back to the default name labels mid-session.
-    if (remoteCaretLabelHost !== null) {
-      surface.setRemoteCaretLabelHost(remoteCaretLabelHost);
-    }
+    // Same remount rule for the host's caret-label host and opening indicator: a rebuilt
+    // surface that forgot them would fall back to the default name labels and spinner.
+    if (remoteCaretLabelHost !== null) surface.setRemoteCaretLabelHost(remoteCaretLabelHost);
+    openingIndicator.adopt(surface);
     // Same remount rule for the host's activation filter: the rail set it once, and a
     // rebuilt surface that forgot it would activate cards the rail does not render.
     if (reviewActivationExclusions !== null) {
@@ -2296,6 +2295,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
     collaborationSession: () => surface?.collaborationSession() ?? null,
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
+    setOpeningIndicatorHost: openingIndicator.set,
     setRemoteCaretLabelHost(host) {
       remoteCaretLabelHost = host;
       // Tolerated detached: the host waits here and applies on the next mount.

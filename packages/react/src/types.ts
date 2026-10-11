@@ -74,6 +74,18 @@ export interface DocxEditorProps {
   readonly renderTitleBarLeft?: () => DocxEditorChildren;
   readonly renderTitleBarRight?: () => DocxEditorChildren;
   /**
+   * Your own loading indicator, in place of the packaged spinner. It shows centered on a
+   * blank page before the document arrives, then on the document's first page while a large
+   * document lays out its remaining pages, and scrolls with it. Include text for screen
+   * readers, as the packaged indicator does. Requires `chrome`; without it, compose
+   * `DocxEditor.Loading` yourself.
+   *
+   * ```tsx
+   * <DocxEditor document={bytes} loadingIndicator={<MyLogoSpinner label="Opening" />} />
+   * ```
+   */
+  readonly loadingIndicator?: DocxEditorChildren;
+  /**
    * Chrome colour mode. `'system'` follows the OS and re-resolves when it changes.
    * Only the editor CHROME is themed — the document canvas stays Word-faithful.
    */

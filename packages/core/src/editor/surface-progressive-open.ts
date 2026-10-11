@@ -6,6 +6,7 @@
 // `surface-measurement.ts`.
 
 import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
+import { showOpeningIndicator } from './surface-opening-indicator.ts';
 
 const steps = new WeakMap<object, (budgetMs: number) => boolean>();
 let stepCount = 0;
@@ -62,7 +63,8 @@ export interface OpeningSlicesHost {
  * Lay a mounted surface's body out in slices of about {@link OPENING_SLICE_MS}: each slice
  * extends the prefix and resumes from the previous one, and a prefix pass pauses between the
  * rows of a long table instead of laying it out in one task. Marks `container` while it runs,
- * so the loading overlay shows the document muted.
+ * so the loading overlay shows the document muted, and shows the loading indicator on the first
+ * page.
  *
  * Answers a function that finishes a paused prefix pass at once. Any other layout of the same
  * session must call it first, because the paused pass holds that session mid-flow.
@@ -112,9 +114,14 @@ export function startOpeningSlices(
   container.removeAttribute('data-docx-opening-preview');
   if (host.limit() !== null) {
     container.setAttribute('data-docx-opening-preview', '');
+    const indicator = showOpeningIndicator(surface, container);
     registerProgressiveOpen(surface, (budgetMs) => {
       const done = step(budgetMs);
-      if (done) container.removeAttribute('data-docx-opening-preview');
+      if (!done) indicator.place();
+      else {
+        container.removeAttribute('data-docx-opening-preview');
+        indicator.remove();
+      }
       return done;
     });
   }

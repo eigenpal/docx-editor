@@ -1371,6 +1371,7 @@ export interface DocxEditorInstance extends Editor {
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
+    setOpeningIndicatorHost(host: OpeningIndicatorHost | null): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;
@@ -1989,6 +1990,11 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 
 // @public
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
+
+// @public
+export interface OpeningIndicatorHost {
+    publish(element: HTMLElement | null): void;
+}
 
 // @public
 export type OpenPaginatedResult = {
