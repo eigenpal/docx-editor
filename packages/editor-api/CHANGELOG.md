@@ -1,5 +1,18 @@
 # @docx-editor.dev/editor-api
 
+## 2.28.0
+
+### Minor Changes
+
+- 7ccd87e: Add `Paragraph.readingOrder` to set and read a paragraph's left-to-right or right-to-left direction, recorded as a paragraph property revision when change tracking is on. Review cards now show a tracked paragraph direction change. Fixes #1173
+- 85e3703: Change the author, and optionally the date, of pending tracked changes without accepting or rejecting them, with `useReview().adopt()`, the `setReviewChangesAuthor` editor command, or `RevisionCollection.setAuthor()`. Fixes #1145
+- 1273247: With change tracking on, `paragraph.delete()` and `range.delete()` over whole paragraphs record tracked deletions of the text and paragraph marks, also in collaboration. Breaking collaboration upgrade: this ships with collaboration format 1.4.2.1; see [Upgrade rooms to format 1.4.2.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1421). Fixes #1174
+- b47308c: PDF export marks text in tracked table rows, new table rows keep the source row's paragraph formatting, and tracked edits can start right after your own pending insertion. A range whose text changed since it was read now fails with `StaleDocument` instead of editing the wrong text.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.28.0
+
 ## 2.27.0
 
 ### Patch Changes
