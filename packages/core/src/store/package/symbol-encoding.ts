@@ -86,6 +86,35 @@ export function isSymbolEncodedFamily(fontFamily: string | null | undefined): bo
   return SYMBOL_FAMILIES.has(fontFamily.toLowerCase());
 }
 
+/** Unicode twin → face byte, per table, built on first use. */
+const unicodeToByteByTable = new Map<ReadonlyMap<number, string>, ReadonlyMap<number, number>>();
+
+/**
+ * The byte of a symbol-encoded face that one character stands for, or null.
+ *
+ * The inverse of {@link mapSymbolPuaText}: a private-use code names its byte directly, a
+ * Unicode twin that mapping produced names the byte it came from, and a bare byte (U+0020–
+ * U+00FF) is the byte itself, which is how the face reads it. Twins win over bare bytes,
+ * because mapping is the only producer of a twin inside that range (`×` from Symbol 0xB4).
+ * Anything else is no byte of the face.
+ */
+export function symbolFaceByteOf(codePoint: number, fontFamily: string): number | null {
+  if (!isSymbolEncodedFamily(fontFamily)) return null;
+  if (codePoint >= SYMBOL_PUA_BASE + 0x20 && codePoint <= SYMBOL_PUA_END)
+    return codePoint - SYMBOL_PUA_BASE;
+  const table = SYMBOL_FAMILIES.get(fontFamily.toLowerCase())!;
+  let inverse = unicodeToByteByTable.get(table);
+  if (!inverse) {
+    const built = new Map<number, number>();
+    for (const [byte, twin] of table) built.set(twin.codePointAt(0)!, byte);
+    unicodeToByteByTable.set(table, built);
+    inverse = built;
+  }
+  const twin = inverse.get(codePoint);
+  if (twin !== undefined) return twin;
+  return codePoint >= 0x20 && codePoint <= 0xff ? codePoint : null;
+}
+
 /** True when the text contains a codepoint from the symbol-font private-use range. */
 export function hasSymbolPua(text: string): boolean {
   for (const glyph of text) {

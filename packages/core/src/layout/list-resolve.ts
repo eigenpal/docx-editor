@@ -37,7 +37,7 @@ import {
   type StyleCascadeTable,
   type StyleDefinition,
 } from './style-cascade.ts';
-import { hasSymbolPua, mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
+import { mapSymbolPuaText, mapSymbolBulletText } from './symbol-encoding.ts';
 import { markerSymbolFontAvailability } from './marker-symbol-font.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 import { resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
@@ -549,14 +549,11 @@ export function resolveStoryListItems(
       authoredMarkerStyle.fontFamily,
       isFontAvailable
     );
-    // A translated marker needs a Unicode face, not the unavailable byte-encoded face.
-    // Resolve the substrate's default in both measurement and painting. Preserve the
-    // authored face when any unknown private-use character remains, or when the host
-    // explicitly admits the original font. Never mutate the cached level style.
-    const markerStyle =
-      markerText !== advanced.markerText && !hasSymbolPua(markerText)
-        ? { ...authoredMarkerStyle, fontFamily: null, fontFamilyEastAsia: null }
-        : authoredMarkerStyle;
+    // The marker keeps its authored face even when its glyph was translated to Unicode. An
+    // unavailable symbol face still sizes the line and the marker by its own metrics
+    // (`symbol-face-metrics.ts`), and paint draws the Unicode twin in a face that has it.
+    // Never mutate the cached level style.
+    const markerStyle = authoredMarkerStyle;
     // `w:lvlPicBulletId` names a `w:numPicBullet` of the SAME part. A level naming one the
     // part never declared, or one whose VML this projection could not read, keeps its
     // `w:lvlText` — a missing image must never cost the reader the marker entirely.

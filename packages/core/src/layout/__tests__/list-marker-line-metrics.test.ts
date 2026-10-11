@@ -91,17 +91,17 @@ describe('a list level run property reaching the marker', () => {
     expect(marker?.style.fontFamily).toBe('Courier New');
   });
 
-  test('a symbol level translated to Unicode drops the face it can no longer use', () => {
-    // `w:lvlText` U+F0B7 in Symbol is Word's default bullet. Translating it to U+2022 means
-    // the authored face cannot draw the marker any more, so measurement AND paint fall to the
-    // substitute together — the line is never sized by a face nothing draws.
+  test('a symbol level translated to Unicode keeps the face that sizes it', () => {
+    // `w:lvlText` U+F0B7 in Symbol is the default bullet. The text becomes U+2022 so that any
+    // face can draw it, but the marker keeps Symbol: an unavailable symbol face still sizes
+    // the marker by its own metrics, and paint draws the Unicode bullet in another face.
     const marker = fragmentOf(
       `<w:rFonts w:ascii="Symbol" w:hAnsi="Symbol" w:hint="default"/>`,
       familyMeasurer(),
       SYMBOL_PUA_BULLET
     ).marker;
     expect(marker?.text).toBe(UNICODE_BULLET);
-    expect(marker?.style.fontFamily).toBeNull();
+    expect(marker?.style.fontFamily).toBe('Symbol');
   });
 });
 

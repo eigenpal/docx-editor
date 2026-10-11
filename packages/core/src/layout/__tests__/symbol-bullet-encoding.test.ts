@@ -100,7 +100,7 @@ describe('symbol-font private-use mapping', () => {
 
   test('resolved list markers carry the mapped glyph', () => {
     expect(items().map((item) => item.markerText)).toEqual(['•', '▪']);
-    expect(items().map((item) => item.markerStyle.fontFamily)).toEqual([null, null]);
+    expect(items().map((item) => item.markerStyle.fontFamily)).toEqual(['Symbol', 'Wingdings']);
     expect(items(() => true).map((item) => item.markerText)).toEqual([
       SYMBOL_BULLET,
       WINGDINGS_SQUARE,
@@ -128,7 +128,7 @@ describe('symbol-font private-use mapping', () => {
     });
     const marker = paragraphFragmentsOf(layout.pages[0]!)[0]!.marker!;
     expect(marker.text).toBe('•');
-    expect(marker.style.fontFamily).toBeNull();
+    expect(marker.style.fontFamily).toBe('Symbol');
     expect(marker.box.width).toBe(6);
   });
 });

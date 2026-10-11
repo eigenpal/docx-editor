@@ -4,6 +4,7 @@ import { fontTableAlternates } from '../store/package/font-table-alternates.ts';
 import { fontFamilyName } from '../store/package/font-family-name.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import { SYMBOL_ENCODED_FAMILIES } from '../store/package/symbol-encoding.ts';
 import { applicationRunDefaults } from './application-run-defaults.ts';
 import { readDocDefaults } from './style-definition-reader.ts';
 import { resolveRunStyle } from './run-style.ts';
@@ -109,6 +110,9 @@ function scriptDefaults(
     if (stack.length > 0)
       return { fallbacks: new Map(), ambiguousFamilies: [], defaults: new Map() };
   }
+  // A symbol-encoded face draws private-use codes that no text face carries. A text default
+  // would paint missing glyphs and size the line by the wrong face, so these stay unresolved.
+  for (const family of SYMBOL_ENCODED_FAMILIES) needs.delete(family);
   const fallbacks = new Map<string, string>();
   const ambiguousFamilies: string[] = [];
   for (const [family, targets] of needs) {
