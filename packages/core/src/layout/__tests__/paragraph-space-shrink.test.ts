@@ -258,19 +258,40 @@ test('a space that opens a field result does not let the word before it compress
 test('a final word that ends with a no-break space borrows inter-word space', () => {
   const layout = (text: string, compatibilityMode: number) =>
     content(layoutSemanticDocument(source('both', text, 76), 1, { measurer, compatibilityMode }));
-  expect(layout('aa bb cc ', 15)).toEqual(['aa bb cc']);
-  expect(layout('aa bb cc ', 14)).toEqual(['aa bb', 'cc']);
+  expect(layout('aa bb cc\u00a0', 15)).toEqual(['aa bb cc']);
+  expect(layout('aa bb cc\u00a0', 14)).toEqual(['aa bb', 'cc']);
   // The shrink budget still bounds the whole word, including text after the no-break space.
-  expect(layout('aa bb cc dd', 15)).toEqual(['aa bb', 'cc dd']);
+  expect(layout('aa bb cc\u00a0dd', 15)).toEqual(['aa bb', 'cc\u00a0dd']);
 });
 
 test('a no-break space inside an earlier word keeps that word space compressible', () => {
   const lines = linesOf(
-    layoutSemanticDocument(source('both', 'a a bb cc', 76), 1, {
+    layoutSemanticDocument(source('both', 'a\u00a0a bb cc', 76), 1, {
       measurer,
       compatibilityMode: 15,
     })
   );
-  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(['a a bb cc']);
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    'a\u00a0a bb cc',
+  ]);
   expect(lines[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+});
+
+// Only the text after a line's last tab is justified, so only its spaces can shrink.
+test('spaces after a tab borrow space, and the tab keeps its stop', () => {
+  const layout = (text: string) =>
+    linesOf(
+      layoutSemanticDocument(source('both', text, 102), 1, { measurer, compatibilityMode: 15 })
+    );
+  // `aa` ends at 20, the tab reaches the 36pt default stop, and `bb cc dd` needs 68 more.
+  const lines = layout('aa\tbb cc dd');
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    'aa\tbb cc dd',
+  ]);
+  const bb = lines[0]!.spans.find((span) => span.text.startsWith('bb'))!;
+  expect(bb.box.x - lines[0]!.spans[0]!.box.x).toBeCloseTo(36, 6);
+  // A space before the tab is not justified, so it cannot make the room.
+  expect(
+    layout('a a\tbb cc dd ee').map((line) => line.spans.map((span) => span.text).join(''))
+  ).toHaveLength(2);
 });
