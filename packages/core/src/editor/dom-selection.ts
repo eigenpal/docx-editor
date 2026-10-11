@@ -446,35 +446,6 @@ function domPointFromPosition(
         : `[data-line-id="${preferredLineId}"]`;
       for (const line of searchRoot.querySelectorAll<HTMLElement>(selector)) {
         if (line.dataset.lineId !== preferredLineId) continue;
-        const fields = [
-          ...line.querySelectorAll<HTMLElement>('[data-docx-field][data-start]'),
-        ].filter((field) => {
-          const identity = identityOf(field);
-          return (
-            identity?.paragraphId === position.paragraphId &&
-            (identity.start === position.offset || identity.end === position.offset)
-          );
-        });
-        const opening = fields.find((field) => identityOf(field)?.start === position.offset);
-        const ending = [...paragraphSpansAndSpacers(line, position.paragraphId).spans]
-          .reverse()
-          .find((span) => {
-            const identity = identityOf(span);
-            return (
-              identity?.end === position.offset &&
-              fields.some((field) => {
-                const range = identityOf(field);
-                return range?.start === identity.start && range.end === identity.end;
-              })
-            );
-          });
-        const field = opening ?? ending;
-        if (field?.parentNode) {
-          return {
-            node: field.parentNode,
-            offset: [...field.parentNode.childNodes].indexOf(field) + (opening ? 0 : 1),
-          };
-        }
         const point = domPointFromPositionIn(line, position);
         if (point) return point;
       }
@@ -487,11 +458,33 @@ function domPointFromPosition(
   return null;
 }
 
+/** Keep field endpoints outside their inert cache, including a field-only paragraph. */
+function fieldBoundaryPoint(
+  spans: readonly Element[],
+  position: SemanticPosition
+): { node: Node; offset: number } | null {
+  let ending: Element | null = null;
+  for (const span of spans) {
+    if (!span.hasAttribute('data-docx-field') || !span.parentNode) continue;
+    const identity = identityOf(span);
+    if (identity?.paragraphId !== position.paragraphId) continue;
+    if (identity.start === position.offset) {
+      return { node: span.parentNode, offset: [...span.parentNode.childNodes].indexOf(span) };
+    }
+    if (identity.end === position.offset) ending = span;
+  }
+  return ending?.parentNode
+    ? { node: ending.parentNode, offset: [...ending.parentNode.childNodes].indexOf(ending) + 1 }
+    : null;
+}
+
 function domPointFromPositionIn(
   searchRoot: Element,
   position: SemanticPosition
 ): { node: Node; offset: number } | null {
   const { spans, spacers } = paragraphSpansAndSpacers(searchRoot, position.paragraphId);
+  const fieldBoundary = fieldBoundaryPoint(spans, position);
+  if (fieldBoundary) return fieldBoundary;
   let fallback: { node: Node; offset: number } | null = null;
   let painted = false;
   for (const span of spans) {
@@ -501,18 +494,13 @@ function domPointFromPositionIn(
     const length = span.textContent?.length ?? 0;
     const end = identity.end;
     if (!text) continue;
-    // A FIELD IS NOT A PLACE TO PUT A SELECTION END. `positionFromDomPoint` refuses every
-    // endpoint under `[data-docx-field]`, and an atom is one model unit wide, so a position
-    // at its START satisfied the `offset < end` test and was written inside it — where the
-    // reader then answered null and `semanticSelectionFromDom` collapsed the whole range to
-    // its other end. Shift-extending onto a page number lost the selection before the next
-    // command ran. Skipping the span keeps the boundary of the one before it, which reads
-    // back as exactly this offset.
-    // Counted as painted only AFTER the skip: a paragraph whose first span is a field — a
-    // note citation, a page number — has no earlier boundary to fall back to, and calling it
-    // painted made the refusal below swallow offset 0 as well. The whole range then failed to
-    // map, so Select All inside a footnote drew no highlight at all.
-    if ((span as HTMLElement).closest?.('[data-docx-field]')) continue;
+    // Exact field boundaries resolved above. Cache text has no editable positions.
+    // A field-only paragraph is not empty: an offset beyond its source range must fail,
+    // rather than falling back to the paragraph start.
+    if ((span as HTMLElement).closest?.('[data-docx-field]')) {
+      painted = true;
+      continue;
+    }
     painted = true;
     if (position.offset >= identity.start && position.offset <= end) {
       // A position on a boundary belongs to the span that STARTS there, so a caret between

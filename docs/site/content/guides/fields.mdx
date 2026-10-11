@@ -47,6 +47,8 @@ Saved results inside another field's instruction do not add text, line breaks, o
 
 By default, every field is one unit. Typing beside a field places the text before or after it, and Backspace removes the whole field.
 
+Caret positions and selections retain both field boundaries, including paragraphs that contain only fields. Computed field caches remain read-only.
+
 To let readers edit the saved result of a field, set `fieldResults` to `'editable'` when you create the editor:
 
 ```ts
