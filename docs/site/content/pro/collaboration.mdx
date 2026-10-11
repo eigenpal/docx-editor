@@ -826,7 +826,10 @@ This example wires `y-websocket` after your transport implements admission. It s
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { WebsocketProvider } from 'y-websocket';
-import { createDocumentCollaboration } from '@docx-editor.dev/pro/collaboration';
+import {
+  createDocumentCollaboration,
+  prepareCollaborationServerDocument,
+} from '@docx-editor.dev/pro/collaboration';
 
 function waitForSync(provider: WebsocketProvider): Promise<void> {
   if (provider.synced) return Promise.resolve();
@@ -847,6 +850,8 @@ function waitForSync(provider: WebsocketProvider): Promise<void> {
 
 async function openRoom(name: string) {
   const ydoc = new Y.Doc();
+  // Preserve formatting markers while the provider receives initial updates.
+  const stopPreparation = prepareCollaborationServerDocument(ydoc);
   const awareness = new Awareness(ydoc);
   const provider = new WebsocketProvider('wss://example.test', 'room-1', ydoc, {
     awareness,
@@ -858,6 +863,7 @@ async function openRoom(name: string) {
   function destroyResources() {
     provider.destroy();
     awareness.destroy();
+    stopPreparation();
     ydoc.destroy();
   }
 
@@ -947,6 +953,8 @@ Keep the editor mounted with the saved bytes until the room is ready. If the joi
 ## Create a headless replica
 
 `DocxEditor.createCollaborative` from `@docx-editor.dev/editor-api` opens a Document Object Model (DOM)-free replica.
+
+Prepare your `Y.Doc` before connecting a custom provider, then wait for its initial synchronization. Use the lifecycle in [Integrate a custom Yjs provider](#integrate-a-custom-yjs-provider). The following code uses that synchronized document and its awareness instance.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';

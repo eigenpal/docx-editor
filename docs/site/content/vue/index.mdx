@@ -30,19 +30,23 @@ The stylesheet styles the editor controls and document layout. Load it before yo
 
 ## Quickstart
 
+This example opens an empty document inside a container with a height:
+
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
 </script>
 
 <template>
-  <DocxEditor :document="docxBytes" />
+  <div style="height: 100vh">
+    <DocxEditor document="blank" />
+  </div>
 </template>
 ```
 
 `<DocxEditor>` is the packaged editor. It includes the title bar, menu, toolbar, navigation pane, hyperlink popover, context menu, and editable document.
 
-The editor has no server-rendered output. On Nuxt, render it inside `<ClientOnly>`. You can also load it with `defineAsyncComponent`.
+The editor uses browser APIs. On Nuxt, place its import and markup in a `.client.vue` component. See [Nuxt](/docs/2.x/frameworks/nuxt) for the complete setup.
 
 <VueEditorDemo />
 
@@ -65,18 +69,22 @@ Use the composition primitives to arrange toolbars, menus, and document controls
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
 </script>
 
 <template>
-  <DocxEditor.Root :document="bytes">
-    <DocxEditor.Toolbar />
-    <DocxEditor.Viewport>
-      <DocxEditor.Navigation />
-      <DocxEditor.Content />
-      <DocxEditor.HyperLink />
-      <DocxEditor.ContextMenu />
-    </DocxEditor.Viewport>
-  </DocxEditor.Root>
+  <div class="docx-editor" style="height: 100vh; display: flex; flex-direction: column">
+    <DocxEditor.Root :document="bytes">
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport style="flex: 1; min-height: 0">
+        <DocxEditor.Navigation />
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
 </template>
 ```
 
@@ -122,12 +130,34 @@ For setup, see [Export Markdown and PDF](/docs/2.x/guides/export) and [Print doc
 
 Use `@docx-editor.dev/editor-api/browser` to automate the open document. Pass the editor instance that the Vue adapter creates:
 
-```ts
+Render this component inside `DocxEditor.Root`. Wait for the editor before creating a runtime, and dispose the runtime after use:
+
+```vue
+<script setup lang="ts">
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
 
-const editor = useDocxEditor(); // null until the content is mounted
-const runtime = DocxEditor.createBrowser(editor.value!);
+const editor = useDocxEditor();
+
+async function inspectDocument() {
+  if (!editor.value) return;
+  const runtime = DocxEditor.createBrowser(editor.value);
+  try {
+    await runtime.run(async (context) => {
+      const body = context.document.body;
+      body.load('text');
+      await context.sync();
+      console.log(body.text);
+    });
+  } finally {
+    runtime.dispose();
+  }
+}
+</script>
+
+<template>
+  <button :disabled="!editor" @click="inspectDocument">Inspect document</button>
+</template>
 ```
 
 For object model details, see [Editing API](/docs/2.x/editor-api).

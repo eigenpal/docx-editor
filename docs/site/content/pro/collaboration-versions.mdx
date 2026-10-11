@@ -179,7 +179,7 @@ For a custom provider, perform the same checks in its connection admission flow.
 
 `readCollaborationFormatVersion` reads a room's recorded format version without joining, exporting, or changing its shared data. It can inspect incompatible rooms so you can identify which deployment they need.
 
-Check a saved snapshot in a temporary document before loading your live room:
+Prepare the live room before it receives any updates. Check a saved snapshot in a separate prepared document before loading it:
 
 ```ts
 import * as Y from 'yjs';
@@ -187,11 +187,13 @@ import {
   assertCollaborationFormatCompatibility,
   readCollaborationFormatVersion,
   readCollaborationDocument,
+  prepareCollaborationServerDocument,
 } from '@docx-editor.dev/pro/collaboration';
 
 export function loadRoom(live: Y.Doc, snapshot: Uint8Array): void {
   const candidate = new Y.Doc();
   try {
+    prepareCollaborationServerDocument(candidate);
     Y.applyUpdate(candidate, snapshot);
     const version = readCollaborationFormatVersion(candidate);
     assertCollaborationFormatCompatibility(version);
@@ -203,6 +205,8 @@ export function loadRoom(live: Y.Doc, snapshot: Uint8Array): void {
   }
 }
 ```
+
+Call `prepareCollaborationServerDocument(live)` once when you create the live room, before calling `loadRoom`. Keep it prepared until destruction.
 
 Version inspection is a small metadata read. It does not validate the document's content. The separate export check validates compatible content and costs a full document export. A failure leaves the saved snapshot intact. If decoding the snapshot throws an unrecognized error, treat it as damaged saved data. Keep the snapshot for recovery, as the example server does.
 
@@ -437,7 +441,7 @@ Use this procedure to replace a room while preserving the earlier room for recov
 1. Pause editing in the old deployment, including background jobs. Let accepted updates finish. Ask users with offline or unsynchronized edits to reconnect to that deployment or save their work for reconciliation.
 1. Back up each room and any separately stored files. Keep the application build that can open the backup. Export a DOCX with that build, as described in [Export rooms with the earlier build](#export-rooms-with-the-earlier-build).
 1. Reopen the exported DOCX. Check the expected text, formatting, comments, tracked changes, tables, and embedded content. Resolve missing work before proceeding. An export does not repair pre-existing document damage.
-1. Deploy compatible clients, room servers, agents, and export workers. Create the replacement room with `migrateCollaborationRoom({ state, exported, documentId })`, where `documentId` is the new room's ID. Store its state under a new storage key, then route your application's document link to that room.
+1. Deploy compatible clients, room servers, agents, and export workers. Create the replacement room with `migrateCollaborationRoom({ state, exported, documentId })`, where `documentId` is the new room's ID. Check the returned `ok` value and migration report before storing its state. If `ok` is false, keep the original room and resolve the reported failure. Store a successful result under a new storage key, then route your application's document link to that room.
 1. Use a new browser persistence key for the replacement room, if your app stores edits locally. Keep old tabs and queued updates attached to the old room. Do not copy saved room data or pending updates into the replacement room.
 1. Open the replacement room with two clients. Check editing and DOCX export before you resume normal access. Keep the old room and backups read-only until you accept the migration.
 

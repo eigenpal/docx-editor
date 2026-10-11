@@ -48,7 +48,7 @@ defineProps<{ bytes: Uint8Array }>();
 <template>
   <div class="docx-editor" style="height: 100vh">
     <DocxEditorRoot :document="bytes">
-      <DocxEditorViewport>
+      <DocxEditorViewport style="height: 100%">
         <DocxEditorContent />
       </DocxEditorViewport>
     </DocxEditorRoot>

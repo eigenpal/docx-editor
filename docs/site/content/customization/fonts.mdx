@@ -88,6 +88,8 @@ Keep the font configuration's identity stable after editing starts. Changing `Ro
 
 Combine packaged fonts with the Google Fonts provider. The `allow` list limits which Google families the editor can download.
 
+Use the provider's `onFailure` callback to report failed downloads. A font formatting command can succeed before its font bytes arrive.
+
 The provider fetches font files from a pinned Google Fonts catalog. It supplies bytes for text layout and browser rendering. A font change can change line breaks and pagination.
 
 Create the configuration once. Pass it to `DocxEditor.Root` through `fonts`.
@@ -272,7 +274,12 @@ export function FontEditor({ bytes }: { bytes: Uint8Array }) {
     let disposed = false;
     loadContractFonts().then(
       (value) => {
-        if (!disposed) setFonts(value);
+        if (disposed) return;
+        if (value.failures.length > 0) {
+          setFailed(true);
+          return;
+        }
+        setFonts(value);
       },
       () => {
         if (!disposed) setFailed(true);
@@ -304,7 +311,12 @@ let disposed = false;
 onMounted(() => {
   loadContractFonts().then(
     (value) => {
-      if (!disposed) fonts.value = value;
+      if (disposed) return;
+      if (value.failures.length > 0) {
+        failed.value = true;
+        return;
+      }
+      fonts.value = value;
     },
     () => {
       if (!disposed) failed.value = true;
