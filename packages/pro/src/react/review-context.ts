@@ -176,6 +176,6 @@ export const INERT_RAIL: ReviewRailValue = {
   measure: () => {},
   beginDraft: () => {},
   endDraft: () => {},
-  commentMarkers: 'initials',
+  commentMarkers: 'icon',
   revisionsIn: 'pane',
 };

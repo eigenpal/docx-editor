@@ -21,10 +21,15 @@ import './review-settings.css';
 const STORAGE_KEY = 'docx-editor-demo.review-pane';
 
 /**
- * The example's own starting settings: the pane stays closed, so comments show as miniature
- * markers in the margin until the reader opens one. The library default opens the pane.
+ * The example's own starting settings: the pane stays closed, so comments show as initials
+ * markers in the margin until the reader opens one, and tracked changes open in balloons.
+ * The library defaults open the pane, list changes in it, and draw comment icons.
  */
-export const EXAMPLE_REVIEW_PANE: ResolvedReviewPane = resolveReviewPane({ opening: 'manual' });
+export const EXAMPLE_REVIEW_PANE: ResolvedReviewPane = resolveReviewPane({
+  opening: 'manual',
+  revisionsIn: 'balloons',
+  commentMarkers: 'initials',
+});
 
 /** The saved settings over the example's defaults. Invalid saved settings are ignored. */
 export function storedReviewPane(): ResolvedReviewPane {

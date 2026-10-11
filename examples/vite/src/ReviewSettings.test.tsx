@@ -31,6 +31,7 @@ test('storedReviewPane starts closed and keeps only valid saved settings', () =>
   expect(storedReviewPane()).toBe(EXAMPLE_REVIEW_PANE);
   expect(EXAMPLE_REVIEW_PANE.opening).toBe('manual');
   expect(EXAMPLE_REVIEW_PANE.commentMarkers).toBe('initials');
+  expect(EXAMPLE_REVIEW_PANE.revisionsIn).toBe('balloons');
   localStorage.setItem(KEY, JSON.stringify({ commentMarkers: 'icon', stray: 'x' }));
   expect(storedReviewPane()).toMatchObject({ commentMarkers: 'icon', opening: 'manual' });
   localStorage.setItem(KEY, JSON.stringify({ commentMarkers: 'sticker' }));
@@ -67,7 +68,7 @@ test('the panel applies a setting, saves it, and Escape returns focus to the gea
   const dialog = controls.getByRole('dialog', { name: t('reviewSettings.title') });
   expect(gear.getAttribute('aria-expanded')).toBe('true');
   // Focus moves to the selected option of the first group.
-  expect(document.activeElement?.getAttribute('value')).toBe('pane');
+  expect(document.activeElement?.getAttribute('value')).toBe('balloons');
 
   await act(async () => {
     fireEvent.click(

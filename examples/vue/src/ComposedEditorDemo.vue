@@ -108,7 +108,8 @@ const showAdapterSwitcher =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
 
 const proModules = [
-  reviewModule(),
+  // Initials markers for comments and balloons for tracked changes, as in the React example.
+  reviewModule({ pane: { revisionsIn: 'balloons', commentMarkers: 'initials' } }),
   customNodesModule({
     nodes: [DEMO_CITATION],
     onDiagnostic: (diagnostic) => {

@@ -467,7 +467,7 @@ describe('the review sidebar', () => {
     const view = render(
       <DocxEditorRoot
         document={COMMENTED_SOURCE}
-        modules={[reviewModule()]}
+        modules={[reviewModule({ pane: { commentMarkers: 'initials' } })]}
         onReady={(editor) => {
           instance = editor as DocxEditorInstance;
         }}
@@ -490,7 +490,7 @@ describe('the review sidebar', () => {
     expect(card().hasAttribute('data-resolved-miniature')).toBe(true);
     act(() => editor.exec({ type: 'toggleReviewPane' }));
     const marker = view.getByTestId('review-marker');
-    // The default `commentMarkers: 'initials'` draws a resolved thread as the quiet check badge.
+    // `commentMarkers: 'initials'` draws a resolved thread as the quiet check badge.
     expect(marker.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
     act(() => fireEvent.click(marker));
     expect(card().open).toBe(true);

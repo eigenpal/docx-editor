@@ -48,6 +48,9 @@ export function readToolbarChildren<Key extends string>(
     // Last override for a slot wins, matching how later props win in a spread.
     if (slot && isDefaultSlot(slot)) overrides.set(slot, child as ReactElement);
     else if (slot && isTableSlot(slot)) tableOverrides.set(slot, child as ReactElement);
+    // Hiding a slot the bar does not draw leaves nothing, not an empty appended block.
+    else if (slot && isValidElement(child) && (child.props as { hidden?: unknown }).hidden === true)
+      continue;
     else appended.push(child);
   }
   return { overrides, tableOverrides, groups: [...groups.values()], appended };

@@ -898,7 +898,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'Comment authoring and review controls require the EigenPal Pro License. Opening and saving existing comments require no review module. The review rail shows threads, replies, and resolution controls. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands. Saving normalizes recognized empty comment parts when no markers or retained relationship dependencies remain. The commentMarkers review pane setting draws collapsed thread markers as author initials badges with a reply count and a resolved check mark, or as comment icons.',
+      'Comment authoring and review controls require the EigenPal Pro License. Opening and saving existing comments require no review module. The review rail shows threads, replies, and resolution controls. React hosts use `@docx-editor.dev/pro/react`; Vue hosts use `@docx-editor.dev/pro/vue` with the same engine commands. Saving normalizes recognized empty comment parts when no markers or retained relationship dependencies remain. The commentMarkers review pane setting draws collapsed thread markers as comment icons by default, or as author initials badges with a reply count and a resolved check mark.',
     docsLink: '/docs/2.x/pro/comments',
   },
   {

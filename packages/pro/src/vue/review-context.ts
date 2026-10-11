@@ -96,7 +96,7 @@ const INERT_RAIL: ReviewRailValue = {
   endDraft: () => {},
   expandedResolvedKey: null,
   setExpandedResolvedKey: () => {},
-  commentMarkers: 'initials',
+  commentMarkers: 'icon',
   revisionsIn: 'pane',
 };
 

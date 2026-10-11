@@ -91,6 +91,8 @@ export function readToolbarChildren<Key extends string>(
     // Last override for a slot wins, matching how later props win in a spread.
     if (slot && isDefaultSlot(slot)) overrides.set(slot, child);
     else if (slot && isTableSlot(slot)) tableOverrides.set(slot, child);
+    // Hiding a slot the bar does not draw leaves nothing, not an empty appended block.
+    else if (slot && vnodeFlag((child as VNode).props?.hidden)) continue;
     else appended.push(child);
   }
   return { overrides, tableOverrides, groups: [...groups.values()], appended };

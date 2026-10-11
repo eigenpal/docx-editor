@@ -24,6 +24,7 @@ import {
   checkCommentMarkers,
   checkReadOnlyBalloon,
   checkBalloonFollowsLayout,
+  checkCommentClickOpensPane,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
   checkReplyCards,
@@ -174,6 +175,15 @@ describe('React review layout preferences', () => {
       }
     });
   }
+
+  test('a click on commented text opens a closed pane', async () => {
+    const { view, editor } = mount();
+    try {
+      await checkCommentClickOpensPane(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
 
   test('useEditorEvent hears reviewItemReveal', async () => {
     const heard: { key: string; source: string }[] = [];

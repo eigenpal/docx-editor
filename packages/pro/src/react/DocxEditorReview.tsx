@@ -69,6 +69,7 @@ import { useReview, type ReviewItemView } from './useReview';
 import { useReviewAuthorInfo } from './review-author-styles';
 import { ResolvedDisclosureProvider } from './review-comment-resolution.tsx';
 import { hasFormattingBalloon } from './review-balloon-anchor.ts';
+import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 import type { ReviewProps } from './review-types.ts';
 import { ReviewContext, ReviewItemContext, type ReviewRailValue } from './review-context.ts';
 import {
@@ -236,6 +237,18 @@ function ReviewRoot({
     if (hidden || paneOpeningRef.current === 'manual') return;
     if (itemsRef.current.some((entry) => entry.key === key)) setReviewPaneOpen(true);
   });
+  // A click on commented text opens the closed pane on its card, as a click on its marker
+  // does: a reader's own press, so the `opening` setting does not hold it back.
+  const paneOpenRef = useRef(open);
+  paneOpenRef.current = open;
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!editor || !rail || documentAbsent || hidden) return undefined;
+    return listenForCommentClicks(rail, editor, (key) => {
+      if (paneOpenRef.current) return;
+      if (itemsRef.current.some((entry) => entry.key === key)) setReviewPaneOpen(true);
+    });
+  }, [editor, documentAbsent, hidden, setReviewPaneOpen]);
   const configuredAuthor = useSyncExternalStore(
     useCallback((notify) => editor?.on('selectionChange', notify) ?? (() => {}), [editor]),
     () => editor?.getConfiguredAuthor() ?? null,

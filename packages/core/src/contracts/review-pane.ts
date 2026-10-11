@@ -80,7 +80,7 @@ export interface ReviewPaneOptions {
   readonly overflow?: ReviewPaneOverflow;
   /** Default `'pane'`. */
   readonly revisionsIn?: RevisionDisplay;
-  /** Default `'initials'`. */
+  /** Default `'icon'`. */
   readonly commentMarkers?: CommentMarkerStyle;
 }
 
@@ -105,7 +105,7 @@ export const DEFAULT_REVIEW_PANE: ResolvedReviewPane = Object.freeze({
   opening: 'auto',
   overflow: 'float',
   revisionsIn: 'pane',
-  commentMarkers: 'initials',
+  commentMarkers: 'icon',
 });
 
 const ALLOWED: { readonly [K in keyof ResolvedReviewPane]: readonly string[] } = {
