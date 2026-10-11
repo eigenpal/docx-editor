@@ -49,7 +49,14 @@ if (options.help) {
 const directory = path.resolve(options['data-dir']);
 let exported = 0;
 let failed = 0;
-for (const name of (await readdir(directory)).sort()) {
+const names = await readdir(directory).catch((error: NodeJS.ErrnoException) => {
+  console.error(
+    `Cannot read room directory ${directory} (${error.code ?? 'unknown error'}). ` +
+      'Set --data-dir to the stopped server’s existing data directory and check read permissions.'
+  );
+  process.exit(1);
+});
+for (const name of names.sort()) {
   const room = name.endsWith('.ydoc') ? name.slice(0, -'.ydoc'.length) : null;
   if (!room || !ROOM_ID.test(room)) continue;
   const document = new Y.Doc();

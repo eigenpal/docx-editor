@@ -33,7 +33,7 @@ Store the room ID in your application state or URL. Do not create a new ID durin
 
 ## Add a collaborative editor
 
-Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX bytes. The first editor creates the room. Later editors join its document.
+Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX bytes. The first editor creates the room. Later editors join its document. Use a different `actorId` for each active editor, including tabs opened by the same user.
 
 <FrameworkTabs>
 <Framework value="react">

@@ -256,11 +256,13 @@ To migrate the rooms, follow these steps:
 1. Export every room with the build that created it, as described in [Export rooms with the earlier build](#export-rooms-with-the-earlier-build). Store each export with the digest of the state it was exported from.
 1. With the new build, run the migration with writes turned off, as described in [Migrate each room](#migrate-each-room). Check the result for every room.
 1. If any room returns an outcome other than `would-migrate` or `current`, stop here. No room has changed, so you can start the servers with the earlier build again. Resolve each such room as the outcomes table describes, then run this step again.
-1. If every room passes, run the migration again with writes turned on.
+1. If every room passes, run the migration again with writes turned on. Check every result before starting any server.
 1. Deploy the new build to the servers, with `prepareCollaborationServerDocument` and `checkCollaborationRoomGeneration` in place. If your app keeps room updates in browser storage, change the storage key in the new build, so that it does not load updates of the earlier room.
 1. Start the servers. Open a few migrated rooms with two clients, edit them, and export them.
 
-Keep the backups until you accept the migration.
+Keep the backups and the compatible earlier build until you accept the migration.
+
+The write run is atomic per room, not across all rooms. If it stops, keep every server stopped. Resolve the failure and resume the migration. To cancel instead, restore every migrated room from its backup before starting the earlier build.
 
 #### Export rooms with the earlier build
 
@@ -303,10 +305,13 @@ The following function migrates one room in place with the new build. `storage` 
 
 ```ts
 import { createHash } from 'node:crypto';
+import * as Y from 'yjs';
 import {
   CollaborationSchemaError,
   collaborationMigrationNeed,
   migrateCollaborationRoom,
+  prepareCollaborationServerDocument,
+  readCollaborationDocument,
   type CollaborationMigrationReport,
 } from '@docx-editor.dev/pro/collaboration';
 
@@ -323,7 +328,18 @@ async function migrateRoom(roomId: string, dryRun: boolean) {
   const state = await storage.readRoom(roomId);
   try {
     const need = collaborationMigrationNeed(state);
-    if (need !== 'earlier-format') return need;
+    if (need === 'later-format') return need;
+    if (need === 'current') {
+      const document = new Y.Doc();
+      try {
+        prepareCollaborationServerDocument(document);
+        Y.applyUpdate(document, state);
+        readCollaborationDocument(document);
+        return 'current';
+      } finally {
+        document.destroy();
+      }
+    }
     const saved = await storage.readExport(roomId);
     if (!saved) return 'no-export';
     const digest = createHash('sha256').update(state).digest('hex');
@@ -359,7 +375,7 @@ function logReport(roomId: string, report: CollaborationMigrationReport) {
 }
 ```
 
-A room in the current format returns `current`, so you can run the migration again after an interruption. Write each room's new state in one atomic write, so an interruption leaves either the earlier state or the new one.
+The example validates current-format documents before returning `current`. The format check alone does not establish that a document can open. You can run the migration again after an interruption. Write each room's new state in one atomic write, so an interruption leaves either the earlier state or the new one.
 
 The function returns one of these outcomes:
 
@@ -402,9 +418,10 @@ For measurement commands, see the [migration memory benchmark](https://github.co
 
 To return a room to the earlier build, follow these steps:
 
-1. Stop the servers that run the new build.
+1. Stop the servers and background jobs that run the new build. Preserve unsynchronized client work before closing sessions.
 1. If people edited the room after its migration, export it with the new build, and keep the DOCX. Those edits do not transfer back.
 1. Restore the backup of the room's earlier state.
+1. Use a fresh browser persistence key for the restored room. Do not replay updates from the migrated generation.
 1. Start the servers with the earlier build.
 
 The example server keeps each backup as `<room>.ydoc.previous`.
@@ -467,7 +484,7 @@ Before admitting production traffic, verify these outcomes in a test deployment:
 - An incompatible saved room is refused without being changed or deleted.
 - Offline work remains recoverable when a user returns after an upgrade.
 - Migrated rooms open with two clients, accept edits, and export the expected document.
-- `collaborationMigrationNeed` returns `current` for every saved room.
+- `collaborationMigrationNeed` returns `current` for every saved room, and `readCollaborationDocument` validates each room's content.
 - A tab of the earlier build is refused, and a tab of the new build that held the earlier room rejoins after `room-generation-changed`.
 
 ## Next steps

@@ -20,12 +20,33 @@ import {
   tocEntriesFromDocument,
 } from './collaboration-review-helpers.ts';
 
-const AUTHOR = 'Demo Reviewer';
+const AUTHOR = 'Alice';
 const CLEAN = 'review-clean-demo.docx';
 const EDITABLE = 'editable-sample.docx';
 const HEADER = 'review-header-demo.docx';
 const TABLE = 'table-cell-selection-drag.docx';
 const TOC = 'paragraph-acceptance.docx';
+
+test('opening a comment changes only the local review display', async ({
+  browser,
+  page: creator,
+}) => {
+  const joiner = await connectedPeers(browser, creator, 'review-nav-demo.docx');
+  const localRail = creator.getByTestId('review-rail');
+  const remoteRail = joiner.getByTestId('review-rail');
+  await expect(localRail).not.toHaveAttribute('data-open', '');
+  await expect(remoteRail).not.toHaveAttribute('data-open', '');
+
+  const highlight = creator.locator('.docx-comment-band').first();
+  await expect(highlight).toBeVisible();
+  const box = await highlight.boundingBox();
+  if (!box) throw new Error('Comment highlight is missing');
+  await creator.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+
+  await expect(localRail).toHaveAttribute('data-open', '');
+  await expect(localRail.getByTestId('review-card').first()).toBeVisible();
+  await expect(remoteRail).not.toHaveAttribute('data-open', '');
+});
 
 test('adding a comment streams text and author to the peer', async ({ browser, page: creator }) => {
   const joiner = await connectedPeers(browser, creator, CLEAN);

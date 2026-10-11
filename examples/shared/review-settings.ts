@@ -16,7 +16,7 @@ const STORAGE_KEY = 'docx-editor-demo.review-pane';
 
 /**
  * The examples' own starting settings: the pane stays closed, so comments show as initials
- * markers in the margin until the reader opens one, and tracked changes open in balloons.
+ * markers in the margin until the reader opens one, and tracked changes open in tracked change balloons.
  * The library defaults open the pane, list changes in it, and draw comment icons.
  */
 export const EXAMPLE_REVIEW_PANE: ResolvedReviewPane = resolveReviewPane({

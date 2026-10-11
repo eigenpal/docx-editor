@@ -65,7 +65,7 @@ const change = async (run: () => void) => {
 };
 
 describe('React review layout preferences', () => {
-  test('comment markers draw initials badges by default and icons on request', async () => {
+  test('comment markers draw icons by default and initials badges on request', async () => {
     const { view, editor } = mount();
     try {
       await checkCommentMarkers(view.container, editor(), change);

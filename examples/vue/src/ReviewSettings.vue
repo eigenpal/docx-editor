@@ -100,7 +100,7 @@
 // The review settings panel, the Vue twin of the React example's `ReviewSettings.tsx`. The
 // model is shared in `examples/shared/review-settings.ts`. Every control writes through
 // `editor.setReviewPaneOptions()` and reads back from `snapshot.reviewPane`.
-import { nextTick, onBeforeUnmount, ref, watch, type CSSProperties } from 'vue';
+import { nextTick, onBeforeUnmount, ref, useId, watch, type CSSProperties } from 'vue';
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
 import type { ResolvedReviewPane, ReviewPaneOptions } from '@docx-editor.dev/core/editor';
 import { exampleText as t } from '../../shared/example-text';
@@ -138,7 +138,7 @@ const open = ref(false);
 const rootRef = ref<HTMLDivElement | null>(null);
 const triggerRef = ref<HTMLButtonElement | null>(null);
 const panelRef = ref<HTMLElement | null>(null);
-const uid = `review-settings-${Math.random().toString(36).slice(2, 8)}`;
+const uid = `review-settings-${useId()}`;
 const titleId = `${uid}-title`;
 const panelId = `${uid}-panel`;
 

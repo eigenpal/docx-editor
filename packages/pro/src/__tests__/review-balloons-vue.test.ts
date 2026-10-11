@@ -41,7 +41,7 @@ async function ready(mounted: { container: HTMLElement }) {
 }
 
 describe('Vue review layout preferences', () => {
-  test('comment markers draw initials badges by default and icons on request', async () => {
+  test('comment markers draw icons by default and initials badges on request', async () => {
     const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });
     try {
       await ready(mounted);

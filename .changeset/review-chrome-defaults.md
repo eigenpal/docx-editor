@@ -2,4 +2,4 @@
 '@docx-editor.dev/pro': minor
 ---
 
-Remove the Track changes options button from the default toolbar, and open the closed review pane when you click text with an open comment.
+Keep comment icons as the default markers, move Track changes options to the Review menu, and open comments when you click their text. Preserve text selection and handled link clicks.

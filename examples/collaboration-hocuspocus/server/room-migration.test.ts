@@ -124,6 +124,18 @@ describe('migrating the rooms the server stores', () => {
     expect(await stateOf(ROOMS.earlier)).toEqual(migrated);
   });
 
+  test('a current-format room with no document fails validation without writes', async () => {
+    await storedRooms();
+    const invalid = roomOfSchema(0);
+    await writeFile(path.join(directory, `${ROOMS.current}.ydoc`), invalid);
+    const files = (await readdir(directory)).sort();
+    const results = await migrateStoredRooms(directory, { dryRun: true });
+    expect(results.find((result) => result.room === ROOMS.current)!.outcome).toBe('error');
+    expect(allRoomsServable(results)).toBe(false);
+    expect(await stateOf(ROOMS.current)).toEqual(invalid);
+    expect((await readdir(directory)).sort()).toEqual(files);
+  });
+
   test('a room edited after its export is refused and left as it is', async () => {
     const states = await storedRooms();
     // People edited the room after the export: its state is no longer the one exported.

@@ -6,7 +6,6 @@ import { PAINTED_PAGE } from './painted-page.ts';
 const VUE_URL = 'http://localhost:5274/';
 const CLEAN_URL = `${VUE_URL}?fixture=review-clean-demo.docx`;
 const COMMENTED_URL = `${VUE_URL}?fixture=review-nav-demo.docx`;
-const SCROLLER = '.docx-editor__scroll-container';
 
 async function waitForEditor(page: Page, url = VUE_URL): Promise<void> {
   await page.goto(url, { waitUntil: 'domcontentloaded' });
@@ -15,7 +14,7 @@ async function waitForEditor(page: Page, url = VUE_URL): Promise<void> {
 }
 
 async function openContextMenu(page: Page): Promise<{ x: number; y: number }> {
-  const fragment = page.locator('.docx-paragraph-fragment').first();
+  const fragment = page.locator('.docx-paragraph-fragment [data-start]').first();
   await expect(fragment).toBeVisible({ timeout: 15_000 });
   const box = await fragment.boundingBox();
   if (!box) throw new Error('paragraph fragment missing');
@@ -28,7 +27,7 @@ async function openContextMenu(page: Page): Promise<{ x: number; y: number }> {
 
 async function ensureReviewPaneOpen(page: Page): Promise<void> {
   const rail = page.locator('[data-testid="review-rail"]');
-  await expect(rail).toBeVisible({ timeout: 15_000 });
+  await expect(rail).toBeAttached({ timeout: 15_000 });
   if (await rail.evaluate((node) => node.hasAttribute('data-open'))) return;
   const toggle = page.locator('.docx-toolbar [data-slot="review.comments"]').first();
   await expect(toggle).toBeVisible();
@@ -56,9 +55,8 @@ test.describe('Vue review chrome', () => {
     page,
   }) => {
     await waitForEditor(page, CLEAN_URL);
-    const scroller = page.locator(SCROLLER);
-    await scroller.click();
-    await page.keyboard.press('Control+A');
+    await page.locator('.docx-paragraph-fragment').first().click();
+    await page.keyboard.press('ControlOrMeta+A');
     await openContextMenu(page);
     const addComment = page.getByRole('menuitem', { name: /Add a comment/i });
     await expect(addComment).not.toHaveAttribute('aria-disabled', 'true');
@@ -118,16 +116,17 @@ test.describe('Vue review chrome', () => {
     await page.goto(COMMENTED_URL, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('composed-mount')).toBeVisible();
     await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
+    await ensureReviewPaneOpen(page);
     await expect(page.locator('[data-testid="review-card"]')).toHaveCount(1, { timeout: 15_000 });
-    await expect(page.locator('[data-testid="review-rail"]')).toContainText('Check this.');
+    await expect(page.getByTestId('review-card')).toBeVisible();
+    await expect(page.getByTestId('review-card')).toContainText('Check this.');
   });
 
   test('Add a comment opens a draft and submits through the rail', async ({ page }) => {
     await waitForEditor(page, CLEAN_URL);
     await ensureReviewPaneOpen(page);
-    const scroller = page.locator(SCROLLER);
-    await scroller.click();
-    await page.keyboard.press('Control+A');
+    await page.locator('.docx-paragraph-fragment').first().click();
+    await page.keyboard.press('ControlOrMeta+A');
     await page.locator('[data-testid="review-add-comment"]').click();
     await expect(page.locator('[data-testid="review-draft"]')).toBeVisible();
     const input = page.locator('[data-testid="review-draft-input"]');

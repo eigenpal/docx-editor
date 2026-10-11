@@ -110,7 +110,7 @@ const showAdapterSwitcher =
 
 const proModules = [
   // The review settings panel's saved choice, or the example's start: initials markers for
-  // comments and balloons for tracked changes, as in the React example.
+  // comments and tracked change balloons, as in the React example.
   reviewModule({ pane: storedReviewPane() }),
   customNodesModule({
     nodes: [DEMO_CITATION],

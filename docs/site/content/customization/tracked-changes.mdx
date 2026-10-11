@@ -13,7 +13,7 @@ The review module shows comments and tracked changes in a review pane beside the
 | Setting | Values | Default | What it controls |
 | --- | --- | --- | --- |
 | `revisionsIn` | `pane`, `balloons` | `pane` | Where tracked changes open. |
-| `commentMarkers` | `initials`, `icon` | `initials` | How a collapsed comment marker looks. |
+| `commentMarkers` | `initials`, `icon` | `icon` | How a collapsed comment marker looks. |
 | `opening` | `auto`, `manual` | `auto` | When the review pane opens by itself. |
 | `overflow` | `float`, `shrinkPage`, `scroll` | `float` | What the open pane does when it does not fit the page. |
 
@@ -23,7 +23,7 @@ The settings belong to one editor instance. The editor never saves them into the
 
 ### Understand the default display
 
-With no settings, the review pane lists comments and tracked changes as cards beside the text that they belong to. The pane opens when a document with review items loads, and when you make a tracked change while it is closed. A collapsed comment marker shows the initials of the thread author.
+With no settings, the review pane lists comments and tracked changes as cards beside the text that they belong to. The pane opens when a document with review items loads, and when you make a tracked change while it is closed. A collapsed comment marker shows the comment icon. Set `commentMarkers: 'initials'` to show the thread author’s initials. Clicking text with an open comment opens the review pane. Selecting text leaves the pane closed.
 
 The following example mounts the default display. `DocxEditorReview` renders the pane, its cards, its markers, and its tracked change balloons, so every example on this page includes it.
 

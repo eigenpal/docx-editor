@@ -77,6 +77,8 @@ Branch on `failure.code` or `error.code` instead of matching message strings. `e
 
 The `<DocxEditor>` host accepts `document` and `modules`. You do not need `DocxEditor.Root` for collaboration.
 
+Pass review and custom-node modules through the hook’s `modules` option. Pass its returned `modules` to the editor. The hook adds `collaborationModule`; adding another collaboration module throws a configuration error.
+
 <FrameworkTabs>
 <Framework value="react">
 
@@ -145,13 +147,13 @@ const props = defineProps<{
 }>();
 
 const editorRef = ref<DocxEditorRef | null>(null);
-const { document, modules, session, error, leave } = useWebrtcCollaboration({
+const { document, modules, session, error, leave } = useWebrtcCollaboration(() => ({
   room: {
     roomId: props.roomId,
     identity: { actorId: props.actorId, name: props.name },
     bootstrap: { kind: 'create-or-join', document: props.bytes },
   },
-});
+}));
 
 async function leaveRoom() {
   // `leave` requires current bytes.
@@ -187,9 +189,11 @@ Omit `room` when the user chooses to share or join later. Then call `connect` wi
 
 If you change the room, server, bootstrap kind, or `actorId` in `room`, the hook leaves the old room and connects to the new one. If you set `room` to `null`, the hook leaves. A room you open with `connect` stays connected until you call `leave`.
 
+Before changing rooms, save local work and check `unsyncedChanges`. Automatic room changes do not preserve the previous editor’s bytes.
+
 The editor reads `modules` at construction time. Set `key` to the session `sessionId`, as shown in the examples. Without `key`, a connection after mount does not register the collaboration module. The editor continues local editing, and no changes replicate. The session logs a warning if you create it without attaching it.
 
-The hook also returns `ydoc` and `provider`. Both values are `null` while the connection is pending. Use them for persistence or direct provider access. `rejoin(bytes)` leaves with saved bytes and rejoins the same room after an `error` status.
+The hook also returns `ydoc` and `provider`. Both values are `null` before the first room connects. Use them for persistence or direct provider access. `rejoin(bytes)` leaves with saved bytes and rejoins the same room after an `error` status.
 
 The default Pro entry exports `collaborationModule` without a network provider. Import `@docx-editor.dev/pro/collaboration` for Yjs factories. Import `@docx-editor.dev/pro/collaboration/webrtc` for room helpers such as `createCollaborationRoomId`.
 
@@ -490,7 +494,7 @@ The session accepts edits while its status is `disconnected`. It merges buffered
 
 Buffered edits live in the browser's memory until they reach the room. A reload, an unmount, or a change of the `room` option drops them. To keep them across reloads, persist the Yjs document. For example, attach `y-indexeddb` to the `ydoc` you pass to `useDocumentCollaboration`.
 
-`useHocuspocusCollaboration` and `useWebrtcCollaboration` return `unsyncedChanges`, the number of local changes that no one else has yet:
+`useHocuspocusCollaboration` and `useWebrtcCollaboration` return `unsyncedChanges`. Its meaning depends on the transport:
 
 - With Hocuspocus, it counts the changes that the server has not confirmed.
 - With WebRTC, it counts the changes made while no peer was connected. A WebRTC room has no server, so these changes exist only in your browser until a peer connects and syncs. To warn users before they close a page with unsent edits, add a `beforeunload` listener while the count is above zero:
@@ -505,6 +509,8 @@ useEffect(() => {
   return () => window.removeEventListener('beforeunload', warn);
 }, [unsyncedChanges]);
 ```
+
+A zero count does not confirm durable server storage. Persist room updates on the server and handle storage failures separately.
 
 To pause editing while disconnected, set `offlineEditing: false` in the `room` or `connect` options. Every room factory and hook accepts this option. The session refuses edits in the `error` status in both cases.
 
@@ -562,7 +568,9 @@ export function ServerBackedEditor({
 }
 ```
 
-`token` reaches the server's `onAuthenticate` hook. If tokens expire, pass a callback instead of a string. The provider calls it for each reconnection.
+`token` reaches the server’s `onAuthenticate` hook. If tokens expire, pass a callback that reads the latest credential. The provider calls it for each reconnection.
+
+Changing a token string in `room` does not reconnect the hook. `rejoin` reuses the options from the last connection attempt. Use a token callback for renewal, or preserve local work and call `connect` with updated credentials.
 
 The provider preserves recognized collaboration failure codes from the server both during the initial join and after reconnecting. For `collaboration-format-mismatch`, follow the [upgrade guide](/docs/2.x/pro/collaboration-versions); refreshing credentials cannot resolve a version mismatch.
 
@@ -806,7 +814,13 @@ After admission, follow these integration rules:
 3. Send provider connection events to `session.setTransportStatus`. Without this call, the status remains `ready` during an outage.
 4. Some transports limit message size. The WebRTC wrapper provides message framing. A WebSocket provider does not need it.
 
-This example wires `y-websocket` after your transport implements admission. It shows session setup; it does not implement server authentication or generation checks:
+For this example, install the WebSocket provider:
+
+```bash
+npm install y-websocket
+```
+
+This example wires `y-websocket` after your transport implements admission. It shows session setup; it does not implement server authentication or generation checks. It disables cross-tab broadcasts because those updates bypass server admission. Enable them only if your integration checks compatibility and room generation on that path too:
 
 ```ts
 import * as Y from 'yjs';
@@ -814,32 +828,79 @@ import { Awareness } from 'y-protocols/awareness';
 import { WebsocketProvider } from 'y-websocket';
 import { createDocumentCollaboration } from '@docx-editor.dev/pro/collaboration';
 
-const ydoc = new Y.Doc();
-const awareness = new Awareness(ydoc);
-const provider = new WebsocketProvider('wss://example.test', 'room-1', ydoc, { awareness });
-declare const currentUser: { id: string; name: string };
-const identity = { actorId: currentUser.id, name: currentUser.name };
+function waitForSync(provider: WebsocketProvider): Promise<void> {
+  if (provider.synced) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      provider.off('sync', onSync);
+      reject(new Error('Initial synchronization timed out'));
+    }, 30_000);
+    function onSync(synced: boolean) {
+      if (!synced) return;
+      clearTimeout(timer);
+      provider.off('sync', onSync);
+      resolve();
+    }
+    provider.on('sync', onSync);
+  });
+}
 
-await new Promise((resolve) => provider.once('sync', resolve));
+async function openRoom(name: string) {
+  const ydoc = new Y.Doc();
+  const awareness = new Awareness(ydoc);
+  const provider = new WebsocketProvider('wss://example.test', 'room-1', ydoc, {
+    awareness,
+    disableBc: true,
+  });
+  // Each active editor needs a distinct actor, including the same user's tabs.
+  const identity = { actorId: crypto.randomUUID(), name };
 
-const room = await createDocumentCollaboration({
-  ydoc,
-  awareness,
-  documentId: 'room-1',
-  identity,
-  bootstrap: { kind: 'join' },
-});
+  function destroyResources() {
+    provider.destroy();
+    awareness.destroy();
+    ydoc.destroy();
+  }
 
-provider.on('status', ({ status }: { status: string }) => {
-  room.session.setTransportStatus(
-    status === 'connected' ? 'ready' : 'disconnected',
-    status === 'connected' ? undefined : 'transport-disconnected',
-    status === 'connected' ? undefined : 'websocket disconnected'
-  );
-});
+  try {
+    await waitForSync(provider);
+    const room = await createDocumentCollaboration({
+      ydoc,
+      awareness,
+      documentId: 'room-1',
+      identity,
+      bootstrap: { kind: 'join' },
+    });
+
+    function onStatus({ status }: { status: string }) {
+      const connected = status === 'connected';
+      room.session.setTransportStatus(
+        connected ? 'ready' : 'disconnected',
+        connected ? undefined : 'transport-disconnected'
+      );
+    }
+    provider.on('status', onStatus);
+    onStatus({ status: provider.wsconnected ? 'connected' : 'disconnected' });
+
+    return {
+      room,
+      destroy() {
+        provider.off('status', onStatus);
+        room.destroy();
+        destroyResources();
+      },
+    };
+  } catch (error) {
+    destroyResources();
+    throw error;
+  }
+}
+
+const connection = await openRoom('Alex Kim');
+// Mount the editor with connection.room.document and its collaboration module.
+// Call connection.destroy() when the host leaves or unmounts.
 ```
 
-The second argument is a `CollaborationFailureCode`, not free text. Use `transport-disconnected` for a socket that retries itself and `authentication-failed` for a credential the server rejected. Those need opposite responses from the host, so they must not share a code. Put your provider's own wording in the third argument.
+The second argument to `setTransportStatus` is a `CollaborationFailureCode`. Put diagnostic text in the third argument. Report reconnecting sockets as `disconnected` with `transport-disconnected`. Report rejected credentials as `error` with `authentication-failed`; a disconnected status alone still permits offline editing. Map your transport’s authentication and generation refusals separately from its connection events.
 
 The factory rejects with a typed `CollaborationSchemaError`. Handle these codes:
 
@@ -847,7 +908,7 @@ The factory rejects with a typed `CollaborationSchemaError`. Handle these codes:
 - `initialization-timeout` or `initialization-aborted`: No synchronized room appeared, or your `signal` aborted the join.
 - `already-initialized`: A `create` bootstrap found a room that is already seeded. Use `join` or `create-or-join`.
 - `document-id-mismatch`: The room has a different `documentId`.
-- `protocol-version-mismatch` or `schema-version-mismatch`: The room is incompatible with this app deployment.
+- `collaboration-format-mismatch`, `protocol-version-mismatch`, or `schema-version-mismatch`: The room is incompatible with this app deployment.
 - `baseline-too-large`, `invalid-baseline`, or `no-main-document-part`: The seed bytes cannot open as a document.
 - `concurrent-seed`, `blob-digest-mismatch`, or a resource-limit code: The room cannot be used.
 
@@ -875,8 +936,8 @@ Custom ports and direct store integrations must call `room.session.gateOperation
 
 For a terminal error, resolve the cause, then recreate the session:
 
-1. If the editor mounted successfully, preserve local work with `await editor.save()`.
-2. Call `room.destroy()`, then destroy the provider.
+1. Save the editor’s document and preserve the bytes in a confirmed download or durable application storage.
+2. Call `room.destroy()`, then destroy the provider, awareness instance, and Yjs document.
 3. Create a new `Y.Doc`, `Awareness`, and provider.
 4. Connect the provider.
 5. Call `createDocumentCollaboration` with `bootstrap: { kind: 'join' }`.
@@ -895,7 +956,7 @@ const room = await createDocumentCollaboration({
   ydoc,
   awareness,
   documentId: 'room-1',
-  identity: { actorId: 'agent', name: 'Agent', role: 'agent' },
+  identity: { actorId: crypto.randomUUID(), name: 'Agent', role: 'agent' },
   bootstrap: { kind: 'join' },
 });
 
@@ -904,7 +965,9 @@ const runtime = await DocxEditor.createCollaborative(room.document, room.session
 });
 ```
 
-When the job finishes, call `runtime.dispose()` and then `room.destroy()` to release the runtime and stop the replica.
+Before cleanup, wait for your provider to acknowledge outgoing updates. `context.sync()` commits to the local replica; it does not confirm transport delivery or durable storage.
+
+Use `try`/`finally` to call `runtime.dispose()`, then `room.destroy()`. For `createDocumentCollaboration`, also destroy the provider, awareness instance, and Yjs document that you created. The Hocuspocus and WebRTC room factories own these resources and destroy them with the room.
 
 ## Let a server agent propose redlines
 

@@ -317,6 +317,7 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: 'formattingBar.groups.format';
 }, {
     readonly controls: readonly [{
+        readonly defaultToolbar: false;
         readonly id: 'revisionMarkup';
         readonly labelKey: 'revisionMarkup.title';
         readonly paths: readonly string[];

@@ -7,9 +7,12 @@
 
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import * as Y from 'yjs';
 import {
   collaborationMigrationNeed,
   migrateCollaborationRoom,
+  prepareCollaborationServerDocument,
+  readCollaborationDocument,
   type CollaborationMigrationReport,
 } from '@docx-editor.dev/pro/collaboration';
 import { ROOM_ID, stateDigest, writeAtomically } from './room-files.ts';
@@ -56,6 +59,15 @@ export async function migrateStoredRooms(
       const state = new Uint8Array(await readFile(stateFile));
       const need = collaborationMigrationNeed(state);
       if (need === 'current') {
+        // A matching format does not prove that the stored document can open.
+        const document = new Y.Doc();
+        try {
+          prepareCollaborationServerDocument(document);
+          Y.applyUpdate(document, state);
+          readCollaborationDocument(document);
+        } finally {
+          document.destroy();
+        }
         results.push({ room, outcome: 'current' });
         continue;
       }

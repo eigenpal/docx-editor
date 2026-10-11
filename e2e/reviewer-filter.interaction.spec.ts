@@ -22,10 +22,76 @@ async function openReviewerMenu(page: Page) {
 }
 
 for (const adapter of ADAPTERS) {
+  test(`${adapter.name} review settings preserve choices and restore defaults`, async ({
+    page,
+  }) => {
+    await waitForEditor(page, adapter.url);
+    const trigger = page.getByRole('button', { name: 'Review settings', exact: true });
+    await trigger.click();
+    const dialog = page.getByRole('dialog', { name: 'Review display' });
+    await expect(dialog).toBeVisible();
+    const panelId = await dialog.getAttribute('id');
+    expect(panelId).toBeTruthy();
+    await expect(trigger).toHaveAttribute('aria-controls', panelId!);
+    const trackedChanges = dialog.getByRole('radio', {
+      name: 'Tracked change balloons',
+      exact: true,
+    });
+    await expect(trackedChanges).toBeChecked();
+    await expect(trackedChanges).toBeFocused();
+    await dialog.getByRole('radio', { name: 'Review pane', exact: true }).check();
+    await dialog.getByRole('radio', { name: 'Icon', exact: true }).check();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
+    await trigger.click();
+    await expect(dialog.getByRole('radio', { name: 'Review pane', exact: true })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: 'Icon', exact: true })).toBeChecked();
+    await dialog.getByRole('button', { name: 'Reset to defaults' }).click();
+    await expect(trackedChanges).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: 'Initials', exact: true })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: 'Manual', exact: true })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: 'Float', exact: true })).toBeChecked();
+    expect(
+      await page.evaluate(() => localStorage.getItem('docx-editor-demo.review-pane'))
+    ).toBeNull();
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await trigger.click();
+    await expect(dialog).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+      .toBe(true);
+    const panelBox = await dialog.boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(panelBox!.x).toBeGreaterThanOrEqual(0);
+    expect(panelBox!.x + panelBox!.width).toBeLessThanOrEqual(390);
+    await dialog.getByRole('radio', { name: 'Review pane', exact: true }).check();
+    await expect(dialog.getByRole('radio', { name: 'Review pane', exact: true })).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+  });
+
   test(`${adapter.name} filters markup, document flow, and review cards by author`, async ({
     page,
   }) => {
     await waitForEditor(page, adapter.url);
+    // These assertions exercise sidebar cards. The example starts with tracked change balloons.
+    await page.getByRole('button', { name: 'Review settings', exact: true }).click();
+    const settings = page.getByRole('dialog', { name: 'Review display' });
+    await settings.getByRole('radio', { name: 'Review pane', exact: true }).check();
+    await settings.getByRole('button', { name: 'Close review settings' }).click();
+    const rail = page.getByTestId('review-rail');
+    if (!(await rail.evaluate((node) => node.hasAttribute('data-open')))) {
+      await page.locator('.docx-toolbar [data-slot="review.comments"]').first().click();
+    }
+    await expect(rail).toHaveAttribute('data-open', '');
     const pages = page.locator('.docx-pages');
     const aliceMarkup = page.locator(
       '.docx-revision-insert[data-review-author="Alice Reviewer"], .docx-revision-delete[data-review-author="Alice Reviewer"]'
