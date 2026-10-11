@@ -11,6 +11,7 @@ import { readNumPr, withNumberingStyleLinks } from './list-resolve.ts';
 import { buildNumberingIndex, resolveNumberingLevel } from './numbering-index.ts';
 import { numberingParagraphProperties } from './numbering-paragraph-properties.ts';
 import { propertyContainer } from '../store/store/direct-properties.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import type { FormattingDisplayMode } from '../store/store/formattable-runs.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
@@ -52,8 +53,12 @@ function withParagraphStyle(pPr: OoxmlNode | undefined, styleId: string): OoxmlN
   const pStyle = {
     kind: 'generic',
     id: '',
+    namespaceUri: WML_NAMESPACE_URI,
     localName: 'pStyle',
-    attributes: [{ localName: 'val', value: styleId }],
+    prefix: 'w',
+    attributes: [
+      { namespaceUri: WML_NAMESPACE_URI, localName: 'val', prefix: 'w', value: styleId },
+    ],
     children: [],
   };
   return {
