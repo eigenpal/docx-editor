@@ -253,3 +253,24 @@ test('a space that opens a field result does not let the word before it compress
     for (const text of texts.slice(1)) expect(text.startsWith(' ')).toBe(false);
   }
 });
+
+// A no-break space joins its neighbours into one word with width; it neither breaks nor hangs.
+test('a final word that ends with a no-break space borrows inter-word space', () => {
+  const layout = (text: string, compatibilityMode: number) =>
+    content(layoutSemanticDocument(source('both', text, 76), 1, { measurer, compatibilityMode }));
+  expect(layout('aa bb cc ', 15)).toEqual(['aa bb cc']);
+  expect(layout('aa bb cc ', 14)).toEqual(['aa bb', 'cc']);
+  // The shrink budget still bounds the whole word, including text after the no-break space.
+  expect(layout('aa bb cc dd', 15)).toEqual(['aa bb', 'cc dd']);
+});
+
+test('a no-break space inside an earlier word keeps that word space compressible', () => {
+  const lines = linesOf(
+    layoutSemanticDocument(source('both', 'a a bb cc', 76), 1, {
+      measurer,
+      compatibilityMode: 15,
+    })
+  );
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(['a a bb cc']);
+  expect(lines[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+});

@@ -10,11 +10,19 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 
+// No-break spaces join their neighbours into one word. They have width, never break the
+// line, and never hang, so the word-shape tests read them as word characters.
+const WORD_CHARACTER = String.raw`(?:[^\s]|[\u00a0\u2007\u202f])`;
+const SPACED_SPAN = new RegExp(`^${WORD_CHARACTER}* $`, 'u');
+const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ $`, 'u');
+const BARE_WORD = new RegExp(`^${WORD_CHARACTER}+$`, 'u');
+
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
-    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} ]*$/u.test(span.text)) ||
+    (!span.style.shaping &&
+      !/^[\p{Script=Latin}\p{N}\p{P} \u00a0\u2007\u202f]*$/u.test(span.text)) ||
     span.lineEndWhitespace ||
-    !/^[^\s]* $/u.test(span.text) ||
+    !SPACED_SPAN.test(span.text) ||
     span.equation
   )
     return 0;
@@ -58,9 +66,9 @@ export function fitsWithSpaceShrink(
   wordEnds = false,
   followingWidth = 0
 ): boolean {
-  const ownSpace = /^[^\s]+ $/u.test(candidate);
+  const ownSpace = SPACED_WORD.test(candidate);
   if (
-    !(ownSpace || (wordEnds && /^[^\s]+$/u.test(candidate))) ||
+    !(ownSpace || (wordEnds && BARE_WORD.test(candidate))) ||
     spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
   )
     return false;
