@@ -1,5 +1,33 @@
 # @docx-editor.dev/pro
 
+## 2.28.0
+
+### Minor Changes
+
+- 9535470: Add `collaborationMigrationNeed` and `migrateCollaborationRoom`, which move a saved room of an earlier collaboration format to the current format from its export, keep the room's document ID, and return the new room only when it matches the export. See [Upgrade saved rooms](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-saved-rooms).
+- 9535470: Add `DocxEditorCollaboration.Status`, which tells users when the document is connecting, offline, waiting for changes, out of sync, or refused an edit. The collaboration hooks also report `waiting`, `recovering`, and `failureCount`, and the Hocuspocus and WebRTC hooks report `unsyncedChanges` so you can warn before a page with unsent edits closes.
+- 9535470: Add `compactCollaborationState` and `checkCollaborationRoomGeneration`, so a Hocuspocus server keeps each room's size bounded by compacting it into a new generation when it loads the room. A replica that still holds the previous generation reports `room-generation-changed` and rejoins.
+- 9535470: Keep collaboration rooms working when people edit the same paragraphs at the same time, keep your caret in place while others type, and recover from a bad remote update without leaving the room. Editing continues while disconnected by default, and `offlineEditing: false` pauses it. Fixes #579
+- 9535470: Text one participant deletes now stays deleted when another participant moves it or undoes a change around it at the same time. `CollaborationResourceUsage` reports `formattingMarkers`, so hosts can see a room's formatting history grow.
+- 9535470: Collaboration keeps every participant's typing and formatting when edits conflict, including typing in text another participant deletes, reformats, splits, or joins at the same time. Breaking collaboration upgrade: rooms of earlier formats must be exported and reseeded; see [Upgrade rooms to format 1.4.2.1](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions#upgrade-rooms-to-format-1421).
+- 9535470: Add `prepareCollaborationServerDocument` for servers that hold a room's document, such as Hocuspocus. Call it when the server creates or loads the document, so the server never removes formatting from text that participants type.
+- 9535470: Change the author, and optionally the date, of pending tracked changes without accepting or rejecting them, with `useReview().adopt()`, the `setReviewChangesAuthor` editor command, or `RevisionCollection.setAuthor()`. Fixes #1145
+- 9535470: Remove the experimental `createTextCollaboration` factory; use `createDocumentCollaboration`, which now refuses an insert longer than the shared text limit before the edit applies, instead of dropping it.
+- 9535470: Add tracked change balloons, comment marker styles, and horizontal review pane scrolling. Comment markers use icons by default; set `commentMarkers: 'initials'` to show author initials and reply counts.
+- 63dde82: Keep comment icons as the default markers, move Track changes options to the Review menu, and open comments when you click their text. Preserve text selection and handled link clicks.
+- 9535470: Add review pane settings, `getReviewItemsAt`, `getReviewItemRects`, `getActivatedReviewItemKey`, replacement pairing, and `scrollToBlock` scroll options for hosts that draw their own review interface. Fix the compact review card template, reply author colors, and `useReviewAuthor` outside the review rail.
+
+### Patch Changes
+
+- 9535470: Keep one collaboration room for each hook call, so pages with several hydrated React roots, or Vue stores that hold a room for each tenant, no longer close each other's rooms.
+- 9535470: Typing in a collaboration room writes each keystroke to shared state directly, which makes typing faster in long documents. Fixes #1168
+- 9535470: Collaborative documents hold less memory for each paragraph, and a room migration needs less heap.
+- 63dde82: Validate current-format rooms before the migration example reports success, and document recovery after partial migrations.
+- 63dde82: Preserve deprecated public text-only collaboration constants and the session type for existing imports.
+- 9535470: With `revisionsIn: 'balloons'`, comments that reply to tracked changes no longer open an empty review pane, and the new `reviewPaneListsItem` export tells a custom review pane which items to list. PDF export marks text in tracked table rows inside text boxes.
+- 63dde82: Refuse incompatible or damaged saved rooms in the server review example.
+- Updated dependencies: @docx-editor.dev/core@2.28.0, @docx-editor.dev/react@2.28.0, @docx-editor.dev/vue@2.28.0
+
 ## 2.27.0
 
 ### Patch Changes

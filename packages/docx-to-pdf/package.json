@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/docx-to-pdf",
-  "version": "2.27.0",
+  "version": "2.28.0",
   "private": false,
   "description": "Convert DOCX to PDF on Node.js with searchable text, embedded fonts, and comments.",
   "type": "module",
@@ -42,8 +42,8 @@
     "validation": "bun scripts/validator/launch.mjs"
   },
   "peerDependencies": {
-    "@docx-editor.dev/core": "~2.27.0",
-    "@docx-editor.dev/fonts-cjk": "~2.27.0"
+    "@docx-editor.dev/core": "~2.28.0",
+    "@docx-editor.dev/fonts-cjk": "~2.28.0"
   },
   "peerDependenciesMeta": {
     "@docx-editor.dev/fonts-cjk": {
@@ -51,7 +51,7 @@
     }
   },
   "dependencies": {
-    "@docx-editor.dev/fonts": "~2.27.0",
+    "@docx-editor.dev/fonts": "~2.28.0",
     "fontkit": "2.0.4",
     "pdf-lib": "1.17.1"
   },
