@@ -89,10 +89,17 @@ export function authoredProperties(
   if (!container || container.kind === 'textValue') return [];
   const properties: OoxmlProperty[] = [];
   for (const child of container.children) {
-    if (child.kind === 'textValue' || !authorable.has(child.localName)) continue;
+    if (
+      child.kind === 'textValue' ||
+      child.namespaceUri !== WML_NAMESPACE_URI ||
+      !authorable.has(child.localName)
+    )
+      continue;
     // Null-prototype: these keys come from the file (D14).
     const attributes = nullRecord<string>();
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
+    for (const entry of child.attributes) {
+      if (entry.namespaceUri === WML_NAMESPACE_URI) attributes[entry.localName] = entry.value;
+    }
     properties.push(
       Object.keys(attributes).length > 0
         ? { localName: child.localName, attributes }

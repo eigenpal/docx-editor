@@ -59,26 +59,7 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
-    if (child.localName === 'lang') {
-      // Foreign extensions stay in the canonical tree. They do not select Word language.
-      if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
-      const attributes: Record<string, string> = {};
-      for (const entry of child.attributes) {
-        if (
-          entry.namespaceUri === WML_NAMESPACE_URI &&
-          (entry.localName === 'val' ||
-            entry.localName === 'eastAsia' ||
-            entry.localName === 'bidi')
-        )
-          attributes[entry.localName] = entry.value;
-      }
-      props.push(
-        Object.keys(attributes).length > 0
-          ? { localName: 'lang', attributes }
-          : { localName: 'lang' }
-      );
-      continue;
-    }
+    // `w14` children have namespace-checked readers of their own.
     if (child.localName === 'ligatures') {
       const value = runLigaturesValue(child);
       if (value !== undefined) props.push({ localName: 'ligatures', attributes: { val: value } });
@@ -89,12 +70,17 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
       if (outline) props.push(outline);
       continue;
     }
+    // Only `w:` qualified children and attributes set properties. Foreign extensions stay in
+    // the canonical tree and are written back on save.
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName !== 'rPrChange' && child.localName !== 'pPrChange') {
       props.push(sharedProperty(child.localName, child.attributes));
       continue;
     }
     const attributes: Record<string, string> = {};
-    for (const entry of child.attributes) attributes[entry.localName] = entry.value;
+    for (const entry of child.attributes) {
+      if (entry.namespaceUri === WML_NAMESPACE_URI) attributes[entry.localName] = entry.value;
+    }
     const hasAttributes = Object.keys(attributes).length > 0;
     const revisionProperty: OoxmlProperty & { readonly revisionNodeId: string } = hasAttributes
       ? { localName: child.localName, attributes, revisionNodeId: child.id }
@@ -113,6 +99,7 @@ const sharedProperties = new WeakMap<readonly OoxmlAttributeLike[], Map<string, 
 
 interface OoxmlAttributeLike {
   readonly localName: string;
+  readonly namespaceUri?: string;
   readonly value: string;
 }
 
@@ -122,9 +109,14 @@ function sharedProperty(localName: string, list: readonly OoxmlAttributeLike[]):
   const known = byName.get(localName);
   if (known) return known;
   const attributes: Record<string, string> = {};
-  for (const entry of list) attributes[entry.localName] = entry.value;
+  let hasAttributes = false;
+  for (const entry of list) {
+    if (entry.namespaceUri !== WML_NAMESPACE_URI) continue;
+    attributes[entry.localName] = entry.value;
+    hasAttributes = true;
+  }
   const property: OoxmlProperty = Object.freeze(
-    list.length > 0 ? { localName, attributes: Object.freeze(attributes) } : { localName }
+    hasAttributes ? { localName, attributes: Object.freeze(attributes) } : { localName }
   );
   byName.set(localName, property);
   return property;

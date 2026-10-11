@@ -1,4 +1,5 @@
 import { inlineCharacterTextOf } from '../store/package/hyphen-text.ts';
+import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 // Canonical tree <-> ProseMirror binding (tasks 6.1, 6.2, 6.3).
 //
@@ -118,9 +119,15 @@ function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
+    // Only `w:` qualified children and attributes are properties. Foreign extensions stay on
+    // the node, so a projected edit can neither read them as properties nor write them back.
+    if (child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName === 'rPrChange' || child.localName === 'pPrChange') continue;
     const attributes: Record<string, string> = {};
-    for (const attribute of child.attributes) attributes[attribute.localName] = attribute.value;
+    for (const attribute of child.attributes) {
+      if (attribute.namespaceUri === WML_NAMESPACE_URI)
+        attributes[attribute.localName] = attribute.value;
+    }
     props.push(
       Object.keys(attributes).length > 0
         ? { localName: child.localName, attributes }

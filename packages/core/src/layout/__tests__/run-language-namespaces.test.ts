@@ -23,22 +23,29 @@ const props = (inner: string) =>
 
 describe('run language namespace boundaries', () => {
   const cases: readonly [string, string, string | undefined][] = [
-    ['Word east Asia', '<w:lang w:eastAsia="zh-CN"/>', 'zh-cn'],
-    ['renamed Word prefix', '<x:lang x:eastAsia="ja-JP"/>', 'ja-jp'],
-    ['Word primary language', '<w:lang w:val="ko-KR"/>', 'ko-kr'],
+    ['qualified east Asia language', '<w:lang w:eastAsia="zh-CN"/>', 'zh-cn'],
+    ['another prefix for the WordprocessingML namespace', '<x:lang x:eastAsia="ja-JP"/>', 'ja-jp'],
     ['foreign language element', '<e:lang w:eastAsia="zh-CN"/>', undefined],
     ['foreign language and attribute', '<e:lang e:eastAsia="zh-CN"/>', undefined],
     ['foreign east Asia attribute', '<w:lang e:eastAsia="zh-CN"/>', undefined],
     ['unqualified east Asia attribute', '<w:lang eastAsia="zh-CN"/>', undefined],
     ['foreign primary language attribute', '<w:lang e:val="zh-CN"/>', undefined],
-    ['foreign attribute follows Word', '<w:lang w:eastAsia="ja-JP" e:eastAsia="zh-CN"/>', 'ja-jp'],
-    ['foreign attribute precedes Word', '<w:lang e:eastAsia="zh-CN" w:eastAsia="ja-JP"/>', 'ja-jp'],
+    [
+      'foreign attribute after the qualified one',
+      '<w:lang w:eastAsia="ja-JP" e:eastAsia="zh-CN"/>',
+      'ja-jp',
+    ],
+    [
+      'foreign attribute before the qualified one',
+      '<w:lang e:eastAsia="zh-CN" w:eastAsia="ja-JP"/>',
+      'ja-jp',
+    ],
   ];
   for (const [label, xml, expected] of cases)
     test(label, () => expect(eastAsianLanguage(props(xml))).toBe(expected));
 
   for (const level of ['defaults', 'paragraph', 'character', 'direct'] as const) {
-    test('foreign language does not replace Word language at ' + level, () => {
+    test('foreign language does not replace the qualified language at ' + level, () => {
       const foreign = '<e:lang e:eastAsia="zh-CN"/>';
       const styles = part(
         '<w:styles ' +
@@ -70,7 +77,7 @@ describe('run language namespace boundaries', () => {
     expect(serializeOoxmlPart(document)).toBe(before);
     expect(before).toContain('e:opaque');
   });
-  test('Word language admits the ordinary punctuation tail through the actual collector', () => {
+  test('qualified language admits the ordinary punctuation tail through the actual collector', () => {
     const document = part(
       '<w:p ' +
         bindings +

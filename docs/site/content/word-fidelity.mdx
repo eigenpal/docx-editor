@@ -286,7 +286,7 @@ East Asian font hints select the document's East Asian face for supported punctu
 
 Document settings control kinsoku, Japanese strict rules, and language-specific break restrictions. They also control Korean character wrapping, punctuation overflow, and punctuation or kana compression. Punctuation compression removes shared side bearings and preserves the ink position during native text selection. Compression removes shared spacing between adjacent punctuation. Paragraph and manual line-break boundaries retain their advance widths.
 
-Run language uses Word `w:lang` elements and Word-qualified attributes across styles and direct formatting. Foreign language extensions remain saved but do not select the layout language.
+Run language uses `w:lang` elements and attributes in the WordprocessingML namespace across styles and direct formatting. Foreign language extensions remain saved but do not select the layout language.
 
 Colons can compress before opening brackets, bounded by the following bracket's available bearing. With measured glyph bounds, colons also compress before closing punctuation. This pair rule halves the colon's advance, including authored character spacing. Other centered punctuation, authored spaces, outlined text, decorated text, and tracked changes retain their advances. Colons with highlight or shading retain their advances.
 

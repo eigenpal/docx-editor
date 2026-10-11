@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Foreign run and paragraph property children and attributes could set formatting by local name. A formatting edit rewrote a foreign child such as e:b as w:b, or removed it.",
+  "after": "Only w: qualified children and attributes set run and paragraph properties. A formatting edit keeps foreign children unchanged on every replica.",
+  "reason": "Shared data, operation fields, and the representation of run properties stay unchanged. Released readers read the corrected writes the same way, and the regression tests check concurrent edits and a late joiner.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-foreign-run-properties.test.ts",
+    "packages/core/src/binding/__tests__/run-property-namespaces.test.ts",
+    "packages/core/src/layout/__tests__/run-property-namespaces.test.ts"
+  ],
+  "changeset": "run-property-namespaces",
+  "migration": null
+}
