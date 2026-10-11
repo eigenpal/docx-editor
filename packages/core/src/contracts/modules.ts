@@ -1,5 +1,6 @@
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 import type { ReviewPaneOptions } from './review-pane.ts';
+import type { EditorDiagnostic } from './diagnostics.ts';
 /**
  * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
  *
@@ -157,6 +158,14 @@ export interface EditorModule {
    * package that raised it.
    */
   readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+  /**
+   * Told about every anonymous diagnostic of this editor, from its first open on.
+   *
+   * The same events as `editor.on('diagnostic')`, but registered before the editor exists, so
+   * a document passed at construction is observed too. A listener that throws is ignored: an
+   * observer must never break the editor it observes.
+   */
+  readonly onDiagnostic?: (event: EditorDiagnostic) => void;
 }
 
 /**
@@ -172,6 +181,8 @@ export interface EditorModuleRegistry {
   readonly customNodePayloadNamespaces: readonly string[];
   /** Every registered diagnostic listener, in registration order. */
   readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
+  /** Every registered `onDiagnostic` listener, in registration order. */
+  readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
 }
 
 const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
@@ -180,6 +191,7 @@ const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
   customNodes: Object.freeze([]) as readonly unknown[],
   customNodePayloadNamespaces: Object.freeze([]) as readonly string[],
   customNodeDiagnostics: Object.freeze([]) as readonly ((diagnostic: unknown) => void)[],
+  diagnosticListeners: Object.freeze([]) as readonly ((event: EditorDiagnostic) => void)[],
 });
 
 /** Resolve construction-time modules into the registry the instance dispatches over. */
@@ -192,6 +204,7 @@ export function resolveEditorModules(
   const customNodes: unknown[] = [];
   const namespaces = new Set<string>();
   const diagnostics: ((diagnostic: unknown) => void)[] = [];
+  const diagnosticListeners: ((event: EditorDiagnostic) => void)[] = [];
   for (const module of modules) {
     // First registration wins: two review modules is a configuration mistake,
     // and silently merging them would leave neither author able to say which
@@ -209,6 +222,7 @@ export function resolveEditorModules(
     if (module.customNodes) customNodes.push(...module.customNodes);
     for (const namespace of module.customNodePayloadNamespaces ?? []) namespaces.add(namespace);
     if (module.onCustomNodeDiagnostic) diagnostics.push(module.onCustomNodeDiagnostic);
+    if (module.onDiagnostic) diagnosticListeners.push(module.onDiagnostic);
   }
   return {
     review,
@@ -216,5 +230,6 @@ export function resolveEditorModules(
     customNodes,
     customNodePayloadNamespaces: [...namespaces],
     customNodeDiagnostics: diagnostics,
+    diagnosticListeners,
   };
 }

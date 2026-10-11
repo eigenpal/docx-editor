@@ -46,10 +46,12 @@ export function openTreeSession(bytes: Uint8Array, options?: OpenTreeSessionOpti
 export type OpenTreeSessionResult = {
     readonly ok: true;
     readonly session: TreeDocxSession;
-} | {
+} | Extract<OoxmlPackageResult, {
+    readonly ok: false;
+}> | {
     readonly detail?: string;
     readonly ok: false;
-    readonly reason: TreeSessionRejection;
+    readonly reason: 'no-main-document-tree';
 };
 
 // @public

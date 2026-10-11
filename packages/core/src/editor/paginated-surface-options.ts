@@ -117,6 +117,12 @@ export interface PaginatedSurfaceOptions {
   readonly pointer?: 'engine' | 'native';
   readonly onChange?: (state: PaginatedSurfaceState) => void;
   /**
+   * Told each time an edit is refused, with the raw reason: a store code such as `'locked'`,
+   * or the surface's own refusal sentence. The raw reason can be a sentence, so a listener
+   * maps it to a public code before it reports anything.
+   */
+  readonly onRejection?: (reason: string) => void;
+  /**
    * A plain click on an external (or inert) hyperlink, for a host to open its popover with.
    *
    * Absent means such a click does nothing. That is deliberate: a host with no popover

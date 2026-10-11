@@ -161,7 +161,8 @@ export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tre
  */
 export type OpenTreeSessionResult =
   | { readonly ok: true; readonly session: TreeDocxSession }
-  | { readonly ok: false; readonly reason: TreeSessionRejection; readonly detail?: string };
+  | Extract<OoxmlPackageResult, { readonly ok: false }>
+  | { readonly ok: false; readonly reason: 'no-main-document-tree'; readonly detail?: string };
 
 /** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
 const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
@@ -203,13 +204,8 @@ export function openTreeSessionFromPackage(
   loaded: OoxmlPackageResult,
   options: OpenTreeSessionOptions = {}
 ): OpenTreeSessionResult {
-  if (!loaded.ok) {
-    return {
-      ok: false,
-      reason: loaded.reason,
-      ...(loaded.detail ? { detail: loaded.detail } : {}),
-    };
-  }
+  // The package's refusal as it is, with the limit it crossed when it names one.
+  if (!loaded.ok) return loaded;
 
   const pkgLoaded: OoxmlPackage = loaded.package;
   const main = pkgLoaded.parts.get(pkgLoaded.mainDocumentPart);

@@ -41,6 +41,9 @@ export interface AuthoredNoteNumbering {
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
+
+// @public
 export type CanResult = {
     ok: true;
 } | {
@@ -137,6 +140,31 @@ export interface ContentControlSummary {
 
 // @public
 export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
+
+// @public
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+// @public
+export const DIAGNOSTIC_SCHEMA_VERSION = 1;
+
+// @public
+export interface DiagnosticBase {
+    readonly editorSessionId: string;
+    readonly schemaVersion: number;
+    readonly time: number;
+}
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode;
+
+// @public
+export function diagnosticCodes(): readonly DiagnosticCode[];
+
+// @public
+export interface DiagnosticExplanation {
+    readonly docs: string;
+    readonly hint: string;
+}
 
 // @public
 export interface DocAnchor {
@@ -422,6 +450,23 @@ export interface DocumentHandle {
 }
 
 // @public
+export type DocumentOpenDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.open';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'opened';
+    readonly pagesBucket: CountBucket;
+    readonly sizeBucket: ByteSizeBucket;
+} | {
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly outcome: 'rejected';
+    readonly sizeBucket?: ByteSizeBucket;
+});
+
+// @public
+export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
 // @public
@@ -477,6 +522,9 @@ export interface DrawingPositionInput {
 
 // @public (undocumented)
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
+
+// @public
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.revision-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
@@ -910,6 +958,12 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic;
+
+// @public
+export type EditorDiagnosticKind = EditorDiagnostic['kind'];
+
+// @public
 export interface EditorError extends Error {
     // (undocumented)
     readonly code?: string;
@@ -918,6 +972,7 @@ export interface EditorError extends Error {
 // @public
 export interface EditorEvents {
     change: (change: DocumentChange) => void;
+    diagnostic: (event: EditorDiagnostic) => void;
     // (undocumented)
     error: (error: EditorError) => void;
     // (undocumented)
@@ -1188,6 +1243,20 @@ export interface EditorSnapshot {
 }
 
 // @public
+export interface EditRejectedDiagnostic extends DiagnosticBase {
+    // (undocumented)
+    readonly code: EditDiagnosticCode;
+    readonly command?: EditorCommand['type'];
+    // (undocumented)
+    readonly kind: 'edit.rejected';
+    readonly origin: EditRejectionOrigin;
+    readonly tracked: boolean;
+}
+
+// @public
+export type EditRejectionOrigin = 'command' | 'input';
+
+// @public
 export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typeMismatch' | 'kindMismatch' | 'outOfBounds' | 'unsupported' | 'invalidArgs';
 
 // @public
@@ -1205,6 +1274,9 @@ export type ExecResult = {
     revisions?: RevisionBatchResult;
     target?: DocTarget;
 };
+
+// @public
+export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
 export interface Extent {
@@ -1243,6 +1315,9 @@ export interface FontDefinition {
 }
 
 // @public
+export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
+
+// @public
 export interface FontFaceRequest {
     // (undocumented)
     readonly family: string;
@@ -1250,6 +1325,14 @@ export interface FontFaceRequest {
     readonly style: 'normal' | 'italic';
     // (undocumented)
     readonly weight: number;
+}
+
+// @public
+export interface FontFailedDiagnostic extends DiagnosticBase {
+    // (undocumented)
+    readonly code: FontDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'font.failed';
 }
 
 // @public
@@ -1773,6 +1856,9 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
 }
 
 // @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+
+// @public
 export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
 
 // @public
@@ -1894,6 +1980,15 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
     readonly kind: 'revision';
     readonly replacedText?: string;
     readonly revisionKind: ReviewRevisionKind;
+}
+
+// @public
+export interface ReviewSkippedDiagnostic extends DiagnosticBase {
+    // (undocumented)
+    readonly code: ReviewDiagnosticCode;
+    readonly count: number;
+    // (undocumented)
+    readonly kind: 'review.skipped';
 }
 
 // @public

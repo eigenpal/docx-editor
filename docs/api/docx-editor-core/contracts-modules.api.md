@@ -34,6 +34,7 @@ export interface EditorModule {
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+    readonly onDiagnostic?: (event: EditorDiagnostic) => void;
     readonly review?: ReviewModuleContribution;
 }
 
@@ -45,6 +46,7 @@ export interface EditorModuleRegistry {
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
     readonly customNodes: readonly unknown[];
+    readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
     // (undocumented)
     readonly review: ReviewModuleContribution | null;
 }

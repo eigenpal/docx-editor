@@ -7,6 +7,7 @@ import type {
   Unsubscribe,
 } from '../contracts/editor.ts';
 import type { HistoryDiagnostic } from '../contracts/editor-scope.ts';
+import type { EditorDiagnostic } from '../contracts/diagnostics.ts';
 import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 
 /** Per-instance notifications. Snapshot derivation stays lazy without subscribers. */
@@ -16,6 +17,7 @@ export function createEditorEvents(snapshot: () => EditorSnapshot) {
     selectionChange: new Set(),
     error: new Set(),
     historyDiagnostic: new Set(),
+    diagnostic: new Set(),
     revisionMarkupChange: new Set(),
     reviewItemReveal: new Set(),
   };
@@ -33,6 +35,9 @@ export function createEditorEvents(snapshot: () => EditorSnapshot) {
     },
     emitHistoryDiagnostic(diagnostic: HistoryDiagnostic) {
       for (const handler of [...handlers.historyDiagnostic]) handler(diagnostic);
+    },
+    emitDiagnostic(event: EditorDiagnostic) {
+      for (const handler of [...handlers.diagnostic]) handler(event);
     },
     emitRevisionMarkupChange(value: ResolvedRevisionMarkup) {
       for (const handler of [...handlers.revisionMarkupChange]) handler(value);

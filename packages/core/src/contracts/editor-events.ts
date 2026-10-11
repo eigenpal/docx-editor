@@ -1,6 +1,7 @@
 import type { ResolvedRevisionMarkup } from './revision-markup.ts';
 import type { EditorError, EditorSnapshot } from './editor.ts';
 import type { HistoryDiagnostic } from './editor-scope.ts';
+import type { EditorDiagnostic } from './diagnostics.ts';
 
 /**
  * What `editor.on(...)` can be subscribed to, and what each handler receives.
@@ -18,6 +19,22 @@ export interface EditorEvents {
   selectionChange: (snapshot: EditorSnapshot) => void;
   error: (error: EditorError) => void;
   historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+  /**
+   * An anonymous diagnostic: a document opened or failed to open, an edit or a tracked change
+   * was refused, a font failed. Carries stable codes and bucketed numbers, never document
+   * content, so a handler may send it to an error tracker as it is.
+   *
+   * A document passed at construction opens before a host can subscribe. To see that open,
+   * register a module with `onDiagnostic` instead.
+   *
+   * @example
+   * ```ts
+   * editor.on('diagnostic', (event) => {
+   *   if (event.kind === 'edit.rejected') console.warn(explainDiagnostic(event.code).hint);
+   * });
+   * ```
+   */
+  diagnostic: (event: EditorDiagnostic) => void;
   /**
    * An explicit request landed on a review item, and its card or balloon should open.
    *

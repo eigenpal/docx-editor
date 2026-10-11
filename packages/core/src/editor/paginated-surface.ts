@@ -379,6 +379,7 @@ export function mountPaginatedSurface(
       ok: false,
       reason: opened.reason,
       ...(opened.detail ? { detail: opened.detail } : {}),
+      ...('limit' in opened && opened.limit ? { limit: opened.limit } : {}),
     };
   }
   const session = scopeSession(opened.session, fieldScope);
@@ -568,9 +569,14 @@ export function mountPaginatedSurface(
    * caret move. Returns false so a refusing command can `return publishRefusal(reason)`.
    */
   function publishRefusal(reason: string): false {
-    lastRejection = reason;
+    lastRejection = refuse(reason);
     options.onChange?.(currentState());
     return false;
+  }
+  /** Every refusal passes here once, raw, so the host's diagnostics can classify it. */
+  function refuse(reason: string, raw = reason): string {
+    options.onRejection?.(raw);
+    return reason;
   }
   const commitHistoryGroup = new CommitHistoryGroup();
   const typingHistory = new TypingHistory(() => session.currentPackage());
@@ -2365,7 +2371,7 @@ export function mountPaginatedSurface(
   function openContentControlWidget(controlId: string, kind: string): void {
     const reason = contentControlsOps.disabledReason(controlId, 'edit');
     if (reason) {
-      lastRejection = reason;
+      lastRejection = refuse(reason);
       options.onChange?.(currentState());
       return;
     }
@@ -3122,10 +3128,8 @@ export function mountPaginatedSurface(
       const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
       refused = rejection !== null;
       if (rejection) {
-        lastRejection = writeRejectionReason(
-          String(rejection.reason ?? 'rejected'),
-          session.settingsRoot()
-        );
+        const raw = String(rejection.reason ?? 'rejected');
+        lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
       } else {
         lastRejection = null;
         // The post-edit selection is installed BEFORE the paint, so the single render below
@@ -3480,7 +3484,7 @@ export function mountPaginatedSurface(
     notify: () => options.onChange?.(currentState()),
     lastRejection: () => lastRejection,
     setLastRejection: (reason) => {
-      lastRejection = reason;
+      lastRejection = reason === null ? null : refuse(reason);
     },
   });
 
@@ -4096,7 +4100,10 @@ export function mountPaginatedSurface(
         () => {
           const applied = applyOps([op], selectionMark());
           if (!applied.committed) {
-            lastRejection = applied.reason ?? 'the table could not be inserted here';
+            lastRejection = refuse(
+              applied.reason ?? 'the table could not be inserted here',
+              applied.reason ?? 'table-insert-refused'
+            );
           }
           committed = applied.committed;
           return applied;
@@ -4157,7 +4164,10 @@ export function mountPaginatedSurface(
     const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
     const inserted = applyJournaledOps([op], undefined, undefined, BODY_STORY);
     if (!inserted.committed) {
-      lastRejection = inserted.reason ?? 'the table of contents could not be inserted';
+      lastRejection = refuse(
+        inserted.reason ?? 'the table of contents could not be inserted',
+        inserted.reason ?? 'table-of-contents-refused'
+      );
       return false;
     }
     const created = detectBodyTocs(session.part()).find((toc) => !existing.has(toc.id));
@@ -4197,7 +4207,10 @@ export function mountPaginatedSurface(
         BODY_STORY
       );
       if (!replaced.committed) {
-        lastRejection = replaced.reason ?? 'the table of contents could not be refreshed';
+        lastRejection = refuse(
+          replaced.reason ?? 'the table of contents could not be refreshed',
+          replaced.reason ?? 'table-of-contents-refused'
+        );
         return false;
       }
       layout = surface.layout();
@@ -4233,7 +4246,10 @@ export function mountPaginatedSurface(
       );
       if (!rewritten.committed) {
         if (rewritten.rejected) {
-          lastRejection = rewritten.reason ?? 'the table of contents page numbers were refused';
+          lastRejection = refuse(
+            rewritten.reason ?? 'the table of contents page numbers were refused',
+            rewritten.reason ?? 'table-of-contents-refused'
+          );
           return false;
         }
         break;
@@ -5475,7 +5491,7 @@ export function mountPaginatedSurface(
       // read-only silently rewound under the reader's hands — the one lane that walked past
       // `applyOps`, `applyPmDoc` and `commitReviewOps` alike.
       if (editingMode === 'view' || refreshWriteBlocked(container)) {
-        lastRejection = VIEWING_REFUSAL;
+        lastRejection = refuse(VIEWING_REFUSAL);
         options.onChange?.(currentState());
         return;
       }
@@ -5488,7 +5504,7 @@ export function mountPaginatedSurface(
     },
     redo: () => {
       if (editingMode === 'view' || refreshWriteBlocked(container)) {
-        lastRejection = VIEWING_REFUSAL;
+        lastRejection = refuse(VIEWING_REFUSAL);
         options.onChange?.(currentState());
         return;
       }

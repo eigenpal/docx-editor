@@ -912,7 +912,13 @@ export interface PaginatedSurface {
  */
 export type OpenPaginatedResult =
   | { readonly ok: true; readonly surface: PaginatedSurface }
-  | { readonly ok: false; readonly reason: string; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly reason: string;
+      readonly detail?: string;
+      /** The resource limit the package crossed, when the reason is a size refusal. */
+      readonly limit?: string;
+    };
 
 export type {
   ParagraphDisagreements,

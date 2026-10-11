@@ -127,6 +127,10 @@ export type {
   RevisionDisplayMode,
 } from './contracts/modules.ts';
 
+// ─── Anonymous diagnostics: stable codes, fixed hints, no document content ───
+export { DIAGNOSTIC_SCHEMA_VERSION } from './contracts/diagnostics.ts';
+export { diagnosticCodes, explainDiagnostic } from './contracts/diagnostic-hints.ts';
+
 // ─── The document model and the edit/query vocabulary ────────────────────────
 export type * from './contracts/types';
 export type {

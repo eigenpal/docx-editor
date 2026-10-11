@@ -1439,6 +1439,7 @@ export interface EditorModule {
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+    readonly onDiagnostic?: (event: EditorDiagnostic) => void;
     readonly review?: ReviewModuleContribution;
 }
 
@@ -1450,6 +1451,7 @@ export interface EditorModuleRegistry {
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
     readonly customNodes: readonly unknown[];
+    readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
     // (undocumented)
     readonly review: ReviewModuleContribution | null;
 }
@@ -2003,6 +2005,7 @@ export type OpenPaginatedResult = {
     readonly surface: PaginatedSurface;
 } | {
     readonly detail?: string;
+    readonly limit?: string;
     readonly ok: false;
     readonly reason: string;
 };
@@ -2314,6 +2317,7 @@ export interface PaginatedSurfaceOptions {
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
+    readonly onRejection?: (reason: string) => void;
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestHyperlink?: () => void;
