@@ -122,6 +122,25 @@ test('computed field caches remain inert despite their editable source boundarie
   });
 });
 
+test('a hard-break field result keeps its end boundary on the preferred first line', () => {
+  withPainted(field('One</w:t><w:br/><w:t>Two'), (fixture) => {
+    const lines = [...fixture.root.querySelectorAll<HTMLElement>('.docx-line')];
+    expect(lines.length).toBeGreaterThan(1);
+    const firstLineId = lines[0]!.dataset.lineId!;
+    const point = { paragraphId: fixture.paragraphId, offset: 1 };
+    const range = { anchor: point, head: point };
+    const selection = document.getSelection()!;
+    expect(
+      applySelectionToDom(fixture.root, range, selection, { preferredLineId: firstLineId })
+    ).toBe(true);
+    expect(semanticSelectionFromDom(fixture.root, selection)).toEqual(range);
+    const focus = selection.focusNode!;
+    const focusElement =
+      focus.nodeType === Node.ELEMENT_NODE ? (focus as Element) : focus.parentElement;
+    expect(focusElement?.closest<HTMLElement>('[data-line-id]')?.dataset.lineId).toBe(firstLineId);
+  });
+});
+
 test('a position beyond a field-only paragraph does not fall back to its start', () => {
   withPainted(field('A long cache'), (fixture) => {
     const point = { paragraphId: fixture.paragraphId, offset: 2 };
