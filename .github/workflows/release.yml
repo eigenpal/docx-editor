@@ -87,8 +87,14 @@ jobs:
             runner: blacksmith-2vcpu-ubuntu-2404
           - label: typecheck
             command: bun run typecheck
-          - label: tests
-            command: bun run test
+          - label: tests (1/4)
+            command: bun run test --shard 1/4 --fail-fast
+          - label: tests (2/4)
+            command: bun run test --shard 2/4 --fail-fast
+          - label: tests (3/4)
+            command: bun run test --shard 3/4 --fail-fast
+          - label: tests (4/4)
+            command: bun run test --shard 4/4 --fail-fast
           - label: parity
             command: bun run check:parity
             runner: blacksmith-2vcpu-ubuntu-2404
