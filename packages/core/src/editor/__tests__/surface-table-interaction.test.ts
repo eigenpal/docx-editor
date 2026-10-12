@@ -16,6 +16,7 @@ import { planTableCommand } from '../table-command-plan.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { readEditableTableTopology } from '../../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue, wmlChildNamed } from '../../store/store/tree-op-table-shared.ts';
+import { MIN_TABLE_ROW_HEIGHT_TWIPS } from '../../store/store/table-constraints.ts';
 import { selectCellRectangle } from './paginated-surface-fixtures.ts';
 import {
   findTableOccurrence,
@@ -483,6 +484,42 @@ describe('surface table interaction furniture', () => {
       expect(wmlAttributeValue(trHeight!, 'hRule')).toBe('exact');
       expect(Number(wmlAttributeValue(trHeight!, 'val'))).toBeGreaterThan(0);
     }
+  });
+
+  test('a row dragged above its own top keeps a minimum height and can be dragged back', () => {
+    const mounted = mount(TABLE);
+    const rowHeightTwips = (rowId: string): number => {
+      const topology = readEditableTableTopology(
+        mounted.surface.session.part().root,
+        tableOnPage(mounted.surface.layout()).tableId
+      );
+      if (!topology.ok) throw new Error('no topology');
+      const row = topology.topology.rows.find((entry) => entry.row.id === rowId)!.row;
+      return Number(
+        wmlAttributeValue(wmlChildNamed(wmlChildNamed(row, 'trPr')!, 'trHeight')!, 'val')
+      );
+    };
+    const drag = (fromY: number, toY: number, x: number): void => {
+      mounted.pages.dispatchEvent(pointer('pointermove', x, fromY));
+      const handle = mounted.furniture.querySelector<HTMLElement>('.docx-table-row-divider-handle');
+      expect(handle).not.toBeNull();
+      handle!.dispatchEvent(pointer('pointerdown', x, fromY));
+      document.dispatchEvent(pointer('pointermove', x, toY, { buttons: 1 }));
+      document.dispatchEvent(pointer('pointerup', x, toY));
+    };
+    const before = tableOnPage(mounted.surface.layout());
+    const rowId = before.rows[1]!.id;
+    const x = before.box.x + before.box.width / 4;
+    const bottom = before.rows[1]!.box.y + before.rows[1]!.box.height;
+    // Far past the row's own top: the commit stops at the minimum, not at 1pt.
+    drag(bottom, bottom - 200, x);
+    expect(rowHeightTwips(rowId)).toBe(MIN_TABLE_ROW_HEIGHT_TWIPS);
+
+    // The shrunken row still owns a band above its bottom divider, so it drags back out.
+    const shrunk = tableOnPage(mounted.surface.layout()).rows.find((row) => row.id === rowId)!;
+    const shrunkBottom = shrunk.box.y + shrunk.box.height;
+    drag(shrunkBottom - 2, shrunkBottom + 20, x);
+    expect(rowHeightTwips(rowId)).toBeGreaterThan(MIN_TABLE_ROW_HEIGHT_TWIPS);
   });
 
   test('a body divider resizes columns below a horizontally merged header', () => {

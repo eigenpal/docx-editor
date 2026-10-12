@@ -6,6 +6,13 @@ export const MAX_TABLE_COLUMNS = 1024;
 /** Minimum grid column width in twips (~0.21") for column resize operations. */
 export const MIN_TABLE_COLUMN_WIDTH_TWIPS = 300;
 
+/**
+ * Minimum row height in twips (8pt) for row resize drags. Row dividers are hit within 4pt of a
+ * row's bottom edge, from inside that row, so a row needs 8pt to keep both its top divider and
+ * its own bottom divider within reach. A shorter row can no longer be dragged back out.
+ */
+export const MIN_TABLE_ROW_HEIGHT_TWIPS = 160;
+
 /** Maximum grid column width in twips (~22", widest page). */
 export const MAX_TABLE_COLUMN_WIDTH_TWIPS = 31_680;
 
