@@ -82,10 +82,16 @@ test('an empty cell keeps its line box when the end marker does not set a row mi
   expect(rows(result)[1]!.box.y).toBe(rows(result)[0]!.box.y + 20);
 });
 
-test('terminal empty paragraphs retain their own line after other paragraphs', () => {
-  expect(height(table(row(cell(paragraph() + paragraph()))))).toBe(40);
-  // The text uses 5pt; the following empty paragraph uses its own 20pt format.
-  expect(height(table(row(cell(paragraph(text) + paragraph()))))).toBe(25);
+test('a hidden mark drops the empty final paragraph after other content', () => {
+  // Earlier empty paragraph marks still occupy their own 20pt lines.
+  expect(height(table(row(cell(paragraph() + paragraph()))))).toBe(20);
+  // The 5pt text sizes the row; the empty final paragraph adds no line or spacing.
+  expect(height(table(row(cell(paragraph(text) + paragraph()))))).toBe(5);
+  expect(
+    height(table(row(cell(paragraph(text) + paragraph('', '<w:spacing w:after="400"/>')))))
+  ).toBe(5);
+  // A visible mark keeps the final paragraph's line.
+  expect(height(table(row(cell(paragraph(text) + paragraph(), ''))))).toBe(25);
 });
 
 test('empty-cell margins, paragraph borders, and paragraph spacing still reserve their own space', () => {
@@ -331,13 +337,13 @@ test('hideMark keeps a terminal inline picture and its source position', () => {
   );
 });
 
-test('empty terminal paragraphs take part in row pagination', () => {
-  const result = run(table(row(cell(paragraph().repeat(6)))));
+test('empty paragraphs before a hidden mark take part in row pagination', () => {
+  const result = run(table(row(cell(paragraph().repeat(7)))));
   expect(result.pages).toHaveLength(2);
   const lines = linesOf(result);
-  expect(lines).toHaveLength(6);
-  for (const line of lines) {
-    expect(line.box.height).toBe(20);
+  expect(lines).toHaveLength(7);
+  for (const [index, line] of lines.entries()) {
+    expect(line.box.height).toBe(index === lines.length - 1 ? 0 : 20);
     expect(line.box.y + line.box.height).toBeLessThanOrEqual(geometry.height);
   }
   expect(rows(result)[0]!.hasContinuation).toBe(true);

@@ -67,7 +67,8 @@ export { initialCellCursors, type CellPlaceCursor } from './table-cell-cursor.ts
 import { type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { resolvedParagraphMarkChangeSites } from './revision-formatting-projection.ts';
-import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
+import { paragraphMergeGroupOf } from './story-roots.ts';
+import { cellTerminatorCollapses } from './table-cell-terminator.ts';
 import { rowDepsForAnchors, type DeferredRowAnchor } from './table-anchor-republish.ts';
 import {
   markRevisionFields,
@@ -586,8 +587,8 @@ function placeCellParagraph(
     listItem !== undefined ||
     (deps.displayMode === 'all-markup' &&
       paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter));
-  // Excluding the cell marker's minimum height does not remove an empty paragraph.
-  // Keep its line box so its insertion point remains inside the row's content area.
+  // An empty cell keeps its line box. An empty final paragraph after other content in a
+  // `w:hideMark` cell collapses instead (`cellTerminatorCollapses`).
   const lines = brokenLines;
   const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
@@ -1119,21 +1120,13 @@ function flowBlocksInBoxBounded(
       continue;
     }
 
-    // POSITION only. Whether this paragraph may actually collapse is one question about what
-    // it would publish, and `placeCellParagraph` is where every answer to it already lives —
-    // see `publishesPlacedGlyphs` there. Deciding it in two places is how the list marker and
-    // the tracked paragraph mark each arrived as their own late special case.
-    //
-    // `lastEmittedTable` rather than the source node's kind: `emitNestedTable` returns null
-    // for a `w:tbl` past the nesting ceiling and for one with no `w:tr` at all (schema-valid,
-    // `EG_ContentRowContent` is minOccurs=0), and the walk simply steps over it. Collapsing
-    // behind a table that produced nothing leaves the row with no content and no terminator,
-    // which paints as a hairline.
-    const collapsible =
-      inTableCell &&
-      blockIndex === blocks.length - 1 &&
-      lastEmittedTable &&
-      isEmptyCellTerminator(block);
+    const collapsible = cellTerminatorCollapses(block, {
+      inTableCell,
+      last: blockIndex === blocks.length - 1,
+      afterEmittedTable: lastEmittedTable,
+      hideEndMark,
+      afterPlacedContent: fragments.length > 0,
+    });
     const placed = placeCellParagraph(
       block,
       left,
