@@ -81,3 +81,23 @@ export function unplacedHeldBreak(
     ? { heldBreak: cursor.heldBreak }
     : {};
 }
+
+/**
+ * Whether the first line of a cell fragment is placed although it passes the band bottom.
+ * On a fresh page (`rowAtPageStart`) with nothing placed above it, a line taller than the
+ * band can never fit another page, so it is placed once and clipped to the cell. A line
+ * pushed down by a wrap exclusion would fit a band without it, so the row still refuses.
+ */
+export function placesOversizedLine(
+  options: { readonly aloneOnPage?: boolean } | undefined,
+  deps: { readonly rowAtPageStart?: boolean },
+  placedLines: number,
+  skipBefore: number
+): boolean {
+  return (
+    options?.aloneOnPage === true &&
+    deps.rowAtPageStart === true &&
+    placedLines === 0 &&
+    skipBefore === 0
+  );
+}

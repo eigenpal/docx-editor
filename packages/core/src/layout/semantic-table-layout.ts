@@ -60,6 +60,7 @@ import {
   continuedCellCursor,
   initialCellCursor,
   initialCellCursors,
+  placesOversizedLine,
   unplacedHeldBreak,
   type CellPlaceCursor,
 } from './table-cell-cursor.ts';
@@ -630,8 +631,7 @@ function placeCellParagraph(
         ? Math.max(lineBottom, options?.cellEndMarkMinBottom ?? lineBottom)
         : lineBottom;
     if (requiredBottom > maxBottom + 0.001) {
-      if (lineTops.length > 0 || options?.placesOversizedLine !== true) break;
-      lineTops.push(probeY + skipBefore);
+      if (placesOversizedLine(options, deps, lineTops.length, skipBefore)) lineTops.push(probeY);
       break;
     }
     lineTops.push(probeY + skipBefore);
@@ -1145,7 +1145,6 @@ function flowBlocksInBoxBounded(
         heldBreak: blockIndex === cursor.blockIndex ? heldBreak : undefined,
         applyWidowControl,
         aloneOnPage: !fitted && deps.rowAtPageStart !== false,
-        placesOversizedLine: !fitted && deps.rowAtPageStart === true,
         fragmentIndex: paragraphFragmentIndex,
         maxBottom,
         includeAfter: true,
