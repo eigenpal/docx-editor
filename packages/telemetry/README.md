@@ -74,7 +74,7 @@ For other Yjs servers, use `roomTelemetry` from `@docx-editor.dev/telemetry/serv
 | `@docx-editor.dev/telemetry` | `createTelemetry`, `consoleExporter`, `callbackExporter`, `memoryExporter`, `isFailure`, `explainDiagnostic`, the metric catalog |
 | `@docx-editor.dev/telemetry/otel` | `otelExporter`, through your OpenTelemetry SDK |
 | `@docx-editor.dev/telemetry/sentry` | `sentryExporter`, `dropEditorBreadcrumbs`, `EDITOR_SELECTORS` |
-| `@docx-editor.dev/telemetry/prometheus` | `prometheusRegistry`, `metricsHandler`, `fetchMetricsHandler` |
+| `@docx-editor.dev/telemetry/prometheus` | `prometheusRegistry`, `metricsHandler`, `fetchMetricsHandler`, for server processes. Browser metrics go through `otelExporter()` and an OpenTelemetry collector. |
 | `@docx-editor.dev/telemetry/server` | `roomTelemetry`, `hmacRoomLabel` |
 | `@docx-editor.dev/telemetry/hocuspocus` | `withCollaborationTelemetry`, `serveMetrics`, `requireBearerToken`, `hmacRoomLabel` |
 

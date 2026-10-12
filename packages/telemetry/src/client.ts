@@ -51,7 +51,8 @@ export type TelemetryArea =
 /** Options for one area. @public */
 export interface TelemetryAreaOptions {
   /**
-   * Share of events to send, from 0 to 1. Metrics always count every event. Defaults to 1.
+   * Share of events to send, from 0 to 1. Metrics count every event, except that a
+   * `performance` rate of 0 turns performance off, metrics included. Defaults to 1.
    * Each event is sampled on its own, except in `performance`: there the choice is made once
    * for each editor, which sends all of its summaries or none.
    */
@@ -277,7 +278,8 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     }
     const area = areaOf(diagnostic);
     const sampleRate = area ? rate(area) : null;
-    if (sampleRate === null) return;
+    // A performance rate of 0 is off, even when another listener keeps the editor measuring.
+    if (sampleRate === null || (area === 'performance' && sampleRate === 0)) return;
     hookPage();
     recordMetrics(pipeline, checked.event as unknown as EditorDiagnostic);
     const key = windowMs > 0 ? dedupeKey(diagnostic) : null;

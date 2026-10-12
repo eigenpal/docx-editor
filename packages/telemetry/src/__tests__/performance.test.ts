@@ -130,7 +130,8 @@ describe('performance summaries', () => {
     expect(memory.events).toEqual([]);
     expect(memory.metrics).toEqual([]);
 
-    createTelemetry({ exporters: [memory], include: { performance: { sampleRate: 0 } } }).record(
+    // A rate above 0 samples the event out almost always; its metrics still count.
+    createTelemetry({ exporters: [memory], include: { performance: { sampleRate: 1e-9 } } }).record(
       summary()
     );
     expect(memory.events).toEqual([]);
@@ -328,6 +329,12 @@ test('a sample rate of 0 turns performance measuring off', () => {
     include: { performance: { sampleRate: 0 } },
   });
   expect(telemetry.module.wantsDiagnostic?.('performance')).toBe(false);
+  // Another listener can keep the editor measuring; the summary still records nothing.
+  const memory = memoryExporter();
+  createTelemetry({ exporters: [memory], include: { performance: { sampleRate: 0 } } }).record(
+    summary()
+  );
+  expect(memory.metrics).toEqual([]);
 });
 
 test('Sentry issues carry the editor session tag for correlation', () => {

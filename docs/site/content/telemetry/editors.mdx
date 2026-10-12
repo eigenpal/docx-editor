@@ -73,7 +73,7 @@ The `include` option turns areas on. If you omit `include`, every area is on.
 | `collaborationClient` | Collaboration status changes, failure codes, connect time, and the number of people in the room. |
 | `performance` | How fast the editor responds: the time from a key press or click to the next frame on screen, and engine layout and paint times. For more information, see [Measure editor performance](#measure-editor-performance). |
 
-Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event.
+Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event. The one exception is `performance`: a rate of 0 turns it off, metrics included.
 
 By default, an opened document is described by its size and page buckets. To also send its part, paragraph, review item, and embedded font buckets, set `documentShape: 'detailed'`. Several counts together describe a document more closely, so turn it on only when you need it.
 
@@ -160,6 +160,8 @@ export const telemetry = createTelemetry({
   include: { performance: true, documentOpen: true },
 });
 ```
+
+`Sentry.setTag` sets the tag for the whole page. If a page shows two editors, the tag names the editor that sent the last event.
 
 The OpenTelemetry exporter adds events to the active span, so an event recorded during one of your own spans is already part of that trace. Issues from the Sentry exporter carry the `docx_editor.editor_session` tag.
 
