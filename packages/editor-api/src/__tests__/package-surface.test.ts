@@ -147,7 +147,7 @@ describe('how the package is built and checked', () => {
   test('typecheck really type-checks', () => {
     // It used to `echo` a paragraph explaining why it could not. A script that prints and exits
     // zero is worse than no script: every aggregate `bun run typecheck` reported success.
-    expect(manifest.scripts.typecheck).toBe('tsc --noEmit');
+    expect(manifest.scripts.typecheck).toBe('bun check');
     expect(manifest.scripts['typecheck:disabled']).toBeUndefined();
   });
 
