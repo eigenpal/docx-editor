@@ -88,6 +88,13 @@ export type HistoryDiagnosticCode =
   | 'history.possible-ungrouped-gesture'
   | 'history.possible-fragmented-gesture';
 
+/**
+ * Why a performance summary needs attention. Informational: nothing was refused.
+ *
+ * @public
+ */
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
+
 /** Why a custom node's stored payload could not be read. The node name is never reported. @public */
 export type CustomNodeDiagnosticCode =
   | 'custom-node.payload-invalid'
@@ -109,6 +116,7 @@ export type DiagnosticCode =
   | FontDiagnosticCode
   | HistoryDiagnosticCode
   | CustomNodeDiagnosticCode
+  | PerformanceDiagnosticCode
   | CollaborationDiagnosticCode;
 
 /**

@@ -113,9 +113,14 @@ function eventAttributes(event: TelemetryEvent): OtelAttributes {
     if (key === 'resource' || key === 'hint' || key === 'docs') continue;
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
       attributes[`docx_editor.${key}`] = value;
-    else if (key === 'shape' && value && typeof value === 'object')
+    else if (key === 'shape' && value && typeof value === 'object') {
       for (const [field, bucket] of Object.entries(value))
         if (typeof bucket === 'string') attributes[`docx_editor.shape.${field}`] = bucket;
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // A timing summary: its numbers, such as `docx_editor.layout.p95Ms`. Bands go to metrics.
+      for (const [field, number] of Object.entries(value))
+        if (typeof number === 'number') attributes[`docx_editor.${key}.${field}`] = number;
+    }
   }
   return attributes;
 }

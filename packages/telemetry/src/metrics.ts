@@ -41,6 +41,8 @@ const BYTES = [
   256 * 1024 * 1024,
   1024 * 1024 * 1024,
 ];
+/** The bands of a performance summary, in seconds. */
+const EDITOR_TIMING = [0.016, 0.033, 0.05, 0.1, 0.2, 0.5, 1];
 const PEOPLE = [1, 2, 3, 5, 10, 20, 50, 100, 250];
 const NODES = [1_000, 10_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
 const RATIO = [0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 1];
@@ -142,6 +144,31 @@ export const METRICS = Object.freeze({
     'People in the room, as each client sees it when the count changes.',
     [],
     PEOPLE
+  ),
+
+  editorInteractionDuration: metric(
+    'docx_editor.editor.interaction.duration',
+    'histogram',
+    's',
+    'Key presses and pointer presses on the pages, to the next frame on screen. Bucket counts are exact; the sum is estimated from the bands.',
+    [],
+    EDITOR_TIMING
+  ),
+  editorLayoutDuration: metric(
+    'docx_editor.editor.layout.duration',
+    'histogram',
+    's',
+    'Engine layout passes. Bucket counts are exact; the sum is estimated from the bands.',
+    [],
+    EDITOR_TIMING
+  ),
+  editorPaintDuration: metric(
+    'docx_editor.editor.paint.duration',
+    'histogram',
+    's',
+    'Engine paints of the pages. Bucket counts are exact; the sum is estimated from the bands.',
+    [],
+    EDITOR_TIMING
   ),
 
   droppedEvents: metric(

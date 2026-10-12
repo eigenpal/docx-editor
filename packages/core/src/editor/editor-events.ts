@@ -47,6 +47,7 @@ export function createEditorEvents(snapshot: () => EditorSnapshot) {
       for (const handler of [...handlers.reviewItemReveal]) handler(value);
     },
     hasErrorHandlers: () => handlers.error.size > 0,
+    hasDiagnosticHandlers: () => handlers.diagnostic.size > 0,
     clear() {
       for (const set of Object.values(handlers)) set.clear();
     },

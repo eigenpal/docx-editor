@@ -148,5 +148,6 @@ export type {
   EditDiagnosticCode,
   FontDiagnosticCode,
   HistoryDiagnosticCode,
+  PerformanceDiagnosticCode,
   ReviewDiagnosticCode,
 } from './diagnostic-vocabulary.ts';

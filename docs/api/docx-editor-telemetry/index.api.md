@@ -72,7 +72,7 @@ export interface DiagnosticBase {
 }
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export interface DiagnosticExplanation {
@@ -112,7 +112,7 @@ export interface DocumentShape {
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
-export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic;
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic;
 
 // @public
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
@@ -213,6 +213,9 @@ export const METRICS: Readonly<{
     documentOpens: MetricDefinition;
     droppedEvents: MetricDefinition;
     editRejections: MetricDefinition;
+    editorInteractionDuration: MetricDefinition;
+    editorLayoutDuration: MetricDefinition;
+    editorPaintDuration: MetricDefinition;
     fontFailures: MetricDefinition;
     historyDiagnostics: MetricDefinition;
     messageRefusals: MetricDefinition;
@@ -235,6 +238,21 @@ export const METRICS: Readonly<{
     updateBytes: MetricDefinition;
     updates: MetricDefinition;
 }>;
+
+// @public
+export interface PerformanceDiagnostic extends DiagnosticBase {
+    readonly code?: PerformanceDiagnosticCode;
+    readonly interaction?: TimingSummary;
+    // (undocumented)
+    readonly kind: 'performance';
+    readonly layout?: TimingSummary;
+    readonly pagesBucket?: CountBucket;
+    readonly paint?: TimingSummary;
+    readonly windowMs: number;
+}
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
 
 // @public
 export function prometheusName(definition: MetricDefinition): string;
@@ -260,7 +278,7 @@ export interface Telemetry {
 }
 
 // @public
-export type TelemetryArea = 'documentOpen' | 'editing' | 'trackedChanges' | 'fonts' | 'history' | 'customNodes' | 'collaborationClient';
+export type TelemetryArea = 'documentOpen' | 'editing' | 'trackedChanges' | 'fonts' | 'history' | 'customNodes' | 'collaborationClient' | 'performance';
 
 // @public
 export interface TelemetryAreaOptions {
@@ -309,6 +327,15 @@ export interface TelemetryPipelineOptions {
     readonly exporters: readonly TelemetryExporter[];
     readonly onExporterError?: (error: unknown, exporter: string) => void;
     readonly resource?: Attributes;
+}
+
+// @public
+export interface TimingSummary {
+    readonly bands: readonly number[];
+    readonly count: number;
+    readonly maxMs: number;
+    readonly p50Ms: number;
+    readonly p95Ms: number;
 }
 
 ```

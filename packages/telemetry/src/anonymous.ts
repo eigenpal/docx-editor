@@ -27,6 +27,7 @@ const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
     'custom-node',
     'collab.status',
     'collab.participants',
+    'performance',
   ]),
   code: CODES,
   outcome: new Set(['opened', 'rejected']),
@@ -49,6 +50,7 @@ const NUMBERS = new Set([
   'repeated',
   'connectMs',
   'participants',
+  'windowMs',
 ]);
 const BOOLEANS = new Set(['tracked', 'recovering']);
 
@@ -103,6 +105,15 @@ export function checkEvent(
       out.shape = shape;
       continue;
     }
+    if (TIMING_FIELDS.has(key)) {
+      const timing = checkTiming(value);
+      if (!timing) {
+        devWarn(`dropped an event whose "${key}" is not a valid timing summary`, `timing:${key}`);
+        return { dropped: 'invalid-field' };
+      }
+      out[key] = timing;
+      continue;
+    }
     if (key === 'hint' || key === 'docs') {
       if (explained && value === explained[key]) out[key] = value;
       continue;
@@ -123,6 +134,32 @@ export function checkEvent(
   }
   out.resource = event.resource;
   return { event: Object.freeze(out) as unknown as TelemetryEvent };
+}
+
+const TIMING_FIELDS: ReadonlySet<string> = new Set(['interaction', 'layout', 'paint']);
+const TIMING_NUMBERS = ['count', 'p50Ms', 'p95Ms', 'maxMs'] as const;
+/** Bands in a timing summary: seven bounds and one band above them. */
+const TIMING_BANDS = 8;
+
+const countable = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/** A timing summary with exactly its numbers and its bands, or null. */
+function checkTiming(value: unknown): Readonly<Record<string, unknown>> | null {
+  if (!value || typeof value !== 'object') return null;
+  const fields = value as Record<string, unknown>;
+  const allowedKeys: readonly string[] = [...TIMING_NUMBERS, 'bands'];
+  if (Object.keys(fields).some((key) => !allowedKeys.includes(key))) return null;
+  const out: Record<string, unknown> = {};
+  for (const key of TIMING_NUMBERS) {
+    if (!countable(fields[key])) return null;
+    out[key] = fields[key];
+  }
+  const bands = fields.bands;
+  if (!Array.isArray(bands) || bands.length !== TIMING_BANDS || !bands.every(countable))
+    return null;
+  out.bands = Object.freeze([...bands]);
+  return Object.freeze(out);
 }
 
 const SHAPE_FIELDS = ['parts', 'paragraphs', 'reviewItems', 'embeddedFonts'] as const;

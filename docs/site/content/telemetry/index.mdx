@@ -44,6 +44,7 @@ Install the peer dependency for each exporter that you use: `@opentelemetry/api`
 - Every diagnostic is built from closed lists of codes, booleans, and bucketed numbers. The engine creates it this way, and the package checks each event again before an exporter receives it.
 - Hints and documentation links are fixed text for each code.
 - Sizes and counts are buckets, such as `4-8MiB` or `10-99`.
+- Performance summaries hold counts and milliseconds only. No key, position, or text is recorded.
 - The `editorSessionId` value is random for each editor instance and is never stored.
 - Metric labels accept only short identifier values. Any other value becomes `other`.
 - Room names never appear in metrics.

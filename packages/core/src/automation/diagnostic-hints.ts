@@ -166,6 +166,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'A custom node points at a payload the document does not contain, often after a partial export or a manual edit. The node opened without its data.',
   'font.unsupported-face':
     'A font face uses a format or face index the editor does not support. The editor uses a substitute.',
+  'performance.slow-interaction':
+    'One key press or click in 20 took more than 200 ms to reach the screen. Compare the layout and paint timings in this event: slow layout follows document size, slow paint follows the pages on screen.',
 };
 
 /** Collaboration codes share hints by cause, as the failure code groups do. */

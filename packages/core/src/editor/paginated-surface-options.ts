@@ -123,6 +123,12 @@ export interface PaginatedSurfaceOptions {
    */
   readonly onRejection?: (reason: string) => void;
   /**
+   * Told the milliseconds of each layout pass and each paint. For `'input'`, told the browser
+   * timestamp of each key press or pointer press on the pages, so a listener can time it to
+   * the next frame. Numbers only.
+   */
+  readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
+  /**
    * A plain click on an external (or inert) hyperlink, for a host to open its popover with.
    *
    * Absent means such a click does nothing. That is deliberate: a host with no popover

@@ -5,8 +5,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import { explainDiagnostic } from '@docx-editor.dev/core';
-import type { EditorDiagnostic, EditorModule } from '@docx-editor.dev/core';
-import { METRICS } from './metrics.ts';
+import type { EditorDiagnostic, EditorModule, TimingSummary } from '@docx-editor.dev/core';
+import { METRICS, type MetricDefinition } from './metrics.ts';
 import { checkEvent } from './anonymous.ts';
 import {
   ENGINE_VERSION,
@@ -28,6 +28,8 @@ import {
  * - `history`: undo steps that did not group as the gesture intended (`history`).
  * - `customNodes`: custom node payloads that could not be read (`custom-node`).
  * - `collaborationClient`: collaboration status changes and room size (`collab.*`).
+ * - `performance`: how fast the editor responds: key presses and clicks to the next frame,
+ *   and engine layout and paint times, as one summary per minute of use (`performance`).
  *
  * @public
  */
@@ -38,7 +40,8 @@ export type TelemetryArea =
   | 'fonts'
   | 'history'
   | 'customNodes'
-  | 'collaborationClient';
+  | 'collaborationClient'
+  | 'performance';
 
 /** Options for one area. @public */
 export interface TelemetryAreaOptions {
@@ -109,6 +112,7 @@ const ALL_AREAS: TelemetryInclude = {
   history: true,
   customNodes: true,
   collaborationClient: true,
+  performance: true,
 };
 
 /** Refusals about tracking itself, reported under `trackedChanges` even with tracking off. */
@@ -137,6 +141,8 @@ function areaOf(event: EditorDiagnostic): TelemetryArea | null {
     case 'collab.status':
     case 'collab.participants':
       return 'collaborationClient';
+    case 'performance':
+      return 'performance';
     default:
       return null;
   }
@@ -332,5 +338,27 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
       return;
     case 'collab.participants':
       pipeline.metric(METRICS.collabClientParticipants, event.count);
+      return;
+    case 'performance':
+      recordTiming(pipeline, METRICS.editorInteractionDuration, event.interaction);
+      recordTiming(pipeline, METRICS.editorLayoutDuration, event.layout);
+      recordTiming(pipeline, METRICS.editorPaintDuration, event.paint);
   }
+}
+
+/**
+ * A summary's bands as histogram samples: each band's count at the middle of the band, and the
+ * band above the last bound at the slowest timing. Every sample lands in its own bucket, so the
+ * bucket counts are exact.
+ */
+function recordTiming(pipeline: Pipeline, definition: MetricDefinition, summary?: TimingSummary) {
+  if (!summary) return;
+  const bounds = definition.buckets ?? [];
+  summary.bands.forEach((count, band) => {
+    const upper = bounds[band];
+    const lower = band === 0 ? 0 : bounds[band - 1]!;
+    const seconds =
+      upper === undefined ? Math.max(summary.maxMs / 1000, lower) : (lower + upper) / 2;
+    for (let sample = 0; sample < count; sample += 1) pipeline.metric(definition, seconds);
+  });
 }

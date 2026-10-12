@@ -18,6 +18,9 @@ Every metric has an OpenTelemetry name, such as `docx_editor.collab.room.load.du
 | `docx_editor_collab_client_status_transitions_total` | counter | `status`, `code` | Collaboration status changes on clients, by new status and failure code. |
 | `docx_editor_collab_client_connect_duration_seconds` | histogram | none | Time from joining a room to the first ready status. |
 | `docx_editor_collab_client_participants` | histogram | none | People in the room, as each client sees it when the count changes. |
+| `docx_editor_editor_interaction_duration_seconds` | histogram | none | Key presses and pointer presses on the pages, to the next frame on screen. Bucket counts are exact; the sum is estimated from the bands. |
+| `docx_editor_editor_layout_duration_seconds` | histogram | none | Engine layout passes. Bucket counts are exact; the sum is estimated from the bands. |
+| `docx_editor_editor_paint_duration_seconds` | histogram | none | Engine paints of the pages. Bucket counts are exact; the sum is estimated from the bands. |
 | `docx_editor_telemetry_dropped_events_total` | counter | `reason` | Events the anonymity guard dropped, by reason. Usually a version mismatch. |
 | `docx_editor_collab_rooms_active` | gauge | none | Rooms loaded. |
 | `docx_editor_collab_connections_active` | gauge | none | Open client connections. One person with two tabs is two connections. |

@@ -21,7 +21,12 @@ import * as Sentry from '@sentry/react';
 
 export const telemetry = createTelemetry({
   exporters: [sentryExporter(Sentry)],
-  include: { documentOpen: true, trackedChanges: true, editing: true },
+  include: {
+    documentOpen: true,
+    trackedChanges: true,
+    editing: true,
+    performance: { sampleRate: 0.1 }, // typing delay, layout, and paint times
+  },
   consent: () => consentManager.analytics === true, // your consent manager
 });
 

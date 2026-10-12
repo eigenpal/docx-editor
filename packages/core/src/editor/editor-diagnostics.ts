@@ -40,6 +40,7 @@ import {
   reviewDiagnosticCode,
 } from './diagnostic-codes.ts';
 import { warnFontFailureOnce } from './font-configuration.ts';
+import { createPerformanceSampler, type PerformanceClock } from './editor-performance.ts';
 import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts';
 
 /** Commands the facade answers itself, before the command classifier sees them. */
@@ -122,10 +123,14 @@ export interface EditorDiagnosticsOptions {
       event: K,
       handler: (diagnostic: HistoryDiagnostic) => void
     ) => () => void;
+    /** Whether `editor.on('diagnostic')` has a handler. Performance is measured only then. */
+    readonly hasDiagnosticHandlers?: () => boolean;
   };
   /** The custom-node reporter, observed so its codes join the stream. */
   readonly customNodes?: CustomNodeDiagnosticReporter;
   readonly now?: () => number;
+  /** Performance window and scheduling, for tests. */
+  readonly performance?: { readonly windowMs?: number; readonly clock?: PerformanceClock };
 }
 
 const HISTORY_KINDS: ReadonlySet<string> = new Set([
@@ -162,6 +167,13 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
   });
   const session = options.modules.collaboration?.session;
   const stopCollaboration = session ? observeCollaboration(session, deliver, clock) : () => {};
+  const performance = createPerformanceSampler({
+    deliver,
+    enabled: () =>
+      options.modules.diagnosticListeners.length > 0 ||
+      options.events.hasDiagnosticHandlers?.() === true,
+    ...options.performance,
+  });
 
   return {
     editorSessionId: emitter.editorSessionId,
@@ -268,8 +280,20 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       );
     },
 
-    /** Stop observing the collaboration session. The editor calls this when destroyed. */
+    /** A layout or paint duration, or a press timestamp, from the surface. */
+    timing(phase: 'layout' | 'paint' | 'input', value: number, surface?: PaginatedSurface): void {
+      performance.timing(
+        phase,
+        value,
+        phase === 'paint' && surface ? totalPages(surface) : undefined
+      );
+    },
+    /**
+     * Send the last performance summary and stop observing the collaboration session. The
+     * editor calls this when destroyed, before it drops its event handlers.
+     */
     dispose(): void {
+      performance.dispose();
       stopCollaboration();
     },
   };

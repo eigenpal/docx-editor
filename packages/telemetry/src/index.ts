@@ -75,6 +75,9 @@ export type {
   FontFailedDiagnostic,
   HistoryDiagnosticCode,
   HistoryDiagnosticEvent,
+  PerformanceDiagnostic,
+  PerformanceDiagnosticCode,
   ReviewDiagnosticCode,
   ReviewSkippedDiagnostic,
+  TimingSummary,
 } from '@docx-editor.dev/core';

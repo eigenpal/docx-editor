@@ -27,6 +27,7 @@ import type {
   CountBucket,
   CustomNodeDiagnosticCode,
   HistoryDiagnosticCode,
+  PerformanceDiagnosticCode,
 } from '../automation/diagnostic-vocabulary.ts';
 
 export type {
@@ -40,6 +41,7 @@ export type {
   CountBucket,
   CustomNodeDiagnosticCode,
   HistoryDiagnosticCode,
+  PerformanceDiagnosticCode,
 } from '../automation/diagnostic-vocabulary.ts';
 export type { DiagnosticExplanation } from '../automation/diagnostic-hints.ts';
 
@@ -162,6 +164,55 @@ export interface CollaborationParticipantsDiagnostic extends DiagnosticBase {
 }
 
 /**
+ * Timings of one kind over a performance window. Every value is in milliseconds, rounded to
+ * whole milliseconds.
+ *
+ * @public
+ */
+export interface TimingSummary {
+  /** Timings measured in the window. */
+  readonly count: number;
+  /** Median. Exact up to 2048 timings; above that, from a uniform sample of 2048. */
+  readonly p50Ms: number;
+  /** 95th percentile, from the same sample as the median. */
+  readonly p95Ms: number;
+  /** The slowest timing, always exact. */
+  readonly maxMs: number;
+  /**
+   * Timings per band, always exact. Eight counts: up to 16, 33, 50, 100, 200, 500, and 1000
+   * ms, then over 1000 ms. A metrics backend builds a histogram from these.
+   */
+  readonly bands: readonly number[];
+}
+
+/**
+ * How the editor performed while it was used: one summary per window, never one event per key
+ * press. Sent after a minute of use, when the page is hidden, and when the editor is destroyed,
+ * if anything was measured since the last summary.
+ *
+ * @public
+ */
+export interface PerformanceDiagnostic extends DiagnosticBase {
+  readonly kind: 'performance';
+  /** Present when the summary needs attention, such as slow key presses. */
+  readonly code?: PerformanceDiagnosticCode;
+  /** Milliseconds from the window's first timing to the summary. */
+  readonly windowMs: number;
+  /** Pages in the document at the last paint. */
+  readonly pagesBucket?: CountBucket;
+  /**
+   * Key presses and pointer presses on the pages, from the browser event to the next frame on
+   * screen: the delay a person feels. At most one is timed at a time, so a burst of key repeats
+   * is timed from its first press.
+   */
+  readonly interaction?: TimingSummary;
+  /** Engine layout passes. */
+  readonly layout?: TimingSummary;
+  /** Engine paints of the pages. */
+  readonly paint?: TimingSummary;
+}
+
+/**
  * One anonymous diagnostic. Switch on `kind` to narrow `code`.
  *
  * @example
@@ -183,7 +234,8 @@ export type EditorDiagnostic =
   | HistoryDiagnosticEvent
   | CustomNodeDiagnosticEvent
   | CollaborationStatusDiagnostic
-  | CollaborationParticipantsDiagnostic;
+  | CollaborationParticipantsDiagnostic
+  | PerformanceDiagnostic;
 
 /** The `kind` of every {@link EditorDiagnostic}. @public */
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];

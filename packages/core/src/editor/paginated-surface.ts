@@ -884,6 +884,13 @@ export function mountPaginatedSurface(
   let lastLayoutMs = 0;
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
+  /** The milliseconds since `began`, also told to `onTiming`. */
+  const timed = (phase: 'layout' | 'paint', began: number): number => {
+    const ms = now() - began;
+    options.onTiming?.(phase, ms);
+    return ms;
+  };
+  const onInputTiming = (event: Event): void => options.onTiming?.('input', event.timeStamp);
 
   // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode } =
@@ -1445,7 +1452,7 @@ export function mountPaginatedSurface(
       undefined,
       openingBlockLimit ?? undefined
     );
-    lastLayoutMs = now() - began;
+    lastLayoutMs = timed('layout', began);
     return layout;
   }
 
@@ -1651,7 +1658,7 @@ export function mountPaginatedSurface(
       deferredLayout.abandon();
       const steps = layoutDocumentSteps(scope.revision, scope);
       const layout = deferredLayout.run(steps, scope.revision);
-      lastLayoutMs = now() - began;
+      lastLayoutMs = timed('layout', began);
       return layout;
     },
     currentRevision: () => session.packageRevision(),
@@ -2691,7 +2698,7 @@ export function mountPaginatedSurface(
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
-    lastPaintMs = now() - paintBegan;
+    lastPaintMs = timed('paint', paintBegan);
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);
@@ -5723,6 +5730,8 @@ export function mountPaginatedSurface(
         document.removeEventListener('selectionchange', onSelectionChange);
         pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
+        pagesLayer.removeEventListener('keydown', onInputTiming, { capture: true });
+        pagesLayer.removeEventListener('pointerdown', onInputTiming, { capture: true });
         pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onKeyDown);
         unbindDirectionChord();
@@ -6019,6 +6028,8 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });
   pagesLayer.addEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
+  pagesLayer.addEventListener('keydown', onInputTiming, { capture: true });
+  pagesLayer.addEventListener('pointerdown', onInputTiming, { capture: true });
   pagesLayer.addEventListener('keydown', onKeyDown);
   const unbindDirectionChord = bindDirectionChord(pagesLayer, directionChord);
   pagesLayer.addEventListener('beforeinput', onBeforeInput as EventListener);

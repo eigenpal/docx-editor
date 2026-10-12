@@ -188,7 +188,7 @@ export interface DiagnosticBase {
 }
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export interface DiagnosticExplanation {
@@ -999,7 +999,7 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
-export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic;
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic;
 
 // @public
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
@@ -1790,6 +1790,21 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface PerformanceDiagnostic extends DiagnosticBase {
+    readonly code?: PerformanceDiagnosticCode;
+    readonly interaction?: TimingSummary;
+    // (undocumented)
+    readonly kind: 'performance';
+    readonly layout?: TimingSummary;
+    readonly pagesBucket?: CountBucket;
+    readonly paint?: TimingSummary;
+    readonly windowMs: number;
+}
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
@@ -2433,6 +2448,15 @@ export interface Theme {
 
 // @public
 export type ThemeColorScheme = Readonly<Record<string, string>>;
+
+// @public
+export interface TimingSummary {
+    readonly bands: readonly number[];
+    readonly count: number;
+    readonly maxMs: number;
+    readonly p50Ms: number;
+    readonly p95Ms: number;
+}
 
 // @public
 export type TrackedChangeFilterMode = 'accept' | 'reject';

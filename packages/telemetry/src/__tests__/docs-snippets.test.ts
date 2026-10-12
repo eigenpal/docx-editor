@@ -234,3 +234,22 @@ function tsconfig(): object {
     include: ['*.ts', '*.tsx'],
   };
 }
+
+test('the metrics page lists every metric with its type, labels, and description', async () => {
+  const { METRICS, prometheusName } = await import('../metrics.ts');
+  const page = readFileSync(path.join(TELEMETRY_DOCS, 'metrics.mdx'), 'utf8');
+  const rows = new Map<string, string>();
+  for (const match of page.matchAll(/^\| `([a-z_]+)` \| (.+) \|$/gm))
+    rows.set(match[1]!, match[2]!);
+  const expected = Object.values(METRICS).map((definition) => {
+    const labels = definition.labels.length
+      ? definition.labels.map((label) => `\`${label}\``).join(', ')
+      : 'none';
+    return [
+      prometheusName(definition),
+      `${definition.kind} | ${labels} | ${definition.description}`,
+    ];
+  });
+  expect(expected.filter(([name, row]) => rows.get(name!) !== row)).toEqual([]);
+  expect([...rows.keys()].sort()).toEqual(expected.map(([name]) => name!).sort());
+});

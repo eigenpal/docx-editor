@@ -167,6 +167,12 @@ export function isSentryIssue(event: TelemetryEvent): boolean {
   }
 }
 
+/** An opened document, or a performance summary that needs no attention. */
+function isInformational(event: TelemetryEvent): boolean {
+  if (event.kind === 'document.open') return event.outcome === 'opened';
+  return event.kind === 'performance' && event.code === undefined;
+}
+
 function codeOf(event: TelemetryEvent): string {
   return 'code' in event && event.code ? event.code : event.kind;
 }
@@ -232,7 +238,7 @@ export function sentryExporter(
       sentry.addBreadcrumb({
         category: 'docx-editor',
         message: describeEvent(event),
-        level: event.kind === 'document.open' && event.outcome === 'opened' ? 'info' : 'warning',
+        level: isInformational(event) ? 'info' : 'warning',
         data: dataOf(event),
       });
     },

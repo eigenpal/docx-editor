@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/telemetr
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
+import type { TimingSummary } from '@docx-editor.dev/core';
 import type { MetricRecord, TelemetryEvent, TelemetryExporter } from './pipeline.ts';
 
 /**
@@ -63,7 +64,22 @@ export function describeEvent(event: TelemetryEvent): string {
       const connected = event.connectMs !== undefined ? ` after ${event.connectMs} ms` : '';
       return `collaboration ${event.status}${code}${event.recovering ? ' (recovering)' : ''}${connected}`;
     }
+    case 'performance': {
+      const parts = [
+        timingText('key presses and clicks', event.interaction),
+        timingText('layout', event.layout),
+        timingText('paint', event.paint),
+      ].filter(Boolean);
+      const pages = event.pagesBucket === undefined ? '' : `, ${event.pagesBucket} pages`;
+      return `performance over ${Math.round(event.windowMs / 1000)} s${pages}: ${parts.join('; ')}`;
+    }
   }
+}
+
+/** `layout p50 4 ms, p95 12 ms, max 30 ms (x120)`, or an empty string. */
+function timingText(label: string, summary?: TimingSummary): string {
+  if (!summary) return '';
+  return `${label} p50 ${summary.p50Ms} ms, p95 ${summary.p95Ms} ms, max ${summary.maxMs} ms (x${summary.count})`;
 }
 
 /**
@@ -83,6 +99,7 @@ export function isFailure(event: TelemetryEvent): boolean {
       return event.outcome === 'rejected';
     case 'collab.participants':
     case 'history':
+    case 'performance':
       return false;
     case 'collab.status':
       // An expired token and a compacted room end in a rejoin; they are not faults.
@@ -139,7 +156,8 @@ export function consoleExporter(options: ConsoleExporterOptions = {}): Telemetry
       const lines = [`[docx-editor] ${describeEvent(event)}`];
       if (event.hint) lines.push(`  ${event.hint}`);
       if (event.docs) lines.push(`  ${event.docs}`);
-      (isFailure(event) ? out.warn : out.info).call(out, lines.join('\n'));
+      const warn = isFailure(event) || (event.kind === 'performance' && event.code !== undefined);
+      (warn ? out.warn : out.info).call(out, lines.join('\n'));
     },
     ...(options.metrics
       ? {

@@ -1380,7 +1380,7 @@ export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAu
 export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export function diagnosticCodes(): readonly DiagnosticCode[];
@@ -1429,6 +1429,9 @@ export function openDiagnosticCode(reason: string, limit?: string): DocumentOpen
 
 // @public
 export function paginationSnapshotOf(layout: SemanticLayout): AutomationPaginationSnapshot;
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
 
 // @public
 export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';

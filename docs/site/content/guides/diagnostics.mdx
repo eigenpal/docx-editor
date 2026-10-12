@@ -152,6 +152,14 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="custom-node-payload-invalid" />`custom-node.payload-invalid` | A custom node payload in the document does not match the node schema, so the node opened without its data. Check the schema version that wrote the file. |
 | <a id="custom-node-payload-missing" />`custom-node.payload-missing` | A custom node points at a payload the document does not contain, often after a partial export or a manual edit. The node opened without its data. |
 
+### Performance
+
+A `performance` event summarizes how fast the editor responded during a window. It carries a code only when the summary needs attention.
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="performance-slow-interaction" />`performance.slow-interaction` | One key press or click in 20 took more than 200 ms to reach the screen. Compare the layout and paint timings in this event: slow layout follows document size, slow paint follows the pages on screen. |
+
 ### Collaboration
 
 A collaboration code is `collab.` followed by the session's own failure code. It appears on `collab.status` events. An edit that a session refuses is an `edit.rejected` event with an `edit.collaboration-*` code instead, so the `collab.collaboration-session-*` and `collab.collaboration-text-limit` codes appear only when a session reports them as its status reason.

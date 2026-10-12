@@ -2324,6 +2324,7 @@ export interface PaginatedSurfaceOptions {
     // (undocumented)
     readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
     readonly onRequestTextFormField?: (session: TextFormFieldDialogSession) => boolean;
+    readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
     // (undocumented)
     readonly onToggleParagraphMarks?: () => void;
     readonly pointer?: 'engine' | 'native';

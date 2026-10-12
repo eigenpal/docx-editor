@@ -644,6 +644,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionMarkup: revisionMarkupState.current(),
       ...reviewModelOption(modules, reportDiagnostic),
       onRejection: (reason) => diagnostics.inputRejected(reason, suggesting()),
+      onTiming: (phase, value) => diagnostics.timing(phase, value, surface ?? undefined),
       ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
@@ -2645,8 +2646,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pendingTextFormInputs = new WeakMap();
       mountGeneration += 1;
       bump();
-      events.clear();
       diagnostics.dispose();
+      events.clear();
     },
 
     on: events.on,
