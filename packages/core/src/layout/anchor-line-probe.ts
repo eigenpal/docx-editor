@@ -12,6 +12,7 @@
 // and horizontal float passages are placement-time decisions this pass cannot see.
 
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
+import { pageBreakYieldsToLineBreak } from './page-break-before-line-break.ts';
 import type { FieldAwarePiece } from './field-projection.ts';
 import { lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
 import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
@@ -62,7 +63,7 @@ export function anchorLineStartsByModelOffset(input: {
     probeWidth = 0;
     probeLineIndex += 1;
   };
-  for (const piece of pieces) {
+  for (const [pieceIndex, piece] of pieces.entries()) {
     const equation = equationLayoutOf(piece);
     if (equation) {
       const width = equation.geometry.box.width;
@@ -80,7 +81,11 @@ export function anchorLineStartsByModelOffset(input: {
       probeWordStartWidth = -1;
       continue;
     }
-    if (piece.text === PAGE_BREAK_CHAR && input.pageBreaksIgnored) continue;
+    if (
+      piece.text === PAGE_BREAK_CHAR &&
+      (input.pageBreaksIgnored || pageBreakYieldsToLineBreak(pieces, pieceIndex))
+    )
+      continue;
     if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
       closeProbeLine(piece.end);
       continue;

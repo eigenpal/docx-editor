@@ -36,6 +36,7 @@ export {
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
 
 import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
+import { pageBreakYieldsToLineBreak } from './page-break-before-line-break.ts';
 import {
   propertiesOfRunContainer as propertiesOf,
   type FieldAwarePiece,
@@ -1181,7 +1182,7 @@ export function breakParagraph(
         ...paragraphSpanMetadata(piece),
       });
       line.end = piece.end;
-      if (pageBreaksIgnored) continue;
+      if (pageBreaksIgnored || pageBreakYieldsToLineBreak(pieces, pieceIndex)) continue;
       growLineMetrics(line, breakMetrics);
       const slotLine: boolean = firstLineOpen;
       closeLine();
