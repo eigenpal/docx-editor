@@ -79,7 +79,7 @@ async function person(browser, url, id, deadline) {
   let lastFlush = Date.now();
   while (Date.now() < deadline) {
     const roll = Math.random();
-    if (roll < 0.03 && url === SINGLE_USER) {
+    if (roll < 0.03 && url.startsWith(SINGLE_USER)) {
       // A broken file, then the sample again.
       await page.getByTestId('open-file').setInputFiles(BROKEN_FILE);
       await pause(1_000);
@@ -112,8 +112,10 @@ const deadline = Date.now() + MINUTES * 60_000;
 console.log(`${PEOPLE} people on each example for ${MINUTES} minutes`);
 const people = [];
 for (let id = 0; id < PEOPLE; id += 1) {
-  people.push(person(browser, SINGLE_USER, `single-${id}`, deadline));
-  people.push(person(browser, COLLABORATION, `room-${id}`, deadline));
+  // Half the people run the next release, so the dashboards can compare versions.
+  const version = id % 2 === 0 ? '1.0.0' : '1.1.0';
+  people.push(person(browser, `${SINGLE_USER}?version=${version}`, `single-${id}`, deadline));
+  people.push(person(browser, `${COLLABORATION}?version=${version}`, `room-${id}`, deadline));
 }
 await Promise.allSettled(people);
 await browser.close();

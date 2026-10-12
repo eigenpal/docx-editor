@@ -37,7 +37,16 @@ export const consent = { analytics: true };
 /** The events this page sent, for the panel beside the editor. */
 export const eventLog = createEventLog();
 
+// Labels the dashboards filter and compare by. Few distinct values each, so they may label
+// metrics. `?version=` lets the simulation show two releases side by side.
+const release = {
+  'deployment.environment': import.meta.env.MODE,
+  'app.version': new URLSearchParams(location.search).get('version') ?? '1.0.0',
+};
+
 export const telemetry = createTelemetry({
+  attributes: release,
+  metricLabels: ['deployment.environment', 'app.version'],
   exporters: [
     otelExporter(),
     ...(sentryDsn ? [sentryExporter(Sentry)] : []),

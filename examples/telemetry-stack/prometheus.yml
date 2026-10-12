@@ -1,5 +1,10 @@
 global:
   scrape_interval: 5s
+  evaluation_interval: 30s
+
+# SLI recording rules and burn-rate alerts. See RUNBOOK.md.
+rule_files:
+  - /etc/prometheus/rules.yml
 
 # Editor metrics arrive over OTLP from the collector: `service.name` becomes `job`.
 otlp:

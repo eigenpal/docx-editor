@@ -1,0 +1,133 @@
+# Service level indicators for the editor, and multi-window burn-rate alerts.
+# Generated from the dashboards script. A recording rule `docx:<sli>:ratio<window>` is the
+# share of bad events in that window; the budget is the share the objective allows.
+# Windows here are short so the local stack shows them; production uses 30 days.
+groups:
+  - name: docx-editor-sli
+    interval: 30s
+    rules:
+      - record: docx:interaction_slow:ratio5m
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.1"}[5m])) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[5m]))
+      - record: docx:interaction_slow:ratio30m
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.1"}[30m])) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[30m]))
+      - record: docx:interaction_slow:ratio1h
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.1"}[1h])) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[1h]))
+      - record: docx:interaction_slow:ratio6h
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.1"}[6h])) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[6h]))
+      - record: docx:interaction_slow:ratio1d
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.1"}[1d])) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[1d]))
+      - record: docx:interaction_slow:ratio3d
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.1"}[3d])) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[3d]))
+      - record: docx:open_failed:ratio5m
+        expr: (sum by (job, deployment_environment) (rate(docx_editor_document_opens_total{outcome="rejected",code=~"open.failed|open.unsupported-source|open.invalid-limits"}[5m])) or sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[5m])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[5m]))
+      - record: docx:open_failed:ratio30m
+        expr: (sum by (job, deployment_environment) (rate(docx_editor_document_opens_total{outcome="rejected",code=~"open.failed|open.unsupported-source|open.invalid-limits"}[30m])) or sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[30m])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[30m]))
+      - record: docx:open_failed:ratio1h
+        expr: (sum by (job, deployment_environment) (rate(docx_editor_document_opens_total{outcome="rejected",code=~"open.failed|open.unsupported-source|open.invalid-limits"}[1h])) or sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[1h])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[1h]))
+      - record: docx:open_failed:ratio6h
+        expr: (sum by (job, deployment_environment) (rate(docx_editor_document_opens_total{outcome="rejected",code=~"open.failed|open.unsupported-source|open.invalid-limits"}[6h])) or sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[6h])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[6h]))
+      - record: docx:open_failed:ratio1d
+        expr: (sum by (job, deployment_environment) (rate(docx_editor_document_opens_total{outcome="rejected",code=~"open.failed|open.unsupported-source|open.invalid-limits"}[1d])) or sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[1d])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[1d]))
+      - record: docx:open_failed:ratio3d
+        expr: (sum by (job, deployment_environment) (rate(docx_editor_document_opens_total{outcome="rejected",code=~"open.failed|open.unsupported-source|open.invalid-limits"}[3d])) or sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[3d])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_document_opens_total[3d]))
+      - record: docx:open_slow:ratio5m
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_bucket{le="2.5"}[5m])) / sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_count[5m]))
+      - record: docx:open_slow:ratio30m
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_bucket{le="2.5"}[30m])) / sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_count[30m]))
+      - record: docx:open_slow:ratio1h
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_bucket{le="2.5"}[1h])) / sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_count[1h]))
+      - record: docx:open_slow:ratio6h
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_bucket{le="2.5"}[6h])) / sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_count[6h]))
+      - record: docx:open_slow:ratio1d
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_bucket{le="2.5"}[1d])) / sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_count[1d]))
+      - record: docx:open_slow:ratio3d
+        expr: 1 - sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_bucket{le="2.5"}[3d])) / sum by (job, deployment_environment) (rate(docx_editor_document_open_duration_seconds_count[3d]))
+      # Proxy for edit reliability until the package counts edit attempts: unexpected
+      # refusals for every 1,000 timed presses.
+      - record: docx:unexpected_refusals_per_1k_presses:rate5m
+        expr: 1000 * (sum by (job, deployment_environment) (rate(docx_editor_edit_rejections_total{code!~"edit.stale-target|edit.read-only|edit.protected-content|edit.refresh-in-progress|edit.collaboration-not-ready"}[5m])) or sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[5m])) * 0) / sum by (job, deployment_environment) (rate(docx_editor_editor_interaction_duration_seconds_count[5m]))
+  - name: docx-editor-burn-rate
+    rules:
+      - alert: DocxEditorInteractionSlowBurnRatePage
+        expr: docx:interaction_slow:ratio1h > 14.4 * 0.01 and docx:interaction_slow:ratio5m > 14.4 * 0.01
+        for: 2m
+        labels:
+          severity: page
+          service: docx-editor
+          slo: interaction_slow
+        annotations:
+          summary: "More than 1% of key presses and clicks take over 100 ms to reach the screen: burning the error budget 14.4x too fast ({{ $labels.job }})"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#interaction-slow
+      - alert: DocxEditorInteractionSlowBurnRateTicket
+        expr: docx:interaction_slow:ratio6h > 6 * 0.01 and docx:interaction_slow:ratio30m > 6 * 0.01
+        for: 2m
+        labels:
+          severity: ticket
+          service: docx-editor
+          slo: interaction_slow
+        annotations:
+          summary: "More than 1% of key presses and clicks take over 100 ms to reach the screen: burning the error budget 6x too fast ({{ $labels.job }})"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#interaction-slow
+      - alert: DocxEditorOpenFailedBurnRatePage
+        expr: docx:open_failed:ratio1h > 14.4 * 0.001 and docx:open_failed:ratio5m > 14.4 * 0.001
+        for: 2m
+        labels:
+          severity: page
+          service: docx-editor
+          slo: open_failed
+        annotations:
+          summary: "Opens fail for reasons the app causes, not broken files: burning the error budget 14.4x too fast ({{ $labels.job }})"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#open-failed
+      - alert: DocxEditorOpenFailedBurnRateTicket
+        expr: docx:open_failed:ratio6h > 6 * 0.001 and docx:open_failed:ratio30m > 6 * 0.001
+        for: 2m
+        labels:
+          severity: ticket
+          service: docx-editor
+          slo: open_failed
+        annotations:
+          summary: "Opens fail for reasons the app causes, not broken files: burning the error budget 6x too fast ({{ $labels.job }})"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#open-failed
+      - alert: DocxEditorOpenSlowBurnRatePage
+        expr: docx:open_slow:ratio1h > 14.4 * 0.01 and docx:open_slow:ratio5m > 14.4 * 0.01
+        for: 2m
+        labels:
+          severity: page
+          service: docx-editor
+          slo: open_slow
+        annotations:
+          summary: "More than 1% of successful opens take over 2.5 seconds: burning the error budget 14.4x too fast ({{ $labels.job }})"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#open-slow
+      - alert: DocxEditorOpenSlowBurnRateTicket
+        expr: docx:open_slow:ratio6h > 6 * 0.01 and docx:open_slow:ratio30m > 6 * 0.01
+        for: 2m
+        labels:
+          severity: ticket
+          service: docx-editor
+          slo: open_slow
+        annotations:
+          summary: "More than 1% of successful opens take over 2.5 seconds: burning the error budget 6x too fast ({{ $labels.job }})"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#open-slow
+  - name: docx-editor-collaboration
+    rules:
+      - alert: DocxCollaborationServerDown
+        expr: up{job="collaboration-server"} == 0
+        for: 1m
+        labels: { severity: page, service: docx-editor }
+        annotations:
+          summary: "The collaboration server does not answer its /metrics scrape"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#collaboration-server-down
+      - alert: DocxCollaborationStoreFailing
+        expr: sum(rate(docx_editor_collab_room_store_duration_seconds_count{outcome!="success"}[10m])) > 0
+        for: 5m
+        labels: { severity: page, service: docx-editor }
+        annotations:
+          summary: "Rooms fail to store: edits may be lost on restart"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#room-store-failing
+      - alert: DocxTelemetryDroppingEvents
+        expr: sum by (job) (rate(docx_editor_telemetry_dropped_events_total[15m])) > 0
+        for: 15m
+        labels: { severity: ticket, service: docx-editor }
+        annotations:
+          summary: "The privacy check drops telemetry events; core and telemetry versions may differ"
+          runbook_url: https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#telemetry-dropping-events

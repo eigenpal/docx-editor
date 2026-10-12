@@ -24,6 +24,7 @@ services:
       - '--enable-feature=created-timestamp-zero-ingestion'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./rules.yml:/etc/prometheus/rules.yml:ro
     ports:
       - '9090:9090'
     extra_hosts:

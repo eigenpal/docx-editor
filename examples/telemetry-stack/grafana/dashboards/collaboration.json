@@ -1,7 +1,7 @@
 {
   "uid": "docx-editor-collaboration",
   "title": "Collaboration",
-  "description": "The room server and the editors in its rooms.",
+  "description": "The room server and the editors in its rooms: availability, rooms and people, server work, and refusals.",
   "tags": [
     "docx-editor"
   ],
@@ -9,16 +9,45 @@
   "schemaVersion": 39,
   "version": 1,
   "editable": true,
-  "refresh": "10s",
+  "refresh": "30s",
   "time": {
-    "from": "now-30m",
+    "from": "now-1h",
     "to": "now"
   },
+  "graphTooltip": 1,
   "templating": {
     "list": [
       {
+        "name": "server_job",
+        "label": "Server",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(docx_editor_collab_rooms_active, job)",
+          "refId": "server_job"
+        },
+        "definition": "label_values(docx_editor_collab_rooms_active, job)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
         "name": "job",
-        "label": "App",
+        "label": "Client app",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -29,8 +58,11 @@
           "refId": "job"
         },
         "definition": "label_values(docx_editor_collab_client_status_transitions_total, job)",
+        "refresh": 2,
         "includeAll": true,
         "multi": true,
+        "allValue": ".*",
+        "sort": 1,
         "current": {
           "selected": true,
           "text": [
@@ -39,23 +71,526 @@
           "value": [
             "$__all"
           ]
-        },
-        "refresh": 2,
-        "allValue": ".*"
+        }
       }
     ]
   },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "Alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "enable": true,
+        "iconColor": "rgba(242, 73, 92, 1)",
+        "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",slo=\"\"}",
+        "step": "60s",
+        "titleFormat": "{{alertname}}",
+        "tagKeys": ""
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Runbook",
+      "url": "https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md",
+      "type": "link",
+      "targetBlank": true,
+      "icon": "doc"
+    },
+    {
+      "title": "Server telemetry docs",
+      "url": "https://docx-editor.dev/docs/2.x/telemetry/servers",
+      "type": "link",
+      "targetBlank": true,
+      "icon": "doc"
+    },
+    {
+      "title": "Metrics",
+      "url": "https://docx-editor.dev/docs/2.x/telemetry/metrics",
+      "type": "link",
+      "targetBlank": true,
+      "icon": "doc"
+    },
+    {
+      "title": "Editor experience",
+      "url": "/d/docx-editor-experience",
+      "type": "link",
+      "targetBlank": true,
+      "icon": "doc"
+    }
+  ],
   "panels": [
     {
       "type": "row",
-      "title": "Rooms now",
-      "id": 2,
+      "title": "Health at a glance",
+      "id": 1,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
         "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Server",
+      "description": "Whether Prometheus can scrape the collaboration server.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "min(up{job=~\"$server_job\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [
+        {
+          "title": "Runbook",
+          "url": "https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#collaboration-server-down",
+          "targetBlank": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "Not scraped",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down"
+                },
+                "1": {
+                  "text": "Up"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Stores succeeding",
+      "description": "Share of room stores that succeeded. A failed store can lose edits on restart.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",outcome=\"success\"}[$__range])) / sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [
+        {
+          "title": "Runbook",
+          "url": "https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md#room-store-failing",
+          "targetBlank": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No stores yet",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.999
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 4,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Refused connections",
+      "description": "Connections the server refused at admission in the selected range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\"}[$__range]))) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 9,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Client errors",
+      "description": "Times an editor reported an error status in the selected range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "round(sum(increase(docx_editor_collab_client_status_transitions_total{job=~\"$job\",status=\"error\"}[$__range]))) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Room limit used, 95th percentile",
+      "description": "How close rooms come to their node, relationship, part, and blob limits. Near 100% means rooms will start to refuse edits.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(docx_editor_collab_room_resource_usage_bucket{job=~\"$server_job\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No samples",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Firing alerts",
+      "description": "Burn-rate and server alerts from rules.yml that fire now. Each links to its runbook section.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",slo=\"\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "alertstate": true,
+              "service": true
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No alerts firing"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alertname"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Runbook",
+                    "url": "https://github.com/eigenpal/docx-editor/blob/main/examples/telemetry-stack/RUNBOOK.md",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 7,
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Rooms now",
+      "id": 8,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
       },
       "panels": []
     },
@@ -69,25 +604,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(docx_editor_collab_rooms_active)",
+          "expr": "sum(docx_editor_collab_rooms_active{job=~\"$server_job\"})",
           "legendFormat": "",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "range": false
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "No data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
               }
             ]
           },
-          "noValue": "\u2014"
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
@@ -95,17 +635,20 @@
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
-          ]
+          ],
+          "values": false
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
       },
-      "id": 3,
+      "id": 9,
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 1
+        "y": 10
       },
       "datasource": {
         "type": "prometheus",
@@ -115,32 +658,37 @@
     {
       "type": "stat",
       "title": "People",
-      "description": "People present in all rooms, from presence.",
+      "description": "People present in all rooms, from presence. A person in two rooms counts twice.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(docx_editor_collab_participants_active)",
+          "expr": "sum(docx_editor_collab_participants_active{job=~\"$server_job\"})",
           "legendFormat": "",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "range": false
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "No data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
               }
             ]
           },
-          "noValue": "\u2014"
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
@@ -148,17 +696,20 @@
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
-          ]
+          ],
+          "values": false
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
       },
-      "id": 4,
+      "id": 10,
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 1
+        "y": 10
       },
       "datasource": {
         "type": "prometheus",
@@ -175,25 +726,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(docx_editor_collab_connections_active)",
+          "expr": "sum(docx_editor_collab_connections_active{job=~\"$server_job\"})",
           "legendFormat": "",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "range": false
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "No data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
               }
             ]
           },
-          "noValue": "\u2014"
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
@@ -201,17 +757,20 @@
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
-          ]
+          ],
+          "values": false
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
       },
-      "id": 5,
+      "id": 11,
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 1
+        "y": 10
       },
       "datasource": {
         "type": "prometheus",
@@ -228,25 +787,30 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max(docx_editor_collab_room_participants_max)",
+          "expr": "max(docx_editor_collab_room_participants_max{job=~\"$server_job\"})",
           "legendFormat": "",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "range": false
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "No data",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "text",
                 "value": null
               }
             ]
           },
-          "noValue": "\u2014"
+          "color": {
+            "mode": "thresholds"
+          }
         },
         "overrides": []
       },
@@ -254,17 +818,20 @@
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
-          ]
+          ],
+          "values": false
         },
         "colorMode": "value",
-        "graphMode": "none"
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
       },
-      "id": 6,
+      "id": 12,
       "gridPos": {
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 1
+        "y": 10
       },
       "datasource": {
         "type": "prometheus",
@@ -281,7 +848,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(docx_editor_collab_rooms_active)",
+          "expr": "sum(docx_editor_collab_rooms_active{job=~\"$server_job\"})",
           "legendFormat": "rooms",
           "refId": "A"
         },
@@ -290,7 +857,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(docx_editor_collab_participants_active)",
+          "expr": "sum(docx_editor_collab_participants_active{job=~\"$server_job\"})",
           "legendFormat": "people",
           "refId": "B"
         },
@@ -299,11 +866,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(docx_editor_collab_connections_active)",
+          "expr": "sum(docx_editor_collab_connections_active{job=~\"$server_job\"})",
           "legendFormat": "connections",
           "refId": "C"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -311,10 +879,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "none"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -325,15 +897,16 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 7,
+      "id": 13,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 5
+        "y": 14
       },
       "datasource": {
         "type": "prometheus",
@@ -350,11 +923,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (kind) (docx_editor_collab_rooms_memory_bytes)",
+          "expr": "sum by (kind) (docx_editor_collab_rooms_memory_bytes{job=~\"$server_job\"})",
           "legendFormat": "{{kind}}",
           "refId": "A"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
@@ -362,10 +936,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "normal"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -376,15 +954,157 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 8,
+      "id": 14,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 5
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Room limit used by resource (95th percentile)",
+      "description": "Share of each room limit in use. The dashed line marks 90%.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{job=~\"$server_job\"}[$__rate_interval])))",
+          "legendFormat": "{{resource}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 15,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Room age and idle time (median)",
+      "description": "How long rooms stay loaded, and how long since they last changed. Idle rooms hold memory for nobody.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_age_seconds_bucket{job=~\"$server_job\"}[$__rate_interval])))",
+          "legendFormat": "age",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_idle_seconds_bucket{job=~\"$server_job\"}[$__rate_interval])))",
+          "legendFormat": "idle",
+          "refId": "B"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 16,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
       },
       "datasource": {
         "type": "prometheus",
@@ -394,13 +1114,13 @@
     {
       "type": "row",
       "title": "Server work",
-      "id": 9,
+      "id": 17,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 30
       },
       "panels": []
     },
@@ -414,7 +1134,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_load_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_load_duration_seconds_bucket{job=~\"$server_job\"}[$__rate_interval])))",
           "legendFormat": "load {{outcome}}",
           "refId": "A"
         },
@@ -423,11 +1143,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_store_duration_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_store_duration_seconds_bucket{job=~\"$server_job\"}[$__rate_interval])))",
           "legendFormat": "store {{outcome}}",
           "refId": "B"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
@@ -435,10 +1156,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "none"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -449,15 +1174,73 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 10,
+      "id": 18,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 31
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Stores per minute by outcome",
+      "description": "Room stores, by outcome. Any failure risks lost edits.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "60 * sum by (outcome) (rate(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\"}[$__rate_interval]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 19,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 31
       },
       "datasource": {
         "type": "prometheus",
@@ -474,11 +1257,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(docx_editor_collab_updates_total[$__rate_interval]))",
+          "expr": "sum(rate(docx_editor_collab_updates_total{job=~\"$server_job\"}[$__rate_interval]))",
           "legendFormat": "updates",
           "refId": "A"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
@@ -486,10 +1270,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "none"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -500,15 +1288,16 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 11,
+      "id": 20,
       "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 12,
-        "y": 14
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 39
       },
       "datasource": {
         "type": "prometheus",
@@ -525,11 +1314,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(docx_editor_collab_update_bytes_total[$__rate_interval]))",
+          "expr": "sum(rate(docx_editor_collab_update_bytes_total{job=~\"$server_job\"}[$__rate_interval]))",
           "legendFormat": "bytes",
           "refId": "A"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "Bps",
@@ -537,10 +1327,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "none"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -551,15 +1345,16 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 12,
+      "id": 21,
       "gridPos": {
-        "h": 8,
-        "w": 6,
-        "x": 18,
-        "y": 14
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 39
       },
       "datasource": {
         "type": "prometheus",
@@ -567,111 +1362,91 @@
       }
     },
     {
-      "type": "bargauge",
-      "title": "Refused connections by reason",
-      "description": "Connections refused at admission, such as a failed sign-in.",
+      "type": "table",
+      "title": "Room migrations by outcome",
+      "description": "Rooms migrated to a newer collaboration format, by outcome.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "round(sort_desc(sum by (reason) (increase(docx_editor_collab_admission_rejections_total[$__range]))))",
-          "legendFormat": "{{reason}}",
+          "expr": "topk(10, sum by (outcome) (increase(docx_editor_collab_migrations_total{job=~\"$server_job\"}[$__range])))",
+          "legendFormat": "",
           "refId": "A",
-          "instant": true
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0,
-          "noValue": "None in this range",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "showUnfilled": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "values": false
-        }
-      },
-      "id": 13,
-      "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 0,
-        "y": 22
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      }
-    },
-    {
-      "type": "bargauge",
-      "title": "Refused messages by reason",
-      "description": "Messages refused before they applied, such as a room that changed generation.",
-      "targets": [
+      "transformations": [
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "round(sort_desc(sum by (reason) (increase(docx_editor_collab_message_refusals_total[$__range]))))",
-          "legendFormat": "{{reason}}",
-          "refId": "A",
-          "instant": true
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "anchor": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "min": 0,
-          "noValue": "None in this range",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
+          "noValue": "No migrations",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
               {
-                "color": "blue",
-                "value": null
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
               }
             ]
           }
-        },
-        "overrides": []
+        ]
       },
       "options": {
-        "orientation": "horizontal",
-        "displayMode": "basic",
-        "showUnfilled": true,
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "values": false
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
         }
       },
-      "id": 14,
+      "id": 22,
       "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
-        "y": 22
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 39
       },
       "datasource": {
         "type": "prometheus",
@@ -681,19 +1456,19 @@
     {
       "type": "row",
       "title": "Clients",
-      "id": 15,
+      "id": 23,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 46
       },
       "panels": []
     },
     {
       "type": "timeseries",
-      "title": "Client status changes",
+      "title": "Client status changes per minute",
       "description": "Ready, disconnected, and error statuses that editors reported, with the failure code.",
       "targets": [
         {
@@ -701,11 +1476,12 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status, code) (increase(docx_editor_collab_client_status_transitions_total{job=~\"$job\"}[$__rate_interval]))",
+          "expr": "60 * sum by (status, code) (rate(docx_editor_collab_client_status_transitions_total{job=~\"$job\"}[$__rate_interval]))",
           "legendFormat": "{{status}} {{code}}",
           "refId": "A"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -713,10 +1489,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "normal"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -727,15 +1507,16 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 16,
+      "id": 24,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 29
+        "y": 47
       },
       "datasource": {
         "type": "prometheus",
@@ -744,8 +1525,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Room size seen by clients",
-      "description": "People in the room, as editors saw it each time the count changed.",
+      "title": "Room size as clients saw it",
+      "description": "People in the room, sampled each time the count changed in an editor. For diagnosis; the server panels are the source of truth.",
       "targets": [
         {
           "datasource": {
@@ -755,17 +1536,9 @@
           "expr": "sum(rate(docx_editor_collab_client_participants_sum{job=~\"$job\"}[$__rate_interval])) / sum(rate(docx_editor_collab_client_participants_count{job=~\"$job\"}[$__rate_interval]))",
           "legendFormat": "average",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(docx_editor_collab_client_participants_bucket{job=~\"$job\"}[$__rate_interval])))",
-          "legendFormat": "95th percentile",
-          "refId": "B"
         }
       ],
+      "links": [],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -773,10 +1546,14 @@
             "drawStyle": "line",
             "lineWidth": 2,
             "fillOpacity": 10,
-            "spanNulls": true,
+            "spanNulls": false,
+            "showPoints": "never",
             "stacking": {
               "mode": "none"
             }
+          },
+          "color": {
+            "mode": "palette-classic"
           }
         },
         "overrides": []
@@ -787,15 +1564,213 @@
           "placement": "bottom"
         },
         "tooltip": {
-          "mode": "multi"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "id": 17,
+      "id": 25,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 29
+        "y": 47
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Refusals",
+      "id": 26,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 55
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Refused connections by reason",
+      "description": "Connections refused at admission, such as a failed sign-in, most frequent first.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "anchor": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None refused",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 27,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Refused messages by reason",
+      "description": "Messages refused before they applied, such as a room that changed generation.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_message_refusals_total{job=~\"$server_job\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "anchor": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None refused",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 28,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 56
       },
       "datasource": {
         "type": "prometheus",
