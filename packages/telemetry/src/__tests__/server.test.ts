@@ -151,6 +151,19 @@ describe('roomTelemetry', () => {
     await rooms.shutdown();
   });
 
+  test('the fullest room follows people live, as the people total does', () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
+    const room = rooms.open(new Y.Doc(), { name: ROOM });
+    room.connected();
+    room.connected();
+    // No sample was taken: both totals move with the connections.
+    expect(metrics.metrics()).toContain('docx_editor_collab_participants_active 2');
+    expect(metrics.metrics()).toContain('docx_editor_collab_room_participants_max 2');
+    room.disconnected();
+    expect(metrics.metrics()).toContain('docx_editor_collab_room_participants_max 1');
+  });
+
   test('a custom reason matches without case', () => {
     const metrics = prometheusRegistry();
     const rooms = roomTelemetry({

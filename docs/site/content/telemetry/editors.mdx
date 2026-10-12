@@ -1,0 +1,164 @@
+---
+title: 'Editors and agents'
+description: 'Record anonymous diagnostics from editors, collaboration clients, and editing API agents, and send them to Sentry, OpenTelemetry, or your own tool.'
+category: 'Telemetry'
+---
+
+Record diagnostics from editors, collaboration clients, and agents that use the editing API. To install the package and read the privacy guarantees, see [Telemetry](/docs/2.x/telemetry).
+
+## Set up an editor
+
+Create the telemetry client once, outside your components, and register its module. The module receives the diagnostics of the first document that the editor opens.
+
+```tsx
+// telemetry.ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { sentryExporter } from '@docx-editor.dev/telemetry/sentry';
+import * as Sentry from '@sentry/react';
+
+export const telemetry = createTelemetry({
+  exporters: [sentryExporter(Sentry)],
+  include: { documentOpen: true, trackedChanges: true, editing: true },
+  consent: () => consentManager.analytics === true, // your consent manager
+  resource: { 'service.name': 'contracts-app' },
+});
+```
+
+```tsx
+// Editor.tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { telemetry } from './telemetry';
+
+const MODULES = [reviewModule(), telemetry.module];
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return <DocxEditor document={bytes} modules={MODULES} />;
+}
+```
+
+In Vue, pass the same array: `<DocxEditor :document="bytes" :modules="MODULES" />`.
+
+If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs only when an event is recorded, so the client is safe to create during server rendering.
+
+Register `telemetry.module`, or call `telemetry.record(event)` yourself, but not both. If you do both, every event is recorded twice.
+
+### Choose what to record
+
+The `include` option turns areas on. If you omit `include`, every area is on.
+
+| Area | Records |
+| --- | --- |
+| `documentOpen` | Documents that opened, with size and page buckets and the open time, and documents that were refused, with the reason. |
+| `editing` | Edits and commands that were refused while changes were not tracked. |
+| `trackedChanges` | Edits that were refused while suggesting, refusals about tracking itself (such as a missing author or protection that allows only tracked changes), and tracked changes that accept, reject, or reassign requests skipped. |
+| `fonts` | Fonts that failed to load and were substituted. |
+| `history` | Undo steps that did not group as the gesture intended. |
+| `customNodes` | Custom node payloads that could not be read. |
+| `collaborationClient` | Collaboration status changes, failure codes, connect time, and the number of people in the room. |
+
+Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event.
+
+By default, an opened document is described by its size and page buckets. To also send its part, paragraph, review item, and embedded font buckets, set `documentShape: 'detailed'`. Several counts together describe a document more closely, so turn it on only when you need it.
+
+Identical refusals within 10 seconds are sent once. When the window closes, one summary event repeats the first event with `repeated` set to the number of extra events. Count a summary; do not treat it as a new failure. For the number of people in a room, only the latest count in the window is sent. A collaboration status that repeats, such as a connection that drops again and again, is also sent once per window. To change the window, set `dedupeWindowMs`.
+
+### See why an edit failed during development
+
+Add `consoleExporter()` to print each event with its hint and documentation link:
+
+```ts
+import { createTelemetry, consoleExporter } from '@docx-editor.dev/telemetry';
+
+export const telemetry = createTelemetry({ exporters: [consoleExporter()] });
+```
+
+If an agent deletes a picture through the editing API while changes are tracked, the console prints the following output:
+
+```text
+[docx-editor] edit refused: edit.tracked-operation-unsupported (automation, tracked)
+  This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed.
+  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-operation-unsupported
+```
+
+## Send to Sentry
+
+`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. An open your app caused or the engine could not explain, a collaboration error that does not heal, a text shaper that did not load, and an engine invariant become Sentry issues. A corrupt or oversized file becomes a breadcrumb, because the app cannot fix the file. An expired collaboration token and a room the server compacted are breadcrumbs too, because the client rejoins. The fingerprint is the diagnostic code, so issues group by cause. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
+
+To change which events become issues, pass `issue: (event) => boolean`.
+
+Sentry records more of the page than your diagnostics. Session Replay records the page, and the page shows the document. Each click and key press becomes a breadcrumb that describes the element with its `alt`, `title`, and `aria-label` values, which inside the editor come from the document. Block the editor in Replay, and drop the editor's click and key press breadcrumbs:
+
+```ts
+import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
+
+Sentry.init({
+  dsn: '...',
+  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
+  beforeBreadcrumb: dropEditorBreadcrumbs,
+});
+```
+
+Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Sentry records console messages as breadcrumbs by default; drop the `console` category in `beforeBreadcrumb` if your own code logs document details.
+
+## Send to OpenTelemetry
+
+The exporter uses the global meter and tracer providers unless you pass your own, and it reads them at each use. You can create it before your OpenTelemetry SDK starts; measurements reach the SDK from the moment it registers.
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({ exporters: [otelExporter()] });
+```
+
+Each document open becomes a `docx_editor.document.open` span. The span has an error status when the open is refused. Other events are added to the active span. If there is no active span, as is usual in a browser, a failure gets a short span of its own. In development, the exporter warns once if no SDK is registered.
+
+## Send to another tool
+
+Use `callbackExporter` to forward events to any function:
+
+```ts
+import { callbackExporter, createTelemetry, isFailure } from '@docx-editor.dev/telemetry';
+
+export const telemetry = createTelemetry({
+  exporters: [
+    // isFailure is false for expected refusals and for deduplication summaries.
+    callbackExporter((event) =>
+      isFailure(event)
+        ? datadogRum.addError(new Error(event.kind), event)
+        : datadogRum.addAction(event.kind, event)
+    ),
+  ],
+});
+```
+
+To write your own exporter, implement `TelemetryExporter` with an `event` method, a `metric` method, or both.
+
+## Set up a server agent
+
+A runtime from `DocxEditor.createServer` reports the same diagnostics as an editor: the open, and each refused batch with its code. A refusal under a tracking mode the batch set itself counts as tracked. Create one telemetry client per process and pass its module to every runtime:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+const telemetry = createTelemetry({ exporters: [otelExporter()] });
+
+const runtime = await DocxEditor.createServer(bytes, {
+  author: 'Review agent',
+  modules: [telemetry.module],
+});
+try {
+  // ...run the agent...
+} finally {
+  runtime.dispose();
+}
+```
+
+In a long-running worker, call `await telemetry.shutdown()` once, when the process exits. In a serverless function or a one-shot job, call `await telemetry.flush()` before it returns, so buffered data is sent. Do not flush after every job in a long-running worker: it forces an export each time and closes the deduplication windows of every other job.
+
+The `editorSessionId` value is different for each runtime, so you can follow one agent run. A runtime from `DocxEditor.createBrowser` reports its refused batches into the diagnostics of the editor it borrows, with `origin: 'automation'`, so the editor's telemetry module covers in-browser agents too.
+
+On a server, the Sentry Node SDK can attach the incoming request body to an issue. If an agent endpoint receives instructions or document bytes, remove `event.request.data` in `beforeSend`. A refused batch also explains itself in `error.debugInfo.innerError`. For more information, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

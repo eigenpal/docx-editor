@@ -57,7 +57,7 @@ export function describeEvent(event: TelemetryEvent): string {
     case 'custom-node':
       return `custom node payload unreadable: ${event.code}${repeated}`;
     case 'collab.participants':
-      return `collaboration: ${event.count} people in the room`;
+      return `collaboration: ${event.count} ${event.count === 1 ? 'person' : 'people'} in the room`;
     case 'collab.status': {
       const code = event.code ? `: ${event.code}` : '';
       const connected = event.connectMs !== undefined ? ` after ${event.connectMs} ms` : '';

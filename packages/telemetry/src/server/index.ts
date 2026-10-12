@@ -270,13 +270,18 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
   function totals(): void {
     let connections = 0;
     let participants = 0;
+    let fullest = 0;
     for (const room of rooms) {
+      const people = participantsOf(room);
       connections += room.connections;
-      participants += participantsOf(room);
+      participants += people;
+      fullest = Math.max(fullest, people);
     }
     pipeline.metric(METRICS.roomsActive, rooms.size);
     pipeline.metric(METRICS.connectionsActive, connections);
     pipeline.metric(METRICS.participantsActive, participants);
+    // Live, as the people total is, so the two never disagree.
+    pipeline.metric(METRICS.roomParticipantsMax, fullest);
   }
 
   function begin(operation: RoomOperation, room?: Room): SettleOperation {
@@ -370,16 +375,13 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
   /** The cross-room gauges, from each room's last sample. */
   function recordTotals(): void {
     const memory = { state: 0, blobs: 0, pending_updates: 0 };
-    let fullest = 0;
     for (const room of rooms) {
       memory.state += room.stateBytes ?? 0;
       memory.blobs += room.blobBytes ?? 0;
       memory.pending_updates += room.pendingBytes;
-      fullest = Math.max(fullest, participantsOf(room));
     }
     for (const [kind, bytes] of Object.entries(memory))
       pipeline.metric(METRICS.roomsMemory, bytes, { kind });
-    pipeline.metric(METRICS.roomParticipantsMax, fullest);
     totals();
   }
 

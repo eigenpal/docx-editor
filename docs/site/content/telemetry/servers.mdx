@@ -1,0 +1,113 @@
+---
+title: 'Collaboration servers'
+description: 'Record rooms, connections, people, memory, and refusals on a Hocuspocus or custom Yjs collaboration server, and serve them to Prometheus or OpenTelemetry.'
+category: 'Telemetry'
+---
+
+Record rooms, connections, people, room memory, load and store times, and refusals on a collaboration server. Metrics carry no room names. For every metric, see [Metrics](/docs/2.x/telemetry/metrics).
+
+## Hocuspocus
+
+Wrap your Hocuspocus configuration. The wrapper adds one extension that runs before all others, so it times each load and store across every extension and hook. It also observes your hooks and the extensions in `extensions`, and records why one of them refused a connection or a message. Your hooks and extensions keep their arguments, return values, and errors. Extensions added later with `server.configure` are not observed. The telemetry flushes when Hocuspocus shuts down, so do not add your own signal handler for it. It requires `@hocuspocus/server` 4.6 or later.
+
+```ts
+import { Server } from '@hocuspocus/server';
+import { withCollaborationTelemetry } from '@docx-editor.dev/telemetry/hocuspocus';
+import { metricsHandler, prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
+
+const metrics = prometheusRegistry();
+const { config, rooms } = withCollaborationTelemetry(
+  { port: 1234, onAuthenticate, onLoadDocument, beforeHandleMessage, onStoreDocument },
+  { exporters: [metrics] }
+);
+const server = new Server(config);
+
+app.get('/metrics', metricsHandler(metrics));
+app.get('/admin/rooms', requireAdmin, (_request, response) => response.json(rooms.list()));
+```
+
+If the server has no web framework, serve the metrics from the Hocuspocus HTTP server with `serveMetrics`:
+
+```ts
+import { requireBearerToken, serveMetrics } from '@docx-editor.dev/telemetry/hocuspocus';
+
+const server = new Server({
+  ...config,
+  onRequest: serveMetrics(metrics, {
+    rooms: { telemetry: rooms, path: '/rooms' },
+    // Throws at startup when METRICS_TOKEN is empty, so the endpoint never opens by accident.
+    authorize: requireBearerToken(process.env.METRICS_TOKEN),
+  }),
+});
+```
+
+Pass every hook in the configuration you wrap. A hook set later, for example in the object you pass to `new Server`, is not observed.
+
+`serveMetrics` requires `authorize` when it serves the room list. To keep your own `onRequest`, pass it as `next`; `serveMetrics` calls it for every other path. The reason of a refusal is read from the error's `reason` property, then its `code`. It becomes a metric label only when it is a collaboration failure code, a common reason such as `unauthorized`, `forbidden`, `permission-denied`, `unknown-room`, or `rate-limited`, or a reason you list in the `reasons` option. Any other reason is counted as `other`, so free text never becomes a label. Hocuspocus's `Unauthorized` and `Forbidden` close events, and an error whose message is a common reason, such as `new Error('Unauthorized')`, count as that reason. A bare `throw` with no error counts as `permission-denied`, which is what Hocuspocus tells the client. An error with no reason, often a bug in the hook, counts as `other`. If your errors carry free text, map them with `reasonOf`: return a common reason, a collaboration failure code, or a value you list in `reasons`. Refusals thrown in `onConnect`, `onAuthenticate`, and `onTokenSync` are counted as admission refusals.
+
+On the server, Hocuspocus writes each hook error message to the console, and Sentry's Node SDK records console output as breadcrumbs by default. Drop the `console` category in `beforeBreadcrumb` if those messages can name a user or a room.
+
+Room telemetry sends metrics only. Use `otelExporter` or `prometheusRegistry` on a server; an exporter without a `metric` method, such as `sentryExporter`, receives nothing there, and the server warns at startup.
+
+## Other Yjs servers
+
+Use `roomTelemetry` and call it from your own room lifecycle:
+
+```ts
+import { roomTelemetry } from '@docx-editor.dev/telemetry/server';
+
+const rooms = roomTelemetry({ exporters: [metrics] });
+
+const room = rooms.open(ydoc, { name: roomName, awareness });
+// Load through the handle: the saved state it applies is not counted as new edits.
+await room.time('load', () => loadRoom(ydoc));
+room.connected();
+// When that connection closes:
+room.disconnected();
+// When a connection is refused at admission:
+rooms.rejected(error);
+// When the server unloads the room:
+room.close();
+```
+
+## People and memory in each room
+
+The number of people in a room comes from the room's awareness states. One person with two tabs counts twice. If you run several Hocuspocus instances with the Redis extension, each instance sees the people of every instance in its awareness, so do not add the instances together. With `perRoomSeries`, take the `max` for each room across instances and add the rooms. Without per-room series, the `max` across instances is exact only when every instance holds the same rooms; otherwise it is a lower bound. Connections are counted separately, as one per socket and room.
+
+JavaScript cannot measure the heap used by one room. The metrics report what each room holds instead: the encoded Yjs state, the stored images and other files, and the updates not yet stored. To see whether process memory grows with the rooms, compare these metrics with your process memory metrics, such as `prom-client` default metrics.
+
+The state is encoded once per sample, and only for rooms that changed. The interval sample handles one room at a time and yields between rooms, so many large rooms do not block other work. To skip encoding entirely, set `measureState: false`. The default sample interval is 60 seconds. To sample once per scrape instead, set `sampleInterval: false` and call `rooms.sample()` before you render the metrics, or pass `sampleBeforeScrape: rooms` to `serveMetrics`.
+
+With the Redis extension, only the instance that holds a room's store lock stores it. Another instance that tries at the same time skips its store. That store is neither timed nor counted, and the room's pending updates stay pending on that instance until one of its own stores succeeds.
+
+## Per-room detail
+
+Metrics carry no room name, so the number of series stays bounded and names stay private. Values such as people and memory per room are histograms: each sample adds every room once. Query them over a window, such as `histogram_quantile(0.95, rate(docx_editor_collab_room_memory_bytes_bucket[5m]))`, or divide `rate(..._sum[5m])` by `rate(..._count[5m])` for the mean. To find a large room, call `rooms.list()` from an endpoint that only administrators can reach. Each row has the room label, people, connections, state bytes, file bytes, pending bytes, node count, the largest share of any room limit, age, and idle time.
+
+By default, the room label is an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, use `roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET)`. It throws at startup when the secret is empty. To show real names, use `roomLabel: (name) => name`.
+
+## Label metrics by room
+
+If a few rooms need their own series, set `perRoomSeries: true`, with the default label or `roomLabel: hmacRoomLabel(secret)`. Any other `roomLabel` throws, so a room name cannot become a label. Each room then gets `docx_editor_collab_room_participants_current` and `docx_editor_collab_room_memory_current_bytes` gauges labeled `room`. A closed room's series are removed. Each room adds series, so keep this off on servers with many rooms.
+
+## Serve Prometheus metrics
+
+`metricsHandler` serves Node-style servers, such as Node `http` and Express. `fetchMetricsHandler` serves Fetch-style servers, such as Next.js route handlers, Hono, Bun, and Deno. To serve your `prom-client` metrics from the same endpoint, pass `merge: [register]` to either one.
+
+```ts
+// Next.js: app/metrics/route.ts
+import { fetchMetricsHandler } from '@docx-editor.dev/telemetry/prometheus';
+import { metrics } from '@/lib/metrics';
+
+export const dynamic = 'force-dynamic'; // never serve cached metrics
+export const GET = fetchMetricsHandler(metrics);
+```
+
+For Fastify, call `reply.hijack()` and pass the raw Node objects. Without `hijack()`, Fastify tries to send a second response after the handler ends it.
+
+```ts
+fastify.get('/metrics', (request, reply) => {
+  reply.hijack();
+  return metricsHandler(metrics)(request.raw, reply.raw);
+});
+```

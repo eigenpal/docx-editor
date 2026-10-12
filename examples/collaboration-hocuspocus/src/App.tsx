@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { DocxEditor, useDocxEditor, useDocxSource } from '@docx-editor.dev/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { reviewModule } from '@docx-editor.dev/pro';
+import { consoleExporter, createTelemetry } from '@docx-editor.dev/telemetry';
 import {
   DocxEditorCollaboration,
   DocxEditorCollaborationRoot,
@@ -41,11 +42,17 @@ import { encodeDemoToken } from '../shared/admission';
 import { failureMessage } from '../shared/failure-message';
 
 /**
+ * Anonymous diagnostics. In development, the console prints each one with its hint, such as why
+ * an edit was refused. In production, pass the exporters for your own tools instead.
+ */
+const telemetry = createTelemetry({ exporters: import.meta.env.DEV ? [consoleExporter()] : [] });
+
+/**
  * Comments and tracked changes. Read once, when the instance is built, so it must not be
  * rebuilt per render. The hook appends `collaborationModule` to it when a room is ready; a
  * host module that carried a collaboration contribution would be a configuration error.
  */
-const MODULES = [reviewModule()];
+const MODULES = [reviewModule(), telemetry.module];
 
 /** Where `server/server.ts` listens. */
 const SERVER_URL = import.meta.env.VITE_COLLAB_URL ?? 'ws://127.0.0.1:1234';

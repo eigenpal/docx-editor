@@ -1,0 +1,4 @@
+{
+  "title": "Telemetry",
+  "pages": ["index", "editors", "servers", "metrics"]
+}

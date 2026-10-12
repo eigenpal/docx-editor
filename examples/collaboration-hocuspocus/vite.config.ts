@@ -87,6 +87,10 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
           },
           {
+            find: /^@docx-editor\.dev\/telemetry$/,
+            replacement: path.join(monorepoRoot, 'packages/telemetry/src/index.ts'),
+          },
+          {
             find: '@docx-editor.dev/pro/collaboration/hocuspocus',
             replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/hocuspocus.ts'),
           },

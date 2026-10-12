@@ -69,7 +69,7 @@ For other Yjs servers, use `roomTelemetry` from `@docx-editor.dev/telemetry/serv
 | `@docx-editor.dev/telemetry/server` | `roomTelemetry`, `hmacRoomLabel` |
 | `@docx-editor.dev/telemetry/hocuspocus` | `withCollaborationTelemetry`, `serveMetrics`, `requireBearerToken`, `hmacRoomLabel` |
 
-For the full guide, see [Telemetry](https://docx-editor.dev/docs/2.x/pro/telemetry).
+For the full guide, see [Telemetry](https://docx-editor.dev/docs/2.x/telemetry).
 
 ## License
 

@@ -1,0 +1,41 @@
+---
+title: 'Metrics'
+description: 'Every metric that the telemetry package records, with its Prometheus name, type, and labels.'
+category: 'Telemetry'
+---
+
+Every metric has an OpenTelemetry name, such as `docx_editor.collab.room.load.duration`, and a Prometheus name derived from it, such as `docx_editor_collab_room_load_duration_seconds`. Labels take only values from closed lists, so the number of series stays bounded.
+
+| Prometheus name | Type | Labels | Description |
+| --- | --- | --- | --- |
+| `docx_editor_document_opens_total` | counter | `outcome`, `code` | Documents opened or refused, by outcome and refusal code. |
+| `docx_editor_document_open_duration_seconds` | histogram | none | Time from the start of an open to the laid-out document. |
+| `docx_editor_edit_rejections_total` | counter | `code`, `origin`, `tracked` | Edits, commands, and tracked changes refused, by public code. |
+| `docx_editor_review_skipped_total` | counter | `code` | Tracked changes skipped by accept, reject, or reassign requests. |
+| `docx_editor_font_failures_total` | counter | `code` | Font faces that failed to load and were substituted. |
+| `docx_editor_history_diagnostics_total` | counter | `code` | Undo steps that did not group as the gesture intended, by code. |
+| `docx_editor_custom_node_diagnostics_total` | counter | `code` | Custom node payloads that could not be read, by code. |
+| `docx_editor_collab_client_status_transitions_total` | counter | `status`, `code` | Collaboration status changes on clients, by new status and failure code. |
+| `docx_editor_collab_client_connect_duration_seconds` | histogram | none | Time from joining a room to the first ready status. |
+| `docx_editor_collab_client_participants` | histogram | none | People in the room, as each client sees it when the count changes. |
+| `docx_editor_telemetry_dropped_events_total` | counter | `reason` | Events the anonymity guard dropped, by reason. Usually a version mismatch. |
+| `docx_editor_collab_rooms_active` | gauge | none | Rooms loaded. |
+| `docx_editor_collab_connections_active` | gauge | none | Open client connections. One person with two tabs is two connections. |
+| `docx_editor_collab_participants_active` | gauge | none | People present in all rooms, from awareness states. |
+| `docx_editor_collab_room_participants` | histogram | none | People present in each room, sampled once per room per interval. |
+| `docx_editor_collab_room_participants_max` | gauge | none | People in the fullest room now. |
+| `docx_editor_collab_room_memory_bytes` | histogram | `kind` | Bytes each room holds, sampled per room: encoded state, blobs, and updates not yet stored. |
+| `docx_editor_collab_rooms_memory_bytes` | gauge | `kind` | Bytes all rooms hold together at the last sample. |
+| `docx_editor_collab_room_nodes` | histogram | `state` | Shared document nodes per room, live and tombstoned. |
+| `docx_editor_collab_room_resource_usage` | histogram | `resource` | Share of each room resource limit in use, from 0 to 1. |
+| `docx_editor_collab_room_age_seconds` | histogram | none | How long each room has been loaded. |
+| `docx_editor_collab_room_idle_seconds` | histogram | none | Time since each room last changed. |
+| `docx_editor_collab_room_load_duration_seconds` | histogram | `outcome` | Time to load a room, by outcome. |
+| `docx_editor_collab_room_store_duration_seconds` | histogram | `outcome` | Time to store a room, by outcome. |
+| `docx_editor_collab_admission_rejections_total` | counter | `reason` | Connections refused at admission, by reason. |
+| `docx_editor_collab_message_refusals_total` | counter | `reason` | Messages refused before they applied, by reason, such as room-generation-changed. |
+| `docx_editor_collab_updates_total` | counter | none | Document updates applied to rooms. |
+| `docx_editor_collab_update_bytes_total` | counter | none | Bytes of document updates applied to rooms. |
+| `docx_editor_collab_room_participants_current` | gauge | `room` | People in each room, labeled by room. Recorded only with perRoomSeries. |
+| `docx_editor_collab_room_memory_current_bytes` | gauge | `room`, `kind` | Bytes each room holds, labeled by room and kind. Recorded only with perRoomSeries. |
+| `docx_editor_collab_migrations_total` | counter | `outcome` | Room migrations, by outcome. |

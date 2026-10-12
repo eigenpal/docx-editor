@@ -178,7 +178,7 @@ export const METRICS = Object.freeze({
     'docx_editor.collab.room.participants.max',
     'gauge',
     '{participant}',
-    'People in the fullest room at the last sample.'
+    'People in the fullest room now.'
   ),
   roomMemory: metric(
     'docx_editor.collab.room.memory',
