@@ -94,6 +94,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'Document protection allows edits only as tracked changes. Switch to suggesting mode, or set document.changeTrackingMode to TrackMineOnly in an editing API batch, then edit again.',
   'edit.tracked-image-replace-unsupported':
     'Replacing a picture cannot be recorded as a tracked change, so the picture did not change. Insert the new picture as a tracked insertion, or ask a person to replace it with tracking off.',
+  'edit.picture-selected':
+    'A picture is selected, so the new picture has no place to go and nothing was inserted. Place the caret in text next to the picture, then insert again.',
   'edit.cross-structure-join':
     'The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately.',
   'edit.indivisible-content':

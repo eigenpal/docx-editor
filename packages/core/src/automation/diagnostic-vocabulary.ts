@@ -41,6 +41,7 @@ export type EditDiagnosticCode =
   | 'edit.revision-unsupported'
   | 'edit.tracking-required'
   | 'edit.tracked-image-replace-unsupported'
+  | 'edit.picture-selected'
   | 'edit.cross-structure-join'
   | 'edit.indivisible-content'
   | 'edit.field-structure'

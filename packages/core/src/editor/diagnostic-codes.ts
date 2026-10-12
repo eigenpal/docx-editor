@@ -25,6 +25,7 @@ import {
 } from './opening-editing-mode.ts';
 import { COLLABORATION_FIELD_RESULTS_REFUSAL } from './field-results-scope.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
+import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
 import {
   LOCKED_CONTENT_BREAK_REFUSAL,
   LOCKED_SECTION_BREAK_REFUSAL,
@@ -68,6 +69,7 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   ['invalid note scope id', 'edit.stale-target'],
   [TRACKED_ONLY_EDITING_REASON, 'edit.tracking-required'],
   [SUGGESTING_IMAGE_REPLACE_REASON, 'edit.tracked-image-replace-unsupported'],
+  [PICTURE_SELECTED_INSERT_REASON, 'edit.picture-selected'],
   [READ_ONLY_REVISION_REASON, 'edit.revision-unsupported'],
   ['note not found', 'edit.stale-target'],
 ]);

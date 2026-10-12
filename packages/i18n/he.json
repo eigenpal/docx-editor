@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "בחר טקסט כדי להעתיק את העיצוב שלו",
     "nothingToPaint": "בחר טקסט כדי להחיל עליו את העיצוב",
     "noReviewAuthors": "אין במסמך זה מחברי סקירה",
-    "suggestingNeedsAuthor": "מצב הצעות מחייב מחבר. הגדר את המחבר בתצורת העורך."
+    "suggestingNeedsAuthor": "מצב הצעות מחייב מחבר. הגדר את המחבר בתצורת העורך.",
+    "pictureSelected": "תמונה נבחרה. מקמו את הסמן בטקסט כדי להוסיף תמונה."
   },
   "equationPopup": {
     "apply": "החלה",

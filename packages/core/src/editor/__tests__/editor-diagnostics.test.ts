@@ -16,6 +16,7 @@ import {
   explainDiagnostic,
 } from '../../automation/diagnostic-hints.ts';
 import { createDocxEditor } from '../docx-editor.ts';
+import { executeImageCommand } from '../docx-editor-images.ts';
 import { byteSizeBucket, countBucket } from '../../automation/diagnostics.ts';
 import {
   diagnosticCodeOfRefusal,
@@ -179,6 +180,42 @@ describe('edit.rejected', () => {
       // `editor.on` and the module hear the same event.
       expect(seen.filter((event) => event.kind === 'edit.rejected')).toEqual(rejected);
       expect(JSON.stringify(events)).not.toContain(SECRET_TEXT);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a refused image insert reports one event, through the editor and the helper alike', async () => {
+    const { events, module } = observe();
+    const editor = createDocxEditor({
+      container: mount(),
+      document: docx(paragraph(SECRET_TEXT)),
+      modules: [module],
+      mode: 'view',
+    });
+    try {
+      const command = {
+        type: 'insertImage' as const,
+        data: new Uint8Array([137, 80, 78, 71]),
+        mime: 'image/png' as const,
+        widthPoints: 20,
+        heightPoints: 10,
+      };
+      expect((await editor.executeImageCommand(command)).ok).toBe(false);
+      expect((await executeImageCommand(editor, command)).ok).toBe(false);
+      const rejected = events.filter((event) => event.kind === 'edit.rejected');
+      expect(rejected).toEqual([
+        expect.objectContaining({
+          code: 'edit.read-only',
+          origin: 'command',
+          command: 'insertImage',
+        }),
+        expect.objectContaining({
+          code: 'edit.read-only',
+          origin: 'command',
+          command: 'insertImage',
+        }),
+      ]);
     } finally {
       editor.destroy();
     }

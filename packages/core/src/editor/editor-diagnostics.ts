@@ -41,6 +41,7 @@ import {
 } from './diagnostic-codes.ts';
 import { warnFontFailureOnce } from './font-configuration.ts';
 import { createPerformanceSampler, type PerformanceClock } from './editor-performance.ts';
+import { setCommandReporter } from './command-reporting.ts';
 import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts';
 
 /** Commands the facade answers itself, before the command classifier sees them. */
@@ -278,6 +279,11 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
           automationDepth -= 1;
         }
       });
+      // Image inserts and replaces are asynchronous and run outside `exec`.
+      setCommandReporter(
+        editor,
+        (command, result) => void this.exec(command, tracked(), () => result)
+      );
       AUTOMATION_REPORTERS.set(editor, (code, automationTracked) =>
         deliver({ kind: 'edit.rejected', code, origin: 'automation', tracked: automationTracked })
       );

@@ -55,3 +55,8 @@ test('the empty reviewer roster refusal is translatable', () => {
   const reason = 'the document has no review authors';
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
+
+test('the picture-selected insert refusal is translatable', () => {
+  const reason = 'a picture is selected; place the caret in text to insert a picture';
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});

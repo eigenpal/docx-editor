@@ -18,7 +18,13 @@ import type { OoxmlDrawingNode, OoxmlElement } from '../../store/package/ooxml-t
 import { createInlineDrawingLayoutBundle } from '../../layout/inline-drawing-source.ts';
 import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import {
+  PICTURE_SELECTED_INSERT_REASON,
+  selectedDrawingOverlayTargetOf,
+} from '../docx-editor-images.ts';
+import { toolbarCommandState } from '../toolbar-commands.ts';
+import { stubReviewModule } from './review-test-module.ts';
+import type { EditorDiagnostic } from '../../contracts/diagnostics.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -626,4 +632,49 @@ describe('docx-editor image commands', () => {
     expect(refused.ok).toBe(false);
     if (!refused.ok) expect(refused.reason).toContain('stale');
   });
+});
+
+describe('inserting a picture while one is selected', () => {
+  for (const wrap of ['inline', 'anchor'] as const)
+    test(`is refused with a reason, a public code, and a disabled toolbar button (${wrap})`, async () => {
+      const events: EditorDiagnostic[] = [];
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: inlinePictureDocument({ wrap }),
+        imageDecodePort: createTestImageDecodePort(),
+        author: 'Reviewer',
+        modules: [
+          stubReviewModule(),
+          { id: 'observer', onDiagnostic: (event) => events.push(event) },
+        ],
+      });
+      try {
+        expect(editor.exec({ type: 'setEditingMode', mode: 'suggesting' } as never).ok).toBe(true);
+        selectInlineDrawing(editor);
+        await settleDrawingResources(editor);
+        expect(editor.snapshot().image).not.toBeNull();
+        expect(toolbarCommandState(editor, 'image.insert')).toMatchObject({
+          enabled: false,
+          disabledReason: PICTURE_SELECTED_INSERT_REASON,
+        });
+        const result = await editor.executeImageCommand({
+          type: 'insertImage',
+          data: PNG_1X1,
+          mime: 'image/png',
+          widthPoints: 10,
+          heightPoints: 10,
+        });
+        expect(result).toMatchObject({ ok: false, reason: PICTURE_SELECTED_INSERT_REASON });
+        expect(events.filter((event) => event.kind === 'edit.rejected')).toEqual([
+          expect.objectContaining({
+            code: 'edit.picture-selected',
+            origin: 'command',
+            command: 'insertImage',
+            tracked: true,
+          }),
+        ]);
+      } finally {
+        editor.destroy();
+      }
+    });
 });
