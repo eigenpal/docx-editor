@@ -238,10 +238,23 @@ export type DiagnosticPayload<T> = T extends unknown
   ? Omit<T, 'schemaVersion' | 'editorSessionId' | 'time'>
   : never;
 
+let sessionCounter = 0;
+
 function randomSessionId(): string {
-  const crypto = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  const crypto = (
+    globalThis as {
+      crypto?: { randomUUID?: () => string; getRandomValues?: (array: Uint8Array) => Uint8Array };
+    }
+  ).crypto;
   if (crypto?.randomUUID) return `e_${crypto.randomUUID()}`;
-  return `e_${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
+  // `randomUUID` needs a secure context; `getRandomValues` works on plain HTTP pages too.
+  if (crypto?.getRandomValues) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    return `e_${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+  }
+  // No Web Crypto at all: unique in this process, which is all a correlation id needs.
+  sessionCounter += 1;
+  return `e_${Date.now().toString(36)}_${sessionCounter.toString(36)}`;
 }
 
 /** One delivery path for one editor or runtime instance. */

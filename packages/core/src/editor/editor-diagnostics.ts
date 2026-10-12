@@ -22,10 +22,7 @@ import type { EditorCommand, EditorError, EditorFontError } from '../contracts/e
 import type { DocxEditorInstance } from './docx-editor.ts';
 import type { EditorModuleRegistry } from '../contracts/modules.ts';
 import type { ExecResult } from '../contracts/types.ts';
-import type {
-  CollaborationStatus,
-  EditorCollaborationSession,
-} from '@docx-editor.dev/core/collaboration';
+import type { CollaborationStatus, EditorCollaborationSession } from '../collaboration/index.ts';
 import {
   byteSizeBucket,
   countBucket,
