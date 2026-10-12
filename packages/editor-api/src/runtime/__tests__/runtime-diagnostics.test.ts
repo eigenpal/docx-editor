@@ -56,6 +56,22 @@ test('an operation tracking cannot record names its cause in debugInfo.innerErro
   }
 });
 
+test('a refusal under a mode the batch set itself counts as tracked', async () => {
+  const { events, module } = observer();
+  const runtime = await DocxEditor.createServer(sample, { author: 'Agent', modules: [module] });
+  try {
+    await runtime.run(async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      context.document.body.clear();
+      await context.sync().catch(() => {});
+    });
+    const rejected = events.filter((event) => event.kind === 'edit.rejected');
+    expect(rejected).toEqual([expect.objectContaining({ tracked: true, origin: 'automation' })]);
+  } finally {
+    runtime.dispose();
+  }
+});
+
 test('TrackAll and a missing author each have their own code', async () => {
   const withoutAuthor = await DocxEditor.createServer(sample);
   try {
@@ -88,6 +104,20 @@ test('a refused open names its cause, and an observer hears it', async () => {
       kind: 'document.open',
       outcome: 'rejected',
       code: error.debugInfo.innerError!.code,
+    }),
+  ]);
+});
+
+test('invalid limits are reported as a refused open', async () => {
+  const { events, module } = observer();
+  await expect(
+    DocxEditor.createServer(sample, { modules: [module], limits: { maxXmlParts: -1 } })
+  ).rejects.toMatchObject({ code: 'InvalidArgument' });
+  expect(events).toEqual([
+    expect.objectContaining({
+      kind: 'document.open',
+      outcome: 'rejected',
+      code: 'open.invalid-limits',
     }),
   ]);
 });

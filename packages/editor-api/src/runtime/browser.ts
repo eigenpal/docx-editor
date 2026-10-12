@@ -17,7 +17,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // else — the queue, the context, the object lifetime, the errors — is neutral and compiles without
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
 
-import { createBrowserAutomationHost, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import {
+  createBrowserAutomationHost,
+  reportAutomationRefusal,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
+import { classifyRefusal } from './diagnostics.ts';
 import { createRuntime, type DocxEditorRuntime, type RevisionTextView } from './runtime.ts';
 
 /**
@@ -52,9 +57,15 @@ export function createBrowser(
   editor: DocxEditorInstance,
   options: CreateBrowserOptions = {}
 ): DocxEditorRuntime {
+  const host = createBrowserAutomationHost(editor);
   return createRuntime({
-    host: createBrowserAutomationHost(editor),
+    host,
     save: false,
+    // A refused batch reaches the editor's own diagnostics, so its telemetry module hears it.
+    onRefusal: (error, operations) => {
+      const { code, tracked } = classifyRefusal(error, host, operations);
+      reportAutomationRefusal(editor, code, tracked);
+    },
     ...(options.author === undefined ? {} : { author: options.author }),
     ...(options.revisionTextView === undefined
       ? {}

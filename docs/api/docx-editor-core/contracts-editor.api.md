@@ -167,6 +167,17 @@ export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdo
 export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
 
 // @public
+export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
+
+// @public
+export interface CustomNodeDiagnosticEvent extends DiagnosticBase {
+    // (undocumented)
+    readonly code: CustomNodeDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'custom-node';
+}
+
+// @public
 export const DIAGNOSTIC_SCHEMA_VERSION = 1;
 
 // @public
@@ -177,7 +188,7 @@ export interface DiagnosticBase {
 }
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export interface DiagnosticExplanation {
@@ -475,6 +486,7 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
     readonly durationMs: number;
     readonly outcome: 'opened';
     readonly pagesBucket?: CountBucket;
+    readonly shape?: DocumentShape;
     readonly sizeBucket: ByteSizeBucket;
 } | {
     readonly code: DocumentOpenDiagnosticCode;
@@ -484,6 +496,16 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
 
 // @public
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export interface DocumentShape {
+    // (undocumented)
+    readonly embeddedFonts: CountBucket;
+    // (undocumented)
+    readonly paragraphs: CountBucket;
+    readonly parts: CountBucket;
+    readonly reviewItems: CountBucket;
+}
 
 // @public
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
@@ -543,7 +565,7 @@ export interface DrawingPositionInput {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
-export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.internal-invariant' | 'edit.refused';
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
@@ -977,7 +999,7 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
-export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic;
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic;
 
 // @public
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
@@ -1496,6 +1518,17 @@ export interface HistoryDiagnostic {
     readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
     // (undocumented)
     readonly reason: string;
+}
+
+// @public
+export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
+
+// @public
+export interface HistoryDiagnosticEvent extends DiagnosticBase {
+    // (undocumented)
+    readonly code: HistoryDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'history';
 }
 
 // @public (undocumented)

@@ -25,6 +25,8 @@ import type {
   DiagnosticCode,
   ByteSizeBucket,
   CountBucket,
+  CustomNodeDiagnosticCode,
+  HistoryDiagnosticCode,
 } from '../automation/diagnostic-vocabulary.ts';
 
 export type {
@@ -36,8 +38,20 @@ export type {
   DiagnosticCode,
   ByteSizeBucket,
   CountBucket,
+  CustomNodeDiagnosticCode,
+  HistoryDiagnosticCode,
 } from '../automation/diagnostic-vocabulary.ts';
 export type { DiagnosticExplanation } from '../automation/diagnostic-hints.ts';
+
+/** The bucketed shape of an opened document. @public */
+export interface DocumentShape {
+  /** XML parts in the package. */
+  readonly parts: CountBucket;
+  readonly paragraphs: CountBucket;
+  /** Tracked changes and comments, as the review queue lists them. */
+  readonly reviewItems: CountBucket;
+  readonly embeddedFonts: CountBucket;
+}
 
 /** Fields every diagnostic carries. @public */
 export interface DiagnosticBase {
@@ -62,6 +76,11 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
         readonly sizeBucket: ByteSizeBucket;
         /** Pages after the first layout. Absent on a headless host that does not paginate. */
         readonly pagesBucket?: CountBucket;
+        /**
+         * More of the document's shape, in buckets. A telemetry client sends it only when you
+         * ask for the detailed shape: several counts together describe a document more closely.
+         */
+        readonly shape?: DocumentShape;
         /** Milliseconds from the start of the open to the mounted first layout. */
         readonly durationMs: number;
       }
@@ -123,6 +142,18 @@ export interface CollaborationStatusDiagnostic extends DiagnosticBase {
   readonly connectMs?: number;
 }
 
+/** The undo history did not group edits as the gesture intended. Informational. @public */
+export interface HistoryDiagnosticEvent extends DiagnosticBase {
+  readonly kind: 'history';
+  readonly code: HistoryDiagnosticCode;
+}
+
+/** A custom node's stored payload could not be read. The node and its data are not named. @public */
+export interface CustomNodeDiagnosticEvent extends DiagnosticBase {
+  readonly kind: 'custom-node';
+  readonly code: CustomNodeDiagnosticCode;
+}
+
 /** The number of people in the collaboration room changed. @public */
 export interface CollaborationParticipantsDiagnostic extends DiagnosticBase {
   readonly kind: 'collab.participants';
@@ -149,6 +180,8 @@ export type EditorDiagnostic =
   | EditRejectedDiagnostic
   | ReviewSkippedDiagnostic
   | FontFailedDiagnostic
+  | HistoryDiagnosticEvent
+  | CustomNodeDiagnosticEvent
   | CollaborationStatusDiagnostic
   | CollaborationParticipantsDiagnostic;
 

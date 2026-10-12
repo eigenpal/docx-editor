@@ -12,6 +12,7 @@ import {
   createDiagnosticEmitter,
   openDiagnosticCode,
   type AutomationHost,
+  type AutomationOperation,
   type ByteSizeBucket,
   type DocumentOpenDiagnosticCode,
   type EditDiagnosticCode,
@@ -19,7 +20,7 @@ import {
 import type { DocxEditorError } from './errors.ts';
 
 /**
- * A diagnostic from a headless runtime: the open, and each refused batch with a known reason.
+ * A diagnostic from a headless runtime: the open, and each refused batch.
  * Each one is also a valid `EditorDiagnostic`, so a telemetry module written for the editor
  * receives these unchanged.
  *
@@ -54,9 +55,24 @@ export type RuntimeDiagnostic = {
 export interface RuntimeDiagnostics {
   openRejected(bytes: Uint8Array, reason: string, limit?: string): void;
   opened(bytes: Uint8Array, durationMs: number): void;
-  /** A refused batch, when the engine named a specific reason or the document moved. */
-  refused(error: DocxEditorError, host: AutomationHost): void;
+  /** A refused batch, with its operations, so a tracking mode the batch staged still counts. */
+  refused(
+    error: DocxEditorError,
+    host: AutomationHost,
+    operations: readonly AutomationOperation[]
+  ): void;
 }
+
+/** A public code for a refused batch the engine named no reason for. */
+const RUNTIME_CODES: Partial<Record<DocxEditorError['code'], EditDiagnosticCode>> = {
+  StaleDocument: 'edit.stale-target',
+  ItemNotFound: 'edit.stale-target',
+  InvalidObjectPath: 'edit.stale-target',
+  InvalidArgument: 'edit.invalid-argument',
+  ResourceLimitExceeded: 'edit.resource-limit',
+  NotSupported: 'edit.operation-unsupported',
+  NotImplemented: 'edit.operation-unsupported',
+};
 
 /** Whether changes were being tracked, read from the host after the refusal. */
 function tracking(host: AutomationHost): boolean {
@@ -67,6 +83,25 @@ function tracking(host: AutomationHost): boolean {
   } catch {
     return false;
   }
+}
+
+/** The public code of a refused batch, and whether it ran under change tracking. */
+export function classifyRefusal(
+  error: DocxEditorError,
+  host: AutomationHost,
+  operations: readonly AutomationOperation[]
+): { readonly code: EditDiagnosticCode; readonly tracked: boolean } {
+  const inner = error.debugInfo.innerError?.code;
+  const code: EditDiagnosticCode = inner?.startsWith('edit.')
+    ? (inner as EditDiagnosticCode)
+    : (RUNTIME_CODES[error.code] ?? 'edit.refused');
+  // A failed batch rolls back the mode it staged, so read the batch as well as the host.
+  const staged = operations.some(
+    (operation) => operation.op === 'setChangeTrackingMode' && operation.mode !== 'Off'
+  );
+  // `tracked` says whether tracking was on, as the editor reports it; refusals about tracking
+  // itself are routed by their code.
+  return { code, tracked: staged || tracking(host) };
 }
 
 /** Diagnostics for these listeners, or null when there are none. */
@@ -92,18 +127,12 @@ export function runtimeDiagnostics(
         durationMs: Math.max(0, Math.round(durationMs)),
       });
     },
-    refused(error, host) {
-      const inner = error.debugInfo.innerError?.code;
-      const code: EditDiagnosticCode | undefined = inner?.startsWith('edit.')
-        ? (inner as EditDiagnosticCode)
-        : error.code === 'StaleDocument'
-          ? 'edit.stale-target'
-          : undefined;
-      if (!code) return;
-      // A failed batch rolls back the mode it staged, so a tracking refusal is tracked by
-      // definition; anything else reads the mode the batch ran under, which is the host's now.
-      const tracked = /^edit\.track(?:ed|ing)-/.test(code) || tracking(host);
-      deliver({ kind: 'edit.rejected', code, origin: 'automation', tracked });
+    refused(error, host, operations) {
+      deliver({
+        kind: 'edit.rejected',
+        origin: 'automation',
+        ...classifyRefusal(error, host, operations),
+      });
     },
   };
 }

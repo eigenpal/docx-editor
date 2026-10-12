@@ -1,3 +1,4 @@
+import { SUGGESTING_IMAGE_REPLACE_REASON } from './opening-editing-mode.ts';
 import {
   hasBorderPayload,
   positionCommandHasFields,
@@ -509,7 +510,7 @@ function asyncImageExecutionGate(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image changes are not supported in suggesting mode',
+      reason: SUGGESTING_IMAGE_REPLACE_REASON,
     };
   }
   return null;
@@ -623,7 +624,7 @@ export function gateImageCommand(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image changes are not supported in suggesting mode',
+      reason: SUGGESTING_IMAGE_REPLACE_REASON,
     };
   }
   switch (command.type) {

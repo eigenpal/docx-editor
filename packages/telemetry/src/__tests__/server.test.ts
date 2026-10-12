@@ -6,8 +6,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
-import { serveMetrics, withCollaborationTelemetry } from '../hocuspocus/index.ts';
-import { fetchMetricsHandler, prometheusRegistry } from '../prometheus/index.ts';
+import { Hocuspocus } from '@hocuspocus/server';
+import {
+  requireBearerToken,
+  serveMetrics,
+  withCollaborationTelemetry,
+} from '../hocuspocus/index.ts';
+import { prometheusRegistry } from '../prometheus/index.ts';
 import { hmacRoomLabel, roomTelemetry } from '../server/index.ts';
 
 const ROOM = 'matter-4471-acme-settlement';
@@ -82,6 +87,88 @@ describe('roomTelemetry', () => {
     await rooms.shutdown();
   });
 
+  test("Hocuspocus's own refusals and case variants have stable reasons", () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
+    rooms.rejected({ code: 4401, reason: 'Unauthorized' });
+    rooms.rejected({ code: 4403, reason: 'Forbidden' });
+    rooms.rejected({ code: 4401 });
+    rooms.rejected({ reason: 'matter-4471' });
+    rooms.rejected(new Error('Unauthorized'));
+    rooms.rejected(new Error('Account suspended for jane@client.com'));
+    rooms.rejected(undefined);
+    const text = metrics.metrics();
+    expect(text).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="unauthorized"} 3'
+    );
+    expect(text).toContain('docx_editor_collab_admission_rejections_total{reason="forbidden"} 1');
+    // Free text that is not a known reason is `other`; a bare throw is Hocuspocus's own answer.
+    expect(text).toContain('docx_editor_collab_admission_rejections_total{reason="other"} 2');
+    expect(text).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="permission-denied"} 1'
+    );
+    expect(text).not.toContain('matter-4471');
+    expect(text).not.toContain('jane@client.com');
+  });
+
+  test("updates replicated from another instance are not counted as this room's writes", () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
+    const doc = new Y.Doc();
+    rooms.open(doc, { name: ROOM });
+    doc.transact(() => doc.getText('t').insert(0, 'from redis'), { source: 'redis' });
+    doc.transact(() => doc.getText('t').insert(0, 'local'), {
+      source: 'local',
+      skipStoreHooks: true,
+    });
+    doc.transact(() => doc.getText('t').insert(0, 'client'), { source: 'connection' });
+    expect(rooms.list()[0]!.pendingBytes).toBeGreaterThan(0);
+    expect(metrics.metrics()).toMatch(/docx_editor_collab_updates_total 1\n/);
+  });
+
+  test('the state a load applies through the handle is not counted as edits', async () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
+    const saved = new Y.Doc();
+    saved.getText('t').insert(0, 'x'.repeat(5_000));
+    const doc = new Y.Doc();
+    const room = rooms.open(doc, { name: ROOM });
+    await room.time('load', async () => Y.applyUpdate(doc, Y.encodeStateAsUpdate(saved)));
+    expect(rooms.list()[0]!.pendingBytes).toBe(0);
+    expect(metrics.metrics()).not.toContain('docx_editor_collab_updates_total');
+    doc.getText('t').insert(0, 'edit');
+    expect(rooms.list()[0]!.pendingBytes).toBeGreaterThan(0);
+    await rooms.shutdown();
+  });
+
+  test('a custom reason matches without case', () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({
+      exporters: [metrics],
+      sampleInterval: false,
+      reasons: ['quotaExceeded'],
+    });
+    rooms.rejected({ reason: 'quotaExceeded' });
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="quotaexceeded"} 1'
+    );
+  });
+
+  test('a reasonOf that throws counts other and never replaces the refusal', () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({
+      exporters: [metrics],
+      sampleInterval: false,
+      reasonOf: () => {
+        throw new Error('bug in host reader');
+      },
+    });
+    expect(() => rooms.rejected(new Error('denied'))).not.toThrow();
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="other"} 1'
+    );
+  });
+
   test('a failed load is timed as a failure and rethrown', async () => {
     const metrics = prometheusRegistry();
     const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
@@ -103,49 +190,41 @@ describe('roomTelemetry', () => {
     expect(hmacRoomLabel('other-secret')(ROOM)).not.toBe(label(ROOM));
     expect(() => hmacRoomLabel(undefined)).toThrow('non-empty secret');
   });
-
-  test('one socket in two rooms counts as two connections, and both leave', async () => {
-    const metrics = prometheusRegistry();
-    const { config, rooms } = withCollaborationTelemetry(
-      {},
-      { exporters: [metrics], sampleInterval: false }
-    );
-    const hooks = config as unknown as Record<string, (payload: unknown) => Promise<unknown>>;
-    for (const name of ['room-a-000000000000000000', 'room-b-000000000000000000']) {
-      const document = new Y.Doc();
-      (document as unknown as { awareness: Awareness }).awareness = new Awareness(document);
-      await hooks.onLoadDocument!({ documentName: name, document });
-      await hooks.connected!({ documentName: name, socketId: 'one-socket' });
-    }
-    expect(metrics.metrics()).toContain('docx_editor_collab_connections_active 2');
-    await hooks.onDisconnect!({
-      documentName: 'room-a-000000000000000000',
-      socketId: 'one-socket',
-    });
-    await hooks.onDisconnect!({
-      documentName: 'room-b-000000000000000000',
-      socketId: 'one-socket',
-    });
-    expect(metrics.metrics()).toContain('docx_editor_collab_connections_active 0');
-    await rooms.shutdown();
-  });
 });
 
 describe('withCollaborationTelemetry', () => {
-  test('observes the host hooks and keeps their behavior', async () => {
+  /** A document as Hocuspocus hands it to hooks: a Y.Doc with its awareness. */
+  function hocusDocument(): Y.Doc & { awareness: Awareness } {
+    const document = new Y.Doc() as Y.Doc & { awareness: Awareness };
+    document.awareness = new Awareness(document);
+    return document;
+  }
+
+  /** A class-based extension, as storage extensions usually are: `this` must still work. */
+  class StorageExtension {
+    readonly reason = 'forbidden';
+    delayMs = 20;
+    failNext = false;
+    async onAuthenticate({ token }: { token: string }) {
+      if (token === 'blocked') throw Object.assign(new Error('blocked'), { reason: this.reason });
+    }
+    async onLoadDocument() {
+      await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+      if (this.failNext) throw new Error('storage unavailable');
+    }
+  }
+
+  test('times the whole chain, sees refusals from hooks and extensions, and keeps behavior', async () => {
     const metrics = prometheusRegistry();
+    const storage = new StorageExtension();
     const calls: string[] = [];
     const { config, rooms } = withCollaborationTelemetry(
       {
-        port: 1234,
+        extensions: [storage as never],
         async onAuthenticate({ token }: { token: string }) {
           calls.push('auth');
-          if (token !== 'ok') throw Object.assign(new Error('denied'), { reason: 'unauthorized' });
+          if (token === 'bad') throw Object.assign(new Error('denied'), { reason: 'unauthorized' });
           return { user: 'u1' };
-        },
-        async onLoadDocument({ document }: { document: Y.Doc }) {
-          calls.push('load');
-          return document;
         },
         async beforeHandleMessage() {
           throw Object.assign(new Error('stale'), { reason: 'room-generation-changed' });
@@ -156,42 +235,404 @@ describe('withCollaborationTelemetry', () => {
       } as never,
       { exporters: [metrics], sampleInterval: false }
     );
-    const hooks = config as unknown as Record<string, (payload: unknown) => Promise<unknown>>;
-    expect((config as { port: number }).port).toBe(1234);
+    const server = new Hocuspocus(config);
+    const document = hocusDocument();
+    const at = { documentName: ROOM, document, socketId: 's1' };
 
-    const document = Object.assign(new Y.Doc(), {});
-    (document as unknown as { awareness: Awareness }).awareness = new Awareness(document);
-
-    expect(await hooks.onAuthenticate!({ token: 'ok' })).toEqual({ user: 'u1' });
-    await expect(hooks.onAuthenticate!({ token: 'bad' })).rejects.toThrow('denied');
-    expect(await hooks.onLoadDocument!({ documentName: ROOM, document })).toBe(document);
-    await hooks.connected!({ documentName: ROOM, socketId: 's1' });
-    await hooks.connected!({ documentName: ROOM, socketId: 's2' });
-    await expect(hooks.beforeHandleMessage!({ documentName: ROOM })).rejects.toThrow('stale');
-    await hooks.onStoreDocument!({ documentName: ROOM, document });
+    await server.hooks('onAuthenticate', { token: 'ok' } as never);
+    await expect(server.hooks('onAuthenticate', { token: 'bad' } as never)).rejects.toThrow(
+      'denied'
+    );
+    await expect(server.hooks('onAuthenticate', { token: 'blocked' } as never)).rejects.toThrow(
+      'blocked'
+    );
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    await server.hooks('connected', at as never);
+    await server.hooks('connected', { ...at, socketId: 's2' } as never);
+    await expect(server.hooks('beforeHandleMessage', at as never)).rejects.toThrow('stale');
+    await server.hooks('onStoreDocument', at as never);
+    await server.hooks('afterStoreDocument', at as never);
     // A connection refused at admission never connected, so its disconnect is not subtracted.
-    await hooks.onDisconnect!({ documentName: ROOM, socketId: 'never-connected' });
-    await hooks.onDisconnect!({ documentName: ROOM, socketId: 's1' });
+    await server.hooks('onDisconnect', { ...at, socketId: 'never-connected' } as never);
+    await server.hooks('onDisconnect', at as never);
+    storage.failNext = true;
+    await expect(
+      server.hooks('onLoadDocument', { ...at, documentName: 'other-room-000000000000000' } as never)
+    ).rejects.toThrow('storage unavailable');
     rooms.sample();
 
-    expect(calls).toEqual(['auth', 'auth', 'load', 'store']);
-    const text = await (await fetchMetricsHandler(metrics)(new Request('http://x/metrics'))).text();
+    expect(calls).toEqual(['auth', 'auth', 'store']);
+    const text = metrics.metrics();
     expect(text).toContain('docx_editor_collab_rooms_active 1');
     expect(text).toContain('docx_editor_collab_connections_active 1');
     expect(text).toContain(
       'docx_editor_collab_admission_rejections_total{reason="unauthorized"} 1'
     );
+    expect(text).toContain('docx_editor_collab_admission_rejections_total{reason="forbidden"} 1');
     expect(text).toContain(
       'docx_editor_collab_message_refusals_total{reason="room-generation-changed"} 1'
+    );
+    expect(text).toContain(
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="success"} 1'
+    );
+    expect(text).toContain(
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="failure"} 1'
+    );
+    // The storage extension's 20 ms is inside the measured load, not after it.
+    expect(text).toContain(
+      'docx_editor_collab_room_load_duration_seconds_bucket{outcome="success",le="0.01"} 0'
     );
     expect(text).toContain(
       'docx_editor_collab_room_store_duration_seconds_count{outcome="success"} 1'
     );
     expect(text).not.toContain(ROOM);
 
-    await hooks.afterUnloadDocument!({ documentName: ROOM });
+    await server.hooks('afterUnloadDocument', at as never);
     rooms.sample();
     expect(metrics.metrics()).toContain('docx_editor_collab_rooms_active 0');
+    await rooms.shutdown();
+  });
+
+  test('extension state on `this` survives, and refusals from onConnect and reasonOf count', async () => {
+    const metrics = prometheusRegistry();
+    class RedisLike {
+      instance: unknown;
+      stored = false;
+      async onConfigure({ instance }: { instance: unknown }) {
+        this.instance = instance;
+      }
+      async onStoreDocument() {
+        // Reads state another hook wrote on `this`: it must be the same object.
+        if (!this.instance) throw new Error('lost this');
+        this.stored = true;
+      }
+    }
+    const redis = new RedisLike();
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        extensions: [redis as never],
+        async onConnect() {
+          throw Object.assign(new Error('nope'), { reason: 'permission-denied' });
+        },
+        async onAuthenticate() {
+          throw new Error('Account suspended for jane@client.com');
+        },
+      } as never,
+      {
+        exporters: [metrics],
+        reasons: ['suspended'],
+        sampleInterval: false,
+        reasonOf: (error) =>
+          String((error as Error).message).startsWith('Account suspended')
+            ? 'suspended'
+            : undefined,
+      }
+    );
+    const server = new Hocuspocus(config);
+    await server.hooks('onConfigure', { instance: server } as never);
+    const at = { documentName: ROOM, document: hocusDocument(), socketId: 's1' };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    await server.hooks('onStoreDocument', at as never);
+    await server.hooks('afterStoreDocument', at as never);
+    expect(redis.stored).toBe(true);
+    await expect(server.hooks('onConnect', at as never)).rejects.toThrow('nope');
+    await expect(server.hooks('onAuthenticate', at as never)).rejects.toThrow('suspended');
+    const text = metrics.metrics();
+    expect(text).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="permission-denied"} 1'
+    );
+    expect(text).toContain('docx_editor_collab_admission_rejections_total{reason="suspended"} 1');
+    expect(text).not.toContain('jane@client.com');
+    expect(text).toContain(
+      'docx_editor_collab_room_store_duration_seconds_count{outcome="success"} 1'
+    );
+    await rooms.shutdown();
+  });
+
+  test('a later afterLoadDocument failure leaves no phantom room', async () => {
+    const metrics = prometheusRegistry();
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        async afterLoadDocument() {
+          throw new Error('post-load check failed');
+        },
+      } as never,
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const at = { documentName: ROOM, document: hocusDocument(), socketId: 's1' };
+    await server.hooks('onLoadDocument', at as never);
+    await expect(server.hooks('afterLoadDocument', at as never)).rejects.toThrow('post-load');
+    rooms.sample();
+    expect(rooms.list()).toEqual([]);
+    expect(metrics.metrics()).toContain('docx_editor_collab_rooms_active 0');
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="failure"} 1'
+    );
+    await rooms.shutdown();
+  });
+
+  test('a skip in afterLoadDocument fails the load and leaves no room, as in Hocuspocus', async () => {
+    const metrics = prometheusRegistry();
+    class SkipFurtherHooksError extends Error {
+      override name = 'SkipFurtherHooksError';
+    }
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        async afterLoadDocument() {
+          throw new SkipFurtherHooksError();
+        },
+      } as never,
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const at = { documentName: ROOM, document: hocusDocument(), socketId: 's1' };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never).catch(() => {});
+    rooms.sample();
+    expect(rooms.list()).toEqual([]);
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="failure"} 1'
+    );
+    await rooms.shutdown();
+  });
+
+  test('a room whose awareness throws is skipped, never the server', async () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
+    const awareness = {
+      on() {},
+      off() {},
+      getStates() {
+        throw new Error('host awareness bug');
+      },
+    };
+    rooms.open(new Y.Doc(), { name: ROOM, awareness: awareness as never });
+    rooms.open(new Y.Doc(), { name: 'other' });
+    expect(() => rooms.sample()).not.toThrow();
+    expect(metrics.metrics()).toContain('docx_editor_collab_rooms_active 2');
+    await rooms.shutdown();
+  });
+
+  test('a room opened by a direct connection is tracked, with its first updates', async () => {
+    const metrics = prometheusRegistry();
+    const { config, rooms } = withCollaborationTelemetry(
+      { extensions: [new StorageExtension() as never] } as never,
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const document = hocusDocument();
+    const at = { documentName: ROOM, document };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    // A server-side writer edits the room without any client connecting.
+    document.getText('t').insert(0, 'agent edit');
+    rooms.sample();
+    expect(rooms.list()).toEqual([expect.objectContaining({ room: 'room-1', connections: 0 })]);
+    const text = metrics.metrics();
+    expect(text).toContain('docx_editor_collab_rooms_active 1');
+    expect(text).toContain(
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="success"} 1'
+    );
+    expect(text).not.toContain('outcome="failure"');
+    expect(text).toMatch(/docx_editor_collab_updates_total 1\n/);
+    await rooms.shutdown();
+  });
+
+  test('a skip in onStoreDocument is not a store here: neither timed nor cleared', async () => {
+    const metrics = prometheusRegistry();
+    class SkipFurtherHooksError extends Error {
+      override name = 'SkipFurtherHooksError';
+    }
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        async onStoreDocument() {
+          // Another instance holds the store lock.
+          throw new SkipFurtherHooksError();
+        },
+      } as never,
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const document = hocusDocument();
+    const at = { documentName: ROOM, document };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    document.getText('t').insert(0, 'edit');
+    await server.hooks('onStoreDocument', at as never).catch(() => {});
+    expect(metrics.metrics()).not.toContain('docx_editor_collab_room_store_duration_seconds_count');
+    expect(rooms.list()[0]!.pendingBytes).toBeGreaterThan(0);
+    await rooms.shutdown();
+  });
+
+  test('a skip in afterStoreDocument is a finished store, as in Hocuspocus', async () => {
+    const metrics = prometheusRegistry();
+    class SkipFurtherHooksError extends Error {
+      override name = 'SkipFurtherHooksError';
+    }
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        async afterStoreDocument() {
+          throw new SkipFurtherHooksError();
+        },
+      } as never,
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const at = { documentName: ROOM, document: hocusDocument() };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    await server.hooks('onStoreDocument', at as never);
+    await server.hooks('afterStoreDocument', at as never).catch(() => {});
+    const text = metrics.metrics();
+    expect(text).toContain(
+      'docx_editor_collab_room_store_duration_seconds_count{outcome="success"} 1'
+    );
+    expect(text).not.toContain('outcome="failure"');
+    await rooms.shutdown();
+  });
+
+  test('a store succeeds only when every afterStoreDocument hook did', async () => {
+    const metrics = prometheusRegistry();
+    let failAfterStore = false;
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        async afterStoreDocument() {
+          if (failAfterStore) throw new Error('replication failed');
+        },
+      } as never,
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const at = { documentName: ROOM, document: hocusDocument() };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    await server.hooks('onStoreDocument', at as never);
+    await server.hooks('afterStoreDocument', at as never);
+    failAfterStore = true;
+    await server.hooks('onStoreDocument', at as never);
+    await expect(server.hooks('afterStoreDocument', at as never)).rejects.toThrow('replication');
+    const text = metrics.metrics();
+    expect(text).toContain(
+      'docx_editor_collab_room_store_duration_seconds_count{outcome="success"} 1'
+    );
+    expect(text).toContain(
+      'docx_editor_collab_room_store_duration_seconds_count{outcome="failure"} 1'
+    );
+    await rooms.shutdown();
+  });
+
+  test('a load that fails inside Hocuspocus is recorded when the room unloads', async () => {
+    const metrics = prometheusRegistry();
+    const { config, rooms } = withCollaborationTelemetry(
+      {},
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    const at = { documentName: ROOM, document: hocusDocument(), socketId: 's1' };
+    await server.hooks('onLoadDocument', at as never);
+    // Hocuspocus failed applying the stored state and unloads; afterLoadDocument never ran.
+    await server.hooks('afterUnloadDocument', { documentName: ROOM } as never);
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="failure"} 1'
+    );
+    await rooms.shutdown();
+  });
+
+  test('a frozen extension still works and is observed', async () => {
+    const metrics = prometheusRegistry();
+    const frozen = Object.freeze({
+      async onAuthenticate() {
+        throw Object.assign(new Error('nope'), { reason: 'forbidden' });
+      },
+      async onChange() {},
+    });
+    const { config, rooms } = withCollaborationTelemetry(
+      { extensions: [frozen as never] } as never,
+      {
+        exporters: [metrics],
+        sampleInterval: false,
+      }
+    );
+    const server = new Hocuspocus(config);
+    await expect(server.hooks('onAuthenticate', {} as never)).rejects.toThrow('nope');
+    await server.hooks('onChange', {} as never);
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="forbidden"} 1'
+    );
+    await rooms.shutdown();
+  });
+
+  test('two sessions of one room on one socket count as two connections', async () => {
+    const metrics = prometheusRegistry();
+    const { config, rooms } = withCollaborationTelemetry({} as never, {
+      exporters: [metrics],
+      sampleInterval: false,
+    });
+    const server = new Hocuspocus(config);
+    const at = { documentName: ROOM, document: hocusDocument(), socketId: 's1' };
+    await server.hooks('onLoadDocument', at as never);
+    await server.hooks('afterLoadDocument', at as never);
+    await server.hooks('connected', at as never);
+    await server.hooks('connected', at as never);
+    await server.hooks('onDisconnect', at as never);
+    expect(metrics.metrics()).toContain('docx_editor_collab_connections_active 1');
+    await server.hooks('onDisconnect', at as never);
+    await server.hooks('onDisconnect', at as never);
+    expect(metrics.metrics()).toContain('docx_editor_collab_connections_active 0');
+    await rooms.shutdown();
+  });
+
+  test('one socket in two rooms counts as two connections, and both leave', async () => {
+    const metrics = prometheusRegistry();
+    const { config, rooms } = withCollaborationTelemetry(
+      {},
+      { exporters: [metrics], sampleInterval: false }
+    );
+    const server = new Hocuspocus(config);
+    for (const name of ['room-a-000000000000000000', 'room-b-000000000000000000']) {
+      const at = { documentName: name, document: hocusDocument(), socketId: 'one-socket' };
+      await server.hooks('onLoadDocument', at as never);
+      await server.hooks('afterLoadDocument', at as never);
+      await server.hooks('connected', at as never);
+    }
+    expect(metrics.metrics()).toContain('docx_editor_collab_connections_active 2');
+    for (const name of ['room-a-000000000000000000', 'room-b-000000000000000000'])
+      await server.hooks('onDisconnect', { documentName: name, socketId: 'one-socket' } as never);
+    expect(metrics.metrics()).toContain('docx_editor_collab_connections_active 0');
+    await rooms.shutdown();
+  });
+
+  test('perRoomSeries refuses a label that could carry a room name', () => {
+    expect(() =>
+      roomTelemetry({ exporters: [], perRoomSeries: true, roomLabel: (name) => name })
+    ).toThrow('perRoomSeries');
+  });
+});
+
+describe('perRoomSeries', () => {
+  test('labels people and memory by room, and drops a closed room', async () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({
+      exporters: [metrics],
+      sampleInterval: false,
+      perRoomSeries: true,
+      roomLabel: hmacRoomLabel('server-secret'),
+    });
+    const room = rooms.open(new Y.Doc(), { name: ROOM });
+    rooms.sample();
+    const label = hmacRoomLabel('server-secret')(ROOM);
+    expect(metrics.metrics()).toContain(
+      `docx_editor_collab_room_participants_current{room="${label}"} 0`
+    );
+    expect(metrics.metrics()).toContain(
+      `docx_editor_collab_room_memory_current_bytes{kind="state",room="${label}"}`
+    );
+    expect(metrics.metrics()).not.toContain(ROOM);
+    room.close();
+    expect(metrics.metrics()).not.toContain(label);
     await rooms.shutdown();
   });
 });
@@ -224,6 +665,14 @@ describe('serveMetrics', () => {
       rooms: { telemetry: rooms, path: '/rooms' },
       authorize: (request) => request.url !== '/rooms?denied',
     });
+    expect(() => serveMetrics(metrics, { rooms: { telemetry: rooms, path: '/rooms' } })).toThrow(
+      'authorize'
+    );
+    const bearer = requireBearerToken('scrape-secret');
+    expect(bearer({ headers: { authorization: 'Bearer scrape-secret' } } as never)).toBe(true);
+    expect(bearer({ headers: { authorization: 'Bearer wrong' } } as never)).toBe(false);
+    expect(bearer({ headers: {} } as never)).toBe(false);
+    expect(() => requireBearerToken(undefined)).toThrow('non-empty secret');
 
     const scrape = await call(hook, '/metrics');
     expect(scrape.handled).toBe(true);
@@ -233,6 +682,12 @@ describe('serveMetrics', () => {
     expect(JSON.parse(listed.written.body!)).toEqual([expect.objectContaining({ room: 'room-1' })]);
 
     expect((await call(hook, '/rooms?denied')).written.status).toBe(403);
+    const throwing = serveMetrics(metrics, {
+      authorize: () => {
+        throw new Error('bad header');
+      },
+    });
+    expect((await call(throwing, '/metrics')).written.status).toBe(403);
     expect((await call(hook, '/')).handled).toBe(false);
     await rooms.shutdown();
   });

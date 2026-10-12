@@ -35,7 +35,7 @@ import {
   type OoxmlPart,
 } from '../store/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
+import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
 import {
   findReviewPlacement,
   isReplacementPairKey,
@@ -439,7 +439,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return {
         ok: false,
         code: 'unsupported',
-        reason: 'this revision kind has no structural accept/reject yet',
+        reason: READ_ONLY_REVISION_REASON,
       };
     let applied: { committed: boolean; reason?: unknown } | undefined;
     deps.surface()!.commitReviewOps(() => {

@@ -24,6 +24,7 @@ export interface TelemetryExporter {
     // (undocumented)
     event?(event: TelemetryEvent): void;
     flush?(): void | Promise<void>;
+    forget?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     metric?(record: MetricRecord): void;
     readonly name: string;

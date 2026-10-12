@@ -108,9 +108,25 @@ describe('createTelemetry behavior', () => {
       ...refusal('edit.tracked-drawing-delete-unsupported'),
       tracked: true,
     } as EditorDiagnostic);
+    // A refusal about tracking itself belongs there too, though tracking was off.
+    telemetry.record(refusal('edit.tracking-required'));
     expect(memory.events.map((event) => (event as { code?: string }).code)).toEqual([
       'edit.tracked-drawing-delete-unsupported',
+      'edit.tracking-required',
     ]);
+  });
+
+  test('a code or kind outside the closed lists is counted as dropped and never a label', async () => {
+    const { prometheusRegistry } = await import('../prometheus/index.ts');
+    const metrics = prometheusRegistry();
+    const telemetry = createTelemetry({ exporters: [metrics], dedupeWindowMs: 0 });
+    telemetry.record(refusal('JohnSmith_NDA'));
+    telemetry.record({ ...base, kind: 'future.kind' } as unknown as EditorDiagnostic);
+    const text = metrics.metrics();
+    expect(text).not.toContain('JohnSmith');
+    expect(text).not.toContain('docx_editor_edit_rejections_total');
+    expect(text).toContain('docx_editor_telemetry_dropped_events_total{reason="unknown-code"} 1');
+    expect(text).toContain('docx_editor_telemetry_dropped_events_total{reason="unknown-kind"} 1');
   });
 
   test('identical refusals inside the window are one event, then one summary', async () => {
@@ -214,6 +230,133 @@ describe('createTelemetry behavior', () => {
       console.warn = warn;
     }
     expect(memory.events).toHaveLength(0);
+  });
+
+  test('the detailed document shape is sent only when asked for', () => {
+    const opened = {
+      ...base,
+      kind: 'document.open',
+      outcome: 'opened',
+      sizeBucket: '0-64KiB',
+      pagesBucket: '1',
+      durationMs: 20,
+      shape: { parts: '2-9', paragraphs: '10-99', reviewItems: '0', embeddedFonts: '0' },
+    } as EditorDiagnostic;
+    const basic = memoryExporter();
+    createTelemetry({ exporters: [basic] }).record(opened);
+    expect(basic.events[0]).not.toHaveProperty('shape');
+    const detailed = memoryExporter();
+    createTelemetry({ exporters: [detailed], documentShape: 'detailed' }).record(opened);
+    expect(detailed.events[0]).toMatchObject({ shape: { paragraphs: '10-99' } });
+  });
+
+  test('history diagnostics are their own area and never a failure', () => {
+    const lines: string[] = [];
+    const telemetry = createTelemetry({
+      exporters: [
+        consoleExporter({
+          console: {
+            info: (line) => lines.push(`info ${line}`),
+            warn: (line) => lines.push(`warn ${line}`),
+          },
+        }),
+      ],
+      include: { history: true },
+    });
+    telemetry.record({ ...base, kind: 'history', code: 'history.split' } as EditorDiagnostic);
+    telemetry.record(refusal());
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toStartWith('info [docx-editor] undo history: history.split');
+  });
+
+  test('no window opens before consent, so no orphan summary is sent', async () => {
+    const memory = memoryExporter();
+    let agreed = false;
+    const telemetry = createTelemetry({ exporters: [memory], consent: () => agreed });
+    telemetry.record(refusal());
+    agreed = true;
+    telemetry.record(refusal());
+    await telemetry.flush();
+    expect(memory.events).toHaveLength(1);
+    expect(memory.events[0]!.repeated).toBeUndefined();
+  });
+
+  test('a collaboration error that stops recovering is its own event', () => {
+    const memory = memoryExporter();
+    const telemetry = createTelemetry({ exporters: [memory] });
+    const status = (recovering: boolean) =>
+      ({
+        ...base,
+        kind: 'collab.status',
+        status: 'error',
+        previous: 'ready',
+        code: 'collab.remote-apply-failed',
+        recovering,
+      }) as EditorDiagnostic;
+    telemetry.record(status(true));
+    telemetry.record(status(false));
+    expect(memory.events.map((event) => (event as { recovering?: boolean }).recovering)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  test('a headless open prints no page count', () => {
+    const lines: string[] = [];
+    const telemetry = createTelemetry({
+      exporters: [
+        consoleExporter({ console: { info: (line) => lines.push(line), warn: () => {} } }),
+      ],
+    });
+    telemetry.record({
+      ...base,
+      kind: 'document.open',
+      outcome: 'opened',
+      sizeBucket: '0-64KiB',
+      durationMs: 12,
+    } as EditorDiagnostic);
+    expect(lines[0]).toBe('[docx-editor] document opened: 0-64KiB, 12 ms');
+  });
+
+  test('expected refusals are not failures', async () => {
+    const { isFailure } = await import('../index.ts');
+    const as = (code: string) => ({ ...refusal(code), engineVersion: 'x', resource: {} }) as never;
+    expect(isFailure(as('edit.stale-target'))).toBe(false);
+    expect(isFailure(as('edit.read-only'))).toBe(false);
+    expect(isFailure(as('edit.protected-content'))).toBe(false);
+    const routine = (kind: string, code: string) =>
+      ({ kind, code, engineVersion: 'x', resource: {} }) as never;
+    expect(isFailure(routine('font.failed', 'font.missing'))).toBe(false);
+    expect(isFailure(routine('font.failed', 'font.load-failed'))).toBe(true);
+    expect(isFailure(routine('review.skipped', 'review.stale-revision'))).toBe(false);
+    expect(isFailure(routine('review.skipped', 'review.revision-unsupported'))).toBe(true);
+    expect(isFailure(as('edit.tracked-drawing-delete-unsupported'))).toBe(true);
+    // A deduplication summary repeats an event already reported.
+    expect(
+      isFailure({
+        ...(as('edit.tracked-drawing-delete-unsupported') as object),
+        repeated: 3,
+      } as never)
+    ).toBe(false);
+  });
+
+  test('a dropped event is counted by reason, so a version mismatch is visible', () => {
+    const memory = memoryExporter();
+    const telemetry = createTelemetry({ exporters: [memory], dedupeWindowMs: 0 });
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      telemetry.record(refusal('edit.from-a-newer-core' as never));
+    } finally {
+      console.warn = warn;
+    }
+    expect(memory.events).toHaveLength(0);
+    expect(memory.metrics).toContainEqual(
+      expect.objectContaining({
+        definition: METRICS.droppedEvents,
+        attributes: { reason: 'unknown-code' },
+      })
+    );
   });
 
   test('shutdown stops recording', async () => {

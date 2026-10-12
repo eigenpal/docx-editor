@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import type { EditorDiagnostic } from '@docx-editor.dev/core';
 import { checkAttributes, checkEvent } from './anonymous.ts';
-import type { MetricDefinition } from './metrics.ts';
+import { METRICS, type MetricDefinition } from './metrics.ts';
 
 /** A metric attribute or a resource value. @public */
 export type AttributeValue = string | number | boolean;
@@ -72,6 +72,11 @@ export interface TelemetryExporter {
   readonly name: string;
   event?(event: TelemetryEvent): void;
   metric?(record: MetricRecord): void;
+  /**
+   * Drop a series that no longer exists, such as a closed room's per-room gauge. Optional:
+   * an exporter without it keeps the series until it expires on its own.
+   */
+  forget?(definition: MetricDefinition, attributes: Attributes): void;
   /** Send anything buffered. Called by `flush()` and when a page is hidden. */
   flush?(): void | Promise<void>;
   /** Flush and release resources. Called by `shutdown()`. */
@@ -114,8 +119,11 @@ export const ENGINE_VERSION: string =
 
 export interface Pipeline {
   readonly resource: Attributes;
+  /** Whether consent is given and the pipeline is open, read now. */
+  consented(): boolean;
   event(event: TelemetryEvent): void;
   metric(definition: MetricDefinition, value: number, attributes?: Attributes): void;
+  forget(definition: MetricDefinition, attributes: Attributes): void;
   flush(): Promise<void>;
   shutdown(): Promise<void>;
 }
@@ -163,14 +171,20 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
 
   return {
     resource,
+    consented,
     event(event) {
       if (!consented()) return;
       const checked = checkEvent(event);
-      if (!checked) return;
+      if ('dropped' in checked) {
+        // Counted even in production, where the guard does not warn: a version mismatch
+        // between core and telemetry shows up here instead of as silence.
+        this.metric(METRICS.droppedEvents, 1, { reason: checked.dropped });
+        return;
+      }
       for (const exporter of exporters) {
         if (!exporter.event) continue;
         try {
-          exporter.event(checked);
+          exporter.event(checked.event);
         } catch (error) {
           report(error, exporter.name);
         }
@@ -187,6 +201,17 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
         if (!exporter.metric) continue;
         try {
           exporter.metric(record);
+        } catch (error) {
+          report(error, exporter.name);
+        }
+      }
+    },
+    forget(definition, attributes) {
+      const checked = checkAttributes(attributes, definition.name, definition.labels);
+      for (const exporter of exporters) {
+        if (!exporter.forget) continue;
+        try {
+          exporter.forget(definition, checked);
         } catch (error) {
           report(error, exporter.name);
         }

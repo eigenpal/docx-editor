@@ -110,6 +110,9 @@ export function prometheusRegistry(): PrometheusRegistry {
         });
       }
     },
+    forget(definition, attributes) {
+      families.get(definition.name)?.series.delete(seriesKey(attributes));
+    },
     metrics() {
       const lines: string[] = [];
       for (const { definition, series } of families.values()) {
@@ -187,7 +190,15 @@ export function metricsHandler(
   options: MetricsHandlerOptions = {}
 ): (request: unknown, response: NodeResponseLike) => Promise<void> {
   return async (_request, response) => {
-    const body = await render(registry, options);
+    let body: string;
+    try {
+      body = await render(registry, options);
+    } catch {
+      // A merged registry that throws must not crash the process through an Express handler.
+      response.statusCode = 500;
+      response.end('metrics unavailable');
+      return;
+    }
     response.statusCode = 200;
     response.setHeader('Content-Type', PROMETHEUS_CONTENT_TYPE);
     response.end(body);
@@ -210,10 +221,15 @@ export function fetchMetricsHandler(
   registry: PrometheusTextSource,
   options: MetricsHandlerOptions = {}
 ): (request?: unknown) => Promise<Response> {
-  return async () =>
-    new Response(await render(registry, options), {
-      headers: { 'Content-Type': PROMETHEUS_CONTENT_TYPE },
-    });
+  return async () => {
+    try {
+      return new Response(await render(registry, options), {
+        headers: { 'Content-Type': PROMETHEUS_CONTENT_TYPE },
+      });
+    } catch {
+      return new Response('metrics unavailable', { status: 500 });
+    }
+  };
 }
 
 export type { TelemetryExporter } from '../pipeline.ts';

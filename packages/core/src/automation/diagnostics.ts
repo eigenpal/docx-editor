@@ -13,6 +13,7 @@ import type {
   EditDiagnosticCode,
   ReviewDiagnosticCode,
 } from './diagnostic-vocabulary.ts';
+import { isEditDiagnosticCode } from './diagnostic-hints.ts';
 import type { ChangeTrackingRefusal } from './change-tracking.ts';
 import type { OoxmlPackageRejection } from '../store/package/index.ts';
 import type {
@@ -83,7 +84,11 @@ type HostRejectionToken =
   | 'no-document'
   | 'table-insert-refused'
   | 'table-of-contents-refused'
-  | 'refresh-in-progress';
+  | 'refresh-in-progress'
+  | 'collaboration-session-not-ready'
+  | 'collaboration-session-not-attached'
+  | 'collaboration-session-destroyed'
+  | 'collaboration-text-limit';
 
 /** Exhaustive over the store and story reasons, like {@link OPEN_CODES}. */
 const STORE_EDIT_CODES: Readonly<
@@ -157,6 +162,10 @@ const STORE_EDIT_CODES: Readonly<
   'table-insert-refused': 'edit.table-insert-refused',
   'table-of-contents-refused': 'edit.table-of-contents-refused',
   'refresh-in-progress': 'edit.refresh-in-progress',
+  'collaboration-session-not-ready': 'edit.collaboration-not-ready',
+  'collaboration-session-not-attached': 'edit.collaboration-not-ready',
+  'collaboration-session-destroyed': 'edit.collaboration-not-ready',
+  'collaboration-text-limit': 'edit.collaboration-text-limit',
   'change-tracking-unsupported-host': 'edit.tracking-unsupported-host',
   'change-tracking-mode-unsupported': 'edit.tracking-mode-unsupported',
   'change-tracking-author-required': 'edit.tracking-author-required',
@@ -171,7 +180,11 @@ const STORE_EDIT_CODES: Readonly<
  * @public
  */
 export function storeEditDiagnosticCode(reason: string): EditDiagnosticCode | null {
-  const token = reason.startsWith('unsupported-revision:') ? 'unsupported-revision' : reason;
+  // A detail after a colon never selects the code; only the token before it does.
+  const colon = reason.indexOf(':');
+  const token = colon < 0 ? reason : reason.slice(0, colon);
+  // A browser host answers with the public code when the surface refused in a sentence.
+  if (isEditDiagnosticCode(token)) return token;
   return own<EditDiagnosticCode>(STORE_EDIT_CODES, token) ?? null;
 }
 

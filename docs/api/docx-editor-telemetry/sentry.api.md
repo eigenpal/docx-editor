@@ -14,7 +14,25 @@ export class DocxEditorDiagnosticError extends Error {
 }
 
 // @public
+export function dropEditorBreadcrumbs<B extends SentryBreadcrumbLike>(breadcrumb: B, hint?: SentryBreadcrumbHintLike): B | null;
+
+// @public
+export const EDITOR_SELECTORS: readonly string[];
+
+// @public
 export function isSentryIssue(event: TelemetryEvent): boolean;
+
+// @public
+export interface SentryBreadcrumbHintLike {
+    // (undocumented)
+    readonly event?: unknown;
+}
+
+// @public
+export interface SentryBreadcrumbLike {
+    // (undocumented)
+    readonly category?: string;
+}
 
 // @public
 export function sentryExporter(sentry: SentryLike, options?: SentryExporterOptions): TelemetryExporter;
@@ -55,6 +73,7 @@ export interface TelemetryExporter {
     // (undocumented)
     event?(event: TelemetryEvent): void;
     flush?(): void | Promise<void>;
+    forget?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     metric?(record: MetricRecord): void;
     readonly name: string;

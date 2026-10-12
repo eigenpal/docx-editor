@@ -46,8 +46,10 @@ export interface SentryLike {
 export interface SentryExporterOptions {
   /**
    * Which events become Sentry issues. The rest become breadcrumbs. The default sends an issue
-   * for a refused open, a collaboration error that will not heal, a text shaper that did not
-   * load, and an engine invariant. Those need an action; a refused keystroke does not.
+   * when the app can act: an open refused because the app passed something wrong or for an
+   * unknown reason, a collaboration error that will not heal, a text shaper that did not load,
+   * and an engine invariant. A corrupt or oversized file and a refused keystroke are
+   * breadcrumbs.
    */
   readonly issue?: (event: TelemetryEvent) => boolean;
   /** Record breadcrumbs for the other events. Defaults to `true`. */
@@ -69,17 +71,97 @@ export class DocxEditorDiagnosticError extends Error {
   }
 }
 
+const EXPECTED_COLLAB_CODES: ReadonlySet<string> = new Set([
+  'collab.authentication-failed',
+  'collab.room-generation-changed',
+]);
+
+const ACTIONABLE_OPEN_CODES: ReadonlySet<string> = new Set([
+  'open.failed',
+  'open.unsupported-source',
+  'open.invalid-limits',
+]);
+
+/**
+ * CSS selectors for everything that shows the document: the editor shell and the painted pages.
+ * Pass them to Session Replay's `block` and `mask` options.
+ *
+ * @public
+ */
+export const EDITOR_SELECTORS: readonly string[] = Object.freeze(['.docx-editor', '.docx-pages']);
+
+/** A Sentry breadcrumb, as `beforeBreadcrumb` receives it. @public */
+export interface SentryBreadcrumbLike {
+  readonly category?: string;
+}
+
+/** The hint Sentry passes with a breadcrumb. For a click or key press, `event` is the DOM event. @public */
+export interface SentryBreadcrumbHintLike {
+  readonly event?: unknown;
+}
+
+/**
+ * A `beforeBreadcrumb` filter that drops Sentry's click and key press breadcrumbs from inside the
+ * editor. Sentry describes the element a person clicked with its `alt`, `title`, and
+ * `aria-label` values. Inside the editor, those values come from the document: picture
+ * descriptions, link tooltips, and content control names. A `ui` breadcrumb whose element is
+ * unknown is dropped too. Other breadcrumbs pass unchanged.
+ *
+ * @example
+ * ```ts
+ * Sentry.init({ dsn, beforeBreadcrumb: dropEditorBreadcrumbs });
+ * // With a filter of your own:
+ * Sentry.init({ dsn, beforeBreadcrumb: (crumb, hint) => myFilter(dropEditorBreadcrumbs(crumb, hint)) });
+ * ```
+ *
+ * @public
+ */
+export function dropEditorBreadcrumbs<B extends SentryBreadcrumbLike>(
+  breadcrumb: B,
+  hint?: SentryBreadcrumbHintLike
+): B | null {
+  if (!breadcrumb.category?.startsWith('ui.')) return breadcrumb;
+  return insideEditor((hint?.event as { target?: unknown } | undefined)?.target)
+    ? null
+    : breadcrumb;
+}
+
+interface ElementLike {
+  closest?: (selectors: string) => unknown;
+  parentElement?: unknown;
+}
+
+/** Whether a DOM event target is inside the editor. An unknown target counts as inside. */
+function insideEditor(target: unknown): boolean {
+  try {
+    let node = target as ElementLike | null | undefined;
+    // A text node has no `closest`; its parent element does.
+    if (node && typeof node.closest !== 'function') node = node.parentElement as ElementLike;
+    if (!node || typeof node.closest !== 'function') return true;
+    return node.closest(EDITOR_SELECTORS.join(', ')) != null;
+  } catch {
+    return true;
+  }
+}
+
 /** The default issue rule. @public */
 export function isSentryIssue(event: TelemetryEvent): boolean {
   switch (event.kind) {
     case 'document.open':
-      return event.outcome === 'rejected';
+      // A corrupt or oversized file is the file's problem, not the app's: a breadcrumb. These
+      // codes say the app passed something wrong, or the engine could not say why.
+      return event.outcome === 'rejected' && ACTIONABLE_OPEN_CODES.has(event.code);
     case 'edit.rejected':
       return event.code === 'edit.internal-invariant';
     case 'font.failed':
       return event.code === 'font.shaper-unavailable';
     case 'collab.status':
-      return event.status === 'error' && !event.recovering;
+      // An expired token and a compacted room are normal: the client rejoins.
+      return (
+        event.status === 'error' &&
+        !event.recovering &&
+        !EXPECTED_COLLAB_CODES.has(event.code ?? '')
+      );
     default:
       return false;
   }
@@ -110,8 +192,10 @@ function dataOf(event: TelemetryEvent): Record<string, unknown> {
 /**
  * Send diagnostics to Sentry.
  *
- * Sentry Session Replay records the page, and the page shows the document. Mask the editor in
- * Replay: `Sentry.replayIntegration({ mask: ['.docx-editor'] })`.
+ * Sentry Session Replay records the page, and the page shows the document. Block the editor in
+ * Replay, so neither its text nor its pictures are recorded, and drop the click breadcrumbs that
+ * describe its elements: `Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })` and
+ * `beforeBreadcrumb: dropEditorBreadcrumbs`.
  *
  * @example
  * ```ts

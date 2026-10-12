@@ -302,7 +302,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     continueOpen: (budgetMs) => {
       if (!surface) return true;
       const done = preparedOpen.continueOpen(surface, budgetMs);
-      if (done) diagnostics.openSettled(totalPagesOf(surface));
+      if (done) diagnostics.openSettled(surface);
       return done;
     },
     // Fonts resolved before the mount are laid out once, by the mount; see `preparedOpenHook`.
@@ -528,7 +528,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   const events = createEditorEvents(snapshotNow);
   const { emitError, emitDocumentChange, emitSelectionChange } = events;
-  const diagnostics = createEditorDiagnostics({ modules, emit: events.emitDiagnostic });
+  const diagnostics = createEditorDiagnostics({ modules, events, customNodes: reportDiagnostic });
   const suggesting = () => editingMode === 'suggesting';
 
   const revisionMarkupState = createRevisionMarkupState(config.revisionMarkup, {
@@ -719,7 +719,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
     else adoptDocumentTracking();
     sweepCustomNodePayloadsOnOpen(surface, modules);
-    if (!preparedOpen.stillOpening(surface)) diagnostics.openSettled(totalPagesOf(surface));
+    if (!preparedOpen.stillOpening(surface)) diagnostics.openSettled(surface);
     mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
     // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`
@@ -2666,9 +2666,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       openScheduler.cancel();
     },
   });
-  const execNow = editor.exec;
-  editor.exec = (command, options) =>
-    diagnostics.exec(command, suggesting(), () => execNow(command, options));
+  diagnostics.attach(editor, suggesting);
   // Host calls read and write saved field results in this editor's mode.
   return fieldScope.methods(editor);
 }

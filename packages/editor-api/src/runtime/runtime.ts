@@ -31,6 +31,7 @@ import type {
   AutomationBatchResponse,
   AutomationHandle,
   AutomationHost,
+  AutomationOperation,
 } from '@docx-editor.dev/core/automation';
 import { Document } from '../model/document.ts';
 import { hostFailure } from './batch.ts';
@@ -134,7 +135,7 @@ export interface CreateRuntimeOptions {
   /** Revision view for standard `text` loads and `search()` calls. Omitted means `allMarkup`. */
   readonly revisionTextView?: RevisionTextView;
   /** Told about each refused batch before it is thrown, for anonymous diagnostics. */
-  readonly onRefusal?: (error: DocxEditorError) => void;
+  readonly onRefusal?: (error: DocxEditorError, operations: readonly AutomationOperation[]) => void;
 }
 
 export function createRuntime(

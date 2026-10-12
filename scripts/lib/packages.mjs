@@ -331,19 +331,20 @@ export const PACKAGES = [
       logLevel: 'warning',
       allowlist: {
         // Owned by `core` and imported from there, like the pro entries above.
-        index: [
-          'CollaborationFailureCode',
-          'CollaborationStatus',
-          'EditorCommand',
-          'EditorModule',
-        ],
+        index: ['CollaborationFailureCode', 'CollaborationStatus', 'EditorCommand', 'EditorModule'],
         // The exporter contract lives in the main entry, which every exporter's user already
         // imports `createTelemetry` from; each entry re-exports only what its calls take.
-        otel: ['MetricRecord', 'TelemetryEvent'],
-        sentry: ['EditorDiagnostic', 'MetricRecord', 'TelemetryEventContext'],
-        prometheus: ['MetricRecord', 'TelemetryEvent'],
-        server: ['Attributes', 'MetricRecord', 'TelemetryEvent'],
-        hocuspocus: ['Attributes', 'MetricRecord', 'TelemetryEvent'],
+        otel: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
+        sentry: [
+          'Attributes',
+          'EditorDiagnostic',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEventContext',
+        ],
+        prometheus: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
+        server: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
+        hocuspocus: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
       },
     },
   },

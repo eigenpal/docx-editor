@@ -18,7 +18,10 @@ import {
   PRO_COLLABORATION_REASON,
   PRO_REVIEW_REASON,
   READ_ONLY_PROTECTION_REASON,
+  READ_ONLY_REVISION_REASON,
   SUGGESTING_AUTHOR_REASON,
+  SUGGESTING_IMAGE_REPLACE_REASON,
+  TRACKED_ONLY_EDITING_REASON,
 } from './opening-editing-mode.ts';
 import { COLLABORATION_FIELD_RESULTS_REFUSAL } from './field-results-scope.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
@@ -63,8 +66,20 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   [LOCKED_CONTENT_BREAK_REFUSAL, 'edit.protected-content'],
   ['An external document refresh is in progress.', 'edit.refresh-in-progress'],
   ['invalid note scope id', 'edit.stale-target'],
+  [TRACKED_ONLY_EDITING_REASON, 'edit.tracking-required'],
+  [SUGGESTING_IMAGE_REPLACE_REASON, 'edit.tracked-image-replace-unsupported'],
+  [READ_ONLY_REVISION_REASON, 'edit.revision-unsupported'],
   ['note not found', 'edit.stale-target'],
 ]);
+
+/**
+ * A surface refusal as the automation lane reads it: a sentence the tables know becomes its
+ * public code, which `storeEditDiagnosticCode` accepts, and a store token passes unchanged.
+ */
+export function publicRefusal(reason: unknown): string {
+  const text = String(reason ?? 'refused');
+  return EDIT_SENTENCES.get(text) ?? text;
+}
 
 /**
  * The public code for a refused edit. A raw reason the tables do not know, such as a sentence

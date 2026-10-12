@@ -142,9 +142,11 @@ export type {
   ByteSizeBucket,
   CollaborationDiagnosticCode,
   CountBucket,
+  CustomNodeDiagnosticCode,
   DiagnosticCode,
   DocumentOpenDiagnosticCode,
   EditDiagnosticCode,
   FontDiagnosticCode,
+  HistoryDiagnosticCode,
   ReviewDiagnosticCode,
 } from './diagnostic-vocabulary.ts';

@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { explainDiagnostic } from '@docx-editor.dev/core';
 import type { EditorDiagnostic, EditorModule } from '@docx-editor.dev/core';
 import { METRICS } from './metrics.ts';
+import { checkEvent } from './anonymous.ts';
 import {
   ENGINE_VERSION,
   createPipeline,
@@ -20,9 +21,12 @@ import {
  *
  * - `documentOpen`: documents opened and refused (`document.open`).
  * - `editing`: edits and commands refused while changes are not tracked (`edit.rejected`).
- * - `trackedChanges`: refusals while suggesting, and skipped tracked changes
+ * - `trackedChanges`: refusals while suggesting, refusals about tracking itself, and skipped
+ *   tracked changes
  *   (`edit.rejected` with `tracked: true`, `review.skipped`).
  * - `fonts`: fonts that failed and were substituted (`font.failed`).
+ * - `history`: undo steps that did not group as the gesture intended (`history`).
+ * - `customNodes`: custom node payloads that could not be read (`custom-node`).
  * - `collaborationClient`: collaboration status changes and room size (`collab.*`).
  *
  * @public
@@ -32,6 +36,8 @@ export type TelemetryArea =
   | 'editing'
   | 'trackedChanges'
   | 'fonts'
+  | 'history'
+  | 'customNodes'
   | 'collaborationClient';
 
 /** Options for one area. @public */
@@ -62,6 +68,13 @@ export interface TelemetryOptions extends TelemetryPipelineOptions {
    * Set 0 to send every event.
    */
   readonly dedupeWindowMs?: number;
+  /**
+   * How much of an opened document's shape to send. `'basic'`, the default, sends the size and
+   * page buckets. `'detailed'` also sends part, paragraph, review item, and embedded font
+   * buckets: useful to group open times, but several counts together describe a document more
+   * closely, so ask for it only when you need it.
+   */
+  readonly documentShape?: 'basic' | 'detailed';
 }
 
 /** A configured telemetry client. Create it once, outside any component. @public */
@@ -93,19 +106,34 @@ const ALL_AREAS: TelemetryInclude = {
   editing: true,
   trackedChanges: true,
   fonts: true,
+  history: true,
+  customNodes: true,
   collaborationClient: true,
 };
+
+/** Refusals about tracking itself, reported under `trackedChanges` even with tracking off. */
+const TRACKING_CODES: ReadonlySet<string> = new Set([
+  'edit.tracking-required',
+  'edit.suggesting-needs-author',
+  'edit.tracking-mode-unsupported',
+  'edit.tracking-author-required',
+  'edit.tracking-unsupported-host',
+]);
 
 function areaOf(event: EditorDiagnostic): TelemetryArea | null {
   switch (event.kind) {
     case 'document.open':
       return 'documentOpen';
     case 'edit.rejected':
-      return event.tracked ? 'trackedChanges' : 'editing';
+      return event.tracked || TRACKING_CODES.has(event.code) ? 'trackedChanges' : 'editing';
     case 'review.skipped':
       return 'trackedChanges';
     case 'font.failed':
       return 'fonts';
+    case 'history':
+      return 'history';
+    case 'custom-node':
+      return 'customNodes';
     case 'collab.status':
     case 'collab.participants':
       return 'collaborationClient';
@@ -119,8 +147,12 @@ function dedupeKey(event: EditorDiagnostic): string | null {
   if (event.kind === 'edit.rejected')
     return `${event.editorSessionId}|${event.code}|${event.origin}|${event.tracked}|${event.command ?? ''}`;
   if (event.kind === 'font.failed') return `${event.editorSessionId}|font|${event.code}`;
+  if (event.kind === 'history' || event.kind === 'custom-node')
+    return `${event.editorSessionId}|${event.kind}|${event.code}`;
   // People join and leave in bursts; inside a window only the latest count matters.
   if (event.kind === 'collab.participants') return `${event.editorSessionId}|participants`;
+  if (event.kind === 'collab.status')
+    return `${event.editorSessionId}|status|${event.status}|${event.code ?? ''}|${event.recovering}`;
   return null;
 }
 
@@ -147,6 +179,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   const pipeline = createPipeline(options);
   const include = options.include ?? ALL_AREAS;
   const windowMs = options.dedupeWindowMs ?? 10_000;
+  const detailedShape = options.documentShape === 'detailed';
   interface Window {
     readonly event: TelemetryEvent;
     repeated: number;
@@ -182,19 +215,28 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       // A count is a state, not a repeat: send the latest one if it differs.
       const sent = open.event as { count?: number };
       if ((open.latest as { count?: number }).count !== sent.count)
-        pipeline.event(enrich(open.latest, pipeline));
+        pipeline.event(enrich(withShape(open.latest, detailedShape), pipeline));
     } else if (open.repeated > 0) {
       pipeline.event({ ...open.event, repeated: open.repeated });
     }
   }
 
   function record(diagnostic: EditorDiagnostic): void {
-    if (closed) return;
+    // Consent first: a window opened before consent would later send a summary of an event
+    // that was never delivered.
+    if (closed || !pipeline.consented()) return;
+    // The guard runs before the metrics, so a value outside the closed lists never becomes a
+    // metric label, and an event the guard drops is counted.
+    const checked = checkEvent(enrich(diagnostic, pipeline));
+    if ('dropped' in checked) {
+      pipeline.metric(METRICS.droppedEvents, 1, { reason: checked.dropped });
+      return;
+    }
     const area = areaOf(diagnostic);
     const sampleRate = area ? rate(area) : null;
     if (sampleRate === null) return;
     hookPage();
-    recordMetrics(pipeline, diagnostic);
+    recordMetrics(pipeline, checked.event as unknown as EditorDiagnostic);
     const key = windowMs > 0 ? dedupeKey(diagnostic) : null;
     const open = key ? windows.get(key) : undefined;
     if (open) {
@@ -203,7 +245,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       return;
     }
     if (sampleRate < 1 && Math.random() >= sampleRate) return;
-    const event = enrich(diagnostic, pipeline);
+    const event = enrich(withShape(diagnostic, detailedShape), pipeline);
     pipeline.event(event);
     if (key) {
       const timer = setTimeout(() => close(key), windowMs);
@@ -232,6 +274,15 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   };
 }
 
+/** The diagnostic without its detailed document shape, unless the host asked for it. */
+function withShape(diagnostic: EditorDiagnostic, detailed: boolean): EditorDiagnostic {
+  if (detailed || diagnostic.kind !== 'document.open' || diagnostic.outcome !== 'opened')
+    return diagnostic;
+  if (!('shape' in diagnostic)) return diagnostic;
+  const { shape: _shape, ...rest } = diagnostic;
+  return rest as EditorDiagnostic;
+}
+
 /** Adds the hint, the docs link, the version, and the host's resource values. */
 function enrich(diagnostic: EditorDiagnostic, pipeline: Pipeline): TelemetryEvent {
   const code = 'code' in diagnostic ? diagnostic.code : undefined;
@@ -248,7 +299,7 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
   switch (event.kind) {
     case 'document.open':
       if (event.outcome === 'opened') {
-        pipeline.metric(METRICS.documentOpens, 1, { outcome: 'opened' });
+        pipeline.metric(METRICS.documentOpens, 1, { outcome: 'opened', code: 'none' });
         pipeline.metric(METRICS.documentOpenDuration, event.durationMs / 1000);
       } else pipeline.metric(METRICS.documentOpens, 1, { outcome: 'rejected', code: event.code });
       return;
@@ -265,10 +316,16 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
     case 'font.failed':
       pipeline.metric(METRICS.fontFailures, 1, { code: event.code });
       return;
+    case 'history':
+      pipeline.metric(METRICS.historyDiagnostics, 1, { code: event.code });
+      return;
+    case 'custom-node':
+      pipeline.metric(METRICS.customNodeDiagnostics, 1, { code: event.code });
+      return;
     case 'collab.status':
       pipeline.metric(METRICS.collabClientStatusTransitions, 1, {
         status: event.status,
-        ...(event.code ? { code: event.code } : {}),
+        code: event.code ?? 'none',
       });
       if (event.connectMs !== undefined)
         pipeline.metric(METRICS.collabClientConnectDuration, event.connectMs / 1000);

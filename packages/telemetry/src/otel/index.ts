@@ -23,6 +23,8 @@ import {
   type MeterProvider,
   type TracerProvider,
 } from '@opentelemetry/api';
+import { nodeEnv } from '../env.ts';
+import { isFailure } from '../exporters.ts';
 import type { MetricDefinition } from '../metrics.ts';
 import type { MetricRecord, TelemetryEvent, TelemetryExporter } from '../pipeline.ts';
 
@@ -43,8 +45,15 @@ export interface OtelExporterOptions {
 
 const SCOPE = '@docx-editor.dev/telemetry';
 
-type Gauge = { record(value: number, attributes?: OtelAttributes): void };
+type Gauge = {
+  record(value: number, attributes?: OtelAttributes): void;
+  forget(attributes: OtelAttributes): void;
+};
 
+/**
+ * Best effort: the API exports no way to ask whether an SDK is registered, so this reads the
+ * no-op class name, which a minified copy of the API may not keep.
+ */
 function isNoop(provider: unknown): boolean {
   const delegate = (provider as { getDelegate?: () => unknown }).getDelegate?.() ?? provider;
   return /^Noop/.test((delegate as { constructor?: { name?: string } })?.constructor?.name ?? '');
@@ -52,8 +61,7 @@ function isNoop(provider: unknown): boolean {
 
 let warnedNoop = false;
 function warnWhenNoop(meterProvider: MeterProvider, tracerProvider: TracerProvider): void {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env?.NODE_ENV;
+  const env = nodeEnv();
   if (warnedNoop || env === 'production') return;
   if (!isNoop(meterProvider) || !isNoop(tracerProvider)) return;
   warnedNoop = true;
@@ -64,20 +72,39 @@ function warnWhenNoop(meterProvider: MeterProvider, tracerProvider: TracerProvid
   );
 }
 
-/** A gauge from `createGauge`, or an observable gauge holding the last value per attribute set. */
-function createGauge(meter: Meter, definition: MetricDefinition): Gauge {
-  const options = { unit: definition.unit, description: definition.description };
-  const sync = (meter as { createGauge?: (name: string, o: typeof options) => Gauge }).createGauge;
-  if (typeof sync === 'function') return sync.call(meter, definition.name, options);
-  const last = new Map<string, { value: number; attributes: OtelAttributes }>();
-  meter.createObservableGauge(definition.name, options).addCallback((result) => {
-    for (const { value, attributes } of last.values()) result.observe(value, attributes);
-  });
+/**
+ * An observable gauge holding the last value per attribute set. Observable rather than
+ * synchronous, so a series that no longer exists, such as a closed room's, can be dropped.
+ */
+function createGauge(
+  meter: Meter,
+  definition: MetricDefinition,
+  last: Map<string, { value: number; attributes: OtelAttributes }>
+): Gauge {
+  meter
+    .createObservableGauge(definition.name, {
+      unit: definition.unit,
+      description: definition.description,
+    })
+    .addCallback((result) => {
+      for (const { value, attributes } of last.values()) result.observe(value, attributes);
+    });
   return {
     record(value, attributes = {}) {
-      last.set(JSON.stringify(attributes), { value, attributes });
+      last.set(attributeKey(attributes), { value, attributes });
+    },
+    forget(attributes) {
+      last.delete(attributeKey(attributes));
     },
   };
+}
+
+function attributeKey(attributes: OtelAttributes): string {
+  return JSON.stringify(
+    Object.keys(attributes)
+      .sort()
+      .map((key) => [key, attributes[key]])
+  );
 }
 
 function eventAttributes(event: TelemetryEvent): OtelAttributes {
@@ -86,16 +113,20 @@ function eventAttributes(event: TelemetryEvent): OtelAttributes {
     if (key === 'resource' || key === 'hint' || key === 'docs') continue;
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
       attributes[`docx_editor.${key}`] = value;
+    else if (key === 'shape' && value && typeof value === 'object')
+      for (const [field, bucket] of Object.entries(value))
+        if (typeof bucket === 'string') attributes[`docx_editor.shape.${field}`] = bucket;
   }
   return attributes;
 }
 
 /**
- * Record metrics and traces with OpenTelemetry.
+ * Record metrics and traces with OpenTelemetry. The exporter reads the global providers at
+ * each use, so it can be created before your SDK starts.
  *
  * Metrics use the names in `METRICS`. Each document open becomes a
- * `docx_editor.document.open` span, with an error status when it is refused. Other failures
- * become events on the active span, when one exists.
+ * `docx_editor.document.open` span, with an error status when it is refused. Other events
+ * become events on the active span; without one, a failure gets a short span of its own.
  *
  * @example
  * ```ts
@@ -109,15 +140,45 @@ function eventAttributes(event: TelemetryEvent): OtelAttributes {
  * @public
  */
 export function otelExporter(options: OtelExporterOptions = {}): TelemetryExporter {
-  const meterProvider = options.meterProvider ?? metrics.getMeterProvider();
-  const tracerProvider = options.tracerProvider ?? trace.getTracerProvider();
-  warnWhenNoop(meterProvider, tracerProvider);
   const scope = options.scope ?? SCOPE;
-  const meter = meterProvider.getMeter(scope);
-  const tracer = tracerProvider.getTracer(scope);
+  // Read the providers at each use, not once: telemetry is often created at module scope, and
+  // an SDK that registers later must still receive every measurement after it starts.
+  const meterProviderNow = () => options.meterProvider ?? metrics.getMeterProvider();
+  const tracerProviderNow = () => options.tracerProvider ?? trace.getTracerProvider();
+  let meterProvider: MeterProvider | undefined;
+  let meter: Meter | undefined;
   const instruments = new Map<string, Counter | Histogram | Gauge>();
+  /** Gauge values by metric, kept across a provider change so the new meter reports them. */
+  const gaugeValues = new Map<string, Map<string, { value: number; attributes: OtelAttributes }>>();
+  let checked = false;
+
+  function gaugeValuesOf(name: string) {
+    let values = gaugeValues.get(name);
+    if (!values) {
+      values = new Map();
+      gaugeValues.set(name, values);
+    }
+    return values;
+  }
+
+  function currentMeter(): Meter {
+    const provider = meterProviderNow();
+    if (provider !== meterProvider || !meter) {
+      meterProvider = provider;
+      meter = provider.getMeter(scope);
+      instruments.clear();
+    }
+    return meter;
+  }
 
   function instrument(definition: MetricDefinition): Counter | Histogram | Gauge {
+    const meter = currentMeter();
+    if (!checked) {
+      checked = true;
+      // Look again a little later: an SDK that starts just after the first measurement is fine.
+      const timer = setTimeout(() => warnWhenNoop(meterProviderNow(), tracerProviderNow()), 5_000);
+      (timer as { unref?: () => void }).unref?.();
+    }
     const known = instruments.get(definition.name);
     if (known) return known;
     const base = { unit: definition.unit, description: definition.description };
@@ -131,7 +192,7 @@ export function otelExporter(options: OtelExporterOptions = {}): TelemetryExport
                 ? { advice: { explicitBucketBoundaries: [...definition.buckets] } }
                 : {}),
             })
-          : createGauge(meter, definition);
+          : createGauge(meter, definition, gaugeValuesOf(definition.name));
     instruments.set(definition.name, created);
     return created;
   }
@@ -147,17 +208,41 @@ export function otelExporter(options: OtelExporterOptions = {}): TelemetryExport
     event(event) {
       if (event.kind === 'document.open') {
         const start = event.time - (event.outcome === 'opened' ? event.durationMs : 0);
-        const span = tracer.startSpan(
-          'docx_editor.document.open',
-          { startTime: start, attributes: eventAttributes(event) },
-          options.parentContext?.()
-        );
+        const span = tracerProviderNow()
+          .getTracer(scope)
+          .startSpan(
+            'docx_editor.document.open',
+            { startTime: start, attributes: eventAttributes(event) },
+            options.parentContext?.()
+          );
         if (event.outcome === 'rejected')
           span.setStatus({ code: SpanStatusCode.ERROR, message: event.code });
         span.end(event.time);
         return;
       }
-      trace.getActiveSpan()?.addEvent(`docx_editor.${event.kind}`, eventAttributes(event));
+      const active = trace.getActiveSpan();
+      if (active) {
+        active.addEvent(`docx_editor.${event.kind}`, eventAttributes(event));
+        return;
+      }
+      // Browsers rarely have an active span: a failure gets a short span of its own, so it is
+      // visible in traces too. Deduplication keeps bursts to one span per window.
+      if (!isFailure(event)) return;
+      const span = tracerProviderNow()
+        .getTracer(scope)
+        .startSpan(
+          `docx_editor.${event.kind}`,
+          { startTime: event.time, attributes: eventAttributes(event) },
+          options.parentContext?.()
+        );
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: 'code' in event ? event.code : event.kind,
+      });
+      span.end(event.time);
+    },
+    forget(definition, attributes) {
+      gaugeValues.get(definition.name)?.delete(attributeKey(attributes as OtelAttributes));
     },
     async flush() {
       // The API types omit `forceFlush`; the SDK providers have it. Without it, a browser
@@ -166,7 +251,7 @@ export function otelExporter(options: OtelExporterOptions = {}): TelemetryExport
         const target = (provider as { getDelegate?: () => unknown }).getDelegate?.() ?? provider;
         return (target as { forceFlush?: () => Promise<void> }).forceFlush?.();
       };
-      await Promise.all([flushable(meterProvider), flushable(tracerProvider)]);
+      await Promise.all([flushable(meterProviderNow()), flushable(tracerProviderNow())]);
     },
   };
 }

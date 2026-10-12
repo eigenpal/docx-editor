@@ -160,17 +160,29 @@ export async function createServer(
   bytes: Uint8Array,
   options: CreateServerOptions = {}
 ): Promise<DocxEditorServerRuntime> {
-  validateDocumentLimits(options.limits);
   const diagnostics = runtimeDiagnostics(
     (options.modules ?? []).flatMap((module) => (module.onDiagnostic ? [module.onDiagnostic] : []))
   );
   const started = Date.now();
+  try {
+    validateDocumentLimits(options.limits);
+  } catch (error) {
+    diagnostics?.openRejected(bytes, 'invalid-limits');
+    throw error;
+  }
   const collaborationModel = collaborationModelOf(options.modules);
-  const opened = createServerAutomationHost(bytes, {
-    ...(options.pagination ? { pagination: serverPagination(options.pagination) } : {}),
-    ...(options.limits === undefined ? {} : { limits: options.limits }),
-    ...(collaborationModel === undefined ? {} : { collaborationModel }),
-  });
+  let opened: ReturnType<typeof createServerAutomationHost>;
+  try {
+    opened = createServerAutomationHost(bytes, {
+      ...(options.pagination ? { pagination: serverPagination(options.pagination) } : {}),
+      ...(options.limits === undefined ? {} : { limits: options.limits }),
+      ...(collaborationModel === undefined ? {} : { collaborationModel }),
+    });
+  } catch (error) {
+    // An engine fault, not a refusal: reported as an open that failed, then rethrown.
+    diagnostics?.openRejected(bytes, 'failed');
+    throw error;
+  }
   if (!opened.ok) {
     const limits: Partial<Record<typeof opened.reason, DocxEditorErrorInit['limit']>> = {
       'too-many-entries': 'zip.maxEntries',
@@ -197,7 +209,9 @@ export async function createServer(
     ...(options.revisionTextView === undefined
       ? {}
       : { revisionTextView: options.revisionTextView }),
-    ...(diagnostics ? { onRefusal: (error) => diagnostics.refused(error, opened.host) } : {}),
+    ...(diagnostics
+      ? { onRefusal: (error, operations) => diagnostics.refused(error, opened.host, operations) }
+      : {}),
   });
 }
 

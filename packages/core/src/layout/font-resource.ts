@@ -113,7 +113,9 @@ export class FontResolutionError extends Error {
       readonly actualHash?: string;
     } = {}
   ) {
-    super(`Font resolution failed (${code}) for ${fontRequestKey(request)}`);
+    // The family and part come from the document: they travel in `request`, never in the
+    // message, because hosts send error messages to their logs and error trackers.
+    super(`Font resolution failed (${code})`);
     this.code = code;
     this.request = freezeRequest(request);
     this.limit = details.limit;

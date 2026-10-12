@@ -39,6 +39,8 @@ export type EditDiagnosticCode =
   | 'edit.tracking-author-required'
   | 'edit.tracking-unsupported-host'
   | 'edit.revision-unsupported'
+  | 'edit.tracking-required'
+  | 'edit.tracked-image-replace-unsupported'
   | 'edit.cross-structure-join'
   | 'edit.indivisible-content'
   | 'edit.field-structure'
@@ -47,12 +49,15 @@ export type EditDiagnosticCode =
   | 'edit.table-insert-refused'
   | 'edit.table-of-contents-refused'
   | 'edit.unsupported-content'
+  | 'edit.operation-unsupported'
   | 'edit.unsupported-story'
   | 'edit.unmapped-change'
   | 'edit.stale-target'
   | 'edit.invalid-argument'
   | 'edit.resource-limit'
   | 'edit.refresh-in-progress'
+  | 'edit.collaboration-not-ready'
+  | 'edit.collaboration-text-limit'
   | 'edit.internal-invariant'
   | 'edit.refused';
 
@@ -74,6 +79,21 @@ export type FontDiagnosticCode =
   | 'font.unsupported-face';
 
 /**
+ * Why the undo history did not group edits as one step. Informational: nothing was refused.
+ *
+ * @public
+ */
+export type HistoryDiagnosticCode =
+  | 'history.split'
+  | 'history.possible-ungrouped-gesture'
+  | 'history.possible-fragmented-gesture';
+
+/** Why a custom node's stored payload could not be read. The node name is never reported. @public */
+export type CustomNodeDiagnosticCode =
+  | 'custom-node.payload-invalid'
+  | 'custom-node.payload-missing';
+
+/**
  * Why a collaboration session failed or refused work: `collab.` and the session's own public
  * {@link CollaborationFailureCode}, such as `collab.authentication-failed`.
  *
@@ -87,6 +107,8 @@ export type DiagnosticCode =
   | EditDiagnosticCode
   | ReviewDiagnosticCode
   | FontDiagnosticCode
+  | HistoryDiagnosticCode
+  | CustomNodeDiagnosticCode
   | CollaborationDiagnosticCode;
 
 /**

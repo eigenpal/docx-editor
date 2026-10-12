@@ -41,10 +41,12 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 
 | Kind | When | Fields |
 | --- | --- | --- |
-| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. |
+| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. An opened document also has `shape`, with part, paragraph, review item, and embedded font buckets. |
 | `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command`, `input`, or `automation`), `tracked`, and `command` for a refused `exec` call. |
 | `review.skipped` | Accepting, rejecting, or reassigning tracked changes skipped some of them. | `code` and `count`. |
 | `font.failed` | A font did not load, and the editor used a substitute. | `code`. |
+| `history` | An undo step did not group as the gesture intended. Informational. | `code`. |
+| `custom-node` | A custom node payload in the document could not be read. The node name is not included. | `code`. |
 | `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, `code` when something is wrong, and `connectMs` on the first `ready`. |
 | `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
 
@@ -89,9 +91,11 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | `edit.tracked-structure-unsupported` | This structural edit cannot be recorded as a tracked change. Edit the text inside the structure instead, or ask a person to make the change with tracking off. |
 | `edit.tracked-operation-unsupported` | This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed. |
 | `edit.tracking-mode-unsupported` | TrackAll needs every collaborator to enforce tracking, which this runtime cannot guarantee. Use TrackMineOnly instead. |
-| `edit.tracking-author-required` | TrackMineOnly needs an author for each tracked change. Pass the author option to createServer, or set a non-empty author on the editor. |
+| `edit.tracking-author-required` | TrackMineOnly needs an author for each tracked change. Pass the author option to createServer or createBrowser. The author set on the editor does not apply to an editing API batch. |
 | `edit.tracking-unsupported-host` | This automation host does not support change tracking. The runtimes from createServer and from a mounted editor both support TrackMineOnly. |
-| `edit.revision-unsupported` | The edit overlaps a tracked change of a kind the editor cannot change. Accept or reject that change first. |
+| `edit.revision-unsupported` | The edit, accept, or reject touches a tracked change of a kind the editor cannot change yet. Edit around it, and leave that change for a person to review. |
+| `edit.tracking-required` | Document protection allows edits only as tracked changes. Switch to suggesting mode, or set document.changeTrackingMode to TrackMineOnly in an editing API batch, then edit again. |
+| `edit.tracked-image-replace-unsupported` | Replacing a picture cannot be recorded as a tracked change, so the picture did not change. Insert the new picture as a tracked insertion, or ask a person to replace it with tracking off. |
 | `edit.cross-structure-join` | The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately. |
 | `edit.indivisible-content` | The edit would split content that must stay whole, such as an equation or a field. Select the whole item instead. |
 | `edit.field-structure` | The edit would break the structure of a field. Edit the field result as a whole, or remove the whole field. |
@@ -100,12 +104,15 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | `edit.table-insert-refused` | A table cannot be inserted at the selection, for example inside a field or a locked content control. Move the caret first. |
 | `edit.table-of-contents-refused` | The table of contents could not be inserted or updated at this place. Check that the selection is in the main document body. |
 | `edit.unsupported-content` | The edit touches content the editor shows but cannot change yet. The content is kept as it is. |
+| `edit.operation-unsupported` | This editing API operation or option is not supported by this runtime or host. Check the compatibility notes for the member you called. |
 | `edit.unsupported-story` | This part of the document, such as a header, a footer or a note, does not support this edit. |
 | `edit.unmapped-change` | The browser changed the page in a way the editor could not express as a document edit, so the change was undone. |
 | `edit.stale-target` | The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry. |
 | `edit.invalid-argument` | The command arguments are not valid for this target. Check the command type and its fields. |
 | `edit.resource-limit` | The edit would exceed a size or nesting limit. Split the change into smaller edits. |
 | `edit.refresh-in-progress` | An external document refresh is in progress. Retry the edit after the refresh completes. |
+| `edit.collaboration-not-ready` | The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin. |
+| `edit.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
 | `edit.internal-invariant` | The editor refused an edit to protect the document structure. This is an engine defect: report the code with the engine version. |
 | `edit.refused` | The edit was refused for a reason without a specific code. Read snapshot().lastRejection for the local message. |
 
@@ -130,17 +137,32 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | `font.size-limit` | A font file is larger than the font byte budget, so the editor used a substitute. Subset the font, or serve a smaller face. |
 | `font.unsupported-face` | A font face uses a format or face index the editor does not support. The editor uses a substitute. |
 
-### Collaboration
-
-A collaboration code is `collab.` followed by the session's own failure code.
+### History
 
 | Code | Cause and action |
 | --- | --- |
-| `collab.collaboration-session-destroyed` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
-| `collab.collaboration-session-not-attached` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
-| `collab.collaboration-session-not-ready` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
-| `collab.collaboration-text-limit` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
-| `collab.experimental-collaboration-body-text-only` | The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry. |
+| `history.split` | An edit started a new undo step inside a gesture you meant as one. Wrap the gesture in beginHistoryGroup and end it when the gesture ends. |
+| `history.possible-ungrouped-gesture` | Several commands ran in quick succession without a history group, so undo may take them back one at a time. Use beginHistoryGroup for one user gesture. |
+| `history.possible-fragmented-gesture` | One gesture was split across several history groups, so undo may need several steps. Keep one history group open for the whole gesture. |
+
+### Custom nodes
+
+| Code | Cause and action |
+| --- | --- |
+| `custom-node.payload-invalid` | A custom node payload in the document does not match the node schema, so the node opened without its data. Check the schema version that wrote the file. |
+| `custom-node.payload-missing` | A custom node points at a payload the document does not contain, often after a partial export or a manual edit. The node opened without its data. |
+
+### Collaboration
+
+A collaboration code is `collab.` followed by the session's own failure code. It appears on `collab.status` events. An edit that a session refuses is an `edit.rejected` event with an `edit.collaboration-*` code instead, so the `collab.collaboration-session-*` and `collab.collaboration-text-limit` codes appear only when a session reports them as its status reason.
+
+| Code | Cause and action |
+| --- | --- |
+| `collab.collaboration-session-destroyed` | The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed. |
+| `collab.collaboration-session-not-attached` | The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed. |
+| `collab.collaboration-session-not-ready` | The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed. |
+| `collab.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
+| `collab.experimental-collaboration-body-text-only` | This session replicates only body text, and the edit touched another part of the document. Make that change outside collaboration. |
 | `collab.invalid-document-id` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
 | `collab.invalid-identity` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
 | `collab.invalid-identity-color` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
@@ -169,11 +191,11 @@ A collaboration code is `collab.` followed by the session's own failure code.
 | `collab.unknown-paragraph-id` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
 | `collab.blob-store-full` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
 | `collab.blob-too-large` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.invalid-blob-descriptor` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.invalid-bound` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.invalid-logical-id` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.invalid-string` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.prototype-key` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.invalid-blob-descriptor` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
+| `collab.invalid-bound` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
+| `collab.invalid-logical-id` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
+| `collab.invalid-string` | A shared value is not valid XML text, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
+| `collab.prototype-key` | A shared state key would reach object internals, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
 | `collab.text-too-long` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
 | `collab.too-many-attributes` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
 | `collab.too-many-children` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
@@ -181,8 +203,8 @@ A collaboration code is `collab.` followed by the session's own failure code.
 | `collab.too-many-parts` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
 | `collab.too-many-relationships` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
 | `collab.tree-too-deep` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.unknown-logical-id` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| `collab.unsafe-part-name` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
+| `collab.unknown-logical-id` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
+| `collab.unsafe-part-name` | A shared package part has an unsafe name, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
 | `collab.invalid-saved-room` | The room server refused the saved room. Check the server storage, then rejoin. |
 | `collab.saved-room-unavailable` | The room server refused the saved room. Check the server storage, then rejoin. |
 | `collab.baseline-digest-mismatch` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |

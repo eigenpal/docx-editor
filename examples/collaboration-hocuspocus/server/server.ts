@@ -19,7 +19,11 @@ import {
   prepareCollaborationServerDocument,
   readCollaborationDocument,
 } from '@docx-editor.dev/pro/collaboration';
-import { serveMetrics, withCollaborationTelemetry } from '@docx-editor.dev/telemetry/hocuspocus';
+import {
+  requireBearerToken,
+  serveMetrics,
+  withCollaborationTelemetry,
+} from '@docx-editor.dev/telemetry/hocuspocus';
 import { prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
 import * as Y from 'yjs';
 import { admissionError, authenticateDemoToken } from '../shared/admission.ts';
@@ -60,7 +64,7 @@ const { config, rooms } = withCollaborationTelemetry(
      * ask.
      */
     async onAuthenticate({ token, documentName }) {
-      if (!ROOM_ID.test(documentName)) throw new Error('unknown room');
+      if (!ROOM_ID.test(documentName)) throw admissionError('unknown-room');
       authenticateDemoToken(token, TOKEN);
       return { room: documentName };
     },
@@ -131,16 +135,31 @@ const { config, rooms } = withCollaborationTelemetry(
       console.log(`[room ${documentName}] client left, ${clientsCount} remaining`);
     },
   },
-  { exporters: [metrics] }
+  {
+    exporters: [metrics],
+    // The demo's admission refusal says "invalid token"; count it under a stable label.
+    reasonOf: (error) =>
+      (error as { reason?: unknown } | null)?.reason === 'invalid token'
+        ? 'unauthorized'
+        : undefined,
+  }
 );
 
 const server = new Server({
   ...config,
-  onRequest: serveMetrics(metrics, { rooms: { telemetry: rooms, path: '/rooms' } }),
+  // `/metrics` holds counts only. The room list is served only with a scrape token set.
+  onRequest: serveMetrics(
+    metrics,
+    process.env.METRICS_TOKEN
+      ? {
+          rooms: { telemetry: rooms, path: '/rooms' },
+          authorize: requireBearerToken(process.env.METRICS_TOKEN),
+        }
+      : {}
+  ),
 });
-process.on('SIGTERM', () => void rooms.shutdown());
 
 await server.listen();
 console.log(`Hocuspocus is listening on ws://127.0.0.1:${PORT}`);
 console.log(`Rooms are stored in ${DATA_DIR}`);
-console.log(`Metrics: http://127.0.0.1:${PORT}/metrics, rooms: http://127.0.0.1:${PORT}/rooms`);
+console.log(`Metrics: http://127.0.0.1:${PORT}/metrics (set METRICS_TOKEN to serve /rooms)`);

@@ -11,7 +11,11 @@ import type { MetricRecord, TelemetryEvent, TelemetryExporter } from './pipeline
  *
  * @example
  * ```ts
- * callbackExporter((event) => datadogRum.addError(event.kind, event));
+ * callbackExporter((event) =>
+ *   isFailure(event)
+ *     ? datadogRum.addError(new Error(event.kind), event)
+ *     : datadogRum.addAction(event.kind, event)
+ * );
  * ```
  *
  * @public
@@ -36,9 +40,10 @@ export function describeEvent(event: TelemetryEvent): string {
   const repeated = event.repeated ? ` (and ${event.repeated} more)` : '';
   switch (event.kind) {
     case 'document.open':
-      return event.outcome === 'opened'
-        ? `document opened: ${event.pagesBucket} pages, ${event.sizeBucket}, ${event.durationMs} ms`
-        : `document refused: ${event.code}`;
+      if (event.outcome === 'rejected') return `document refused: ${event.code}`;
+      return event.pagesBucket === undefined
+        ? `document opened: ${event.sizeBucket}, ${event.durationMs} ms`
+        : `document opened: ${event.pagesBucket} pages, ${event.sizeBucket}, ${event.durationMs} ms`;
     case 'edit.rejected': {
       const via = event.command ? `${event.origin} ${event.command}` : event.origin;
       return `edit refused: ${event.code} (${via}, ${event.tracked ? 'tracked' : 'untracked'})${repeated}`;
@@ -47,6 +52,10 @@ export function describeEvent(event: TelemetryEvent): string {
       return `tracked changes skipped: ${event.code} x${event.count}`;
     case 'font.failed':
       return `font substituted: ${event.code}${repeated}`;
+    case 'history':
+      return `undo history: ${event.code}${repeated}`;
+    case 'custom-node':
+      return `custom node payload unreadable: ${event.code}${repeated}`;
     case 'collab.participants':
       return `collaboration: ${event.count} people in the room`;
     case 'collab.status': {
@@ -57,19 +66,55 @@ export function describeEvent(event: TelemetryEvent): string {
   }
 }
 
-/** Whether an event is a failure, which consoles print as a warning. */
+/**
+ * Whether an event is a failure: a refused open, a refused edit other than an expected one
+ * (a stale range, a read-only document, protected content, a session or refresh not ready
+ * yet), an unreadable payload, a font that did not load, or a collaboration error. A missing
+ * font that was substituted and a tracked change someone else already reviewed are not. Use it in a callback to send failures as errors and
+ * the rest as actions or logs.
+ *
+ * @public
+ */
 export function isFailure(event: TelemetryEvent): boolean {
+  // A deduplication summary repeats an event already reported.
+  if (event.repeated !== undefined) return false;
   switch (event.kind) {
     case 'document.open':
       return event.outcome === 'rejected';
     case 'collab.participants':
+    case 'history':
       return false;
     case 'collab.status':
-      return event.status === 'error';
+      // An expired token and a compacted room end in a rejoin; they are not faults.
+      return (
+        event.status === 'error' &&
+        event.code !== 'collab.authentication-failed' &&
+        event.code !== 'collab.room-generation-changed'
+      );
+    case 'edit.rejected':
+      return !EXPECTED_REFUSALS.has(event.code);
+    case 'font.failed':
+      // A font the app does not ship is substituted; the document still renders.
+      return event.code !== 'font.missing';
+    case 'review.skipped':
+      // A tracked change another person already accepted or rejected.
+      return event.code !== 'review.stale-revision';
     default:
       return true;
   }
 }
+
+/**
+ * Refusals that are part of normal use, not faults: a stale range the guide says to read
+ * again, typing in a read-only document, a refresh or a session that is not ready yet.
+ */
+const EXPECTED_REFUSALS: ReadonlySet<string> = new Set([
+  'edit.stale-target',
+  'edit.read-only',
+  'edit.protected-content',
+  'edit.refresh-in-progress',
+  'edit.collaboration-not-ready',
+]);
 
 /**
  * Print each event with its hint and docs link. Use it during development to see why a

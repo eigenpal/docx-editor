@@ -26,11 +26,12 @@ import type {
   AutomationBatchRequest,
   AutomationCapabilities,
   AutomationHost,
+  AutomationOperation,
 } from '@docx-editor.dev/core/automation';
 import type { Document } from '../model/document.ts';
 import { batchFailure, planBatch, settleBatch } from './batch.ts';
 import type { ClientObject } from './client-object.ts';
-import { DocxEditorError, fail } from './errors.ts';
+import { DocxEditorError, fail, isDocxEditorError } from './errors.ts';
 import type { DocumentCapabilities, RevisionTextView } from './runtime.ts';
 import {
   INTERNALS,
@@ -50,8 +51,11 @@ export interface RuntimeSession {
   readonly author?: string;
   /** Revision view used by standard Office-compatible text reads and searches. */
   readonly revisionTextView: RevisionTextView;
-  /** Told about each refused batch before it is thrown. A listener that throws is ignored. */
-  readonly onRefusal?: (error: DocxEditorError) => void;
+  /**
+   * Told about each refused batch before it is thrown, with the batch's operations. A listener
+   * that throws is ignored.
+   */
+  readonly onRefusal?: (error: DocxEditorError, operations: readonly AutomationOperation[]) => void;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
   roots(): RootHandles;
@@ -228,22 +232,28 @@ export class RequestContext {
         ...request,
         expectedRevision: request.expectedRevision ?? this.#session.host.revision(),
       };
-      await this.#session.host.prepare(pinned);
+      try {
+        await this.#session.host.prepare(pinned);
+      } catch (error) {
+        throw isDocxEditorError(error) ? this.#refused(error, planned.operations) : error;
+      }
       const response = this.#session.host.execute(pinned);
-      if (!response.ok) throw this.#refused(batchFailure(response, actions, reportedRevision));
+      if (!response.ok)
+        throw this.#refused(batchFailure(response, actions, reportedRevision), planned.operations);
       settleBatch(actions, response);
       this.#readRevision = response.revision;
       return;
     }
     const response = this.#session.host.execute(request);
-    if (!response.ok) throw this.#refused(batchFailure(response, actions, reportedRevision));
+    if (!response.ok)
+      throw this.#refused(batchFailure(response, actions, reportedRevision), planned.operations);
     settleBatch(actions, response);
     if (planned.hasRead || planned.hasWrite) this.#readRevision = response.revision;
   }
 
-  #refused(error: DocxEditorError): DocxEditorError {
+  #refused(error: DocxEditorError, operations: readonly AutomationOperation[]): DocxEditorError {
     try {
-      this.#session.onRefusal?.(error);
+      this.#session.onRefusal?.(error, operations);
     } catch {
       /* an observer must never change what the caller sees */
     }

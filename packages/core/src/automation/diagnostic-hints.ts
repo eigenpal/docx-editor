@@ -1,4 +1,8 @@
-import type { CollaborationDiagnosticCode, DiagnosticCode } from './diagnostic-vocabulary.ts';
+import type {
+  CollaborationDiagnosticCode,
+  DiagnosticCode,
+  EditDiagnosticCode,
+} from './diagnostic-vocabulary.ts';
 
 /**
  * What a diagnostic code means and what to do about it.
@@ -22,6 +26,8 @@ const SECTIONS = {
   edit: 'edit',
   review: 'review',
   font: 'font',
+  history: 'history',
+  'custom-node': 'custom-nodes',
   collab: 'collaboration',
 } as const;
 
@@ -84,11 +90,15 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.tracking-mode-unsupported':
     'TrackAll needs every collaborator to enforce tracking, which this runtime cannot guarantee. Use TrackMineOnly instead.',
   'edit.tracking-author-required':
-    'TrackMineOnly needs an author for each tracked change. Pass the author option to createServer, or set a non-empty author on the editor.',
+    'TrackMineOnly needs an author for each tracked change. Pass the author option to createServer or createBrowser. The author set on the editor does not apply to an editing API batch.',
   'edit.tracking-unsupported-host':
     'This automation host does not support change tracking. The runtimes from createServer and from a mounted editor both support TrackMineOnly.',
   'edit.revision-unsupported':
-    'The edit overlaps a tracked change of a kind the editor cannot change. Accept or reject that change first.',
+    'The edit, accept, or reject touches a tracked change of a kind the editor cannot change yet. Edit around it, and leave that change for a person to review.',
+  'edit.tracking-required':
+    'Document protection allows edits only as tracked changes. Switch to suggesting mode, or set document.changeTrackingMode to TrackMineOnly in an editing API batch, then edit again.',
+  'edit.tracked-image-replace-unsupported':
+    'Replacing a picture cannot be recorded as a tracked change, so the picture did not change. Insert the new picture as a tracked insertion, or ask a person to replace it with tracking off.',
   'edit.cross-structure-join':
     'The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately.',
   'edit.indivisible-content':
@@ -105,6 +115,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The table of contents could not be inserted or updated at this place. Check that the selection is in the main document body.',
   'edit.unsupported-content':
     'The edit touches content the editor shows but cannot change yet. The content is kept as it is.',
+  'edit.operation-unsupported':
+    'This editing API operation or option is not supported by this runtime or host. Check the compatibility notes for the member you called.',
   'edit.unsupported-story':
     'This part of the document, such as a header, a footer or a note, does not support this edit.',
   'edit.unmapped-change':
@@ -117,6 +129,10 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The edit would exceed a size or nesting limit. Split the change into smaller edits.',
   'edit.refresh-in-progress':
     'An external document refresh is in progress. Retry the edit after the refresh completes.',
+  'edit.collaboration-not-ready':
+    'The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin.',
+  'edit.collaboration-text-limit':
+    'One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts.',
   'edit.internal-invariant':
     'The editor refused an edit to protect the document structure. This is an engine defect: report the code with the engine version.',
   'edit.refused':
@@ -143,13 +159,23 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'A font file is not a valid font, so the editor refused it and used a substitute. Check the file the font source points at.',
   'font.size-limit':
     'A font file is larger than the font byte budget, so the editor used a substitute. Subset the font, or serve a smaller face.',
+  'history.split':
+    'An edit started a new undo step inside a gesture you meant as one. Wrap the gesture in beginHistoryGroup and end it when the gesture ends.',
+  'history.possible-ungrouped-gesture':
+    'Several commands ran in quick succession without a history group, so undo may take them back one at a time. Use beginHistoryGroup for one user gesture.',
+  'history.possible-fragmented-gesture':
+    'One gesture was split across several history groups, so undo may need several steps. Keep one history group open for the whole gesture.',
+  'custom-node.payload-invalid':
+    'A custom node payload in the document does not match the node schema, so the node opened without its data. Check the schema version that wrote the file.',
+  'custom-node.payload-missing':
+    'A custom node points at a payload the document does not contain, often after a partial export or a manual edit. The node opened without its data.',
   'font.unsupported-face':
     'A font face uses a format or face index the editor does not support. The editor uses a substitute.',
 };
 
 /** Collaboration codes share hints by cause, as the failure code groups do. */
 const COLLAB_GATE =
-  'The collaboration session refused the edit because it is not ready to replicate it. The status does not change. Wait for the ready status, then retry.';
+  'The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed.';
 const COLLAB_INPUT =
   'The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed.';
 const COLLAB_JOIN =
@@ -164,6 +190,8 @@ const COLLAB_REMOTE =
   'A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists.';
 const COLLAB_LIMIT =
   'Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy.';
+const COLLAB_MALFORMED =
+  'A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy.';
 const COLLAB_RESERVED =
   'The room server refused the saved room. Check the server storage, then rejoin.';
 const COLLAB_DEPRECATED =
@@ -173,8 +201,10 @@ const COLLABORATION_HINTS: Readonly<Record<CollaborationDiagnosticCode, string>>
   'collab.collaboration-session-destroyed': COLLAB_GATE,
   'collab.collaboration-session-not-attached': COLLAB_GATE,
   'collab.collaboration-session-not-ready': COLLAB_GATE,
-  'collab.collaboration-text-limit': COLLAB_GATE,
-  'collab.experimental-collaboration-body-text-only': COLLAB_GATE,
+  'collab.collaboration-text-limit':
+    'One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts.',
+  'collab.experimental-collaboration-body-text-only':
+    'This session replicates only body text, and the edit touched another part of the document. Make that change outside collaboration.',
   'collab.invalid-document-id': COLLAB_INPUT,
   'collab.invalid-identity': COLLAB_INPUT,
   'collab.invalid-identity-color': COLLAB_INPUT,
@@ -203,11 +233,13 @@ const COLLABORATION_HINTS: Readonly<Record<CollaborationDiagnosticCode, string>>
   'collab.unknown-paragraph-id': COLLAB_REMOTE,
   'collab.blob-store-full': COLLAB_LIMIT,
   'collab.blob-too-large': COLLAB_LIMIT,
-  'collab.invalid-blob-descriptor': COLLAB_LIMIT,
-  'collab.invalid-bound': COLLAB_LIMIT,
-  'collab.invalid-logical-id': COLLAB_LIMIT,
-  'collab.invalid-string': COLLAB_LIMIT,
-  'collab.prototype-key': COLLAB_LIMIT,
+  'collab.invalid-blob-descriptor': COLLAB_MALFORMED,
+  'collab.invalid-bound': COLLAB_MALFORMED,
+  'collab.invalid-logical-id': COLLAB_MALFORMED,
+  'collab.invalid-string':
+    'A shared value is not valid XML text, so the session refused it. A peer sent malformed state; save a copy and recreate the room.',
+  'collab.prototype-key':
+    'A shared state key would reach object internals, so the session refused it. A peer sent malformed state; save a copy and recreate the room.',
   'collab.text-too-long': COLLAB_LIMIT,
   'collab.too-many-attributes': COLLAB_LIMIT,
   'collab.too-many-children': COLLAB_LIMIT,
@@ -215,8 +247,9 @@ const COLLABORATION_HINTS: Readonly<Record<CollaborationDiagnosticCode, string>>
   'collab.too-many-parts': COLLAB_LIMIT,
   'collab.too-many-relationships': COLLAB_LIMIT,
   'collab.tree-too-deep': COLLAB_LIMIT,
-  'collab.unknown-logical-id': COLLAB_LIMIT,
-  'collab.unsafe-part-name': COLLAB_LIMIT,
+  'collab.unknown-logical-id': COLLAB_MALFORMED,
+  'collab.unsafe-part-name':
+    'A shared package part has an unsafe name, so the session refused it. A peer sent malformed state; save a copy and recreate the room.',
   'collab.invalid-saved-room': COLLAB_RESERVED,
   'collab.saved-room-unavailable': COLLAB_RESERVED,
   'collab.baseline-digest-mismatch': COLLAB_DEPRECATED,
@@ -260,8 +293,14 @@ export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation {
   const family = code.slice(0, code.indexOf('.')) as keyof typeof SECTIONS;
   return {
     hint: ALL_HINTS[code] ?? HINTS['edit.refused'],
-    docs: `${DOCS}#${SECTIONS[family]}`,
+    // An unknown code, from plain JavaScript or a newer engine, links to the page itself.
+    docs: Object.hasOwn(SECTIONS, family) ? `${DOCS}#${SECTIONS[family]}` : DOCS,
   };
+}
+
+/** Whether a string is a public edit code. */
+export function isEditDiagnosticCode(value: string): value is EditDiagnosticCode {
+  return value.startsWith('edit.') && Object.hasOwn(HINTS, value);
 }
 
 /** Every public code, in declaration order. For coverage tests and catalogs. @public */

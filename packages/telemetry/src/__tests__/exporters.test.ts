@@ -5,7 +5,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { describe, expect, test } from 'bun:test';
 import type { EditorDiagnostic } from '@docx-editor.dev/core';
-import { createTelemetry, METRICS } from '../index.ts';
+import { createTelemetry, METRICS, prometheusName } from '../index.ts';
 import { otelExporter } from '../otel/index.ts';
 import { fetchMetricsHandler, metricsHandler, prometheusRegistry } from '../prometheus/index.ts';
 import { DocxEditorDiagnosticError, sentryExporter, type SentryLike } from '../sentry/index.ts';
@@ -45,27 +45,57 @@ describe('sentryExporter', () => {
     return { sentry, issues, crumbs };
   }
 
-  test('a refused open is an issue grouped by code; a refused edit is a breadcrumb', () => {
+  test('an open the app caused is an issue grouped by code; a bad file and an edit are breadcrumbs', () => {
     const { sentry, issues, crumbs } = fakeSentry();
     const telemetry = createTelemetry({ exporters: [sentryExporter(sentry)] });
+    telemetry.record({ ...openRejected, code: 'open.unsupported-source' } as EditorDiagnostic);
     telemetry.record(openRejected);
     telemetry.record(refusal);
 
     expect(issues).toHaveLength(1);
     const [{ error, context }] = issues;
     expect(error).toBeInstanceOf(DocxEditorDiagnosticError);
-    expect((error as Error).message).toStartWith('open.zip-ratio-limit: ');
+    expect((error as Error).message).toStartWith('open.unsupported-source: ');
     expect(context).toMatchObject({
-      fingerprint: ['docx-editor', 'document.open', 'open.zip-ratio-limit'],
+      fingerprint: ['docx-editor', 'document.open', 'open.unsupported-source'],
       level: 'error',
-      tags: { 'docx_editor.code': 'open.zip-ratio-limit', 'docx_editor.outcome': 'rejected' },
+      tags: { 'docx_editor.code': 'open.unsupported-source', 'docx_editor.outcome': 'rejected' },
     });
     expect(crumbs).toEqual([
+      expect.objectContaining({ message: 'document refused: open.zip-ratio-limit' }),
       expect.objectContaining({
         category: 'docx-editor',
         message: 'edit refused: edit.protected-content (input, untracked)',
       }),
     ]);
+  });
+});
+
+describe('sentryExporter collaboration defaults', () => {
+  test('an expired token is a breadcrumb; a broken room is an issue', () => {
+    const issues: unknown[] = [];
+    const crumbs: unknown[] = [];
+    const telemetry = createTelemetry({
+      exporters: [
+        sentryExporter({
+          captureException: (error) => issues.push(error),
+          addBreadcrumb: (crumb) => void crumbs.push(crumb),
+        }),
+      ],
+    });
+    const status = (code: string) =>
+      ({
+        ...base,
+        kind: 'collab.status',
+        status: 'error',
+        previous: 'ready',
+        code,
+        recovering: false,
+      }) as EditorDiagnostic;
+    telemetry.record(status('collab.authentication-failed'));
+    telemetry.record(status('collab.blob-digest-mismatch'));
+    expect(issues).toHaveLength(1);
+    expect(crumbs).toHaveLength(1);
   });
 });
 
@@ -139,6 +169,106 @@ describe('otelExporter', () => {
   });
 });
 
+describe('otelExporter gauges', () => {
+  test('a forgotten series is no longer observed', () => {
+    let callback:
+      | ((result: { observe: (value: number, attributes: unknown) => void }) => void)
+      | undefined;
+    const meter = {
+      createObservableGauge: () => ({ addCallback: (fn: typeof callback) => void (callback = fn) }),
+    };
+    const exporter = otelExporter({
+      meterProvider: { getMeter: () => meter } as never,
+      tracerProvider: { getTracer: () => ({}) } as never,
+    });
+    exporter.metric!({
+      definition: METRICS.roomParticipantsByRoom,
+      value: 3,
+      attributes: { room: 'room-1' },
+    });
+    exporter.metric!({
+      definition: METRICS.roomParticipantsByRoom,
+      value: 1,
+      attributes: { room: 'room-2' },
+    });
+    exporter.forget!(METRICS.roomParticipantsByRoom, { room: 'room-1' });
+    const observed: unknown[] = [];
+    callback!({ observe: (_value, attributes) => void observed.push(attributes) });
+    expect(observed).toEqual([{ room: 'room-2' }]);
+  });
+});
+
+describe('otelExporter without an active span', () => {
+  test('a failure gets a short span of its own; a success does not', () => {
+    const spans: string[] = [];
+    const exporter = otelExporter({
+      meterProvider: {
+        getMeter: () => ({
+          createCounter: () => ({ add: () => {} }),
+          createHistogram: () => ({ record: () => {} }),
+        }),
+      } as never,
+      tracerProvider: {
+        getTracer: () => ({
+          startSpan: (name: string) => {
+            spans.push(name);
+            return { setStatus: () => {}, end: () => {} };
+          },
+        }),
+      } as never,
+    });
+    const telemetry = createTelemetry({ exporters: [exporter], dedupeWindowMs: 0 });
+    telemetry.record({
+      ...refusal,
+      code: 'edit.tracked-drawing-delete-unsupported',
+    } as EditorDiagnostic);
+    // Expected refusals and summaries are not failures.
+    telemetry.record(refusal);
+    telemetry.record({ ...base, kind: 'history', code: 'history.split' } as EditorDiagnostic);
+    expect(spans).toEqual(['docx_editor.edit.rejected']);
+  });
+});
+
+describe('otelExporter with a late SDK', () => {
+  test('measurements after the SDK registers reach it', async () => {
+    const { metrics } = await import('@opentelemetry/api');
+    const warn = console.warn;
+    console.warn = () => {};
+    const exporter = otelExporter();
+    const telemetry = createTelemetry({ exporters: [exporter] });
+    const added: string[] = [];
+    try {
+      telemetry.record(refusal);
+      metrics.setGlobalMeterProvider({
+        getMeter: () =>
+          ({
+            createCounter: (name: string) => ({ add: () => void added.push(name) }),
+            createHistogram: () => ({ record: () => {} }),
+            createGauge: () => ({ record: () => {} }),
+          }) as never,
+      });
+      telemetry.record({ ...refusal, code: 'edit.read-only' } as EditorDiagnostic);
+    } finally {
+      console.warn = warn;
+      metrics.disable();
+    }
+    expect(added).toEqual([METRICS.editRejections.name]);
+  });
+});
+
+describe('prometheusName', () => {
+  test('follows the OpenTelemetry Prometheus naming rules', () => {
+    expect(prometheusName(METRICS.roomLoadDuration)).toBe(
+      'docx_editor_collab_room_load_duration_seconds'
+    );
+    expect(prometheusName(METRICS.updateBytes)).toBe('docx_editor_collab_update_bytes_total');
+    // `_ratio` is for gauges; a unit-1 histogram gets no unit suffix.
+    expect(prometheusName(METRICS.roomResourceUsage)).toBe(
+      'docx_editor_collab_room_resource_usage'
+    );
+  });
+});
+
 describe('prometheus', () => {
   test('renders counters and histograms in the text format', () => {
     const metrics = prometheusRegistry();
@@ -179,5 +309,47 @@ describe('prometheus', () => {
       }
     );
     expect(written.body).toContain('docx_editor_collab_rooms_active 3');
+  });
+
+  test('a merged registry that fails answers 500 instead of crashing', async () => {
+    const failing = [{ metrics: async () => Promise.reject(new Error('down')) }];
+    const response = await fetchMetricsHandler(prometheusRegistry(), { merge: failing })();
+    expect(response.status).toBe(500);
+    const written: { status?: number } = {};
+    const node = {
+      setHeader: () => {},
+      end: () => {},
+      set statusCode(value: number) {
+        written.status = value;
+      },
+    };
+    await metricsHandler(prometheusRegistry(), { merge: failing })({}, node);
+    expect(written.status).toBe(500);
+  });
+});
+
+describe('label sets', () => {
+  test('every series of a counter carries the same labels', () => {
+    const metrics = prometheusRegistry();
+    const telemetry = createTelemetry({ exporters: [metrics], dedupeWindowMs: 0 });
+    telemetry.record({
+      ...base,
+      kind: 'document.open',
+      outcome: 'opened',
+      sizeBucket: '0-64KiB',
+      durationMs: 3,
+    } as EditorDiagnostic);
+    telemetry.record({
+      ...base,
+      kind: 'collab.status',
+      status: 'ready',
+      previous: 'initializing',
+      recovering: false,
+    } as EditorDiagnostic);
+    const text = metrics.metrics();
+    expect(text).toMatch(/docx_editor_document_opens_total\{[^}]*code="none"[^}]*\} 1/);
+    expect(text).toMatch(
+      /docx_editor_collab_client_status_transitions_total\{[^}]*code="none"[^}]*\} 1/
+    );
   });
 });

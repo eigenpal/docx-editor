@@ -1377,7 +1377,10 @@ export function createDiagnosticEmitter<E>(listeners: () => Iterable<(event: E) 
 export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAutomationHostOptions): ServerAutomationHostResult;
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | CollaborationDiagnosticCode;
+export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export function diagnosticCodes(): readonly DiagnosticCode[];
@@ -1401,7 +1404,7 @@ export type DiagnosticPayload<T> = T extends unknown ? Omit<T, 'schemaVersion' |
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
 
 // @public
-export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.internal-invariant' | 'edit.refused';
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
@@ -1411,6 +1414,9 @@ export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' 
 
 // @public
 export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
+
+// @public
+export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
 
 // @public
 export function isAutomationCommand(operation: AutomationOperation): boolean;

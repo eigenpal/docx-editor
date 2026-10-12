@@ -106,6 +106,20 @@ export const METRICS = Object.freeze({
     'Font faces that failed to load and were substituted.',
     ['code']
   ),
+  historyDiagnostics: metric(
+    'docx_editor.history.diagnostics',
+    'counter',
+    '{event}',
+    'Undo steps that did not group as the gesture intended, by code.',
+    ['code']
+  ),
+  customNodeDiagnostics: metric(
+    'docx_editor.custom_node.diagnostics',
+    'counter',
+    '{node}',
+    'Custom node payloads that could not be read, by code.',
+    ['code']
+  ),
   collabClientStatusTransitions: metric(
     'docx_editor.collab.client.status_transitions',
     'counter',
@@ -128,6 +142,14 @@ export const METRICS = Object.freeze({
     'People in the room, as each client sees it when the count changes.',
     [],
     PEOPLE
+  ),
+
+  droppedEvents: metric(
+    'docx_editor.telemetry.dropped_events',
+    'counter',
+    '{event}',
+    'Events the anonymity guard dropped, by reason. Usually a version mismatch.',
+    ['reason']
   ),
 
   // Collaboration servers.
@@ -247,6 +269,20 @@ export const METRICS = Object.freeze({
     'By',
     'Bytes of document updates applied to rooms.'
   ),
+  roomParticipantsByRoom: metric(
+    'docx_editor.collab.room.participants.current',
+    'gauge',
+    '{participant}',
+    'People in each room, labeled by room. Recorded only with perRoomSeries.',
+    ['room']
+  ),
+  roomMemoryByRoom: metric(
+    'docx_editor.collab.room.memory.current',
+    'gauge',
+    'By',
+    'Bytes each room holds, labeled by room and kind. Recorded only with perRoomSeries.',
+    ['room', 'kind']
+  ),
   migrations: metric(
     'docx_editor.collab.migrations',
     'counter',
@@ -259,7 +295,7 @@ export const METRICS = Object.freeze({
 /** A key of {@link METRICS}. @public */
 export type MetricId = keyof typeof METRICS;
 
-const UNIT_SUFFIX: Readonly<Record<string, string>> = { s: 'seconds', By: 'bytes', '1': 'ratio' };
+const UNIT_SUFFIX: Readonly<Record<string, string>> = { s: 'seconds', By: 'bytes' };
 
 /**
  * The Prometheus name of a metric: dots become underscores, the unit becomes a suffix, and a
@@ -269,7 +305,13 @@ const UNIT_SUFFIX: Readonly<Record<string, string>> = { s: 'seconds', By: 'bytes
  */
 export function prometheusName(definition: MetricDefinition): string {
   let name = definition.name.replace(/[^a-zA-Z0-9_]/g, '_');
-  const suffix = UNIT_SUFFIX[definition.unit];
+  // `_ratio` goes on gauges with unit `1` only; other unit-`1` metrics get no unit suffix.
+  const suffix =
+    definition.unit === '1'
+      ? definition.kind === 'gauge'
+        ? 'ratio'
+        : undefined
+      : UNIT_SUFFIX[definition.unit];
   if (suffix && !name.endsWith(`_${suffix}`)) name += `_${suffix}`;
   if (definition.kind === 'counter') name += '_total';
   return name;

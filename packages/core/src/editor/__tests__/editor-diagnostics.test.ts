@@ -19,6 +19,11 @@ import {
   openDiagnosticCode,
 } from '../diagnostic-codes.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import {
+  READ_ONLY_REVISION_REASON,
+  SUGGESTING_IMAGE_REPLACE_REASON,
+  TRACKED_ONLY_EDITING_REASON,
+} from '../opening-editing-mode.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -239,6 +244,66 @@ describe('review.skipped', () => {
   });
 });
 
+describe('history, custom nodes, shape, and font messages', () => {
+  test('history and custom-node diagnostics join the stream by code only', async () => {
+    const { createEditorDiagnostics } = await import('../editor-diagnostics.ts');
+    const { customNodeDiagnosticReporter } = await import('../custom-node-wiring.ts');
+    const { resolveEditorModules } = await import('../../contracts/modules.ts');
+    const out: EditorDiagnostic[] = [];
+    const history: ((diagnostic: { kind: string; reason: string }) => void)[] = [];
+    const modules = resolveEditorModules([{ id: 'nodes', onCustomNodeDiagnostic: () => {} }]);
+    const reporter = customNodeDiagnosticReporter(modules);
+    createEditorDiagnostics({
+      modules,
+      events: {
+        emitDiagnostic: (event) => out.push(event),
+        on: (_event, handler) => {
+          history.push(handler as (typeof history)[number]);
+          return () => {};
+        },
+      },
+      customNodes: reporter,
+    });
+    history[0]!({ kind: 'split', reason: 'a reason with Client Name' });
+    reporter({ code: 'payload-missing', name: 'ClientMatterChip', nodeId: 'n1', issues: [] });
+    reporter({ code: 'something-else' });
+    expect(out.map((event) => [event.kind, 'code' in event ? event.code : undefined])).toEqual([
+      ['history', 'history.split'],
+      ['custom-node', 'custom-node.payload-missing'],
+    ]);
+    expect(JSON.stringify(out)).not.toContain('Client');
+  });
+
+  test('an opened document carries its bucketed shape', () => {
+    const { events, module } = observe();
+    const editor = createDocxEditor({
+      container: mount(),
+      document: docx(paragraph('a')),
+      modules: [module],
+    });
+    try {
+      expect(events.find((event) => event.kind === 'document.open')).toMatchObject({
+        outcome: 'opened',
+        shape: { parts: '2-9', paragraphs: '1', reviewItems: '0', embeddedFonts: '0' },
+      });
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('an embedded font error names no family and no part', async () => {
+    const { embeddedFontDropError } = await import('../embedded-font-sources.ts');
+    const error = embeddedFontDropError({
+      reason: 'overLimit',
+      partName: '/word/fonts/client-font.odttf',
+      request: { family: 'Client Brand Serif', weight: 400, style: 'normal' },
+    } as never);
+    expect(error.message).not.toContain('Client Brand Serif');
+    expect(error.message).not.toContain('client-font');
+    expect(error.request?.family).toBe('Client Brand Serif');
+  });
+});
+
 describe('codes and hints', () => {
   test('every public code has a hint and a docs link', () => {
     const SECTION: Record<string, string> = {
@@ -246,6 +311,8 @@ describe('codes and hints', () => {
       edit: 'edit',
       review: 'review',
       font: 'font',
+      history: 'history',
+      'custom-node': 'custom-nodes',
       collab: 'collaboration',
     };
     const codes = diagnosticCodes();
@@ -269,6 +336,15 @@ describe('codes and hints', () => {
       'edit.tracked-drawing-delete-unsupported'
     );
     expect(diagnosticCodeOfRefusal('not-adjacent-siblings')).toBe('edit.cross-structure-join');
+    expect(diagnosticCodeOfRefusal(TRACKED_ONLY_EDITING_REASON)).toBe('edit.tracking-required');
+    expect(diagnosticCodeOfRefusal(SUGGESTING_IMAGE_REPLACE_REASON)).toBe(
+      'edit.tracked-image-replace-unsupported'
+    );
+    expect(diagnosticCodeOfRefusal(READ_ONLY_REVISION_REASON)).toBe('edit.revision-unsupported');
+    // An unknown code, from plain JavaScript or a newer engine, links to the page itself.
+    expect(explainDiagnostic('future.code' as never).docs).toBe(
+      'https://docx-editor.dev/docs/2.x/guides/diagnostics'
+    );
     expect(diagnosticCodeOfRefusal('unsupported-revision:moveFrom')).toBe(
       'edit.revision-unsupported'
     );
@@ -276,6 +352,12 @@ describe('codes and hints', () => {
     expect(diagnosticCodeOfRefusal(`a sentence about ${SECRET_TEXT}`)).toBe('edit.refused');
     expect(diagnosticCodeOfRefusal('a sentence', 'notFound')).toBe('edit.stale-target');
     expect(diagnosticCodeOfRefusal('__proto__')).toBe('edit.refused');
+    expect(diagnosticCodeOfRefusal('collaboration-session-not-ready')).toBe(
+      'edit.collaboration-not-ready'
+    );
+    expect(diagnosticCodeOfRefusal('collaboration-text-limit')).toBe(
+      'edit.collaboration-text-limit'
+    );
     expect(fontDiagnosticCode('wasmUnavailable')).toBe('font.shaper-unavailable');
     expect(fontDiagnosticCode(undefined)).toBe('font.load-failed');
   });

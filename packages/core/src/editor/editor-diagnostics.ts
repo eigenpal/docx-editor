@@ -9,9 +9,17 @@
 import type {
   ByteSizeBucket,
   CollaborationDiagnosticCode,
+  DocumentShape,
+  EditDiagnosticCode,
   EditorDiagnostic,
+  HistoryDiagnosticCode,
 } from '../contracts/diagnostics.ts';
+import type { HistoryDiagnostic } from '../contracts/editor-scope.ts';
+import type { CustomNodeDiagnosticReporter } from './custom-node-wiring.ts';
+import type { PaginatedSurface } from './paginated-surface.ts';
+import { totalPages } from './docx-editor-derive.ts';
 import type { EditorCommand, EditorError, EditorFontError } from '../contracts/editor.ts';
+import type { DocxEditorInstance } from './docx-editor.ts';
 import type { EditorModuleRegistry } from '../contracts/modules.ts';
 import type { ExecResult } from '../contracts/types.ts';
 import type {
@@ -67,6 +75,37 @@ function builtInCommand(command: EditorCommand): EditorCommand['type'] | undefin
   }
 }
 
+/** Each editor's automation scope: input refusals inside it belong to an automation batch. */
+const AUTOMATION_SCOPES = new WeakMap<object, <T>(run: () => T) => T>();
+
+/**
+ * Run an editing API batch on this editor. Refusals the surface raises inside it are the
+ * batch's, which its runtime reports with `origin: 'automation'`, so they are not also input.
+ */
+export function runAsAutomation<T>(editor: object, run: () => T): T {
+  const scope = AUTOMATION_SCOPES.get(editor);
+  return scope ? scope(run) : run();
+}
+
+/** Each editor's automation reporter, for a runtime that borrows the editor. */
+const AUTOMATION_REPORTERS = new WeakMap<
+  object,
+  (code: EditDiagnosticCode, tracked: boolean) => void
+>();
+
+/**
+ * Report a refused editing API batch into the diagnostics of the editor it ran on. A runtime
+ * from `DocxEditor.createBrowser` calls this, so its refusals reach the editor's telemetry.
+ * Does nothing for an object that is not an editor.
+ */
+export function reportAutomationRefusal(
+  editor: object,
+  code: EditDiagnosticCode,
+  tracked: boolean
+): void {
+  AUTOMATION_REPORTERS.get(editor)?.(code, tracked);
+}
+
 /** What the facade tells the reporter about the opening document. */
 interface Opening {
   readonly sizeBucket: ByteSizeBucket;
@@ -76,9 +115,24 @@ interface Opening {
 
 export interface EditorDiagnosticsOptions {
   readonly modules: EditorModuleRegistry;
-  readonly emit: (event: EditorDiagnostic) => void;
+  /** The instance's event bus: diagnostics go out on it, history diagnostics come in on it. */
+  readonly events: {
+    readonly emitDiagnostic: (event: EditorDiagnostic) => void;
+    readonly on: <K extends 'historyDiagnostic'>(
+      event: K,
+      handler: (diagnostic: HistoryDiagnostic) => void
+    ) => () => void;
+  };
+  /** The custom-node reporter, observed so its codes join the stream. */
+  readonly customNodes?: CustomNodeDiagnosticReporter;
   readonly now?: () => number;
 }
+
+const HISTORY_KINDS: ReadonlySet<string> = new Set([
+  'split',
+  'possible-ungrouped-gesture',
+  'possible-fragmented-gesture',
+]);
 
 export type EditorDiagnostics = ReturnType<typeof createEditorDiagnostics>;
 
@@ -86,13 +140,26 @@ export type EditorDiagnostics = ReturnType<typeof createEditorDiagnostics>;
 export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
   const clock = () => globalThis.performance?.now() ?? Date.now();
   const emitter = createDiagnosticEmitter<EditorDiagnostic>(
-    () => [...options.modules.diagnosticListeners, options.emit],
+    () => [...options.modules.diagnosticListeners, options.events.emitDiagnostic],
     options.now
   );
   const deliver = emitter.deliver;
   let opening: Opening | null = null;
   /** Depth of `exec` calls, so a surface refusal inside one is reported once, as a command. */
   let execDepth = 0;
+  /** Depth of editing API batches on this editor; their refusals are reported as automation. */
+  let automationDepth = 0;
+  // History and custom-node diagnostics keep their own channels and join this one by code only:
+  // the history reason and the node's name and payload issues stay out of it.
+  options.events.on('historyDiagnostic', (diagnostic) => {
+    if (HISTORY_KINDS.has(diagnostic.kind))
+      deliver({ kind: 'history', code: `history.${diagnostic.kind}` as HistoryDiagnosticCode });
+  });
+  options.customNodes?.observe((diagnostic) => {
+    const code = (diagnostic as { code?: unknown } | null)?.code;
+    if (code === 'payload-invalid' || code === 'payload-missing')
+      deliver({ kind: 'custom-node', code: `custom-node.${code}` });
+  });
   const session = options.modules.collaboration?.session;
   const stopCollaboration = session ? observeCollaboration(session, deliver, clock) : () => {};
 
@@ -112,7 +179,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       if (opening && opening.start === null) opening.start = clock();
     },
     /** The opening document laid out. Reports once per open, never for a remount. */
-    openSettled(pages: number): void {
+    openSettled(surface: PaginatedSurface): void {
       if (!opening) return;
       const { sizeBucket, start } = opening;
       opening = null;
@@ -120,8 +187,9 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         kind: 'document.open',
         outcome: 'opened',
         sizeBucket,
-        pagesBucket: countBucket(pages),
+        pagesBucket: countBucket(totalPages(surface)),
         durationMs: start === null ? 0 : Math.max(0, Math.round(clock() - start)),
+        ...shapeOf(surface),
       });
     },
     /** The open was refused. `limit` disambiguates the one reason two layers share. */
@@ -170,7 +238,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     },
     /** A refusal from typing, the clipboard, a drag or the pointer. Inside `exec` it is not new. */
     inputRejected(reason: string, tracked: boolean): void {
-      if (execDepth > 0) return;
+      if (execDepth > 0 || automationDepth > 0) return;
       const code = diagnosticCodeOfRefusal(reason);
       deliver({ kind: 'edit.rejected', code, origin: 'input', tracked });
     },
@@ -179,11 +247,49 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       deliver({ kind: 'font.failed', code: fontDiagnosticCode(code) });
     },
 
+    /**
+     * Report `exec` refusals and automation refusals for this editor instance: wraps `exec`, and
+     * lets a runtime borrowing the editor report its refused batches into the same stream.
+     */
+    attach(editor: { exec: DocxEditorInstance['exec'] }, tracked: () => boolean): void {
+      const execNow = editor.exec;
+      editor.exec = (command, options) =>
+        this.exec(command, tracked(), () => execNow(command, options));
+      AUTOMATION_SCOPES.set(editor, (run) => {
+        automationDepth += 1;
+        try {
+          return run();
+        } finally {
+          automationDepth -= 1;
+        }
+      });
+      AUTOMATION_REPORTERS.set(editor, (code, automationTracked) =>
+        deliver({ kind: 'edit.rejected', code, origin: 'automation', tracked: automationTracked })
+      );
+    },
+
     /** Stop observing the collaboration session. The editor calls this when destroyed. */
     dispose(): void {
       stopCollaboration();
     },
   };
+}
+
+/** The bucketed shape of the opened document. Counts only: nothing is read from the content. */
+function shapeOf(surface: PaginatedSurface): { readonly shape?: DocumentShape } {
+  try {
+    const { session } = surface;
+    return {
+      shape: {
+        parts: countBucket(session.currentPackage().parts.size),
+        paragraphs: countBucket(session.paragraphIds().length),
+        reviewItems: countBucket(session.reviewItems().length),
+        embeddedFonts: countBucket(session.embeddedFonts().length),
+      },
+    };
+  } catch {
+    return {};
+  }
 }
 
 /**

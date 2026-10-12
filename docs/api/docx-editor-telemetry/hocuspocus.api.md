@@ -4,7 +4,6 @@
 
 ```ts
 
-import { Extension } from '@hocuspocus/server';
 import { onRequestPayload } from '@hocuspocus/server';
 import { ServerConfiguration } from '@hocuspocus/server';
 import * as Y from 'yjs';
@@ -29,7 +28,9 @@ export interface CollaborationTelemetry<C> {
 export function hmacRoomLabel(secret: string | undefined): (name: string) => string;
 
 // @public
-export type ObservedHocuspocusHooks = Pick<Extension, 'onAuthenticate' | 'onLoadDocument' | 'connected' | 'beforeHandleMessage' | 'onStoreDocument' | 'onDisconnect' | 'afterUnloadDocument'>;
+export interface MetricsHandlerOptions {
+    readonly merge?: readonly PrometheusTextSource[];
+}
 
 // @public
 export interface PrometheusTextSource {
@@ -38,7 +39,11 @@ export interface PrometheusTextSource {
 }
 
 // @public
+export function requireBearerToken(secret: string | undefined): (request: onRequestPayload['request']) => boolean;
+
+// @public
 export interface RoomHandle {
+    begin(operation: RoomOperation): SettleOperation;
     close(): void;
     // (undocumented)
     connected(): void;
@@ -73,6 +78,7 @@ export interface RoomStats {
 
 // @public
 export interface RoomTelemetry {
+    begin(operation: RoomOperation): SettleOperation;
     // (undocumented)
     flush(): Promise<void>;
     list(): readonly RoomStats[];
@@ -91,6 +97,8 @@ export interface RoomTelemetry {
 // @public
 export interface RoomTelemetryOptions extends TelemetryPipelineOptions {
     readonly measureState?: boolean;
+    readonly perRoomSeries?: boolean;
+    readonly reasonOf?: (error: unknown) => string | undefined;
     readonly reasons?: readonly string[];
     readonly roomLabel?: (name: string) => string;
     readonly sampleInterval?: number | false;
@@ -100,21 +108,26 @@ export interface RoomTelemetryOptions extends TelemetryPipelineOptions {
 export function serveMetrics(registry: PrometheusTextSource, options?: ServeMetricsOptions): (payload: onRequestPayload) => Promise<void>;
 
 // @public
-export interface ServeMetricsOptions {
+export interface ServeMetricsOptions extends MetricsHandlerOptions {
     readonly authorize?: (request: onRequestPayload['request']) => boolean;
+    readonly next?: (payload: onRequestPayload) => Promise<unknown>;
     readonly path?: string;
     readonly rooms?: {
         readonly path: string;
         readonly telemetry: RoomTelemetry;
     };
-    readonly sampleBeforeScrape?: boolean;
+    readonly sampleBeforeScrape?: RoomTelemetry;
 }
+
+// @public
+export type SettleOperation = (outcome: 'success' | 'failure') => void;
 
 // @public
 export interface TelemetryExporter {
     // (undocumented)
     event?(event: TelemetryEvent): void;
     flush?(): void | Promise<void>;
+    forget?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     metric?(record: MetricRecord): void;
     readonly name: string;

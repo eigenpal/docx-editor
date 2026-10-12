@@ -20,10 +20,8 @@ export interface AwarenessLike {
 export function hmacRoomLabel(secret: string | undefined): (name: string) => string;
 
 // @public
-export function reasonOf(value: unknown, known: ReadonlySet<string>): string;
-
-// @public
 export interface RoomHandle {
+    begin(operation: RoomOperation): SettleOperation;
     close(): void;
     // (undocumented)
     connected(): void;
@@ -58,6 +56,7 @@ export interface RoomStats {
 
 // @public
 export interface RoomTelemetry {
+    begin(operation: RoomOperation): SettleOperation;
     // (undocumented)
     flush(): Promise<void>;
     list(): readonly RoomStats[];
@@ -79,16 +78,22 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry;
 // @public
 export interface RoomTelemetryOptions extends TelemetryPipelineOptions {
     readonly measureState?: boolean;
+    readonly perRoomSeries?: boolean;
+    readonly reasonOf?: (error: unknown) => string | undefined;
     readonly reasons?: readonly string[];
     readonly roomLabel?: (name: string) => string;
     readonly sampleInterval?: number | false;
 }
 
 // @public
+export type SettleOperation = (outcome: 'success' | 'failure') => void;
+
+// @public
 export interface TelemetryExporter {
     // (undocumented)
     event?(event: TelemetryEvent): void;
     flush?(): void | Promise<void>;
+    forget?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     metric?(record: MetricRecord): void;
     readonly name: string;

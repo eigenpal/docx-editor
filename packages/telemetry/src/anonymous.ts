@@ -10,6 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * engine produced the event. A string that is not a known enum value is dropped, never sent.
  */
 import { diagnosticCodes, explainDiagnostic } from '@docx-editor.dev/core';
+import { nodeEnv } from './env.ts';
 import type { DiagnosticCode } from '@docx-editor.dev/core';
 import type { Attributes, AttributeValue, TelemetryEvent } from './pipeline.ts';
 
@@ -22,6 +23,8 @@ const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
     'edit.rejected',
     'review.skipped',
     'font.failed',
+    'history',
+    'custom-node',
     'collab.status',
     'collab.participants',
   ]),
@@ -49,12 +52,14 @@ const NUMBERS = new Set([
 ]);
 const BOOLEANS = new Set(['tracked', 'recovering']);
 
-let warned = false;
-function devWarn(message: string): void {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env?.NODE_ENV;
-  if (warned || env === 'production') return;
-  warned = true;
+/** Why the guard dropped an event. Also the `reason` label of the dropped-events metric. */
+export type DropReason = 'unknown-kind' | 'unknown-code' | 'invalid-field';
+
+const warned = new Set<string>();
+/** Warn once per kind of problem, in development only. */
+function devWarn(message: string, kind = message): void {
+  if (warned.has(kind) || nodeEnv() === 'production') return;
+  warned.add(kind);
   console.warn(`[docx-editor telemetry] ${message}`);
 }
 
@@ -69,21 +74,35 @@ function allowed(field: string, value: string): boolean {
  * fields and strings outside their enum are dropped. `hint` and `docs` must be the constants
  * for the event's own code.
  */
-export function checkEvent(event: TelemetryEvent): TelemetryEvent | null {
+export function checkEvent(
+  event: TelemetryEvent
+): { readonly event: TelemetryEvent } | { readonly dropped: DropReason } {
   const source = event as unknown as Record<string, unknown>;
   if (typeof source.kind !== 'string' || !allowed('kind', source.kind)) {
-    devWarn(`dropped an event of unknown kind "${String(source.kind).slice(0, 40)}"`);
-    return null;
+    devWarn('dropped an event of an unknown kind; core and telemetry versions may differ', 'kind');
+    return { dropped: 'unknown-kind' };
   }
   const code = typeof source.code === 'string' ? source.code : undefined;
   if (code !== undefined && !CODES.has(code)) {
-    devWarn('dropped an event with an unknown code');
-    return null;
+    devWarn(
+      'dropped an event with an unknown code; core and telemetry versions may differ',
+      'code'
+    );
+    return { dropped: 'unknown-code' };
   }
   const explained = code ? explainDiagnostic(code as DiagnosticCode) : undefined;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(source)) {
     if (key === 'resource') continue;
+    if (key === 'shape') {
+      const shape = checkShape(value);
+      if (!shape) {
+        devWarn('dropped an event whose "shape" is not a valid document shape', 'shape');
+        return { dropped: 'invalid-field' };
+      }
+      out.shape = shape;
+      continue;
+    }
     if (key === 'hint' || key === 'docs') {
       if (explained && value === explained[key]) out[key] = value;
       continue;
@@ -94,12 +113,33 @@ export function checkEvent(event: TelemetryEvent): TelemetryEvent | null {
     else if (typeof value === 'string' && allowed(key, value)) out[key] = value;
     else if (known) {
       // A known field that fails its check would leave a typed event with a hole in it.
-      devWarn(`dropped an event whose "${key}" is not a valid value`);
-      return null;
-    } else devWarn(`dropped the field "${key}", which is not an anonymous diagnostic field`);
+      devWarn(`dropped an event whose "${key}" is not a valid value`, `field:${key}`);
+      return { dropped: 'invalid-field' };
+    } else
+      devWarn(
+        `dropped the field "${key}", which is not an anonymous diagnostic field`,
+        `extra:${key}`
+      );
   }
   out.resource = event.resource;
-  return Object.freeze(out) as unknown as TelemetryEvent;
+  return { event: Object.freeze(out) as unknown as TelemetryEvent };
+}
+
+const SHAPE_FIELDS = ['parts', 'paragraphs', 'reviewItems', 'embeddedFonts'] as const;
+
+/** A document shape with exactly its four count buckets, or null. */
+function checkShape(value: unknown): Readonly<Record<string, string>> | null {
+  if (!value || typeof value !== 'object') return null;
+  const fields = value as Record<string, unknown>;
+  if (Object.keys(fields).some((key) => !(SHAPE_FIELDS as readonly string[]).includes(key)))
+    return null;
+  const out: Record<string, string> = {};
+  for (const key of SHAPE_FIELDS) {
+    const bucket = fields[key];
+    if (typeof bucket !== 'string' || !allowed('pagesBucket', bucket)) return null;
+    out[key] = bucket;
+  }
+  return Object.freeze(out);
 }
 
 const KEY = /^[A-Za-z_][A-Za-z0-9_.-]{0,63}$/;
@@ -118,7 +158,10 @@ export function checkAttributes(
   const out: Record<string, AttributeValue> = {};
   for (const [key, value] of Object.entries(attributes)) {
     if (!KEY.test(key) || (labels && !labels.includes(key))) {
-      devWarn(`dropped the attribute "${key.slice(0, 40)}" on ${context}`);
+      devWarn(
+        `dropped the attribute "${key.slice(0, 40)}" on ${context}`,
+        `attribute:${context}:${key}`
+      );
       continue;
     }
     if (typeof value === 'number' || typeof value === 'boolean') out[key] = value;
