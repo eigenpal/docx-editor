@@ -151,7 +151,7 @@ describe('roomTelemetry', () => {
     await rooms.shutdown();
   });
 
-  test('the fullest room follows people live, as the people total does', () => {
+  test('the fullest room follows people live, as the people total does', async () => {
     const metrics = prometheusRegistry();
     const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
     const room = rooms.open(new Y.Doc(), { name: ROOM });
@@ -162,6 +162,7 @@ describe('roomTelemetry', () => {
     expect(metrics.metrics()).toContain('docx_editor_collab_room_participants_max 2');
     room.disconnected();
     expect(metrics.metrics()).toContain('docx_editor_collab_room_participants_max 1');
+    await rooms.shutdown();
   });
 
   test('a custom reason matches without case', () => {

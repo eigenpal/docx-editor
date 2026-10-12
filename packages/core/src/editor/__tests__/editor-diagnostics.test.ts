@@ -305,6 +305,16 @@ describe('history, custom nodes, shape, and font messages', () => {
 });
 
 describe('codes and hints', () => {
+  test('every public code has an anchor in the diagnostics guide', async () => {
+    const guide = await Bun.file(
+      new URL('../../../../../docs/site/content/guides/diagnostics.mdx', import.meta.url)
+    ).text();
+    const missing = diagnosticCodes().filter(
+      (code) => !guide.includes(`<a id="${code.replace('.', '-')}" />`)
+    );
+    expect(missing).toEqual([]);
+  });
+
   test('every public code has a hint and a docs link', () => {
     const codes = diagnosticCodes();
     expect(codes.length).toBeGreaterThan(40);

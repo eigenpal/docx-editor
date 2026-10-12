@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { afterAll, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import * as Y from 'yjs';
 import { Hocuspocus } from '@hocuspocus/server';
@@ -28,12 +28,6 @@ import {
 import { createTelemetry, memoryExporter, type MemoryExporter } from '../index.ts';
 import { withCollaborationTelemetry } from '../hocuspocus/index.ts';
 import { prometheusRegistry } from '../prometheus/index.ts';
-
-// happy-dom replaces the runtime's WebSocket with one that cannot reach a real server.
-const { WebSocket: NativeWebSocket } = globalThis as unknown as { WebSocket: typeof WebSocket };
-afterAll(() => {
-  (globalThis as { WebSocket: typeof WebSocket }).WebSocket = NativeWebSocket;
-});
 
 const SECRET = 'Indemnification cap';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -70,7 +64,6 @@ const bodyXml = async (editor: DocxEditorInstance) =>
   strFromU8(unzipSync(new Uint8Array(await editor.save()))['word/document.xml']!);
 
 test('two editors on a real server: room metrics, client events, convergence, no leaks', async () => {
-  (globalThis as { WebSocket: typeof WebSocket }).WebSocket = NativeWebSocket;
   const saved = new Map<string, Uint8Array>();
   const serverMetrics = prometheusRegistry();
   const { config, rooms } = withCollaborationTelemetry(
@@ -207,10 +200,14 @@ test('two editors on a real server: room metrics, client events, convergence, no
     }, 'one person left in the room');
 
     // The room stores, and a person who joins later opens the same document.
-    await until(() => saved.has(roomId), 'the room to store');
-    expect(serverMetrics.metrics()).toContain(
-      'docx_editor_collab_room_store_duration_seconds_count{outcome="success"}'
+    await until(
+      () =>
+        serverMetrics
+          .metrics()
+          .includes('docx_editor_collab_room_store_duration_seconds_count{outcome="success"}'),
+      'the room to store'
     );
+    expect(saved.has(roomId)).toBe(true);
     const carol = await createHocuspocusCollaboration({
       url,
       roomId,
@@ -239,8 +236,9 @@ test('two editors on a real server: room metrics, client events, convergence, no
     for (const editor of editors) editor.destroy();
     for (const room of opened) room.destroy();
     await telemetry.shutdown();
+    await rooms.shutdown();
     await server.stop(true);
-    await hocuspocus.closeConnections?.();
+    hocuspocus.closeConnections();
   }
 }, 30_000);
 
@@ -300,16 +298,19 @@ function startRoomServer() {
     state,
     metrics,
     rooms,
-    stop: () => server.stop(true),
+    stop: async () => {
+      await server.stop(true);
+      hocuspocus.closeConnections();
+    },
   };
 }
 
 test('two tabs, a delete during an edit, a reconnect, and a compacted room', async () => {
-  (globalThis as { WebSocket: typeof WebSocket }).WebSocket = NativeWebSocket;
   const server = startRoomServer();
   const roomId = createCollaborationRoomId();
   const opened: HocuspocusCollaborationRoom[] = [];
   const editors: DocxEditorInstance[] = [];
+  const clients: { shutdown(): Promise<void> }[] = [];
   const mount = (room: HocuspocusCollaborationRoom) => {
     const events = memoryExporter();
     const telemetry = createTelemetry({
@@ -317,6 +318,7 @@ test('two tabs, a delete during an edit, a reconnect, and a compacted room', asy
       include: { collaborationClient: true, editing: true },
       dedupeWindowMs: 0,
     });
+    clients.push(telemetry);
     const container = document.createElement('div');
     document.body.append(container);
     const editor = createDocxEditor({
@@ -386,6 +388,10 @@ test('two tabs, a delete during an edit, a reconnect, and a compacted room', asy
       async () => (await bodyXml(left.editor)).includes('Z'),
       'the offline edit to merge'
     );
+    await until(
+      () => statuses(right.events).at(-1)?.[0] === 'ready',
+      'the client to report ready again'
+    );
     expect(statuses(right.events).at(-1)).toEqual(['ready', null]);
 
     // The room is compacted while Bob is away: his reconnect is refused, and both sides say so.
@@ -421,8 +427,9 @@ test('two tabs, a delete during an edit, a reconnect, and a compacted room', asy
   } finally {
     for (const editor of editors) editor.destroy();
     for (const room of opened) room.destroy();
+    for (const client of clients) await client.shutdown();
     await server.rooms.shutdown();
-    server.stop();
+    await server.stop();
     restoreLog();
   }
 }, 40_000);

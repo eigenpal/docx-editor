@@ -21,6 +21,7 @@
       "@docx-editor.dev/pro": ["../../packages/pro/src/index.ts"],
       "@docx-editor.dev/pro/*": ["../../packages/pro/src/*"],
       "@docx-editor.dev/react": ["../../packages/react/src/index.ts"],
+      "@docx-editor.dev/telemetry": ["../../packages/telemetry/src/index.ts"],
       "@docx-editor.dev/telemetry/*": ["../../packages/telemetry/src/*"]
     },
     "types": ["bun", "vite/client"]

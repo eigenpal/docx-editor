@@ -54,8 +54,10 @@ Room telemetry sends metrics only. Use `otelExporter` or `prometheusRegistry` on
 Use `roomTelemetry` and call it from your own room lifecycle:
 
 ```ts
+import { prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
 import { roomTelemetry } from '@docx-editor.dev/telemetry/server';
 
+const metrics = prometheusRegistry();
 const rooms = roomTelemetry({ exporters: [metrics] });
 
 const room = rooms.open(ydoc, { name: roomName, awareness });
