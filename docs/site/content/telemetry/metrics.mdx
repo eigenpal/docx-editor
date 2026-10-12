@@ -16,7 +16,7 @@ Every metric has an OpenTelemetry name, such as `docx_editor.collab.room.load.du
 | `docx_editor_history_diagnostics_total` | counter | `code` | Undo steps that did not group as the gesture intended, by code. |
 | `docx_editor_custom_node_diagnostics_total` | counter | `code` | Custom node payloads that could not be read, by code. |
 | `docx_editor_collab_client_status_transitions_total` | counter | `status`, `code` | Collaboration status changes on clients, by new status and failure code. |
-| `docx_editor_collab_client_connect_duration_seconds` | histogram | none | Time from joining a room to the first ready status. |
+| `docx_editor_collab_client_connect_duration_seconds` | histogram | none | Time from an editor attaching a room to its first ready status, when the editor attached before the room was ready. |
 | `docx_editor_collab_client_participants` | histogram | none | People in the room, as each client sees it when the count changes. |
 | `docx_editor_editor_interaction_duration_seconds` | histogram | `pages` | Key presses and pointer presses on the pages, to the next frame on screen, by page count bucket. Bucket counts are exact; the sum is estimated from the bands. |
 | `docx_editor_editor_layout_duration_seconds` | histogram | `pages` | Engine layout passes after edits and view changes, background work included, by page count bucket. Bucket counts are exact; the sum is estimated from the bands. |

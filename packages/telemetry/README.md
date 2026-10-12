@@ -10,7 +10,7 @@ Every event contains only codes, booleans, bucketed sizes and counts, and timing
 npm install @docx-editor.dev/telemetry @docx-editor.dev/core
 ```
 
-Add `@sentry/*`, `@opentelemetry/api`, or `@hocuspocus/server` only for the exporters and server integrations that you use.
+Add `@opentelemetry/api` or `@hocuspocus/server` only for the exporters and server integrations that you use. The Sentry exporter takes the Sentry SDK your app already loads.
 
 ## Editors
 

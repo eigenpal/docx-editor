@@ -86,6 +86,9 @@ The React Vite example and the peer-to-peer collaboration example both use port 
 - `editor-api-consumers/` runs deterministic agents against the published `@docx-editor.dev/editor-api` surface. No model API key.
 - `collaboration/` uses `y-webrtc` for peer-to-peer collaboration without an application server.
 - `collaboration-hocuspocus/` uses a Hocuspocus server for authenticated rooms and durable storage.
+- [telemetry-single-user/](telemetry-single-user/README.md) reports anonymous diagnostics and editing performance to OpenTelemetry, Sentry, and the console.
+- [telemetry-collaboration/](telemetry-collaboration/README.md) adds collaboration status in the editor and room telemetry on a Hocuspocus server.
+- [telemetry-stack/](telemetry-stack/README.md) runs an OpenTelemetry collector, Prometheus, Jaeger, and Grafana with ready dashboards for the two telemetry examples.
 - `parity/` assembles the React, Vue, Igloo, and DOCX-to-Markdown builds for the primary Vercel deployment and `bun run preview`.
 - `shared/` contains reusable example chrome, links, branding, and framework switchers. It is not runnable.
 - `dev-all.sh` starts the main framework examples for `bun run dev:demo`.

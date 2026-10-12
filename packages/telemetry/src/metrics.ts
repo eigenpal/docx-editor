@@ -133,7 +133,7 @@ export const METRICS = Object.freeze({
     'docx_editor.collab.client.connect.duration',
     'histogram',
     's',
-    'Time from joining a room to the first ready status.',
+    'Time from an editor attaching a room to its first ready status, when the editor attached before the room was ready.',
     [],
     SECONDS
   ),

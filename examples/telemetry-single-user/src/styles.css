@@ -1,0 +1,9 @@
+/* The chrome stylesheet.
+   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css';
+   This app runs the packages from SOURCE, so it imports the same file from there. */
+@import '../../../packages/core/src/styles/editor.css';
+@import '../../telemetry-stack/client/telemetry-example.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

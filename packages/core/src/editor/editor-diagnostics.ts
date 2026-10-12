@@ -353,6 +353,9 @@ function observeCollaboration(
     )
       return;
     const firstReady = snapshot.status === 'ready' && !readyOnce;
+    // Timed only when this editor saw the wait. A session that was ready before the editor
+    // attached, as a room hook makes it, joined before the clock started.
+    const waited = firstReady && previous !== 'none';
     if (firstReady) readyOnce = true;
     deliver({
       kind: 'collab.status',
@@ -360,7 +363,7 @@ function observeCollaboration(
       previous,
       ...(failure ? { code: `collab.${failure}` as CollaborationDiagnosticCode } : {}),
       recovering,
-      ...(firstReady ? { connectMs: Math.max(0, Math.round(clock() - joined)) } : {}),
+      ...(waited ? { connectMs: Math.max(0, Math.round(clock() - joined)) } : {}),
     });
     previous = snapshot.status;
     previousCode = failure;

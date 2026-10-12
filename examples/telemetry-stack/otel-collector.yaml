@@ -1,0 +1,36 @@
+# Receives OTLP from browser editors and sends the metrics to Prometheus and the spans to
+# Jaeger. Prometheus names come out as the telemetry package documents them, such as
+# `docx_editor_editor_interaction_duration_seconds`.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins: ['http://localhost:*', 'http://127.0.0.1:*']
+
+processors:
+  batch: {}
+
+exporters:
+  # Prometheus takes OTLP itself. It keeps each point's start time, so the first count of a tab
+  # that just opened is not lost to `increase()`.
+  otlphttp/prometheus:
+    endpoint: http://prometheus:9090/api/v1/otlp
+    tls:
+      insecure: true
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]

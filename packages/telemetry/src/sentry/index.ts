@@ -84,7 +84,8 @@ const ACTIONABLE_OPEN_CODES: ReadonlySet<string> = new Set([
 
 /**
  * CSS selectors for everything that shows the document: the editor shell and the painted pages.
- * Pass them to Session Replay's `block` and `mask` options.
+ * Pass them to Session Replay's `block` option, which replaces the editor with a placeholder, so
+ * `mask` is not needed as well.
  *
  * @public
  */
@@ -111,7 +112,13 @@ export interface SentryBreadcrumbHintLike {
  * ```ts
  * Sentry.init({ dsn, beforeBreadcrumb: dropEditorBreadcrumbs });
  * // With a filter of your own:
- * Sentry.init({ dsn, beforeBreadcrumb: (crumb, hint) => myFilter(dropEditorBreadcrumbs(crumb, hint)) });
+ * Sentry.init({
+ *   dsn,
+ *   beforeBreadcrumb: (crumb, hint) => {
+ *     const kept = dropEditorBreadcrumbs(crumb, hint);
+ *     return kept && myFilter(kept, hint); // dropped breadcrumbs never reach your filter
+ *   },
+ * });
  * ```
  *
  * @public

@@ -140,7 +140,11 @@ export interface CollaborationStatusDiagnostic extends DiagnosticBase {
   readonly code?: CollaborationDiagnosticCode;
   /** True when the session will heal on its own; wait instead of rejoining. */
   readonly recovering: boolean;
-  /** Milliseconds from the editor attaching the session to its first `ready`. Only then. */
+  /**
+   * Milliseconds from the editor attaching the session to its first `ready`. Present only on
+   * that change, and only when the editor saw the wait: a session that was already ready when
+   * the editor attached, as `useHocuspocusCollaboration` makes it, reports none.
+   */
   readonly connectMs?: number;
 }
 

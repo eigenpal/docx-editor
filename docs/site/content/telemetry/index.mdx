@@ -37,7 +37,7 @@ OpenTelemetry is the source model. Prometheus names come from the OpenTelemetry 
 npm install @docx-editor.dev/telemetry @docx-editor.dev/core
 ```
 
-Install the peer dependency for each exporter that you use: `@opentelemetry/api` for OpenTelemetry, `yjs` with `@docx-editor.dev/pro` for room telemetry, and `@hocuspocus/server` 4.6 or later for the Hocuspocus integration. The Sentry and Prometheus exporters have no dependencies.
+Install the peer dependency for each exporter that you use: `@opentelemetry/api` for OpenTelemetry, `yjs` with `@docx-editor.dev/pro` for room telemetry, and `@hocuspocus/server` 4.6 or later for the Hocuspocus integration. The Sentry exporter takes the Sentry SDK your app already loads, and the Prometheus exporter has no dependencies. In an editor app, you also have `@docx-editor.dev/react` or `@docx-editor.dev/vue`, and `@docx-editor.dev/pro` for review and collaboration.
 
 ## Privacy
 
@@ -56,3 +56,4 @@ Install the peer dependency for each exporter that you use: `@opentelemetry/api`
 - To record rooms, people, and memory on a collaboration server, see [Collaboration servers](/docs/2.x/telemetry/servers).
 - For every metric name, type, and label, see [Metrics](/docs/2.x/telemetry/metrics).
 - For every diagnostic code and its hint, see [Diagnostics](/docs/2.x/guides/diagnostics).
+- To run working setups with Grafana dashboards, see the [one-person example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-single-user), the [collaboration example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-collaboration), and the [dashboards stack](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack).

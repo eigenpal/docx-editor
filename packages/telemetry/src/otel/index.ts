@@ -138,7 +138,8 @@ function eventAttributes(event: TelemetryEvent): OtelAttributes {
  * import { createTelemetry } from '@docx-editor.dev/telemetry';
  * import { otelExporter } from '@docx-editor.dev/telemetry/otel';
  *
- * // After your OpenTelemetry SDK starts:
+ * // Before or after your OpenTelemetry SDK starts: the exporter reads the global providers at
+ * // each use.
  * export const telemetry = createTelemetry({ exporters: [otelExporter()] });
  * ```
  *

@@ -54,13 +54,13 @@ const MODULES = [reviewModule(), telemetry.module];
 </template>
 ```
 
-If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs when an event is recorded and, with the `performance` area on, at each timed key press, layout, and paint. Keep it cheap, for example by reading a value your consent manager keeps in memory. It never runs during server rendering, so the client is safe to create there.
+If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs when an event is recorded and, with the `performance` area on, at each timed key press, layout, and paint. Keep it cheap, for example by reading a value your consent manager keeps in memory. It never runs during server rendering, so the client is safe to create there. The check applies to every exporter, the console exporter included; in development, you can return `true` for local builds, as in `consent: () => import.meta.env.DEV || consentManager.analytics === true`.
 
 Register `telemetry.module`, or call `telemetry.record(event)` yourself, but not both. If you do both, every event is recorded twice.
 
 ### Choose what to record
 
-The `include` option turns areas on. If you omit `include`, every area is on.
+The `include` option turns areas on. If you omit `include`, every area is on. If you pass `include`, only the areas it names are on, so to set one area's options and keep the others, list each area you want.
 
 | Area | Records |
 | --- | --- |
@@ -74,6 +74,8 @@ The `include` option turns areas on. If you omit `include`, every area is on.
 | `performance` | How fast the editor responds: the time from a key press or click to the next frame on screen, and engine layout and paint times. For more information, see [Measure editor performance](#measure-editor-performance). |
 
 Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event. The one exception is `performance`: a rate of 0 turns it off, metrics included.
+
+The areas whose failures can become Sentry issues are `documentOpen`, `editing`, `trackedChanges`, `fonts`, and `collaborationClient`. For the rule, see [Send to Sentry](#send-to-sentry).
 
 By default, an opened document is described by its size and page buckets. To also send its part, paragraph, review item, and embedded font buckets, set `documentShape: 'detailed'`. Several counts together describe a document more closely, so turn it on only when you need it.
 
@@ -111,7 +113,7 @@ Each summary has `count`, `p50Ms`, `p95Ms`, `maxMs`, and `bands`, the number of 
 
 If at least 20 presses were timed and more than one in 20 took over 200 ms, the event has the code `performance.slow-interaction` and a hint. The console exporter prints it as a warning, and the Sentry exporter records it as a warning breadcrumb, never as an issue.
 
-The following example sends the performance events of about one editor in ten to OpenTelemetry. For the `performance` area, the choice is made once for each editor, so one person's summaries stay together:
+The following example sends the performance events of about one editor in ten. The choice is made once for each editor, so one person's summaries stay together. Every editor with the area on still measures, and the metrics count every summary: sampling limits only the events, such as span events and breadcrumbs. To stop measuring, set `sampleRate` to 0.
 
 ```ts
 import { createTelemetry } from '@docx-editor.dev/telemetry';
@@ -123,9 +125,9 @@ export const telemetry = createTelemetry({
 });
 ```
 
-Sampling applies to events only, and a `sampleRate` of 0 turns performance measuring off, metrics included. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their `pages` label is the page count bucket, such as `10-99`, so you can compare documents of different sizes. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
+Sampling applies to events only, and a `sampleRate` of 0 turns performance measuring off, metrics included. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their `pages` label is the page count bucket, one of `0`, `1`, `2-9`, `10-99`, `100-999`, and `1000+`, or `unknown` before the first paint, so you can compare documents of different sizes. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
 
-To watch editor performance in Prometheus, start from the following queries. The first gives the 95th percentile of typing delay for each page count bucket. The second gives the share of presses that took over 200 ms:
+To watch editor performance in Prometheus, start from the following queries. The first gives the 95th percentile of input delay, key presses and clicks together, for each page count bucket. The second gives the share of presses that took over 200 ms:
 
 ```text
 histogram_quantile(0.95, sum by (le, pages) (rate(docx_editor_editor_interaction_duration_seconds_bucket[10m])))
@@ -184,11 +186,29 @@ Sentry.init({
 });
 ```
 
-Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Sentry records console messages as breadcrumbs by default; drop the `console` category in `beforeBreadcrumb` if your own code logs document details.
+`EDITOR_SELECTORS` goes in `block`, which replaces the editor with a placeholder in Replay, so it does not need `mask` as well.
+
+Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Navigation and fetch breadcrumbs carry URLs too, so remove the identifier from them in `beforeBreadcrumb`. Sentry records console messages as breadcrumbs by default; drop the `console` category if your own code logs document details.
+
+To combine `dropEditorBreadcrumbs` with your own filter, call it first and pass on only what it keeps:
+
+```ts
+import * as Sentry from '@sentry/react';
+import { dropEditorBreadcrumbs } from '@docx-editor.dev/telemetry/sentry';
+
+Sentry.init({
+  beforeBreadcrumb: (crumb, hint) => {
+    const kept = dropEditorBreadcrumbs(crumb, hint);
+    return kept?.category === 'console' ? null : kept;
+  },
+});
+```
 
 ## Send to OpenTelemetry
 
 The exporter uses the global meter and tracer providers unless you pass your own, and it reads them at each use. You can create it before your OpenTelemetry SDK starts; measurements reach the SDK from the moment it registers.
+
+Each histogram carries its bucket bounds as instrument advice, which the OpenTelemetry JavaScript SDK uses, so the buckets match the bands in [Metrics](/docs/2.x/telemetry/metrics). A collector or a Prometheus 3 OTLP receiver adds unit suffixes by default, so the Prometheus names match that page too. Metrics carry only their own labels: the `resource` option goes on events. Set attributes such as `service.name` on your SDK, where Prometheus turns them into the `job` label.
 
 ```ts
 import { createTelemetry } from '@docx-editor.dev/telemetry';
