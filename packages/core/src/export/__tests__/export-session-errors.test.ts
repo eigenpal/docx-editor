@@ -37,11 +37,18 @@ function docx(body: string): Uint8Array {
 }
 
 test('normalizes fail-closed layout invariants at the shared exporter boundary', async () => {
+  // A keep-together row around a nested row that cannot split either: no page holds it.
+  const nested =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="1800"/></w:tblGrid>' +
+    '<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr>' +
+    '<w:p><w:r><w:t>Nested row</w:t></w:r></w:p>'.repeat(80) +
+    '</w:tc></w:tr></w:tbl>';
   const source = docx(
     '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
-      '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:hRule="exact" w:val="60000"/></w:trPr>' +
+      '<w:tr><w:trPr><w:cantSplit/></w:trPr>' +
       '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
-      '<w:p><w:r><w:t>Authored overheight row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+      nested +
+      '<w:p/></w:tc></w:tr></w:tbl>'
   );
   const opened = openDocumentForExport(source);
   expect(opened.ok).toBe(true);
@@ -52,7 +59,7 @@ test('normalizes fail-closed layout invariants at the shared exporter boundary',
     expect(error).toMatchObject({ code: 'layoutInvariant' });
     expect((error as Error).cause).toMatchObject({
       name: 'TablePaginationError',
-      code: 'table-row-overheight',
+      code: 'table-row-split-unsupported',
     });
   } finally {
     opened.session.dispose();

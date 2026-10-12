@@ -10,7 +10,6 @@ import {
 } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { MAX_TABLE_ROW_HEIGHT_PT, readTableStructure } from '../semantic-table.ts';
-import { TablePaginationError } from '../semantic-table-layout.ts';
 import type { TableFragmentRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -167,10 +166,19 @@ describe('w:trHeight layout', () => {
     expect(lineCount).toBeGreaterThan(0);
   });
 
-  test('exact row taller than the page fails closed rather than overflowing', () => {
+  test('exact row taller than the page fills the page, and the next block starts a page', () => {
     // Default page content height is well under 2000pt; 40000 twips = 2000pt.
-    const part = loadPart(`<w:tbl>${tr(tc(p('x')), trHeight('40000', 'exact'))}</w:tbl>`);
-    expect(() => layout(part)).toThrow(TablePaginationError);
+    const part = loadPart(
+      `<w:tbl>${tr(tc(p('x')), trHeight('40000', 'exact'))}</w:tbl>${p('after')}`
+    );
+    const result = layout(part);
+    const [table] = allTables(result);
+    const contentHeight = result.pages[0]!.contentBox.height;
+    // The row keeps no continuation: it is clipped at the bottom of the content box.
+    expect(table!.rows).toHaveLength(1);
+    expect(table!.rows[0]!.box.height).toBeCloseTo(contentHeight, 3);
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[1]!.fragments.some((fragment) => fragment.kind === 'paragraph')).toBe(true);
   });
 });
 

@@ -246,6 +246,8 @@ Bottom-to-top cell text does not make its row taller. The text wraps at the fina
 
 A table row starts below other content only when the remaining space holds its minimum height. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If a fresh page cannot hold that minimum below repeated headers, the row splits where it stands. Rows of positioned tables keep their existing placement.
 
+A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its content is clipped at the bottom margin. The next block starts on the next page. The reference layout keeps the full row height past the bottom margin, so the bottom edge of the row differs.
+
 Keep-with-next table groups include closed vertical merges. Their merged content contributes its height once across the covered rows. Table decisions measure at most 256 kept rows and the next row. Longer groups use that measured prefix as a lower bound. Paragraph keep lookahead remains unchanged.
 
 Changes to numbering and document properties update field text and table pagination during editing.

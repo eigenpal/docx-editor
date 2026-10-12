@@ -211,9 +211,23 @@ test('incremental layout returns the same pages for an oversized cantSplit row',
     );
 });
 
-test('an exact-height row taller than the page still fails closed', () => {
-  const part = source(table(row(p('x'), '<w:trHeight w:val="2000" w:hRule="exact"/>')));
-  expect(() => layoutSemanticDocument(part, 0, options)).toThrow(TablePaginationError);
+test('an exact-height row taller than the page fills the page without splitting', () => {
+  const part = source(
+    table(row(p('x'), '<w:trHeight w:val="2000" w:hRule="exact"/>')) + p('after')
+  );
+  const layout = layoutSemanticDocument(part, 0, options);
+  expect(tables(layout).flatMap((fragment) => fragment.rows)).toHaveLength(1);
+  expect(pageOfLines(layout).get('after')).toBe(2);
+  expectInsideContentBox(layout);
+});
+
+test('an exact-height row taller than the page below other content moves to a fresh page', () => {
+  const part = source(
+    p('lead') + table(row(p('x'), '<w:trHeight w:val="2000" w:hRule="exact"/>')) + p('after')
+  );
+  const layout = layoutSemanticDocument(part, 0, options);
+  const pages = pageOfLines(layout);
+  expect([pages.get('lead'), pages.get('x'), pages.get('after')]).toEqual([1, 2, 3]);
 });
 
 test('an oversized cantSplit row splits a nested row taller than the page inside its cell', () => {

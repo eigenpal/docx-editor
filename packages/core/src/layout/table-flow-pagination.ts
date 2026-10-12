@@ -1,5 +1,6 @@
 import { isSettledPreviousRow, takePreviousRows } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
+import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
 //
 // Lifted out of the story loop because it is the one block kind whose placement is a loop of
@@ -872,13 +873,15 @@ export function* paginateTableInFlowSteps(
         // body actually placed, so this only pushes the page's footnotes forward), while
         // the throw below rejects the entire document for one row+reserve collision.
         const fullBand = flow.unreservedContentHeight?.() ?? contentHeight();
-        if (
-          fullBand > contentHeight() + 0.001 &&
-          naturalHeight <= fullBand - flow.cursorY + 0.001
-        ) {
+        // An exact row no band holds fills the rest of this one (`table-exact-row-clip.ts`).
+        const offer =
+          fullBand > contentHeight() + 0.001 && naturalHeight <= fullBand - flow.cursorY + 0.001
+            ? { row, band: fullBand }
+            : clippedExactRow(row, contentHeight(), flow.cursorY);
+        if (offer) {
           const placementDeps = rowDeps();
           const placed = layoutRowFragment(
-            row,
+            offer.row,
             structure.columnWidthsPt,
             tableLeft,
             flow.cursorY,
@@ -887,9 +890,9 @@ export function* paginateTableInFlowSteps(
             placementDeps,
             structure.cellSpacingPt,
             vMerge,
-            fullBand
+            offer.band
           );
-          if (placed.bottom <= fullBand + 0.001 && placed.remainder === null) {
+          if (placed.bottom <= offer.band + 0.001 && placed.remainder === null) {
             rows.push(placed.record);
             rememberInsets(placed.record, placementDeps);
             sourceRows.push(row);
@@ -900,14 +903,7 @@ export function* paginateTableInFlowSteps(
         // `w:cantSplit` cannot keep a row whole when no page can hold it. The row is now
         // on a fresh page or below header rows only, so it splits from here like an
         // ordinary row instead of discarding the document. An exact height cannot split.
-        if (!splitsAnyway) {
-          throw new TablePaginationError(
-            'table-row-overheight',
-            row.height.rule === 'exact'
-              ? `Table row ${row.id} has w:trHeight hRule=exact taller than the available page content`
-              : `Table row ${row.id} has w:cantSplit and is taller than the available page content`
-          );
-        }
+        if (!splitsAnyway) throw overheightRowError(row);
       }
 
       const placementDeps = rowDeps();
