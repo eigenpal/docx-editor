@@ -10,7 +10,11 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import type { EditorDiagnostic } from '../../contracts/diagnostics.ts';
 import { DIAGNOSTIC_SCHEMA_VERSION } from '../../contracts/diagnostics.ts';
-import { diagnosticCodes, explainDiagnostic } from '../../automation/diagnostic-hints.ts';
+import {
+  diagnosticAnchor,
+  diagnosticCodes,
+  explainDiagnostic,
+} from '../../automation/diagnostic-hints.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { byteSizeBucket, countBucket } from '../../automation/diagnostics.ts';
 import {
@@ -310,7 +314,7 @@ describe('codes and hints', () => {
       new URL('../../../../../docs/site/content/guides/diagnostics.mdx', import.meta.url)
     ).text();
     const missing = diagnosticCodes().filter(
-      (code) => !guide.includes(`<a id="${code.replace('.', '-')}" />`)
+      (code) => !guide.includes(`<a id="${diagnosticAnchor(code)}" />`)
     );
     expect(missing).toEqual([]);
   });
