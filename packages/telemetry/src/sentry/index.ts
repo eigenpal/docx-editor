@@ -183,6 +183,7 @@ function tagsOf(event: TelemetryEvent): Record<string, string> {
     'docx_editor.kind': event.kind,
     'docx_editor.code': codeOf(event),
     'docx_editor.version': event.engineVersion,
+    'docx_editor.editor_session': event.editorSessionId,
   };
   for (const key of ['origin', 'tracked', 'status', 'outcome'])
     if (fields[key] !== undefined) tags[`docx_editor.${key}`] = String(fields[key]);

@@ -37,9 +37,24 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
 }
 ```
 
-In Vue, pass the same array: `<DocxEditor :document="bytes" :modules="MODULES" />`.
+In Vue, register the same module:
 
-If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs only when an event is recorded, so the client is safe to create during server rendering.
+```vue
+<script setup lang="ts">
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { reviewModule } from '@docx-editor.dev/pro';
+import { telemetry } from './telemetry';
+
+defineProps<{ bytes: Uint8Array }>();
+const MODULES = [reviewModule(), telemetry.module];
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :modules="MODULES" />
+</template>
+```
+
+If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs when an event is recorded and, with the `performance` area on, at each timed key press, layout, and paint. Keep it cheap, for example by reading a value your consent manager keeps in memory. It never runs during server rendering, so the client is safe to create there.
 
 Register `telemetry.module`, or call `telemetry.record(event)` yourself, but not both. If you do both, every event is recorded twice.
 
@@ -108,7 +123,7 @@ export const telemetry = createTelemetry({
 });
 ```
 
-Sampling applies to events only. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their `pages` label is the page count bucket, such as `10-99`, so you can compare documents of different sizes. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
+Sampling applies to events only, and a `sampleRate` of 0 turns performance measuring off, metrics included. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their `pages` label is the page count bucket, such as `10-99`, so you can compare documents of different sizes. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
 
 To watch editor performance in Prometheus, start from the following queries. The first gives the 95th percentile of typing delay for each page count bucket. The second gives the share of presses that took over 200 ms:
 
@@ -121,9 +136,32 @@ histogram_quantile(0.95, sum by (le, pages) (rate(docx_editor_editor_interaction
 
 If the share of slow presses grows, compare the layout and paint histograms for the same page bucket. Slow layout follows document size. Slow paint follows the pages on screen.
 
-Send performance to an exporter that records metrics, such as `otelExporter()` or `prometheusRegistry()`. The Sentry exporter records a performance event only as a breadcrumb, which Sentry shows beside a later error. A `callbackExporter` with an `onMetric` function receives each timing in a summary as one histogram sample, at the middle of its band.
+Send performance to an exporter that records metrics, such as `otelExporter()`. In a browser, the metrics reach Prometheus through your OpenTelemetry SDK and an OpenTelemetry Protocol (OTLP) collector; `prometheusRegistry()` serves metrics from a server process, not from a browser. The Sentry exporter records a performance event only as a breadcrumb, which Sentry shows beside a later error. A `callbackExporter` with an `onMetric` function receives each timing in a summary as one histogram sample, at the middle of its band.
 
 The editor measures only while something wants the data: `telemetry.module` with the `performance` area on and consent given, another module whose `wantsDiagnostic` returns `true` for `'performance'`, or an `editor.on('diagnostic')` handler.
+
+## Link events to your own sessions
+
+Every event has an `editorSessionId` value. It is random for each editor instance and identifies no person and no document. Use it to join a slow performance summary or a refused edit to your own logs, traces, or error reports:
+
+```ts
+import { callbackExporter, createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+import * as Sentry from '@sentry/react';
+
+export const telemetry = createTelemetry({
+  exporters: [
+    otelExporter(),
+    callbackExporter((event) => {
+      // Later Sentry errors and replays carry the editor that was open.
+      Sentry.setTag('docx_editor.editor_session', event.editorSessionId);
+    }),
+  ],
+  include: { performance: true, documentOpen: true },
+});
+```
+
+The OpenTelemetry exporter adds events to the active span, so an event recorded during one of your own spans is already part of that trace. Issues from the Sentry exporter carry the `docx_editor.editor_session` tag.
 
 ## Send to Sentry
 

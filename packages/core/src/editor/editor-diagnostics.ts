@@ -288,7 +288,8 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       performance.timing(
         phase,
         value,
-        phase === 'paint' && surface ? totalPages(surface) : undefined
+        // Read only when measured: the page count is not free on every paint.
+        phase === 'paint' && surface ? () => totalPages(surface) : undefined
       );
     },
     /**

@@ -169,9 +169,9 @@ export function createPerformanceSampler(options: PerformanceSamplerOptions) {
 
   return {
     /** One timing from the surface: milliseconds for layout and paint, a timestamp for input. */
-    timing(phase: 'layout' | 'paint' | 'input', value: number, pageCount?: number): void {
+    timing(phase: 'layout' | 'paint' | 'input', value: number, pageCount?: () => number): void {
       if (disposed || !options.enabled()) return;
-      if (pageCount !== undefined) pages = pageCount;
+      if (pageCount) pages = pageCount();
       if (phase !== 'input') {
         add(phase, value);
         return;

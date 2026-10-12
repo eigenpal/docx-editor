@@ -309,7 +309,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       // The editor times key presses only while performance would be recorded.
       wantsDiagnostic: (kind: EditorDiagnosticKind) =>
         !closed &&
-        (kind !== 'performance' || (rate('performance') !== null && pipeline.consented())),
+        (kind !== 'performance' || ((rate('performance') ?? 0) > 0 && pipeline.consented())),
     }),
     record,
     flush,

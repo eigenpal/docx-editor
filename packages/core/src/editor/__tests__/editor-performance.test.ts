@@ -83,7 +83,7 @@ describe('performance sampler', () => {
   test('one summary per window, with exact counts, bands, and maximum', () => {
     const { sent, time, instance } = sampler();
     for (const ms of [4, 10, 20, 40, 80, 150, 300, 700, 1500]) instance.timing('layout', ms);
-    instance.timing('paint', 12, 42);
+    instance.timing('paint', 12, () => 42);
     expect(sent).toEqual([]);
     time.advance(60_000);
     expect(sent).toHaveLength(1);

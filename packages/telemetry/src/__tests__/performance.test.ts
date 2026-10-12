@@ -321,3 +321,26 @@ test('the module wants performance only with the area on and consent given', asy
   await on.shutdown();
   expect(on.module.wantsDiagnostic?.('performance')).toBe(false);
 });
+
+test('a sample rate of 0 turns performance measuring off', () => {
+  const telemetry = createTelemetry({
+    exporters: [memoryExporter()],
+    include: { performance: { sampleRate: 0 } },
+  });
+  expect(telemetry.module.wantsDiagnostic?.('performance')).toBe(false);
+});
+
+test('Sentry issues carry the editor session tag for correlation', () => {
+  const contexts: { tags?: Record<string, string> }[] = [];
+  const sentry: SentryLike = {
+    captureException: (_error, context) => void contexts.push(context as never),
+    addBreadcrumb: () => {},
+  };
+  createTelemetry({ exporters: [sentryExporter(sentry)] }).record({
+    ...base,
+    kind: 'document.open',
+    outcome: 'rejected',
+    code: 'open.unsupported-source',
+  } as EditorDiagnostic);
+  expect(contexts[0]?.tags?.['docx_editor.editor_session']).toBe(base.editorSessionId);
+});
