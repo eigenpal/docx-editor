@@ -20,11 +20,18 @@ describe('server-first defaults', () => {
   });
 
   test('one-shot conversion exposes layout invariants through the shared typed error', async () => {
+    // A keep-together row around a nested row that cannot split either: no page holds it.
+    const nested =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="1800"/></w:tblGrid>' +
+      '<w:tr><w:trPr><w:cantSplit/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1800" w:type="dxa"/></w:tcPr>' +
+      '<w:p><w:r><w:t>Nested row</w:t></w:r></w:p>'.repeat(80) +
+      '</w:tc></w:tr></w:tbl>';
     const bytes = docx(
       '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
-        '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:hRule="exact" w:val="60000"/></w:trPr>' +
+        '<w:tr><w:trPr><w:cantSplit/></w:trPr>' +
         '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
-        '<w:p><w:r><w:t>Authored overheight row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        nested +
+        '<w:p/></w:tc></w:tr></w:tbl>'
     );
     const error = await exportMarkdown(bytes).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(ExportResourceError);
