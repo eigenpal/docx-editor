@@ -1,0 +1,130 @@
+---
+title: 'Dashboards and alerts'
+description: 'Download ready Grafana dashboards for editor experience and collaboration, and Prometheus alert rules for clear faults.'
+category: 'Telemetry'
+---
+
+Two Grafana dashboards show how editing feels to the people who use your app and how your collaboration server runs. A Prometheus rule file alerts on clear faults. The dashboards report measurements only and set no targets: decide what is acceptable from a few weeks of your own traffic.
+
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
+
+## Download
+
+| File | What it is | Download |
+| --- | --- | --- |
+| `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
+| `collaboration.json` | Grafana dashboard: server state, rooms and people, memory, server work, client status, and refusals. | [collaboration.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
+| `rules.yml` | Prometheus alert rules for a server that stops answering, failed room stores, and dropped telemetry events. | [rules.yml](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/prometheus/rules.yml) |
+
+To download all three files from a terminal, run:
+
+```bash
+BASE=https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability
+curl -LO "$BASE/grafana/editor-experience.json"
+curl -LO "$BASE/grafana/collaboration.json"
+curl -LO "$BASE/prometheus/rules.yml"
+```
+
+The files also live in [`assets/observability`](https://github.com/eigenpal/docx-editor/tree/main/assets/observability) in the repository, with the script that generates them.
+
+## Before you import
+
+The dashboards read Prometheus metrics. For every name, see [Metrics](/docs/2.x/telemetry/metrics).
+
+- **Editor metrics** come from browsers through your OpenTelemetry SDK and an OpenTelemetry Protocol (OTLP) collector or Prometheus OTLP receiver. To set up the editor, see [Send to OpenTelemetry](/docs/2.x/telemetry/editors#send-to-opentelemetry), and turn on the areas that the panels read, as in the next example.
+- **Server metrics** come from the `/metrics` endpoint of your collaboration server. To set it up, see [Collaboration servers](/docs/2.x/telemetry/servers).
+
+The dashboard filters use these labels:
+
+| Label | Comes from |
+| --- | --- |
+| `job` | `service.name` on your OpenTelemetry SDK, or the scrape job of your server. |
+| `deployment_environment` | `deployment.environment`, which you add with `attributes` and `metricLabels`. |
+| `app_version` | `app.version`, which you add with `attributes` and `metricLabels`. |
+| `docx_editor_version` | Added by the telemetry package to every editor metric. |
+| `docx_editor` | The scrape target label that marks a collaboration server. |
+
+Add the environment and the app version to the editor metrics, and record the areas that the panels read:
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({
+  exporters: [otelExporter()],
+  include: {
+    documentOpen: true,
+    editing: true,
+    trackedChanges: true,
+    fonts: true,
+    performance: true,
+  },
+  attributes: { 'deployment.environment': 'production', 'app.version': '4.2.0' },
+  metricLabels: ['deployment.environment', 'app.version'],
+});
+```
+
+Mark each collaboration server with the `docx_editor` target label. The **Server** filter and the server-down alert find servers by this label, so a server that fails every scrape still shows:
+
+```yaml
+scrape_configs:
+  - job_name: collaboration-server
+    static_configs:
+      - targets: ['collaboration.internal:1235']
+        labels:
+          docx_editor: collaboration
+```
+
+## Import the dashboards
+
+1. In Grafana, go to **Dashboards** > **New** > **Import**, and upload `editor-experience.json`.
+2. Repeat for `collaboration.json`.
+3. Open each dashboard, and select your Prometheus data source in **Data source**.
+4. Select the **App** and **Environment** values. On **Collaboration**, select the **Server** job and its instances.
+
+## Editor experience
+
+The first row answers how editing feels now: input delay median and 95th percentile, the share of presses over 1 second, the share of opens that succeed, open time, the browser tabs that report, unexpected refusals for every 1,000 presses, and dropped telemetry events.
+
+The rows below show:
+
+- **Interaction:** input delay over time, presses by delay band, and input delay by document size, app version, editor version, and the same time a week earlier.
+- **Engine work:** engine layout and paint passes by duration band.
+- **Documents:** opens per minute, open time, and refused files by reason.
+- **Tracked changes:** edits refused while suggesting, tracked changes that accept, reject, or reassign requests skipped, and the reasons and sources of both.
+- **All refused edits:** every refusal code, by source, with font substitutions and dropped telemetry.
+
+Every code in a table links to its hint in [Diagnostics](/docs/2.x/guides/diagnostics).
+
+![The tracked changes and refused edits rows of the Editor experience dashboard: refusals while suggesting, the share of refusals while suggesting, refused tracked changes by reason and by source, and all refused edits by reason and by source.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-tracked-changes.png)
+
+Input delay percentiles are estimates from the timing bands. The highest band ends at 1 second, so a percentile of 1 second means that it falls in the over 1 second band. In that case, read **Presses over 1 s**.
+
+## Collaboration
+
+The first row shows whether the server answers, the share of room stores that succeed, refused connections, client errors, and the room limit usage. The rows below show rooms, people, and connections over time, room memory, room limit usage by resource, room age and idle time, load and store times, updates, client status changes, and refusals by reason.
+
+![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/collaboration.png)
+
+The people totals add up all selected server instances. If your instances share rooms through Redis, each instance counts the same people, so select one instance.
+
+## Load the alert rules
+
+Add the rule file to `rule_files` in your Prometheus configuration, or copy the rules into your own rule group:
+
+```yaml
+rule_files:
+  - /etc/prometheus/docx-editor-rules.yml
+```
+
+| Alert | Fires when |
+| --- | --- |
+| `DocxCollaborationServerDown` | A server with the `docx_editor="collaboration"` label fails its scrape for 1 minute. |
+| `DocxCollaborationStoreFailing` | Room stores fail for 5 minutes. Edits can be lost on restart. |
+| `DocxTelemetryDroppingEvents` | The privacy check drops editor events for 15 minutes. Core and telemetry versions may differ. |
+
+## Try the dashboards locally
+
+The [telemetry stack example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack) runs an OpenTelemetry collector, Prometheus, Jaeger, and Grafana with these files. It also has a script that simulates people who edit, so the dashboards fill with data in a few minutes. Use it with the [one-person example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-single-user) and the [collaboration example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-collaboration).
+
+To report a problem with the dashboards, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose).

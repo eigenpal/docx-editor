@@ -264,6 +264,8 @@ export const telemetry = createTelemetry({ exporters: [otelExporter()] });
 
 Each document open becomes a `docx_editor.document.open` span. The span has an error status when the open is refused. Other events are added to the active span. If there is no active span, as is usual in a browser, a failure gets a short span of its own. In development, the exporter warns once if no SDK is registered.
 
+To see these metrics in Grafana, download the **Editor experience** dashboard from [Dashboards and alerts](/docs/2.x/telemetry/dashboards).
+
 ## Send to another tool
 
 Use `callbackExporter` to forward events to any function:

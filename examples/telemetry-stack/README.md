@@ -4,7 +4,9 @@ A local observability stack for the telemetry examples: an OpenTelemetry collect
 
 The dashboards answer the questions a team asks about its editor: how long a key press takes to reach the screen, whether a release or large documents made it slower, why files fail to open, which tracked changes and edits the editor refuses, and how many people each room holds. They report measurements only and set no targets. Prometheus alerts on clear faults, such as a server that stops answering. The dashboards and alert rules live in [`assets/observability`](../../assets/observability), the files you import into your own Grafana and Prometheus; this stack mounts them from there.
 
-![The Editor experience dashboard after three minutes of simulated editing: input delay percentiles, presses by delay band, engine work, opens, refused files, and refused edits by reason.](editor-experience-dashboard.png)
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](../../assets/observability/screenshots/editor-experience.png)
+
+To download the dashboards for your own Grafana, see [`assets/observability`](../../assets/observability) or [Dashboards and alerts](https://docx-editor.dev/docs/2.x/telemetry/dashboards) in the docs.
 
 ## Run the example
 
@@ -42,11 +44,13 @@ flowchart LR
 
 ## What the dashboards show
 
-**Editor experience** opens with the input delay median and 95th percentile, the share of opens that succeed, the open time, the editors that report now, unexpected refusals per 1,000 presses, dropped telemetry, and firing alerts. Rows below show input delay over time and by document size, app version, editor version, and the week before; engine layout and paint time; opens; refused tracked changes and skipped tracked changes; and all refused edits, each code linked to its hint.
+**Editor experience** opens with the input delay median and 95th percentile, the share of presses over 1 second, the share of opens that succeed, the open time, the browser tabs that report, unexpected refusals per 1,000 presses, dropped telemetry, and firing alerts. Rows below show input delay over time and by document size, app version, editor version, and the week before; engine layout and paint time; opens; refused tracked changes and skipped tracked changes; and all refused edits, each code linked to its hint.
 
 **Collaboration** opens with server state: whether the server answers, the share of room stores that succeed, refused connections, client errors, and how much of the room limits is in use. Rows below show rooms and people, memory, room age, server work, client status, and refusals.
 
-**Editor experience** filters by environment, app, app version, and editor version. The examples send `deployment.environment` and `app.version` as allowed metric labels; see `metricLabels` in their `src/telemetry.ts`. Every editor metric carries `docx_editor_version` by itself. **Collaboration** filters by server and client app. Annotations mark every firing alert; a **New version** annotation, off by default, marks the first time an app version reports.
+![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](../../assets/observability/screenshots/collaboration.png)
+
+**Editor experience** filters by environment, app, app version, and editor version. The examples send `deployment.environment` and `app.version` as allowed metric labels; see `metricLabels` in their `src/telemetry.ts`. Every editor metric carries `docx_editor_version` by itself. **Collaboration** filters by server, server instance, and client app. Annotations mark every firing alert; a **New version** annotation, off by default, marks the first time an app version reports.
 
 ## Notes for your own setup
 

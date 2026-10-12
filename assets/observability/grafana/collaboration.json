@@ -378,7 +378,7 @@
     },
     {
       "type": "stat",
-      "title": "Room limit usage, p95 over 5 min",
+      "title": "Room limit p95, last 5 min",
       "description": "The highest 95th percentile of any one room limit (nodes, relationships, parts, blob bytes) over the last 5 minutes. At 100%, a room refuses edits that need more of that resource.",
       "targets": [
         {

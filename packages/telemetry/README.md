@@ -67,6 +67,14 @@ app.get('/admin/rooms', requireAdmin, (_request, response) => response.json(room
 
 For other Yjs servers, use `roomTelemetry` from `@docx-editor.dev/telemetry/server`.
 
+## Dashboards and alerts
+
+Ready Grafana dashboards show input delay, engine work, opens, and refused edits from your editors, and rooms, people, memory, and refusals from your collaboration server. Prometheus alert rules cover clear faults.
+
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
+
+Download [`editor-experience.json`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json), [`collaboration.json`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json), and [`rules.yml`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/prometheus/rules.yml), then import them into Grafana and Prometheus. For the setup each one needs, see [Dashboards and alerts](https://docx-editor.dev/docs/2.x/telemetry/dashboards).
+
 ## Entry points
 
 | Entry | Contents |

@@ -321,7 +321,7 @@ c.add(stat('Refused connections', f'round(sum(increase(docx_editor_collab_admiss
            'Connections the server refused at admission in the selected range. No data while any selected server is down or not scraped.'), 5, 4)
 c.add(stat('Client errors', f'round(sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job",status="error"}}[$__range]))) or (sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job"}}[$__range])) * 0)', 'short',
            'Times an editor reported an error status in the selected range. No data means no editor reported a status.', no_value='No client data'), 5, 4)
-c.add(stat('Room limit usage, p95 over 5 min', f'max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[5m]))))',
+c.add(stat('Room limit p95, last 5 min', f'max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[5m]))))',
            'percentunit', 'The highest 95th percentile of any one room limit (nodes, relationships, parts, blob bytes) over the last 5 minutes. At 100%, a room refuses edits that need more of that resource.', decimals=0), 5, 4)
 c.add(alerts_table('service="docx-editor",scope="server",job=~"$server_job",instance=~"$instance"'), 24, 4)
 

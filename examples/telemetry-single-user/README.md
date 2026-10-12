@@ -23,6 +23,8 @@ The whole integration is in [`src/telemetry.ts`](src/telemetry.ts) and three lin
 
 3. Open http://localhost:5181 and edit. Then open the **Editor experience** dashboard at http://localhost:3300/d/docx-editor-experience.
 
+   ![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](../../assets/observability/screenshots/editor-experience.png)
+
 A performance summary arrives once a minute of use, and when you switch to another tab. Metrics reach Prometheus within about 10 seconds after that.
 
 To fill the dashboards without typing yourself, run `node examples/telemetry-stack/simulate.mjs` from the repository root.
