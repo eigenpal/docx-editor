@@ -30,7 +30,7 @@
   ],
   "scripts": {
     "build": "node ../../scripts/check-built-siblings.mjs && tsup",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "check:consumer": "node scripts/check-consumer.mjs",
     "license:check": "license-check-and-add check -f license-check.json",
     "license:add": "license-check-and-add add -f license-check.json",

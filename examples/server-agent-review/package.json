@@ -7,7 +7,7 @@
     "server": "node --env-file-if-exists=.env server/collaboration.ts",
     "worker": "node --env-file-if-exists=.env server/index.ts",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "test": "bun test ./server/stored-room.test.ts ./server/tools.test.ts ./server/jobs.test.ts ./server/job-state.test.ts && bun run test:lifecycle",
     "test:lifecycle": "node --test server/lifecycle.integration.mjs"
   },

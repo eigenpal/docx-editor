@@ -7,7 +7,7 @@
     "dev": "next dev --webpack --port 3004",
     "prebuild": "bun run build:workspace-packages",
     "build": "next build --webpack",
-    "typecheck": "node node_modules/typescript7/bin/tsc --noEmit",
+    "typecheck": "bun check",
     "test": "bun test",
     "start": "next start --port 3004"
   },

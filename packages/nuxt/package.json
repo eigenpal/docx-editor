@@ -25,7 +25,7 @@
   "scripts": {
     "build": "nuxt-module-build build",
     "prepack": "nuxt-module-build build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@nuxt/kit": "^3.14.0 || ^4.0.0",

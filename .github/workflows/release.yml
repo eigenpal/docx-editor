@@ -118,7 +118,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.2'
+          bun-version: '1.4.3'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -150,7 +150,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.2'
+          bun-version: '1.4.3'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -286,7 +286,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.2'
+          bun-version: '1.4.3'
 
       # Node 24 ships with npm 11.x; Trusted Publishing requires >=11.5.1.
       - name: Setup Node.js

@@ -141,7 +141,7 @@
     "test:e2e:editor": "playwright test --config e2e/editor-smoke.config.ts",
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
-    "typecheck:root": "node node_modules/typescript7/bin/tsc -p tsconfig.json --noEmit",
+    "typecheck:root": "bun check -p tsconfig.json",
     "version-packages": "changeset version && bun install --lockfile-only && node scripts/check-lockfile-workspaces.mjs --fix && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
     "dev:server-agent-review": "bun run build:packages && node examples/server-agent-review/dev.mjs",
     "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts",

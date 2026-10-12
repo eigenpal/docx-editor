@@ -7,7 +7,7 @@
     "server": "node server/server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "test": "bun test ./shared/admission.test.ts ./server/stored-room.test.ts ./server/room-migration.test.ts"
   },
   "dependencies": {

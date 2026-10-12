@@ -29,7 +29,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/fonts-cjk --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/fonts-cjk"
   },

@@ -7,7 +7,7 @@
     "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
     "build": "vite build",
     "headless": "bun headless-agent.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",

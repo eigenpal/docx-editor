@@ -4,7 +4,7 @@ This guide covers setup, tests, and pull requests for the monorepo.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) 1.4.2, the release workflow version.
+- [Bun](https://bun.sh/) 1.4.3, the release workflow version.
 - [Node.js](https://nodejs.org/) 24, the CI and release workflow version.
 
 These versions apply to repository development. Published packages declare their supported Node.js versions in their `engines` fields.
@@ -54,9 +54,9 @@ bun run lint:fix
 bun run format
 ```
 
-The pre-commit hook formats and lints staged files, then runs the full typecheck, parity, license, API, formatting, and lint checks. It prints the duration of each step. Local commits use TypeScript's incremental build information and a content-based Prettier cache; CI runs the uncached package commands. oxlint needs no cache. The first commit after creating or clearing these caches takes longer.
+The pre-commit hook formats and lints staged files, then runs the full typecheck, parity, license, API, formatting, and lint checks. It prints the duration of each step. Local commits use a content-based Prettier cache; CI runs the uncached package commands. The type check and oxlint need no cache. The first commit after creating or clearing the cache takes longer.
 
-The Prettier cache lives under the root `node_modules/.cache/precommit/`. TypeScript writes build information under each workspace's `node_modules/.cache/precommit/`, outside the source and license scans. To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`, or `bun run format:check` without the hook's cache flags.
+The Prettier cache lives under the root `node_modules/.cache/precommit/`, outside the source and license scans. To diagnose a suspected stale cache, run `bun run typecheck`, `bun run lint`, or `bun run format:check` without the hook's cache flags.
 
 ## Contributor license agreement
 

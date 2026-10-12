@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "build": "node ../../scripts/check-built-siblings.mjs && tsup",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/vue"
   },
