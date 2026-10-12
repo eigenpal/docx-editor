@@ -148,6 +148,14 @@ function occurrenceRef(
   return null;
 }
 
+/**
+ * The least height a row drag commits. A row already shorter than the minimum, such as an
+ * authored spacer row, keeps its height as the floor: dragging it up must not make it taller.
+ */
+function rowHeightFloor(startTwips: number): number {
+  return Math.min(MIN_TABLE_ROW_HEIGHT_TWIPS, startTwips);
+}
+
 export function createSurfaceTableInteraction(
   host: SurfaceTableInteractionHost
 ): SurfaceTableInteraction {
@@ -649,7 +657,7 @@ export function createSurfaceTableInteraction(
           ...mode,
         },
         activeDrag.resizeTarget as TableRowOccurrenceTarget,
-        Math.max(MIN_TABLE_ROW_HEIGHT_TWIPS, activeDrag.rowHeightTwips + moveTwips)
+        Math.max(rowHeightFloor(activeDrag.rowHeightTwips), activeDrag.rowHeightTwips + moveTwips)
       );
     } else if (activeDrag.rightEdge && activeDrag.target.kind === 'rightEdge') {
       const columnWidthTwips = Math.max(
@@ -782,7 +790,10 @@ export function createSurfaceTableInteraction(
         host.scale();
       // The preview stops where the commit does: a row keeps its minimum height.
       if (drag.target.kind === 'rowDivider')
-        deltaPt = Math.max(deltaPt, (MIN_TABLE_ROW_HEIGHT_TWIPS - drag.rowHeightTwips) / 20);
+        deltaPt = Math.max(
+          deltaPt,
+          (rowHeightFloor(drag.rowHeightTwips) - drag.rowHeightTwips) / 20
+        );
       for (const child of [...layer.children]) {
         if (child !== drag.captureElement) child.remove();
       }

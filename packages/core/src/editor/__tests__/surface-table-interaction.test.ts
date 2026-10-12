@@ -522,6 +522,37 @@ describe('surface table interaction furniture', () => {
     expect(rowHeightTwips(rowId)).toBeGreaterThan(MIN_TABLE_ROW_HEIGHT_TWIPS);
   });
 
+  test('dragging a row shorter than the minimum upward never makes it taller', () => {
+    const spacer =
+      '<w:tr><w:trPr><w:trHeight w:val="100" w:hRule="exact"/></w:trPr>' +
+      `${tc(p(''), 3000)}${tc(p(''), 3000)}</w:tr>`;
+    const mounted = mount(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="3000"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+        `${tr(tc(p('A1'), 3000) + tc(p('B1'), 3000))}${spacer}` +
+        `${tr(tc(p('A3'), 3000) + tc(p('B3'), 3000))}</w:tbl>`
+    );
+    const table = tableOnPage(mounted.surface.layout());
+    const row = table.rows[1]!;
+    const x = table.box.x + table.box.width / 4;
+    const bottom = row.box.y + row.box.height;
+    // Within 4pt of the row above's divider too, except for the spacer's last point.
+    mounted.pages.dispatchEvent(pointer('pointermove', x, bottom - 0.5));
+    const handle = mounted.furniture.querySelector<HTMLElement>('.docx-table-row-divider-handle');
+    expect(handle).not.toBeNull();
+    handle!.dispatchEvent(pointer('pointerdown', x, bottom - 0.5));
+    document.dispatchEvent(pointer('pointermove', x, bottom - 2.5, { buttons: 1 }));
+    document.dispatchEvent(pointer('pointerup', x, bottom - 2.5));
+    const topology = readEditableTableTopology(mounted.surface.session.part().root, table.tableId);
+    if (!topology.ok) throw new Error('no topology');
+    const resized = topology.topology.rows.find((entry) => entry.row.id === row.id)!.row;
+    const height = Number(
+      wmlAttributeValue(wmlChildNamed(wmlChildNamed(resized, 'trPr')!, 'trHeight')!, 'val')
+    );
+    // The spacer itself was dragged, and it did not grow past its own height.
+    expect(resized.id).toBe(row.id);
+    expect(height).toBeLessThanOrEqual(100);
+  });
+
   test('a body divider resizes columns below a horizontally merged header', () => {
     const xml = TABLE.replace(
       '<w:tr>',
