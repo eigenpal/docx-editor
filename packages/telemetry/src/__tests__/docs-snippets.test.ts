@@ -60,7 +60,6 @@ const READER: Readonly<Record<string, string>> = {
 
 /** Names an earlier block on the same page may set up, as one file would. */
 const CARRIED: Readonly<Record<string, string>> = {
-  Sentry: `typeof import('@sentry/core') & { init(options: import('@sentry/core').Options): void; replayIntegration(options: { block?: string[] }): import('@sentry/core').Integration }`,
   Server: `typeof import('@hocuspocus/server').Server`,
   config: `ReturnType<typeof import('@docx-editor.dev/telemetry/hocuspocus').withCollaborationTelemetry>['config']`,
   rooms: `import('@docx-editor.dev/telemetry/server').RoomTelemetry`,
@@ -102,6 +101,9 @@ interface Example {
   readonly before: string;
 }
 
+/** A block that opens with its own file name, such as `// telemetry.ts` or `// lib/sentry.client.ts`. */
+const FILE_HEADER = /^\/\/ ([\w./-]+\.tsx?)\n/;
+
 const FENCE = /^[ \t]*```(ts|tsx|typescript)\b[^\n]*\r?\n([\s\S]*?)^[ \t]*```/gm;
 
 function examples(): Example[] {
@@ -116,7 +118,7 @@ function examples(): Example[] {
         found.push({ file, lang: match[1] === 'tsx' ? 'tsx' : 'ts', code, before });
       // A block that names its file, such as `// telemetry.ts`, is a separate file: what it
       // defines is imported, never carried.
-      if (!/^\/\/ [\w-]+\.tsx?\n/.test(code)) before += `\n${code}`;
+      if (!FILE_HEADER.test(code)) before += `\n${code}`;
     }
   }
   return found;
@@ -161,6 +163,12 @@ test('the docs contain no JavaScript blocks that this check would skip', () => {
 test('every TypeScript example in the telemetry docs type-checks', () => {
   const found = examples();
   expect(found.length).toBeGreaterThan(10);
+  // A selected page whose example was rewritten would otherwise drop out of the check unseen.
+  for (const { file } of PARTIAL_SOURCES)
+    expect(
+      found.filter((example) => example.file === file).length,
+      path.relative(ROOT, file)
+    ).toBeGreaterThan(0);
   // Inside node_modules, so package imports resolve as they do for the package itself; one
   // directory per run, so two runs in one checkout never share files.
   const cache = path.join(PACKAGE, 'node_modules/.cache');
@@ -173,7 +181,9 @@ test('every TypeScript example in the telemetry docs type-checks', () => {
     found.forEach((example, index) => {
       // A block that opens with its file name, such as `// telemetry.ts`, is saved under it, so
       // a later block can import it.
-      const declared = /^\/\/ ([\w-]+\.tsx?)\n/.exec(example.code)?.[1];
+      // The blocks share one directory, so a nested path keeps its last segment.
+      const fileName = FILE_HEADER.exec(example.code)?.[1];
+      const declared = fileName ? path.posix.basename(fileName) : undefined;
       const name = declared && !named.has(declared) ? declared : `example-${index}.${example.lang}`;
       named.add(name);
       origin.push(`${name}: ${path.relative(ROOT, example.file)}`);
