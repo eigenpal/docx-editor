@@ -54,7 +54,7 @@ const MODULES = [reviewModule(), telemetry.module];
 </template>
 ```
 
-If you pass `consent`, nothing is sent while it returns `false`, and events from that time are dropped, not buffered. If you omit `consent`, events are sent. The function runs when an event is recorded and, with the `performance` area on, at each timed key press, layout, and paint. Keep it cheap, for example by reading a value your consent manager keeps in memory. It never runs during server rendering, so the client is safe to create there. The check applies to every exporter, the console exporter included; in development, you can return `true` for local builds, as in `consent: () => import.meta.env.DEV || consentManager.analytics === true`.
+If you pass `consent`, the editor records no new telemetry while it returns `false`, and events from that time are dropped, not buffered. Your OpenTelemetry SDK still exports the metrics it recorded before. Your Sentry and OpenTelemetry SDKs have their own consent settings, so apply your consent choice to them as well. If you omit `consent`, events are sent. The function runs when an event is recorded and, with the `performance` area on, at each timed key press, layout, and paint. Keep it cheap, for example by reading a value your consent manager keeps in memory. It never runs during server rendering, so the client is safe to create there. The check applies to every exporter, the console exporter included; in development, you can return `true` for local builds, as in `consent: () => import.meta.env.DEV || consentManager.analytics === true`.
 
 Register `telemetry.module`, or call `telemetry.record(event)` yourself, but not both. If you do both, every event is recorded twice.
 

@@ -130,5 +130,8 @@ for (let id = 0; id < PEOPLE; id += 1) {
   people.push(person(browser, `${SINGLE_USER}?version=${version}`, `single-${id}`, deadline, suggesting));
   people.push(person(browser, `${COLLABORATION}?version=${version}`, `room-${id}`, deadline, !suggesting));
 }
-await Promise.allSettled(people);
+const results = await Promise.allSettled(people);
 await browser.close();
+const failed = results.filter((result) => result.status === 'rejected');
+for (const result of failed) console.error('person failed:', result.reason);
+if (failed.length > 0) process.exit(1);

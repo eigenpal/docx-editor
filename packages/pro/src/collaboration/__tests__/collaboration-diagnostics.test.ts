@@ -83,7 +83,8 @@ test('two editors report status and people, converge, and leak nothing', async (
     for (const events of [left, right]) {
       const [first] = events.filter((event) => event.kind === 'collab.status');
       expect(first).toMatchObject({ kind: 'collab.status', status: 'ready', previous: 'none' });
-      expect(first && 'connectMs' in first && typeof first.connectMs).toBe('number');
+      // The session was ready before the editor attached, so the editor timed no wait.
+      expect(first && 'connectMs' in first).toBe(false);
       const people = events.filter((event) => event.kind === 'collab.participants');
       expect(people.at(-1)).toMatchObject({ count: 2 });
     }
@@ -116,6 +117,42 @@ test('two editors report status and people, converge, and leak nothing', async (
     }
   } finally {
     for (const editor of editors) editor.destroy();
+    harness.cleanup();
+  }
+});
+
+test('an editor that waits for the room reports how long it waited', async () => {
+  const harness = createPeerHarness('collaboration-connect-time', { offlineEditing: true });
+  const events: EditorDiagnostic[] = [];
+  let editor: DocxEditorInstance | undefined;
+  try {
+    const { alice } = await harness.pair(zipDocument('<w:p><w:r><w:t>A</w:t></w:r></w:p>'));
+    // The editor attaches its own port to the session.
+    alice.detach();
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected');
+    const container = document.createElement('div');
+    document.body.append(container);
+    editor = createDocxEditor({
+      container,
+      document: alice.room.document,
+      modules: [
+        collaborationModule({ session: alice.room.session }),
+        { id: 'observer', onDiagnostic: (event) => events.push(event) },
+      ],
+    });
+    alice.room.session.setTransportStatus('ready');
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected');
+    alice.room.session.setTransportStatus('ready');
+
+    const ready = events.filter(
+      (event) => event.kind === 'collab.status' && event.status === 'ready'
+    );
+    expect(ready).toHaveLength(2);
+    expect(ready[0] && 'connectMs' in ready[0] && typeof ready[0].connectMs).toBe('number');
+    // A reconnect is not a first connect.
+    expect(ready[1] && 'connectMs' in ready[1]).toBe(false);
+  } finally {
+    editor?.destroy();
     harness.cleanup();
   }
 });

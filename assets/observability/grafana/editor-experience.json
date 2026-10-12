@@ -34,10 +34,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count, deployment_environment)",
+          "query": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\"}, deployment_environment)",
           "refId": "env"
         },
-        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count, deployment_environment)",
+        "definition": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\"}, deployment_environment)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -58,10 +58,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\"}, job)",
+          "query": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\",deployment_environment=~\"$env\"}, job)",
           "refId": "job"
         },
-        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\"}, job)",
+        "definition": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\",deployment_environment=~\"$env\"}, job)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -82,10 +82,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, app_version)",
+          "query": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\",deployment_environment=~\"$env\",job=~\"$job\"}, app_version)",
           "refId": "version"
         },
-        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, app_version)",
+        "definition": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\",deployment_environment=~\"$env\",job=~\"$job\"}, app_version)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -106,10 +106,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, docx_editor_version)",
+          "query": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\",deployment_environment=~\"$env\",job=~\"$job\"}, docx_editor_version)",
           "refId": "editor_version"
         },
-        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, docx_editor_version)",
+        "definition": "label_values({__name__=~\"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)\",deployment_environment=~\"$env\",job=~\"$job\"}, docx_editor_version)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -2514,7 +2514,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "None dropped",
+          "noValue": "No recorded events",
           "custom": {
             "align": "auto"
           }

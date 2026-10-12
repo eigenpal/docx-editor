@@ -287,14 +287,16 @@ b.add(series('Refused edits per minute by source', [(f'60 * sum by (origin, trac
 b.add(top_table('Font substitutions by reason', f'sum by (code) (increase(docx_editor_font_failures_total{{{F}}}[$__range]))', 'code',
                 'Fonts that failed to load. The editor used a substitute.'), 12, 6)
 b.add(top_table('Dropped telemetry by reason', f'sum by (reason) (increase(docx_editor_telemetry_dropped_events_total{{{F}}}[$__range]))', 'reason',
-                'Events the privacy check dropped, by reason.', code_links=False, no_value='None dropped'), 12, 6)
+                'Events the privacy check dropped, by reason.', code_links=False, no_value='No recorded events'), 12, 6)
 
+# Filter values come from every editor metric, so an app that only reports failed opens appears too.
+EDITOR_METRICS = '__name__=~"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)"'
 editor_vars = [
     DATASOURCE,
-    variable('env', 'Environment', f'label_values({INTERACTION}_count, deployment_environment)'),
-    variable('job', 'App', f'label_values({INTERACTION}_count{{deployment_environment=~"$env"}}, job)'),
-    variable('version', 'App version', f'label_values({INTERACTION}_count{{deployment_environment=~"$env",job=~"$job"}}, app_version)'),
-    variable('editor_version', 'Editor version', f'label_values({INTERACTION}_count{{deployment_environment=~"$env",job=~"$job"}}, docx_editor_version)'),
+    variable('env', 'Environment', f'label_values({{{EDITOR_METRICS}}}, deployment_environment)'),
+    variable('job', 'App', f'label_values({{{EDITOR_METRICS},deployment_environment=~"$env"}}, job)'),
+    variable('version', 'App version', f'label_values({{{EDITOR_METRICS},deployment_environment=~"$env",job=~"$job"}}, app_version)'),
+    variable('editor_version', 'Editor version', f'label_values({{{EDITOR_METRICS},deployment_environment=~"$env",job=~"$job"}}, docx_editor_version)'),
 ]
 editor = dashboard(
     'docx-editor-experience', 'Editor experience',
@@ -312,13 +314,13 @@ c.add(stat('Server', f'min(up{{{S}}})', 'none', 'Whether Prometheus can scrape t
 c.add(stat('Stores succeeding',
            f'(sum(increase(docx_editor_collab_room_store_duration_seconds_count{{{S},outcome="success"}}[$__range])) or sum(increase(docx_editor_collab_room_store_duration_seconds_count{{{S}}}[$__range])) * 0) / sum(increase(docx_editor_collab_room_store_duration_seconds_count{{{S}}}[$__range]))',
            'percentunit', 'Share of room stores that succeeded. A failed store can lose edits on restart.', decimals=2, no_value='No stores yet'), 5, 4)
-c.add(stat('Refused connections', f'round(sum(increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))) or ((max(up{{{S}}}) == 1) * 0)', 'short',
-           'Connections the server refused at admission in the selected range. No data while the server is down or not scraped.'), 5, 4)
+c.add(stat('Refused connections', f'round(sum(increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))) or ((min(up{{{S}}}) == 1) * 0)', 'short',
+           'Connections the server refused at admission in the selected range. No data while any selected server is down or not scraped.'), 5, 4)
 c.add(stat('Client errors', f'round(sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job",status="error"}}[$__range]))) or (sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job"}}[$__range])) * 0)', 'short',
            'Times an editor reported an error status in the selected range. No data means no editor reported a status.', no_value='No client data'), 5, 4)
 c.add(stat('Room limit usage, p95 over 5 min', f'max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[5m]))))',
-           'percentunit', 'The highest 95th percentile of any one room limit (nodes, relationships, parts, blob bytes) over the last 5 minutes. At 100%, a room refuses edits that need more of that resource.', decimals=0, no_value='No rooms'), 5, 4)
-c.add(alerts_table('service="docx-editor",scope="server",job=~"$server_job"'), 24, 4)
+           'percentunit', 'The highest 95th percentile of any one room limit (nodes, relationships, parts, blob bytes) over the last 5 minutes. At 100%, a room refuses edits that need more of that resource.', decimals=0), 5, 4)
+c.add(alerts_table('service="docx-editor",scope="server",job=~"$server_job",instance=~"$instance"'), 24, 4)
 
 c.row('Rooms now')
 for title, expr, desc in [('Rooms', f'sum(docx_editor_collab_rooms_active{{{S}}})', 'Rooms the server holds in memory.'),
@@ -337,7 +339,7 @@ c.add(series('Room limit used by resource (95th percentile)', [(f'histogram_quan
 c.add(series('Room age and idle time (median)', [
     (f'histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_age_seconds_bucket{{{S}}}[$__rate_interval])))', 'age'),
     (f'histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_idle_seconds_bucket{{{S}}}[$__rate_interval])))', 'idle')],
-             's', 'How long rooms stay loaded, and how long since they last changed. Idle rooms hold memory for nobody.'), 12, 8)
+             's', 'How long rooms stay loaded, and the time since each room last changed.'), 12, 8)
 
 c.row('Server work')
 c.add(series('Room load and store time (95th percentile)', [
@@ -362,9 +364,9 @@ c.add(series('Room size as clients saw it', [
 
 c.row('Refusals')
 c.add(top_table('Refused connections by reason', f'sum by (reason) (increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))', 'reason',
-                'Connections refused at admission, such as a failed sign-in, most frequent first.', code_links=False, no_value='None refused'), 12, 6)
+                'Connections refused at admission, such as a failed sign-in, most frequent first.', code_links=False, no_value='No recorded events'), 12, 6)
 c.add(top_table('Refused messages by reason', f'sum by (reason) (increase(docx_editor_collab_message_refusals_total{{{S}}}[$__range]))', 'reason',
-                'Messages refused before they applied, such as a room that changed generation.', code_links=False, no_value='None refused'), 12, 6)
+                'Messages refused before they applied, such as a room that changed generation.', code_links=False, no_value='No recorded events'), 12, 6)
 
 collab_vars = [
     DATASOURCE,
@@ -376,7 +378,7 @@ collab = dashboard(
     'docx-editor-collaboration', 'Collaboration',
     'The room server and the editors in its rooms: availability, rooms and people, server work, and refusals.',
     c, collab_vars,
-    [annotation('Alerts', 'ALERTS{alertstate="firing",service="docx-editor",scope="server",job=~"$server_job"}', '{{alertname}}', 'rgba(242, 73, 92, 1)')],
+    [annotation('Alerts', 'ALERTS{alertstate="firing",service="docx-editor",scope="server",job=~"$server_job",instance=~"$instance"}', '{{alertname}}', 'rgba(242, 73, 92, 1)')],
     [('Docs', f'{DOCS}/telemetry/servers'), ('Report an issue', ISSUES)])
 
 for name, board in [('editor-experience.json', editor), ('collaboration.json', collab)]:

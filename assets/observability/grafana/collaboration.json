@@ -120,7 +120,7 @@
         },
         "enable": true,
         "iconColor": "rgba(242, 73, 92, 1)",
-        "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"server\",job=~\"$server_job\"}",
+        "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"server\",job=~\"$server_job\",instance=~\"$instance\"}",
         "step": "60s",
         "titleFormat": "{{alertname}}",
         "tagKeys": ""
@@ -276,14 +276,14 @@
     {
       "type": "stat",
       "title": "Refused connections",
-      "description": "Connections the server refused at admission in the selected range. No data while the server is down or not scraped.",
+      "description": "Connections the server refused at admission in the selected range. No data while any selected server is down or not scraped.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "round(sum(increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range]))) or ((max(up{job=~\"$server_job\",instance=~\"$instance\"}) == 1) * 0)",
+          "expr": "round(sum(increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range]))) or ((min(up{job=~\"$server_job\",instance=~\"$instance\"}) == 1) * 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -396,7 +396,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "noValue": "No rooms",
+          "noValue": "No data",
           "color": {
             "mode": "fixed",
             "fixedColor": "text"
@@ -437,7 +437,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"server\",job=~\"$server_job\"}",
+          "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"server\",job=~\"$server_job\",instance=~\"$instance\"}",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -911,7 +911,7 @@
     {
       "type": "timeseries",
       "title": "Room age and idle time (median)",
-      "description": "How long rooms stay loaded, and how long since they last changed. Idle rooms hold memory for nobody.",
+      "description": "How long rooms stay loaded, and the time since each room last changed.",
       "targets": [
         {
           "datasource": {
@@ -1496,7 +1496,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "None refused",
+          "noValue": "No recorded events",
           "custom": {
             "align": "auto"
           }
@@ -1587,7 +1587,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "None refused",
+          "noValue": "No recorded events",
           "custom": {
             "align": "auto"
           }
