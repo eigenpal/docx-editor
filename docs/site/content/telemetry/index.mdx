@@ -49,6 +49,7 @@ Install the peer dependency for each exporter that you use: `@opentelemetry/api`
 - Metric labels accept only short identifier values. Any other value becomes `other`.
 - Room names never appear in metrics.
 - The `resource` values are yours. Do not put a user, a document, or a room name in them.
+- The `attributes` values are yours too: identifiers you choose to add, such as a room or a pseudonymous user id. The engine never adds them, and metrics carry only the keys you list in `metricLabels`.
 
 ## Next steps
 

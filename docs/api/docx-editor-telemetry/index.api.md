@@ -163,6 +163,9 @@ export interface HistoryDiagnosticEvent extends DiagnosticBase {
 export function isFailure(event: TelemetryEvent): boolean;
 
 // @public
+export const MAX_METRIC_LABEL_VALUES = 50;
+
+// @public
 export interface MemoryExporter extends TelemetryExporter {
     clear(): void;
     // (undocumented)
@@ -273,7 +276,8 @@ export interface ReviewSkippedDiagnostic extends DiagnosticBase {
 export interface Telemetry {
     flush(): Promise<void>;
     readonly module: EditorModule;
-    record(event: EditorDiagnostic): void;
+    moduleFor(attributes: Attributes): EditorModule;
+    record(event: EditorDiagnostic, attributes?: Attributes): void;
     shutdown(): Promise<void>;
 }
 
@@ -290,6 +294,7 @@ export type TelemetryEvent = EditorDiagnostic & TelemetryEventContext;
 
 // @public
 export interface TelemetryEventContext {
+    readonly attributes: Attributes;
     readonly docs?: string;
     readonly engineVersion: string;
     readonly hint?: string;
@@ -316,6 +321,7 @@ export type TelemetryInclude = {
 
 // @public
 export interface TelemetryOptions extends TelemetryPipelineOptions {
+    readonly attributes?: Attributes | (() => Attributes);
     readonly dedupeWindowMs?: number;
     readonly documentShape?: 'basic' | 'detailed';
     readonly include?: TelemetryInclude;
@@ -325,6 +331,7 @@ export interface TelemetryOptions extends TelemetryPipelineOptions {
 export interface TelemetryPipelineOptions {
     readonly consent?: boolean | (() => boolean);
     readonly exporters: readonly TelemetryExporter[];
+    readonly metricLabels?: readonly string[];
     readonly onExporterError?: (error: unknown, exporter: string) => void;
     readonly resource?: Attributes;
 }

@@ -38,6 +38,12 @@ export interface TelemetryEventContext {
    * host decides what goes here, and every event carries it.
    */
   readonly resource: Attributes;
+  /**
+   * Your identifiers for this event: the client's `attributes`, then the values of the
+   * `moduleFor` module of the editor that sent it, such as a room, a document, or a user.
+   * Empty when you set none. The engine never adds a value here.
+   */
+  readonly attributes: Attributes;
 }
 
 /** A diagnostic as an exporter receives it. Switch on `kind` to narrow it. @public */
@@ -107,7 +113,17 @@ export interface TelemetryPipelineOptions {
   readonly resource?: Attributes;
   /** Told once per exporter when it throws. Defaults to one `console.warn`. */
   readonly onExporterError?: (error: unknown, exporter: string) => void;
+  /**
+   * Keys of your own attributes that may also label metrics, such as `tenant.tier` or
+   * `app.region`. Only for values with few distinct values: each value makes a new series.
+   * After {@link MAX_METRIC_LABEL_VALUES} distinct values of one key, later values become
+   * `other`. Never list a user, document, or room id here; put those on events instead.
+   */
+  readonly metricLabels?: readonly string[];
 }
+
+/** Distinct values one of your metric labels may take before later values become `other`. @public */
+export const MAX_METRIC_LABEL_VALUES = 50;
 
 declare const __DOCX_EDITOR_TELEMETRY_VERSION__: string | undefined;
 
@@ -132,7 +148,30 @@ export interface Pipeline {
 export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
   const exporters = [...options.exporters];
   const resource = Object.freeze({ ...checkAttributes(options.resource ?? {}, 'resource') });
+  const hostLabels = [...(options.metricLabels ?? [])];
+  const seenValues = new Map<string, Set<string>>();
   const reported = new Set<string>();
+
+  /** Your labels, bounded: a value beyond the cap for its key becomes `other`. */
+  function boundHostLabels(attributes: Attributes): Attributes {
+    if (hostLabels.length === 0) return attributes;
+    const out: Record<string, AttributeValue> = { ...attributes };
+    for (const key of hostLabels) {
+      const value = out[key];
+      if (value === undefined) continue;
+      const text = String(value);
+      let seen = seenValues.get(key);
+      if (!seen) seenValues.set(key, (seen = new Set()));
+      if (!seen.has(text)) {
+        if (seen.size >= MAX_METRIC_LABEL_VALUES) {
+          out[key] = 'other';
+          continue;
+        }
+        seen.add(text);
+      }
+    }
+    return out;
+  }
   let closed = false;
 
   function report(error: unknown, exporter: string): void {
@@ -195,7 +234,9 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
       const record: MetricRecord = {
         definition,
         value,
-        attributes: checkAttributes(attributes, definition.name, definition.labels),
+        attributes: boundHostLabels(
+          checkAttributes(attributes, definition.name, [...definition.labels, ...hostLabels])
+        ),
       };
       for (const exporter of exporters) {
         if (!exporter.metric) continue;

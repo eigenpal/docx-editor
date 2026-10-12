@@ -95,7 +95,8 @@ export function checkEvent(
   const explained = code ? explainDiagnostic(code as DiagnosticCode) : undefined;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(source)) {
-    if (key === 'resource') continue;
+    // Your own values, checked when the client built them; the engine never sets them.
+    if (key === 'resource' || key === 'attributes') continue;
     if (key === 'shape') {
       const shape = checkShape(value);
       if (!shape) {
@@ -133,6 +134,7 @@ export function checkEvent(
       );
   }
   out.resource = event.resource;
+  out.attributes = event.attributes ?? {};
   return { event: Object.freeze(out) as unknown as TelemetryEvent };
 }
 

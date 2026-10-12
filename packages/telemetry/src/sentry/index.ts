@@ -207,6 +207,8 @@ function tagsOf(event: TelemetryEvent): Record<string, string> {
   };
   for (const key of ['origin', 'tracked', 'status', 'outcome'])
     if (fields[key] !== undefined) tags[`docx_editor.${key}`] = String(fields[key]);
+  // Your identifiers, such as `room.id` or `user.id`, so issues can be searched by them.
+  for (const [key, value] of Object.entries(event.attributes ?? {})) tags[key] = String(value);
   return tags;
 }
 

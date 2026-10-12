@@ -108,9 +108,10 @@ function attributeKey(attributes: OtelAttributes): string {
 }
 
 function eventAttributes(event: TelemetryEvent): OtelAttributes {
-  const attributes: OtelAttributes = { ...event.resource };
+  // Your resource values and identifiers keep their own keys, such as `room.id`.
+  const attributes: OtelAttributes = { ...event.resource, ...event.attributes };
   for (const [key, value] of Object.entries(event)) {
-    if (key === 'resource' || key === 'hint' || key === 'docs') continue;
+    if (key === 'resource' || key === 'attributes' || key === 'hint' || key === 'docs') continue;
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
       attributes[`docx_editor.${key}`] = value;
     else if (key === 'shape' && value && typeof value === 'object') {

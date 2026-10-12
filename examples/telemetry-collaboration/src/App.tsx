@@ -6,9 +6,6 @@ import { useHocuspocusCollaboration } from '@docx-editor.dev/pro/react/hocuspocu
 import { EventLogPanel } from '../../telemetry-stack/client/event-log';
 import { eventLog, telemetry } from './telemetry';
 
-// The hook adds the collaboration module to these when the room is ready.
-const MODULES = [reviewModule(), telemetry.module];
-
 const SERVER = import.meta.env.VITE_COLLABORATION_URL ?? 'ws://127.0.0.1:1235';
 const params = new URLSearchParams(location.search);
 // A room id has 24 to 256 URL-safe characters. Make a random one with `createCollaborationRoomId`.
@@ -36,7 +33,13 @@ export function App() {
         : null,
     [bytes]
   );
-  const collaboration = useHocuspocusCollaboration({ room, modules: MODULES });
+  // Each event from this editor carries the room and the person, so a slow room or a failing
+  // user can be found in your events. The hook adds the collaboration module when it is ready.
+  const modules = useMemo(
+    () => [reviewModule(), telemetry.moduleFor({ 'room.id': ROOM, 'user.id': ACTOR })],
+    []
+  );
+  const collaboration = useHocuspocusCollaboration({ room, modules });
 
   const invite = `${location.origin}${location.pathname}?room=${encodeURIComponent(ROOM)}`;
   return (

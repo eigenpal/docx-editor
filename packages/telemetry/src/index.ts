@@ -43,6 +43,7 @@ export {
 } from './metrics.ts';
 export {
   ENGINE_VERSION,
+  MAX_METRIC_LABEL_VALUES,
   type AttributeValue,
   type Attributes,
   type MetricRecord,

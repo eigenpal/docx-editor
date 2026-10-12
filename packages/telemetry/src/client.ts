@@ -12,10 +12,12 @@ import type {
   TimingSummary,
 } from '@docx-editor.dev/core';
 import { METRICS, type MetricDefinition } from './metrics.ts';
-import { checkEvent } from './anonymous.ts';
+import { checkAttributes, checkEvent } from './anonymous.ts';
 import {
   ENGINE_VERSION,
   createPipeline,
+  type AttributeValue,
+  type Attributes,
   type Pipeline,
   type TelemetryEvent,
   type TelemetryPipelineOptions,
@@ -86,6 +88,22 @@ export interface TelemetryOptions extends TelemetryPipelineOptions {
    * closely, so ask for it only when you need it.
    */
   readonly documentShape?: 'basic' | 'detailed';
+  /**
+   * Your identifiers on every event, such as a tenant or a pseudonymous user id. A function is
+   * read at each event, so it can follow sign-in and tenant switches. Events only: to label
+   * metrics with a key, list it in `metricLabels`. For values that belong to one editor, such as
+   * its room or document, use {@link Telemetry.moduleFor}.
+   *
+   * These values are yours and go only to your exporters. Keys follow attribute rules: letters,
+   * digits, `_`, `.`, and `-`, up to 64 characters. Values are strings, numbers, or booleans;
+   * strings are cut at 256 characters.
+   *
+   * @example
+   * ```ts
+   * attributes: () => ({ 'tenant.id': session.tenantId, 'user.id': session.pseudonymousId })
+   * ```
+   */
+  readonly attributes?: Attributes | (() => Attributes);
 }
 
 /** A configured telemetry client. Create it once, outside any component. @public */
@@ -102,10 +120,25 @@ export interface Telemetry {
    */
   readonly module: EditorModule;
   /**
-   * Record one diagnostic yourself, for example from a runtime you created without `module`.
-   * Use `module` or `record`, not both, or every event is recorded twice.
+   * A module for one editor, whose events also carry `attributes`, such as its collaboration
+   * room, document, or workspace. Create one for each editor, and keep it stable across renders.
+   * Use it in place of `module`, not next to it.
+   *
+   * @example
+   * ```tsx
+   * const modules = useMemo(
+   *   () => [reviewModule(), telemetry.moduleFor({ 'room.id': roomId, 'document.id': documentId })],
+   *   [roomId, documentId]
+   * );
+   * ```
    */
-  record(event: EditorDiagnostic): void;
+  moduleFor(attributes: Attributes): EditorModule;
+  /**
+   * Record one diagnostic yourself, for example from a runtime you created without `module`.
+   * Use `module` or `record`, not both, or every event is recorded twice. `attributes` are added
+   * to this event, as `moduleFor` adds them.
+   */
+  record(event: EditorDiagnostic, attributes?: Attributes): void;
   /** Send summaries of open deduplication windows, then flush every exporter. */
   flush(): Promise<void>;
   /** Flush, then stop. Later events are dropped. */
@@ -191,6 +224,25 @@ function dedupeKey(event: EditorDiagnostic): string | null {
  */
 export function createTelemetry(options: TelemetryOptions): Telemetry {
   const pipeline = createPipeline(options);
+  const metricLabels = options.metricLabels ?? [];
+  /** The client's attributes now, then the editor's. A function that throws adds nothing. */
+  function attributesFor(editor: Attributes): Attributes {
+    let client: Attributes = {};
+    try {
+      const value =
+        typeof options.attributes === 'function' ? options.attributes() : options.attributes;
+      client = checkAttributes(value ?? {}, 'attributes');
+    } catch {
+      /* the host's attribute problem, not the editor's */
+    }
+    return Object.freeze({ ...client, ...editor });
+  }
+  /** Your attributes listed in `metricLabels`, as metric labels. */
+  function hostLabels(attributes: Attributes): Attributes {
+    const out: Record<string, AttributeValue> = {};
+    for (const key of metricLabels) if (attributes[key] !== undefined) out[key] = attributes[key];
+    return out;
+  }
   const include = options.include ?? ALL_AREAS;
   const windowMs = options.dedupeWindowMs ?? 10_000;
   const detailedShape = options.documentShape === 'detailed';
@@ -259,19 +311,22 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       // A count is a state, not a repeat: send the latest one if it differs.
       const sent = open.event as { count?: number };
       if ((open.latest as { count?: number }).count !== sent.count)
-        pipeline.event(enrich(withShape(open.latest, detailedShape), pipeline));
+        pipeline.event(
+          enrich(withShape(open.latest, detailedShape), pipeline, open.event.attributes)
+        );
     } else if (open.repeated > 0) {
       pipeline.event({ ...open.event, repeated: open.repeated });
     }
   }
 
-  function record(diagnostic: EditorDiagnostic): void {
+  function record(diagnostic: EditorDiagnostic, editorAttributes: Attributes = {}): void {
     // Consent first: a window opened before consent would later send a summary of an event
     // that was never delivered.
     if (closed || !pipeline.consented()) return;
+    const attributes = attributesFor(editorAttributes);
     // The guard runs before the metrics, so a value outside the closed lists never becomes a
     // metric label, and an event the guard drops is counted.
-    const checked = checkEvent(enrich(diagnostic, pipeline));
+    const checked = checkEvent(enrich(diagnostic, pipeline, attributes));
     if ('dropped' in checked) {
       pipeline.metric(METRICS.droppedEvents, 1, { reason: checked.dropped });
       return;
@@ -281,7 +336,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     // A performance rate of 0 is off, even when another listener keeps the editor measuring.
     if (sampleRate === null || (area === 'performance' && sampleRate === 0)) return;
     hookPage();
-    recordMetrics(pipeline, checked.event as unknown as EditorDiagnostic);
+    recordMetrics(pipeline, checked.event as unknown as EditorDiagnostic, hostLabels(attributes));
     const key = windowMs > 0 ? dedupeKey(diagnostic) : null;
     const open = key ? windows.get(key) : undefined;
     if (open) {
@@ -290,7 +345,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       return;
     }
     if (!sampled(diagnostic, area!, sampleRate)) return;
-    const event = enrich(withShape(diagnostic, detailedShape), pipeline);
+    const event = enrich(withShape(diagnostic, detailedShape), pipeline, attributes);
     pipeline.event(event);
     if (key) {
       const timer = setTimeout(() => close(key), windowMs);
@@ -299,20 +354,27 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     }
   }
 
+  function moduleFor(attributes: Attributes): EditorModule {
+    return Object.freeze({
+      id: 'telemetry',
+      onDiagnostic: (event: EditorDiagnostic) => record(event, attributes),
+      // The editor times key presses only while performance would be recorded.
+      wantsDiagnostic: (kind: EditorDiagnosticKind) =>
+        !closed &&
+        (kind !== 'performance' || ((rate('performance') ?? 0) > 0 && pipeline.consented())),
+    });
+  }
+
   async function flush(): Promise<void> {
     for (const key of [...windows.keys()]) close(key);
     await pipeline.flush();
   }
 
   return {
-    module: Object.freeze({
-      id: 'telemetry',
-      onDiagnostic: record,
-      // The editor times key presses only while performance would be recorded.
-      wantsDiagnostic: (kind: EditorDiagnosticKind) =>
-        !closed &&
-        (kind !== 'performance' || ((rate('performance') ?? 0) > 0 && pipeline.consented())),
-    }),
+    module: moduleFor({}),
+    moduleFor(attributes) {
+      return moduleFor(checkAttributes(attributes, 'moduleFor'));
+    },
     record,
     flush,
     async shutdown() {
@@ -334,60 +396,70 @@ function withShape(diagnostic: EditorDiagnostic, detailed: boolean): EditorDiagn
 }
 
 /** Adds the hint, the docs link, the version, and the host's resource values. */
-function enrich(diagnostic: EditorDiagnostic, pipeline: Pipeline): TelemetryEvent {
+function enrich(
+  diagnostic: EditorDiagnostic,
+  pipeline: Pipeline,
+  attributes: Attributes
+): TelemetryEvent {
   const code = 'code' in diagnostic ? diagnostic.code : undefined;
   return {
     ...diagnostic,
     ...(code ? explainDiagnostic(code) : {}),
     engineVersion: ENGINE_VERSION,
     resource: pipeline.resource,
+    attributes,
   };
 }
 
 /** Metrics count every event, before sampling and deduplication. */
-function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
+function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic, labels: Attributes): void {
+  // Your labels from `metricLabels` go on every measurement of this event.
+  const labelled: Pick<Pipeline, 'metric'> = {
+    metric: (definition, value, attributes = {}) =>
+      pipeline.metric(definition, value, { ...attributes, ...labels }),
+  };
   switch (event.kind) {
     case 'document.open':
       if (event.outcome === 'opened') {
-        pipeline.metric(METRICS.documentOpens, 1, { outcome: 'opened', code: 'none' });
-        pipeline.metric(METRICS.documentOpenDuration, event.durationMs / 1000);
-      } else pipeline.metric(METRICS.documentOpens, 1, { outcome: 'rejected', code: event.code });
+        labelled.metric(METRICS.documentOpens, 1, { outcome: 'opened', code: 'none' });
+        labelled.metric(METRICS.documentOpenDuration, event.durationMs / 1000);
+      } else labelled.metric(METRICS.documentOpens, 1, { outcome: 'rejected', code: event.code });
       return;
     case 'edit.rejected':
-      pipeline.metric(METRICS.editRejections, 1, {
+      labelled.metric(METRICS.editRejections, 1, {
         code: event.code,
         origin: event.origin,
         tracked: event.tracked,
       });
       return;
     case 'review.skipped':
-      pipeline.metric(METRICS.reviewSkipped, event.count, { code: event.code });
+      labelled.metric(METRICS.reviewSkipped, event.count, { code: event.code });
       return;
     case 'font.failed':
-      pipeline.metric(METRICS.fontFailures, 1, { code: event.code });
+      labelled.metric(METRICS.fontFailures, 1, { code: event.code });
       return;
     case 'history':
-      pipeline.metric(METRICS.historyDiagnostics, 1, { code: event.code });
+      labelled.metric(METRICS.historyDiagnostics, 1, { code: event.code });
       return;
     case 'custom-node':
-      pipeline.metric(METRICS.customNodeDiagnostics, 1, { code: event.code });
+      labelled.metric(METRICS.customNodeDiagnostics, 1, { code: event.code });
       return;
     case 'collab.status':
-      pipeline.metric(METRICS.collabClientStatusTransitions, 1, {
+      labelled.metric(METRICS.collabClientStatusTransitions, 1, {
         status: event.status,
         code: event.code ?? 'none',
       });
       if (event.connectMs !== undefined)
-        pipeline.metric(METRICS.collabClientConnectDuration, event.connectMs / 1000);
+        labelled.metric(METRICS.collabClientConnectDuration, event.connectMs / 1000);
       return;
     case 'collab.participants':
-      pipeline.metric(METRICS.collabClientParticipants, event.count);
+      labelled.metric(METRICS.collabClientParticipants, event.count);
       return;
     case 'performance': {
       const pages = event.pagesBucket ?? 'unknown';
-      recordTiming(pipeline, METRICS.editorInteractionDuration, pages, event.interaction);
-      recordTiming(pipeline, METRICS.editorLayoutDuration, pages, event.layout);
-      recordTiming(pipeline, METRICS.editorPaintDuration, pages, event.paint);
+      recordTiming(labelled, METRICS.editorInteractionDuration, pages, event.interaction);
+      recordTiming(labelled, METRICS.editorLayoutDuration, pages, event.layout);
+      recordTiming(labelled, METRICS.editorPaintDuration, pages, event.paint);
     }
   }
 }
@@ -398,7 +470,7 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
  * bucket counts are exact.
  */
 function recordTiming(
-  pipeline: Pipeline,
+  pipeline: Pick<Pipeline, 'metric'>,
   definition: MetricDefinition,
   pages: string,
   summary?: TimingSummary

@@ -138,6 +138,7 @@ export interface TelemetryExporter {
 export interface TelemetryPipelineOptions {
     readonly consent?: boolean | (() => boolean);
     readonly exporters: readonly TelemetryExporter[];
+    readonly metricLabels?: readonly string[];
     readonly onExporterError?: (error: unknown, exporter: string) => void;
     readonly resource?: Attributes;
 }
