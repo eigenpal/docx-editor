@@ -144,7 +144,20 @@ function insideEditor(target: unknown): boolean {
   }
 }
 
-/** The default issue rule. @public */
+/**
+ * The default issue rule: an open the app caused, an internal error, a shaper that never
+ * loaded, and a collaboration error that will not heal become issues. Wrap it to add your own.
+ *
+ * @example
+ * ```ts
+ * sentryExporter(Sentry, {
+ *   issue: (event) =>
+ *     isSentryIssue(event) || ('code' in event && event.code === 'font.load-failed'),
+ * });
+ * ```
+ *
+ * @public
+ */
 export function isSentryIssue(event: TelemetryEvent): boolean {
   switch (event.kind) {
     case 'document.open':

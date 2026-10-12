@@ -328,6 +328,12 @@ const UNIT_SUFFIX: Readonly<Record<string, string>> = { s: 'seconds', By: 'bytes
  * The Prometheus name of a metric: dots become underscores, the unit becomes a suffix, and a
  * counter ends in `_total`, as the OpenTelemetry Prometheus exporter writes it.
  *
+ * @example
+ * ```ts
+ * prometheusName(METRICS.editRejections); // 'docx_editor_edit_rejections_total'
+ * prometheusName(METRICS.editorInteractionDuration); // 'docx_editor_editor_interaction_duration_seconds'
+ * ```
+ *
  * @public
  */
 export function prometheusName(definition: MetricDefinition): string {

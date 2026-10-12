@@ -90,8 +90,17 @@ function timingText(label: string, summary?: TimingSummary): string {
  * Whether an event is a failure: a refused open, a refused edit other than an expected one
  * (a stale range, a read-only document, protected content, a session or refresh not ready
  * yet), an unreadable payload, a font that did not load, or a collaboration error. A missing
- * font that was substituted and a tracked change someone else already reviewed are not. Use it in a callback to send failures as errors and
- * the rest as actions or logs.
+ * font that was substituted and a tracked change someone else already reviewed are not. Use it
+ * in a callback to send failures as errors and the rest as actions or logs.
+ *
+ * @example
+ * ```ts
+ * callbackExporter((event) => {
+ *   const code = 'code' in event ? event.code : undefined;
+ *   if (isFailure(event)) myLogger.error(event.kind, { code, hint: event.hint });
+ *   else myLogger.info(event.kind);
+ * });
+ * ```
  *
  * @public
  */

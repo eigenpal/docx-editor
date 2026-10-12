@@ -136,6 +136,14 @@ export interface RoomTelemetry {
  * A stable room label that does not reveal the name: an HMAC of the name with your secret.
  * The same name gives the same label across processes and restarts.
  *
+ * @example
+ * ```ts
+ * const rooms = roomTelemetry({
+ *   exporters: [metrics],
+ *   roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET),
+ * });
+ * ```
+ *
  * @public
  */
 export function hmacRoomLabel(secret: string | undefined): (name: string) => string {
