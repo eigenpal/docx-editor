@@ -15,6 +15,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 import { createHmac } from 'node:crypto';
 import { readCollaborationResourceUsage } from '@docx-editor.dev/pro/collaboration';
+import { diagnosticCodes } from '@docx-editor.dev/core';
 import { isCollaborationFailureCode } from '@docx-editor.dev/core/collaboration';
 import * as Y from 'yjs';
 import { METRICS } from '../metrics.ts';
@@ -193,6 +194,11 @@ const HOCUSPOCUS_CLOSE_CODES: Readonly<Record<number, string>> = {
   4403: 'forbidden',
 };
 
+/** Every collaboration failure code, which a refusal may carry as its reason. */
+const FAILURE_REASONS = diagnosticCodes()
+  .map((code) => code.replace(/^collab\./, ''))
+  .filter(isCollaborationFailureCode);
+
 const COMMON_REASONS = [
   'unauthorized',
   'forbidden',
@@ -250,7 +256,7 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
   );
   const measureState = options.measureState ?? true;
   // Known series start at zero, so a scraper counts the first refusal and the first failed store.
-  for (const reason of [...known, 'other']) {
+  for (const reason of new Set([...known, ...FAILURE_REASONS, 'other'])) {
     pipeline.declare(METRICS.admissionRejections, { reason });
     pipeline.declare(METRICS.messageRefusals, { reason });
   }

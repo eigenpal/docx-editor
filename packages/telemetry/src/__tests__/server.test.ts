@@ -160,6 +160,8 @@ describe('roomTelemetry', () => {
       'docx_editor_collab_admission_rejections_total{reason="quota-exceeded"} 0',
       'docx_editor_collab_admission_rejections_total{reason="other"} 0',
       'docx_editor_collab_message_refusals_total{reason="other"} 0',
+      'docx_editor_collab_message_refusals_total{reason="room-generation-changed"} 0',
+      'docx_editor_collab_admission_rejections_total{reason="protocol-version-mismatch"} 0',
       'docx_editor_collab_room_store_duration_seconds_count{outcome="failure"} 0',
       'docx_editor_collab_room_load_duration_seconds_count{outcome="success"} 0',
       'docx_editor_collab_migrations_total{outcome="failed"} 0',
@@ -174,6 +176,10 @@ describe('roomTelemetry', () => {
     rooms.rejected({ reason: 'unauthorized' });
     expect(metrics.metrics()).toContain(
       'docx_editor_collab_admission_rejections_total{reason="unauthorized"} 1'
+    );
+    rooms.refused({ reason: 'room-generation-changed' });
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_message_refusals_total{reason="room-generation-changed"} 1'
     );
     await rooms.shutdown();
   });
