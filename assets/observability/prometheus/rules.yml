@@ -14,7 +14,7 @@ groups:
           summary: "The privacy check drops telemetry events; core and telemetry versions may differ ({{ $labels.job }})"
           runbook_url: https://docx-editor.dev/docs/2.x/telemetry/metrics
       - alert: DocxCollaborationServerDown
-        expr: up{job="collaboration-server"} == 0
+        expr: up{docx_editor="collaboration"} == 0
         for: 1m
         labels:
           severity: page

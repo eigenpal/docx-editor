@@ -22,6 +22,8 @@ F = 'job=~"$job",deployment_environment=~"$env",app_version=~"$version",docx_edi
 # Every summary number covers the selected time range.
 W = '$__range'
 S = 'job=~"$server_job",instance=~"$instance"'
+# The scrape target label that marks a collaboration server. See README.md.
+COLLAB_TARGET = 'docx_editor="collaboration"'
 
 
 class Board:
@@ -119,7 +121,8 @@ def top_table(title, expr, key, description, code_links=True, no_value='No event
         overrides.append({'matcher': {'id': 'byName', 'options': 'anchor'},
                           'properties': [{'id': 'custom.hidden', 'value': True}]})
     return {'type': 'table', 'title': title, 'description': description,
-            'targets': [target(f'topk(10, {expr})', instant=True, fmt='table')],
+            # Servers declare known series at zero; a table lists only what happened.
+            'targets': [target(f'topk(10, {expr} > 0)', instant=True, fmt='table')],
             'transformations': [{'id': 'organize', 'options': {'excludeByName': exclude}},
                                 {'id': 'sortBy', 'options': {'sort': [{'field': 'Value', 'desc': True}]}}],
             'fieldConfig': {'defaults': {'noValue': no_value, 'custom': {'align': 'auto'}}, 'overrides': overrides},
@@ -302,7 +305,7 @@ editor = dashboard(
     'docx-editor-experience', 'Editor experience',
     'How editing feels to people: input delay, engine work, opens, and refusals.',
     b, editor_vars,
-    [annotation('New version', f'count by (app_version) ({INTERACTION}_count) unless count by (app_version) ({INTERACTION}_count offset 2m)', 'Version {{app_version}} first seen', 'rgba(126, 178, 109, 1)', enable=False),
+    [annotation('New version', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} first seen', 'rgba(126, 178, 109, 1)', enable=False),
      annotation('Alerts', 'ALERTS{alertstate="firing",service="docx-editor",scope="editor",job=~"$job",deployment_environment=~"$env"}', '{{alertname}}', 'rgba(242, 73, 92, 1)')],
     [('Docs', TELEMETRY_DOCS), ('Report an issue', ISSUES)])
 
@@ -370,8 +373,11 @@ c.add(top_table('Refused messages by reason', f'sum by (reason) (increase(docx_e
 
 collab_vars = [
     DATASOURCE,
-    variable('server_job', 'Server', 'label_values(docx_editor_collab_rooms_active, job)', all_value=None),
-    variable('instance', 'Server instance', 'label_values(docx_editor_collab_rooms_active{job=~"$server_job"}, instance)'),
+    # Servers come from their scrape target label, so a server that fails every scrape still
+    # appears; servers without the label appear once they report room metrics.
+    dict(variable('server_job', 'Server', f'query_result(count by (job) (up{{{COLLAB_TARGET}}}) or count by (job) (docx_editor_collab_rooms_active))',
+                  all_value=None), regex='/job="([^"]+)"/'),
+    variable('instance', 'Server instance', 'label_values(up{job=~"$server_job"}, instance)'),
     variable('job', 'Client app', 'label_values(docx_editor_collab_client_status_transitions_total, job)'),
 ]
 collab = dashboard(
@@ -402,7 +408,7 @@ rule_lines += alert('DocxTelemetryDroppingEvents',
                     'sum by (' + BY + ') (rate(docx_editor_telemetry_dropped_events_total[15m])) > 0', '15m', 'ticket',
                     'editor', 'The privacy check drops telemetry events; core and telemetry versions may differ ({{ $labels.job }})',
                     f'{DOCS}/telemetry/metrics')
-rule_lines += alert('DocxCollaborationServerDown', 'up{job="collaboration-server"} == 0', '1m', 'page', 'server',
+rule_lines += alert('DocxCollaborationServerDown', f'up{{{COLLAB_TARGET}}} == 0', '1m', 'page', 'server',
                     'The collaboration server does not answer its /metrics scrape ({{ $labels.instance }})',
                     f'{DOCS}/telemetry/servers')
 rule_lines += alert('DocxCollaborationStoreFailing',

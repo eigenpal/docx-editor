@@ -45,7 +45,16 @@ rule_files:
   - /etc/prometheus/docx-editor-rules.yml
 ```
 
-Change the `job="collaboration-server"` selector to the job name of your server's scrape.
+The server-down alert and the **Server** filter find collaboration servers by the `docx_editor="collaboration"` target label. Add it to the scrape configuration of each collaboration server, so a server that fails every scrape still shows:
+
+```yaml
+scrape_configs:
+  - job_name: collaboration-server
+    static_configs:
+      - targets: ['collaboration.internal:1235']
+        labels:
+          docx_editor: collaboration
+```
 
 ## Try them locally
 

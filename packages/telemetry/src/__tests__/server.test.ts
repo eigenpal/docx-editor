@@ -135,7 +135,7 @@ describe('roomTelemetry', () => {
     const room = rooms.open(doc, { name: ROOM });
     await room.time('load', async () => Y.applyUpdate(doc, Y.encodeStateAsUpdate(saved)));
     expect(rooms.list()[0]!.pendingBytes).toBe(0);
-    expect(metrics.metrics()).not.toContain('docx_editor_collab_updates_total');
+    expect(metrics.metrics()).toContain('docx_editor_collab_updates_total 0\n');
     doc.getText('t').insert(0, 'edit');
     expect(rooms.list()[0]!.pendingBytes).toBeGreaterThan(0);
     await rooms.shutdown();
@@ -148,6 +148,33 @@ describe('roomTelemetry', () => {
     expect(text).toContain('docx_editor_collab_rooms_active 0');
     expect(text).toContain('docx_editor_collab_connections_active 0');
     expect(text).toContain('docx_editor_collab_participants_active 0');
+    await rooms.shutdown();
+  });
+
+  test('known counters start at zero, so a scraper counts the first refusal and failed store', async () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], reasons: ['quota-exceeded'] });
+    const before = metrics.metrics();
+    for (const series of [
+      'docx_editor_collab_admission_rejections_total{reason="unauthorized"} 0',
+      'docx_editor_collab_admission_rejections_total{reason="quota-exceeded"} 0',
+      'docx_editor_collab_admission_rejections_total{reason="other"} 0',
+      'docx_editor_collab_message_refusals_total{reason="other"} 0',
+      'docx_editor_collab_room_store_duration_seconds_count{outcome="failure"} 0',
+      'docx_editor_collab_room_load_duration_seconds_count{outcome="success"} 0',
+      'docx_editor_collab_migrations_total{outcome="failed"} 0',
+      'docx_editor_collab_updates_total 0',
+    ])
+      expect(before).toContain(series);
+    // A declared histogram has no observation in it.
+    expect(before).toContain(
+      'docx_editor_collab_room_store_duration_seconds_sum{outcome="failure"} 0'
+    );
+
+    rooms.rejected({ reason: 'unauthorized' });
+    expect(metrics.metrics()).toContain(
+      'docx_editor_collab_admission_rejections_total{reason="unauthorized"} 1'
+    );
     await rooms.shutdown();
   });
 
@@ -460,7 +487,7 @@ describe('withCollaborationTelemetry', () => {
     expect(text).toContain(
       'docx_editor_collab_room_load_duration_seconds_count{outcome="success"} 1'
     );
-    expect(text).not.toContain('outcome="failure"');
+    expect(text).not.toMatch(/outcome="failure"\} [1-9]/);
     expect(text).toMatch(/docx_editor_collab_updates_total 1\n/);
     await rooms.shutdown();
   });
@@ -486,7 +513,9 @@ describe('withCollaborationTelemetry', () => {
     await server.hooks('afterLoadDocument', at as never);
     document.getText('t').insert(0, 'edit');
     await server.hooks('onStoreDocument', at as never).catch(() => {});
-    expect(metrics.metrics()).not.toContain('docx_editor_collab_room_store_duration_seconds_count');
+    expect(metrics.metrics()).not.toMatch(
+      /docx_editor_collab_room_store_duration_seconds_count\{[^}]*\} [1-9]/
+    );
     expect(rooms.list()[0]!.pendingBytes).toBeGreaterThan(0);
     await rooms.shutdown();
   });
@@ -514,7 +543,7 @@ describe('withCollaborationTelemetry', () => {
     expect(text).toContain(
       'docx_editor_collab_room_store_duration_seconds_count{outcome="success"} 1'
     );
-    expect(text).not.toContain('outcome="failure"');
+    expect(text).not.toMatch(/outcome="failure"\} [1-9]/);
     await rooms.shutdown();
   });
 

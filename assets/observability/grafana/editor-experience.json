@@ -145,7 +145,7 @@
         },
         "enable": false,
         "iconColor": "rgba(126, 178, 109, 1)",
-        "expr": "count by (app_version) (docx_editor_editor_interaction_duration_seconds_count) unless count by (app_version) (docx_editor_editor_interaction_duration_seconds_count offset 2m)",
+        "expr": "count by (app_version) (docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}) unless count by (app_version) (docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"} offset 2m)",
         "step": "60s",
         "titleFormat": "Version {{app_version}} first seen",
         "tagKeys": ""
@@ -1584,7 +1584,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",outcome=\"rejected\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",outcome=\"rejected\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1872,7 +1872,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2050,7 +2050,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_review_skipped_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_review_skipped_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2184,7 +2184,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2362,7 +2362,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_font_failures_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_font_failures_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2483,7 +2483,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (reason) (increase(docx_editor_telemetry_dropped_events_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])))",
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_telemetry_dropped_events_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,

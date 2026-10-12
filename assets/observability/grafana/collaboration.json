@@ -34,10 +34,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(docx_editor_collab_rooms_active, job)",
+          "query": "query_result(count by (job) (up{docx_editor=\"collaboration\"}) or count by (job) (docx_editor_collab_rooms_active))",
           "refId": "server_job"
         },
-        "definition": "label_values(docx_editor_collab_rooms_active, job)",
+        "definition": "query_result(count by (job) (up{docx_editor=\"collaboration\"}) or count by (job) (docx_editor_collab_rooms_active))",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -46,7 +46,8 @@
           "selected": true,
           "text": ["All"],
           "value": ["$__all"]
-        }
+        },
+        "regex": "/job=\"([^\"]+)\"/"
       },
       {
         "name": "instance",
@@ -57,10 +58,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(docx_editor_collab_rooms_active{job=~\"$server_job\"}, instance)",
+          "query": "label_values(up{job=~\"$server_job\"}, instance)",
           "refId": "instance"
         },
-        "definition": "label_values(docx_editor_collab_rooms_active{job=~\"$server_job\"}, instance)",
+        "definition": "label_values(up{job=~\"$server_job\"}, instance)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -1234,7 +1235,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (outcome) (increase(docx_editor_collab_migrations_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])))",
+          "expr": "topk(10, sum by (outcome) (increase(docx_editor_collab_migrations_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1465,7 +1466,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])))",
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1556,7 +1557,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_message_refusals_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])))",
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_message_refusals_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,

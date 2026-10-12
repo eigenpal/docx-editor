@@ -249,6 +249,19 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
     [...COMMON_REASONS, ...(options.reasons ?? [])].map((reason) => reason.toLowerCase())
   );
   const measureState = options.measureState ?? true;
+  // Known series start at zero, so a scraper counts the first refusal and the first failed store.
+  for (const reason of [...known, 'other']) {
+    pipeline.declare(METRICS.admissionRejections, { reason });
+    pipeline.declare(METRICS.messageRefusals, { reason });
+  }
+  for (const outcome of ['success', 'failure']) {
+    pipeline.declare(METRICS.roomLoadDuration, { outcome });
+    pipeline.declare(METRICS.roomStoreDuration, { outcome });
+  }
+  for (const outcome of ['migrated', 'unchanged', 'failed'])
+    pipeline.declare(METRICS.migrations, { outcome });
+  pipeline.declare(METRICS.updates);
+  pipeline.declare(METRICS.updateBytes);
   // A reason the host chose still has to be a known one, so no free value becomes a series.
   const classify = (error: unknown) => {
     try {

@@ -202,9 +202,9 @@ test('two editors on a real server: room metrics, client events, convergence, no
     // The room stores, and a person who joins later opens the same document.
     await until(
       () =>
-        serverMetrics
-          .metrics()
-          .includes('docx_editor_collab_room_store_duration_seconds_count{outcome="success"}'),
+        /docx_editor_collab_room_store_duration_seconds_count\{outcome="success"\} [1-9]/.test(
+          serverMetrics.metrics()
+        ),
       'the room to store'
     );
     expect(saved.has(roomId)).toBe(true);

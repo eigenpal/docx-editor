@@ -83,6 +83,12 @@ export interface TelemetryExporter {
    * an exporter without it keeps the series until it expires on its own.
    */
   forget?(definition: MetricDefinition, attributes: Attributes): void;
+  /**
+   * Start a series at zero before its first measurement. A scraper that sees a counter first
+   * at 1 cannot count that first increase, so the room server declares its known series when
+   * it starts. Optional: an exporter without it creates each series at its first measurement.
+   */
+  declare?(definition: MetricDefinition, attributes: Attributes): void;
   /** Send anything buffered. Called by `flush()` and when a page is hidden. */
   flush?(): void | Promise<void>;
   /** Flush and release resources. Called by `shutdown()`. */
@@ -140,6 +146,7 @@ export interface Pipeline {
   event(event: TelemetryEvent): void;
   metric(definition: MetricDefinition, value: number, attributes?: Attributes): void;
   forget(definition: MetricDefinition, attributes: Attributes): void;
+  declare(definition: MetricDefinition, attributes?: Attributes): void;
   flush(): Promise<void>;
   shutdown(): Promise<void>;
 }
@@ -253,6 +260,20 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
         if (!exporter.forget) continue;
         try {
           exporter.forget(definition, checked);
+        } catch (error) {
+          report(error, exporter.name);
+        }
+      }
+    },
+    declare(definition, attributes = {}) {
+      if (!consented()) return;
+      const labels = boundHostLabels(
+        checkAttributes(attributes, definition.name, [...definition.labels, ...hostLabels])
+      );
+      for (const exporter of exporters) {
+        if (!exporter.declare) continue;
+        try {
+          exporter.declare(definition, labels);
         } catch (error) {
           report(error, exporter.name);
         }

@@ -81,25 +81,30 @@ function formatNumber(value: number): string {
 export function prometheusRegistry(): PrometheusRegistry {
   const families = new Map<string, { definition: MetricDefinition; series: Map<string, Series> }>();
 
+  const seriesFor = (definition: MetricDefinition, attributes: Attributes): Series => {
+    let family = families.get(definition.name);
+    if (!family) {
+      family = { definition, series: new Map() };
+      families.set(definition.name, family);
+    }
+    const key = seriesKey(attributes);
+    let series = family.series.get(key);
+    if (!series) {
+      series = { labels: attributes, value: 0 };
+      if (definition.kind === 'histogram') {
+        series.buckets = new Array((definition.buckets ?? []).length).fill(0);
+        series.sum = 0;
+      }
+      family.series.set(key, series);
+    }
+    return series;
+  };
+
   return {
     name: 'prometheus',
     metric(record: MetricRecord) {
       const { definition, value, attributes } = record;
-      let family = families.get(definition.name);
-      if (!family) {
-        family = { definition, series: new Map() };
-        families.set(definition.name, family);
-      }
-      const key = seriesKey(attributes);
-      let series = family.series.get(key);
-      if (!series) {
-        series = { labels: attributes, value: 0 };
-        if (definition.kind === 'histogram') {
-          series.buckets = new Array((definition.buckets ?? []).length).fill(0);
-          series.sum = 0;
-        }
-        family.series.set(key, series);
-      }
+      const series = seriesFor(definition, attributes);
       if (definition.kind === 'counter') series.value += Math.max(0, value);
       else if (definition.kind === 'gauge') series.value = value;
       else {
@@ -109,6 +114,9 @@ export function prometheusRegistry(): PrometheusRegistry {
           if (value <= bound) series!.buckets![index]! += 1;
         });
       }
+    },
+    declare(definition, attributes) {
+      seriesFor(definition, attributes);
     },
     forget(definition, attributes) {
       families.get(definition.name)?.series.delete(seriesKey(attributes));

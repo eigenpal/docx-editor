@@ -45,6 +45,7 @@ export interface PrometheusTextSource {
 
 // @public
 export interface TelemetryExporter {
+    declare?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     event?(event: TelemetryEvent): void;
     flush?(): void | Promise<void>;

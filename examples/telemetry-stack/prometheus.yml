@@ -15,3 +15,6 @@ scrape_configs:
   - job_name: collaboration-server
     static_configs:
       - targets: ['host.docker.internal:1235']
+        # Marks a collaboration server for the dashboard and the server-down alert.
+        labels:
+          docx_editor: collaboration
