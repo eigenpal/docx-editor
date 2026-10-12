@@ -386,7 +386,7 @@ describe('consoleExporter', () => {
     expect(lines[0]).toStartWith(
       '[docx-editor] edit refused: edit.tracked-drawing-delete-unsupported (input, tracked)'
     );
-    expect(lines[0]).toContain('Deleting a drawing is not supported');
+    expect(lines[0]).toContain('cannot record a drawing deletion as a tracked change');
     expect(lines[0]).toContain(
       'https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-drawing-delete-unsupported'
     );

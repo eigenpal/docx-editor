@@ -15,13 +15,17 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import * as Y from 'yjs';
 import { Hocuspocus } from '@hocuspocus/server';
 import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
-import { collaborationModule } from '@docx-editor.dev/pro/collaboration';
+import {
+  checkCollaborationRoomGeneration,
+  collaborationModule,
+  compactCollaborationState,
+} from '@docx-editor.dev/pro/collaboration';
 import {
   createCollaborationRoomId,
   createHocuspocusCollaboration,
   type HocuspocusCollaborationRoom,
 } from '@docx-editor.dev/pro/collaboration/hocuspocus';
-import { createTelemetry, memoryExporter } from '../index.ts';
+import { createTelemetry, memoryExporter, type MemoryExporter } from '../index.ts';
 import { withCollaborationTelemetry } from '../hocuspocus/index.ts';
 import { prometheusRegistry } from '../prometheus/index.ts';
 
@@ -239,3 +243,186 @@ test('two editors on a real server: room metrics, client events, convergence, no
     await hocuspocus.closeConnections?.();
   }
 }, 30_000);
+
+/** A Hocuspocus room server over Bun, with the generation gate and compaction on demand. */
+function startRoomServer() {
+  const saved = new Map<string, Uint8Array>();
+  const state = { compactNextLoad: false };
+  const metrics = prometheusRegistry();
+  const { config, rooms } = withCollaborationTelemetry(
+    {
+      async onLoadDocument({ documentName, document }) {
+        let stored = saved.get(documentName);
+        if (stored && state.compactNextLoad) {
+          state.compactNextLoad = false;
+          const compacted = await compactCollaborationState(stored, { minimumGain: 1 });
+          if (compacted) saved.set(documentName, (stored = compacted));
+        }
+        if (stored) Y.applyUpdate(document, stored);
+      },
+      async beforeHandleMessage(payload) {
+        checkCollaborationRoomGeneration(payload);
+      },
+      async onStoreDocument({ documentName, document }) {
+        saved.set(documentName, Y.encodeStateAsUpdate(document));
+      },
+    },
+    { exporters: [metrics], sampleInterval: false }
+  );
+  const hocuspocus = new Hocuspocus({ ...config, quiet: true, debounce: 50, maxDebounce: 200 });
+  type Socket = { request: Request; connection?: ReturnType<Hocuspocus['handleConnection']> };
+  const server = Bun.serve<Socket>({
+    port: 0,
+    hostname: '127.0.0.1',
+    fetch(request, bun) {
+      return bun.upgrade(request, { data: { request } }) ? undefined : new Response('ok');
+    },
+    websocket: {
+      open(socket) {
+        socket.data.connection = hocuspocus.handleConnection(
+          socket as never,
+          socket.data.request as never
+        );
+      },
+      message(socket, message) {
+        socket.data.connection?.handleMessage(
+          typeof message === 'string' ? new TextEncoder().encode(message) : new Uint8Array(message)
+        );
+      },
+      close(socket, code, reason) {
+        socket.data.connection?.handleClose({ code, reason });
+      },
+    },
+  });
+  return {
+    url: `ws://127.0.0.1:${server.port}`,
+    saved,
+    state,
+    metrics,
+    rooms,
+    stop: () => server.stop(true),
+  };
+}
+
+test('two tabs, a delete during an edit, a reconnect, and a compacted room', async () => {
+  (globalThis as { WebSocket: typeof WebSocket }).WebSocket = NativeWebSocket;
+  const server = startRoomServer();
+  const roomId = createCollaborationRoomId();
+  const opened: HocuspocusCollaborationRoom[] = [];
+  const editors: DocxEditorInstance[] = [];
+  const mount = (room: HocuspocusCollaborationRoom) => {
+    const events = memoryExporter();
+    const telemetry = createTelemetry({
+      exporters: [events],
+      include: { collaborationClient: true, editing: true },
+      dedupeWindowMs: 0,
+    });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: room.document,
+      modules: [collaborationModule({ session: room.session }), telemetry.module],
+    });
+    editors.push(editor);
+    return { editor, events };
+  };
+  const statuses = (events: MemoryExporter) =>
+    events.events
+      .filter((event) => event.kind === 'collab.status')
+      .map((event) => [
+        (event as { status: string }).status,
+        (event as { code?: string }).code ?? null,
+      ]);
+  const join = async (actorId: string, name: string, create?: Uint8Array) => {
+    const room = await createHocuspocusCollaboration({
+      url: server.url,
+      roomId,
+      identity: { actorId, name },
+      bootstrap: create ? { kind: 'create', document: create } : { kind: 'join' },
+    });
+    opened.push(room);
+    return room;
+  };
+  let restoreLog = () => {};
+  try {
+    const alice = await join('alice-actor', 'Alice Example', docx(SECRET));
+    const bob = await join('bob-actor', 'Bob Example');
+    // The same person in a second tab: one more connection, and one more presence.
+    const aliceTab = await join('alice-actor', 'Alice Example');
+    const left = mount(alice);
+    const right = mount(bob);
+    const tab = mount(aliceTab);
+    await until(() => {
+      server.rooms.sample();
+      const [room] = server.rooms.list();
+      return room?.connections === 3 && room.participants === 3;
+    }, 'three connections and three presences');
+
+    // One person deletes the text while another types: all three converge.
+    left.editor.exec({ type: 'selectAll' });
+    expect(left.editor.exec({ type: 'deleteText' }).ok).toBe(true);
+    expect(right.editor.exec({ type: 'insertText', text: 'B' }).ok).toBe(true);
+    await until(async () => {
+      const [a, b, c] = await Promise.all(editors.map(bodyXml));
+      return a === b && b === c;
+    }, 'the delete and the edit to converge');
+    expect(await bodyXml(left.editor)).not.toContain(SECRET);
+
+    // A dropped connection: the server counts it gone, the client reports it, an offline
+    // edit merges after the reconnect.
+    bob.provider.disconnect();
+    await until(
+      () => statuses(right.events).some(([status]) => status === 'disconnected'),
+      'the disconnect'
+    );
+    await until(
+      () => server.rooms.list()[0]?.connections === 2,
+      'the server to see two connections'
+    );
+    expect(right.editor.exec({ type: 'insertText', text: 'Z' }).ok).toBe(true);
+    await bob.provider.connect();
+    await until(
+      async () => (await bodyXml(left.editor)).includes('Z'),
+      'the offline edit to merge'
+    );
+    expect(statuses(right.events).at(-1)).toEqual(['ready', null]);
+
+    // The room is compacted while Bob is away: his reconnect is refused, and both sides say so.
+    bob.provider.disconnect();
+    for (const editor of [left.editor, tab.editor]) editor.destroy();
+    for (const room of [alice, aliceTab]) room.destroy();
+    await until(() => server.rooms.list().length === 0, 'the room to unload');
+    server.state.compactNextLoad = true;
+    // Hocuspocus logs the refusal this step expects.
+    const log = console.error;
+    console.error = () => {};
+    restoreLog = () => (console.error = log);
+    void bob.provider.connect();
+    await until(
+      () =>
+        statuses(right.events).some(
+          ([status, code]) => status === 'error' && code === 'collab.room-generation-changed'
+        ),
+      'the client to report the changed generation'
+    );
+    expect(server.metrics.metrics()).toContain(
+      'docx_editor_collab_message_refusals_total{reason="room-generation-changed"}'
+    );
+
+    const reported = [
+      server.metrics.metrics(),
+      JSON.stringify(server.rooms.list()),
+      JSON.stringify([...left.events.events, ...right.events.events, ...tab.events.events]),
+    ].join('\n');
+    for (const secret of [SECRET, roomId, 'Alice', 'Bob', 'alice-actor', 'bob-actor']) {
+      expect(reported).not.toContain(secret);
+    }
+  } finally {
+    for (const editor of editors) editor.destroy();
+    for (const room of opened) room.destroy();
+    await server.rooms.shutdown();
+    server.stop();
+    restoreLog();
+  }
+}, 40_000);

@@ -30,12 +30,12 @@ export const MODULES = [telemetry.module];
 // <DocxEditor document={bytes} modules={MODULES} />
 ```
 
-A refused tracked change explains itself:
+A refused tracked change explains itself. Here, an agent deleted a picture through the editing API while changes were tracked:
 
 ```text
-[docx-editor] edit refused: edit.tracked-drawing-delete-unsupported (input, tracked)
-  Deleting a drawing is not supported while changes are tracked, so nothing was deleted. Leave the drawing, or ask a person to delete it with tracking off.
-  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-drawing-delete-unsupported
+[docx-editor] edit refused: edit.tracked-operation-unsupported (automation, tracked)
+  This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed.
+  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-operation-unsupported
 ```
 
 ## Collaboration servers

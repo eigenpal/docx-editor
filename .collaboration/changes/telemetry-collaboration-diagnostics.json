@@ -6,7 +6,8 @@
   "reason": "The editor reads the session's existing status and participant subscriptions, and the server wrapper observes host hooks. Neither changes shared state, document operations, or the collaboration format.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/collaboration-diagnostics.test.ts",
-    "packages/telemetry/src/__tests__/server.test.ts"
+    "packages/telemetry/src/__tests__/server.test.ts",
+    "packages/telemetry/src/__tests__/hocuspocus-editors.test.ts"
   ],
   "changeset": "telemetry-package",
   "migration": null

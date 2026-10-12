@@ -141,6 +141,16 @@ describe('roomTelemetry', () => {
     await rooms.shutdown();
   });
 
+  test('a new server reads zero rooms before its first sample', async () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics] });
+    const text = metrics.metrics();
+    expect(text).toContain('docx_editor_collab_rooms_active 0');
+    expect(text).toContain('docx_editor_collab_connections_active 0');
+    expect(text).toContain('docx_editor_collab_participants_active 0');
+    await rooms.shutdown();
+  });
+
   test('a custom reason matches without case', () => {
     const metrics = prometheusRegistry();
     const rooms = roomTelemetry({
@@ -631,8 +641,13 @@ describe('perRoomSeries', () => {
       `docx_editor_collab_room_memory_current_bytes{kind="state",room="${label}"}`
     );
     expect(metrics.metrics()).not.toContain(ROOM);
+    expect(metrics.metrics()).not.toContain(
+      'docx_editor_collab_rooms_memory_bytes{kind="state"} 0'
+    );
     room.close();
     expect(metrics.metrics()).not.toContain(label);
+    // A closed room leaves no stale total behind.
+    expect(metrics.metrics()).toContain('docx_editor_collab_rooms_memory_bytes{kind="state"} 0');
     await rooms.shutdown();
   });
 });

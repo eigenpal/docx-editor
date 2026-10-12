@@ -409,6 +409,9 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
     }
   }
 
+  // A scrape before the first sample reads zero rooms, never an empty body.
+  recordTotals();
+
   const interval = options.sampleInterval ?? 60_000;
   const timer = interval === false ? null : setInterval(() => void sampleGradually(), interval);
   (timer as { unref?: () => void } | null)?.unref?.();
@@ -468,7 +471,9 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
             for (const [kind] of memoryOf(room))
               pipeline.forget(METRICS.roomMemoryByRoom, { room: label, kind });
           }
-          totals();
+          // Memory and the fullest room come from the rooms left, so a closed room leaves no
+          // stale total behind.
+          recordTotals();
         },
       };
       const room: Room = {

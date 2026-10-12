@@ -77,7 +77,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.review-module-required':
     'This operation needs the review module. Register reviewModule() from @docx-editor.dev/pro in modules.',
   'edit.tracked-drawing-delete-unsupported':
-    'Deleting a drawing is not supported while changes are tracked, so nothing was deleted. Leave the drawing, or ask a person to delete it with tracking off.',
+    'This path cannot record a drawing deletion as a tracked change, so nothing was deleted. Delete the picture in the editor, which records the deletion as a tracked change, or leave it.',
   'edit.tracked-structure-unsupported':
     'This structural edit cannot be recorded as a tracked change. Edit the text inside the structure instead, or ask a person to make the change with tracking off.',
   'edit.tracked-operation-unsupported':
