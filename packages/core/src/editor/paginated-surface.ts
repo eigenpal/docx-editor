@@ -136,7 +136,6 @@ import {
   reviewThreadRootOf,
   selectionRects,
   caretAt,
-  cellSelectionText,
   contentControlHoldingParagraph,
   contentControlRecordsInPart,
   contentControlsInLayout,
@@ -211,8 +210,9 @@ import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
+  cellsPlainText,
   orderedRangeOf,
-  selectedTextIn,
+  rangePlainText,
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
 import {
@@ -5413,9 +5413,10 @@ export function mountPaginatedSurface(
     selectedText() {
       // A rectangle copies as a grid — tabs between cells, newlines between rows — because
       // the text range it stands in for would paste back as one run with the grid gone.
-      if (cellSelection) return cellSelectionText(currentLayout, cellSelection);
+      // Each computed field reads as its painted result, not its one model unit.
+      if (cellSelection) return cellsPlainText(currentLayout, cellSelection);
       const { from, to } = orderedRange();
-      return selectedTextIn(editingLayout(), from, to, paragraphOrder());
+      return rangePlainText(editingLayout(), from, to, paragraphOrder());
     },
 
     copyFlavours: () => copyFlavoursNow(),
