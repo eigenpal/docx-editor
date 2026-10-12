@@ -44,7 +44,8 @@ test('legacy noExtraLineSpacing retains natural baselines only within the author
   expect(
     applyLineSpacing({ rule: 'exact', value: 8, preserveExactBaseline: true }, 14, 11)
   ).toEqual({ height: 8, baseline: 8 });
-  for (const mode of [undefined, 11, 12, 14]) {
+  // Every mode keeps the face baseline, also mode 15 and a refused mode.
+  for (const mode of [undefined, 11, 12, 14, 15, 99]) {
     expect(
       compatibilityProfileFromSettings(settings(mode, '<w:noExtraLineSpacing/>')).has(
         'preserveExactLineBaseline'
@@ -57,16 +58,6 @@ test('legacy noExtraLineSpacing retains natural baselines only within the author
         ).has('preserveExactLineBaseline')
       ).toBe(false);
   }
-  expect(
-    compatibilityProfileFromSettings(settings(15, '<w:noExtraLineSpacing/>')).has(
-      'preserveExactLineBaseline'
-    )
-  ).toBe(false);
-  expect(
-    compatibilityProfileFromSettings(settings(99, '<w:noExtraLineSpacing/>')).has(
-      'preserveExactLineBaseline'
-    )
-  ).toBe(false);
   expect(
     compatibilityProfileFromSettings(settings(12, '<x:noExtraLineSpacing/>')).has(
       'preserveExactLineBaseline'
@@ -84,7 +75,7 @@ test('baseline policy reaches body and cell lines and invalidates reused paragra
   const session = createLayoutSession();
   const cache = createParagraphLayoutCache();
   const measurer = createFixedMeasurer(6, 14);
-  const modern = buildStyleCascadeTable(null, undefined, settings(15, '<w:noExtraLineSpacing/>'));
+  const modern = buildStyleCascadeTable(null, undefined, settings(15));
   const legacy = buildStyleCascadeTable(null, undefined, settings(12, '<w:noExtraLineSpacing/>'));
   expect(modern.cacheToken).not.toBe(legacy.cacheToken);
   for (const cascade of [modern, legacy, modern]) {

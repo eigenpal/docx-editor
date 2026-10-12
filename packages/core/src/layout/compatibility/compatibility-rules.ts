@@ -171,10 +171,9 @@ export const PROFILE_RULES = {
   },
   preserveExactLineBaseline: {
     behavior:
-      'With `w:noExtraLineSpacing` in a legacy mode that was not refused, an exact-height line keeps the face baseline',
+      'With `w:noExtraLineSpacing`, an exact-height line keeps the face baseline in every compatibility mode, also a refused one',
     source: 'ECMA-376 Part 4 §14.8.3.28 noExtraLineSpacing',
-    applies: (p) =>
-      !p.modeRefused && p.modeClass === 'legacy' && p.legacy.noExtraLineSpacing === true,
+    applies: (p) => p.legacy.noExtraLineSpacing === true,
   },
   strictTableStyleHierarchy: {
     behavior: 'Table style font size and justification apply over the default paragraph style',
