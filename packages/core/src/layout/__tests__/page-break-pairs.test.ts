@@ -89,6 +89,29 @@ describe('a page break directly followed by a line break', () => {
   });
 });
 
+describe('space before a paragraph that opens with a break', () => {
+  // 40pt space before (800 twips); lines are 20pt slots.
+  const spaced = (runs: string) =>
+    `<w:p><w:pPr><w:spacing w:before="800" w:after="0" w:line="400" w:lineRule="exact"/></w:pPr>${runs}</w:p>`;
+
+  test('goes to the text in the next column, not to the break line', () => {
+    const layout = lay(
+      load(
+        paragraph(run('S')) +
+          spaced(column + run('AA')) +
+          paragraph(run('NEXT')) +
+          sect('<w:cols w:num="2" w:space="0"/>')
+      )
+    );
+    expect(wordsAt(layout)).toMatchObject({ S: [0, 0], AA: [0, 2], NEXT: [0, 3] });
+  });
+
+  test('goes to the text on the next page after a page break, as before', () => {
+    const layout = lay(load(paragraph(run('S')) + spaced(page + run('AA')) + sect()));
+    expect(wordsAt(layout).AA).toEqual([1, 2]);
+  });
+});
+
 describe('a paragraph that opens with a column break', () => {
   test('keeps the break line on a full page, with nothing after the break', () => {
     const layout = lay(load(fill(14) + paragraph(column) + paragraph(run('NEXT')) + sect()));
