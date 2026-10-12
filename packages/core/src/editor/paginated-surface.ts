@@ -390,6 +390,8 @@ export function mountPaginatedSurface(
   const VIEWING_REFUSAL = 'the document is open for viewing';
   /** Document protection, as opposed to the reversible mode — the wording `gateCommand` uses. */
   const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
+  /** Set while formatting writes its ops outside a selected table of contents. */
+  let formattingOutsideToc = false;
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
   /** One timestamp per edit. The clock is the host's; the store never reads one. */
@@ -1135,6 +1137,16 @@ export function mountPaginatedSurface(
     runFormatRefusal: () =>
       commandProtectionRefusal({ type: 'toggleMark', mark: 'bold' }, surface)?.reason ?? null,
     session: gatedSession,
+    applyOutsideToc: (ops, apply) => {
+      const kept = ops.filter((op) => !opTouchesToc(op));
+      if (kept.length === 0) return apply(ops);
+      formattingOutsideToc = true;
+      try {
+        return apply(kept);
+      } finally {
+        formattingOutsideToc = false;
+      }
+    },
     storyScope,
     paragraphOrder,
     layout: editingLayout,
@@ -2870,7 +2882,8 @@ export function mountPaginatedSurface(
     if (
       edits &&
       !protectionWrite &&
-      ((checkSelection && selectionTouchesToc()) || ops.some((op) => opTouchesToc(op)))
+      ((checkSelection && !formattingOutsideToc && selectionTouchesToc()) ||
+        ops.some((op) => opTouchesToc(op)))
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
