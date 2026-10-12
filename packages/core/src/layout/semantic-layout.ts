@@ -113,6 +113,7 @@ import * as tableWrap from './table-float-exclusion.ts';
 import {
   bodyAnchorFrameBase,
   atKeptBreakY,
+  holdsOnlyColumnBreak,
   opensWithPageBreak,
   paragraphHoldsNothing,
   paragraphPaintsNothing,
@@ -2229,6 +2230,17 @@ function* layoutBlocksPass(
     let keptBreakLine = false;
     /** Where that kept line would sit unclamped: its shading fills there, past the band. */
     let keptBreakY = 0;
+    /** After a break line. Text after leading breaks opens with its space before and top rule. */
+    const openAfterBreak = (endsHere: boolean): void => {
+      fragmentBefore = 0;
+      fragmentTopExtent = 0;
+      endedWithPageBreak = !breakLinesOnly || endsHere;
+      if (endedWithPageBreak) return;
+      breakLinesOnly = false;
+      fragmentBefore = textBefore;
+      fragmentTopExtent = paragraphBorderExtentPt(borders.top);
+      cursorY += fragmentBefore + fragmentTopExtent;
+    };
     let fragmentParagraphStartY = cursorY;
     /** Clearance applied above the fragment's first placed line, for anchor framing. */
     let fragmentFirstLineSkip = 0;
@@ -2688,9 +2700,8 @@ function* layoutBlocksPass(
         const priorPageHadExclusions = pageExclusionZones().length > 0;
         flushFragment(isLastLine);
         advanceColumn();
-        fragmentBefore = 0;
-        fragmentTopExtent = 0;
-        endedWithPageBreak = true;
+        const next = lines[lineIndex + 1];
+        openAfterBreak(!next || holdsOnlyPageBreak(next) || holdsOnlyColumnBreak(next));
         if (
           !isLastLine &&
           (columnWidth() !== priorColumnWidth ||
@@ -2712,18 +2723,8 @@ function* layoutBlocksPass(
         if (isLastLine && options.markJoinsBreakSheet && !frame && emptySectionMarkAt(index + 1)) {
           markOnBreakSheet = index + 1;
         } else flushPage();
-        fragmentBefore = 0;
-        fragmentTopExtent = 0;
-        // Text after leading breaks opens here with its space before and its own top rule. It
-        // starts on this sheet, so its space after collapses with the next paragraph as usual.
-        endedWithPageBreak =
-          !breakLinesOnly || isLastLine || holdsOnlyPageBreak(lines[lineIndex + 1]!);
-        if (!endedWithPageBreak) {
-          breakLinesOnly = false;
-          fragmentBefore = textBefore;
-          fragmentTopExtent = paragraphBorderExtentPt(borders.top);
-          cursorY += fragmentBefore + fragmentTopExtent;
-        }
+        // The text starts on this sheet, so its space after collapses with the next paragraph.
+        openAfterBreak(isLastLine || holdsOnlyPageBreak(lines[lineIndex + 1]!));
         if (!isLastLine && (priorPageHadExclusions || pageExclusionZones().length > 0)) {
           rebreakInCurrentColumn(pendingLine.end, cursorY);
           appliedSkipByLineIndex.clear();

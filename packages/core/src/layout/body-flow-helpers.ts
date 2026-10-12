@@ -138,7 +138,7 @@ export function opensWithPageBreak(
 }
 
 /** Whether a line holds nothing but the column break that ends it. */
-const holdsOnlyColumnBreak = (line: PendingLine): boolean =>
+export const holdsOnlyColumnBreak = (line: PendingLine): boolean =>
   line.columnBreakAfter === true &&
   line.drawings.length === 0 &&
   line.spans.every((span) => !/[^\n]/.test(span.text));
