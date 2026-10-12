@@ -7,7 +7,7 @@
     "server": "node server/server.ts",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun check"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",
