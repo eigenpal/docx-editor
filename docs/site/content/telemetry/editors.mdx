@@ -123,7 +123,7 @@ If the share of slow presses grows, compare the layout and paint histograms for 
 
 Send performance to an exporter that records metrics, such as `otelExporter()` or `prometheusRegistry()`. The Sentry exporter records a performance event only as a breadcrumb, which Sentry shows beside a later error. A `callbackExporter` with an `onMetric` function receives each timing in a summary as one histogram sample, at the middle of its band.
 
-The editor measures only while something listens: a module with `onDiagnostic`, such as `telemetry.module`, or an `editor.on('diagnostic')` handler.
+The editor measures only while something wants the data: `telemetry.module` with the `performance` area on and consent given, another module whose `wantsDiagnostic` returns `true` for `'performance'`, or an `editor.on('diagnostic')` handler.
 
 ## Send to Sentry
 

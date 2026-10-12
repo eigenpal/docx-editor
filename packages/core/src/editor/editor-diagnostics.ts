@@ -123,7 +123,10 @@ export interface EditorDiagnosticsOptions {
       event: K,
       handler: (diagnostic: HistoryDiagnostic) => void
     ) => () => void;
-    /** Whether `editor.on('diagnostic')` has a handler. Performance is measured only then. */
+    /**
+     * Whether `editor.on('diagnostic')` has a handler. Performance is measured only then, or
+     * while a module wants it.
+     */
     readonly hasDiagnosticHandlers?: () => boolean;
   };
   /** The custom-node reporter, observed so its codes join the stream. */
@@ -170,8 +173,8 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
   const performance = createPerformanceSampler({
     deliver,
     enabled: () =>
-      options.modules.diagnosticListeners.length > 0 ||
-      options.events.hasDiagnosticHandlers?.() === true,
+      options.events.hasDiagnosticHandlers?.() === true ||
+      options.modules.wantsDiagnostic('performance'),
     ...options.performance,
   });
 

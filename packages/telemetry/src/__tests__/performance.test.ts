@@ -304,3 +304,20 @@ test('a press just over the last bound lands in the overflow bucket', () => {
     '+Inf': 1,
   });
 });
+
+test('the module wants performance only with the area on and consent given', async () => {
+  let consent = false;
+  const on = createTelemetry({
+    exporters: [memoryExporter()],
+    include: { performance: true },
+    consent: () => consent,
+  });
+  const off = createTelemetry({ exporters: [memoryExporter()], include: { editing: true } });
+  expect(on.module.wantsDiagnostic?.('performance')).toBe(false);
+  consent = true;
+  expect(on.module.wantsDiagnostic?.('performance')).toBe(true);
+  expect(off.module.wantsDiagnostic?.('performance')).toBe(false);
+  expect(off.module.wantsDiagnostic?.('edit.rejected')).toBe(true);
+  await on.shutdown();
+  expect(on.module.wantsDiagnostic?.('performance')).toBe(false);
+});

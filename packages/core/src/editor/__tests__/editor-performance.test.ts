@@ -279,3 +279,32 @@ describe('editor performance', () => {
     expect(events).toEqual([]);
   });
 });
+
+test('a module that does not want performance turns the measuring off', async () => {
+  const events: EditorDiagnostic[] = [];
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const editor = createDocxEditor({
+    container,
+    document: docx(),
+    modules: [
+      {
+        id: 'failures-only',
+        onDiagnostic: (event) => events.push(event),
+        wantsDiagnostic: (kind) => kind !== 'performance',
+      },
+    ],
+  });
+  try {
+    container
+      .querySelector('[contenteditable="true"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+    await nextFrame();
+    editor.exec({ type: 'insertText', text: 'x' });
+  } finally {
+    editor.destroy();
+    container.remove();
+  }
+  expect(events.filter((event) => event.kind === 'performance')).toEqual([]);
+  expect(events.some((event) => event.kind === 'document.open')).toBe(true);
+});

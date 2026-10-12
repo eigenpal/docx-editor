@@ -5,7 +5,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
 import { explainDiagnostic } from '@docx-editor.dev/core';
-import type { EditorDiagnostic, EditorModule, TimingSummary } from '@docx-editor.dev/core';
+import type {
+  EditorDiagnostic,
+  EditorDiagnosticKind,
+  EditorModule,
+  TimingSummary,
+} from '@docx-editor.dev/core';
 import { METRICS, type MetricDefinition } from './metrics.ts';
 import { checkEvent } from './anonymous.ts';
 import {
@@ -301,6 +306,10 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     module: Object.freeze({
       id: 'telemetry',
       onDiagnostic: record,
+      // The editor times key presses only while performance would be recorded.
+      wantsDiagnostic: (kind: EditorDiagnosticKind) =>
+        !closed &&
+        (kind !== 'performance' || (rate('performance') !== null && pipeline.consented())),
     }),
     record,
     flush,

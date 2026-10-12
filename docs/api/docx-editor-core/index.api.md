@@ -2015,6 +2015,7 @@ export interface EditorModule {
     readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
     readonly onDiagnostic?: (event: EditorDiagnostic) => void;
     readonly review?: ReviewModuleContribution;
+    readonly wantsDiagnostic?: (kind: EditorDiagnosticKind) => boolean;
 }
 
 // @public
