@@ -60,7 +60,9 @@ const summary = (fields: Partial<PerformanceDiagnostic> = {}): EditorDiagnostic 
 /** Bucket counts of one histogram in the Prometheus text, by upper bound. */
 function buckets(text: string, name: string): Record<string, number> {
   const out: Record<string, number> = {};
-  for (const match of text.matchAll(new RegExp(`^${name}_bucket\\{le="([^"]+)"\\} (\\d+)$`, 'gm')))
+  for (const match of text.matchAll(
+    new RegExp(`^${name}_bucket\\{pages="10-99",le="([^"]+)"\\} (\\d+)$`, 'gm')
+  ))
     out[match[1]!] = Number(match[2]);
   return out;
 }
@@ -93,11 +95,13 @@ describe('performance with a real editor', () => {
     const event = events[0] as PerformanceDiagnostic;
     expect(event.interaction?.count).toBe(1);
     const text = metrics.metrics();
-    expect(text).toContain('docx_editor_editor_interaction_duration_seconds_count 1');
+    expect(text).toContain('docx_editor_editor_interaction_duration_seconds_count{pages="1"} 1');
     expect(text).toContain(
-      `docx_editor_editor_layout_duration_seconds_count ${event.layout!.count}`
+      `docx_editor_editor_layout_duration_seconds_count{pages="1"} ${event.layout!.count}`
     );
-    expect(text).toContain(`docx_editor_editor_paint_duration_seconds_count ${event.paint!.count}`);
+    expect(text).toContain(
+      `docx_editor_editor_paint_duration_seconds_count{pages="1"} ${event.paint!.count}`
+    );
     expect(JSON.stringify(memory.events) + text).not.toContain(SECRET.split(' ')[1]);
     await telemetry.shutdown();
   });
@@ -169,7 +173,7 @@ describe('performance summaries', () => {
       '[docx-editor] performance over 60 s, 10-99 pages: key presses and clicks p50 20 ms, p95 240 ms, max 1800 ms (x8)',
     ]);
     expect(lines[1]![0]).toBe('warn');
-    expect(lines[1]![1]).toContain('took more than 200 ms to reach the screen');
+    expect(lines[1]![1]).toContain('took over 200 ms to reach the screen');
     expect(lines[1]![1]).toContain('#performance-slow-interaction');
   });
 
@@ -221,4 +225,34 @@ describe('performance summaries', () => {
     });
     expect(Object.keys(attributes[0]!).some((key) => key.includes('bands'))).toBe(false);
   });
+});
+
+test('hiding the page flushes the exporters after the editor sends its summary', async () => {
+  const order: string[] = [];
+  const telemetry = createTelemetry({
+    exporters: [
+      {
+        name: 'order',
+        event: (event) => void order.push(event.kind),
+        flush: () => void order.push('flush'),
+      },
+    ],
+    include: { performance: true, documentOpen: true },
+  });
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const editor = createDocxEditor({ container, document: docx(), modules: [telemetry.module] });
+  try {
+    editor.exec({ type: 'insertText', text: 'z' });
+    order.length = 0;
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+    await Promise.resolve();
+    expect(order).toEqual(['performance', 'flush']);
+  } finally {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    editor.destroy();
+    container.remove();
+    await telemetry.shutdown();
+  }
 });

@@ -25,7 +25,6 @@ export const telemetry = createTelemetry({
     documentOpen: true,
     trackedChanges: true,
     editing: true,
-    performance: { sampleRate: 0.1 }, // typing delay, layout, and paint times
   },
   consent: () => consentManager.analytics === true, // your consent manager
 });
@@ -41,6 +40,21 @@ A refused tracked change explains itself. Here, an agent deleted a picture throu
 [docx-editor] edit refused: edit.tracked-operation-unsupported (automation, tracked)
   This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed.
   https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-operation-unsupported
+```
+
+### Editor performance
+
+Turn on the `performance` area to measure typing delay and engine layout and paint times. Send it to an exporter that records metrics, because the Sentry exporter records it only as breadcrumbs:
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const performanceTelemetry = createTelemetry({
+  exporters: [otelExporter()],
+  include: { performance: true },
+});
+// Register both modules: [telemetry.module, performanceTelemetry.module]
 ```
 
 ## Collaboration servers

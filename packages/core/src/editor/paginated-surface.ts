@@ -356,6 +356,8 @@ type ScaleMutableSurface = PaginatedSurface & {
 
 /** Body blocks a sliced opening lays out at mount, before its first yield. */
 const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
+/** Presses of these keys alone change nothing on the page, so they are not timed. */
+const MODIFIER_KEYS: ReadonlySet<string> = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -884,13 +886,12 @@ export function mountPaginatedSurface(
   let lastLayoutMs = 0;
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
-  /** The milliseconds since `began`, also told to `onTiming`. */
-  const timed = (phase: 'layout' | 'paint', began: number): number => {
-    const ms = now() - began;
-    options.onTiming?.(phase, ms);
-    return ms;
+  // Timings for diagnostics. Layout is told per pass by the deferred layout, background slices
+  // included; the opening layout is not told, because the open reports its own duration.
+  const onInputTiming = (event: Event): void => {
+    if (!MODIFIER_KEYS.has((event as KeyboardEvent).key))
+      options.onTiming?.('input', event.timeStamp);
   };
-  const onInputTiming = (event: Event): void => options.onTiming?.('input', event.timeStamp);
 
   // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode } =
@@ -1100,6 +1101,7 @@ export function mountPaginatedSurface(
     },
     // Marks the container while later pages still show the previous layout.
     pendingChanged: (pending) => container.toggleAttribute('data-docx-layout-pending', pending),
+    passTimed: (ms) => options.onTiming?.('layout', ms),
   });
   let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
     ? PROGRESSIVE_OPEN_FIRST_BLOCKS
@@ -1452,7 +1454,7 @@ export function mountPaginatedSurface(
       undefined,
       openingBlockLimit ?? undefined
     );
-    lastLayoutMs = timed('layout', began);
+    lastLayoutMs = now() - began;
     return layout;
   }
 
@@ -1658,7 +1660,7 @@ export function mountPaginatedSurface(
       deferredLayout.abandon();
       const steps = layoutDocumentSteps(scope.revision, scope);
       const layout = deferredLayout.run(steps, scope.revision);
-      lastLayoutMs = timed('layout', began);
+      lastLayoutMs = now() - began;
       return layout;
     },
     currentRevision: () => session.packageRevision(),
@@ -2698,7 +2700,8 @@ export function mountPaginatedSurface(
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
-    lastPaintMs = timed('paint', paintBegan);
+    lastPaintMs = now() - paintBegan;
+    options.onTiming?.('paint', lastPaintMs);
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);

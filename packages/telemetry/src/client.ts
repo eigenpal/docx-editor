@@ -209,7 +209,13 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     pageHooked = true;
     const target = (globalThis as { addEventListener?: typeof addEventListener }).addEventListener;
     // Read lazily: during server rendering there is no window, and nothing to flush.
-    if (typeof target === 'function') target('pagehide', () => void flush());
+    if (typeof target !== 'function') return;
+    target('pagehide', () => void flush());
+    // A mobile browser often closes a background tab without `pagehide`. The event reaches the
+    // window after the document's own listeners, where each editor sends its last summary.
+    target('visibilitychange', () => {
+      if (globalThis.document?.visibilityState === 'hidden') void flush();
+    });
   }
 
   function close(key: string): void {
@@ -339,10 +345,12 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
     case 'collab.participants':
       pipeline.metric(METRICS.collabClientParticipants, event.count);
       return;
-    case 'performance':
-      recordTiming(pipeline, METRICS.editorInteractionDuration, event.interaction);
-      recordTiming(pipeline, METRICS.editorLayoutDuration, event.layout);
-      recordTiming(pipeline, METRICS.editorPaintDuration, event.paint);
+    case 'performance': {
+      const pages = event.pagesBucket ?? 'unknown';
+      recordTiming(pipeline, METRICS.editorInteractionDuration, pages, event.interaction);
+      recordTiming(pipeline, METRICS.editorLayoutDuration, pages, event.layout);
+      recordTiming(pipeline, METRICS.editorPaintDuration, pages, event.paint);
+    }
   }
 }
 
@@ -351,7 +359,12 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic): void {
  * band above the last bound at the slowest timing. Every sample lands in its own bucket, so the
  * bucket counts are exact.
  */
-function recordTiming(pipeline: Pipeline, definition: MetricDefinition, summary?: TimingSummary) {
+function recordTiming(
+  pipeline: Pipeline,
+  definition: MetricDefinition,
+  pages: string,
+  summary?: TimingSummary
+) {
   if (!summary) return;
   const bounds = definition.buckets ?? [];
   summary.bands.forEach((count, band) => {
@@ -359,6 +372,7 @@ function recordTiming(pipeline: Pipeline, definition: MetricDefinition, summary?
     const lower = band === 0 ? 0 : bounds[band - 1]!;
     const seconds =
       upper === undefined ? Math.max(summary.maxMs / 1000, lower) : (lower + upper) / 2;
-    for (let sample = 0; sample < count; sample += 1) pipeline.metric(definition, seconds);
+    for (let sample = 0; sample < count; sample += 1)
+      pipeline.metric(definition, seconds, { pages });
   });
 }

@@ -155,6 +155,29 @@ describe('pages after the screen finish in the background', () => {
     }
   });
 
+  test('a pass reports its layout time once, background slices included, when it ends', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const layouts: number[] = [];
+    const opened = mountPaginatedSurface(container, docx(), {
+      onTiming: (phase, ms) => void (phase === 'layout' && layouts.push(ms)),
+    });
+    if (!opened.ok) throw new Error(opened.reason);
+    const { surface } = opened;
+    try {
+      // The opening layout is the open's own duration, not an edit's.
+      expect(layouts).toEqual([]);
+      splitFirst(surface);
+      expect(layouts).toEqual([]);
+      await settled(surface, coldLines(surface));
+      expect(layouts).toHaveLength(1);
+      expect(layouts[0]).toBeGreaterThan(0);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
   test('a save during the pass writes the edited document', () => {
     const { surface, dispose } = mount(docx());
     try {

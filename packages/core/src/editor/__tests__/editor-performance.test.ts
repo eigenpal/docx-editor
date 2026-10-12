@@ -99,14 +99,39 @@ describe('performance sampler', () => {
     expect(sent[0]!.interaction).toMatchObject({ count: 1, p50Ms: 35, maxMs: 35 });
   });
 
-  test('presses while one waits for its frame are one interaction', () => {
+  test('presses queued behind slow work each count with their full delay', () => {
     const { sent, time, instance } = sampler();
     instance.timing('input', 1_000);
-    instance.timing('input', 1_000);
-    instance.timing('input', 1_000);
+    time.advance(100);
+    instance.timing('input', 1_100);
+    time.advance(100);
+    instance.timing('input', 1_200);
     time.frame(30);
     instance.flush();
-    expect(sent[0]!.interaction?.count).toBe(1);
+    expect(sent[0]!.interaction).toMatchObject({ count: 3, maxMs: 230, p50Ms: 130 });
+  });
+
+  test('a press waiting while the page is hidden is dropped, and a later one still counts', () => {
+    const { sent, time, instance } = sampler();
+    instance.timing('input', 1_000);
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    instance.timing('input', time.clock.now());
+    time.frame(20_000);
+    instance.flush();
+    expect(sent.at(-1)!.interaction).toMatchObject({ count: 1, maxMs: 20_000 });
+  });
+
+  test('a few slow presses are too few for the slow code', () => {
+    const { sent, time, instance } = sampler();
+    for (let press = 0; press < 19; press += 1) {
+      instance.timing('input', time.clock.now());
+      time.frame(400);
+    }
+    instance.flush();
+    expect(sent[0]!.interaction?.p95Ms).toBe(400);
+    expect(sent[0]!.code).toBeUndefined();
   });
 
   test('a slow 95th percentile of presses carries a code with a hint', () => {

@@ -194,7 +194,10 @@ export interface TimingSummary {
  */
 export interface PerformanceDiagnostic extends DiagnosticBase {
   readonly kind: 'performance';
-  /** Present when the summary needs attention, such as slow key presses. */
+  /**
+   * Present when the summary needs attention: `performance.slow-interaction` when at least 20
+   * presses were timed and more than one in 20 took over 200 ms.
+   */
   readonly code?: PerformanceDiagnosticCode;
   /** Milliseconds from the window's first timing to the summary. */
   readonly windowMs: number;
@@ -202,11 +205,14 @@ export interface PerformanceDiagnostic extends DiagnosticBase {
   readonly pagesBucket?: CountBucket;
   /**
    * Key presses and pointer presses on the pages, from the browser event to the next frame on
-   * screen: the delay a person feels. At most one is timed at a time, so a burst of key repeats
-   * is timed from its first press.
+   * screen: the delay a person feels. Presses queued behind slow work count with their full
+   * delay. Presses of modifier keys alone, and presses while the page is hidden, are not timed.
    */
   readonly interaction?: TimingSummary;
-  /** Engine layout passes. */
+  /**
+   * Engine layout passes after edits, each with its main-thread work in the background
+   * included. The opening layout is not here: `document.open` reports it as `durationMs`.
+   */
   readonly layout?: TimingSummary;
   /** Engine paints of the pages. */
   readonly paint?: TimingSummary;

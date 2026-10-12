@@ -88,15 +88,15 @@ The `performance` area reports how fast the editor responds to the person who us
 
 Each event has up to three timing summaries:
 
-- `interaction`: the time from a key press or a pointer press on the pages to the next frame on screen. This is the delay that a person feels when they type or click.
-- `layout`: the time of each engine layout pass.
+- `interaction`: the time from a key press or a pointer press on the pages to the next frame on screen. This is the delay that a person feels when they type or click. Presses that wait behind slow work count with their full delay. Presses of modifier keys alone, and presses while the page is hidden, are not timed.
+- `layout`: the main-thread time of each engine layout pass after an edit, including the parts that finish in the background. The opening layout is not included, because the `document.open` event reports it.
 - `paint`: the time of each engine paint of the pages.
 
 Each summary has `count`, `p50Ms`, `p95Ms`, `maxMs`, and `bands`, the number of timings up to 16, 33, 50, 100, 200, 500, and 1000 ms, and over 1000 ms. The event also has `windowMs` and `pagesBucket`. It has no keys, positions, or text.
 
-If more than one key press or click in 20 takes more than 200 ms, the event has the code `performance.slow-interaction` and a hint. The console exporter prints it as a warning, and the Sentry exporter records it as a warning breadcrumb, never as an issue.
+If at least 20 presses were timed and more than one in 20 took over 200 ms, the event has the code `performance.slow-interaction` and a hint. The console exporter prints it as a warning, and the Sentry exporter records it as a warning breadcrumb, never as an issue.
 
-The following example records performance for one session in ten:
+The following example sends about one performance event in ten to OpenTelemetry. Each event is sampled on its own, not each session:
 
 ```ts
 import { createTelemetry } from '@docx-editor.dev/telemetry';
@@ -108,7 +108,9 @@ export const telemetry = createTelemetry({
 });
 ```
 
-Sampling applies to events only. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
+Sampling applies to events only. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their `pages` label is the page count bucket, such as `10-99`, so you can compare documents of different sizes. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
+
+Send performance to an exporter that records metrics, such as `otelExporter()` or `prometheusRegistry()`. The Sentry exporter records a performance event only as a breadcrumb, which Sentry shows beside a later error. A `callbackExporter` with an `onMetric` function receives each timing in a summary as one histogram sample, at the middle of its band.
 
 The editor measures only while something listens: a module with `onDiagnostic`, such as `telemetry.module`, or an `editor.on('diagnostic')` handler.
 

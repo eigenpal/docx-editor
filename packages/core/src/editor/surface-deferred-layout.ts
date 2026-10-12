@@ -49,6 +49,11 @@ export interface DeferredLayoutHost {
   snapshot(): () => void;
   /** Told when a pass starts or stops finishing in the background. */
   pendingChanged?(pending: boolean): void;
+  /**
+   * Told the milliseconds of main-thread work one pass took, its foreground part and every
+   * background slice together, once the pass ends: finished, or dropped for a newer edit.
+   */
+  passTimed?(ms: number): void;
 }
 
 export interface DeferredLayout {
@@ -94,6 +99,8 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     readonly steps: LayoutSteps<SemanticLayout>;
     readonly revision: number;
     readonly restore: () => void;
+    /** Main-thread milliseconds the pass has taken so far. */
+    spent: number;
   };
   let paused: Paused | null = null;
   const setPaused = (next: Paused | null): void => {
@@ -109,29 +116,36 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
   const drive = (): void => {
     const pass = paused;
     if (!pass) return;
-    const deadline = host.now() + BACKGROUND_SLICE_MS;
+    const began = host.now();
+    const deadline = began + BACKGROUND_SLICE_MS;
     for (;;) {
       const next = pass.steps.next();
       if (next.done) {
         setPaused(null);
         settle(next.value, pass.revision);
+        host.passTimed?.(pass.spent + host.now() - began);
         return;
       }
       if (host.now() >= deadline) break;
     }
+    pass.spent += host.now() - began;
     queueTask(drive);
   };
 
   return {
     run(steps, revision) {
       const restore = host.snapshot();
-      const deadline = host.now() + foregroundMs;
+      const began = host.now();
+      const deadline = began + foregroundMs;
       const after = pageAfterViewForTest ?? host.pageAfterView();
       const previous = host.current();
       let progress: LayoutProgress | null = null;
       for (;;) {
         const next = steps.next();
-        if (next.done) return next.value;
+        if (next.done) {
+          host.passTimed?.(host.now() - began);
+          return next.value;
+        }
         if (next.value) progress = next.value;
         if (
           after === undefined ||
@@ -145,7 +159,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
         // The completed pages, then the previous layout's pages after them, until the pass
         // ends. Each keeps the index it is painted at.
         const pages = [...progress.pages, ...previous.pages.slice(progress.pages.length)];
-        setPaused({ steps, revision, restore });
+        setPaused({ steps, revision, restore, spent: host.now() - began });
         afterPaint(drive);
         return progress.finalize(pages);
       }
@@ -153,14 +167,17 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     finish() {
       const pass = paused;
       if (!pass) return;
+      const began = host.now();
       setPaused(null);
       settle(drainLayoutSteps(pass.steps), pass.revision);
+      host.passTimed?.(pass.spent + host.now() - began);
     },
     abandon() {
       const pass = paused;
       if (!pass) return;
       setPaused(null);
       pass.restore();
+      host.passTimed?.(pass.spent);
     },
     pending: () => paused !== null,
     cancel() {

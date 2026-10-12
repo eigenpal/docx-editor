@@ -10,6 +10,10 @@ import type { MetricRecord, TelemetryEvent, TelemetryExporter } from './pipeline
 /**
  * Send each event to your own function: Datadog RUM, PostHog, a logger, or an API route.
  *
+ * `onMetric` receives every measurement. A performance summary arrives as one histogram sample
+ * for each timing in it, at the middle of the timing's band, so the bucket counts are exact.
+ * To chart percentiles, read `p50Ms` and `p95Ms` from the `performance` event instead.
+ *
  * @example
  * ```ts
  * callbackExporter((event) =>

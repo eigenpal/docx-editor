@@ -150,24 +150,24 @@ export const METRICS = Object.freeze({
     'docx_editor.editor.interaction.duration',
     'histogram',
     's',
-    'Key presses and pointer presses on the pages, to the next frame on screen. Bucket counts are exact; the sum is estimated from the bands.',
-    [],
+    'Key presses and pointer presses on the pages, to the next frame on screen, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
+    ['pages'],
     EDITOR_TIMING
   ),
   editorLayoutDuration: metric(
     'docx_editor.editor.layout.duration',
     'histogram',
     's',
-    'Engine layout passes. Bucket counts are exact; the sum is estimated from the bands.',
-    [],
+    'Engine layout passes after edits, background work included, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
+    ['pages'],
     EDITOR_TIMING
   ),
   editorPaintDuration: metric(
     'docx_editor.editor.paint.duration',
     'histogram',
     's',
-    'Engine paints of the pages. Bucket counts are exact; the sum is estimated from the bands.',
-    [],
+    'Engine paints of the pages, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
+    ['pages'],
     EDITOR_TIMING
   ),
 
