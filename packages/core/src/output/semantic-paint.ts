@@ -1049,6 +1049,12 @@ function paintLine(
   // baseline`, so mixed-size and superscript/subscript (relative offset) still work.
   element.style.fontSize = '0';
   element.style.whiteSpace = 'pre';
+  // ONE UNBROKEN RULE ACROSS THE LINE. Every run is its own inline-block, so each run's
+  // trailing space ends a line box of its own, and the browser default skips decoration at
+  // line edges and around descenders. A document underline crosses both. Both properties
+  // inherit, so the line sets them once for every run and decoration layer inside it.
+  element.style.setProperty('text-decoration-skip-ink', 'none');
+  element.style.setProperty('text-decoration-skip-spaces', 'none');
   // A raised superscript or a tall glyph draws outside the line box rather than being
   // clipped at it; the box governs spacing and the selection band, not what is visible.
   element.style.overflow = 'visible';
