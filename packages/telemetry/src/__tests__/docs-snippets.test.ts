@@ -5,76 +5,66 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Every TypeScript code block in the telemetry docs, the diagnostics guide, and this package's
 // README must type-check against the source, so a renamed option or export breaks this test
-// instead of a reader's build. Each block is its own module. The prelude declares only what
-// the docs leave to the reader: their consent manager, logger, web framework, and handlers.
+// instead of a reader's build. Each block is its own module. A block may use a name only if it
+// imports or declares it, an earlier block on the same page does, or the reader supplies it
+// (their consent manager, logger, web framework, and handlers).
 import { expect, test } from 'bun:test';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const PACKAGE = path.resolve(import.meta.dir, '../..');
 const ROOT = path.resolve(PACKAGE, '../..');
+const TELEMETRY_DOCS = path.join(ROOT, 'docs/site/content/telemetry');
 const SOURCES = [
-  'docs/site/content/telemetry/index.mdx',
-  'docs/site/content/telemetry/editors.mdx',
-  'docs/site/content/telemetry/servers.mdx',
-  'docs/site/content/telemetry/metrics.mdx',
-  'docs/site/content/guides/diagnostics.mdx',
-  'packages/telemetry/README.md',
+  ...readdirSync(TELEMETRY_DOCS)
+    .filter((name) => name.endsWith('.mdx'))
+    .sort()
+    .map((name) => path.join(TELEMETRY_DOCS, name)),
+  path.join(ROOT, 'docs/site/content/guides/diagnostics.mdx'),
+  path.join(PACKAGE, 'README.md'),
 ];
 
-const PRELUDE = `
-type Hook = (payload: any) => Promise<any>;
-declare global {
-  const consentManager: { readonly analytics: boolean };
-  const datadogRum: {
-    addError(error: Error, context?: object): void;
-    addAction(name: string, context?: object): void;
-  };
-  const Sentry: typeof import('@sentry/core') & {
-    init(options: { dsn: string; integrations?: unknown[]; beforeBreadcrumb?: unknown }): void;
-    replayIntegration(options: { block?: string[] }): unknown;
-  };
-  type Handler = (
-    request: import('node:http').IncomingMessage,
-    response: import('node:http').ServerResponse & { json(body: unknown): void },
-    next?: () => void
-  ) => unknown;
-  const app: { get(path: string, ...handlers: Handler[]): void };
-  const requireAdmin: Handler;
-  const fastify: {
-    get(
-      path: string,
-      handler: (
-        request: { raw: import('node:http').IncomingMessage },
-        reply: { raw: import('node:http').ServerResponse; hijack(): void }
-      ) => unknown
-    ): void;
-  };
-  const bytes: Uint8Array;
-  const onAuthenticate: Hook;
-  const onLoadDocument: Hook;
-  const beforeHandleMessage: Hook;
-  const onStoreDocument: Hook;
-  const Server: typeof import('@hocuspocus/server').Server;
-  const config: ReturnType<
-    typeof import('@docx-editor.dev/telemetry/hocuspocus').withCollaborationTelemetry
-  >['config'];
-  const rooms: import('@docx-editor.dev/telemetry/server').RoomTelemetry;
-  const metrics: import('@docx-editor.dev/telemetry/prometheus').PrometheusRegistry;
-  const metricsHandler: typeof import('@docx-editor.dev/telemetry/prometheus').metricsHandler;
-  const ydoc: import('yjs').Doc;
-  const roomName: string;
-  const awareness: import('@docx-editor.dev/telemetry/server').AwarenessLike;
-  const error: unknown;
-  function loadRoom(doc: import('yjs').Doc): Promise<void>;
-}
-export {};
+/** What the reader supplies. Never a package export: those must be imported. */
+const READER: Readonly<Record<string, string>> = {
+  consentManager: '{ readonly analytics: boolean }',
+  datadogRum:
+    '{ addError(error: Error, context?: object): void; addAction(name: string, context?: object): void }',
+  app: '{ get(path: string, ...handlers: Handler[]): void }',
+  requireAdmin: 'Handler',
+  fastify: `{ get(path: string, handler: (request: { raw: import('node:http').IncomingMessage }, reply: { raw: import('node:http').ServerResponse; hijack(): void }) => unknown): void }`,
+  bytes: 'Uint8Array',
+  onAuthenticate: 'Hook',
+  onLoadDocument: 'Hook',
+  beforeHandleMessage: 'Hook',
+  onStoreDocument: 'Hook',
+  ydoc: `import('yjs').Doc`,
+  roomName: 'string',
+  awareness: `import('@docx-editor.dev/telemetry/server').AwarenessLike`,
+  error: 'unknown',
+  loadRoom: `(doc: import('yjs').Doc) => Promise<void>`,
+};
+
+/** Names an earlier block on the same page may set up, as one file would. */
+const CARRIED: Readonly<Record<string, string>> = {
+  Sentry: `typeof import('@sentry/core') & { init(options: import('@sentry/core').Options): void; replayIntegration(options: { block?: string[] }): import('@sentry/core').Integration }`,
+  Server: `typeof import('@hocuspocus/server').Server`,
+  config: `ReturnType<typeof import('@docx-editor.dev/telemetry/hocuspocus').withCollaborationTelemetry>['config']`,
+  rooms: `import('@docx-editor.dev/telemetry/server').RoomTelemetry`,
+  metrics: `import('@docx-editor.dev/telemetry/prometheus').PrometheusRegistry`,
+  metricsHandler: `typeof import('@docx-editor.dev/telemetry/prometheus').metricsHandler`,
+  telemetry: `import('@docx-editor.dev/telemetry').Telemetry`,
+};
+
+const SHARED_TYPES = `type Hook = (payload: any) => Promise<any>;
+type Handler = (request: import('node:http').IncomingMessage, response: import('node:http').ServerResponse & { json(body: unknown): void }, next?: () => void) => unknown;
 `;
 
 // Typed by their public shape: compiling the React adapter here would pull in its own aliases.
 const MODULES = `
 declare module '@sentry/react' {
   export * from '@sentry/core';
+  export function init(options: import('@sentry/core').Options): void;
+  export function replayIntegration(options: { block?: string[] }): import('@sentry/core').Integration;
 }
 declare module '@/lib/metrics' {
   export const metrics: import('@docx-editor.dev/telemetry/prometheus').PrometheusRegistry;
@@ -90,36 +80,109 @@ declare module '@docx-editor.dev/pro' {
 }
 `;
 
-function blocks(): { file: string; lang: string; code: string }[] {
-  const found: { file: string; lang: string; code: string }[] = [];
+interface Example {
+  readonly file: string;
+  readonly lang: 'ts' | 'tsx';
+  readonly code: string;
+  /** Code of the earlier blocks on the same page. */
+  readonly before: string;
+}
+
+const FENCE = /^[ \t]*```(ts|tsx|typescript)\b[^\n]*\r?\n([\s\S]*?)^[ \t]*```/gm;
+
+function examples(): Example[] {
+  const found: Example[] = [];
   for (const source of SOURCES) {
-    const text = readFileSync(path.join(ROOT, source), 'utf8');
-    for (const match of text.matchAll(/```(tsx?)\n([\s\S]*?)```/g))
-      found.push({ file: source, lang: match[1]!, code: match[2]! });
+    const text = readFileSync(source, 'utf8');
+    let before = '';
+    for (const match of text.matchAll(FENCE)) {
+      const code = match[2]!.replace(/\r\n/g, '\n');
+      found.push({ file: source, lang: match[1] === 'tsx' ? 'tsx' : 'ts', code, before });
+      before += `\n${code}`;
+    }
   }
   return found;
 }
 
+/** Whether the code imports or declares a name at the top level. */
+function defines(code: string, name: string): boolean {
+  const word = `\\b${name}\\b`;
+  return (
+    new RegExp(`^\\s*import\\b[^;]*${word}[^;]*from`, 'm').test(code) ||
+    new RegExp(
+      `^\\s*(?:export\\s+)?(?:const|let|function|class)\\s+(?:\\{[^}]*${word}|${name}\\b)`,
+      'm'
+    ).test(code)
+  );
+}
+
+function uses(code: string, name: string): boolean {
+  // A spread (`...config`) uses the name; a property access (`event.config`) does not.
+  return new RegExp(`(?<![.\\w'"/])${name}\\b`).test(code.replace(/\.\.\./g, '   '));
+}
+
+/** The declarations a block needs: what the reader supplies, and what earlier blocks set up. */
+function context(example: Example): string {
+  const lines: string[] = [];
+  for (const [name, type] of Object.entries(READER))
+    if (uses(example.code, name) && !defines(example.code, name))
+      lines.push(`declare const ${name}: ${type};`);
+  for (const [name, type] of Object.entries(CARRIED))
+    if (uses(example.code, name) && !defines(example.code, name) && defines(example.before, name))
+      lines.push(`declare const ${name}: ${type};`);
+  return lines.length ? `${SHARED_TYPES}${lines.join('\n')}\n` : '';
+}
+
+test('the docs contain no JavaScript blocks that this check would skip', () => {
+  for (const source of SOURCES)
+    expect(readFileSync(source, 'utf8').match(/^[ \t]*```(js|jsx|javascript)\b/gm) ?? []).toEqual(
+      []
+    );
+});
+
 test('every TypeScript example in the telemetry docs type-checks', () => {
-  const examples = blocks();
-  expect(examples.length).toBeGreaterThan(10);
-  // Inside node_modules, so package imports resolve as they do for the package itself.
-  const dir = path.join(PACKAGE, 'node_modules/.cache/docs-snippets');
-  rmSync(dir, { recursive: true, force: true });
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(path.join(dir, 'prelude.ts'), PRELUDE);
-  writeFileSync(path.join(dir, 'modules.d.ts'), MODULES);
-  const origin: string[] = [];
-  const named = new Set<string>();
-  examples.forEach((example, index) => {
-    // A block that opens with its file name, such as `// telemetry.ts`, is saved under it, so
-    // the next block can import it.
-    const declared = /^\/\/ ([\w-]+\.tsx?)\n/.exec(example.code)?.[1];
-    const name = declared && !named.has(declared) ? declared : `example-${index}.${example.lang}`;
-    named.add(name);
-    origin.push(`${name}: ${example.file}`);
-    writeFileSync(path.join(dir, name), example.code);
-  });
+  const found = examples();
+  expect(found.length).toBeGreaterThan(10);
+  // Inside node_modules, so package imports resolve as they do for the package itself; one
+  // directory per run, so two runs in one checkout never share files.
+  const cache = path.join(PACKAGE, 'node_modules/.cache');
+  readdirSync(PACKAGE); // the package exists
+  const dir = mkdtempSync(path.join(ensure(cache), 'docs-snippets-'));
+  try {
+    writeFileSync(path.join(dir, 'modules.d.ts'), MODULES);
+    const origin: string[] = [];
+    const named = new Set<string>();
+    found.forEach((example, index) => {
+      // A block that opens with its file name, such as `// telemetry.ts`, is saved under it, so
+      // a later block can import it.
+      const declared = /^\/\/ ([\w-]+\.tsx?)\n/.exec(example.code)?.[1];
+      const name = declared && !named.has(declared) ? declared : `example-${index}.${example.lang}`;
+      named.add(name);
+      origin.push(`${name}: ${path.relative(ROOT, example.file)}`);
+      const header = context(example);
+      // A block with no import or export is a script; `export {}` keeps it a module, so its
+      // declarations stay its own.
+      writeFileSync(path.join(dir, name), `${header}${example.code}\nexport {};\n`);
+    });
+    writeFileSync(path.join(dir, 'tsconfig.json'), JSON.stringify(tsconfig()));
+    const run = Bun.spawnSync(
+      ['node', path.join(ROOT, 'node_modules/typescript7/bin/tsc'), '-p', dir],
+      { cwd: dir, stdout: 'pipe', stderr: 'pipe' }
+    );
+    const output = `${run.stdout.toString()}${run.stderr.toString()}`;
+    if (run.exitCode !== 0) console.error(`${origin.join('\n')}\n\n${output}`);
+    expect(run.exitCode).toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 120_000);
+
+function ensure(dir: string): string {
+  Bun.spawnSync(['mkdir', '-p', dir]);
+  return dir;
+}
+
+function tsconfig(): object {
   const telemetryPaths = JSON.parse(
     readFileSync(path.join(PACKAGE, 'tsconfig.json'), 'utf8').replace(/^\s*\/\/.*$/gm, '')
   ).compilerOptions.paths as Record<string, string[]>;
@@ -129,32 +192,22 @@ test('every TypeScript example in the telemetry docs type-checks', () => {
   paths['@docx-editor.dev/telemetry'] = [path.join(PACKAGE, 'src/index.ts')];
   paths['@docx-editor.dev/telemetry/*'] = [path.join(PACKAGE, 'src/*/index.ts')];
   paths['@docx-editor.dev/editor-api'] = [path.join(ROOT, 'packages/editor-api/src/index.ts')];
-  writeFileSync(
-    path.join(dir, 'tsconfig.json'),
-    JSON.stringify({
-      compilerOptions: {
-        target: 'ES2022',
-        lib: ['ES2022', 'DOM', 'DOM.Iterable'],
-        types: ['bun'],
-        module: 'ESNext',
-        moduleResolution: 'bundler',
-        jsx: 'react-jsx',
-        strict: true,
-        noEmit: true,
-        skipLibCheck: true,
-        allowImportingTsExtensions: true,
-        isolatedModules: true,
-        paths,
-      },
-      include: ['*.ts', '*.tsx'],
-    })
-  );
-  const run = Bun.spawnSync(
-    ['node', path.join(ROOT, 'node_modules/typescript7/bin/tsc'), '-p', dir],
-    { cwd: dir, stdout: 'pipe', stderr: 'pipe' }
-  );
-  const output = `${run.stdout.toString()}${run.stderr.toString()}`;
-  if (run.exitCode !== 0) console.error(`${origin.join('\n')}\n\n${output}`);
-  expect(run.exitCode).toBe(0);
-  rmSync(dir, { recursive: true, force: true });
-}, 120_000);
+  return {
+    compilerOptions: {
+      target: 'ES2022',
+      lib: ['ES2022', 'DOM', 'DOM.Iterable'],
+      types: ['bun'],
+      module: 'ESNext',
+      moduleResolution: 'bundler',
+      jsx: 'react-jsx',
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      allowImportingTsExtensions: true,
+      isolatedModules: true,
+      moduleDetection: 'force',
+      paths,
+    },
+    include: ['*.ts', '*.tsx'],
+  };
+}
