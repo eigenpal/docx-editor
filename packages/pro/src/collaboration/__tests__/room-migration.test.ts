@@ -166,23 +166,35 @@ describe('migrating a saved room', () => {
 
   // Room state that each published release saved, with the document it holds.
   const releases = resolve(import.meta.dir, '../../../../../.collaboration/releases');
+  const catalog = JSON.parse(readFileSync(resolve(releases, '../releases.json'), 'utf8')) as {
+    releases: { version: string; format: string }[];
+  };
   for (const release of readdirSync(releases).filter((name) =>
     existsSync(resolve(releases, name, 'fixture.json'))
   )) {
-    test(`a room that ${release} saved migrates and keeps its document ID`, async () => {
+    test(`a room that ${release} saved follows its recorded migration requirement`, async () => {
       const saved = JSON.parse(
         readFileSync(resolve(releases, release, 'fixture.json'), 'utf8')
       ) as { document: string; state: string };
       const state = new Uint8Array(Buffer.from(saved.state, 'base64'));
-      expect(collaborationMigrationNeed(state)).toBe('earlier-format');
+      const format = catalog.releases.find((entry) => entry.version === release)?.format;
+      expect(format).toBeDefined();
+      const current = format === COLLABORATION_FORMAT_VERSION;
+      expect(collaborationMigrationNeed(state)).toBe(current ? 'current' : 'earlier-format');
+      const documentId = metaOf(state).get('documentId');
+      if (typeof documentId !== 'string') throw new Error('Fixture has no document ID');
       const migrated = await migrateCollaborationRoom({
         state,
         exported: new Uint8Array(Buffer.from(saved.document, 'base64')),
       });
+      if (current) {
+        expect(migrated).toEqual({ ok: false, reason: 'current' });
+        return;
+      }
       if (!migrated.ok) throw new Error(JSON.stringify(migrated));
-      expect(migrated.report.from).toBe('docx-collaboration:1.3.1.1');
-      expect(migrated.report.documentId).toBe('old-room');
-      expect(metaOf(migrated.state).get('documentId')).toBe('old-room');
+      expect(migrated.report.from).toBe(format!);
+      expect(migrated.report.documentId).toBe(documentId);
+      expect(metaOf(migrated.state).get('documentId')).toBe(documentId);
     });
   }
 

@@ -399,9 +399,9 @@ jobs:
             --arg release "$release_url" \
             --arg packages "$packages_md" \
             '{
-              text: ":white_check_mark: docx-editor \($version) released",
+              text: ":large_green_circle: docx-editor \($version) released",
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: ":white_check_mark: *docx-editor \($version) released*" } },
+                { type: "section", text: { type: "mrkdwn", text: ":large_green_circle: *docx-editor \($version) released*" } },
                 { type: "section", fields: [
                   { type: "mrkdwn", text: "*Version*\n<\($release)|\($version)>" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" }

@@ -1,16 +1,24 @@
 name: Python wheels
 
 # Builds the docx-to-markdown Python package: one platform-tagged wheel per runner,
-# each carrying a Bun executable compiled on that platform. Pull requests that touch
-# the Python package upload the wheels as artifacts; engine changes are covered by the
-# main CI and do not rebuild wheels. The release workflow dispatches this one at the
-# release tag with `publish` set, which uploads to PyPI through trusted publishing
+# each carrying a Bun executable compiled on that platform. Pull requests that change
+# Python or its runtime dependencies build and test wheels on every supported platform.
+# The release workflow dispatches this one at the release tag with `publish` set,
+# which uploads to PyPI through trusted publishing
 # (the `pypi` environment; no token is stored).
 
 on:
   pull_request:
     paths:
       - 'python/docx-to-markdown/**'
+      - 'packages/core/**'
+      - 'packages/docx-to-markdown/**'
+      - 'packages/fonts/**'
+      - 'packages/i18n/**'
+      - 'scripts/build-*.mjs'
+      - 'scripts/tsup-*.mjs'
+      - 'package.json'
+      - 'bun.lock'
       - '.github/workflows/python-wheels.yml'
   workflow_dispatch:
     inputs:
@@ -135,8 +143,8 @@ jobs:
           RUN_NUMBER: ${{ github.run_number }}
         run: |
           if [ -z "$MISSING" ]; then
-            headline=":snake: *docx-to-markdown $VERSION published to PyPI*"
-            summary=":snake: docx-to-markdown $VERSION published to PyPI"
+            headline=":large_green_circle: *docx-to-markdown $VERSION published to PyPI*"
+            summary=":large_green_circle: docx-to-markdown $VERSION published to PyPI"
             detail=""
           else
             headline=":warning: *docx-to-markdown $VERSION published to PyPI without every platform*"

@@ -18,16 +18,26 @@ from docx_to_markdown import (
 def test_bundled_fonts_paginate_like_word(narrow_pages):
     result = convert(narrow_pages)
     assert isinstance(result, MarkdownResult)
-    # The Node.js library lays this fixture out on 15 pages with Carlito standing in for Calibri.
+    # Keep pagination stable while checking each requested family and its substitute.
     assert result.page_count == 15
     assert result.warnings == []
     assert result.fonts_complete
     assert result.font_resolution is not None
-    families = {f.family: f.coverage for f in result.font_resolution.families}
-    assert families == {"Calibri": "complete"}
-    face = result.font_resolution.families[0].faces[0]
-    assert (face.source_family, face.via) == ("Carlito", "substitution")
-    assert face.substitution is not None and face.substitution.requested.family == "Calibri"
+    # The fixture has run defaults but no font declaration. Its Latin font slot
+    # resolves to Times New Roman; the export fallback also requests Calibri.
+    families = {f.family: f for f in result.font_resolution.families}
+    assert set(families) == {"Times New Roman", "Calibri"}
+    for requested, substitute in {
+        "Times New Roman": "Liberation Serif",
+        "Calibri": "Carlito",
+    }.items():
+        family = families[requested]
+        assert family.coverage == "complete"
+        assert len(family.faces) == 4
+        for face in family.faces:
+            assert (face.source_family, face.via) == (substitute, "substitution")
+            assert face.substitution is not None
+            assert face.substitution.requested.family == requested
     assert result.pagination.display_mode == "all-markup"
     assert result.review_artifacts == [] and result.review_bindings == []
     assert result.font_errors == []

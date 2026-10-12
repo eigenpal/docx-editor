@@ -38,7 +38,7 @@ export function summarizeJobs(jobs, { version, published, runUrl, sourceUrl }) {
       : published
         ? 'The packages are already on npm; do not republish. Fix the cause, then rerun the failed jobs in the post-release run.'
         : 'The run could not confirm what was published. Check the Release run before you retry anything.';
-  const icon = (result) => (result === 'success' ? '✅' : result === 'skipped' ? '⚪' : '❌');
+  const icon = (result) => (result === 'success' ? '🟢' : result === 'skipped' ? '⚪' : '❌');
   const suffix = (result) => (result === 'success' ? '' : `: ${result}`);
   const slack = [
     `${icon(failed ? 'failure' : skipped ? 'skipped' : 'success')} ${title}`,

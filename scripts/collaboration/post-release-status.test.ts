@@ -313,7 +313,7 @@ test('the report counts every job, including source, and never calls a skip a pa
     [job('downstream / catalog / Merge verified catalog', 'success')],
     context
   );
-  expect(allPassed.slack.split('\n')[0]).toBe('✅ Post-release 2.22.0: all 1 steps passed.');
+  expect(allPassed.slack.split('\n')[0]).toBe('🟢 Post-release 2.22.0: all 1 steps passed.');
   expect(allPassed.slack).not.toContain('do not republish');
   expect(jobLabel('downstream / catalog / Merge verified catalog')).toBe('Merge verified catalog');
 });
