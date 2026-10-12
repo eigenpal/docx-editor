@@ -61,7 +61,10 @@ const summary = (fields: Partial<PerformanceDiagnostic> = {}): EditorDiagnostic 
 function buckets(text: string, name: string): Record<string, number> {
   const out: Record<string, number> = {};
   for (const match of text.matchAll(
-    new RegExp(`^${name}_bucket\\{pages="10-99",le="([^"]+)"\\} (\\d+)$`, 'gm')
+    new RegExp(
+      `^${name}_bucket\\{docx_editor_version="development",pages="10-99",le="([^"]+)"\\} (\\d+)$`,
+      'gm'
+    )
   ))
     out[match[1]!] = Number(match[2]);
   return out;
@@ -95,12 +98,14 @@ describe('performance with a real editor', () => {
     const event = events[0] as PerformanceDiagnostic;
     expect(event.interaction?.count).toBe(1);
     const text = metrics.metrics();
-    expect(text).toContain('docx_editor_editor_interaction_duration_seconds_count{pages="1"} 1');
     expect(text).toContain(
-      `docx_editor_editor_layout_duration_seconds_count{pages="1"} ${event.layout!.count}`
+      'docx_editor_editor_interaction_duration_seconds_count{docx_editor_version="development",pages="1"} 1'
     );
     expect(text).toContain(
-      `docx_editor_editor_paint_duration_seconds_count{pages="1"} ${event.paint!.count}`
+      `docx_editor_editor_layout_duration_seconds_count{docx_editor_version="development",pages="1"} ${event.layout!.count}`
+    );
+    expect(text).toContain(
+      `docx_editor_editor_paint_duration_seconds_count{docx_editor_version="development",pages="1"} ${event.paint!.count}`
     );
     expect(JSON.stringify(memory.events) + text).not.toContain(SECRET.split(' ')[1]);
     await telemetry.shutdown();
@@ -154,9 +159,9 @@ describe('performance summaries', () => {
     expect(
       memory.metrics.filter((r) => r.definition === METRICS.droppedEvents).map((r) => r.attributes)
     ).toEqual([
-      { reason: 'invalid-field' },
-      { reason: 'invalid-field' },
-      { reason: 'invalid-field' },
+      { reason: 'invalid-field', 'docx_editor.version': 'development' },
+      { reason: 'invalid-field', 'docx_editor.version': 'development' },
+      { reason: 'invalid-field', 'docx_editor.version': 'development' },
     ]);
   });
 

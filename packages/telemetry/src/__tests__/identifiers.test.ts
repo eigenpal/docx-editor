@@ -87,6 +87,7 @@ describe('identifiers on metrics', () => {
       origin: 'input',
       tracked: false,
       'tenant.tier': 'enterprise',
+      'docx_editor.version': 'development',
     });
   });
 
@@ -157,5 +158,20 @@ describe('identifiers in exporters', () => {
     }
     expect(recorded[0]).toMatchObject({ 'room.id': 'room-1', 'docx_editor.kind': 'edit.rejected' });
     expect(Object.keys(recorded[0]!).some((key) => key.includes('attributes'))).toBe(false);
+  });
+});
+
+test('dropped events carry your metric labels, so filtered dashboards still show them', () => {
+  const memory = memoryExporter();
+  const telemetry = createTelemetry({
+    exporters: [memory],
+    attributes: { 'deployment.environment': 'production' },
+    metricLabels: ['deployment.environment'],
+  });
+  telemetry.record({ ...refusal(), code: 'edit.from-a-newer-core' } as never);
+  const dropped = memory.metrics.find((record) => record.definition === METRICS.droppedEvents);
+  expect(dropped?.attributes).toMatchObject({
+    reason: 'unknown-code',
+    'deployment.environment': 'production',
   });
 });

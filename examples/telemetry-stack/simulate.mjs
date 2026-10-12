@@ -7,6 +7,9 @@
 //
 //   node examples/telemetry-stack/simulate.mjs [minutes] [people]
 //
+// Every person is a headless browser on this machine. Many people load the CPU, and the
+// dashboards then show that load as input delay, as they would on a busy laptop.
+//
 // Start the stack and the example apps first. See README.md.
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -15,7 +18,7 @@ const require = createRequire(path.resolve(import.meta.dirname, '../../package.j
 const { chromium } = require('@playwright/test');
 
 const MINUTES = Number(process.argv[2] ?? 4);
-const PEOPLE = Number(process.argv[3] ?? 3);
+const PEOPLE = Number(process.argv[3] ?? 2);
 const SINGLE_USER = process.env.SINGLE_USER_URL ?? 'http://localhost:5181/';
 const COLLABORATION = process.env.COLLABORATION_URL ?? 'http://localhost:5182/';
 const WORDS = 'the parties agree that this clause applies to every later amendment of the terms'.split(' ');
@@ -71,11 +74,18 @@ async function refusedPictureInsert(page) {
   });
 }
 
-async function person(browser, url, id, deadline) {
+/** Turn on suggesting mode, so edits become tracked changes and refusals count as tracked. */
+async function suggest(page) {
+  await page.getByRole('button', { name: 'Editing mode' }).click();
+  await page.getByRole('menuitemradio', { name: /Suggesting/ }).click();
+}
+
+async function person(browser, url, id, deadline, suggesting) {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on('dialog', (dialog) => void dialog.accept());
   await page.goto(url);
   await page.waitForSelector('.docx-editor [contenteditable="true"]', { timeout: 60_000 });
+  if (suggesting) await suggest(page).catch(() => {});
   let lastFlush = Date.now();
   while (Date.now() < deadline) {
     const roll = Math.random();
@@ -85,6 +95,7 @@ async function person(browser, url, id, deadline) {
       await pause(1_000);
       await page.reload();
       await page.waitForSelector('.docx-editor [contenteditable="true"]', { timeout: 60_000 });
+      if (suggesting) await suggest(page).catch(() => {});
     } else if (roll < 0.08) {
       await refusedPictureInsert(page).catch(() => {});
     } else {
@@ -114,8 +125,10 @@ const people = [];
 for (let id = 0; id < PEOPLE; id += 1) {
   // Half the people run the next release, so the dashboards can compare versions.
   const version = id % 2 === 0 ? '1.0.0' : '1.1.0';
-  people.push(person(browser, `${SINGLE_USER}?version=${version}`, `single-${id}`, deadline));
-  people.push(person(browser, `${COLLABORATION}?version=${version}`, `room-${id}`, deadline));
+  // Every other person suggests, so the tracked-change panels have data.
+  const suggesting = id % 2 === 1;
+  people.push(person(browser, `${SINGLE_USER}?version=${version}`, `single-${id}`, deadline, suggesting));
+  people.push(person(browser, `${COLLABORATION}?version=${version}`, `room-${id}`, deadline, !suggesting));
 }
 await Promise.allSettled(people);
 await browser.close();

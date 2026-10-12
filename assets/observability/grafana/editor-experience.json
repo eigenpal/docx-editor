@@ -1,0 +1,2568 @@
+{
+  "uid": "docx-editor-experience",
+  "title": "Editor experience",
+  "description": "How editing feels to people: input delay, engine work, opens, and refusals.",
+  "tags": ["docx-editor"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {}
+      },
+      {
+        "name": "env",
+        "label": "Environment",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count, deployment_environment)",
+          "refId": "env"
+        },
+        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count, deployment_environment)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "allValue": ".*"
+      },
+      {
+        "name": "job",
+        "label": "App",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\"}, job)",
+          "refId": "job"
+        },
+        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\"}, job)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "allValue": ".*"
+      },
+      {
+        "name": "version",
+        "label": "App version",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, app_version)",
+          "refId": "version"
+        },
+        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, app_version)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "allValue": ".*"
+      },
+      {
+        "name": "editor_version",
+        "label": "Editor version",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "query": {
+          "query": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, docx_editor_version)",
+          "refId": "editor_version"
+        },
+        "definition": "label_values(docx_editor_editor_interaction_duration_seconds_count{deployment_environment=~\"$env\",job=~\"$job\"}, docx_editor_version)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "allValue": ".*"
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "name": "New version",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "enable": false,
+        "iconColor": "rgba(126, 178, 109, 1)",
+        "expr": "count by (app_version) (docx_editor_editor_interaction_duration_seconds_count) unless count by (app_version) (docx_editor_editor_interaction_duration_seconds_count offset 2m)",
+        "step": "60s",
+        "titleFormat": "Version {{app_version}} first seen",
+        "tagKeys": ""
+      },
+      {
+        "name": "Alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "enable": true,
+        "iconColor": "rgba(242, 73, 92, 1)",
+        "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"editor\",job=~\"$job\",deployment_environment=~\"$env\"}",
+        "step": "60s",
+        "titleFormat": "{{alertname}}",
+        "tagKeys": ""
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Docs",
+      "url": "https://docx-editor.dev/docs/2.x/telemetry",
+      "type": "link",
+      "targetBlank": true,
+      "icon": "doc"
+    },
+    {
+      "title": "Report an issue",
+      "url": "https://github.com/eigenpal/docx-editor/issues/new/choose",
+      "type": "link",
+      "targetBlank": true,
+      "icon": "doc"
+    }
+  ],
+  "panels": [
+    {
+      "type": "row",
+      "title": "At a glance",
+      "id": 1,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Input delay, 95th percentile",
+      "description": "Time from a key press or click on the pages to the next frame on screen, over the selected range. 95 in 100 presses were faster. Estimated from the timing bands. The highest finite band ends at 1 s, so a value of 1 s means the percentile is in the over 1 s band; see Presses over 1 s.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (increase(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Input delay, median",
+      "description": "Time from a key press or click on the pages to the next frame on screen, over the selected range. Half the presses were faster. Estimated from the timing bands. The highest finite band ends at 1 s, so a value of 1 s means the percentile is in the over 1 s band; see Presses over 1 s.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (increase(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 5,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Presses over 1 s",
+      "description": "Share of timed presses that took more than 1 s to reach the screen, over the selected range. The percentiles cannot measure these presses.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "1 - sum(increase(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__range])) / sum(increase(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 10,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Opens succeeding",
+      "description": "Successful opens out of successful opens plus failures the app causes, over the selected range. Broken files are left out; see Refused files.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(sum(increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",outcome=\"opened\"}[$__range])) or sum(increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",code=~\"none|open.failed|open.unsupported-source|open.invalid-limits\"}[$__range])) * 0) / sum(increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",code=~\"none|open.failed|open.unsupported-source|open.invalid-limits\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No opens",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 5,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Open time, 95th percentile",
+      "description": "From the start of an open to the first laid-out page, for successful opens over the selected range. Estimated from the timing bands.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (increase(docx_editor_document_open_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "noValue": "No opens",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 6,
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 1
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Browser tabs reporting, last 5 minutes",
+      "description": "Browser tabs that sent timings in the last 5 minutes. A reload counts as a new tab. Zero while people edit means telemetry stopped, not that editing is healthy.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "count(count by (instance) (rate(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[5m]) > 0)) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 7,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Unexpected refusals per 1,000 presses",
+      "description": "Refusals other than expected ones (read-only, protected, stale target), for every 1,000 timed presses, over the selected range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "1000 * (sum(increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",code!~\"edit.stale-target|edit.read-only|edit.protected-content|edit.refresh-in-progress|edit.collaboration-not-ready\"}[$__range])) or sum(increase(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])) * 0) / sum(increase(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 2
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 8,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Dropped telemetry events",
+      "description": "Events the privacy check dropped. Not zero usually means core and telemetry versions differ. No data means no editor reported.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "round(sum(increase(docx_editor_telemetry_dropped_events_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range]))) or sum(increase(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])) * 0",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 9,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Firing alerts",
+      "description": "Fault alerts from prometheus/rules.yml that fire now. Each alert name links to the docs.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"editor\",job=~\"$job\",deployment_environment=~\"$env\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "alertstate": true,
+              "service": true
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No alerts firing"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alertname"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Telemetry docs",
+                    "url": "https://docx-editor.dev/docs/2.x/telemetry",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 10,
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Interaction",
+      "id": 11,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Input delay",
+      "description": "Key press or click to the next frame on screen: the delay a person feels. Estimated from the timing bands. The highest finite band ends at 1 s, so a value of 1 s means the percentile is in the over 1 s band; see Presses over 1 s.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval])))",
+          "legendFormat": "median",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval])))",
+          "legendFormat": "95th percentile",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval])))",
+          "legendFormat": "99th percentile",
+          "refId": "C"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 12,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Presses timed",
+      "description": "Key presses and clicks timed, per minute. Shows how much editing the other panels describe.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "60 * sum(rate(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval]))",
+          "legendFormat": "presses per minute",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 13,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Presses by delay band",
+      "description": "Share of presses in each delay band. Growth in the upper bands means editing got slower.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.016\"}[$__rate_interval]))",
+          "legendFormat": "up to 16 ms",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.033\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.016\"}[$__rate_interval]))",
+          "legendFormat": "16 to 33 ms",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.05\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.033\"}[$__rate_interval]))",
+          "legendFormat": "33 to 50 ms",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.1\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.05\"}[$__rate_interval]))",
+          "legendFormat": "50 to 100 ms",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.2\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.1\"}[$__rate_interval]))",
+          "legendFormat": "100 to 200 ms",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.5\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.2\"}[$__rate_interval]))",
+          "legendFormat": "200 to 500 ms",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.5\"}[$__rate_interval]))",
+          "legendFormat": "500 ms to 1 s",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"+Inf\"}[$__rate_interval])) - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__rate_interval]))",
+          "legendFormat": "over 1 s",
+          "refId": "H"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 60,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "percent"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 14,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Input delay by document size (95th percentile)",
+      "description": "Large documents lay out more per edit. If only the large buckets are slow, the delay follows document size.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, pages) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",pages!=\"\"}[$__rate_interval])))",
+          "legendFormat": "{{pages}} pages",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 15,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Input delay by app version (95th percentile)",
+      "description": "Your app releases, from the app.version attribute you send. A release slower than the one before points to it.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, app_version) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",app_version!=\"\"}[$__rate_interval])))",
+          "legendFormat": "{{app_version}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 16,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Input delay by editor version (95th percentile)",
+      "description": "The docx-editor packages that measured it. Compare editor upgrades.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, docx_editor_version) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",docx_editor_version!=\"\"}[$__rate_interval])))",
+          "legendFormat": "{{docx_editor_version}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 17,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Input delay, now and a week ago (95th percentile)",
+      "description": "The same time a week earlier. Empty until the stack has a week of data.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval])))",
+          "legendFormat": "now",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(docx_editor_editor_interaction_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval] offset 7d)))",
+          "legendFormat": "a week ago",
+          "refId": "B"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 18,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Engine work",
+      "id": 19,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 46
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Layout passes by duration band",
+      "description": "Share of engine layout passes after edits and view changes in each duration band. Each pass is timed alone, so many short passes can still add up to a slow press.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.016\"}[$__rate_interval]))",
+          "legendFormat": "up to 16 ms",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.033\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.016\"}[$__rate_interval]))",
+          "legendFormat": "16 to 33 ms",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.05\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.033\"}[$__rate_interval]))",
+          "legendFormat": "33 to 50 ms",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.1\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.05\"}[$__rate_interval]))",
+          "legendFormat": "50 to 100 ms",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.2\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.1\"}[$__rate_interval]))",
+          "legendFormat": "100 to 200 ms",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.5\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.2\"}[$__rate_interval]))",
+          "legendFormat": "200 to 500 ms",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.5\"}[$__rate_interval]))",
+          "legendFormat": "500 ms to 1 s",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"+Inf\"}[$__rate_interval])) - sum(rate(docx_editor_editor_layout_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__rate_interval]))",
+          "legendFormat": "over 1 s",
+          "refId": "H"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 60,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "percent"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 20,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Paint passes by duration band",
+      "description": "Share of engine paint passes after edits and view changes in each duration band. Each pass is timed alone, so many short passes can still add up to a slow press.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.016\"}[$__rate_interval]))",
+          "legendFormat": "up to 16 ms",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.033\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.016\"}[$__rate_interval]))",
+          "legendFormat": "16 to 33 ms",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.05\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.033\"}[$__rate_interval]))",
+          "legendFormat": "33 to 50 ms",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.1\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.05\"}[$__rate_interval]))",
+          "legendFormat": "50 to 100 ms",
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.2\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.1\"}[$__rate_interval]))",
+          "legendFormat": "100 to 200 ms",
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.5\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.2\"}[$__rate_interval]))",
+          "legendFormat": "200 to 500 ms",
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"0.5\"}[$__rate_interval]))",
+          "legendFormat": "500 ms to 1 s",
+          "refId": "G"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"+Inf\"}[$__rate_interval])) - sum(rate(docx_editor_editor_paint_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",le=\"1\"}[$__rate_interval]))",
+          "legendFormat": "over 1 s",
+          "refId": "H"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 60,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "percent"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 21,
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Documents",
+      "id": 22,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 54
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Opens per minute",
+      "description": "Documents opened and refused, per minute.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "60 * sum by (outcome) (rate(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval]))",
+          "legendFormat": "{{outcome}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 23,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 55
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Open time, successful opens",
+      "description": "From the start of an open to the first laid-out page, for opens that succeeded.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_document_open_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval])))",
+          "legendFormat": "median",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(docx_editor_document_open_duration_seconds_bucket{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval])))",
+          "legendFormat": "95th percentile",
+          "refId": "B"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 24,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 55
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Refused files by reason",
+      "description": "Why files did not open, most frequent first. Each code links to its hint.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",outcome=\"rejected\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No events in this range",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Hint and action for ${__value.text}",
+                    "url": "https://docx-editor.dev/docs/2.x/guides/diagnostics#${__data.fields.anchor}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "anchor"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 25,
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 55
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "Tracked changes",
+      "id": 26,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 63
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Refused while suggesting",
+      "description": "Edits, commands, and agent batches refused while changes were tracked, over the selected range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "round(sum(increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range]))) or sum(increase(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])) * 0",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 27,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 64
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tracked changes skipped",
+      "description": "Tracked changes that accept, reject, or reassign requests skipped, over the selected range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "round(sum(increase(docx_editor_review_skipped_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range]))) or sum(increase(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])) * 0",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "No data",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 28,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 64
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Share of refusals while suggesting",
+      "description": "Refusals while changes were tracked, out of all refusals, over the selected range.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "(sum(increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range])) or sum(increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])) * 0) / sum(increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "No refusals",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "text"
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "id": 29,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 64
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Refused tracked changes by reason",
+      "description": "Why edits were refused while changes were tracked, most frequent first. Each code links to its hint.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No events in this range",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Hint and action for ${__value.text}",
+                    "url": "https://docx-editor.dev/docs/2.x/guides/diagnostics#${__data.fields.anchor}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "anchor"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 30,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 68
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Refused tracked changes per minute by source",
+      "description": "Typing and pointer input, toolbar commands, or an editing API batch, while changes were tracked.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "60 * sum by (origin) (rate(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__rate_interval]))",
+          "legendFormat": "{{origin}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 31,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 68
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Skipped tracked changes by reason",
+      "description": "Tracked changes that accept, reject, or reassign requests skipped, by reason. Each code links to its hint.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_review_skipped_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No events in this range",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Hint and action for ${__value.text}",
+                    "url": "https://docx-editor.dev/docs/2.x/guides/diagnostics#${__data.fields.anchor}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "anchor"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 32,
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 76
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "row",
+      "title": "All refused edits",
+      "id": 33,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 82
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "title": "Refused edits by reason",
+      "description": "The public code of each refused edit, command, or tracked change, most frequent first. Each code links to its hint.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No events in this range",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Hint and action for ${__value.text}",
+                    "url": "https://docx-editor.dev/docs/2.x/guides/diagnostics#${__data.fields.anchor}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "anchor"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 34,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 83
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Refused edits per minute by source",
+      "description": "Typing and pointer input, toolbar commands, or an editing API batch. Tracked means the person was suggesting.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "60 * sum by (origin, tracked) (rate(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__rate_interval]))",
+          "legendFormat": "{{origin}}, tracked {{tracked}}",
+          "refId": "A"
+        }
+      ],
+      "links": [],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 35,
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 83
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Font substitutions by reason",
+      "description": "Fonts that failed to load. The editor used a substitute.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_font_failures_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No events in this range",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Hint and action for ${__value.text}",
+                    "url": "https://docx-editor.dev/docs/2.x/guides/diagnostics#${__data.fields.anchor}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "anchor"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 36,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 91
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Dropped telemetry by reason",
+      "description": "Events the privacy check dropped, by reason.",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_telemetry_dropped_events_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Value",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "None dropped",
+          "custom": {
+            "align": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 37,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 91
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      }
+    }
+  ]
+}

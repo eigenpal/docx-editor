@@ -279,12 +279,18 @@ describe('prometheus', () => {
     const text = metrics.metrics();
     expect(text).toContain('# TYPE docx_editor_edit_rejections_total counter');
     expect(text).toContain(
-      'docx_editor_edit_rejections_total{code="edit.protected-content",origin="input",tracked="false"} 2'
+      'docx_editor_edit_rejections_total{code="edit.protected-content",docx_editor_version="development",origin="input",tracked="false"} 2'
     );
     expect(text).toContain('# TYPE docx_editor_document_open_duration_seconds histogram');
-    expect(text).toContain('docx_editor_document_open_duration_seconds_bucket{le="0.25"} 1');
-    expect(text).toContain('docx_editor_document_open_duration_seconds_bucket{le="0.1"} 0');
-    expect(text).toContain('docx_editor_document_open_duration_seconds_count 1');
+    expect(text).toContain(
+      'docx_editor_document_open_duration_seconds_bucket{docx_editor_version="development",le="0.25"} 1'
+    );
+    expect(text).toContain(
+      'docx_editor_document_open_duration_seconds_bucket{docx_editor_version="development",le="0.1"} 0'
+    );
+    expect(text).toContain(
+      'docx_editor_document_open_duration_seconds_count{docx_editor_version="development"} 1'
+    );
   });
 
   test('the handler serves Fetch and Node style, and merges another registry', async () => {

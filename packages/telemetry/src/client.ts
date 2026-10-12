@@ -328,7 +328,12 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     // metric label, and an event the guard drops is counted.
     const checked = checkEvent(enrich(diagnostic, pipeline, attributes));
     if ('dropped' in checked) {
-      pipeline.metric(METRICS.droppedEvents, 1, { reason: checked.dropped });
+      // Your labels too, so a dashboard filtered by environment or version still shows drops.
+      pipeline.metric(METRICS.droppedEvents, 1, {
+        ...hostLabels(attributes),
+        reason: checked.dropped,
+        'docx_editor.version': ENGINE_VERSION,
+      });
       return;
     }
     const area = areaOf(diagnostic);
@@ -416,7 +421,11 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic, labels: Attr
   // Your labels from `metricLabels` go on every measurement of this event.
   const labelled: Pick<Pipeline, 'metric'> = {
     metric: (definition, value, attributes = {}) =>
-      pipeline.metric(definition, value, { ...attributes, ...labels }),
+      pipeline.metric(definition, value, {
+        ...attributes,
+        ...labels,
+        'docx_editor.version': ENGINE_VERSION,
+      }),
   };
   switch (event.kind) {
     case 'document.open':

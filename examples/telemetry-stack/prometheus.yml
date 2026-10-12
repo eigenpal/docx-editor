@@ -2,7 +2,7 @@ global:
   scrape_interval: 5s
   evaluation_interval: 30s
 
-# SLI recording rules and burn-rate alerts. See RUNBOOK.md.
+# Alerts on clear faults, from assets/observability/prometheus/rules.yml.
 rule_files:
   - /etc/prometheus/rules.yml
 

@@ -28,6 +28,12 @@ export interface MetricDefinition {
   readonly buckets?: readonly number[];
 }
 
+/**
+ * The label every editor metric carries: the version of the editor packages that measured it,
+ * so a dashboard can compare editor releases. One value per release.
+ */
+const EDITOR_VERSION = 'docx_editor.version';
+
 const SECONDS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60];
 const BYTES = [
   1024,
@@ -77,14 +83,14 @@ export const METRICS = Object.freeze({
     'counter',
     '{open}',
     'Documents opened or refused, by outcome and refusal code.',
-    ['outcome', 'code']
+    ['outcome', 'code', EDITOR_VERSION]
   ),
   documentOpenDuration: metric(
     'docx_editor.document.open.duration',
     'histogram',
     's',
     'Time from the start of an open to the laid-out document.',
-    [],
+    [EDITOR_VERSION],
     SECONDS
   ),
   editRejections: metric(
@@ -92,49 +98,49 @@ export const METRICS = Object.freeze({
     'counter',
     '{edit}',
     'Edits, commands, and tracked changes refused, by public code.',
-    ['code', 'origin', 'tracked']
+    ['code', 'origin', 'tracked', EDITOR_VERSION]
   ),
   reviewSkipped: metric(
     'docx_editor.review.skipped',
     'counter',
     '{change}',
     'Tracked changes skipped by accept, reject, or reassign requests.',
-    ['code']
+    ['code', EDITOR_VERSION]
   ),
   fontFailures: metric(
     'docx_editor.font.failures',
     'counter',
     '{failure}',
     'Font faces that failed to load and were substituted.',
-    ['code']
+    ['code', EDITOR_VERSION]
   ),
   historyDiagnostics: metric(
     'docx_editor.history.diagnostics',
     'counter',
     '{event}',
     'Undo steps that did not group as the gesture intended, by code.',
-    ['code']
+    ['code', EDITOR_VERSION]
   ),
   customNodeDiagnostics: metric(
     'docx_editor.custom_node.diagnostics',
     'counter',
     '{node}',
     'Custom node payloads that could not be read, by code.',
-    ['code']
+    ['code', EDITOR_VERSION]
   ),
   collabClientStatusTransitions: metric(
     'docx_editor.collab.client.status_transitions',
     'counter',
     '{transition}',
     'Collaboration status changes on clients, by new status and failure code.',
-    ['status', 'code']
+    ['status', 'code', EDITOR_VERSION]
   ),
   collabClientConnectDuration: metric(
     'docx_editor.collab.client.connect.duration',
     'histogram',
     's',
     'Time from an editor attaching a room to its first ready status, when the editor attached before the room was ready.',
-    [],
+    [EDITOR_VERSION],
     SECONDS
   ),
   collabClientParticipants: metric(
@@ -142,7 +148,7 @@ export const METRICS = Object.freeze({
     'histogram',
     '{participant}',
     'People in the room, as each client sees it when the count changes.',
-    [],
+    [EDITOR_VERSION],
     PEOPLE
   ),
 
@@ -151,7 +157,7 @@ export const METRICS = Object.freeze({
     'histogram',
     's',
     'Key presses and pointer presses on the pages, to the next frame on screen, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
-    ['pages'],
+    ['pages', EDITOR_VERSION],
     EDITOR_TIMING
   ),
   editorLayoutDuration: metric(
@@ -159,7 +165,7 @@ export const METRICS = Object.freeze({
     'histogram',
     's',
     'Engine layout passes after edits and view changes, background work included, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
-    ['pages'],
+    ['pages', EDITOR_VERSION],
     EDITOR_TIMING
   ),
   editorPaintDuration: metric(
@@ -167,7 +173,7 @@ export const METRICS = Object.freeze({
     'histogram',
     's',
     'Engine paints of the pages, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
-    ['pages'],
+    ['pages', EDITOR_VERSION],
     EDITOR_TIMING
   ),
 
@@ -176,7 +182,7 @@ export const METRICS = Object.freeze({
     'counter',
     '{event}',
     'Events the anonymity guard dropped, by reason. Usually a version mismatch.',
-    ['reason']
+    ['reason', EDITOR_VERSION]
   ),
 
   // Collaboration servers.

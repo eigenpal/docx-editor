@@ -127,8 +127,12 @@ describe('createTelemetry behavior', () => {
     const text = metrics.metrics();
     expect(text).not.toContain('JohnSmith');
     expect(text).not.toContain('docx_editor_edit_rejections_total');
-    expect(text).toContain('docx_editor_telemetry_dropped_events_total{reason="unknown-code"} 1');
-    expect(text).toContain('docx_editor_telemetry_dropped_events_total{reason="unknown-kind"} 1');
+    expect(text).toContain(
+      'docx_editor_telemetry_dropped_events_total{docx_editor_version="development",reason="unknown-code"} 1'
+    );
+    expect(text).toContain(
+      'docx_editor_telemetry_dropped_events_total{docx_editor_version="development",reason="unknown-kind"} 1'
+    );
   });
 
   test('identical refusals inside the window are one event, then one summary', async () => {
@@ -356,7 +360,7 @@ describe('createTelemetry behavior', () => {
     expect(memory.metrics).toContainEqual(
       expect.objectContaining({
         definition: METRICS.droppedEvents,
-        attributes: { reason: 'unknown-code' },
+        attributes: { reason: 'unknown-code', 'docx_editor.version': 'development' },
       })
     );
   });
