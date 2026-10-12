@@ -113,6 +113,31 @@ describe('an empty paragraph with a hidden mark leaves the flow', () => {
   });
 });
 
+describe('an empty paragraph with a hidden mark before a table', () => {
+  const table = (value: string) =>
+    `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc>${para(text(value))}</w:tc></w:tr></w:tbl>`;
+  const hiddenNoBefore = (after = 0) =>
+    para('', `<w:spacing w:before="0" w:after="${after}"/><w:rPr>${HIDDEN}</w:rPr>`);
+
+  test('between two tables takes no line and no space after', () => {
+    const tops = (body: string) => linesOf(layout(body)).map((line) => line.box.y);
+    const joined = tops(`${table('one')}${hiddenNoBefore(240)}${table('two')}`);
+    expect(lineTexts(layout(`${table('one')}${hiddenNoBefore(240)}${table('two')}`))).toEqual([
+      'one',
+      'two',
+    ]);
+    const adjacent = tops(`${table('one')}${table('two')}`);
+    expect(joined[1]! - joined[0]!).toBeCloseTo(adjacent[1]! - adjacent[0]!, 6);
+  });
+
+  test('after a paragraph leaves that paragraph and the table as neighbours', () => {
+    expect(lineTexts(layout(`${para(text('a'))}${hiddenNoBefore()}${table('cell')}`))).toEqual([
+      'a',
+      'cell',
+    ]);
+  });
+});
+
 describe('paragraphs that keep their line', () => {
   const kept = (body: string, expected: string[]) => {
     expect(lineTexts(layout(body))).toEqual(expected);
@@ -154,7 +179,7 @@ describe('paragraphs that keep their line', () => {
     kept(`${para(text('a'))}${emptyMarked(HIDDEN)}`, ['a', '']);
   });
 
-  test('a paragraph before a table has no paragraph to join', () => {
+  test('a paragraph before a table keeps its line when it states a space before', () => {
     const table = `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid><w:tr><w:tc>${para(text('cell'))}</w:tc></w:tr></w:tbl>`;
     kept(`${emptyMarked(HIDDEN)}${table}`, ['', 'cell']);
   });
