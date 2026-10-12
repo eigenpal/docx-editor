@@ -1,8 +1,8 @@
 # Observability assets
 
-Grafana dashboards and Prometheus alert rules for `@docx-editor.dev/telemetry`. Import them into your own Grafana and Prometheus to see how editing feels to your users and how your collaboration server runs.
+Grafana dashboards for `@docx-editor.dev/telemetry`. Import them into your own Grafana to see how editing feels to your users and how your collaboration server runs.
 
-The dashboards report measurements only and set no targets. Decide what is acceptable from a few weeks of your own traffic, then add your own alerts for it.
+The dashboards report measurements only and set no targets. Decide what is acceptable from a few weeks of your own traffic, then decide what to alert on.
 
 ![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](screenshots/editor-experience.png)
 
@@ -12,16 +12,14 @@ The dashboards report measurements only and set no targets. Decide what is accep
 | --- | --- | --- |
 | [`grafana/editor-experience.json`](grafana/editor-experience.json) | **Editor experience**: input delay, engine layout and paint time, opens, refused and skipped tracked changes, and all refused edits by code, filtered by environment, app, app version, and editor version. | [Raw file](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
 | [`grafana/collaboration.json`](grafana/collaboration.json) | **Collaboration**: server state, rooms and people, room memory and limits, room load and store time, client status, and refused connections and messages. | [Raw file](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
-| [`prometheus/rules.yml`](prometheus/rules.yml) | Alerts on clear faults: a collaboration server that stops answering, room stores that fail, and telemetry events the privacy check drops. | [Raw file](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/prometheus/rules.yml) |
 | [`generate.py`](generate.py) | Generates every file above. |  |
 
-To download the three files from a terminal, run:
+To download both dashboards from a terminal, run:
 
 ```bash
 BASE=https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability
 curl -LO "$BASE/grafana/editor-experience.json"
 curl -LO "$BASE/grafana/collaboration.json"
-curl -LO "$BASE/prometheus/rules.yml"
 ```
 
 ## Import the dashboards
@@ -76,16 +74,9 @@ The first row shows whether the server answers, the share of room stores that su
 
 The people totals add up all selected server instances. If your instances share rooms through Redis, each instance counts the same people, so select one instance.
 
-## Load the alert rules
+## Mark collaboration servers
 
-Add the file to `rule_files` in your Prometheus configuration, or copy the rules into your own rule group:
-
-```yaml
-rule_files:
-  - /etc/prometheus/docx-editor-rules.yml
-```
-
-The server-down alert and the **Server** filter find collaboration servers by the `docx_editor="collaboration"` target label. Add it to the scrape configuration of each collaboration server, so a server that fails every scrape still shows:
+The **Server** filter finds collaboration servers by the `docx_editor="collaboration"` target label. Add it to the scrape configuration of each collaboration server, so a server that fails every scrape still shows:
 
 ```yaml
 scrape_configs:
@@ -98,7 +89,7 @@ scrape_configs:
 
 ## Try them locally
 
-[`examples/telemetry-stack`](../../examples/telemetry-stack) runs an OpenTelemetry collector, Prometheus, Jaeger, and Grafana with these files, and simulates people who edit.
+[`examples/telemetry-stack`](../../examples/telemetry-stack) runs an OpenTelemetry collector, Prometheus, Jaeger, and Grafana with these dashboards, and simulates people who edit.
 
 ## Change the dashboards
 
@@ -111,4 +102,4 @@ bun run format
 
 To refresh the screenshots, run the local stack and its simulation, then run `node assets/observability/screenshots/capture.mjs` from the repository root.
 
-For setup and options, see [Dashboards and alerts](https://docx-editor.dev/docs/2.x/telemetry/dashboards) in the telemetry docs. To report a problem, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose).
+For setup and options, see [Dashboards](https://docx-editor.dev/docs/2.x/telemetry/dashboards) in the telemetry docs. To report a problem, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose).

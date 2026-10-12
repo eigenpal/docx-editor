@@ -1,4 +1,4 @@
-"""Generate the Grafana dashboards in grafana/ and the Prometheus alert rules in prometheus/rules.yml.
+"""Generate the Grafana dashboards in grafana/.
 
 Run `python3 assets/observability/generate.py` after a change, then `bun run format`, and commit
 the output.
@@ -129,18 +129,6 @@ def top_table(title, expr, key, description, code_links=True, no_value='No event
             'options': {'showHeader': True, 'cellHeight': 'sm', 'footer': {'show': False}}}
 
 
-def alerts_table(service_filter):
-    return {'type': 'table', 'title': 'Firing alerts',
-            'description': 'Fault alerts from prometheus/rules.yml that fire now. Each alert name links to the docs.',
-            'targets': [target(f'ALERTS{{alertstate="firing",{service_filter}}}', instant=True, fmt='table')],
-            'transformations': [{'id': 'organize', 'options': {'excludeByName': {
-                'Time': True, 'Value': True, '__name__': True, 'alertstate': True, 'service': True}}}],
-            'fieldConfig': {'defaults': {'noValue': 'No alerts firing'}, 'overrides': [
-                {'matcher': {'id': 'byName', 'options': 'alertname'}, 'properties': [
-                    {'id': 'links', 'value': [{'title': 'Telemetry docs', 'url': TELEMETRY_DOCS, 'targetBlank': True}]}]}]},
-            'options': {'showHeader': True, 'cellHeight': 'sm'}}
-
-
 def text(content):
     return {'type': 'text', 'title': '', 'options': {'mode': 'markdown', 'content': content},
             'transparent': True, 'datasource': None}
@@ -219,7 +207,6 @@ b.add(stat('Unexpected refusals per 1,000 presses',
            decimals=2), 8, 4)
 b.add(stat('Dropped telemetry events', f'round(sum(increase(docx_editor_telemetry_dropped_events_total{{{F}}}[{W}]))) or {reporting}',
            'short', 'Events the privacy check dropped. Not zero usually means core and telemetry versions differ. No data means no editor reported.', decimals=0), 8, 4)
-b.add(alerts_table('service="docx-editor",scope="editor",job=~"$job",deployment_environment=~"$env"'), 24, 4)
 
 b.row('Interaction')
 b.add(series('Input delay', [(quantile(INTERACTION, 0.5), 'median'), (quantile(INTERACTION, 0.95), '95th percentile'),
@@ -305,8 +292,7 @@ editor = dashboard(
     'docx-editor-experience', 'Editor experience',
     'How editing feels to people: input delay, engine work, opens, and refusals.',
     b, editor_vars,
-    [annotation('New version', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} first seen', 'rgba(126, 178, 109, 1)', enable=False),
-     annotation('Alerts', 'ALERTS{alertstate="firing",service="docx-editor",scope="editor",job=~"$job",deployment_environment=~"$env"}', '{{alertname}}', 'rgba(242, 73, 92, 1)')],
+    [annotation('New version', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} first seen', 'rgba(126, 178, 109, 1)', enable=False)],
     [('Docs', TELEMETRY_DOCS), ('Report an issue', ISSUES)])
 
 # ─── Collaboration ─────────────────────────────────────────────────────────────────────────
@@ -323,7 +309,6 @@ c.add(stat('Client errors', f'round(sum(increase(docx_editor_collab_client_statu
            'Times an editor reported an error status in the selected range. No data means no editor reported a status.', no_value='No client data'), 5, 4)
 c.add(stat('Room limit p95, last 5 min', f'max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[5m]))))',
            'percentunit', 'The highest 95th percentile of any one room limit (nodes, relationships, parts, blob bytes) over the last 5 minutes. At 100%, a room refuses edits that need more of that resource.', decimals=0), 5, 4)
-c.add(alerts_table('service="docx-editor",scope="server",job=~"$server_job",instance=~"$instance"'), 24, 4)
 
 c.row('Rooms now')
 for title, expr, desc in [('Rooms', f'sum(docx_editor_collab_rooms_active{{{S}}})', 'Rooms the server holds in memory.'),
@@ -384,36 +369,9 @@ collab = dashboard(
     'docx-editor-collaboration', 'Collaboration',
     'The room server and the editors in its rooms: availability, rooms and people, server work, and refusals.',
     c, collab_vars,
-    [annotation('Alerts', 'ALERTS{alertstate="firing",service="docx-editor",scope="server",job=~"$server_job",instance=~"$instance"}', '{{alertname}}', 'rgba(242, 73, 92, 1)')],
+    [],
     [('Docs', f'{DOCS}/telemetry/servers'), ('Report an issue', ISSUES)])
 
 for name, board in [('editor-experience.json', editor), ('collaboration.json', collab)]:
     (OUT / name).write_text(json.dumps(board, indent=2) + '\n')
-# ─── Prometheus rules: fault alerts ───────────────────────────────────────────────────
-BY = 'job, deployment_environment'
-
-
-def alert(name, expr, wait, severity, scope, summary, anchor, extra=None):
-    lines = [f'      - alert: {name}', f'        expr: {expr}', f'        for: {wait}', '        labels:',
-             f'          severity: {severity}', '          service: docx-editor', f'          scope: {scope}']
-    lines += [f'          {key}: {value}' for key, value in (extra or {}).items()]
-    lines += ['        annotations:', f'          summary: "{summary}"', f'          runbook_url: {anchor}']
-    return lines
-
-
-rule_lines = ['# Generated by assets/observability/generate.py. Do not edit by hand.',
-              '# Alerts on clear faults only. Set objectives and their alerts from your own traffic.',
-              'groups:', '  - name: docx-editor', '    rules:']
-rule_lines += alert('DocxTelemetryDroppingEvents',
-                    'sum by (' + BY + ') (rate(docx_editor_telemetry_dropped_events_total[15m])) > 0', '15m', 'ticket',
-                    'editor', 'The privacy check drops telemetry events; core and telemetry versions may differ ({{ $labels.job }})',
-                    f'{DOCS}/telemetry/metrics')
-rule_lines += alert('DocxCollaborationServerDown', f'up{{{COLLAB_TARGET}}} == 0', '1m', 'page', 'server',
-                    'The collaboration server does not answer its /metrics scrape ({{ $labels.instance }})',
-                    f'{DOCS}/telemetry/servers')
-rule_lines += alert('DocxCollaborationStoreFailing',
-                    'sum by (job, instance) (rate(docx_editor_collab_room_store_duration_seconds_count{outcome!="success"}[10m])) > 0',
-                    '5m', 'page', 'server', 'Rooms fail to store, and edits may be lost on restart ({{ $labels.instance }})',
-                    f'{DOCS}/telemetry/servers')
-(Path(__file__).parent / 'prometheus' / 'rules.yml').write_text('\n'.join(rule_lines) + '\n')
-print('dashboards and rules written')
+print('dashboards written')

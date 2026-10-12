@@ -5,7 +5,7 @@
 #   Collaboration server /metrics --------------------------> Prometheus
 #
 # Grafana: http://localhost:3300 (no sign-in). Jaeger: http://localhost:16686.
-# The dashboards and alert rules come from assets/observability, the files you import.
+# The dashboards come from assets/observability, the files you import.
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.120.0
@@ -25,7 +25,6 @@ services:
       - '--enable-feature=created-timestamp-zero-ingestion'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../../assets/observability/prometheus/rules.yml:/etc/prometheus/rules.yml:ro
     ports:
       - '9090:9090'
     extra_hosts:

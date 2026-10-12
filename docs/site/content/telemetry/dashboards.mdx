@@ -1,12 +1,12 @@
 ---
-title: 'Dashboards and alerts'
-description: 'Download ready Grafana dashboards for editor experience and collaboration, and Prometheus alert rules for clear faults.'
+title: 'Dashboards'
+description: 'Download ready Grafana dashboards for editor experience and collaboration.'
 category: 'Telemetry'
 ---
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Two Grafana dashboards show how editing feels to the people who use your app and how your collaboration server runs. A Prometheus rule file alerts on clear faults. The dashboards report measurements only and set no targets: decide what is acceptable from a few weeks of your own traffic.
+Two Grafana dashboards show how editing feels to the people who use your app and how your collaboration server runs. The dashboards report measurements only and set no targets. What is acceptable, and what to alert on, is your decision: base it on a few weeks of your own traffic.
 
 ![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
 
@@ -16,15 +16,13 @@ Two Grafana dashboards show how editing feels to the people who use your app and
 | --- | --- | --- |
 | `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
 | `collaboration.json` | Grafana dashboard: server state, rooms and people, memory, server work, client status, and refusals. | [collaboration.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
-| `rules.yml` | Prometheus alert rules for a server that stops answering, failed room stores, and dropped telemetry events. | [rules.yml](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/prometheus/rules.yml) |
 
-To download all three files from a terminal, run:
+To download both files from a terminal, run:
 
 ```bash
 BASE=https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability
 curl -LO "$BASE/grafana/editor-experience.json"
 curl -LO "$BASE/grafana/collaboration.json"
-curl -LO "$BASE/prometheus/rules.yml"
 ```
 
 The files also live in [`assets/observability`](https://github.com/eigenpal/docx-editor/tree/main/assets/observability) in the repository, with the script that generates them.
@@ -66,7 +64,7 @@ export const telemetry = createTelemetry({
 });
 ```
 
-Mark each collaboration server with the `docx_editor` target label. The **Server** filter and the server-down alert find servers by this label, so a server that fails every scrape still shows:
+Mark each collaboration server with the `docx_editor` target label. The **Server** filter finds servers by this label, so a server that fails every scrape still shows:
 
 ```yaml
 scrape_configs:
@@ -109,21 +107,6 @@ The first row shows whether the server answers, the share of room stores that su
 ![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/collaboration.png)
 
 The people totals add up all selected server instances. If your instances share rooms through Redis, each instance counts the same people, so select one instance.
-
-## Load the alert rules
-
-Add the rule file to `rule_files` in your Prometheus configuration, or copy the rules into your own rule group:
-
-```yaml
-rule_files:
-  - /etc/prometheus/docx-editor-rules.yml
-```
-
-| Alert | Fires when |
-| --- | --- |
-| `DocxCollaborationServerDown` | A server with the `docx_editor="collaboration"` label fails its scrape for 1 minute. |
-| `DocxCollaborationStoreFailing` | Room stores fail for 5 minutes. Edits can be lost on restart. |
-| `DocxTelemetryDroppingEvents` | The privacy check drops editor events for 15 minutes. Core and telemetry versions may differ. |
 
 ## Try the dashboards locally
 

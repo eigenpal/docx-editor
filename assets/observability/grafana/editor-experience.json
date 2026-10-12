@@ -149,19 +149,6 @@
         "step": "60s",
         "titleFormat": "Version {{app_version}} first seen",
         "tagKeys": ""
-      },
-      {
-        "name": "Alerts",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${datasource}"
-        },
-        "enable": true,
-        "iconColor": "rgba(242, 73, 92, 1)",
-        "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"editor\",job=~\"$job\",deployment_environment=~\"$env\"}",
-        "step": "60s",
-        "titleFormat": "{{alertname}}",
-        "tagKeys": ""
       }
     ]
   },
@@ -611,88 +598,15 @@
       }
     },
     {
-      "type": "table",
-      "title": "Firing alerts",
-      "description": "Fault alerts from prometheus/rules.yml that fire now. Each alert name links to the docs.",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "ALERTS{alertstate=\"firing\",service=\"docx-editor\",scope=\"editor\",job=~\"$job\",deployment_environment=~\"$env\"}",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": true,
-              "__name__": true,
-              "alertstate": true,
-              "service": true
-            }
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "noValue": "No alerts firing"
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "alertname"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Telemetry docs",
-                    "url": "https://docx-editor.dev/docs/2.x/telemetry",
-                    "targetBlank": true
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "id": 10,
-      "gridPos": {
-        "h": 4,
-        "w": 24,
-        "x": 0,
-        "y": 9
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      }
-    },
-    {
       "type": "row",
       "title": "Interaction",
-      "id": 11,
+      "id": 10,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 9
       },
       "panels": []
     },
@@ -759,12 +673,12 @@
           "sort": "desc"
         }
       },
-      "id": 12,
+      "id": 11,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 10
       },
       "datasource": {
         "type": "prometheus",
@@ -816,12 +730,12 @@
           "sort": "desc"
         }
       },
-      "id": 13,
+      "id": 12,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 10
       },
       "datasource": {
         "type": "prometheus",
@@ -936,12 +850,12 @@
           "sort": "desc"
         }
       },
-      "id": 14,
+      "id": 13,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -993,12 +907,12 @@
           "sort": "desc"
         }
       },
-      "id": 15,
+      "id": 14,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 22
+        "y": 18
       },
       "datasource": {
         "type": "prometheus",
@@ -1050,12 +964,12 @@
           "sort": "desc"
         }
       },
-      "id": 16,
+      "id": 15,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 26
       },
       "datasource": {
         "type": "prometheus",
@@ -1107,12 +1021,12 @@
           "sort": "desc"
         }
       },
-      "id": 17,
+      "id": 16,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 26
       },
       "datasource": {
         "type": "prometheus",
@@ -1173,12 +1087,12 @@
           "sort": "desc"
         }
       },
-      "id": 18,
+      "id": 17,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 38
+        "y": 34
       },
       "datasource": {
         "type": "prometheus",
@@ -1188,13 +1102,13 @@
     {
       "type": "row",
       "title": "Engine work",
-      "id": 19,
+      "id": 18,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 46
+        "y": 42
       },
       "panels": []
     },
@@ -1306,12 +1220,12 @@
           "sort": "desc"
         }
       },
-      "id": 20,
+      "id": 19,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 47
+        "y": 43
       },
       "datasource": {
         "type": "prometheus",
@@ -1426,12 +1340,12 @@
           "sort": "desc"
         }
       },
-      "id": 21,
+      "id": 20,
       "gridPos": {
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 47
+        "y": 43
       },
       "datasource": {
         "type": "prometheus",
@@ -1441,13 +1355,13 @@
     {
       "type": "row",
       "title": "Documents",
-      "id": 22,
+      "id": 21,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 50
       },
       "panels": []
     },
@@ -1496,12 +1410,12 @@
           "sort": "desc"
         }
       },
-      "id": 23,
+      "id": 22,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 55
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",
@@ -1562,12 +1476,12 @@
           "sort": "desc"
         }
       },
-      "id": 24,
+      "id": 23,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 55
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",
@@ -1683,12 +1597,12 @@
           "show": false
         }
       },
-      "id": 25,
+      "id": 24,
       "gridPos": {
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 55
+        "y": 51
       },
       "datasource": {
         "type": "prometheus",
@@ -1698,13 +1612,13 @@
     {
       "type": "row",
       "title": "Tracked changes",
-      "id": 26,
+      "id": 25,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 63
+        "y": 59
       },
       "panels": []
     },
@@ -1747,12 +1661,12 @@
         "textMode": "value",
         "justifyMode": "center"
       },
-      "id": 27,
+      "id": 26,
       "gridPos": {
         "h": 4,
         "w": 8,
         "x": 0,
-        "y": 64
+        "y": 60
       },
       "datasource": {
         "type": "prometheus",
@@ -1798,12 +1712,12 @@
         "textMode": "value",
         "justifyMode": "center"
       },
-      "id": 28,
+      "id": 27,
       "gridPos": {
         "h": 4,
         "w": 8,
         "x": 8,
-        "y": 64
+        "y": 60
       },
       "datasource": {
         "type": "prometheus",
@@ -1850,12 +1764,12 @@
         "textMode": "value",
         "justifyMode": "center"
       },
-      "id": 29,
+      "id": 28,
       "gridPos": {
         "h": 4,
         "w": 8,
         "x": 16,
-        "y": 64
+        "y": 60
       },
       "datasource": {
         "type": "prometheus",
@@ -1971,12 +1885,12 @@
           "show": false
         }
       },
-      "id": 30,
+      "id": 29,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 68
+        "y": 64
       },
       "datasource": {
         "type": "prometheus",
@@ -2028,12 +1942,12 @@
           "sort": "desc"
         }
       },
-      "id": 31,
+      "id": 30,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 68
+        "y": 64
       },
       "datasource": {
         "type": "prometheus",
@@ -2149,12 +2063,12 @@
           "show": false
         }
       },
-      "id": 32,
+      "id": 31,
       "gridPos": {
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 72
       },
       "datasource": {
         "type": "prometheus",
@@ -2164,13 +2078,13 @@
     {
       "type": "row",
       "title": "All refused edits",
-      "id": 33,
+      "id": 32,
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 78
       },
       "panels": []
     },
@@ -2283,12 +2197,12 @@
           "show": false
         }
       },
-      "id": 34,
+      "id": 33,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 79
       },
       "datasource": {
         "type": "prometheus",
@@ -2340,12 +2254,12 @@
           "sort": "desc"
         }
       },
-      "id": 35,
+      "id": 34,
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 79
       },
       "datasource": {
         "type": "prometheus",
@@ -2461,12 +2375,12 @@
           "show": false
         }
       },
-      "id": 36,
+      "id": 35,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 87
       },
       "datasource": {
         "type": "prometheus",
@@ -2552,12 +2466,12 @@
           "show": false
         }
       },
-      "id": 37,
+      "id": 36,
       "gridPos": {
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 87
       },
       "datasource": {
         "type": "prometheus",
