@@ -357,7 +357,12 @@ type ScaleMutableSurface = PaginatedSurface & {
 /** Body blocks a sliced opening lays out at mount, before its first yield. */
 const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
 /** Presses of these keys alone change nothing on the page, so they are not timed. */
-const MODIFIER_KEYS: ReadonlySet<string> = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
+const MODIFIER_KEYS: ReadonlySet<string> = new Set([
+  ...['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'Hyper', 'Super', 'Symbol'],
+  ...['Fn', 'FnLock', 'CapsLock', 'NumLock', 'ScrollLock', 'SymbolLock'],
+]);
+/** Layouts that loading causes, not the person: untimed unless an edit joined the batch. */
+const LOADING_LAYOUTS = ['opening', 'fonts', 'drawing-resources'] as const;
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -1659,7 +1664,10 @@ export function mountPaginatedSurface(
       finishOpeningPass();
       deferredLayout.abandon();
       const steps = layoutDocumentSteps(scope.revision, scope);
-      const layout = deferredLayout.run(steps, scope.revision);
+      const timed =
+        scope.paragraphIds.size > 0 ||
+        !LOADING_LAYOUTS.some((reason) => scope.dependencyKeys.has(reason));
+      const layout = deferredLayout.run(steps, scope.revision, timed);
       lastLayoutMs = now() - began;
       return layout;
     },

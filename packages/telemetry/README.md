@@ -16,15 +16,18 @@ Add `@sentry/*`, `@opentelemetry/api`, or `@hocuspocus/server` only for the expo
 
 ```ts
 import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
 import { sentryExporter } from '@docx-editor.dev/telemetry/sentry';
 import * as Sentry from '@sentry/react';
 
 export const telemetry = createTelemetry({
-  exporters: [sentryExporter(Sentry)],
+  // Sentry for failures, OpenTelemetry for metrics such as typing delay.
+  exporters: [sentryExporter(Sentry), otelExporter()],
   include: {
     documentOpen: true,
     trackedChanges: true,
     editing: true,
+    performance: true,
   },
   consent: () => consentManager.analytics === true, // your consent manager
 });
@@ -42,20 +45,7 @@ A refused tracked change explains itself. Here, an agent deleted a picture throu
   https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-operation-unsupported
 ```
 
-### Editor performance
-
-Turn on the `performance` area to measure typing delay and engine layout and paint times. Send it to an exporter that records metrics, because the Sentry exporter records it only as breadcrumbs:
-
-```ts
-import { createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-
-export const performanceTelemetry = createTelemetry({
-  exporters: [otelExporter()],
-  include: { performance: true },
-});
-// Register both modules: [telemetry.module, performanceTelemetry.module]
-```
+The `performance` area measures typing delay and engine layout and paint times. Send it to an exporter that records metrics, such as `otelExporter()`. The Sentry exporter records performance only as breadcrumbs.
 
 ## Collaboration servers
 

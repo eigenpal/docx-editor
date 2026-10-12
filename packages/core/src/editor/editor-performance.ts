@@ -37,8 +37,11 @@ interface Collected {
 /** The scheduling the sampler needs; tests pass their own. */
 export interface PerformanceClock {
   readonly now: () => number;
-  /** Calls back after the next frame is on screen, or returns false when there are no frames. */
-  readonly afterNextFrame: (callback: () => void) => boolean;
+  /**
+   * Calls `onFrame` when the next frame starts, before the browser paints it, and `onPainted`
+   * after it is on screen. Returns false when there are no frames.
+   */
+  readonly afterNextFrame: (onFrame: () => void, onPainted: () => void) => boolean;
   readonly setTimer: (callback: () => void, ms: number) => unknown;
   readonly clearTimer: (timer: unknown) => void;
 }
@@ -57,11 +60,14 @@ function browserClock(): PerformanceClock {
   const now = (): number => globalThis.performance?.now() ?? Date.now();
   return {
     now,
-    afterNextFrame(callback) {
+    afterNextFrame(onFrame, onPainted) {
       const frame = globalThis.requestAnimationFrame;
       if (typeof frame !== 'function') return false;
       // The frame callback runs before the browser paints; a task queued from it runs after.
-      frame(() => setTimeout(callback, 0));
+      frame(() => {
+        onFrame();
+        setTimeout(onPainted, 0);
+      });
       return true;
     },
     setTimer(callback, ms) {
@@ -158,6 +164,8 @@ export function createPerformanceSampler(options: PerformanceSamplerOptions) {
     flush();
   };
   globalThis.document?.addEventListener?.('visibilitychange', onHidden);
+  const hidden = (): boolean =>
+    (globalThis as { document?: Document }).document?.visibilityState === 'hidden';
 
   return {
     /** One timing from the surface: milliseconds for layout and paint, a timestamp for input. */
@@ -168,7 +176,8 @@ export function createPerformanceSampler(options: PerformanceSamplerOptions) {
         add(phase, value);
         return;
       }
-      if (pendingPresses.length >= MAX_PENDING_PRESSES) return;
+      // A hidden page draws no frames, so its presses cannot be timed to one.
+      if (pendingPresses.length >= MAX_PENDING_PRESSES || hidden()) return;
       const now = clock.now();
       // An event timestamp shares the clock of `performance.now()` in browsers; one that does
       // not (zero, or in the future) is replaced by the time the surface heard the press.
@@ -178,14 +187,22 @@ export function createPerformanceSampler(options: PerformanceSamplerOptions) {
       // count with their full delay.
       if (pendingPresses.length > 1) return;
       const waiting = pendingPresses;
-      const scheduled = clock.afterNextFrame(() => {
-        // A hidden page dropped these presses; a newer batch waits for its own frame.
-        if (waiting !== pendingPresses) return;
-        pendingPresses = [];
-        const end = clock.now();
-        for (const pressed of waiting)
-          if (!disposed && end - pressed <= MAX_INTERACTION_MS) add('interaction', end - pressed);
-      });
+      let closed = false;
+      const scheduled = clock.afterNextFrame(
+        () => {
+          // A hidden page dropped these presses; a newer batch waits for its own frame.
+          if (waiting !== pendingPresses) return;
+          // The batch closes as this frame starts: a press after it waits for the next frame.
+          pendingPresses = [];
+          closed = true;
+        },
+        () => {
+          if (!closed || disposed) return;
+          const end = clock.now();
+          for (const pressed of waiting)
+            if (end - pressed <= MAX_INTERACTION_MS) add('interaction', end - pressed);
+        }
+      );
       if (!scheduled) pendingPresses = [];
     },
     flush,

@@ -250,9 +250,57 @@ test('hiding the page flushes the exporters after the editor sends its summary',
     await Promise.resolve();
     expect(order).toEqual(['performance', 'flush']);
   } finally {
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    // An own property shadows the prototype's getter; deleting it leaves `document` as found.
+    delete (document as { visibilityState?: unknown }).visibilityState;
     editor.destroy();
     container.remove();
     await telemetry.shutdown();
   }
+});
+
+test('shutdown removes the page listeners', async () => {
+  let flushes = 0;
+  const telemetry = createTelemetry({
+    exporters: [{ name: 'count', event: () => {}, flush: () => void (flushes += 1) }],
+  });
+  telemetry.record(summary());
+  await telemetry.shutdown();
+  flushes = 0;
+  globalThis.dispatchEvent(new Event('pagehide'));
+  await Promise.resolve();
+  expect(flushes).toBe(0);
+});
+
+test('performance is sampled once per editor: all of its summaries or none', () => {
+  const memory = memoryExporter();
+  const telemetry = createTelemetry({
+    exporters: [memory],
+    include: { performance: { sampleRate: 0.5 } },
+  });
+  const editors = Array.from(
+    { length: 40 },
+    (_, index) => `e_editor-${String(index).padStart(4, '0')}`
+  );
+  for (let round = 0; round < 5; round += 1)
+    for (const editorSessionId of editors)
+      telemetry.record({ ...summary(), editorSessionId } as EditorDiagnostic);
+  const perEditor = new Map<string, number>();
+  for (const event of memory.events)
+    perEditor.set(event.editorSessionId, (perEditor.get(event.editorSessionId) ?? 0) + 1);
+  expect([...perEditor.values()].every((count) => count === 5)).toBe(true);
+  expect(perEditor.size).toBeGreaterThan(0);
+  expect(perEditor.size).toBeLessThan(40);
+});
+
+test('a press just over the last bound lands in the overflow bucket', () => {
+  const metrics = prometheusRegistry();
+  createTelemetry({ exporters: [metrics] }).record(
+    summary({ interaction: timing([0, 0, 0, 0, 0, 0, 0, 1], 1000) })
+  );
+  expect(
+    buckets(metrics.metrics(), 'docx_editor_editor_interaction_duration_seconds')
+  ).toMatchObject({
+    '1': 0,
+    '+Inf': 1,
+  });
 });

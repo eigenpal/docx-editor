@@ -17,13 +17,14 @@ import {
 
 function fakeClock() {
   let time = 1_000;
-  const frames: (() => void)[] = [];
+  const frames: { onFrame: () => void; onPainted: () => void }[] = [];
+  let painting: (() => void)[] = [];
   const timers = new Map<number, { at: number; run: () => void }>();
   let nextTimer = 1;
   const clock: PerformanceClock = {
     now: () => time,
-    afterNextFrame(callback) {
-      frames.push(callback);
+    afterNextFrame(onFrame, onPainted) {
+      frames.push({ onFrame, onPainted });
       return true;
     },
     setTimer(run, ms) {
@@ -43,10 +44,25 @@ function fakeClock() {
           timer.run();
         }
     },
+    /** The next frame starts `ms` from now, before it is painted. */
+    frameStart(ms = 0) {
+      time += ms;
+      for (const frame of frames.splice(0)) {
+        frame.onFrame();
+        painting.push(frame.onPainted);
+      }
+    },
+    /** The started frame is on screen `ms` from now. */
+    painted(ms = 0) {
+      time += ms;
+      const done = painting;
+      painting = [];
+      for (const onPainted of done) onPainted();
+    },
     /** The next frame reaches the screen `ms` from now. */
     frame(ms: number) {
-      time += ms;
-      for (const callback of frames.splice(0)) callback();
+      this.frameStart(ms);
+      this.painted();
     },
   };
 }
@@ -111,12 +127,24 @@ describe('performance sampler', () => {
     expect(sent[0]!.interaction).toMatchObject({ count: 3, maxMs: 230, p50Ms: 130 });
   });
 
+  test('a press after a frame starts waits for the next frame', () => {
+    const { sent, time, instance } = sampler();
+    instance.timing('input', 1_000);
+    time.frameStart(10);
+    instance.timing('input', time.clock.now());
+    time.painted(5);
+    time.frame(16);
+    instance.flush();
+    expect(sent[0]!.interaction).toMatchObject({ count: 2, p50Ms: 15, maxMs: 21 });
+  });
+
   test('a press waiting while the page is hidden is dropped, and a later one still counts', () => {
     const { sent, time, instance } = sampler();
     instance.timing('input', 1_000);
     Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    // An own property shadows the prototype's getter; deleting it leaves `document` as found.
+    delete (document as { visibilityState?: unknown }).visibilityState;
     instance.timing('input', time.clock.now());
     time.frame(20_000);
     instance.flush();

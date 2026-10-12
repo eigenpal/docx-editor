@@ -210,8 +210,10 @@ export interface PerformanceDiagnostic extends DiagnosticBase {
    */
   readonly interaction?: TimingSummary;
   /**
-   * Engine layout passes after edits, each with its main-thread work in the background
-   * included. The opening layout is not here: `document.open` reports it as `durationMs`.
+   * Engine layout passes that the person causes, by an edit or a view change such as zoom.
+   * Each pass includes its main-thread work in the background, and the work of a pass that a
+   * newer edit replaced. Layouts that loading causes are not here: the opening layout, which
+   * `document.open` reports as `durationMs`, and layouts after fonts or images arrive.
    */
   readonly layout?: TimingSummary;
   /** Engine paints of the pages. */

@@ -47,6 +47,8 @@ export type TelemetryArea =
 export interface TelemetryAreaOptions {
   /**
    * Share of events to send, from 0 to 1. Metrics always count every event. Defaults to 1.
+   * Each event is sampled on its own, except in `performance`: there the choice is made once
+   * for each editor, which sends all of its summaries or none.
    */
   readonly sampleRate?: number;
 }
@@ -195,6 +197,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   }
   const windows = new Map<string, Window>();
   let pageHooked = false;
+  let unhookPage = (): void => {};
   let closed = false;
 
   function rate(area: TelemetryArea): number | null {
@@ -204,18 +207,41 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     return Math.min(1, Math.max(0, setting.sampleRate ?? 1));
   }
 
+  /** For `performance`, one choice per editor, so one person's summaries stay together. */
+  const editorSamples = new Map<string, boolean>();
+  function sampled(diagnostic: EditorDiagnostic, area: TelemetryArea, sampleRate: number) {
+    if (sampleRate >= 1) return true;
+    if (area !== 'performance') return Math.random() < sampleRate;
+    let keep = editorSamples.get(diagnostic.editorSessionId);
+    if (keep === undefined) {
+      if (editorSamples.size >= 1000) editorSamples.clear();
+      keep = Math.random() < sampleRate;
+      editorSamples.set(diagnostic.editorSessionId, keep);
+    }
+    return keep;
+  }
+
   function hookPage(): void {
     if (pageHooked) return;
     pageHooked = true;
-    const target = (globalThis as { addEventListener?: typeof addEventListener }).addEventListener;
+    const page = globalThis as {
+      addEventListener?: (type: string, listener: () => void) => void;
+      removeEventListener?: (type: string, listener: () => void) => void;
+    };
     // Read lazily: during server rendering there is no window, and nothing to flush.
-    if (typeof target !== 'function') return;
-    target('pagehide', () => void flush());
+    if (typeof page.addEventListener !== 'function') return;
+    const onPageHide = () => void flush();
     // A mobile browser often closes a background tab without `pagehide`. The event reaches the
     // window after the document's own listeners, where each editor sends its last summary.
-    target('visibilitychange', () => {
+    const onVisibility = () => {
       if (globalThis.document?.visibilityState === 'hidden') void flush();
-    });
+    };
+    page.addEventListener('pagehide', onPageHide);
+    page.addEventListener('visibilitychange', onVisibility);
+    unhookPage = () => {
+      page.removeEventListener?.('pagehide', onPageHide);
+      page.removeEventListener?.('visibilitychange', onVisibility);
+    };
   }
 
   function close(key: string): void {
@@ -256,7 +282,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       else open.repeated += 1;
       return;
     }
-    if (sampleRate < 1 && Math.random() >= sampleRate) return;
+    if (!sampled(diagnostic, area!, sampleRate)) return;
     const event = enrich(withShape(diagnostic, detailedShape), pipeline);
     pipeline.event(event);
     if (key) {
@@ -281,6 +307,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     async shutdown() {
       for (const key of [...windows.keys()]) close(key);
       closed = true;
+      unhookPage();
       await pipeline.shutdown();
     },
   };
@@ -370,8 +397,9 @@ function recordTiming(
   summary.bands.forEach((count, band) => {
     const upper = bounds[band];
     const lower = band === 0 ? 0 : bounds[band - 1]!;
+    // `maxMs` is rounded: a press of 1000.3 ms reports 1000, which must stay above the bound.
     const seconds =
-      upper === undefined ? Math.max(summary.maxMs / 1000, lower) : (lower + upper) / 2;
+      upper === undefined ? Math.max(summary.maxMs / 1000, lower + 1e-6) : (lower + upper) / 2;
     for (let sample = 0; sample < count; sample += 1)
       pipeline.metric(definition, seconds, { pages });
   });

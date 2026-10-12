@@ -158,7 +158,7 @@ export const METRICS = Object.freeze({
     'docx_editor.editor.layout.duration',
     'histogram',
     's',
-    'Engine layout passes after edits, background work included, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
+    'Engine layout passes after edits and view changes, background work included, by page count bucket. Bucket counts are exact; the sum is estimated from the bands.',
     ['pages'],
     EDITOR_TIMING
   ),
