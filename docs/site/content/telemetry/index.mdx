@@ -4,6 +4,8 @@ description: 'Send anonymous diagnostics and metrics from editors and collaborat
 category: 'Telemetry'
 ---
 
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
 `@docx-editor.dev/telemetry` sends the editor's anonymous [diagnostics](/docs/2.x/guides/diagnostics) and metrics to the observability tools that you already run. It covers single-user editors, collaboration clients, and collaboration servers.
 
 The package sends nothing by itself. You choose the exporters, and you choose the areas to record. Every event contains only codes, booleans, bucketed sizes and counts, and timings. Document text, file names, part names, author names, font names, and room names are never sent.

@@ -4,6 +4,8 @@ description: 'Every metric that the telemetry package records, with its Promethe
 category: 'Telemetry'
 ---
 
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
 Every metric has an OpenTelemetry name, such as `docx_editor.collab.room.load.duration`, and a Prometheus name derived from it, such as `docx_editor_collab_room_load_duration_seconds`. Labels take only values from closed lists, so the number of series stays bounded.
 
 Every editor metric also has the `docx_editor.version` label, `docx_editor_version` in Prometheus: the version of the editor packages that measured it, so you can compare editor releases. Server metrics do not have it. Keys you list in `metricLabels`, such as `app.version`, are added to editor metrics too.

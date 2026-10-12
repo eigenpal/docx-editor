@@ -6,6 +6,8 @@ Every event contains only codes, booleans, bucketed sizes and counts, and timing
 
 ## Install the package
 
+The package is available in version 2.29.0 and later.
+
 ```sh
 npm install @docx-editor.dev/telemetry @docx-editor.dev/core
 ```
