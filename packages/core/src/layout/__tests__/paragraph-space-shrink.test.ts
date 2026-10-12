@@ -264,17 +264,22 @@ test('a final word that ends with a no-break space borrows inter-word space', ()
   expect(layout('aa bb cc\u00a0dd', 15)).toEqual(['aa bb', 'cc\u00a0dd']);
 });
 
-test('a no-break space inside an earlier word keeps that word space compressible', () => {
+// Screen paint applies `word-spacing` to U+00A0 too, so a span holding one lends no space.
+test('a no-break space inside an earlier word lends no inter-word space', () => {
   const lines = linesOf(
     layoutSemanticDocument(source('both', 'a\u00a0a bb cc', 76), 1, {
       measurer,
       compatibilityMode: 15,
     })
   );
-  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
-    'a\u00a0a bb cc',
-  ]);
-  expect(lines[0]!.spans[0]!.style.shaping?.wordSpacingPt).toBeCloseTo(-1, 6);
+  expect(
+    lines.map((line) =>
+      line.spans
+        .map((span) => span.text)
+        .join('')
+        .trimEnd()
+    )
+  ).toEqual(['a\u00a0a bb', 'cc']);
 });
 
 // Only the text after a line's last tab is justified, so only its spaces can shrink.
@@ -293,5 +298,18 @@ test('spaces after a tab borrow space, and the tab keeps its stop', () => {
   // A space before the tab is not justified, so it cannot make the room.
   expect(
     layout('a a\tbb cc dd ee').map((line) => line.spans.map((span) => span.text).join(''))
+  ).toHaveLength(2);
+});
+
+test('text after a center tab is placed against its stop, not compressed', () => {
+  const body = loadBody(
+    '<w:p><w:pPr><w:jc w:val="both"/><w:tabs><w:tab w:val="center" w:pos="1200"/></w:tabs></w:pPr>' +
+      '<w:r><w:t xml:space="preserve">aa\tbb cc dd</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="2840" w:h="6000"/>' +
+      '<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>'
+  );
+  // Centred at 60, `bb cc dd` would end at 94, past the 92pt measure.
+  expect(
+    content(layoutSemanticDocument(body, 1, { measurer, compatibilityMode: 15 }))
   ).toHaveLength(2);
 });

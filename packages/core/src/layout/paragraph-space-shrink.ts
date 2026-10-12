@@ -13,7 +13,9 @@ import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 // No-break spaces join their neighbours into one word. They have width, never break the
 // line, and never hang, so the word-shape tests read them as word characters.
 const WORD_CHARACTER = String.raw`(?:[^\s]|[\u00a0\u2007\u202f])`;
-const SPACED_SPAN = new RegExp(`^${WORD_CHARACTER}* $`, 'u');
+// A span holding U+00A0 lends none of its space: screen paint applies `word-spacing` to
+// U+00A0 as well, so its shrink would be painted twice. The narrow forms are unaffected.
+const SPACED_SPAN = /^(?:[^\s]|[\u2007\u202f])* $/u;
 const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ $`, 'u');
 const BARE_WORD = new RegExp(`^${WORD_CHARACTER}+$`, 'u');
 
@@ -29,8 +31,7 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
 
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
-    (!span.style.shaping &&
-      !/^[\p{Script=Latin}\p{N}\p{P} \u00a0\u2007\u202f]*$/u.test(span.text)) ||
+    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} \u2007\u202f]*$/u.test(span.text)) ||
     span.lineEndWhitespace ||
     !SPACED_SPAN.test(span.text) ||
     span.equation
