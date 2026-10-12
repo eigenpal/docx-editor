@@ -4,7 +4,10 @@
 // `layout-steps.ts`.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import { createDrawingExclusionPasses } from './drawing-exclusion-passes.ts';
+import {
+  createDrawingExclusionPasses,
+  exclusionZoneChangeCount,
+} from './drawing-exclusion-passes.ts';
 import {
   collectExclusionZonesByPage,
   collectExclusionZonesByPageMemoized,
@@ -26,6 +29,17 @@ import type { BlockLayoutOptions } from './semantic-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
+
+/**
+ * Hard ceiling for a reflow that is still settling. Objects positioned against text that
+ * wraps the object before them form a chain, and each pass settles about one more link, so a
+ * long chain needs more passes than the ordinary budget. The extension runs only while the
+ * passes keep reaching fewer changed zones.
+ */
+const MAX_DRAWING_EXCLUSION_SETTLING_PASSES = 64;
+
+/** Passes a settling reflow may run without a new low of changed zones. */
+const SETTLING_PASSES_WITHOUT_PROGRESS = 4;
 
 /**
  * The converged layout of `bodies` under their exclusion zones, or null when nothing in them
@@ -184,6 +198,24 @@ export function* convergeExclusionLayout(
       candidateSession
     );
   }
+  // A reflow that keeps reaching a new low of changed zones is still settling, even when one
+  // pass moves a few more zones than the pass before it.
+  let fewestChanges = Number.POSITIVE_INFINITY;
+  let passesSinceFewest = 0;
+  let settling = true;
+  const noteChanges = (
+    previous: ReadonlyMap<number, readonly ExclusionZone[]>,
+    next: ReadonlyMap<number, readonly ExclusionZone[]>
+  ): void => {
+    // The first collection compares against no zones and says nothing about settling.
+    if (previous.size === 0) return;
+    const changes = exclusionZoneChangeCount(previous, next);
+    if (changes < fewestChanges) {
+      fewestChanges = changes;
+      passesSinceFewest = 0;
+    } else passesSinceFewest += 1;
+    settling = passesSinceFewest < SETTLING_PASSES_WITHOUT_PROGRESS;
+  };
   for (let pass = 0; pass < exclusionPasses.maxPasses; pass += 1) {
     const candidateSession = options.session ? createLayoutSession() : undefined;
     result = yield* layoutExclusionCandidate({
@@ -204,6 +236,7 @@ export function* convergeExclusionLayout(
     }
     const transition = exclusionPasses.advance(zonesByPage, nextZones);
     if (transition === 'stable') return publishCandidate(result, candidateSession);
+    noteChanges(zonesByPage, nextZones);
     zonesByPage = new Map(nextZones);
     if (transition === 'cycle') {
       converged = true;
@@ -211,7 +244,13 @@ export function* convergeExclusionLayout(
     }
   }
   if (!converged) {
-    for (let stab = 0; stab < MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES && !converged; stab += 1) {
+    for (
+      let stab = 0;
+      !converged &&
+      (stab < MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES ||
+        (settling && exclusionPasses.maxPasses + stab < MAX_DRAWING_EXCLUSION_SETTLING_PASSES));
+      stab += 1
+    ) {
       const candidateSession = options.session ? createLayoutSession() : undefined;
       result = yield* layoutExclusionCandidate({
         ...options,
@@ -224,6 +263,7 @@ export function* convergeExclusionLayout(
       const nextZones = collectZones(result.pages);
       const transition = exclusionPasses.advance(zonesByPage, nextZones, true);
       if (transition === 'stable') return publishCandidate(result, candidateSession);
+      noteChanges(zonesByPage, nextZones);
       zonesByPage = new Map(nextZones);
       if (transition === 'cycle') {
         converged = true;

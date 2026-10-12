@@ -630,6 +630,8 @@ function placeCellParagraph(
         ? Math.max(lineBottom, options?.cellEndMarkMinBottom ?? lineBottom)
         : lineBottom;
     if (requiredBottom > maxBottom + 0.001) {
+      if (lineTops.length > 0 || options?.placesOversizedLine !== true) break;
+      lineTops.push(probeY + skipBefore);
       break;
     }
     lineTops.push(probeY + skipBefore);
@@ -1090,7 +1092,8 @@ function flowBlocksInBoxBounded(
         depth + 1,
         deps,
         maxBottom,
-        nestedTable
+        nestedTable,
+        !fitted && deps.rowAtPageStart === true
       );
       if (!nested) {
         lastEmittedTable = false;
@@ -1142,6 +1145,7 @@ function flowBlocksInBoxBounded(
         heldBreak: blockIndex === cursor.blockIndex ? heldBreak : undefined,
         applyWidowControl,
         aloneOnPage: !fitted && deps.rowAtPageStart !== false,
+        placesOversizedLine: !fitted && deps.rowAtPageStart === true,
         fragmentIndex: paragraphFragmentIndex,
         maxBottom,
         includeAfter: true,

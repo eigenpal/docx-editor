@@ -216,8 +216,13 @@ test('an exact-height row taller than the page still fails closed', () => {
   expect(() => layoutSemanticDocument(part, 0, options)).toThrow(TablePaginationError);
 });
 
-test('an oversized cantSplit row with an unsplittable nested row still fails closed', () => {
+test('an oversized cantSplit row splits a nested row taller than the page inside its cell', () => {
   const nested = table(row(lines('n', 8)));
-  const part = source(table(row(nested, '<w:cantSplit/>')));
-  expect(() => layoutSemanticDocument(part, 0, options)).toThrow(TablePaginationError);
+  const layout = layoutSemanticDocument(source(table(row(nested, '<w:cantSplit/>'))), 0, options);
+  const pages = pageOfLines(layout);
+  expect(pages.get('n0')).toBe(1);
+  expect(pages.get('n5')).toBe(1);
+  expect(pages.get('n6')).toBe(2);
+  expect(lineTexts(layout).filter((text) => text.startsWith('n'))).toHaveLength(8);
+  expectInsideContentBox(layout);
 });

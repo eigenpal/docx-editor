@@ -21,6 +21,12 @@ export interface CellParagraphPlacementOptions {
   readonly applyWidowControl?: boolean;
   /** Fail open when moving this paragraph would leave an identical fresh page. */
   readonly aloneOnPage?: boolean;
+  /**
+   * The row already has a fresh page and nothing is placed in this cell fragment yet. A
+   * first line taller than the band can never fit another page, so it is placed once and
+   * clipped to the cell instead of rejecting the row.
+   */
+  readonly placesOversizedLine?: boolean;
   /** When false, omit trailing paragraph spacing (more content follows on a later page). */
   readonly includeAfter?: boolean;
   /**

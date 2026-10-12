@@ -12,8 +12,8 @@ export interface CellPlaceCursor {
   readonly startOffset?: number;
   /** The continued paragraph's line break, which the next page indexes instead of re-breaking. */
   readonly heldBreak?: HeldCellBreak;
-  /** Row-boundary continuation of the nested table at blockIndex. */
-  readonly nestedTable?: { readonly nextRowIndex: number; readonly fragmentIndex: number };
+  /** Continuation of the nested table at blockIndex. */
+  readonly nestedTable?: NestedTableCursor;
   readonly previousSpaceAfter: number;
   readonly paragraphFragmentIndex: number;
   /**
@@ -25,6 +25,14 @@ export interface CellPlaceCursor {
    * terminator collapse behind a table that never appeared on that page.
    */
   readonly precededByEmittedTable: boolean;
+}
+
+/** Progress through a nested table: the next row, and its cell cursors when it was split. */
+export interface NestedTableCursor {
+  readonly nextRowIndex: number;
+  readonly fragmentIndex: number;
+  /** Set when row `nextRowIndex` continues from a page before. */
+  readonly rowCursors?: readonly CellPlaceCursor[];
 }
 
 export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
