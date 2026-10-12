@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/telemetry/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, setSystemTime, test } from 'bun:test';
 import * as Y from 'yjs';
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import { Hocuspocus } from '@hocuspocus/server';
@@ -124,6 +124,28 @@ describe('roomTelemetry', () => {
     doc.transact(() => doc.getText('t').insert(0, 'client'), { source: 'connection' });
     expect(rooms.list()[0]!.pendingBytes).toBeGreaterThan(0);
     expect(metrics.metrics()).toMatch(/docx_editor_collab_updates_total 1\n/);
+  });
+
+  test('updates from another instance refresh room memory and idle time', () => {
+    const metrics = prometheusRegistry();
+    const rooms = roomTelemetry({ exporters: [metrics], sampleInterval: false });
+    const doc = new Y.Doc();
+    rooms.open(doc, { name: ROOM });
+    rooms.sample();
+    const before = rooms.list()[0]!;
+    setSystemTime(new Date(Date.now() + 60_000));
+    try {
+      doc.transact(() => doc.getText('t').insert(0, 'x'.repeat(5_000)), { source: 'redis' });
+      rooms.sample();
+      const after = rooms.list()[0]!;
+      expect(after.stateBytes!).toBeGreaterThan(before.stateBytes! + 4_000);
+      expect(after.idleSeconds).toBe(0);
+      // Still not this server's write: nothing waits to be stored, and nothing counts.
+      expect(after.pendingBytes).toBe(0);
+      expect(metrics.metrics()).toContain('docx_editor_collab_updates_total 0\n');
+    } finally {
+      setSystemTime();
+    }
   });
 
   test('the state a load applies through the handle is not counted as edits', async () => {

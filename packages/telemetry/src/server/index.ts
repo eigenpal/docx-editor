@@ -449,18 +449,20 @@ export function roomTelemetry(options: RoomTelemetryOptions): RoomTelemetry {
     open(doc, roomOptions = {}) {
       const opened = now();
       const onUpdate = (update: Uint8Array, origin?: unknown) => {
+        // Every update changes what the room holds, so the next sample measures it again.
+        room.changed = true;
+        if (room.loading > 0) return;
+        // An edit from another instance is still an edit to this room: it is not idle.
+        room.lastChange = now();
         // Hocuspocus marks updates that arrive from another instance or skip storing; they are
         // not this server's writes, so they neither count nor wait to be stored here.
         const source = (origin as { source?: unknown; skipStoreHooks?: unknown } | null)?.source;
         if (
-          room.loading > 0 ||
           source === 'redis' ||
           (source === 'local' && (origin as { skipStoreHooks?: unknown }).skipStoreHooks === true)
         )
           return;
-        room.lastChange = now();
         room.pendingBytes += update.byteLength;
-        room.changed = true;
         pipeline.metric(METRICS.updates, 1);
         pipeline.metric(METRICS.updateBytes, update.byteLength);
       };
