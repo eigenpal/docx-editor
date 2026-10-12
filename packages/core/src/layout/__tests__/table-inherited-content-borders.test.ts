@@ -38,9 +38,11 @@ test.each([0, 40])(
     const table = layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table')!;
     const [first, second] = table.rows;
     // Collapsed: each row carries its own top rule and the last row also the outer bottom,
-    // so the two rows split 25.5 as 12.5 + 13 rather than 12.75 twice.
-    expect(first!.box.height).toBeCloseTo(spacing === 0 ? 12.5 : 13, 6);
-    expect(second!.box.height).toBeCloseTo(13, 6);
+    // so the two rows split 25.5 as 12.5 + 13 rather than 12.75 twice. Spaced, each row also
+    // holds the twice-the-spacing gap above its cells.
+    const gap = (2 * spacing) / 20;
+    expect(first!.box.height).toBeCloseTo(spacing === 0 ? 12.5 : 13 + gap, 6);
+    expect(second!.box.height).toBeCloseTo(13 + gap, 6);
     // Collapsed, the legacy content-aligned table starts content at the side rule's inner half;
     // a spaced cell clears its whole rule.
     expect(first!.cells[0]!.blocks[0]!.box.x - first!.cells[0]!.box.x).toBeCloseTo(

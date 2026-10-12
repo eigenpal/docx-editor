@@ -808,6 +808,7 @@ function readTableStructureUncached(
   const cellSpacingPt =
     preferredLengthPt(tblPr && childNamed(tblPr, 'tblCellSpacing'), MAX_CELL_MARGIN_PT) ??
     styleCellSpacingPt ??
+    uniformRowCellSpacingPt(table) ??
     0;
 
   const placement = resolveTableWidthPlacement({
@@ -921,5 +922,26 @@ function readTableStructureUncached(
       ? { ...defaultMargins, left: defaultMargins.right, right: defaultMargins.left }
       : defaultMargins,
   };
+}
+
+/**
+ * `w:trPr/w:tblCellSpacing` (17.4.44) when every row states the same value and the table
+ * states none. A value shared by all rows is the table's spacing; rows that differ are an
+ * exception this layout does not model, so they keep the table's own spacing.
+ */
+function uniformRowCellSpacingPt(table: OoxmlElement): number | undefined {
+  let spacing: number | undefined;
+  for (const rowNode of flattenContentControls(table.children)) {
+    if (rowNode.kind !== 'tableRow') continue;
+    const properties = wmlRevisionChild(rowNode, 'trPr');
+    const value = preferredLengthPt(
+      properties && childNamed(properties, 'tblCellSpacing'),
+      MAX_CELL_MARGIN_PT
+    );
+    if (value === undefined || (spacing !== undefined && Math.abs(value - spacing) > 0.001))
+      return undefined;
+    spacing = value;
+  }
+  return spacing;
 }
 import { physicalTableRows, withTableContentBorders } from './table-content-borders.ts';

@@ -8,17 +8,18 @@ import {
   layoutOnePassRow,
   layoutRowFragmentBounded,
   measureRowHeight,
-  vMergePlanFor,
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { vMergePlanFor } from './table-vmerge-plan.ts';
 import { publishDeferredRowAnchors, type DeferredRowAnchor } from './table-anchor-republish.ts';
 import { acceptVMergeSpansAt } from './table-vmerge-heights.ts';
-import { finalizeTableRows } from './table-fragment-finalize.ts';
+import { finalizeTableRows, splitHead } from './table-fragment-finalize.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import type { TableFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
 import { initialCellCursors, type NestedTableCursor } from './table-cell-cursor.ts';
+import { closingCellSpacingPt } from './table-cell-spacing.ts';
 
 /**
  * A nested table inside a cell. Ordinary rows continue at row boundaries, and a row that does
@@ -159,7 +160,7 @@ export function emitNestedTable(
             break;
           }
           const hasMore = placed.remainder !== null;
-          const record = hasMore ? { ...placed.record, hasContinuation: true } : placed.record;
+          const record = hasMore ? splitHead(placed.record) : placed.record;
           rawRows.push(record);
           // A partial occurrence is its own source row, so finalize does not remeasure all of it.
           sourceRows.push(continued || hasMore ? { ...row } : row);
@@ -202,6 +203,8 @@ export function emitNestedTable(
   layRows(keepsWhole);
   if (keepsWhole && bounded && freshBand && y > maxBottom + 0.001) layRows(false);
   if (rawRows.length === 0 || y > maxBottom + 0.001) return { fragment: null, bottom: top };
+  if (nextRowIndex >= structure.rows.length)
+    y = Math.min(y + closingCellSpacingPt(structure), Math.max(y, maxBottom));
   const rows = finalizeTableRows(
     rawRows,
     structure,

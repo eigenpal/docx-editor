@@ -40,7 +40,11 @@ import {
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
-import { cellSpacingGeometry } from './table-cell-spacing.ts';
+import {
+  cellSpacingGapPt,
+  cellSpacingGeometry,
+  closingCellSpacingPt,
+} from './table-cell-spacing.ts';
 import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
@@ -120,7 +124,6 @@ import {
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
-import { planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { cellContentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt, type RowMinimumInsetMap } from './table-row-minimum-insets.ts';
 import {
@@ -132,7 +135,7 @@ import {
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 import { cellAnchorFlow, cellAnchorScope } from './cell-anchor-layout.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
-import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
+import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { inlineDrawingFlow } from './inline-textbox-flow.ts';
 import {
@@ -1302,6 +1305,9 @@ export function layoutRowFragmentBounded(
   const heightRule = row.height;
   const exactHeightPt = heightRule.rule === 'exact' ? heightRule.valuePt : undefined;
   const atLeastHeightPt = heightRule.rule === 'atLeast' ? heightRule.valuePt : undefined;
+  // The same spacing opens a gap above each row's cells: content starts that much lower and
+  // the table closes the gap below its last row. An exact row keeps its authored height.
+  const rowGapPt = exactHeightPt === undefined ? cellSpacingGapPt(cellSpacingPt) : 0;
   const deferredRowAnchors: DeferredRowAnchor[] = [];
   const { rowDeps, flushDeferred } = rowDepsForAnchors(deps, deferredRowAnchors);
   const flowDeps: TableFlowDeps =
@@ -1356,8 +1362,9 @@ export function layoutRowFragmentBounded(
     const spaced = gap && gridColumn < cols.length ? gap : null;
     const cellX = spaced ? left + spaced.cellLeft(gridColumn) : slotX;
     const cellW = Math.max(spaced ? spaced.cellWidth(gridColumn, span) : slotW, MIN_CELL_BOX_PT);
-    const insets =
+    const ownInsets =
       deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);
+    const insets = rowGapPt > 0 ? { ...ownInsets, top: ownInsets.top + rowGapPt } : ownInsets;
     // Each page fragment retains the cell padding, even when its paragraph continues.
     const topInset = insets.top;
     // A detached head answers to the page and to its own SPAN, and to nothing about this
@@ -1508,7 +1515,12 @@ export function layoutRowFragmentBounded(
     const authoredFloorPt =
       isContinuation || atLeastHeightPt === undefined
         ? 0
-        : authoredRowMinimumFloorPt(atLeastHeightPt, flowed, deps.cellMinimumContentInsets);
+        : authoredRowMinimumFloorPt(
+            atLeastHeightPt,
+            flowed,
+            deps.cellMinimumContentInsets,
+            rowGapPt
+          );
     const spanFloorPt = isContinuation ? 0 : (vMerge?.heightFloorPt ?? 0);
     const minBottom = rowTop + Math.max(authoredFloorPt, spanFloorPt);
     const floors = minBottom > rowBottom && minBottom <= maxBottom + 0.001;
@@ -1516,6 +1528,7 @@ export function layoutRowFragmentBounded(
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
+  const cellHeight = Math.max(0, rowHeight - rowGapPt);
   if (layOutWaitingBottomToTopCells(flowed, rowHeight) && markSizedRow) anyFitted = true;
 
   const cells: TableCellFragmentRecord[] = flowed.map((entry) => {
@@ -1556,7 +1569,7 @@ export function layoutRowFragmentBounded(
       ...(entry.cell.shading === undefined ? {} : { shading: entry.cell.shading }),
       ...(entry.cell.textDirection === 'btLr' ? { textDirection: 'btLr' as const } : {}),
       blocks,
-      box: { x: entry.x, y: rowTop, width: entry.width, height: rowHeight },
+      box: { x: entry.x, y: rowTop + rowGapPt, width: entry.width, height: cellHeight },
     };
   });
 
@@ -1685,42 +1698,6 @@ export function layoutOnePassRow(
   return place(rollback());
 }
 
-/**
- * The vMerge plan for one table, probed by row layout. `rows` narrows it to the rows the
- * caller actually places — the paginator plans over the BODY rows, so a merge is never
- * planned against a repeated header copy.
- */
-export const vMergePlanFor = (
-  structure: SemanticTableStructure,
-  left: number | (() => number),
-  depth: number,
-  deps: TableFlowDeps,
-  rows?: readonly SemanticTableRow[],
-  isFragmentFirstRow?: (row: SemanticTableRow) => boolean
-): VMergeRowHeights | null =>
-  deps.measuringOnly === true
-    ? null
-    : planTableVMergeHeights(
-        rows ? { ...structure, rows } : structure,
-        left,
-        depth,
-        deps,
-        (row, cols, atLeft, atDepth, rowDeps, spacing, merge, top) =>
-          measureRowHeight(
-            row,
-            cols,
-            atLeft,
-            atDepth,
-            isFragmentFirstRow?.(row) ? firstRowContentDeps(structure, row, rowDeps) : rowDeps,
-            spacing,
-            merge,
-            top
-          ),
-        isFragmentFirstRow
-          ? (row) => (isFragmentFirstRow(row) ? 'outer-top' : 'shared-top')
-          : undefined
-      );
-
 /** Lay out every row of a structure (no pagination) and finalize merges/borders. */
 export function layoutTableFragment(
   structure: SemanticTableStructure,
@@ -1760,6 +1737,7 @@ export function layoutTableFragment(
     if (rowDeps.cellContentInsets) occurrenceInsets.set(placed.record, rowDeps.cellContentInsets);
     y = placed.bottom;
   }
+  y += closingCellSpacingPt(structure);
   const rows = finalizeTableRows(
     rawRows,
     structure,

@@ -1,6 +1,5 @@
-import { isSettledPreviousRow } from './table-row-placement-reuse.ts';
+import { isSettledPreviousRow, takePreviousRows } from './table-row-placement-reuse.ts';
 import { createRowProbeReuse } from './table-row-probe-reuse.ts';
-import { takePreviousRows } from './table-row-placement-reuse.ts';
 // Placing ONE top-level table into the body flow, row by row, across page breaks.
 //
 // Lifted out of the story loop because it is the one block kind whose placement is a loop of
@@ -24,10 +23,11 @@ import {
   layoutRowFragmentBounded,
   MAX_TABLE_ROW_FRAGMENTS,
   TablePaginationError,
-  vMergePlanFor,
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { closingCellSpacingPt } from './table-cell-spacing.ts';
+import { vMergePlanFor } from './table-vmerge-plan.ts';
 import { prepareTerminalBorderPlan, sameTerminalContent } from './table-terminal-border-plan.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
@@ -48,7 +48,7 @@ import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
 import { pinnedBreakAtCursor, withSplittableRows } from './table-pinned-break.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
-import { shiftTableFragment } from './table-fragment-finalize.ts';
+import { shiftTableFragment, splitHead } from './table-fragment-finalize.ts';
 import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
 import { planOutOfCellFloats } from './table-out-of-cell-floats.ts';
 import { tableFloatClearance } from './table-float-collision.ts';
@@ -275,7 +275,7 @@ export function* paginateTableInFlowSteps(
           box: { ...record.box, height: terminal.height },
           cells: record.cells.map((cell) => ({
             ...cell,
-            box: { ...cell.box, height: terminal.height },
+            box: { ...cell.box, height: terminal.height - (cell.box.y - record.box.y) },
           })),
         };
         rows[index] = corrected;
@@ -984,6 +984,7 @@ export function* paginateTableInFlowSteps(
       breakForContinuation(admitsRepeatedHeaders);
     }
   }
+  flow.cursorY = Math.min(flow.cursorY + closingCellSpacingPt(structure), flow.contentHeight());
   closeTableFragment();
   if (outOfFlow) flow.cursorY = bodyCursorY;
   else if (pinnedBreak)
@@ -992,9 +993,4 @@ export function* paginateTableInFlowSteps(
       flow.contentHeight()
     );
   return { outOfFlow };
-}
-
-/** A row fragment whose rest continues on the next page: the head of a split row. */
-function splitHead(record: TableRowFragmentRecord): TableRowFragmentRecord {
-  return { ...record, hasContinuation: true };
 }
