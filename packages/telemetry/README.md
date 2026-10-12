@@ -4,6 +4,14 @@ Anonymous diagnostics, metrics, and error reporting for `@docx-editor.dev` edito
 
 Every event contains only codes, booleans, bucketed sizes and counts, and timings. Document text, file names, author names, font names, and room names are never sent. The package sends nothing by itself: you choose the exporters.
 
+## Install the package
+
+```sh
+npm install @docx-editor.dev/telemetry @docx-editor.dev/core
+```
+
+Add `@sentry/*`, `@opentelemetry/api`, or `@hocuspocus/server` only for the exporters and server integrations that you use.
+
 ## Editors
 
 ```ts
@@ -27,7 +35,7 @@ A refused tracked change explains itself:
 ```text
 [docx-editor] edit refused: edit.tracked-drawing-delete-unsupported (input, tracked)
   Deleting a drawing is not supported while changes are tracked, so nothing was deleted. Leave the drawing, or ask a person to delete it with tracking off.
-  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit
+  https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-drawing-delete-unsupported
 ```
 
 ## Collaboration servers

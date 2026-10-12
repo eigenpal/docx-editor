@@ -76,7 +76,9 @@ describe('createTelemetry with a real editor', () => {
       resource: { 'service.name': 'contracts-app' },
     });
     expect(rejected.hint).toContain('viewing');
-    expect(rejected.docs).toBe('https://docx-editor.dev/docs/2.x/guides/diagnostics#edit');
+    expect(rejected.docs).toBe(
+      'https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-read-only'
+    );
     expect(JSON.stringify(memory.events)).not.toContain(SECRET);
 
     const names = memory.metrics.map((record) => prometheusName(record.definition));
@@ -385,6 +387,8 @@ describe('consoleExporter', () => {
       '[docx-editor] edit refused: edit.tracked-drawing-delete-unsupported (input, tracked)'
     );
     expect(lines[0]).toContain('Deleting a drawing is not supported');
-    expect(lines[0]).toContain('https://docx-editor.dev/docs/2.x/guides/diagnostics#edit');
+    expect(lines[0]).toContain(
+      'https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-drawing-delete-unsupported'
+    );
   });
 });

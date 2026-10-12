@@ -34,7 +34,8 @@
         "../core/src/collaboration/replication.ts"
       ],
       "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
-      "@docx-editor.dev/pro/collaboration": ["../pro/src/collaboration/index.ts"]
+      "@docx-editor.dev/pro/collaboration": ["../pro/src/collaboration/index.ts"],
+      "@docx-editor.dev/pro/collaboration/hocuspocus": ["../pro/src/collaboration/hocuspocus.ts"]
     }
   },
   "include": ["src"],

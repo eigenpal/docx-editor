@@ -306,22 +306,13 @@ describe('history, custom nodes, shape, and font messages', () => {
 
 describe('codes and hints', () => {
   test('every public code has a hint and a docs link', () => {
-    const SECTION: Record<string, string> = {
-      open: 'open',
-      edit: 'edit',
-      review: 'review',
-      font: 'font',
-      history: 'history',
-      'custom-node': 'custom-nodes',
-      collab: 'collaboration',
-    };
     const codes = diagnosticCodes();
     expect(codes.length).toBeGreaterThan(40);
     for (const code of codes) {
       const { hint, docs } = explainDiagnostic(code);
       expect(hint.length).toBeGreaterThan(20);
       expect(docs).toBe(
-        `https://docx-editor.dev/docs/2.x/guides/diagnostics#${SECTION[code.split('.')[0]!]}`
+        `https://docx-editor.dev/docs/2.x/guides/diagnostics#${code.replace('.', '-')}`
       );
     }
   });

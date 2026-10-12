@@ -15,21 +15,16 @@ import type {
 export interface DiagnosticExplanation {
   /** One or two sentences: the cause, then the action. */
   readonly hint: string;
-  /** The documentation section for this code. */
+  /** The documentation anchor for this code, such as `…/guides/diagnostics#edit-read-only`. */
   readonly docs: string;
 }
 
 const DOCS = 'https://docx-editor.dev/docs/2.x/guides/diagnostics';
-/** The docs section of each code family; `open.zip-corrupt` is in `#open`. */
-const SECTIONS = {
-  open: 'open',
-  edit: 'edit',
-  review: 'review',
-  font: 'font',
-  history: 'history',
-  'custom-node': 'custom-nodes',
-  collab: 'collaboration',
-} as const;
+
+/** The anchor of a code in the diagnostics guide: `edit.read-only` is `#edit-read-only`. */
+export function diagnosticAnchor(code: string): string {
+  return code.replace('.', '-');
+}
 
 /**
  * A `Record` over the whole union, so a new code without a hint fails the type check.
@@ -290,11 +285,10 @@ const ALL_HINTS: Readonly<Record<DiagnosticCode, string>> = { ...HINTS, ...COLLA
  * @public
  */
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation {
-  const family = code.slice(0, code.indexOf('.')) as keyof typeof SECTIONS;
   return {
     hint: ALL_HINTS[code] ?? HINTS['edit.refused'],
     // An unknown code, from plain JavaScript or a newer engine, links to the page itself.
-    docs: Object.hasOwn(SECTIONS, family) ? `${DOCS}#${SECTIONS[family]}` : DOCS,
+    docs: Object.hasOwn(ALL_HINTS, code) ? `${DOCS}#${diagnosticAnchor(code)}` : DOCS,
   };
 }
 

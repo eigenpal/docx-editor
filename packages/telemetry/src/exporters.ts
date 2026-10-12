@@ -125,7 +125,7 @@ const EXPECTED_REFUSALS: ReadonlySet<string> = new Set([
  * createTelemetry({ exporters: [consoleExporter()] });
  * // [docx-editor] edit refused: edit.tracked-drawing-delete-unsupported (input, tracked)
  * //   Deleting a drawing is not supported while changes are tracked. ...
- * //   https://docx-editor.dev/docs/2.x/guides/diagnostics#edit
+ * //   https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-drawing-delete-unsupported
  * ```
  *
  * @public

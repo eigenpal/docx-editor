@@ -359,8 +359,8 @@ export function withCollaborationTelemetry<C extends Partial<ServerConfiguration
       ({ documentName }) => afterStoreFinished(documentName ?? '')
     );
     guard('onStoreDocument', (error, { documentName }) => {
-      // A skip here can mean that this instance did not store the room, as when another
-      // instance holds the store lock. The store is neither timed nor counted, and the
+      // The Redis extension skips here when another instance holds the store lock: this
+      // instance did not store the room. The store is neither timed nor counted, and the
       // pending updates stay pending.
       if (isSkip(error)) stores.delete(documentName ?? '');
       else settle(stores, documentName ?? '', 'failure');

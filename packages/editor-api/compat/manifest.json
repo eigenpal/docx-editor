@@ -214,6 +214,14 @@
   },
   "omissions": [
     {
+      "uid": "OfficeExtension.Error#debugInfo",
+      "reason": "Implemented: every DocxEditorError has debugInfo with code, message, errorLocation, and innerError. Not selected for exact conformance, because DocxEditorError is a runtime error class, not a declared proxy object, and the reference types statement, surroundingStatements, and fullStatements, which a batch of queued proxies has no source text for. runtime-notes.json records the supported subset."
+    },
+    {
+      "uid": "OfficeExtension.DebugInfo#innerError",
+      "reason": "Implemented as an object with a stable public diagnostic code and the fixed hint for that code, never a string and never document content. Not selected, because the reference type is DebugInfo | string, which would let a raw engine reason through. runtime-notes.json records the difference."
+    },
+    {
       "uid": "Word.View#revisionsFilter",
       "reason": "Deferred to a separate view API change, including markup and view. Revision markup preferences belong to the editor host, outside the Office-shaped document model. Use createDocxEditor revisionMarkup and setRevisionMarkup; no competing document automation member is introduced."
     },
