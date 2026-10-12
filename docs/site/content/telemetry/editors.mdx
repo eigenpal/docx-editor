@@ -90,6 +90,7 @@ To change which events become issues, pass `issue: (event) => boolean`.
 Sentry records more of the page than your diagnostics. Session Replay records the page, and the page shows the document. Each click and key press becomes a breadcrumb that describes the element with its `alt`, `title`, and `aria-label` values, which inside the editor come from the document. Block the editor in Replay, and drop the editor's click and key press breadcrumbs:
 
 ```ts
+import * as Sentry from '@sentry/react';
 import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
 
 Sentry.init({

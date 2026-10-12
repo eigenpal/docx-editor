@@ -9,7 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // imports or declares it, an earlier block on the same page does, or the reader supplies it
 // (their consent manager, logger, web framework, and handlers).
 import { expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const PACKAGE = path.resolve(import.meta.dir, '../..');
@@ -24,8 +24,22 @@ const SOURCES = [
   path.join(PACKAGE, 'README.md'),
 ];
 
+/** Pages outside the telemetry docs: only their blocks that show a refusal's diagnostic. */
+const PARTIAL_SOURCES: readonly { readonly file: string; readonly contains: string }[] = [
+  {
+    file: path.join(ROOT, 'docs/site/content/editor-api/batching-and-errors.mdx'),
+    contains: 'debugInfo.innerError',
+  },
+  {
+    file: path.join(ROOT, 'packages/editor-api/OFFICE_JS_GUIDE.md'),
+    contains: 'debugInfo.innerError',
+  },
+];
+
 /** What the reader supplies. Never a package export: those must be imported. */
 const READER: Readonly<Record<string, string>> = {
+  context: '{ sync(): Promise<void> }',
+  feedback: 'string[]',
   consentManager: '{ readonly analytics: boolean }',
   datadogRum:
     '{ addError(error: Error, context?: object): void; addAction(name: string, context?: object): void }',
@@ -92,13 +106,17 @@ const FENCE = /^[ \t]*```(ts|tsx|typescript)\b[^\n]*\r?\n([\s\S]*?)^[ \t]*```/gm
 
 function examples(): Example[] {
   const found: Example[] = [];
-  for (const source of SOURCES) {
-    const text = readFileSync(source, 'utf8');
+  const pages = [...SOURCES.map((file) => ({ file, contains: '' })), ...PARTIAL_SOURCES];
+  for (const { file, contains } of pages) {
+    const text = readFileSync(file, 'utf8');
     let before = '';
     for (const match of text.matchAll(FENCE)) {
       const code = match[2]!.replace(/\r\n/g, '\n');
-      found.push({ file: source, lang: match[1] === 'tsx' ? 'tsx' : 'ts', code, before });
-      before += `\n${code}`;
+      if (code.includes(contains))
+        found.push({ file, lang: match[1] === 'tsx' ? 'tsx' : 'ts', code, before });
+      // A block that names its file, such as `// telemetry.ts`, is a separate file: what it
+      // defines is imported, never carried.
+      if (!/^\/\/ [\w-]+\.tsx?\n/.test(code)) before += `\n${code}`;
     }
   }
   return found;
@@ -146,8 +164,8 @@ test('every TypeScript example in the telemetry docs type-checks', () => {
   // Inside node_modules, so package imports resolve as they do for the package itself; one
   // directory per run, so two runs in one checkout never share files.
   const cache = path.join(PACKAGE, 'node_modules/.cache');
-  readdirSync(PACKAGE); // the package exists
-  const dir = mkdtempSync(path.join(ensure(cache), 'docs-snippets-'));
+  mkdirSync(cache, { recursive: true });
+  const dir = mkdtempSync(path.join(cache, 'docs-snippets-'));
   try {
     writeFileSync(path.join(dir, 'modules.d.ts'), MODULES);
     const origin: string[] = [];
@@ -176,11 +194,6 @@ test('every TypeScript example in the telemetry docs type-checks', () => {
     rmSync(dir, { recursive: true, force: true });
   }
 }, 120_000);
-
-function ensure(dir: string): string {
-  Bun.spawnSync(['mkdir', '-p', dir]);
-  return dir;
-}
 
 function tsconfig(): object {
   const telemetryPaths = JSON.parse(
