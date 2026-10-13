@@ -6,7 +6,7 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Record rooms, connections, people, room memory, load and store times, and refusals on a collaboration server. Metrics carry no room names. For every metric, see [Metrics](/docs/2.x/telemetry/metrics). To see these metrics in Grafana, download the **Collaboration** dashboard from [Dashboards](/docs/2.x/telemetry/dashboards).
+Record rooms, connections, people, room memory, load and store times, and refusals on a collaboration server. Metrics carry no room names. For how people and memory are counted, and for per-room detail, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms). For every metric, see [Metrics](/docs/2.x/telemetry/metrics). To see these metrics in Grafana, download the **Collaboration** dashboard from [Dashboards](/docs/2.x/telemetry/dashboards).
 
 ## Hocuspocus
 
@@ -73,26 +73,6 @@ rooms.rejected(error);
 // When the server unloads the room:
 room.close();
 ```
-
-## People and memory in each room
-
-The number of people in a room comes from the room's awareness states. One person with two tabs counts twice. If you run several Hocuspocus instances with the Redis extension, each instance sees the people of every instance in its awareness, so do not add the instances together. With `perRoomSeries`, take the `max` for each room across instances and add the rooms. Without per-room series, the `max` across instances is exact only when every instance holds the same rooms; otherwise it is a lower bound. Connections are counted separately, as one per socket and room.
-
-JavaScript cannot measure the heap used by one room. The metrics report what each room holds instead: the encoded Yjs state, the stored images and other files, and the updates not yet stored. To see whether process memory grows with the rooms, compare these metrics with your process memory metrics, such as `prom-client` default metrics.
-
-The state is encoded once per sample, and only for rooms that changed. The interval sample handles one room at a time and yields between rooms, so many large rooms do not block other work. To skip encoding entirely, set `measureState: false`. The default sample interval is 60 seconds. To sample once per scrape instead, set `sampleInterval: false` and call `rooms.sample()` before you render the metrics, or pass `sampleBeforeScrape: rooms` to `serveMetrics`.
-
-With the Redis extension, only the instance that holds a room's store lock stores it. Another instance that tries at the same time skips its store. That store is neither timed nor counted, and the room's pending updates stay pending on that instance until one of its own stores succeeds.
-
-## Per-room detail
-
-Metrics carry no room name, so the number of series stays bounded and names stay private. Values such as people and memory per room are histograms: each sample adds every room once. Query them over a window, such as `histogram_quantile(0.95, rate(docx_editor_collab_room_memory_bytes_bucket[5m]))`, or divide `rate(..._sum[5m])` by `rate(..._count[5m])` for the mean. To find a large room, call `rooms.list()` from an endpoint that only administrators can reach. Each row has the room label, people, connections, state bytes, file bytes, pending bytes, node count, the largest share of any room limit, age, and idle time.
-
-By default, the room label is an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, use `roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET)`. It throws at startup when the secret is empty. To show real names, use `roomLabel: (name) => name`.
-
-## Label metrics by room
-
-If a few rooms need their own series, set `perRoomSeries: true`, with the default label or `roomLabel: hmacRoomLabel(secret)`. Any other `roomLabel` throws, so a room name cannot become a label. Each room then gets `docx_editor_collab_room_participants_current` and `docx_editor_collab_room_memory_current_bytes` gauges labeled `room`. A closed room's series are removed. Each room adds series, so keep this off on servers with many rooms.
 
 ## Serve Prometheus metrics
 

@@ -283,10 +283,7 @@ test('performance is sampled once per editor: all of its summaries or none', () 
     exporters: [memory],
     include: { performance: { sampleRate: 0.5 } },
   });
-  const editors = Array.from(
-    { length: 40 },
-    (_, index) => `e_editor-${String(index).padStart(4, '0')}`
-  );
+  const editors = Array.from({ length: 40 }, (_, index) => `e_${String(index).padStart(16, '0')}`);
   for (let round = 0; round < 5; round += 1)
     for (const editorSessionId of editors)
       telemetry.record({ ...summary(), editorSessionId } as EditorDiagnostic);

@@ -77,11 +77,67 @@ describe('httpExporter', () => {
     telemetry.record({ ...refusal, code: 'edit.protected-content' } as EditorDiagnostic);
     expect(posts).toHaveLength(1);
     expect(posts[0]).toHaveLength(2);
-    await telemetry.flush();
-    await Promise.resolve();
+    globalThis.dispatchEvent(new Event('pagehide'));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(posts).toHaveLength(1);
     expect(beacons.map((batch) => batch.length)).toEqual([1]);
+    await telemetry.shutdown();
+  });
+
+  test('a summary that fills a batch while the page hides still goes out with sendBeacon', async () => {
+    stubBeacon();
+    const posts: unknown[][] = [];
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      posts.push(JSON.parse(String(init.body)));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const telemetry = createTelemetry({
+      exporters: [httpExporter({ url: '/api/telemetry', batchSize: 2, flushIntervalMs: 60_000 })],
+    });
+    // The repeat is summarized at page hide, and the summary fills the batch of two.
+    telemetry.record(refusal);
+    telemetry.record(refusal);
+    globalThis.dispatchEvent(new Event('pagehide'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(posts).toEqual([]);
+    expect(beacons.flat()).toHaveLength(2);
+    await telemetry.shutdown();
+  });
+
+  test('a flush while the page is open sends everything with fetch', async () => {
+    stubBeacon();
+    const posts: unknown[][] = [];
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      posts.push(JSON.parse(String(init.body)));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const exporter = httpExporter({
+      url: '/api/telemetry',
+      batchSize: 50,
+      flushIntervalMs: 60_000,
+    });
+    exporter.attach!({ consented: () => true, pageClosing: () => false });
+    const many = (index: number) =>
+      ({ ...refusal, editorSessionId: `e_${String(index).padStart(16, '0')}` }) as never;
+    for (let index = 0; index < 49; index += 1) exporter.event!(many(index));
+    await exporter.flush!();
+    expect(beacons).toEqual([]);
+    expect(posts.flat()).toHaveLength(49);
+  });
+
+  test('batchSize is at most 50, the route default for maxEvents', () => {
+    const posts: unknown[][] = [];
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      posts.push(JSON.parse(String(init.body)));
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
+    const exporter = httpExporter({
+      url: '/api/telemetry',
+      batchSize: 500,
+      flushIntervalMs: 60_000,
+    });
+    for (let index = 0; index < 50; index += 1) exporter.event!(refusal as never);
+    expect(posts.map((batch) => batch.length)).toEqual([50]);
   });
 
   test('falls back to fetch when sendBeacon refuses, and reports a failed request', async () => {
@@ -93,8 +149,10 @@ describe('httpExporter', () => {
       exporters: [httpExporter({ url: '/api/telemetry', onError: (error) => errors.push(error) })],
     });
     telemetry.record(refusal);
+    globalThis.dispatchEvent(new Event('pagehide'));
     await telemetry.flush();
     expect(errors).toHaveLength(1);
+    await telemetry.shutdown();
   });
 });
 
@@ -208,6 +266,7 @@ describe('httpExporter delivery limits', () => {
       flushIntervalMs: 60_000,
       onError: (error) => errors.push(error),
     });
+    withErrors.attach!({ consented: () => true, pageClosing: () => true });
     // Each event is about 200 bytes; 600 of them are far over the closing budget.
     for (let index = 0; index < 600; index += 1) withErrors.event!(big(index));
     await withErrors.flush!();
@@ -216,8 +275,10 @@ describe('httpExporter delivery limits', () => {
       (total, batch) => total + new TextEncoder().encode(JSON.stringify(batch)).byteLength,
       0
     );
+    // The budget covers the whole closing period, not each batch.
     expect(sentBytes).toBeLessThanOrEqual(60 * 1024);
-    expect(errors).toHaveLength(1);
+    expect(sentBytes).toBeGreaterThan(50 * 1024);
+    expect(errors.length).toBeGreaterThan(0);
   });
 });
 
@@ -241,11 +302,16 @@ describe('ingest', () => {
     // Only the first is complete and known; a made-up command drops its whole event.
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ code: 'edit.picture-selected', resource: {} });
-    expect(events[0]).not.toHaveProperty('attributes');
+    expect(events[0]!.attributes).toEqual({});
     const text = JSON.stringify(events);
     for (const secret of ['Confidential', 'sk_live', 'Alice', 'site'])
       expect(text).not.toContain(secret);
     expect(validateTelemetryEvents({ events: [sent] })).toEqual([]);
+    // Free text in the session id or the version drops the event.
+    expect(validateTelemetryEvents([{ ...sent, engineVersion: 'Confidential' }])).toEqual([]);
+    expect(validateTelemetryEvents([{ ...sent, editorSessionId: 'e_Bearer-secret123' }])).toEqual(
+      []
+    );
     expect(validateTelemetryEvents(Array.from({ length: 51 }, () => sent))).toEqual([]);
   });
 

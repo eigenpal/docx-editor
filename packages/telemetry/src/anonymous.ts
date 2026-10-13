@@ -117,8 +117,11 @@ const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
   command: new Set(diagnosticCommands()),
   sizeBucket: /^(?:\d+(?:KiB|MiB)?-\d+(?:KiB|MiB)|512MiB\+)$/,
   pagesBucket: new Set(['0', '1', '2-9', '10-99', '100-999', '1000+']),
-  editorSessionId: /^e_[A-Za-z0-9-]{8,64}$/,
-  engineVersion: /^[0-9A-Za-z.+-]{1,40}$/,
+  // The engine's three forms: a UUID, 32 hex digits, or a time and counter without Web Crypto.
+  editorSessionId:
+    /^e_(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{16,64}|[0-9a-z]{6,12}_[0-9a-z]{1,8})$/,
+  // A release version, such as `2.29.0` or `2.29.0-next.1`, or `development` in this repository.
+  engineVersion: /^(?:development|\d{1,4}\.\d{1,4}\.\d{1,4}(?:-[0-9A-Za-z.]{1,20})?)$/,
   status: new Set(['initializing', 'ready', 'disconnected', 'error', 'destroyed']),
   previous: new Set(['none', 'initializing', 'ready', 'disconnected', 'error', 'destroyed']),
   // Failure detail: the engine's own reason and the anonymous context around it.

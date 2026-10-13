@@ -17,7 +17,10 @@ export interface HttpExporterOptions {
    * the service's token never reaches the browser. See `@docx-editor.dev/telemetry/ingest`.
    */
   readonly url: string;
-  /** Events per request. Defaults to 20. A full batch is sent at once. */
+  /**
+   * Events per request, from 1 to 50. Defaults to 20. A full batch is sent at once. The limit
+   * matches the default `maxEvents` of `telemetryRoute`, which refuses a longer list.
+   */
   readonly batchSize?: number;
   /** How long an event waits for its batch to fill, in milliseconds. Defaults to 10 000. */
   readonly flushIntervalMs?: number;
@@ -39,6 +42,9 @@ export interface HttpExporterOptions {
  */
 const CLOSING_BUDGET_BYTES = 60 * 1024;
 
+/** The default `maxEvents` of `telemetryRoute`: a larger batch would be refused whole. */
+const MAX_BATCH_SIZE = 50;
+
 const encoder = new TextEncoder();
 const byteLength = (text: string): number => encoder.encode(text).byteLength;
 
@@ -46,10 +52,11 @@ const byteLength = (text: string): number => encoder.encode(text).byteLength;
  * Batch events and POST them as a JSON array to your own endpoint.
  *
  * While the page is open, events wait up to `flushIntervalMs` for a batch of `batchSize`, and
- * each batch goes out with an ordinary `fetch`. When the page is hidden or closes, the telemetry
- * client flushes, and the rest go out with `sendBeacon`. A closing page may send only about
- * 64 KiB in all, so delivery while closing is best effort: batches beyond that are dropped and
- * reported to `onError`. If consent is withdrawn, events still waiting are discarded.
+ * each batch goes out with an ordinary `fetch`; so does a `telemetry.flush()` you call. When the
+ * page is hidden or closes, everything waiting goes out with `sendBeacon`. A closing page may
+ * send only about 64 KiB in all, so delivery while closing is best effort: batches beyond that
+ * are dropped and reported to `onError`. If consent is withdrawn, events still waiting are
+ * discarded.
  *
  * @example
  * ```ts
@@ -64,7 +71,7 @@ const byteLength = (text: string): number => encoder.encode(text).byteLength;
  * @public
  */
 export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
-  const batchSize = Math.max(1, options.batchSize ?? 20);
+  const batchSize = Math.min(MAX_BATCH_SIZE, Math.max(1, Math.floor(options.batchSize ?? 20)));
   const intervalMs = options.flushIntervalMs ?? 10_000;
   let queue: TelemetryEvent[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -122,6 +129,9 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
     return null;
   };
 
+  /** Bytes sent since the page started closing. The browser's limit covers all of them. */
+  let closingSent = 0;
+
   const drain = (closing: boolean): void => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
@@ -130,10 +140,10 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
       queue = [];
       return;
     }
-    let budget = closing ? CLOSING_BUDGET_BYTES : Infinity;
+    if (!closing) closingSent = 0;
     let dropped = 0;
     while (queue.length) {
-      const batch = nextBatch(Math.min(budget, CLOSING_BUDGET_BYTES));
+      const batch = nextBatch(CLOSING_BUDGET_BYTES - (closing ? closingSent : 0));
       if (!batch) {
         // Too large for what remains of the budget, or one event too large to send at all.
         dropped += closing ? queue.length : 1;
@@ -142,12 +152,15 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
       }
       queue = queue.slice(batch.count);
       if (closing) {
-        budget -= batch.bytes;
+        closingSent += batch.bytes;
         postClosing(batch.body);
       } else post(batch.body, false);
     }
     if (dropped) failed(new Error(`telemetry dropped ${dropped} events that did not fit`));
   };
+
+  /** Whether the page is hidden or closing now, so a send must survive it. */
+  const closing = (): boolean => context?.pageClosing() ?? false;
 
   return {
     name: 'http',
@@ -156,18 +169,18 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
     },
     event(event) {
       queue.push(event);
-      if (queue.length >= batchSize) drain(false);
+      if (queue.length >= batchSize) drain(closing());
       else if (timer === undefined) {
-        timer = setTimeout(() => drain(false), intervalMs);
+        timer = setTimeout(() => drain(closing()), intervalMs);
         (timer as { unref?: () => void }).unref?.();
       }
     },
     async flush() {
-      drain(true);
+      drain(closing());
       await Promise.all(pending);
     },
     async shutdown() {
-      drain(true);
+      drain(closing());
       await Promise.all(pending);
     },
   };

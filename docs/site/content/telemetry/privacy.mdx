@@ -6,7 +6,7 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-This page is for teams that must show, in a privacy or security review, what their editor telemetry sends. It lists every field the editor can send, the rules that keep personal data and document content out, and the settings in your own SDKs that you need to check.
+This page is for teams that must show, in a privacy or security review, what their editor telemetry sends. It lists every field the editor can send and the rules that keep personal data and document content out. For the settings in your own app and SDKs that you need to check, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 
 ## Summary
 
@@ -59,73 +59,7 @@ Metrics carry the same codes and buckets as labels. A metric label accepts only 
 - `perRoomSeries: true` accepts only the default label or `hmacRoomLabel`, so a room name cannot become a metric label.
 - Refusal reasons from your hooks become a known reason or `other`. The error message is never recorded.
 
-For more information, see [Collaboration servers](/docs/2.x/telemetry/servers).
-
-## What you are responsible for
-
-### Your own identifiers
-
-`attributes`, `resource`, and `metricLabels` send exactly what you give them. Event attributes accept any string up to 256 characters, so the package cannot tell a pseudonymous identifier from an email address.
-
-- Send pseudonymous identifiers that your backend issues, such as an internal user number or a random room token. Never send names, email addresses, document titles, matter numbers, or file names.
-- Add a key to `metricLabels` only if it has few values, such as an environment or an app version. A user or room identifier as a metric label creates one series per user or room.
-
-The following example sends an app version and a pseudonymous tenant identifier, and labels metrics by the version only:
-
-```ts
-import { createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-
-export const telemetry = createTelemetry({
-  exporters: [otelExporter()],
-  attributes: { 'app.version': '4.2.0', 'tenant.id': 't_8f3a' },
-  metricLabels: ['app.version'],
-});
-```
-
-### Consent
-
-Pass `consent` when your app asks for consent. The editor reads it before each event and metric, and records nothing while it returns `false`. Events from that time are dropped, not buffered. To follow Global Privacy Control, Do Not Track, and your own opt-out key, use `consent: browserPrivacySignals({ optOutKey })`, alone or combined with your consent manager.
-
-`consent` controls only what this package records. Your OpenTelemetry SDK still exports the metrics it recorded before, and your Sentry and OpenTelemetry SDKs have their own consent settings. Apply your consent decision to them as well.
-
-### Sentry
-
-The Sentry SDK collects more than your diagnostics. Check each of these settings:
-
-- **Session Replay** records the page, and the page shows the document. Block the editor with `EDITOR_SELECTORS`, or turn Replay off on pages with the editor.
-- **Click and key breadcrumbs** describe the element that was clicked, and inside the editor its `alt`, `title`, and `aria-label` values come from the document. Remove them with `dropEditorBreadcrumbs`.
-- **Page URLs** are attached to every event and to navigation and fetch breadcrumbs. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend` and `beforeBreadcrumb`.
-- **IP addresses and user data** are sent when `sendDefaultPii` is `true`. Keep it `false`.
-- **Console breadcrumbs** record what your own code logs. Drop the `console` category if your code logs document details.
-- **Request bodies** on a server can be attached to an issue. If an endpoint receives document bytes or agent instructions, remove `event.request.data` in `beforeSend`.
-- **Uncaught errors** that your global error handler captures carry the JavaScript error message and stack trace. These come from the runtime, not from the document, but the package does not control them.
-
-The following example applies these settings:
-
-```ts
-import * as Sentry from '@sentry/react';
-import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
-
-Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN,
-  sendDefaultPii: false,
-  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
-  beforeBreadcrumb: (crumb, hint) => {
-    const kept = dropEditorBreadcrumbs(crumb, hint);
-    return kept && kept.category === 'console' ? null : kept;
-  },
-  beforeSend: (event) => {
-    // Remove identifiers from the URL before the event leaves the browser.
-    if (event.request?.url) event.request.url = event.request.url.split('?')[0];
-    return event;
-  },
-});
-```
-
-### OpenTelemetry
-
-Your OpenTelemetry SDK adds resource attributes to every metric and span, such as `service.name`. Some instrumentations also add the browser's user agent or page URL. Check the resource and the instrumentations that you register, and keep identifiers out of them.
+For more information, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms).
 
 ## Verify it yourself
 
@@ -146,12 +80,6 @@ export function assertNoDocumentText(text: string): void {
 
 During development, `consoleExporter()` prints each event as it would be sent.
 
-## Review checklist
+## Next step
 
-- [ ] Exporters send only to backends that your organization controls or has approved.
-- [ ] `attributes` and `resource` contain only pseudonymous identifiers.
-- [ ] `metricLabels` lists only keys with few values.
-- [ ] `documentShape` is left at `'basic'`, or the detailed shape is approved.
-- [ ] `consent` reads your consent manager, and your Sentry and OpenTelemetry SDKs follow the same decision.
-- [ ] Sentry: Replay blocks the editor, `dropEditorBreadcrumbs` is set, `sendDefaultPii` is `false`, and URLs and request bodies are scrubbed.
-- [ ] Collaboration server: `rooms.list()` is behind an administrator endpoint, and `roomLabel` is the default or `hmacRoomLabel`.
+Check the settings that only you control, such as your own identifiers, consent, and your Sentry and OpenTelemetry SDKs, in [Privacy review checklist](/docs/2.x/telemetry/privacy-review).

@@ -49,23 +49,24 @@ Install the peer dependency for each exporter that you use: `@opentelemetry/api`
 - The engine builds each event this way, and the package checks each event again before an exporter receives it.
 - The identifiers you add with `attributes`, `resource`, and `metricLabels`, and what your Sentry and OpenTelemetry SDKs collect, are yours to control.
 
-For every field that can be sent, how the rules are enforced, and a review checklist, see [Privacy](/docs/2.x/telemetry/privacy).
+For every field that can be sent and how the rules are enforced, see [Privacy](/docs/2.x/telemetry/privacy). For the settings you control, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 
 ## Where to start
 
 Read the pages in this order. Each one is short and covers one task.
 
-1. [Privacy](/docs/2.x/telemetry/privacy): what is sent and what is never sent. Start here for a privacy review.
+1. [Privacy](/docs/2.x/telemetry/privacy): what is sent and what is never sent. Start here for a privacy review, then complete the [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 2. [Set up an editor](/docs/2.x/telemetry/editors): create the client, register its module, and choose what to record.
 3. Send the data to your backend:
    - [Send to Sentry](/docs/2.x/telemetry/sentry) for grouped issues.
    - [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry) for metrics and traces in Grafana, Datadog, or Honeycomb.
-   - [Send to a log service](/docs/2.x/telemetry/log-services) for Better Stack, Axiom, Datadog Logs, or your own function.
+   - [Send to a log service](/docs/2.x/telemetry/log-services) for Better Stack or any HTTP log intake. For Axiom and Datadog Logs, see [Other log services](/docs/2.x/telemetry/log-recipes).
+   - [Send to your own code](/docs/2.x/telemetry/callbacks) for Datadog RUM, PostHog, or your own logger.
 4. Optional:
    - [Measure performance](/docs/2.x/telemetry/performance): how fast typing and layout feel.
    - [Identify rooms and users](/docs/2.x/telemetry/identifiers): your own identifiers, and thousands of open editors.
    - [Server agents](/docs/2.x/telemetry/agents): agents that use the editing API.
-   - [Collaboration servers](/docs/2.x/telemetry/servers): rooms, people, and memory on your server.
+   - [Collaboration servers](/docs/2.x/telemetry/servers): set up metrics on your server. Then read [Rooms, people, and memory](/docs/2.x/telemetry/rooms) for what the room metrics mean.
 5. Watch it: [Dashboards](/docs/2.x/telemetry/dashboards) to download, and [Metrics](/docs/2.x/telemetry/metrics) for every name and label.
 
 For every diagnostic code and its hint, see [Diagnostics](/docs/2.x/guides/diagnostics). To run working setups, see the [one-person example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-single-user), the [collaboration example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-collaboration), and the [dashboards stack](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack).

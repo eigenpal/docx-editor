@@ -51,7 +51,7 @@ Telemetry for hundreds or thousands of open editors stays cheap when each signal
 
 - Metrics labels come from closed lists, so the number of series does not grow with users. Avoid a label that differs per browser tab, such as a per-tab instance id. With cumulative counters, each tab becomes its own series. Send delta temporality from the browser SDK, and let your collector or backend add the tabs together.
 - Events carry your identifiers for drill-down. Each editor sends at most one performance summary a minute, identical refusals within 10 seconds become one event, and `sampleRate` limits events further.
-- On a collaboration server, `rooms.list()` gives a table with one row for each room, and `roomLabel` decides how rooms are named in it. For more information, see [Collaboration servers](/docs/2.x/telemetry/servers).
+- On a collaboration server, `rooms.list()` gives a table with one row for each room, and `roomLabel` decides how rooms are named in it. For more information, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms).
 
 ## Link events to your own sessions
 

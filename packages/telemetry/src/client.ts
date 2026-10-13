@@ -317,11 +317,17 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     };
     // Read lazily: during server rendering there is no window, and nothing to flush.
     if (typeof page.addEventListener !== 'function') return;
-    const onPageHide = () => void flush();
+    // Closing first, so the summaries the flush emits go out with delivery that survives the page.
+    const onPageHide = () => {
+      pipeline.setPageClosing(true);
+      void flush();
+    };
     // A mobile browser often closes a background tab without `pagehide`. The event reaches the
     // window after the document's own listeners, where each editor sends its last summary.
     const onVisibility = () => {
-      if (globalThis.document?.visibilityState === 'hidden') void flush();
+      const hidden = globalThis.document?.visibilityState === 'hidden';
+      pipeline.setPageClosing(hidden);
+      if (hidden) void flush();
     };
     page.addEventListener('pagehide', onPageHide);
     page.addEventListener('visibilitychange', onVisibility);

@@ -34,10 +34,10 @@ describe('identifiers on events', () => {
     });
     const roomOne = telemetry.moduleFor({ 'room.id': 'room-1', 'user.id': 'u-17-in-room' });
     const roomTwo = telemetry.moduleFor({ 'room.id': 'room-2' });
-    roomOne.onDiagnostic!(refusal('e_editor-one-0001'));
+    roomOne.onDiagnostic!(refusal('e_0000000000000001'));
     tenant = 'tenant-b';
-    roomTwo.onDiagnostic!(refusal('e_editor-two-0002'));
-    telemetry.module.onDiagnostic!(refusal('e_editor-plain-03'));
+    roomTwo.onDiagnostic!(refusal('e_0000000000000002'));
+    telemetry.module.onDiagnostic!(refusal('e_0000000000000003'));
     expect(memory.events.map((event) => event.attributes)).toEqual([
       { 'tenant.id': 'tenant-a', 'user.id': 'u-17-in-room', 'room.id': 'room-1' },
       { 'tenant.id': 'tenant-b', 'user.id': 'u-17', 'room.id': 'room-2' },

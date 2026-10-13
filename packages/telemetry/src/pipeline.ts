@@ -105,6 +105,11 @@ export interface TelemetryExporter {
 export interface TelemetryExporterContext {
   /** Whether the host's consent is given, read now. */
   consented(): boolean;
+  /**
+   * Whether the page is hidden or closing, read now. While it is, a browser exporter sends with
+   * `sendBeacon` or `keepalive`, which still deliver after the page goes away.
+   */
+  pageClosing(): boolean;
 }
 
 /** Options shared by the editor client and the room server. @public */
@@ -161,6 +166,8 @@ export interface Pipeline {
   declare(definition: MetricDefinition, attributes?: Attributes): void;
   flush(): Promise<void>;
   shutdown(): Promise<void>;
+  /** Mark the page as hidden or closing, or as visible again. */
+  setPageClosing(closing: boolean): void;
 }
 
 /** One delivery path for a set of exporters. */
@@ -217,9 +224,10 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
   function consented(): boolean {
     return !closed && consentGiven();
   }
+  let pageClosing = false;
   for (const exporter of exporters) {
     try {
-      exporter.attach?.({ consented: consentGiven });
+      exporter.attach?.({ consented: consentGiven, pageClosing: () => pageClosing });
     } catch (error) {
       report(error, exporter.name);
     }
@@ -302,6 +310,9 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
       }
     },
     flush: () => each((exporter) => exporter.flush?.()),
+    setPageClosing(closing) {
+      pageClosing = closing;
+    },
     async shutdown() {
       if (closed) return;
       closed = true;

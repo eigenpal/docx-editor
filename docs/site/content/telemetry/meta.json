@@ -3,14 +3,18 @@
   "pages": [
     "index",
     "privacy",
+    "privacy-review",
     "editors",
-    "performance",
-    "identifiers",
     "sentry",
     "opentelemetry",
     "log-services",
+    "log-recipes",
+    "callbacks",
+    "performance",
+    "identifiers",
     "agents",
     "servers",
+    "rooms",
     "dashboards",
     "metrics"
   ]

@@ -370,6 +370,7 @@ export interface TelemetryExporter {
 // @public
 export interface TelemetryExporterContext {
     consented(): boolean;
+    pageClosing(): boolean;
 }
 
 // @public

@@ -126,7 +126,7 @@ export function validateTelemetryEvents(
       Object.freeze({
         ...event,
         resource: allowed(source.resource, keys),
-        ...(Object.keys(attributes).length ? { attributes } : {}),
+        attributes,
       }) as TelemetryEvent,
     ];
   });
