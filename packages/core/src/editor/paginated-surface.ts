@@ -132,7 +132,6 @@ import {
   paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
   reviewItemKey,
-  reviewItemsAt,
   reviewThreadRootOf,
   selectionRects,
   caretAt,
@@ -165,6 +164,7 @@ import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts
 import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { frameCoalescer } from './frame-coalescer.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
+import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
 import type { CaretGeometry } from '../layout/semantic-interaction.ts';
@@ -3687,8 +3687,7 @@ export function mountPaginatedSurface(
     // An explicit activation outranks the caret's own reading of where it landed.
     const pinned = activatedReviewItem();
     if (pinned) return resolveReviewThread(pinned);
-    const at = selection?.head;
-    if (!at) return null;
+    if (!selection) return null;
     // An empty queue still builds the order index. NOT gated: the index's `partFor` reads are
     // what durably open the note stores on first render, and skipping them moved paraId
     // minting into the first note edit — where undo can no longer unwind it to opening bytes
@@ -3698,7 +3697,13 @@ export function mountPaginatedSurface(
     // The covering items, innermost first, minus the one the reader dismissed. Returning
     // null for a dismissed innermost item hid every item under it too: dismissing a comment
     // that wraps a revision meant the revision could never become active either.
-    const covering = reviewItemsAt(visibleReviewItems(), at, reviewOrderIndex()).filter(
+    // A range selection activates only what it shares characters with (see the helper).
+    const covering = reviewItemsAtSelection(
+      visibleReviewItems(),
+      selection.anchor,
+      selection.head,
+      reviewOrderIndex()
+    ).filter(
       (item) =>
         !(item.kind === 'comment' && item.resolved) &&
         !dismissedReviewKeys.has(reviewItemKey(item)) &&
