@@ -72,6 +72,7 @@
     "telemetry/sentry",
     "telemetry/opentelemetry",
     "telemetry/log-services",
+    "telemetry/http-reference",
     "telemetry/log-recipes",
     "telemetry/callbacks",
     "telemetry/performance",

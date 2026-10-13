@@ -8,6 +8,7 @@
     "sentry",
     "opentelemetry",
     "log-services",
+    "http-reference",
     "log-recipes",
     "callbacks",
     "performance",

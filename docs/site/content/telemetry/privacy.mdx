@@ -61,25 +61,6 @@ Metrics carry the same codes and buckets as labels. A metric label accepts only 
 
 For more information, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms).
 
-## Verify it yourself
-
-You can check what the editor sends in your own test suite. Collect every event with `memoryExporter`, open, edit, and review a file that contains text you can recognize, and check that the text never appears in the events:
-
-```ts
-import { createTelemetry, memoryExporter } from '@docx-editor.dev/telemetry';
-
-export const memory = memoryExporter();
-export const telemetry = createTelemetry({ exporters: [memory] });
-
-/** Throws if any recorded event contains `text`. Call it after your test edits the file. */
-export function assertNoDocumentText(text: string): void {
-  if (JSON.stringify(memory.events).includes(text))
-    throw new Error('A telemetry event contains document text.');
-}
-```
-
-During development, `consoleExporter()` prints each event as it would be sent.
-
 ## Next step
 
-Check the settings that only you control, such as your own identifiers, consent, and your Sentry and OpenTelemetry SDKs, in [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+Check the settings that only you control, such as your own identifiers, consent, and your Sentry and OpenTelemetry SDKs, and test what your app sends, in [Privacy review checklist](/docs/2.x/telemetry/privacy-review).

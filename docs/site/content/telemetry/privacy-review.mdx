@@ -52,6 +52,25 @@ For a configuration that applies these settings, see [Keep document content out 
 
 Your OpenTelemetry SDK adds resource attributes to every metric and span, such as `service.name`. Some instrumentations also add the browser's user agent or page URL. Check the resource and the instrumentations that you register, and keep identifiers out of them.
 
+## Verify it yourself
+
+You can check what the editor sends in your own test suite. Collect every event with `memoryExporter`, open, edit, and review a file that contains text you can recognize, and check that the text never appears in the events:
+
+```ts
+import { createTelemetry, memoryExporter } from '@docx-editor.dev/telemetry';
+
+export const memory = memoryExporter();
+export const telemetry = createTelemetry({ exporters: [memory] });
+
+/** Throws if any recorded event contains `text`. Call it after your test edits the file. */
+export function assertNoDocumentText(text: string): void {
+  if (JSON.stringify(memory.events).includes(text))
+    throw new Error('A telemetry event contains document text.');
+}
+```
+
+During development, `consoleExporter()` prints each event as it would be sent.
+
 ## Review checklist
 
 - [ ] Exporters send only to backends that your organization controls or has approved.
