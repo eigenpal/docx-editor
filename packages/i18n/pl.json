@@ -981,5 +981,14 @@
     "insertionsBackground": "Tło wstawień",
     "movedFromBackground": "Tło tekstu przeniesionego z",
     "movedToBackground": "Tło tekstu przeniesionego do"
+  },
+  "formattingMarks": {
+    "columnBreak": null,
+    "pageBreak": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakEvenPage": null,
+    "sectionBreakNextColumn": null,
+    "sectionBreakNextPage": null,
+    "sectionBreakOddPage": null
   }
 }

@@ -104,7 +104,8 @@ import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphBoxOutdent } from './paragraph-indent.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { paragraphFragmentBorders } from './paragraph-fragment-borders.ts';
-import { holdsOnlyPageBreak, lineContentX } from './pending-line.ts';
+import { holdsOnlyPageBreak, lineBreakAfterFields, lineContentX } from './pending-line.ts';
+import { withSectionBreakMarks } from './section-break-marks.ts';
 import { alignLineWithPictures } from './line-picture-alignment.ts';
 import { createLeadingBreakGroups } from './leading-break-border-group.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -406,7 +407,8 @@ function* layoutInModeSteps(
     if (options.session && options.bodyBlockLimit === undefined) {
       projected = relabelListMarkers(projected, optionsWithLists.listItems, options.measurer);
     }
-    const withBoundaries = attachContentControlBoundaries(projected, part, controlToken);
+    const bounded = attachContentControlBoundaries(projected, part, controlToken);
+    const withBoundaries = withSectionBreakMarks(bounded, blocks, sections);
     carryLayoutReadCaches(layout, withBoundaries);
     if (options.session) {
       options.session.previous = withBoundaries;
@@ -2686,6 +2688,7 @@ function* layoutBlocksPass(
         leading: pendingLine.leading,
         trailingSpacing: pendingLine.trailingSpacing,
         ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
+        ...lineBreakAfterFields(pendingLine),
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
         ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),

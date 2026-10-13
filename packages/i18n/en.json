@@ -759,6 +759,15 @@
     "insertSectionPages": "Insert section page count",
     "insertPageXofY": "Insert page X of Y"
   },
+  "formattingMarks": {
+    "pageBreak": "Page break",
+    "columnBreak": "Column break",
+    "sectionBreakContinuous": "Section break (continuous)",
+    "sectionBreakNextPage": "Section break (next page)",
+    "sectionBreakEvenPage": "Section break (even page)",
+    "sectionBreakOddPage": "Section break (odd page)",
+    "sectionBreakNextColumn": "Section break (next column)"
+  },
   "image": {
     "unsupportedFormat": "Unsupported image format ({format})",
     "nonPictureGraphic": "Unsupported graphic ({kind})",

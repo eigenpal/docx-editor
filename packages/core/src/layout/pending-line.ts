@@ -174,6 +174,14 @@ export function placeLeadingIgnoredBreaks(line: PendingLine, pageBreaksIgnored: 
   }
 }
 
+/** The published break kind of a placed line: page wins, as it does in pagination. */
+export function lineBreakAfterFields(
+  line: Pick<PendingLine, 'pageBreakAfter' | 'columnBreakAfter'>
+): { readonly breakAfter?: 'page' | 'column' } {
+  if (line.pageBreakAfter) return { breakAfter: 'page' };
+  return line.columnBreakAfter ? { breakAfter: 'column' } : {};
+}
+
 /** Whether a line holds nothing but the page break that ends it. */
 export function holdsOnlyPageBreak(line: PendingLine): boolean {
   return (

@@ -306,6 +306,7 @@ export const PACKAGES = [
           'RenderableImageMime',
           'ResolvedRunStyle',
           'RevisionKind',
+          'SectionBreakMarkRecord',
           'SemanticDrawingLayer',
           'SemanticRootStoryKind',
           'SemanticStoryKind',

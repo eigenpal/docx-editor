@@ -189,6 +189,10 @@ import {
   drawingPaintStringsCacheToken,
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
+import {
+  breakMarkStringsCacheToken,
+  breakMarkStringsFromTranslate,
+} from '../output/semantic-break-marks.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   collaborationParagraphAt,
@@ -897,6 +901,7 @@ export function mountPaginatedSurface(
     onResourcesChanged: () => onDrawingResourcesChanged?.(),
   });
   let drawingStrings: DrawingPaintStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  let breakMarkStrings = breakMarkStringsFromTranslate(options.translate);
   let tocLabels = options.tocLabels;
   /**
    * The insertion point, or null when the selection is not collapsed — a range has two ends
@@ -2635,6 +2640,7 @@ export function mountPaginatedSurface(
         materialize: materializedSet,
         ariaHidden: false,
         drawingStrings,
+        breakMarkStrings,
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         revisionMarkup: markupSettings.current(),
@@ -5269,6 +5275,16 @@ export function mountPaginatedSurface(
       translate = next;
       setSurfaceAccessibleLabel(pagesLayer, next);
       textFormInteraction?.update();
+      const nextBreakStrings = breakMarkStringsFromTranslate(next);
+      const labelsMoved =
+        breakMarkStringsCacheToken(nextBreakStrings) !==
+        breakMarkStringsCacheToken(breakMarkStrings);
+      breakMarkStrings = nextBreakStrings;
+      // Break labels paint only with paragraph marks; hidden ones repaint on the next toggle.
+      if (labelsMoved && paragraphMarks.get()) {
+        flushPendingInputAndLayout();
+        render(false);
+      }
     },
     setTocLabels: (labels) => {
       tocLabels = labels;

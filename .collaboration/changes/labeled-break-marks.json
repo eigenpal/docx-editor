@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Page, column, and section breaks paint no visible mark when paragraph marks are shown.",
+  "after": "With paragraph marks shown, each break paints a labeled dotted line as local view furniture.",
+  "reason": "Only paint changes. Shared nodes, text offsets, operations, and package serialization remain unchanged, and the labels derive from each peer's own layout.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/break-marks.test.ts",
+    "packages/core/src/output/__tests__/break-marks.test.ts"
+  ],
+  "changeset": "labeled-break-marks",
+  "migration": null
+}

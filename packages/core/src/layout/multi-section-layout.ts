@@ -57,6 +57,7 @@ const MULTI_SECTION_LAYOUT_FIELD_ROLES = {
   reviewArtifacts: 'post-processed',
   contentControls: 'post-processed',
   controlContextToken: 'post-processed',
+  sectionBreaks: 'post-processed',
 } as const satisfies Record<keyof SemanticLayout, MultiSectionLayoutFieldRole>;
 
 void MULTI_SECTION_LAYOUT_FIELD_ROLES;

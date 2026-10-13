@@ -122,6 +122,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
   } satisfies Record<keyof EquationSpanRecord, MarkdownFieldPolicy>,
   line: {
     manualBreakAfter: 'layout-only',
+    breakAfter: 'layout-only',
     id: 'layout-only',
     range: 'represented',
     spans: 'represented',
@@ -382,6 +383,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     reviewArtifacts: 'represented',
     contentControls: 'explicitly-omitted',
     controlContextToken: 'layout-only',
+    sectionBreaks: 'layout-only',
   } satisfies Record<keyof SemanticLayout, MarkdownFieldPolicy>,
   reviewArtifactOccurrence: {
     pageIndex: 'represented',

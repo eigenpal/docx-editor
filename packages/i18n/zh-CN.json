@@ -981,5 +981,14 @@
     "insertionsBackground": "插入背景",
     "movedFromBackground": "移出背景",
     "movedToBackground": "移入背景"
+  },
+  "formattingMarks": {
+    "columnBreak": null,
+    "pageBreak": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakEvenPage": null,
+    "sectionBreakNextColumn": null,
+    "sectionBreakNextPage": null,
+    "sectionBreakOddPage": null
   }
 }

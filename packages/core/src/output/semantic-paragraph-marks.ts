@@ -40,7 +40,8 @@ export function lineTerminatorEdge(
  * below the baseline. The seat's bottom edge is the glyph's baseline whatever its font, so
  * the seat's bottom is placed on the line's published baseline. A top-anchored seat drew the
  * glyph a third of an em low: its line box starts at the glyph's box, not at the baseline. A right-to-left seat reads from its right
- * edge, so its glyph ends at the terminator edge rather than starting there.
+ * edge, so its glyph ends at the terminator edge rather than starting there. `at` moves the
+ * seat past furniture that occupies the terminator edge, such as a break label.
  */
 export function seatTerminatorMark(
   glyph: HTMLElement,
@@ -48,9 +49,10 @@ export function seatTerminatorMark(
   line: LineRecord,
   paragraphRtl: boolean,
   fontSizePt: number,
-  scale: number
+  scale: number,
+  at?: { readonly x: number; readonly rtl: boolean }
 ): void {
-  const edge = lineTerminatorEdge(line, paragraphRtl);
+  const edge = at ?? lineTerminatorEdge(line, paragraphRtl);
   const seat = lineElement.ownerDocument.createElement('span');
   seat.className = 'docx-terminator-seat';
   seat.dataset.docxMarker = '';

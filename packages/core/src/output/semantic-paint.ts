@@ -18,11 +18,15 @@ import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
 
 import { paintedSpanText } from '../layout/optional-hyphen-break.ts';
+import { paintManualLineBreak } from './semantic-paragraph-marks.ts';
 import {
-  paintParagraphMark,
-  paintManualLineBreak,
-  seatTerminatorMark,
-} from './semantic-paragraph-marks.ts';
+  DEFAULT_BREAK_MARK_STRINGS,
+  breakMarkStringsCacheToken,
+  breakMarksOfLayout,
+  paintParagraphEndFurniture,
+  type BreakMarkPaint,
+  type BreakMarkStrings,
+} from './semantic-break-marks.ts';
 // Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
 // no `getComputedStyle`, no canvas text metrics. If this file could measure, the DOM would
@@ -168,6 +172,8 @@ export interface PaintContext {
   readonly fieldShading?: FieldShadingMode;
   /** Paint paragraph-end and manual-line-break furniture. Tracked marks also follow Show/Hide. */
   readonly showParagraphMarks?: boolean;
+  /** Labeled page, column and section break furniture, present only with paragraph marks. */
+  readonly breakMarks?: BreakMarkPaint;
   /**
    * Whether legacy form fields (`w:ffData`) are shaded — the document's `w:doNotShadeFormData`,
    * inverted at the read so this states what to DO rather than what to skip.
@@ -240,6 +246,8 @@ export interface PaintOptions {
   readonly fieldShading?: FieldShadingMode;
   /** Paint paragraph-end and manual-line-break furniture. Tracked marks also follow Show/Hide. */
   readonly showParagraphMarks?: boolean;
+  /** Localized labels for the break furniture paragraph marks show (defaults to English). */
+  readonly breakMarkStrings?: BreakMarkStrings;
   /** See {@link PaintContext.shadeFormFields}. */
   readonly shadeFormFields?: boolean;
   /**
@@ -1413,7 +1421,7 @@ function paintFragment(
       if (leader) element.append(leader);
     }
   }
-  let lastElement: HTMLElement | null = null;
+  const lineElements: HTMLElement[] = [];
   for (const line of fragment.lines) {
     const painted = paintLine(
       document,
@@ -1424,7 +1432,6 @@ function paintFragment(
       paragraphIsRtl(fragment.props),
       fragment.emptyParagraphStyle
     );
-    lastElement = painted;
     if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
       applyParagraphFormatAnchor(painted, fragment, true);
     }
@@ -1434,30 +1441,9 @@ function paintFragment(
     painted.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
     painted.style.left = `${(line.contentX - fragment.box.x) * scale}px`;
     element.append(painted);
+    lineElements.push(painted);
   }
-  if (
-    (ctx.showParagraphMarks && fragment.paragraphEnd) ||
-    (fragment.markRevisions && fragment.markRevisions.length > 0)
-  ) {
-    const glyph = paintParagraphMark(
-      document,
-      fragment.markRevisions ?? [],
-      ctx.revisionStyles,
-      ctx.revisionMarkup,
-      ctx.revisionKindColors
-    );
-    const last = fragment.lines[fragment.lines.length - 1];
-    if (last && lastElement) {
-      // On the last line's baseline after its content, at the mark's own size. No content
-      // means an empty paragraph, whose mark sits at the ALIGNED origin, where the caret goes.
-      const size =
-        fragment.paragraphMarkSizePt ??
-        fragment.emptyParagraphStyle?.fontSizePt ??
-        last.spans.at(-1)?.style.fontSizePt ??
-        DEFAULT_RUN_STYLE.fontSizePt;
-      seatTerminatorMark(glyph, lastElement, last, paragraphIsRtl(fragment.props), size, scale);
-    }
-  }
+  paintParagraphEndFurniture(document, fragment, lineElements, ctx, scale);
   // Layout owns border geometry. Side rules sit OUTSIDE the text column — Word draws them
   // there and never reflows the text for them — so a painter deriving an edge from the
   // fragment box would put the frame through the words.
@@ -2305,6 +2291,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     ? `${chrome.showAll === true ? '1' : '0'}:${chrome.activeIds ? [...chrome.activeIds].sort().join(',') : ''}:${chrome.checkedIds ? [...chrome.checkedIds].sort().join(',') : ''}:${chrome.tocControlIds ? [...chrome.tocControlIds].sort().join(',') : ''}:${chrome.suppressedIds ? [...chrome.suppressedIds].sort().join(',') : ''}:${chrome.readOnly === true ? 'ro' : ''}`
     : '';
   const drawingStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  const breakStrings = options.breakMarkStrings ?? DEFAULT_BREAK_MARK_STRINGS;
   const urlRegistry =
     options.imageUrlPort !== undefined
       ? drawingUrlRegistryFor(container, options.imageUrlPort)
@@ -2351,6 +2338,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
     showParagraphMarks: options.showParagraphMarks ?? false,
+    ...(options.showParagraphMarks ? { breakMarks: breakMarksOfLayout(layout, breakStrings) } : {}),
     changeBars: options.changeBars ?? 'all-markup',
     changeBarsToggle: options.changeBarsToggle ?? false,
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
@@ -2391,6 +2379,8 @@ export function paintSemanticLayoutWithAuthorSlots(
     // The slot map belongs to this paint. A standalone paint derives it from the layout; an
     // attached surface supplies its stable session map. The key must move when that map moves.
     `markup:${JSON.stringify(options.revisionMarkup)}|facing:${options.facingPages}|rev:${revisionStyleContextKey(revisionStyles)}|cells:${revisionStyleContextKey(revisionCellStyles)}|marks:${options.showParagraphMarks ?? false}|` +
+    // A reused page keeps its painted labels, so the labels and the section kinds key reuse.
+    `${resolved.breakMarks ? `breaks:${breakMarkStringsCacheToken(breakStrings)}:${resolved.breakMarks.token}|` : ''}` +
     `bars:${resolved.changeBars}:${resolved.changeBarsToggle}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;

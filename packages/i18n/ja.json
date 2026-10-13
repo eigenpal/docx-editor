@@ -981,5 +981,14 @@
     "insertionsBackground": "挿入の背景",
     "movedFromBackground": "移動元の背景",
     "movedToBackground": "移動先の背景"
+  },
+  "formattingMarks": {
+    "columnBreak": null,
+    "pageBreak": null,
+    "sectionBreakContinuous": null,
+    "sectionBreakEvenPage": null,
+    "sectionBreakNextColumn": null,
+    "sectionBreakNextPage": null,
+    "sectionBreakOddPage": null
   }
 }
