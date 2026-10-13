@@ -34,10 +34,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "query_result(count by (job) (up{docx_editor=\"collaboration\"}) or count by (job) (docx_editor_collab_rooms_active))",
+          "query": "query_result(count by (job) (up{docx_editor=\"collaboration\"}))",
           "refId": "server_job"
         },
-        "definition": "query_result(count by (job) (up{docx_editor=\"collaboration\"}) or count by (job) (docx_editor_collab_rooms_active))",
+        "definition": "query_result(count by (job) (up{docx_editor=\"collaboration\"}))",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -58,10 +58,10 @@
           "uid": "${datasource}"
         },
         "query": {
-          "query": "label_values(up{job=~\"$server_job\"}, instance)",
+          "query": "label_values(up{job=~\"$server_job\",docx_editor=\"collaboration\"}, instance)",
           "refId": "instance"
         },
-        "definition": "label_values(up{job=~\"$server_job\"}, instance)",
+        "definition": "label_values(up{job=~\"$server_job\",docx_editor=\"collaboration\"}, instance)",
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -155,7 +155,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "min(up{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "min(up{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -219,7 +219,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\",outcome=\"success\"}[$__range])) or sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) * 0) / sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\"}[$__range]))",
+          "expr": "(sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\",outcome=\"success\"}[$__range])) or sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__range])) * 0) / sum(increase(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__range]))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -264,14 +264,14 @@
     {
       "type": "stat",
       "title": "Refused connections",
-      "description": "Connections the server refused at admission in the selected range. No data while any selected server is down or not scraped.",
+      "description": "Connections the server refused at admission, as recorded in the selected range. For whether the server is scraped now, see Server.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "round(sum(increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range]))) or ((min(up{job=~\"$server_job\",instance=~\"$instance\"}) == 1) * 0)",
+          "expr": "round(sum(increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__range]))) or ((min(up{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}) == 1) * 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -373,7 +373,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{job=~\"$server_job\",instance=~\"$instance\"}[5m]))))",
+          "expr": "max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[5m]))))",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -438,7 +438,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(docx_editor_collab_rooms_active{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum(docx_editor_collab_rooms_active{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -489,7 +489,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(docx_editor_collab_participants_active{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum(docx_editor_collab_participants_active{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -540,7 +540,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(docx_editor_collab_connections_active{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum(docx_editor_collab_connections_active{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -591,7 +591,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(docx_editor_collab_room_participants_max{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "max(docx_editor_collab_room_participants_max{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -635,14 +635,14 @@
     {
       "type": "timeseries",
       "title": "Rooms, people, and connections",
-      "description": "Live totals over time.",
+      "description": "Live totals over time. Connections are dashed, so they stay visible when they equal people.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(docx_editor_collab_rooms_active{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum(docx_editor_collab_rooms_active{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "rooms",
           "refId": "A"
         },
@@ -651,7 +651,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(docx_editor_collab_participants_active{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum(docx_editor_collab_participants_active{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "people",
           "refId": "B"
         },
@@ -660,7 +660,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(docx_editor_collab_connections_active{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum(docx_editor_collab_connections_active{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "connections",
           "refId": "C"
         }
@@ -683,12 +683,29 @@
             "mode": "palette-classic"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "connections"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [10, 6]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull"]
         },
         "tooltip": {
           "mode": "multi",
@@ -717,7 +734,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (kind) (docx_editor_collab_rooms_memory_bytes{job=~\"$server_job\",instance=~\"$instance\"})",
+          "expr": "sum by (kind) (docx_editor_collab_rooms_memory_bytes{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"})",
           "legendFormat": "{{kind}}",
           "refId": "A"
         }
@@ -745,7 +762,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -774,7 +792,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval])))",
           "legendFormat": "{{resource}}",
           "refId": "A"
         }
@@ -804,7 +822,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -833,7 +852,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_age_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_age_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval])))",
           "legendFormat": "age",
           "refId": "A"
         },
@@ -842,7 +861,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_idle_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(docx_editor_collab_room_idle_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval])))",
           "legendFormat": "idle",
           "refId": "B"
         }
@@ -870,7 +889,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -912,7 +932,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_load_duration_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_load_duration_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval])))",
           "legendFormat": "load {{outcome}}",
           "refId": "A"
         },
@@ -921,7 +941,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_store_duration_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, outcome) (rate(docx_editor_collab_room_store_duration_seconds_bucket{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval])))",
           "legendFormat": "store {{outcome}}",
           "refId": "B"
         }
@@ -949,7 +969,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -978,7 +999,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "60 * sum by (outcome) (rate(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "60 * sum by (outcome) (rate(docx_editor_collab_room_store_duration_seconds_count{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval]))",
           "legendFormat": "{{outcome}}",
           "refId": "A"
         }
@@ -1006,7 +1027,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1035,7 +1057,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(docx_editor_collab_updates_total{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum(rate(docx_editor_collab_updates_total{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval]))",
           "legendFormat": "updates",
           "refId": "A"
         }
@@ -1063,7 +1085,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1092,7 +1115,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(docx_editor_collab_update_bytes_total{job=~\"$server_job\",instance=~\"$instance\"}[$__rate_interval]))",
+          "expr": "sum(rate(docx_editor_collab_update_bytes_total{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__rate_interval]))",
           "legendFormat": "bytes",
           "refId": "A"
         }
@@ -1120,7 +1143,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1149,7 +1173,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (outcome) (increase(docx_editor_collab_migrations_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) > 0)",
+          "expr": "topk(10, sum by (outcome) (increase(docx_editor_collab_migrations_total{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1163,6 +1187,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "outcome": 0
             }
           }
         },
@@ -1206,6 +1233,91 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           }
@@ -1281,7 +1393,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1338,7 +1451,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1380,7 +1494,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) > 0)",
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_admission_rejections_total{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1394,6 +1508,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "reason": 0
             }
           }
         },
@@ -1411,7 +1528,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No recorded events",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -1437,6 +1554,91 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           }
@@ -1471,7 +1673,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_message_refusals_total{job=~\"$server_job\",instance=~\"$instance\"}[$__range])) > 0)",
+          "expr": "topk(10, sum by (reason) (increase(docx_editor_collab_message_refusals_total{job=~\"$server_job\",instance=~\"$instance\",docx_editor=\"collaboration\"}[$__range])) > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1485,6 +1687,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "reason": 0
             }
           }
         },
@@ -1502,7 +1707,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No recorded events",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -1528,6 +1733,91 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           }

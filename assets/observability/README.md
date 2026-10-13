@@ -4,7 +4,7 @@ Grafana dashboards for `@docx-editor.dev/telemetry`. Import them into your own G
 
 The dashboards report measurements only and set no targets. Decide what is acceptable from a few weeks of your own traffic, then decide what to alert on.
 
-![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](screenshots/editor-experience.png)
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](screenshots/editor-experience.png)
 
 ## Download
 
@@ -76,7 +76,7 @@ The people totals add up all selected server instances. If your instances share 
 
 ## Mark collaboration servers
 
-The **Server** filter finds collaboration servers by the `docx_editor="collaboration"` target label. Add it to the scrape configuration of each collaboration server, so a server that fails every scrape still shows:
+The **Collaboration** dashboard reads only targets with the `docx_editor="collaboration"` label. Add it to the scrape configuration of each collaboration server. Other targets in the same job then never appear, and a server that fails every scrape still shows:
 
 ```yaml
 scrape_configs:

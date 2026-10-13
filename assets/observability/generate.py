@@ -21,9 +21,9 @@ EXPECTED_REFUSALS = 'edit.stale-target|edit.read-only|edit.protected-content|edi
 F = 'job=~"$job",deployment_environment=~"$env",app_version=~"$version",docx_editor_version=~"$editor_version"'
 # Every summary number covers the selected time range.
 W = '$__range'
-S = 'job=~"$server_job",instance=~"$instance"'
 # The scrape target label that marks a collaboration server. See README.md.
 COLLAB_TARGET = 'docx_editor="collaboration"'
+S = f'job=~"$server_job",instance=~"$instance",{COLLAB_TARGET}'
 
 
 class Board:
@@ -88,7 +88,7 @@ def stat(title, expr, unit, description, thresholds=None, decimals=None, no_valu
 
 
 def series(title, queries, unit, description, line=None, stack=None, minimum=None, maximum=None,
-           panel_links=(), fill=10):
+           panel_links=(), fill=10, legend_calcs=(), dashed=()):
     custom = {'drawStyle': 'line', 'lineWidth': 2, 'fillOpacity': fill, 'spanNulls': False,
               'showPoints': 'never', 'stacking': {'mode': stack or 'none'}}
     defaults = {'unit': unit, 'custom': custom, 'color': {'mode': 'palette-classic'}}
@@ -99,12 +99,20 @@ def series(title, queries, unit, description, line=None, stack=None, minimum=Non
     return {'type': 'timeseries', 'title': title, 'description': description,
             'targets': [target(e, l, ref=chr(65 + i)) for i, (e, l) in enumerate(queries)],
             'links': links(*panel_links),
-            'fieldConfig': {'defaults': defaults, 'overrides': []},
-            'options': {'legend': {'displayMode': 'list', 'placement': 'bottom'},
+            'fieldConfig': {'defaults': defaults, 'overrides': [
+                {'matcher': {'id': 'byName', 'options': name},
+                 'properties': [{'id': 'custom.lineStyle', 'value': {'fill': 'dash', 'dash': [10, 6]}}]}
+                for name in dashed]},
+            'options': {'legend': {'displayMode': 'table' if legend_calcs else 'list', 'placement': 'bottom',
+                                   'calcs': list(legend_calcs)},
                         'tooltip': {'mode': 'multi', 'sort': 'desc'}}}
 
 
-def top_table(title, expr, key, description, code_links=True, no_value='No events in this range'):
+COLUMN_NAMES = {'code': 'Code', 'cause': 'Engine cause', 'part': 'Part', 'operation': 'Operation',
+                'change_kind': 'Change kind', 'reason': 'Reason'}
+
+
+def top_table(title, expr, key, description, code_links=True, no_value='No recorded events in this range'):
     """A top-10 table. With `code_links`, each code links to its hint in the diagnostics guide."""
     if code_links:
         expr = f'label_replace({expr}, "anchor", "$1-$2", "{key}", "([^.]+)\\\\.(.+)")'
@@ -116,6 +124,12 @@ def top_table(title, expr, key, description, code_links=True, no_value='No event
             {'id': 'links', 'value': [{'title': 'Hint and action for ${__value.text}',
                                        'url': f'{DOCS}/guides/diagnostics#${{__data.fields.anchor}}',
                                        'targetBlank': True}]}]})
+    for label, name in COLUMN_NAMES.items():
+        properties = [{'id': 'displayName', 'value': name}]
+        if label == 'cause':
+            properties.append({'id': 'mappings', 'value': [
+                {'type': 'value', 'options': {'none': {'text': 'Not supplied'}}}]})
+        overrides.append({'matcher': {'id': 'byName', 'options': label}, 'properties': properties})
     exclude = {'Time': True}
     if code_links:
         overrides.append({'matcher': {'id': 'byName', 'options': 'anchor'},
@@ -123,7 +137,7 @@ def top_table(title, expr, key, description, code_links=True, no_value='No event
     return {'type': 'table', 'title': title, 'description': description,
             # Servers declare known series at zero; a table lists only what happened.
             'targets': [target(f'topk(10, {expr} > 0)', instant=True, fmt='table')],
-            'transformations': [{'id': 'organize', 'options': {'excludeByName': exclude}},
+            'transformations': [{'id': 'organize', 'options': {'excludeByName': exclude, 'indexByName': {key: 0}}},
                                 {'id': 'sortBy', 'options': {'sort': [{'field': 'Value', 'desc': True}]}}],
             'fieldConfig': {'defaults': {'noValue': no_value, 'custom': {'align': 'auto'}}, 'overrides': overrides},
             'options': {'showHeader': True, 'cellHeight': 'sm', 'footer': {'show': False}}}
@@ -199,8 +213,8 @@ b.add(stat('Opens succeeding', open_ok, 'percentunit',
 b.add(stat('Open time, 95th percentile', f'histogram_quantile(0.95, sum by (le) (increase(docx_editor_document_open_duration_seconds_bucket{{{F}}}[{W}])))', 's',
            'From the start of an open to the first laid-out page, for successful opens over the selected range. Estimated from the timing bands.',
            decimals=0, no_value='No opens'), 5, 4)
-b.add(stat('Browser tabs reporting, last 5 minutes', f'count(count by (instance) (rate({INTERACTION}_count{{{F}}}[5m]) > 0)) or vector(0)', 'short',
-           'Browser tabs that sent timings in the last 5 minutes. A reload counts as a new tab. Zero while people edit means telemetry stopped, not that editing is healthy.'), 8, 4)
+b.add(stat('Sources reporting, last 5 minutes', f'count(count by (job, instance) (rate({INTERACTION}_count{{{F}}}[5m]) > 0)) or vector(0)', 'short',
+           'Distinct metric sources (job and instance) that sent timings in the last 5 minutes. With a random service.instance.id per page, as in the examples, each source is one open page, and a reload is a new one. A collector that aggregates browsers reports fewer sources. Zero while people edit means telemetry stopped, not that editing is healthy.'), 8, 4)
 b.add(stat('Unexpected refusals per 1,000 presses',
            f'1000 * (sum(increase(docx_editor_edit_rejections_total{{{F},code!~"{EXPECTED_REFUSALS}"}}[{W}])) or {reporting}) / sum(increase({INTERACTION}_count{{{F}}}[{W}]))',
            'none', 'Refusals other than expected ones (read-only, protected, stale target), for every 1,000 timed presses, over the selected range.',
@@ -277,7 +291,7 @@ b.add(series('Refused edits per minute by source', [(f'60 * sum by (origin, trac
 b.add(top_table('Font substitutions by reason', f'sum by (code) (increase(docx_editor_font_failures_total{{{F}}}[$__range]))', 'code',
                 'Fonts that failed to load. The editor used a substitute.'), 12, 6)
 b.add(top_table('Dropped telemetry by reason', f'sum by (reason) (increase(docx_editor_telemetry_dropped_events_total{{{F}}}[$__range]))', 'reason',
-                'Events the privacy check dropped, by reason.', code_links=False, no_value='No recorded events'), 12, 6)
+                'Events the privacy check dropped, by reason.', code_links=False), 12, 6)
 
 # Filter values come from every editor metric, so an app that only reports failed opens appears too.
 EDITOR_METRICS = '__name__=~"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)"'
@@ -292,7 +306,7 @@ editor = dashboard(
     'docx-editor-experience', 'Editor experience',
     'How editing feels to people: input delay, engine work, opens, and refusals.',
     b, editor_vars,
-    [annotation('New version', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} first seen', 'rgba(126, 178, 109, 1)', enable=False)],
+    [annotation('Version started reporting', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} reports and did not 2 minutes earlier: a release, or reporting resumed after a gap', 'rgba(126, 178, 109, 1)', enable=False)],
     [('Docs', TELEMETRY_DOCS), ('Report an issue', ISSUES)])
 
 # ─── Collaboration ─────────────────────────────────────────────────────────────────────────
@@ -304,7 +318,7 @@ c.add(stat('Stores succeeding',
            f'(sum(increase(docx_editor_collab_room_store_duration_seconds_count{{{S},outcome="success"}}[$__range])) or sum(increase(docx_editor_collab_room_store_duration_seconds_count{{{S}}}[$__range])) * 0) / sum(increase(docx_editor_collab_room_store_duration_seconds_count{{{S}}}[$__range]))',
            'percentunit', 'Share of room stores that succeeded. A failed store can lose edits on restart.', decimals=2, no_value='No stores yet'), 5, 4)
 c.add(stat('Refused connections', f'round(sum(increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))) or ((min(up{{{S}}}) == 1) * 0)', 'short',
-           'Connections the server refused at admission in the selected range. No data while any selected server is down or not scraped.'), 5, 4)
+           'Connections the server refused at admission, as recorded in the selected range. For whether the server is scraped now, see Server.'), 5, 4)
 c.add(stat('Client errors', f'round(sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job",status="error"}}[$__range]))) or (sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job"}}[$__range])) * 0)', 'short',
            'Times an editor reported an error status in the selected range. No data means no editor reported a status.', no_value='No client data'), 5, 4)
 c.add(stat('Room limit p95, last 5 min', f'max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[5m]))))',
@@ -319,7 +333,8 @@ for title, expr, desc in [('Rooms', f'sum(docx_editor_collab_rooms_active{{{S}}}
 c.add(series('Rooms, people, and connections', [(f'sum(docx_editor_collab_rooms_active{{{S}}})', 'rooms'),
                                                 (f'sum(docx_editor_collab_participants_active{{{S}}})', 'people'),
                                                 (f'sum(docx_editor_collab_connections_active{{{S}}})', 'connections')],
-             'short', 'Live totals over time.'), 12, 8)
+             'short', 'Live totals over time. Connections are dashed, so they stay visible when they equal people.', legend_calcs=['lastNotNull'],
+             dashed=['connections']), 12, 8)
 c.add(series('Room memory', [(f'sum by (kind) (docx_editor_collab_rooms_memory_bytes{{{S}}})', '{{kind}}')], 'bytes',
              'Bytes all rooms hold: encoded state, blobs, and updates not yet stored.', stack='normal'), 12, 8)
 c.add(series('Room limit used by resource (95th percentile)', [(f'histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[$__rate_interval])))', '{{resource}}')],
@@ -352,17 +367,17 @@ c.add(series('Room size as clients saw it', [
 
 c.row('Refusals')
 c.add(top_table('Refused connections by reason', f'sum by (reason) (increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))', 'reason',
-                'Connections refused at admission, such as a failed sign-in, most frequent first.', code_links=False, no_value='No recorded events'), 12, 6)
+                'Connections refused at admission, such as a failed sign-in, most frequent first.', code_links=False), 12, 6)
 c.add(top_table('Refused messages by reason', f'sum by (reason) (increase(docx_editor_collab_message_refusals_total{{{S}}}[$__range]))', 'reason',
-                'Messages refused before they applied, such as a room that changed generation.', code_links=False, no_value='No recorded events'), 12, 6)
+                'Messages refused before they applied, such as a room that changed generation.', code_links=False), 12, 6)
 
 collab_vars = [
     DATASOURCE,
     # Servers come from their scrape target label, so a server that fails every scrape still
-    # appears; servers without the label appear once they report room metrics.
-    dict(variable('server_job', 'Server', f'query_result(count by (job) (up{{{COLLAB_TARGET}}}) or count by (job) (docx_editor_collab_rooms_active))',
+    # appears, and an unrelated target in the same job never does.
+    dict(variable('server_job', 'Server', f'query_result(count by (job) (up{{{COLLAB_TARGET}}}))',
                   all_value=None), regex='/job="([^"]+)"/'),
-    variable('instance', 'Server instance', 'label_values(up{job=~"$server_job"}, instance)'),
+    variable('instance', 'Server instance', f'label_values(up{{job=~"$server_job",{COLLAB_TARGET}}}, instance)'),
     variable('job', 'Client app', 'label_values(docx_editor_collab_client_status_transitions_total, job)'),
 ]
 collab = dashboard(

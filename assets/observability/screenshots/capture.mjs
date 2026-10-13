@@ -41,7 +41,7 @@ for (const shot of SHOTS) {
     page.evaluate(() =>
       Math.max(...[...document.querySelectorAll('.react-grid-item')].map((item) => item.getBoundingClientRect().bottom))
     );
-  const top = shot.from ? (await rowTop(shot.from)) - 12 : 0;
+  const top = shot.from ? (await rowTop(shot.from)) - 6 : 0;
   const bottom = shot.to ? (await rowTop(shot.to)) - 12 : (await contentBottom()) + 12;
   await page.screenshot({
     path: path.join(import.meta.dirname, shot.file),

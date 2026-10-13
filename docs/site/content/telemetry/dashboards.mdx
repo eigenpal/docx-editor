@@ -8,7 +8,7 @@ category: 'Telemetry'
 
 Two Grafana dashboards show how editing feels to the people who use your app and how your collaboration server runs. The dashboards report measurements only and set no targets. What is acceptable, and what to alert on, is your decision: base it on a few weeks of your own traffic.
 
-![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
 
 ## Download
 
@@ -64,7 +64,7 @@ export const telemetry = createTelemetry({
 });
 ```
 
-Mark each collaboration server with the `docx_editor` target label. The **Server** filter finds servers by this label, so a server that fails every scrape still shows:
+Mark each collaboration server with the `docx_editor` target label. The **Collaboration** dashboard reads only targets with this label, so other targets in the same job never appear, and a server that fails every scrape still shows:
 
 ```yaml
 scrape_configs:
@@ -84,14 +84,14 @@ scrape_configs:
 
 ## Editor experience
 
-The first row answers how editing feels now: input delay median and 95th percentile, the share of presses over 1 second, the share of opens that succeed, open time, the browser tabs that report, unexpected refusals for every 1,000 presses, and dropped telemetry events.
+The first row answers how editing feels now: input delay median and 95th percentile, the share of presses over 1 second, the share of opens that succeed, open time, the metric sources that report, unexpected refusals for every 1,000 presses, and dropped telemetry events.
 
 The rows below show:
 
 - **Interaction:** input delay over time, presses by delay band, and input delay by document size, app version, editor version, and the same time a week earlier.
 - **Engine work:** engine layout and paint passes by duration band.
 - **Documents:** opens per minute, open time, and refused files by reason.
-- **Tracked changes:** edits refused while suggesting, tracked changes that accept, reject, or reassign requests skipped, and the reasons and sources of both.
+- **Tracked changes:** edits refused while suggesting, by reason and source, and tracked changes that accept, reject, or reassign requests skipped, by reason, operation, and kind of change.
 - **All refused edits:** every refusal code, by source, with font substitutions and dropped telemetry.
 
 Every code in a table links to its hint in [Diagnostics](/docs/2.x/guides/diagnostics).

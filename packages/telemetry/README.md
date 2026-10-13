@@ -73,7 +73,7 @@ For other Yjs servers, use `roomTelemetry` from `@docx-editor.dev/telemetry/serv
 
 Ready Grafana dashboards show input delay, engine work, opens, and refused edits from your editors, and rooms, people, memory, and refusals from your collaboration server.
 
-![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
 
 Download [`editor-experience.json`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) and [`collaboration.json`](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json), then import them into Grafana. For the setup each one needs, see [Dashboards](https://docx-editor.dev/docs/2.x/telemetry/dashboards).
 

@@ -138,7 +138,7 @@
         "type": "dashboard"
       },
       {
-        "name": "New version",
+        "name": "Version started reporting",
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
@@ -147,7 +147,7 @@
         "iconColor": "rgba(126, 178, 109, 1)",
         "expr": "count by (app_version) (docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}) unless count by (app_version) (docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"} offset 2m)",
         "step": "60s",
-        "titleFormat": "Version {{app_version}} first seen",
+        "titleFormat": "Version {{app_version}} reports and did not 2 minutes earlier: a release, or reporting resumed after a gap",
         "tagKeys": ""
       }
     ]
@@ -444,15 +444,15 @@
     },
     {
       "type": "stat",
-      "title": "Browser tabs reporting, last 5 minutes",
-      "description": "Browser tabs that sent timings in the last 5 minutes. A reload counts as a new tab. Zero while people edit means telemetry stopped, not that editing is healthy.",
+      "title": "Sources reporting, last 5 minutes",
+      "description": "Distinct metric sources (job and instance) that sent timings in the last 5 minutes. With a random service.instance.id per page, as in the examples, each source is one open page, and a reload is a new one. A collector that aggregates browsers reports fewer sources. Zero while people edit means telemetry stopped, not that editing is healthy.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(count by (instance) (rate(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[5m]) > 0)) or vector(0)",
+          "expr": "count(count by (job, instance) (rate(docx_editor_editor_interaction_duration_seconds_count{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[5m]) > 0)) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -666,7 +666,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -723,7 +724,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -843,7 +845,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -900,7 +903,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -957,7 +961,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1014,7 +1019,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1080,7 +1086,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1213,7 +1220,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1333,7 +1341,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1403,7 +1412,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1469,7 +1479,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1512,6 +1523,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "code": 0
             }
           }
         },
@@ -1529,7 +1543,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No events in this range",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -1573,6 +1587,91 @@
                     "targetBlank": true
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           },
@@ -1800,6 +1899,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "code": 0
             }
           }
         },
@@ -1817,7 +1919,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No events in this range",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -1861,6 +1963,91 @@
                     "targetBlank": true
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           },
@@ -1935,7 +2122,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -1978,6 +2166,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "code": 0
             }
           }
         },
@@ -1995,7 +2186,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No events in this range",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -2039,6 +2230,91 @@
                     "targetBlank": true
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           },
@@ -2112,6 +2388,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "code": 0
             }
           }
         },
@@ -2129,7 +2408,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No events in this range",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -2173,6 +2452,91 @@
                     "targetBlank": true
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           },
@@ -2247,7 +2611,8 @@
       "options": {
         "legend": {
           "displayMode": "list",
-          "placement": "bottom"
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -2290,6 +2655,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "code": 0
             }
           }
         },
@@ -2307,7 +2675,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No events in this range",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -2351,6 +2719,91 @@
                     "targetBlank": true
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           },
@@ -2411,6 +2864,9 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "indexByName": {
+              "reason": 0
             }
           }
         },
@@ -2428,7 +2884,7 @@
       ],
       "fieldConfig": {
         "defaults": {
-          "noValue": "No recorded events",
+          "noValue": "No recorded events in this range",
           "custom": {
             "align": "auto"
           }
@@ -2454,6 +2910,91 @@
                   "type": "gauge",
                   "mode": "basic"
                 }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Code"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cause"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Engine cause"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "none": {
+                        "text": "Not supplied"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "part"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Part"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "operation"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Operation"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "change_kind"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Change kind"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reason"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Reason"
               }
             ]
           }
