@@ -983,12 +983,12 @@
     "movedToBackground": "Arrière-plan du texte déplacé vers"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "Saut de colonne",
+    "pageBreak": "Saut de page",
+    "sectionBreakContinuous": "Saut de section (continu)",
+    "sectionBreakEvenPage": "Saut de section (page paire)",
+    "sectionBreakNextColumn": "Saut de section (colonne suivante)",
+    "sectionBreakNextPage": "Saut de section (page suivante)",
+    "sectionBreakOddPage": "Saut de section (page impaire)"
   }
 }

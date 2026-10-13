@@ -983,12 +983,12 @@
     "movedToBackground": "स्थानांतरण गंतव्य की पृष्ठभूमि"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "कॉलम ब्रेक",
+    "pageBreak": "पृष्ठ ब्रेक",
+    "sectionBreakContinuous": "अनुभाग ब्रेक (निरंतर)",
+    "sectionBreakEvenPage": "अनुभाग ब्रेक (सम पृष्ठ)",
+    "sectionBreakNextColumn": "अनुभाग ब्रेक (अगला कॉलम)",
+    "sectionBreakNextPage": "अनुभाग ब्रेक (अगला पृष्ठ)",
+    "sectionBreakOddPage": "अनुभाग ब्रेक (विषम पृष्ठ)"
   }
 }

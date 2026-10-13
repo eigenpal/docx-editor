@@ -983,12 +983,12 @@
     "movedToBackground": "רקע יעד ההעברה"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "מעבר עמודה",
+    "pageBreak": "מעבר עמוד",
+    "sectionBreakContinuous": "מעבר מקטע (רציף)",
+    "sectionBreakEvenPage": "מעבר מקטע (עמוד זוגי)",
+    "sectionBreakNextColumn": "מעבר מקטע (העמודה הבאה)",
+    "sectionBreakNextPage": "מעבר מקטע (העמוד הבא)",
+    "sectionBreakOddPage": "מעבר מקטע (עמוד אי-זוגי)"
   }
 }

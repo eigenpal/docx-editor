@@ -983,12 +983,12 @@
     "movedToBackground": "Taşıma hedefinin arka planı"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "Sütun sonu",
+    "pageBreak": "Sayfa sonu",
+    "sectionBreakContinuous": "Bölüm sonu (sürekli)",
+    "sectionBreakEvenPage": "Bölüm sonu (çift sayfa)",
+    "sectionBreakNextColumn": "Bölüm sonu (sonraki sütun)",
+    "sectionBreakNextPage": "Bölüm sonu (sonraki sayfa)",
+    "sectionBreakOddPage": "Bölüm sonu (tek sayfa)"
   }
 }

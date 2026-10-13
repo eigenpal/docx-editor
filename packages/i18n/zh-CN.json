@@ -983,12 +983,12 @@
     "movedToBackground": "移入背景"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "分栏符",
+    "pageBreak": "分页符",
+    "sectionBreakContinuous": "分节符(连续)",
+    "sectionBreakEvenPage": "分节符(偶数页)",
+    "sectionBreakNextColumn": "分节符(下一栏)",
+    "sectionBreakNextPage": "分节符(下一页)",
+    "sectionBreakOddPage": "分节符(奇数页)"
   }
 }

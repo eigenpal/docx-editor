@@ -983,12 +983,12 @@
     "movedToBackground": "Hintergrund für Verschiebungsziele"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "Spaltenumbruch",
+    "pageBreak": "Seitenumbruch",
+    "sectionBreakContinuous": "Abschnittswechsel (fortlaufend)",
+    "sectionBreakEvenPage": "Abschnittswechsel (gerade Seite)",
+    "sectionBreakNextColumn": "Abschnittswechsel (nächste Spalte)",
+    "sectionBreakNextPage": "Abschnittswechsel (nächste Seite)",
+    "sectionBreakOddPage": "Abschnittswechsel (ungerade Seite)"
   }
 }

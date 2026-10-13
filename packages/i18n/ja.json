@@ -983,12 +983,12 @@
     "movedToBackground": "移動先の背景"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "段区切り",
+    "pageBreak": "改ページ",
+    "sectionBreakContinuous": "セクション区切り (現在の位置から開始)",
+    "sectionBreakEvenPage": "セクション区切り (偶数ページから開始)",
+    "sectionBreakNextColumn": "セクション区切り (次の段から開始)",
+    "sectionBreakNextPage": "セクション区切り (次のページから開始)",
+    "sectionBreakOddPage": "セクション区切り (奇数ページから開始)"
   }
 }

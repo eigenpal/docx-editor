@@ -983,12 +983,12 @@
     "movedToBackground": "Fondo del destino de movimientos"
   },
   "formattingMarks": {
-    "columnBreak": null,
-    "pageBreak": null,
-    "sectionBreakContinuous": null,
-    "sectionBreakEvenPage": null,
-    "sectionBreakNextColumn": null,
-    "sectionBreakNextPage": null,
-    "sectionBreakOddPage": null
+    "columnBreak": "Salto de columna",
+    "pageBreak": "Salto de página",
+    "sectionBreakContinuous": "Salto de sección (continuo)",
+    "sectionBreakEvenPage": "Salto de sección (página par)",
+    "sectionBreakNextColumn": "Salto de sección (columna siguiente)",
+    "sectionBreakNextPage": "Salto de sección (página siguiente)",
+    "sectionBreakOddPage": "Salto de sección (página impar)"
   }
 }
