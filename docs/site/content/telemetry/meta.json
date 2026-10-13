@@ -1,4 +1,17 @@
 {
   "title": "Telemetry",
-  "pages": ["index", "privacy", "editors", "servers", "log-services", "dashboards", "metrics"]
+  "pages": [
+    "index",
+    "privacy",
+    "editors",
+    "performance",
+    "identifiers",
+    "sentry",
+    "opentelemetry",
+    "log-services",
+    "agents",
+    "servers",
+    "dashboards",
+    "metrics"
+  ]
 }

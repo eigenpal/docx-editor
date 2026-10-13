@@ -1,0 +1,35 @@
+---
+title: 'Server agents'
+description: 'Record anonymous diagnostics from agents that edit documents through the editing API, on a server or in the browser.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Agents that edit documents through the editing API report the same diagnostics as an editor.
+
+A runtime from `DocxEditor.createServer` reports the same diagnostics as an editor: the open, and each refused batch with its code. A refusal under a tracking mode the batch set itself counts as tracked. Create one telemetry client per process and pass its module to every runtime:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+const telemetry = createTelemetry({ exporters: [otelExporter()] });
+
+const runtime = await DocxEditor.createServer(bytes, {
+  author: 'Review agent',
+  modules: [telemetry.module],
+});
+try {
+  // ...run the agent...
+} finally {
+  runtime.dispose();
+}
+```
+
+In a long-running worker, call `await telemetry.shutdown()` once, when the process exits. In a serverless function or a one-shot job, call `await telemetry.flush()` before it returns, so buffered data is sent. Do not flush after every job in a long-running worker: it forces an export each time and closes the deduplication windows of every other job.
+
+The `editorSessionId` value is different for each runtime, so you can follow one agent run. A runtime from `DocxEditor.createBrowser` reports its refused batches into the diagnostics of the editor it borrows, with `origin: 'automation'`, so the editor's telemetry module covers in-browser agents too.
+
+On a server, the Sentry Node SDK can attach the incoming request body to an issue. If an agent endpoint receives instructions or document bytes, remove `event.request.data` in `beforeSend`. A refused batch also explains itself in `error.debugInfo.innerError`. For more information, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

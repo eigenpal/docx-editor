@@ -17,11 +17,10 @@ export type TelemetryLogRecord = Record<string, unknown> & {
 export function telemetryRoute(options: TelemetryRouteOptions): (request: Request) => Promise<Response>;
 
 // @public
-export interface TelemetryRouteOptions {
+export interface TelemetryRouteOptions extends ValidateTelemetryEventsOptions {
     readonly allowedOrigins?: readonly string[];
     forward(events: readonly TelemetryEvent[]): unknown;
     readonly maxBodyBytes?: number;
-    readonly maxEvents?: number;
     readonly onError?: (error: unknown) => void;
 }
 
@@ -33,6 +32,7 @@ export function validateTelemetryEvents(body: unknown, options?: ValidateTelemet
 
 // @public
 export interface ValidateTelemetryEventsOptions {
+    readonly attributeKeys?: readonly string[];
     readonly maxEvents?: number;
 }
 

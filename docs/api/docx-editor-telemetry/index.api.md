@@ -355,6 +355,7 @@ export interface TelemetryEventContext {
 
 // @public
 export interface TelemetryExporter {
+    attach?(context: TelemetryExporterContext): void;
     declare?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     event?(event: TelemetryEvent): void;
@@ -364,6 +365,11 @@ export interface TelemetryExporter {
     metric?(record: MetricRecord): void;
     readonly name: string;
     shutdown?(): void | Promise<void>;
+}
+
+// @public
+export interface TelemetryExporterContext {
+    consented(): boolean;
 }
 
 // @public

@@ -58,6 +58,7 @@ export {
   type TelemetryEvent,
   type TelemetryEventContext,
   type TelemetryExporter,
+  type TelemetryExporterContext,
   type TelemetryPipelineOptions,
 } from './pipeline.ts';
 export { explainDiagnostic } from '@docx-editor.dev/core';

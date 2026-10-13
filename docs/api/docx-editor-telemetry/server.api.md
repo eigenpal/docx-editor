@@ -90,6 +90,7 @@ export type SettleOperation = (outcome: 'success' | 'failure') => void;
 
 // @public
 export interface TelemetryExporter {
+    attach?(context: TelemetryExporterContext): void;
     declare?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     event?(event: TelemetryEvent): void;

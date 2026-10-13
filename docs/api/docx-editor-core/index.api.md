@@ -1030,6 +1030,9 @@ export function diagnosticCodeOfRefusal(reason: string, execCode?: ExecErrorCode
 export function diagnosticCodes(): readonly DiagnosticCode[];
 
 // @public
+export function diagnosticCommands(): readonly EditorCommand['type'][];
+
+// @public
 export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
 
 // @public

@@ -1,14 +1,14 @@
 ---
-title: 'Editors and agents'
-description: 'Record anonymous diagnostics from editors, collaboration clients, and editing API agents, and send them to Sentry, OpenTelemetry, or your own tool.'
+title: 'Set up an editor'
+description: 'Create the telemetry client, register its module in React or Vue, choose what to record, and read diagnostics in the console while you develop.'
 category: 'Telemetry'
 ---
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Record diagnostics from editors, collaboration clients, and agents that use the editing API. To install the package, see [Telemetry](/docs/2.x/telemetry). For what is sent and what is never sent, see [Privacy](/docs/2.x/telemetry/privacy).
+Create one telemetry client, register its module in the editor, and choose what it records. To install the package, see [Telemetry](/docs/2.x/telemetry). For what is sent and what is never sent, see [Privacy](/docs/2.x/telemetry/privacy).
 
-## Set up an editor
+## Register the module
 
 Create the telemetry client once, outside your components, and register its module. The module receives the diagnostics of the first document that the editor opens.
 
@@ -60,7 +60,7 @@ If you pass `consent`, the editor records no new telemetry while it returns `fal
 
 Register `telemetry.module`, or call `telemetry.record(event)` yourself, but not both. If you do both, every event is recorded twice.
 
-### Choose what to record
+## Choose what to record
 
 The `include` option turns areas on. If you omit `include`, every area is on. If you pass `include`, only the areas it names are on, so to set one area's options and keep the others, list each area you want.
 
@@ -73,17 +73,17 @@ The `include` option turns areas on. If you omit `include`, every area is on. If
 | `history` | Undo steps that did not group as the gesture intended. |
 | `customNodes` | Custom node payloads that could not be read. |
 | `collaborationClient` | Collaboration status changes, failure codes, connect time, and the number of people in the room. |
-| `performance` | How fast the editor responds: the time from a key press or click to the next frame on screen, and engine layout and paint times. For more information, see [Measure editor performance](#measure-editor-performance). |
+| `performance` | How fast the editor responds: the time from a key press or click to the next frame on screen, and engine layout and paint times. For more information, see [Measure performance](/docs/2.x/telemetry/performance). |
 
 Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event. The one exception is `performance`: a rate of 0 turns it off, metrics included.
 
-The areas whose failures can become Sentry issues are `documentOpen`, `editing`, `trackedChanges`, `fonts`, and `collaborationClient`. For the rule, see [Send to Sentry](#send-to-sentry).
+The areas whose failures can become Sentry issues are `documentOpen`, `editing`, `trackedChanges`, `fonts`, and `collaborationClient`. For the rule, see [Send to Sentry](/docs/2.x/telemetry/sentry).
 
 By default, an opened document is described by its size and page buckets. To also send its part, paragraph, review item, and embedded font buckets, set `documentShape: 'detailed'`. Several counts together describe a document more closely, so turn it on only when you need it.
 
 Identical refusals within 10 seconds are sent once. When the window closes, one summary event repeats the first event with `repeated` set to the number of extra events. Count a summary; do not treat it as a new failure. For the number of people in a room, only the latest count in the window is sent. A collaboration status that repeats, such as a connection that drops again and again, is also sent once per window. To change the window, set `dedupeWindowMs`.
 
-### See why an edit failed during development
+## See why an edit failed during development
 
 Add `consoleExporter()` to print each event with its hint and documentation link:
 
@@ -101,220 +101,8 @@ If an agent deletes a picture through the editing API while changes are tracked,
   https://docx-editor.dev/docs/2.x/guides/diagnostics#edit-tracked-operation-unsupported
 ```
 
-## Measure editor performance
-
-The `performance` area reports how fast the editor responds to the person who uses it. The editor collects timings and sends one `performance` event for each minute of use. It also sends one when the page is hidden and when the editor is destroyed. It never sends one event for each key press.
-
-Each event has up to three timing summaries:
-
-- `interaction`: the time from a key press or a pointer press on the pages to the next frame on screen. This is the delay that a person feels when they type or click. Presses that wait behind slow work count with their full delay. Presses of modifier keys alone, and presses while the page is hidden, are not timed.
-- `layout`: the main-thread time of each engine layout pass that the person causes, by an edit or a view change such as zoom. A pass includes its background work, and the work of a pass that a newer edit replaced. Layouts that loading causes are not included: the opening layout, which the `document.open` event reports, and layouts after fonts or images arrive.
-- `paint`: the time of each engine paint of the pages.
-
-Each summary has `count`, `p50Ms`, `p95Ms`, `maxMs`, and `bands`, the number of timings up to 16, 33, 50, 100, 200, 500, and 1000 ms, and over 1000 ms. The event also has `windowMs` and `pagesBucket`. It has no keys, positions, or text.
-
-If at least 20 presses were timed and more than one in 20 took over 200 ms, the event has the code `performance.slow-interaction` and a hint. The console exporter prints it as a warning, and the Sentry exporter records it as a warning breadcrumb, never as an issue.
-
-The following example sends the performance events of about one editor in ten. The choice is made once for each editor, so one person's summaries stay together. Every editor with the area on still measures, and the metrics count every summary: sampling limits only the events, such as span events and breadcrumbs. To stop measuring, set `sampleRate` to 0.
-
-```ts
-import { createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-
-export const telemetry = createTelemetry({
-  exporters: [otelExporter()],
-  include: { performance: { sampleRate: 0.1 }, documentOpen: true, trackedChanges: true },
-});
-```
-
-Sampling applies to events only, and a `sampleRate` of 0 turns performance measuring off, metrics included. The metrics `docx_editor_editor_interaction_duration_seconds`, `docx_editor_editor_layout_duration_seconds`, and `docx_editor_editor_paint_duration_seconds` count every summary. Their `pages` label is the page count bucket, one of `0`, `1`, `2-9`, `10-99`, `100-999`, and `1000+`, or `unknown` before the first paint, so you can compare documents of different sizes. Their bucket counts are exact, and their sums are estimated from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
-
-To watch editor performance in Prometheus, start from the following queries. The first gives the 95th percentile of input delay, key presses and clicks together, for each page count bucket. The second gives the share of presses that took over 200 ms:
-
-```text
-histogram_quantile(0.95, sum by (le, pages) (rate(docx_editor_editor_interaction_duration_seconds_bucket[10m])))
-
-1 - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.2"}[10m]))
-  / sum(rate(docx_editor_editor_interaction_duration_seconds_count[10m]))
-```
-
-If the share of slow presses grows, compare the layout and paint histograms for the same page bucket. Slow layout follows document size. Slow paint follows the pages on screen.
-
-Send performance to an exporter that records metrics, such as `otelExporter()`. In a browser, the metrics reach Prometheus through your OpenTelemetry SDK and an OpenTelemetry Protocol (OTLP) collector; `prometheusRegistry()` serves metrics from a server process, not from a browser. The Sentry exporter records a performance event only as a breadcrumb, which Sentry shows beside a later error. A `callbackExporter` with an `onMetric` function receives each timing in a summary as one histogram sample, at the middle of its band.
-
-The editor measures only while something wants the data: `telemetry.module` with the `performance` area on and consent given, another module whose `wantsDiagnostic` returns `true` for `'performance'`, or an `editor.on('diagnostic')` handler.
-
-## Identify rooms, users, and documents
-
-With hundreds of editors open, a dashboard shows how the whole app behaves, and your events show which room, user, or document had a problem. Add your own identifiers to events in two places:
-
-- `attributes` on the client: values for everyone on the page, such as the tenant or a pseudonymous user id. A function is read at each event.
-- `telemetry.moduleFor(attributes)` for each editor: values for one editor, such as its collaboration room or document. Use it in place of `telemetry.module`.
-
-```tsx
-import { useMemo } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-import { createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-
-const session = { tenantId: 'acme', pseudonymousUserId: 'u-5f2c', tenantTier: 'enterprise' };
-
-export const telemetry = createTelemetry({
-  exporters: [otelExporter()],
-  attributes: () => ({
-    'tenant.id': session.tenantId,
-    'user.id': session.pseudonymousUserId,
-    'tenant.tier': session.tenantTier,
-  }),
-  metricLabels: ['tenant.tier'],
-});
-
-export function Editor({ bytes, roomId }: { bytes: Uint8Array; roomId: string }) {
-  const modules = useMemo(() => [telemetry.moduleFor({ 'room.id': roomId })], [roomId]);
-  return <DocxEditor key={roomId} document={bytes} modules={modules} />;
-}
-```
-
-Every event then carries `tenant.id`, `user.id`, `tenant.tier`, and `room.id` in `attributes`. Sentry issues get them as tags, so you can search issues by room or user. OpenTelemetry span events get them under the same keys. A callback receives them in `event.attributes`.
-
-Metrics get only the keys you list in `metricLabels`, because each distinct value makes a new series. List keys with few values, such as a tenant tier, a region, or an app version. Never list a user, room, or document id: put those on events, and search them in a backend built for many distinct values, such as Sentry, Honeycomb, or a log store. After 50 distinct values of one key, later values become `other` in metrics; events keep the real value.
-
-These values are your data, and they go only to your exporters. The engine never adds a value to `attributes`. Prefer pseudonymous ids over names or email addresses.
-
-## Run many editors
-
-Telemetry for hundreds or thousands of open editors stays cheap when each signal goes to the place built for it:
-
-- Metrics labels come from closed lists, so the number of series does not grow with users. Avoid a label that differs per browser tab, such as a per-tab instance id. With cumulative counters, each tab becomes its own series. Send delta temporality from the browser SDK, and let your collector or backend add the tabs together.
-- Events carry your identifiers for drill-down. Each editor sends at most one performance summary a minute, identical refusals within 10 seconds become one event, and `sampleRate` limits events further.
-- On a collaboration server, `rooms.list()` gives a table with one row for each room, and `roomLabel` decides how rooms are named in it. For more information, see [Collaboration servers](/docs/2.x/telemetry/servers).
-
-## Link events to your own sessions
-
-Every event has an `editorSessionId` value. It is random for each editor instance and identifies no person and no document. Use it to join a slow performance summary or a refused edit to your own logs, traces, or error reports:
-
-```ts
-import { callbackExporter, createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-import * as Sentry from '@sentry/react';
-
-export const telemetry = createTelemetry({
-  exporters: [
-    otelExporter(),
-    callbackExporter((event) => {
-      // Later Sentry errors and replays carry the editor that was open.
-      Sentry.setTag('docx_editor.editor_session', event.editorSessionId);
-    }),
-  ],
-  include: { performance: true, documentOpen: true },
-});
-```
-
-`Sentry.setTag` sets the tag for the whole page. If a page shows two editors, the tag names the editor that sent the last event.
-
-The OpenTelemetry exporter adds events to the active span, so an event recorded during one of your own spans is already part of that trace. Issues from the Sentry exporter carry the `docx_editor.editor_session` tag.
-
-## Send to Sentry
-
-`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. These events become Sentry issues: an open your app caused or the engine could not explain, a collaboration error that does not heal, a text shaper that did not load, an engine invariant or an exception in a command, and a tracked change the engine could not accept or reject (`review.revision-unsupported` and `review.retained-structure`, as warnings). A corrupt or oversized file becomes a breadcrumb, because the app cannot fix the file. An expired collaboration token and a room the server compacted are breadcrumbs too, because the client rejoins. The fingerprint is the diagnostic code followed by the engine reason and the kind of change, so each distinct defect is its own issue. Issues carry the [failure detail](/docs/2.x/guides/diagnostics#failure-detail) as tags, such as `docx_editor.cause` and `docx_editor.change_kind`. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
-
-To change which events become issues, pass `issue: (event) => boolean`.
-
-Sentry records more of the page than your diagnostics. Session Replay records the page, and the page shows the document. Each click and key press becomes a breadcrumb that describes the element with its `alt`, `title`, and `aria-label` values, which inside the editor come from the document. Block the editor in Replay, and drop the editor's click and key press breadcrumbs:
-
-```ts
-import * as Sentry from '@sentry/react';
-import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
-
-Sentry.init({
-  dsn: '...',
-  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
-  beforeBreadcrumb: dropEditorBreadcrumbs,
-});
-```
-
-`EDITOR_SELECTORS` goes in `block`, which replaces the editor with a placeholder in Replay, so it does not need `mask` as well.
-
-Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Navigation and fetch breadcrumbs carry URLs too, so remove the identifier from them in `beforeBreadcrumb`. Sentry records console messages as breadcrumbs by default; drop the `console` category if your own code logs document details.
-
-To combine `dropEditorBreadcrumbs` with your own filter, call it first and pass on only what it keeps:
-
-```ts
-import * as Sentry from '@sentry/react';
-import { dropEditorBreadcrumbs } from '@docx-editor.dev/telemetry/sentry';
-
-Sentry.init({
-  beforeBreadcrumb: (crumb, hint) => {
-    const kept = dropEditorBreadcrumbs(crumb, hint);
-    return kept?.category === 'console' ? null : kept;
-  },
-});
-```
-
-## Send to OpenTelemetry
-
-The exporter uses the global meter and tracer providers unless you pass your own, and it reads them at each use. You can create it before your OpenTelemetry SDK starts; measurements reach the SDK from the moment it registers.
-
-Each histogram carries its bucket bounds as instrument advice, which the OpenTelemetry JavaScript SDK uses, so the buckets match the bands in [Metrics](/docs/2.x/telemetry/metrics). A collector or a Prometheus 3 OTLP receiver adds unit suffixes by default, so the Prometheus names match that page too. Metrics carry only their own labels: the `resource` option goes on events. Set attributes such as `service.name` on your SDK, where Prometheus turns them into the `job` label.
-
-```ts
-import { createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-
-export const telemetry = createTelemetry({ exporters: [otelExporter()] });
-```
-
-Each document open becomes a `docx_editor.document.open` span. The span has an error status when the open is refused. Other events are added to the active span. If there is no active span, as is usual in a browser, a failure gets a short span of its own. In development, the exporter warns once if no SDK is registered.
-
-To see these metrics in Grafana, download the **Editor experience** dashboard from [Dashboards](/docs/2.x/telemetry/dashboards).
-
-## Send to another tool
-
-To send events to a log service over HTTP, such as Better Stack, Axiom, or Datadog Logs, use `httpExporter` and a route on your server. For the setup, see [Send to a log service](/docs/2.x/telemetry/log-services).
-
-Use `callbackExporter` to forward events to any function:
-
-```ts
-import { callbackExporter, createTelemetry, isFailure } from '@docx-editor.dev/telemetry';
-
-export const telemetry = createTelemetry({
-  exporters: [
-    // isFailure is false for expected refusals and for deduplication summaries.
-    callbackExporter((event) =>
-      isFailure(event)
-        ? datadogRum.addError(new Error(event.kind), event)
-        : datadogRum.addAction(event.kind, event)
-    ),
-  ],
-});
-```
-
-To write your own exporter, implement `TelemetryExporter` with an `event` method, a `metric` method, or both.
-
-## Set up a server agent
-
-A runtime from `DocxEditor.createServer` reports the same diagnostics as an editor: the open, and each refused batch with its code. A refusal under a tracking mode the batch set itself counts as tracked. Create one telemetry client per process and pass its module to every runtime:
-
-```ts
-import { DocxEditor } from '@docx-editor.dev/editor-api';
-import { createTelemetry } from '@docx-editor.dev/telemetry';
-import { otelExporter } from '@docx-editor.dev/telemetry/otel';
-
-const telemetry = createTelemetry({ exporters: [otelExporter()] });
-
-const runtime = await DocxEditor.createServer(bytes, {
-  author: 'Review agent',
-  modules: [telemetry.module],
-});
-try {
-  // ...run the agent...
-} finally {
-  runtime.dispose();
-}
-```
-
-In a long-running worker, call `await telemetry.shutdown()` once, when the process exits. In a serverless function or a one-shot job, call `await telemetry.flush()` before it returns, so buffered data is sent. Do not flush after every job in a long-running worker: it forces an export each time and closes the deduplication windows of every other job.
-
-The `editorSessionId` value is different for each runtime, so you can follow one agent run. A runtime from `DocxEditor.createBrowser` reports its refused batches into the diagnostics of the editor it borrows, with `origin: 'automation'`, so the editor's telemetry module covers in-browser agents too.
-
-On a server, the Sentry Node SDK can attach the incoming request body to an issue. If an agent endpoint receives instructions or document bytes, remove `event.request.data` in `beforeSend`. A refused batch also explains itself in `error.debugInfo.innerError`. For more information, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).
+## Next steps
+
+- To send events to a backend, see [Send to Sentry](/docs/2.x/telemetry/sentry), [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry), or [Send to a log service](/docs/2.x/telemetry/log-services).
+- To add your own room or user identifiers, see [Identify rooms and users](/docs/2.x/telemetry/identifiers).
+- To measure how fast editing feels, see [Measure performance](/docs/2.x/telemetry/performance).

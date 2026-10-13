@@ -8,7 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * Sending telemetry to your own HTTP endpoint from a browser, and reading the browser's privacy
  * signals. No dependency: `fetch`, `sendBeacon`, and `localStorage` only.
  */
-import type { TelemetryEvent, TelemetryExporter } from './pipeline.ts';
+import type { TelemetryEvent, TelemetryExporter, TelemetryExporterContext } from './pipeline.ts';
 
 /** Options for {@link httpExporter}. @public */
 export interface HttpExporterOptions {
@@ -22,21 +22,34 @@ export interface HttpExporterOptions {
   /** How long an event waits for its batch to fill, in milliseconds. Defaults to 10 000. */
   readonly flushIntervalMs?: number;
   /**
-   * Extra request headers. A browser cannot set headers on `sendBeacon`, so with headers, a
-   * batch sent while the page closes uses `fetch` with `keepalive` instead.
+   * Extra request headers. A browser cannot set headers on `sendBeacon`, so with headers, the
+   * batches sent while the page closes use `fetch` with `keepalive` instead.
    */
   readonly headers?: Readonly<Record<string, string>>;
-  /** Called when a request fails. Telemetry never throws into your app. */
+  /**
+   * Called when a request fails, or when batches are dropped because the page closed with more
+   * than the browser lets it send. Telemetry never throws into your app.
+   */
   readonly onError?: (error: unknown) => void;
 }
 
-/** `sendBeacon` and `keepalive` both refuse bodies above 64 KiB; stay well below. */
-const MAX_BODY_BYTES = 60 * 1024;
+/**
+ * The bytes the browser lets a closing page send, across all its `sendBeacon` and `keepalive`
+ * requests together: 64 KiB in the Fetch Standard. Stay below it.
+ */
+const CLOSING_BUDGET_BYTES = 60 * 1024;
+
+const encoder = new TextEncoder();
+const byteLength = (text: string): number => encoder.encode(text).byteLength;
 
 /**
- * Batch events and POST them as a JSON array to your own endpoint. Events wait up to
- * `flushIntervalMs` for a batch of `batchSize`. When the page is hidden, the telemetry client
- * flushes, and the batch goes out with `sendBeacon`, which still delivers while the page closes.
+ * Batch events and POST them as a JSON array to your own endpoint.
+ *
+ * While the page is open, events wait up to `flushIntervalMs` for a batch of `batchSize`, and
+ * each batch goes out with an ordinary `fetch`. When the page is hidden or closes, the telemetry
+ * client flushes, and the rest go out with `sendBeacon`. A closing page may send only about
+ * 64 KiB in all, so delivery while closing is best effort: batches beyond that are dropped and
+ * reported to `onError`. If consent is withdrawn, events still waiting are discarded.
  *
  * @example
  * ```ts
@@ -55,51 +68,92 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
   const intervalMs = options.flushIntervalMs ?? 10_000;
   let queue: TelemetryEvent[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let context: TelemetryExporterContext | undefined;
   const pending = new Set<Promise<void>>();
 
-  const post = (body: string, closing: boolean): void => {
-    const beacon = (globalThis as { navigator?: Navigator }).navigator;
-    if (closing && !options.headers && typeof beacon?.sendBeacon === 'function') {
-      try {
-        if (beacon.sendBeacon(options.url, new Blob([body], { type: 'application/json' }))) return;
-      } catch {
-        // Fall through to fetch.
-      }
+  const failed = (error: unknown): void => {
+    try {
+      options.onError?.(error);
+    } catch {
+      /* an observer must never break the app it observes */
     }
+  };
+
+  /** A batch while the page is open: an ordinary request, with no shared size budget. */
+  const post = (body: string, keepalive: boolean): void => {
     if (typeof fetch !== 'function') return;
     const request = fetch(options.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...options.headers },
       body,
-      keepalive: true,
+      keepalive,
     })
       .then((response) => {
         if (!response.ok) throw new Error(`telemetry endpoint answered ${response.status}`);
       })
-      .catch((error: unknown) => options.onError?.(error))
+      .catch(failed)
       .finally(() => pending.delete(request));
     pending.add(request);
   };
 
-  /** Send everything queued, in batches that stay under the browser's body limit. */
+  /** A batch while the page closes: `sendBeacon`, or `fetch` with `keepalive` as a fallback. */
+  const postClosing = (body: string): void => {
+    const browser = (globalThis as { navigator?: Navigator }).navigator;
+    if (!options.headers && typeof browser?.sendBeacon === 'function') {
+      try {
+        if (browser.sendBeacon(options.url, new Blob([body], { type: 'application/json' }))) return;
+      } catch {
+        // Fall through to fetch.
+      }
+    }
+    post(body, true);
+  };
+
+  /** The next batch from the queue, split until it fits in `limit` bytes. */
+  const nextBatch = (limit: number): { body: string; bytes: number; count: number } | null => {
+    let count = Math.min(batchSize, queue.length);
+    while (count > 0) {
+      const body = JSON.stringify(queue.slice(0, count));
+      const bytes = byteLength(body);
+      if (bytes <= limit) return { body, bytes, count };
+      if (count === 1) return null;
+      count = Math.ceil(count / 2);
+    }
+    return null;
+  };
+
   const drain = (closing: boolean): void => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
-    while (queue.length) {
-      let take = Math.min(batchSize, queue.length);
-      let body = JSON.stringify(queue.slice(0, take));
-      while (take > 1 && body.length > MAX_BODY_BYTES) {
-        take = Math.ceil(take / 2);
-        body = JSON.stringify(queue.slice(0, take));
-      }
-      queue = queue.slice(take);
-      // One event over the limit is not telemetry this package produces: drop it.
-      if (body.length <= MAX_BODY_BYTES) post(body, closing);
+    // Consent can be withdrawn while events wait: they are discarded, never sent.
+    if (context && !context.consented()) {
+      queue = [];
+      return;
     }
+    let budget = closing ? CLOSING_BUDGET_BYTES : Infinity;
+    let dropped = 0;
+    while (queue.length) {
+      const batch = nextBatch(Math.min(budget, CLOSING_BUDGET_BYTES));
+      if (!batch) {
+        // Too large for what remains of the budget, or one event too large to send at all.
+        dropped += closing ? queue.length : 1;
+        queue = closing ? [] : queue.slice(1);
+        continue;
+      }
+      queue = queue.slice(batch.count);
+      if (closing) {
+        budget -= batch.bytes;
+        postClosing(batch.body);
+      } else post(batch.body, false);
+    }
+    if (dropped) failed(new Error(`telemetry dropped ${dropped} events that did not fit`));
   };
 
   return {
     name: 'http',
+    attach(attached) {
+      context = attached;
+    },
     event(event) {
       queue.push(event);
       if (queue.length >= batchSize) drain(false);
@@ -131,7 +185,8 @@ export interface BrowserPrivacySignalsOptions {
 /**
  * A `consent` function that follows the browser's privacy signals: it returns `false` when the
  * visitor sends Global Privacy Control or Do Not Track, or when `optOutKey` is set to `off`.
- * On a server, it returns `false`. Combine it with your consent manager when you have one.
+ * Outside a browser page, such as during server rendering, it returns `false`. Combine it with
+ * your consent manager when you have one.
  *
  * @example
  * ```ts
@@ -148,10 +203,15 @@ export interface BrowserPrivacySignalsOptions {
  */
 export function browserPrivacySignals(options: BrowserPrivacySignalsOptions = {}): () => boolean {
   return () => {
-    const browser = (globalThis as { navigator?: Navigator & { globalPrivacyControl?: boolean } })
-      .navigator;
-    if (!browser) return false;
-    if (browser.globalPrivacyControl === true || browser.doNotTrack === '1') return false;
+    const page = globalThis as {
+      window?: unknown;
+      document?: unknown;
+      navigator?: Navigator & { globalPrivacyControl?: boolean };
+    };
+    // Bun and Node have a `navigator` but no page: no visitor to ask, so no consent.
+    if (!page.window || !page.document || !page.navigator) return false;
+    if (page.navigator.globalPrivacyControl === true || page.navigator.doNotTrack === '1')
+      return false;
     if (!options.optOutKey) return true;
     try {
       return globalThis.localStorage?.getItem(options.optOutKey) !== 'off';

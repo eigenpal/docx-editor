@@ -70,6 +70,7 @@ export type TelemetryEvent = EditorDiagnostic & TelemetryEventContext;
 
 // @public
 export interface TelemetryExporter {
+    attach?(context: TelemetryExporterContext): void;
     declare?(definition: MetricDefinition, attributes: Attributes): void;
     // (undocumented)
     event?(event: TelemetryEvent): void;

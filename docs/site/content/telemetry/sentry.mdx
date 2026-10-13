@@ -1,0 +1,48 @@
+---
+title: 'Send to Sentry'
+description: 'Turn editor failures into grouped Sentry issues and breadcrumbs, and keep document content out of Replay, breadcrumbs, and URLs.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+The Sentry exporter turns failures into grouped issues and everything else into breadcrumbs.
+
+## Issues and breadcrumbs
+
+`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. These events become Sentry issues: an open your app caused or the engine could not explain, a collaboration error that does not heal, a text shaper that did not load, an engine invariant or an exception in a command, and a tracked change the engine could not accept or reject (`review.revision-unsupported` and `review.retained-structure`, as warnings). A corrupt or oversized file becomes a breadcrumb, because the app cannot fix the file. An expired collaboration token and a room the server compacted are breadcrumbs too, because the client rejoins. The fingerprint is the diagnostic code followed by the engine reason and the kind of change, so each distinct defect is its own issue. Issues carry the [failure detail](/docs/2.x/guides/diagnostics#failure-detail) as tags, such as `docx_editor.cause` and `docx_editor.change_kind`. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
+
+To change which events become issues, pass `issue: (event) => boolean`.
+
+## Keep document content out of Sentry
+
+Sentry records more of the page than your diagnostics. Session Replay records the page, and the page shows the document. Each click and key press becomes a breadcrumb that describes the element with its `alt`, `title`, and `aria-label` values, which inside the editor come from the document. Block the editor in Replay, and drop the editor's click and key press breadcrumbs:
+
+```ts
+import * as Sentry from '@sentry/react';
+import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
+
+Sentry.init({
+  dsn: '...',
+  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
+  beforeBreadcrumb: dropEditorBreadcrumbs,
+});
+```
+
+`EDITOR_SELECTORS` goes in `block`, which replaces the editor with a placeholder in Replay, so it does not need `mask` as well.
+
+Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Navigation and fetch breadcrumbs carry URLs too, so remove the identifier from them in `beforeBreadcrumb`. Sentry records console messages as breadcrumbs by default; drop the `console` category if your own code logs document details.
+
+To combine `dropEditorBreadcrumbs` with your own filter, call it first and pass on only what it keeps:
+
+```ts
+import * as Sentry from '@sentry/react';
+import { dropEditorBreadcrumbs } from '@docx-editor.dev/telemetry/sentry';
+
+Sentry.init({
+  beforeBreadcrumb: (crumb, hint) => {
+    const kept = dropEditorBreadcrumbs(crumb, hint);
+    return kept?.category === 'console' ? null : kept;
+  },
+});
+```

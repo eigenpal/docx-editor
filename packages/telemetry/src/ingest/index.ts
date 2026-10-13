@@ -10,31 +10,92 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * route, and only your server holds the log service's token.
  *
  * Anyone can POST to a public route, so every event is checked again with the same closed lists
- * the browser used. No dependency: Fetch API `Request` and `Response` only, so it runs in
- * Next.js route handlers, Hono, Bun, Deno, and Cloudflare Workers.
+ * the browser used, and fields the client chose itself are dropped unless you allow them. No
+ * dependency: Fetch API `Request` and `Response` only, so it runs in Next.js route handlers,
+ * Hono, Bun, Deno, and Cloudflare Workers.
  *
  * @packageDocumentation
  */
 import { checkEvent, checkIdentifierAttributes } from '../anonymous.ts';
-import type { TelemetryEvent } from '../pipeline.ts';
+import type { Attributes, TelemetryEvent } from '../pipeline.ts';
 
 /** Options for {@link validateTelemetryEvents}. @public */
 export interface ValidateTelemetryEventsOptions {
   /** The most events one request may carry. Defaults to 50; a longer list is refused whole. */
   readonly maxEvents?: number;
+  /**
+   * Keys of the browser's `resource` and `attributes` to keep, such as `['app.version']`. Each
+   * kept value must be a number, a boolean, or an identifier string. Defaults to none: a value
+   * the client chose cannot be checked for meaning, so add your fixed fields on the server.
+   */
+  readonly attributeKeys?: readonly string[];
 }
 
 const DEFAULT_MAX_EVENTS = 50;
 
+type Fields = Readonly<Record<string, unknown>>;
+const isString = (value: unknown) => typeof value === 'string';
+const isNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value);
+const isBoolean = (value: unknown) => typeof value === 'boolean';
+
+/** The fields every event of a kind must have, after the closed-list check. */
+const REQUIRED: Readonly<
+  Record<string, readonly (readonly [string, (value: unknown) => boolean])[]>
+> = {
+  'edit.rejected': [
+    ['code', isString],
+    ['origin', isString],
+    ['tracked', isBoolean],
+  ],
+  'review.skipped': [
+    ['code', isString],
+    ['count', isNumber],
+  ],
+  'font.failed': [['code', isString]],
+  history: [['code', isString]],
+  'custom-node': [['code', isString]],
+  'collab.status': [
+    ['status', isString],
+    ['previous', isString],
+    ['recovering', isBoolean],
+  ],
+  'collab.participants': [['count', isNumber]],
+  performance: [['windowMs', isNumber]],
+};
+
+/** Whether an event has every field its kind needs, so a log record is never half empty. */
+function complete(event: Fields): boolean {
+  if (!isNumber(event.schemaVersion) || !isNumber(event.time)) return false;
+  if (!isString(event.editorSessionId) || !isString(event.engineVersion)) return false;
+  if (event.kind === 'document.open')
+    return event.outcome === 'opened'
+      ? isString(event.sizeBucket) && isNumber(event.durationMs)
+      : event.outcome === 'rejected' && isString(event.code);
+  const required = REQUIRED[event.kind as string];
+  return !!required && required.every(([key, check]) => check(event[key]));
+}
+
+/** Only the allowed keys of a client's attributes, with identifier values. */
+function allowed(value: unknown, keys: ReadonlySet<string>): Attributes {
+  if (keys.size === 0) return {};
+  const checked = checkIdentifierAttributes(value) ?? {};
+  return Object.fromEntries(Object.entries(checked).filter(([key]) => keys.has(key)));
+}
+
 /**
  * The telemetry events in an untrusted request body, checked again with the package's own
- * closed lists. An event with an unknown kind or code is dropped, a field outside its list is
- * removed, and `resource` and `attributes` keep only identifier values. Returns an empty list
- * for a body that is not an array or is longer than `maxEvents`.
+ * closed lists. An event with an unknown kind or code, or without the fields its kind needs, is
+ * dropped. A field outside its list is removed. The client's `resource` and `attributes` keep
+ * only the keys in `attributeKeys`. Returns an empty list for a body that is not an array or is
+ * longer than `maxEvents`.
+ *
+ * The check proves that every value comes from the package's lists or is a number. It cannot
+ * prove that a client told the truth: a script can send a well-formed event that never
+ * happened. It can never send text.
  *
  * @example
  * ```ts
- * const events = validateTelemetryEvents(await request.json());
+ * const events = validateTelemetryEvents(await request.json(), { attributeKeys: ['app.version'] });
  * ```
  *
  * @public
@@ -44,19 +105,28 @@ export function validateTelemetryEvents(
   options: ValidateTelemetryEventsOptions = {}
 ): TelemetryEvent[] {
   const maxEvents = options.maxEvents ?? DEFAULT_MAX_EVENTS;
+  const keys = new Set(options.attributeKeys ?? []);
   if (!Array.isArray(body) || body.length > maxEvents) return [];
   return body.flatMap((value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
-    const source = value as Record<string, unknown>;
-    const checked = checkEvent(source as unknown as TelemetryEvent);
-    if ('dropped' in checked) return [];
-    const resource = checkIdentifierAttributes(source.resource) ?? {};
-    const attributes = checkIdentifierAttributes(source.attributes);
+    const source = value as Fields;
+    const {
+      resource: _resource,
+      attributes: _attributes,
+      ...rest
+    } = source as Fields & { resource?: unknown; attributes?: unknown };
+    const checked = checkEvent(rest as unknown as TelemetryEvent);
+    if ('dropped' in checked || !complete(checked.event as unknown as Fields)) return [];
+    const attributes = allowed(source.attributes, keys);
+    // The check copies the attributes it was given; these come only from `attributeKeys`.
+    const { attributes: _checkedAttributes, ...event } = checked.event as TelemetryEvent & {
+      attributes?: unknown;
+    };
     return [
       Object.freeze({
-        ...checked.event,
-        resource,
-        ...(attributes ? { attributes } : {}),
+        ...event,
+        resource: allowed(source.resource, keys),
+        ...(Object.keys(attributes).length ? { attributes } : {}),
       }) as TelemetryEvent,
     ];
   });
@@ -72,11 +142,12 @@ export type TelemetryLogRecord = Record<string, unknown> & {
 
 /**
  * An event as a log record: `dt` for the time, `message` for the live tail, and every field of
- * the event except the fixed `hint` and `docs` text, which the code already identifies.
+ * the event except the fixed `hint` and `docs` text, which the code already identifies. Add
+ * your own fixed fields, such as a service name, to the result.
  *
  * @example
  * ```ts
- * body: JSON.stringify(events.map(toLogRecord))
+ * body: JSON.stringify(events.map((event) => ({ ...toLogRecord(event), service: 'my-app' })))
  * ```
  *
  * @public
@@ -95,26 +166,52 @@ export function toLogRecord(event: TelemetryEvent): TelemetryLogRecord {
 }
 
 /** Options for {@link telemetryRoute}. @public */
-export interface TelemetryRouteOptions {
+export interface TelemetryRouteOptions extends ValidateTelemetryEventsOptions {
   /** Send the checked events on, such as to your log service. Errors are caught and reported. */
   forward(events: readonly TelemetryEvent[]): unknown;
   /** Origins allowed to post, such as `['https://app.example.com']`. Omit to allow any. */
   readonly allowedOrigins?: readonly string[];
   /** The largest body accepted, in bytes. Defaults to 64 KiB. */
   readonly maxBodyBytes?: number;
-  /** The most events one request may carry. Defaults to 50. */
-  readonly maxEvents?: number;
-  /** Called when `forward` throws or rejects. Defaults to nothing. */
+  /** Called when `forward` throws or rejects, or the log service refuses. Defaults to nothing. */
   readonly onError?: (error: unknown) => void;
 }
 
 const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 
+/** The body as text, or null when it is larger than `limit` bytes. Stops reading at the limit. */
+async function readLimited(request: Request, limit: number): Promise<string | null> {
+  if (Number(request.headers.get('content-length') ?? 0) > limit) return null;
+  const body = request.body;
+  if (!body) return '';
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > limit) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 /**
- * A Fetch-style POST handler for telemetry from `httpExporter`: it limits the body, checks the
- * origin, validates every event, and calls `forward` with what passes. It answers 204 in every
- * case, so a telemetry problem never surfaces in the editor; use `onError` to see failures. It
- * does not rate-limit; put it behind your platform's limits.
+ * A Fetch-style handler for telemetry from `httpExporter`: it accepts POST only, checks the
+ * origin, reads at most `maxBodyBytes`, validates every event, and calls `forward` with what
+ * passes. It answers 204 to every request, so a telemetry problem never surfaces in the
+ * editor; use `onError` to see failures. It does not rate-limit; put it behind your platform's
+ * limits.
  *
  * @example
  * ```ts
@@ -141,29 +238,33 @@ export function telemetryRoute(
 ): (request: Request) => Promise<Response> {
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
   const accepted = () => new Response(null, { status: 204 });
+  const failed = (error: unknown): void => {
+    try {
+      options.onError?.(error);
+    } catch {
+      /* an observer must never change the answer */
+    }
+  };
   return async (request) => {
-    if (request.method !== 'POST') return new Response(null, { status: 405 });
+    if (request.method !== 'POST') return accepted();
     if (options.allowedOrigins) {
       const origin = request.headers.get('origin');
       if (!origin || !options.allowedOrigins.includes(origin)) return accepted();
     }
-    if (Number(request.headers.get('content-length') ?? 0) > maxBodyBytes) return accepted();
-    let text: string;
+    let text: string | null;
     try {
-      text = await request.text();
+      text = await readLimited(request, maxBodyBytes);
     } catch {
       return accepted();
     }
-    if (text.length > maxBodyBytes) return accepted();
+    if (text === null) return accepted();
     let body: unknown;
     try {
       body = JSON.parse(text);
     } catch {
       return accepted();
     }
-    const events = validateTelemetryEvents(body, {
-      ...(options.maxEvents === undefined ? {} : { maxEvents: options.maxEvents }),
-    });
+    const events = validateTelemetryEvents(body, options);
     if (!events.length) return accepted();
     try {
       const forwarded = await options.forward(events);
@@ -172,11 +273,7 @@ export function telemetryRoute(
       if (response && response.ok === false)
         throw new Error(`the log service answered ${String(response.status)}`);
     } catch (error) {
-      try {
-        options.onError?.(error);
-      } catch {
-        /* an observer must never change the answer */
-      }
+      failed(error);
     }
     return accepted();
   };

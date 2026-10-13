@@ -1,0 +1,79 @@
+---
+title: 'Identify rooms and users'
+description: 'Add your own room, user, and tenant identifiers to events, keep metrics bounded for thousands of editors, and link events to your own sessions.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+With hundreds of editors open, dashboards show how the whole app behaves, and your own identifiers show which room or user had a problem.
+
+## Add your identifiers
+
+Add your own identifiers to events in two places:
+
+- `attributes` on the client: values for everyone on the page, such as the tenant or a pseudonymous user id. A function is read at each event.
+- `telemetry.moduleFor(attributes)` for each editor: values for one editor, such as its collaboration room or document. Use it in place of `telemetry.module`.
+
+```tsx
+import { useMemo } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+const session = { tenantId: 'acme', pseudonymousUserId: 'u-5f2c', tenantTier: 'enterprise' };
+
+export const telemetry = createTelemetry({
+  exporters: [otelExporter()],
+  attributes: () => ({
+    'tenant.id': session.tenantId,
+    'user.id': session.pseudonymousUserId,
+    'tenant.tier': session.tenantTier,
+  }),
+  metricLabels: ['tenant.tier'],
+});
+
+export function Editor({ bytes, roomId }: { bytes: Uint8Array; roomId: string }) {
+  const modules = useMemo(() => [telemetry.moduleFor({ 'room.id': roomId })], [roomId]);
+  return <DocxEditor key={roomId} document={bytes} modules={modules} />;
+}
+```
+
+Every event then carries `tenant.id`, `user.id`, `tenant.tier`, and `room.id` in `attributes`. Sentry issues get them as tags, so you can search issues by room or user. OpenTelemetry span events get them under the same keys. A callback receives them in `event.attributes`.
+
+Metrics get only the keys you list in `metricLabels`, because each distinct value makes a new series. List keys with few values, such as a tenant tier, a region, or an app version. Never list a user, room, or document id: put those on events, and search them in a backend built for many distinct values, such as Sentry, Honeycomb, or a log store. After 50 distinct values of one key, later values become `other` in metrics; events keep the real value.
+
+These values are your data, and they go only to your exporters. The engine never adds a value to `attributes`. Prefer pseudonymous ids over names or email addresses.
+
+## Run many editors
+
+Telemetry for hundreds or thousands of open editors stays cheap when each signal goes to the place built for it:
+
+- Metrics labels come from closed lists, so the number of series does not grow with users. Avoid a label that differs per browser tab, such as a per-tab instance id. With cumulative counters, each tab becomes its own series. Send delta temporality from the browser SDK, and let your collector or backend add the tabs together.
+- Events carry your identifiers for drill-down. Each editor sends at most one performance summary a minute, identical refusals within 10 seconds become one event, and `sampleRate` limits events further.
+- On a collaboration server, `rooms.list()` gives a table with one row for each room, and `roomLabel` decides how rooms are named in it. For more information, see [Collaboration servers](/docs/2.x/telemetry/servers).
+
+## Link events to your own sessions
+
+Every event has an `editorSessionId` value. It is random for each editor instance and identifies no person and no document. Use it to join a slow performance summary or a refused edit to your own logs, traces, or error reports:
+
+```ts
+import { callbackExporter, createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+import * as Sentry from '@sentry/react';
+
+export const telemetry = createTelemetry({
+  exporters: [
+    otelExporter(),
+    callbackExporter((event) => {
+      // Later Sentry errors and replays carry the editor that was open.
+      Sentry.setTag('docx_editor.editor_session', event.editorSessionId);
+    }),
+  ],
+  include: { performance: true, documentOpen: true },
+});
+```
+
+`Sentry.setTag` sets the tag for the whole page. If a page shows two editors, the tag names the editor that sent the last event.
+
+The OpenTelemetry exporter adds events to the active span, so an event recorded during one of your own spans is already part of that trace. Issues from the Sentry exporter carry the `docx_editor.editor_session` tag.

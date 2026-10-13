@@ -9,7 +9,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * numbers; this guard makes sure that stays true at the boundary, whatever version of the
  * engine produced the event. A string that is not a known enum value is dropped, never sent.
  */
-import { diagnosticCauses, diagnosticCodes, explainDiagnostic } from '@docx-editor.dev/core';
+import {
+  diagnosticCauses,
+  diagnosticCodes,
+  diagnosticCommands,
+  explainDiagnostic,
+} from '@docx-editor.dev/core';
 import { nodeEnv } from './env.ts';
 import type {
   DiagnosticCode,
@@ -108,8 +113,8 @@ const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
   code: CODES,
   outcome: new Set(['opened', 'rejected']),
   origin: new Set(['command', 'input', 'automation']),
-  // A command type is a public enum value such as `insertTable`.
-  command: /^[a-zA-Z][a-zA-Z0-9]{0,63}$/,
+  // A built-in command type such as `insertTable`; a host's own command is never named.
+  command: new Set(diagnosticCommands()),
   sizeBucket: /^(?:\d+(?:KiB|MiB)?-\d+(?:KiB|MiB)|512MiB\+)$/,
   pagesBucket: new Set(['0', '1', '2-9', '10-99', '100-999', '1000+']),
   editorSessionId: /^e_[A-Za-z0-9-]{8,64}$/,

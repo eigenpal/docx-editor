@@ -51,4 +51,4 @@ VITE_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
 | `src/App.tsx` | Registers `telemetry.module` in the editor's `modules`, next to `reviewModule()`. |
 | `../telemetry-stack/client/event-log.tsx` | The panel that lists sent events. |
 
-For the options, see [Telemetry for editors](https://docx-editor.dev/docs/2.x/telemetry/editors).
+For the options, see [Set up an editor](https://docx-editor.dev/docs/2.x/telemetry/editors).

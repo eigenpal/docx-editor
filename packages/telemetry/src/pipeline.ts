@@ -93,6 +93,18 @@ export interface TelemetryExporter {
   flush?(): void | Promise<void>;
   /** Flush and release resources. Called by `shutdown()`. */
   shutdown?(): void | Promise<void>;
+  /**
+   * Called once when a telemetry client or room server takes the exporter. An exporter that
+   * holds events, such as a batching one, reads `consented()` before it sends, so events queued
+   * before consent was withdrawn are discarded, not sent.
+   */
+  attach?(context: TelemetryExporterContext): void;
+}
+
+/** What a telemetry client tells an exporter it takes. @public */
+export interface TelemetryExporterContext {
+  /** Whether the host's consent is given, read now. */
+  consented(): boolean;
 }
 
 /** Options shared by the editor client and the room server. @public */
@@ -192,14 +204,24 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
     }
   }
 
-  function consented(): boolean {
-    if (closed) return false;
+  /** The host's consent only. A closed pipeline still lets exporters send what they hold. */
+  function consentGiven(): boolean {
     const consent = options.consent ?? true;
     if (typeof consent === 'boolean') return consent;
     try {
       return consent() === true;
     } catch {
       return false;
+    }
+  }
+  function consented(): boolean {
+    return !closed && consentGiven();
+  }
+  for (const exporter of exporters) {
+    try {
+      exporter.attach?.({ consented: consentGiven });
+    } catch (error) {
+      report(error, exporter.name);
     }
   }
 

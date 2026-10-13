@@ -131,6 +131,7 @@ export type {
 export { DIAGNOSTIC_SCHEMA_VERSION } from './contracts/diagnostics.ts';
 export { diagnosticCodes, explainDiagnostic } from './automation/diagnostic-hints.ts';
 export { diagnosticCauses } from './automation/diagnostic-context.ts';
+export { diagnosticCommands } from './editor/diagnostic-commands.ts';
 export { diagnosticCodeOfRefusal } from './editor/diagnostic-codes.ts';
 
 // ─── The document model and the edit/query vocabulary ────────────────────────
