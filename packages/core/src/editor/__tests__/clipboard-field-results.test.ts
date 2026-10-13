@@ -4,7 +4,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, zipSync, unzipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -107,4 +107,43 @@ test('a result that wraps onto the next line copies once, in order', () => {
   );
   selectAll(editor);
   expect(editor.surface!.copyFlavours().text).toBe(long);
+});
+
+test('a repeated footer copies one field result occurrence', () => {
+  const body =
+    '<w:p><w:r><w:t>One</w:t><w:br w:type="page"/>' +
+    '<w:t>Two</w:t><w:br w:type="page"/><w:t>Three</w:t></w:r></w:p>';
+  const entries = unzipSync(docx(body));
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  entries['[Content_Types].xml'] = strToU8(
+    new TextDecoder()
+      .decode(entries['[Content_Types].xml'])
+      .replace(
+        '</Types>',
+        '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>'
+      )
+  );
+  entries['word/document.xml'] = strToU8(
+    `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}` +
+      '<w:sectPr><w:footerReference w:type="default" r:id="rIdFooter"/></w:sectPr>' +
+      '</w:body></w:document>'
+  );
+  entries['word/_rels/document.xml.rels'] = strToU8(
+    `<Relationships xmlns="${REL}"><Relationship Id="rIdFooter" Type="${R}/footer" Target="footer1.xml"/></Relationships>`
+  );
+  entries['word/footer1.xml'] = strToU8(
+    `<w:ftr xmlns:w="${W}"><w:p><w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple>` +
+      '<w:r><w:t xml:space="preserve"> of </w:t></w:r>' +
+      '<w:fldSimple w:instr="NUMPAGES"><w:r><w:t>3</w:t></w:r></w:fldSimple></w:p></w:ftr>'
+  );
+  const container = document.createElement('div');
+  document.body.append(container);
+  const editor = createDocxEditor({ container, document: zipSync(entries) });
+  mounted = { editor, container };
+  const surface = editor.surface!;
+  expect(surface.layout().pages).toHaveLength(3);
+  expect(surface.enterHeaderFooter({ rId: 'rIdFooter', pageIndex: 0 })).toBe(true);
+  surface.selectAll();
+  expect(surface.copyFlavours().text).toBe('1 of 3');
+  expect(surface.selectedText()).toBe('1 of 3');
 });

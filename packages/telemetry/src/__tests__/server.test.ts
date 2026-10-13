@@ -646,6 +646,68 @@ describe('withCollaborationTelemetry', () => {
     await rooms.shutdown();
   });
 
+  test('frozen extension hooks keep their original private instance state', async () => {
+    class FrozenExtension {
+      #changes = 0;
+      readonly onAuthenticate = async () => {};
+      async onChange() {
+        this.#changes += 1;
+      }
+      get changes() {
+        return this.#changes;
+      }
+    }
+    const extension = Object.freeze(new FrozenExtension());
+    const { config, rooms } = withCollaborationTelemetry(
+      { extensions: [extension] },
+      { exporters: [], sampleInterval: false }
+    );
+    try {
+      const server = new Hocuspocus(config);
+      await server.hooks('onAuthenticate', {} as never);
+      await server.hooks('onChange', {} as never);
+      expect(extension.changes).toBe(1);
+    } finally {
+      await rooms.shutdown();
+    }
+  });
+
+  test('non-configurable extension accessors preserve hook order and receiver', async () => {
+    const order: string[] = [];
+    const extension = {
+      async onAuthenticate() {
+        order.push('first');
+      },
+    };
+    Object.defineProperty(extension, 'priority', {
+      get() {
+        expect(this).toBe(extension);
+        return 100;
+      },
+    });
+    const { config, rooms } = withCollaborationTelemetry(
+      {
+        extensions: [
+          {
+            priority: 50,
+            async onAuthenticate() {
+              order.push('second');
+            },
+          },
+          extension,
+        ],
+      },
+      { exporters: [], sampleInterval: false }
+    );
+    try {
+      const server = new Hocuspocus(config);
+      await server.hooks('onAuthenticate', {} as never);
+      expect(order).toEqual(['first', 'second']);
+    } finally {
+      await rooms.shutdown();
+    }
+  });
+
   test('two sessions of one room on one socket count as two connections', async () => {
     const metrics = prometheusRegistry();
     const { config, rooms } = withCollaborationTelemetry({} as never, {

@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Frozen extensions changed receivers, and non-configurable accessors lost their values.",
+  "after": "Telemetry preserves extension receivers and accessor values, including hook priorities.",
+  "reason": "This change preserves host hook behavior. It does not change shared state, document operations, or the collaboration format.",
+  "tests": ["packages/telemetry/src/__tests__/server.test.ts"],
+  "changeset": "telemetry-extension-state",
+  "migration": null
+}

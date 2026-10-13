@@ -374,30 +374,25 @@ export function withCollaborationTelemetry<C extends Partial<ServerConfiguration
   const wrappedConfig = observing(config) as Record<string, unknown>;
   const extensions = (config.extensions ?? []).map((extension) => {
     const guarded = observing(extension) as Record<string | symbol, unknown>;
-    // A frozen or read-only hook cannot be answered by a proxy; such an extension cannot keep
-    // state on `this` either, so an object that inherits from it is safe.
-    const fixed = Object.keys(guarded).some((hook) => {
-      const descriptor = Reflect.getOwnPropertyDescriptor(extension, hook);
-      return descriptor !== undefined && !descriptor.configurable && !descriptor.writable;
-    });
-    if (fixed) {
-      // Define, not assign: assigning over an inherited read-only property throws.
-      const inheriting = Object.create(extension) as Extension;
-      for (const [hook, value] of Object.entries(guarded))
-        Object.defineProperty(inheriting, hook, { value, enumerable: true });
-      return inheriting;
-    }
-    return new Proxy(extension, {
-      get(target, property) {
+    // Use an empty target so frozen methods and accessors impose no proxy invariants.
+    // Every property still reads the original extension, including private instance state.
+    return new Proxy(Object.create(Object.getPrototypeOf(extension)) as Extension, {
+      get(_target, property) {
         if (Object.hasOwn(guarded, property)) return guarded[property];
-        const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
-        // A non-configurable, read-only value must come back unchanged (a proxy invariant).
-        if (descriptor && !descriptor.configurable && !descriptor.writable) return descriptor.value;
-        const value = Reflect.get(target, property, target);
+        const value = Reflect.get(extension, property, extension);
         // Bind methods so `this` is the extension; `constructor` stays itself for its name.
         return typeof value === 'function' && property !== 'constructor'
-          ? value.bind(target)
+          ? value.bind(extension)
           : value;
+      },
+      set(_target, property, value) {
+        return Reflect.set(extension, property, value, extension);
+      },
+      has: (_target, property) => Reflect.has(extension, property),
+      ownKeys: () => Reflect.ownKeys(extension),
+      getOwnPropertyDescriptor(_target, property) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(extension, property);
+        return descriptor ? { ...descriptor, configurable: true } : undefined;
       },
     });
   });

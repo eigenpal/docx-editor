@@ -19,6 +19,8 @@ The editor displays inline and floating DrawingML pictures (`w:drawing` with `pi
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
 
+The editor refuses picture insertion while another picture is selected. Place the caret in text before inserting another picture. The toolbar explains this restriction when it disables picture insertion.
+
 The editor identifies PNG, JPEG, GIF, BMP, and WebP images from their bytes. These images can render even when the document declares another format from this list. For example, JPEG bytes declared as PNG still display. Image validation and size limits still apply. Saving preserves the original bytes and content-type declaration.
 
 This recovery does not cover declarations that confuse these formats with SVG, TIFF, EMF, or WMF. Those mismatches show a placeholder.

@@ -204,10 +204,24 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
     if (reported.has(exporter)) return;
     reported.add(exporter);
     try {
-      if (options.onExporterError) options.onExporterError(error, exporter);
-      else console.warn(`[docx-editor telemetry] exporter "${exporter}" failed`, error);
+      if (options.onExporterError) {
+        const result: unknown = options.onExporterError(error, exporter);
+        if (result && typeof (result as PromiseLike<unknown>).then === 'function')
+          void Promise.resolve(result).catch(() => {});
+      } else console.warn(`[docx-editor telemetry] exporter "${exporter}" failed`, error);
     } catch {
       /* the host's reporting problem */
+    }
+  }
+
+  /** Contain returned promise rejections without changing exporter-owned buffering. */
+  function invoke(exporter: TelemetryExporter, run: () => unknown): void {
+    try {
+      const result = run();
+      if (!result || typeof (result as PromiseLike<unknown>).then !== 'function') return;
+      void Promise.resolve(result).then(undefined, (error) => report(error, exporter.name));
+    } catch (error) {
+      report(error, exporter.name);
     }
   }
 
@@ -230,11 +244,9 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
   const isPageClosing = (): boolean =>
     pageClosing || globalThis.document?.visibilityState === 'hidden';
   for (const exporter of exporters) {
-    try {
-      exporter.attach?.({ consented: consentGiven, pageClosing: isPageClosing });
-    } catch (error) {
-      report(error, exporter.name);
-    }
+    invoke(exporter, () =>
+      exporter.attach?.({ consented: consentGiven, pageClosing: isPageClosing })
+    );
   }
 
   async function each(step: (exporter: TelemetryExporter) => void | Promise<void>) {
@@ -263,11 +275,7 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
       }
       for (const exporter of exporters) {
         if (!exporter.event) continue;
-        try {
-          exporter.event(checked.event);
-        } catch (error) {
-          report(error, exporter.name);
-        }
+        invoke(exporter, () => exporter.event!(checked.event));
       }
     },
     metric(definition, value, attributes = {}) {
@@ -281,22 +289,14 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
       };
       for (const exporter of exporters) {
         if (!exporter.metric) continue;
-        try {
-          exporter.metric(record);
-        } catch (error) {
-          report(error, exporter.name);
-        }
+        invoke(exporter, () => exporter.metric!(record));
       }
     },
     forget(definition, attributes) {
       const checked = checkAttributes(attributes, definition.name, definition.labels);
       for (const exporter of exporters) {
         if (!exporter.forget) continue;
-        try {
-          exporter.forget(definition, checked);
-        } catch (error) {
-          report(error, exporter.name);
-        }
+        invoke(exporter, () => exporter.forget!(definition, checked));
       }
     },
     declare(definition, attributes = {}) {
@@ -306,11 +306,7 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
       );
       for (const exporter of exporters) {
         if (!exporter.declare) continue;
-        try {
-          exporter.declare(definition, labels);
-        } catch (error) {
-          report(error, exporter.name);
-        }
+        invoke(exporter, () => exporter.declare!(definition, labels));
       }
     },
     flush: () => each((exporter) => exporter.flush?.()),
@@ -320,7 +316,7 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
     async shutdown() {
       if (closed) return;
       closed = true;
-      await each((exporter) => exporter.shutdown?.() ?? exporter.flush?.());
+      await each((exporter) => (exporter.shutdown ? exporter.shutdown() : exporter.flush?.()));
     },
   };
 }

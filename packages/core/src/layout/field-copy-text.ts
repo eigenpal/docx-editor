@@ -7,6 +7,7 @@
 
 import { lineSegmentFor } from './line-segments.ts';
 import { paragraphLinesFor } from './paragraph-lines.ts';
+import { paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type { SemanticLayout } from './semantic-records.ts';
 
 const ATOM = '\uFFFC';
@@ -24,7 +25,22 @@ export function fieldResultTexts(
 ): ReadonlyMap<number, string> {
   const results = new Map<number, string>();
   const lines = new Set<object>();
-  for (const { line } of paragraphLinesFor(layout, paragraphId) ?? []) {
+  const placed = paragraphLinesFor(layout, paragraphId);
+  const first = placed[0];
+  const page = first && layout.pages.find((page) => page.index === first.pageIndex);
+  // Page fields give each occurrence of shared furniture its own line objects. Read the
+  // first occurrence, as the base paragraph text does, rather than joining every page.
+  const furniture =
+    first &&
+    [page?.header, page?.footer].some((story) =>
+      story
+        ? paragraphFragmentsOfBlocks(story.fragments).some((fragment) =>
+            fragment.lines.includes(first.line)
+          )
+        : false
+    );
+  for (const { line, pageIndex } of placed) {
+    if (furniture && pageIndex !== first.pageIndex) continue;
     if (lines.has(line)) continue;
     lines.add(line);
     for (const span of lineSegmentFor(line, paragraphId)?.spans ?? []) {

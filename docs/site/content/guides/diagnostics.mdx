@@ -47,8 +47,9 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 | `font.failed` | A font did not load, and the editor used a substitute. | `code`. |
 | `history` | An undo step did not group as the gesture intended. Informational. | `code`. |
 | `custom-node` | A custom node payload in the document could not be read. The node name is not included. | `code`. |
-| `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, `code` when something is wrong, and `connectMs` on the first `ready`. |
+| `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, and `code` when something is wrong. The first `ready` includes `connectMs` only when the editor observed the wait. |
 | `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
+| `performance` | The editor summarizes timings after a minute, when the page becomes hidden, or when the editor closes. | `windowMs`, optional `pagesBucket`, and optional `interaction`, `layout`, and `paint` summaries. Slow interactions also include `code`. See [Measure performance](/docs/2.x/telemetry/performance). |
 
 Document sizes and counts use buckets, such as `4-8MiB` or `10-99`. Rare combinations can still distinguish documents within an organization. The telemetry package omits detailed shape buckets by default.
 
