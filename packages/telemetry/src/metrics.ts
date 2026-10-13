@@ -82,8 +82,8 @@ export const METRICS = Object.freeze({
     'docx_editor.document.opens',
     'counter',
     '{open}',
-    'Documents opened or refused, by outcome and refusal code.',
-    ['outcome', 'code', EDITOR_VERSION]
+    'Documents opened or refused, by outcome, refusal code, engine reason, and part role.',
+    ['outcome', 'code', 'cause', 'part', EDITOR_VERSION]
   ),
   documentOpenDuration: metric(
     'docx_editor.document.open.duration',
@@ -97,15 +97,15 @@ export const METRICS = Object.freeze({
     'docx_editor.edit.rejections',
     'counter',
     '{edit}',
-    'Edits, commands, and tracked changes refused, by public code.',
-    ['code', 'origin', 'tracked', EDITOR_VERSION]
+    'Edits, commands, and tracked changes refused, by public code and engine reason.',
+    ['code', 'cause', 'origin', 'tracked', EDITOR_VERSION]
   ),
   reviewSkipped: metric(
     'docx_editor.review.skipped',
     'counter',
     '{change}',
-    'Tracked changes skipped by accept, reject, or reassign requests.',
-    ['code', EDITOR_VERSION]
+    'Tracked changes skipped by accept, reject, or reassign requests, by engine reason, operation, and change kind.',
+    ['code', 'cause', 'operation', 'change_kind', EDITOR_VERSION]
   ),
   fontFailures: metric(
     'docx_editor.font.failures',

@@ -56,6 +56,11 @@ export interface RuntimeSession {
    * that throws is ignored.
    */
   readonly onRefusal?: (error: DocxEditorError, operations: readonly AutomationOperation[]) => void;
+  /**
+   * Told about each batch that threw an error other than a refusal, before it propagates: an
+   * engine defect. A listener that throws is ignored.
+   */
+  readonly onException?: (error: unknown, operations: readonly AutomationOperation[]) => void;
   /** Identity for adoption checks. The session object itself. */
   readonly id: object;
   roots(): RootHandles;
@@ -221,6 +226,26 @@ export class RequestContext {
     reportedRevision: number | undefined
   ): Promise<void> {
     const planned = planBatch(actions);
+    try {
+      await this.#execute(actions, planned, expectedRevision, reportedRevision);
+    } catch (error) {
+      if (!isDocxEditorError(error)) {
+        try {
+          this.#session.onException?.(error, planned.operations);
+        } catch {
+          /* an observer must never change what the caller sees */
+        }
+      }
+      throw error;
+    }
+  }
+
+  async #execute(
+    actions: readonly QueuedAction[],
+    planned: ReturnType<typeof planBatch>,
+    expectedRevision: number | undefined,
+    reportedRevision: number | undefined
+  ): Promise<void> {
     const request: AutomationBatchRequest = {
       operations: planned.operations,
       ...(expectedRevision === undefined ? {} : { expectedRevision }),

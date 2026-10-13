@@ -75,9 +75,19 @@ export interface DiagnosticBase {
 export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
 export interface DiagnosticExplanation {
     readonly docs: string;
     readonly hint: string;
+}
+
+// @public
+export interface DiagnosticFailureDetail {
+    readonly cause?: string;
+    readonly errorName?: DiagnosticErrorName;
+    readonly stage?: FailureStage;
 }
 
 // @public
@@ -89,14 +99,18 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
     readonly pagesBucket?: CountBucket;
     readonly shape?: DocumentShape;
     readonly sizeBucket: ByteSizeBucket;
-} | {
+} | (DiagnosticFailureDetail & {
     readonly code: DocumentOpenDiagnosticCode;
     readonly outcome: 'rejected';
+    readonly part?: DocumentPartKind;
     readonly sizeBucket?: ByteSizeBucket;
-});
+}));
 
 // @public
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
 
 // @public
 export interface DocumentShape {
@@ -118,7 +132,7 @@ export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic |
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
 
 // @public
-export interface EditRejectedDiagnostic extends DiagnosticBase {
+export interface EditRejectedDiagnostic extends DiagnosticBase, DiagnosticFailureDetail {
     // (undocumented)
     readonly code: EditDiagnosticCode;
     readonly command?: EditorCommand['type'];
@@ -138,6 +152,9 @@ export const ENGINE_VERSION: string;
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
+
+// @public
 export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
 
 // @public
@@ -147,6 +164,9 @@ export interface FontFailedDiagnostic extends DiagnosticBase {
     // (undocumented)
     readonly kind: 'font.failed';
 }
+
+// @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
 
 // @public
 export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
@@ -261,15 +281,26 @@ export type PerformanceDiagnosticCode = 'performance.slow-interaction';
 export function prometheusName(definition: MetricDefinition): string;
 
 // @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+
+// @public
 export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
 
 // @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+// @public
 export interface ReviewSkippedDiagnostic extends DiagnosticBase {
+    readonly cause?: string;
+    readonly changeKind?: ReviewChangeKind;
     // (undocumented)
     readonly code: ReviewDiagnosticCode;
     readonly count: number;
+    readonly formattingKind?: FormattingChangeKind;
     // (undocumented)
     readonly kind: 'review.skipped';
+    readonly operation?: ReviewOperation;
+    readonly part?: DocumentPartKind;
 }
 
 // @public

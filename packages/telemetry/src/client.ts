@@ -192,7 +192,16 @@ function areaOf(event: EditorDiagnostic): TelemetryArea | null {
 /** Events that repeat in bursts, and the fields that make two of them the same. */
 function dedupeKey(event: EditorDiagnostic): string | null {
   if (event.kind === 'edit.rejected')
-    return `${event.editorSessionId}|${event.code}|${event.origin}|${event.tracked}|${event.command ?? ''}`;
+    return [
+      event.editorSessionId,
+      event.code,
+      event.cause,
+      event.errorName,
+      event.stage,
+      event.origin,
+      event.tracked,
+      event.command,
+    ].join('|');
   if (event.kind === 'font.failed') return `${event.editorSessionId}|font|${event.code}`;
   if (event.kind === 'history' || event.kind === 'custom-node')
     return `${event.editorSessionId}|${event.kind}|${event.code}`;
@@ -430,19 +439,36 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic, labels: Attr
   switch (event.kind) {
     case 'document.open':
       if (event.outcome === 'opened') {
-        labelled.metric(METRICS.documentOpens, 1, { outcome: 'opened', code: 'none' });
+        labelled.metric(METRICS.documentOpens, 1, {
+          outcome: 'opened',
+          code: 'none',
+          cause: 'none',
+          part: 'none',
+        });
         labelled.metric(METRICS.documentOpenDuration, event.durationMs / 1000);
-      } else labelled.metric(METRICS.documentOpens, 1, { outcome: 'rejected', code: event.code });
+      } else
+        labelled.metric(METRICS.documentOpens, 1, {
+          outcome: 'rejected',
+          code: event.code,
+          cause: event.cause ?? 'none',
+          part: event.part ?? 'none',
+        });
       return;
     case 'edit.rejected':
       labelled.metric(METRICS.editRejections, 1, {
         code: event.code,
+        cause: event.cause ?? 'none',
         origin: event.origin,
         tracked: event.tracked,
       });
       return;
     case 'review.skipped':
-      labelled.metric(METRICS.reviewSkipped, event.count, { code: event.code });
+      labelled.metric(METRICS.reviewSkipped, event.count, {
+        code: event.code,
+        cause: event.cause ?? 'none',
+        operation: event.operation ?? 'none',
+        change_kind: event.changeKind ?? 'none',
+      });
       return;
     case 'font.failed':
       labelled.metric(METRICS.fontFailures, 1, { code: event.code });

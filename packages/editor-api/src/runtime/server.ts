@@ -180,7 +180,7 @@ export async function createServer(
     });
   } catch (error) {
     // An engine fault, not a refusal: reported as an open that failed, then rethrown.
-    diagnostics?.openRejected(bytes, 'failed');
+    diagnostics?.openCrashed(bytes, error);
     throw error;
   }
   if (!opened.ok) {
@@ -193,7 +193,7 @@ export async function createServer(
       'too-many-relationships': 'maxRelationships',
     };
     const limit = opened.limit ?? limits[opened.reason];
-    diagnostics?.openRejected(bytes, opened.reason, opened.limit);
+    diagnostics?.openRejected(bytes, opened.reason, opened.limit, opened.detail);
     fail({
       code: limit === undefined ? 'InvalidArgument' : 'ResourceLimitExceeded',
       target: 'createServer',
@@ -210,7 +210,10 @@ export async function createServer(
       ? {}
       : { revisionTextView: options.revisionTextView }),
     ...(diagnostics
-      ? { onRefusal: (error, operations) => diagnostics.refused(error, opened.host, operations) }
+      ? {
+          onRefusal: (error, operations) => diagnostics.refused(error, opened.host, operations),
+          onException: (error, operations) => diagnostics.crashed(error, opened.host, operations),
+        }
       : {}),
   });
 }

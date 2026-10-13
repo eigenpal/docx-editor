@@ -3964,6 +3964,7 @@ export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revisio
 export interface RevisionBatchEntry {
     // (undocumented)
     readonly author: string;
+    readonly formattingKind?: string;
     // (undocumented)
     readonly key: string;
     // (undocumented)
@@ -3979,6 +3980,7 @@ export interface RevisionBatchResult {
     readonly resolved: readonly RevisionBatchEntry[];
     // (undocumented)
     readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
         readonly key: string;
         readonly reason: RevisionBatchSkipReason;
         readonly revision?: RevisionBatchEntry;
@@ -3986,10 +3988,16 @@ export interface RevisionBatchResult {
 }
 
 // @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
 export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
 
 // @public
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
 
 // @public
 export function runAddressRanges(paragraph: Extract<OoxmlNode, {

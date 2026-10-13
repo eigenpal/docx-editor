@@ -251,8 +251,8 @@ b.add(series('Opens per minute', [(f'60 * sum by (outcome) (rate(docx_editor_doc
 b.add(series('Open time, successful opens', [(quantile('docx_editor_document_open_duration_seconds', 0.5), 'median'),
                                             (quantile('docx_editor_document_open_duration_seconds', 0.95), '95th percentile')],
              's', 'From the start of an open to the first laid-out page, for opens that succeeded.'), 8, 8)
-b.add(top_table('Refused files by reason', f'sum by (code) (increase(docx_editor_document_opens_total{{{F},outcome="rejected"}}[$__range]))', 'code',
-                'Why files did not open, most frequent first. Each code links to its hint.'), 8, 8)
+b.add(top_table('Refused files by reason', f'sum by (code, cause, part) (increase(docx_editor_document_opens_total{{{F},outcome="rejected"}}[$__range]))', 'code',
+                'Why files did not open, most frequent first, with the engine reason and the role of the part that failed. Each code links to its hint.'), 8, 8)
 
 b.row('Tracked changes')
 b.add(stat('Refused while suggesting', f'round(sum(increase(docx_editor_edit_rejections_total{{{F},tracked="true"}}[{W}]))) or {reporting}', 'short',
@@ -262,16 +262,16 @@ b.add(stat('Tracked changes skipped', f'round(sum(increase(docx_editor_review_sk
 b.add(stat('Share of refusals while suggesting',
            f'(sum(increase(docx_editor_edit_rejections_total{{{F},tracked="true"}}[{W}])) or sum(increase(docx_editor_edit_rejections_total{{{F}}}[{W}])) * 0) / sum(increase(docx_editor_edit_rejections_total{{{F}}}[{W}]))',
            'percentunit', 'Refusals while changes were tracked, out of all refusals, over the selected range.', decimals=0, no_value='No refusals'), 8, 4)
-b.add(top_table('Refused tracked changes by reason', f'sum by (code) (increase(docx_editor_edit_rejections_total{{{F},tracked="true"}}[$__range]))', 'code',
-                'Why edits were refused while changes were tracked, most frequent first. Each code links to its hint.'), 12, 8)
+b.add(top_table('Refused tracked changes by reason', f'sum by (code, cause) (increase(docx_editor_edit_rejections_total{{{F},tracked="true"}}[$__range]))', 'code',
+                'Why edits were refused while changes were tracked, most frequent first, with the engine reason. Each code links to its hint.'), 12, 8)
 b.add(series('Refused tracked changes per minute by source', [(f'60 * sum by (origin) (rate(docx_editor_edit_rejections_total{{{F},tracked="true"}}[$__rate_interval]))', '{{origin}}')],
              'short', 'Typing and pointer input, toolbar commands, or an editing API batch, while changes were tracked.', stack='normal'), 12, 8)
-b.add(top_table('Skipped tracked changes by reason', f'sum by (code) (increase(docx_editor_review_skipped_total{{{F}}}[$__range]))', 'code',
-                'Tracked changes that accept, reject, or reassign requests skipped, by reason. Each code links to its hint.'), 24, 6)
+b.add(top_table('Skipped tracked changes by reason', f'sum by (code, cause, operation, change_kind) (increase(docx_editor_review_skipped_total{{{F}}}[$__range]))', 'code',
+                'Tracked changes that accept, reject, or reassign requests skipped, by reason, operation, and kind of change. Each code links to its hint.'), 24, 6)
 
 b.row('All refused edits')
-b.add(top_table('Refused edits by reason', f'sum by (code) (increase(docx_editor_edit_rejections_total{{{F}}}[$__range]))', 'code',
-                'The public code of each refused edit, command, or tracked change, most frequent first. Each code links to its hint.'), 12, 8)
+b.add(top_table('Refused edits by reason', f'sum by (code, cause) (increase(docx_editor_edit_rejections_total{{{F}}}[$__range]))', 'code',
+                'The public code of each refused edit, command, or tracked change, with the engine reason, most frequent first. Each code links to its hint.'), 12, 8)
 b.add(series('Refused edits per minute by source', [(f'60 * sum by (origin, tracked) (rate(docx_editor_edit_rejections_total{{{F}}}[$__rate_interval]))', '{{origin}}, tracked {{tracked}}')],
              'short', 'Typing and pointer input, toolbar commands, or an editing API batch. Tracked means the person was suggesting.', stack='normal'), 12, 8)
 b.add(top_table('Font substitutions by reason', f'sum by (code) (increase(docx_editor_font_failures_total{{{F}}}[$__range]))', 'code',

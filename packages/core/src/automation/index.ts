@@ -115,7 +115,9 @@ export type {
   RevisionBatchResult,
   RevisionBatchEntry,
   RevisionBatchSkipReason,
+  RevisionBatchSkipDetail,
 } from '../store/store/revision-batch.ts';
+export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
 export type {
   RevisionAuthorEntry,
   RevisionAuthorResult,
@@ -138,13 +140,26 @@ export {
   explainDiagnostic,
   type DiagnosticExplanation,
 } from './diagnostic-hints.ts';
+export {
+  diagnosticCause,
+  diagnosticCauses,
+  diagnosticErrorName,
+  documentPartKind,
+  exceptionCause,
+} from './diagnostic-context.ts';
 export type {
   ByteSizeBucket,
   CollaborationDiagnosticCode,
   CountBucket,
   CustomNodeDiagnosticCode,
   DiagnosticCode,
+  DiagnosticErrorName,
   DocumentOpenDiagnosticCode,
+  DocumentPartKind,
+  FailureStage,
+  FormattingChangeKind,
+  ReviewChangeKind,
+  ReviewOperation,
   EditDiagnosticCode,
   FontDiagnosticCode,
   HistoryDiagnosticCode,

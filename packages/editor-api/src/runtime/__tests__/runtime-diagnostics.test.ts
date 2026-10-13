@@ -145,3 +145,40 @@ test('an error without an engine reason has debugInfo and no innerError', async 
     runtime.dispose();
   }
 });
+
+test('a refused open names the engine reason and the part role, never the part', async () => {
+  const { events, module } = observer();
+  // `q:` has no namespace declaration.
+  const malformed = docx(`<w:p><q:x/></w:p>${p(SECRET)}`);
+  await expect(DocxEditor.createServer(malformed, { modules: [module] })).rejects.toThrow();
+  expect(events).toEqual([
+    expect.objectContaining({
+      kind: 'document.open',
+      outcome: 'rejected',
+      code: 'open.xml-malformed',
+      cause: 'undeclared-prefix',
+      part: 'main-document',
+    }),
+  ]);
+  const text = JSON.stringify(events);
+  expect(text).not.toContain(SECRET);
+  expect(text).not.toContain('document.xml');
+});
+
+test('a refused batch carries the engine reason behind its public code', async () => {
+  const { events, module } = observer();
+  const runtime = await DocxEditor.createServer(sample, { author: 'Agent', modules: [module] });
+  try {
+    await runtime.run(async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      context.document.body.clear();
+      await context.sync().catch(() => {});
+    });
+    expect(events.find((event) => event.kind === 'edit.rejected')).toMatchObject({
+      code: 'edit.tracked-operation-unsupported',
+      cause: 'change-tracking-operation-unsupported',
+    });
+  } finally {
+    runtime.dispose();
+  }
+});

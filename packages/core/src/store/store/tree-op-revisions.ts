@@ -1,3 +1,4 @@
+import { revisionSiteRefusal, type RevisionSiteRefusal } from './revision-site-refusal.ts';
 import {
   hasRevisionMarkerContent,
   heldOnlyResolvedMarks,
@@ -119,6 +120,8 @@ export interface RevisionSite {
   readonly parent: OoxmlElement | null;
   /** True when this site cannot be resolved and the whole op must refuse. */
   readonly refused: boolean;
+  /** Why, when `refused` is true. */
+  readonly refusal?: RevisionSiteRefusal;
   /** True for `w:pPr/w:rPr/w:ins|w:del` — the paragraph MARK, not content. */
   readonly paragraphMark: boolean;
   /** True for a supported property-history wrapper. */
@@ -267,16 +270,20 @@ function collectRevisionSitesIn(
           !paragraphMark &&
           !tableRevision &&
           !numberingRevision;
+        const refusal = revisionSiteRefusal({
+          unaddressed: addressOf(node) === null,
+          misplacedMarker: unsupportedContent,
+          nestedMarker:
+            !isContent &&
+            !PROPERTY_CHANGE_NAMES.has(node.localName) &&
+            hasRevisionMarkerContent(node),
+          unsupportedStructure: structural && !tableRevision && !numberingRevision,
+        });
         sites.push({
           node,
           parent,
-          refused:
-            addressOf(node) === null ||
-            unsupportedContent ||
-            (!isContent &&
-              !PROPERTY_CHANGE_NAMES.has(node.localName) &&
-              hasRevisionMarkerContent(node)) ||
-            (structural && !tableRevision && !numberingRevision),
+          refused: refusal !== undefined,
+          ...(refusal ? { refusal } : {}),
           paragraphMark,
           propertyChange: PROPERTY_CHANGE_NAMES.has(node.localName),
           nesting,
@@ -311,6 +318,7 @@ function collectRevisionSitesIn(
         node: range.start,
         parent: range.parent,
         refused: !range.supported,
+        ...(range.supported ? {} : { refusal: 'unsupported-move' as const }),
         paragraphMark: false,
         propertyChange: false,
         nesting: 0,

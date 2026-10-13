@@ -191,9 +191,19 @@ export interface DiagnosticBase {
 export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
 export interface DiagnosticExplanation {
     readonly docs: string;
     readonly hint: string;
+}
+
+// @public
+export interface DiagnosticFailureDetail {
+    readonly cause?: string;
+    readonly errorName?: DiagnosticErrorName;
+    readonly stage?: FailureStage;
 }
 
 // @public
@@ -488,14 +498,18 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
     readonly pagesBucket?: CountBucket;
     readonly shape?: DocumentShape;
     readonly sizeBucket: ByteSizeBucket;
-} | {
+} | (DiagnosticFailureDetail & {
     readonly code: DocumentOpenDiagnosticCode;
     readonly outcome: 'rejected';
+    readonly part?: DocumentPartKind;
     readonly sizeBucket?: ByteSizeBucket;
-});
+}));
 
 // @public
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
 
 // @public
 export interface DocumentShape {
@@ -1284,7 +1298,7 @@ export interface EditorSnapshot {
 }
 
 // @public
-export interface EditRejectedDiagnostic extends DiagnosticBase {
+export interface EditRejectedDiagnostic extends DiagnosticBase, DiagnosticFailureDetail {
     // (undocumented)
     readonly code: EditDiagnosticCode;
     readonly command?: EditorCommand['type'];
@@ -1323,6 +1337,9 @@ export interface Extent {
     // (undocumented)
     readonly widthEmu: number;
 }
+
+// @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
 
 // @public
 export interface FontConfiguration {
@@ -1414,6 +1431,9 @@ export interface FormatPainterSurfaceState {
     // (undocumented)
     readonly mode: FormatPainterMode;
 }
+
+// @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
 
 // @public
 export type FurnitureVariant = 'default' | 'first' | 'even';
@@ -1858,6 +1878,9 @@ export interface ReviewActivationOptions {
 }
 
 // @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+
+// @public
 export interface ReviewChangesAttribution {
     author?: string;
     date?: string;
@@ -1974,6 +1997,9 @@ export interface ReviewItemRevealEvent {
 export type ReviewItemRevealSource = 'navigate' | 'host';
 
 // @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+// @public
 export interface ReviewPosition {
     // (undocumented)
     readonly offset: number;
@@ -2048,11 +2074,16 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
 
 // @public
 export interface ReviewSkippedDiagnostic extends DiagnosticBase {
+    readonly cause?: string;
+    readonly changeKind?: ReviewChangeKind;
     // (undocumented)
     readonly code: ReviewDiagnosticCode;
     readonly count: number;
+    readonly formattingKind?: FormattingChangeKind;
     // (undocumented)
     readonly kind: 'review.skipped';
+    readonly operation?: ReviewOperation;
+    readonly part?: DocumentPartKind;
 }
 
 // @public
@@ -2092,6 +2123,7 @@ export interface RevisionBatchResult {
     readonly resolved: readonly RevisionBatchEntry[];
     // (undocumented)
     readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
         readonly key: string;
         readonly reason: RevisionBatchSkipReason;
         readonly revision?: RevisionBatchEntry;

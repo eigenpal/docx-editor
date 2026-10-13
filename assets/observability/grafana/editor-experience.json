@@ -1491,14 +1491,14 @@
     {
       "type": "table",
       "title": "Refused files by reason",
-      "description": "Why files did not open, most frequent first. Each code links to its hint.",
+      "description": "Why files did not open, most frequent first, with the engine reason and the role of the part that failed. Each code links to its hint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",outcome=\"rejected\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
+          "expr": "topk(10, label_replace(sum by (code, cause, part) (increase(docx_editor_document_opens_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",outcome=\"rejected\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1779,14 +1779,14 @@
     {
       "type": "table",
       "title": "Refused tracked changes by reason",
-      "description": "Why edits were refused while changes were tracked, most frequent first. Each code links to its hint.",
+      "description": "Why edits were refused while changes were tracked, most frequent first, with the engine reason. Each code links to its hint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
+          "expr": "topk(10, label_replace(sum by (code, cause) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\",tracked=\"true\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -1957,14 +1957,14 @@
     {
       "type": "table",
       "title": "Skipped tracked changes by reason",
-      "description": "Tracked changes that accept, reject, or reassign requests skipped, by reason. Each code links to its hint.",
+      "description": "Tracked changes that accept, reject, or reassign requests skipped, by reason, operation, and kind of change. Each code links to its hint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_review_skipped_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
+          "expr": "topk(10, label_replace(sum by (code, cause, operation, change_kind) (increase(docx_editor_review_skipped_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -2091,14 +2091,14 @@
     {
       "type": "table",
       "title": "Refused edits by reason",
-      "description": "The public code of each refused edit, command, or tracked change, most frequent first. Each code links to its hint.",
+      "description": "The public code of each refused edit, command, or tracked change, with the engine reason, most frequent first. Each code links to its hint.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "topk(10, label_replace(sum by (code) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
+          "expr": "topk(10, label_replace(sum by (code, cause) (increase(docx_editor_edit_rejections_total{job=~\"$job\",deployment_environment=~\"$env\",app_version=~\"$version\",docx_editor_version=~\"$editor_version\"}[$__range])), \"anchor\", \"$1-$2\", \"code\", \"([^.]+)\\\\.(.+)\") > 0)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,

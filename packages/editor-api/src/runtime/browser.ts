@@ -19,10 +19,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   createBrowserAutomationHost,
+  reportAutomationException,
   reportAutomationRefusal,
   type DocxEditorInstance,
 } from '@docx-editor.dev/core/editor';
-import { classifyRefusal } from './diagnostics.ts';
+import { classifyRefusal, trackedDuring } from './diagnostics.ts';
+import { refusalCause } from './batch.ts';
 import { createRuntime, type DocxEditorRuntime, type RevisionTextView } from './runtime.ts';
 
 /**
@@ -64,8 +66,10 @@ export function createBrowser(
     // A refused batch reaches the editor's own diagnostics, so its telemetry module hears it.
     onRefusal: (error, operations) => {
       const { code, tracked } = classifyRefusal(error, host, operations);
-      reportAutomationRefusal(editor, code, tracked);
+      reportAutomationRefusal(editor, code, tracked, refusalCause(error));
     },
+    onException: (error, operations) =>
+      reportAutomationException(editor, error, trackedDuring(host, operations)),
     ...(options.author === undefined ? {} : { author: options.author }),
     ...(options.revisionTextView === undefined
       ? {}

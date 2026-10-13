@@ -200,6 +200,16 @@ export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | nul
   return own<ReviewDiagnosticCode>(REVIEW_CODES, reason) ?? null;
 }
 
+/** Every open, store, host and review reason token the tables above know. */
+export function knownReasonTokens(): readonly string[] {
+  return [
+    ...Object.keys(OPEN_CODES),
+    'too-large',
+    ...Object.keys(STORE_EDIT_CODES),
+    ...Object.keys(REVIEW_CODES),
+  ];
+}
+
 const KIB = 1024;
 const SIZE_BUCKETS: readonly (readonly [number, ByteSizeBucket])[] = [
   [64 * KIB, '0-64KiB'],

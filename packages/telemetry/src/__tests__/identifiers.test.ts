@@ -84,6 +84,7 @@ describe('identifiers on metrics', () => {
     const rejection = memory.metrics.find((record) => record.definition === METRICS.editRejections);
     expect(rejection?.attributes).toEqual({
       code: 'edit.read-only',
+      cause: 'none',
       origin: 'input',
       tracked: false,
       'tenant.tier': 'enterprise',

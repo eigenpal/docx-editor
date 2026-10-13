@@ -173,6 +173,12 @@ export function isSentryIssue(event: TelemetryEvent): boolean {
       return event.outcome === 'rejected' && ACTIONABLE_OPEN_CODES.has(event.code);
     case 'edit.rejected':
       return event.code === 'edit.internal-invariant';
+    case 'review.skipped':
+      // The engine could not resolve a change it lists: a limit to lift, not a user mistake. An
+      // incomplete selection or a change resolved already stays a breadcrumb.
+      return (
+        event.code === 'review.revision-unsupported' || event.code === 'review.retained-structure'
+      );
     case 'font.failed':
       return event.code === 'font.shaper-unavailable';
     case 'collab.status':
@@ -205,11 +211,36 @@ function tagsOf(event: TelemetryEvent): Record<string, string> {
     'docx_editor.version': event.engineVersion,
     'docx_editor.editor_session': event.editorSessionId,
   };
-  for (const key of ['origin', 'tracked', 'status', 'outcome'])
-    if (fields[key] !== undefined) tags[`docx_editor.${key}`] = String(fields[key]);
+  for (const [key, tag] of [
+    ['origin', 'origin'],
+    ['tracked', 'tracked'],
+    ['status', 'status'],
+    ['outcome', 'outcome'],
+    ['command', 'command'],
+    ['cause', 'cause'],
+    ['part', 'part'],
+    ['errorName', 'error_name'],
+    ['stage', 'stage'],
+    ['operation', 'operation'],
+    ['changeKind', 'change_kind'],
+    ['formattingKind', 'formatting_kind'],
+  ] as const)
+    if (fields[key] !== undefined) tags[`docx_editor.${tag}`] = String(fields[key]);
   // Your identifiers, such as `room.id` or `user.id`, so issues can be searched by them.
   for (const [key, value] of Object.entries(event.attributes ?? {})) tags[key] = String(value);
   return tags;
+}
+
+/**
+ * One Sentry issue per distinct defect: the code, then the engine reason and the kind of change,
+ * so `open.xml-malformed` from an undeclared prefix and from a parse error are separate issues.
+ */
+function fingerprintOf(event: TelemetryEvent, code: string): string[] {
+  const fields = event as unknown as Record<string, unknown>;
+  const detail = ['cause', 'errorName', 'stage', 'changeKind', 'formattingKind']
+    .map((key) => fields[key])
+    .filter((value): value is string => typeof value === 'string');
+  return ['docx-editor', event.kind, code, ...detail];
 }
 
 /** The event without its resource block, as Sentry context data. */
@@ -250,8 +281,9 @@ export function sentryExporter(
       // A deduplication summary repeats an event already sent: never a second issue.
       if (event.repeated === undefined && issue(event)) {
         sentry.captureException(new DocxEditorDiagnosticError(code, event.hint), {
-          fingerprint: ['docx-editor', event.kind, code],
-          level: event.kind === 'font.failed' ? 'warning' : 'error',
+          fingerprint: fingerprintOf(event, code),
+          level:
+            event.kind === 'font.failed' || event.kind === 'review.skipped' ? 'warning' : 'error',
           tags: tagsOf(event),
           contexts: { docx_editor: dataOf(event) },
         });

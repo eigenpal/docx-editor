@@ -28,6 +28,12 @@ import type {
   CustomNodeDiagnosticCode,
   HistoryDiagnosticCode,
   PerformanceDiagnosticCode,
+  DiagnosticErrorName,
+  DocumentPartKind,
+  FailureStage,
+  FormattingChangeKind,
+  ReviewChangeKind,
+  ReviewOperation,
 } from '../automation/diagnostic-vocabulary.ts';
 
 export type {
@@ -42,6 +48,12 @@ export type {
   CustomNodeDiagnosticCode,
   HistoryDiagnosticCode,
   PerformanceDiagnosticCode,
+  DiagnosticErrorName,
+  DocumentPartKind,
+  FailureStage,
+  FormattingChangeKind,
+  ReviewChangeKind,
+  ReviewOperation,
 } from '../automation/diagnostic-vocabulary.ts';
 export type { DiagnosticExplanation } from '../automation/diagnostic-hints.ts';
 
@@ -68,6 +80,26 @@ export interface DiagnosticBase {
   readonly time: number;
 }
 
+/**
+ * Anonymous detail of a failure, for the engineer who fixes it. Every field is optional and
+ * comes from a closed list: never a part name, an element name, a message, or document text.
+ *
+ * @public
+ */
+export interface DiagnosticFailureDetail {
+  /**
+   * The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, or
+   * `exception` for an error the engine did not expect. Causes can change between engine
+   * versions: match on `code`, and include the `cause` when you report a problem. See
+   * `diagnosticCauses()` for every value.
+   */
+  readonly cause?: string;
+  /** The class of the exception when `cause` is `exception`. Its message is never reported. */
+  readonly errorName?: DiagnosticErrorName;
+  /** Where the exception was caught, when `cause` is `exception`. */
+  readonly stage?: FailureStage;
+}
+
 /** A document opened, or failed to open. @public */
 export type DocumentOpenDiagnostic = DiagnosticBase & {
   readonly kind: 'document.open';
@@ -86,19 +118,21 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
         /** Milliseconds from the start of the open to the mounted first layout. */
         readonly durationMs: number;
       }
-    | {
+    | (DiagnosticFailureDetail & {
         readonly outcome: 'rejected';
         readonly code: DocumentOpenDiagnosticCode;
         /** Compressed size of the bytes, absent when the source was not bytes at all. */
         readonly sizeBucket?: ByteSizeBucket;
-      }
+        /** The role of the part that failed, such as `'header'`. Never its name. */
+        readonly part?: DocumentPartKind;
+      })
   );
 
 /** Where a refused edit came from. @public */
 export type EditRejectionOrigin = 'command' | 'input' | 'automation';
 
 /** An edit, a command or a tracked change was refused. @public */
-export interface EditRejectedDiagnostic extends DiagnosticBase {
+export interface EditRejectedDiagnostic extends DiagnosticBase, DiagnosticFailureDetail {
   readonly kind: 'edit.rejected';
   readonly code: EditDiagnosticCode;
   /**
@@ -112,12 +146,30 @@ export interface EditRejectedDiagnostic extends DiagnosticBase {
   readonly command?: EditorCommand['type'];
 }
 
-/** An accept, reject or re-author request skipped one or more tracked changes. @public */
+/**
+ * An accept, reject or re-author request skipped one or more tracked changes. One event for each
+ * code and kind of change in the request.
+ *
+ * @public
+ */
 export interface ReviewSkippedDiagnostic extends DiagnosticBase {
   readonly kind: 'review.skipped';
   readonly code: ReviewDiagnosticCode;
-  /** How many items were skipped for this code in the one request. */
+  /** How many items were skipped for this code and kind in the one request. */
   readonly count: number;
+  /** What the request asked: accept, reject, or attribute to another author. */
+  readonly operation?: ReviewOperation;
+  /** The kind of the skipped changes, absent when the change no longer exists. */
+  readonly changeKind?: ReviewChangeKind;
+  /** For `changeKind: 'format'`, which property change it is. */
+  readonly formattingKind?: FormattingChangeKind;
+  /** The role of the part the changes are in, such as `'footnotes'`. Never its name. */
+  readonly part?: DocumentPartKind;
+  /**
+   * For `review.revision-unsupported`, the engine condition that refused the change, such as
+   * `unaddressed` (no `w:id` or author) or `unrecorded-properties`. See `diagnosticCauses()`.
+   */
+  readonly cause?: string;
 }
 
 /** A font failed to load. The editor kept working with a substitute. @public */

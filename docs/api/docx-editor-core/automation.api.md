@@ -1380,6 +1380,12 @@ export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAu
 export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
 
 // @public
+export function diagnosticCause(reason: string | undefined): string | undefined;
+
+// @public
+export function diagnosticCauses(): readonly string[];
+
+// @public
 export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
@@ -1390,6 +1396,12 @@ export interface DiagnosticEmitter<E> {
     deliver(payload: DiagnosticPayload<E>): void;
     readonly editorSessionId: string;
 }
+
+// @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
+export function diagnosticErrorName(error: unknown): DiagnosticErrorName;
 
 // @public
 export interface DiagnosticExplanation {
@@ -1404,13 +1416,28 @@ export type DiagnosticPayload<T> = T extends unknown ? Omit<T, 'schemaVersion' |
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
 
 // @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
+
+// @public
+export function documentPartKind(detail: string | undefined): DocumentPartKind | undefined;
+
+// @public
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
+
+// @public
+export function exceptionCause(): string;
 
 // @public
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
+
+// @public
 export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
+
+// @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
 
 // @public
 export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
@@ -1434,10 +1461,16 @@ export function paginationSnapshotOf(layout: SemanticLayout): AutomationPaginati
 export type PerformanceDiagnosticCode = 'performance.slow-interaction';
 
 // @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+
+// @public
 export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
 
 // @public
 export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | null;
+
+// @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
 
 // @public
 export interface RevisionAuthorEntry extends RevisionBatchEntry {
@@ -1462,6 +1495,7 @@ export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revisio
 export interface RevisionBatchEntry {
     // (undocumented)
     readonly author: string;
+    readonly formattingKind?: string;
     // (undocumented)
     readonly key: string;
     // (undocumented)
@@ -1477,6 +1511,7 @@ export interface RevisionBatchResult {
     readonly resolved: readonly RevisionBatchEntry[];
     // (undocumented)
     readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
         readonly key: string;
         readonly reason: RevisionBatchSkipReason;
         readonly revision?: RevisionBatchEntry;
@@ -1484,7 +1519,13 @@ export interface RevisionBatchResult {
 }
 
 // @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
 export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
 
 // @public
 export const SERVER_AUTOMATION_CAPABILITIES: AutomationCapabilities;

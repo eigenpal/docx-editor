@@ -12,10 +12,10 @@ Every editor metric also has the `docx_editor.version` label, `docx_editor_versi
 
 | Prometheus name | Type | Labels | Description |
 | --- | --- | --- | --- |
-| `docx_editor_document_opens_total` | counter | `outcome`, `code`, `docx_editor.version` | Documents opened or refused, by outcome and refusal code. |
+| `docx_editor_document_opens_total` | counter | `outcome`, `code`, `cause`, `part`, `docx_editor.version` | Documents opened or refused, by outcome, refusal code, engine reason, and part role. |
 | `docx_editor_document_open_duration_seconds` | histogram | `docx_editor.version` | Time from the start of an open to the laid-out document. |
-| `docx_editor_edit_rejections_total` | counter | `code`, `origin`, `tracked`, `docx_editor.version` | Edits, commands, and tracked changes refused, by public code. |
-| `docx_editor_review_skipped_total` | counter | `code`, `docx_editor.version` | Tracked changes skipped by accept, reject, or reassign requests. |
+| `docx_editor_edit_rejections_total` | counter | `code`, `cause`, `origin`, `tracked`, `docx_editor.version` | Edits, commands, and tracked changes refused, by public code and engine reason. |
+| `docx_editor_review_skipped_total` | counter | `code`, `cause`, `operation`, `change_kind`, `docx_editor.version` | Tracked changes skipped by accept, reject, or reassign requests, by engine reason, operation, and change kind. |
 | `docx_editor_font_failures_total` | counter | `code`, `docx_editor.version` | Font faces that failed to load and were substituted. |
 | `docx_editor_history_diagnostics_total` | counter | `code`, `docx_editor.version` | Undo steps that did not group as the gesture intended, by code. |
 | `docx_editor_custom_node_diagnostics_total` | counter | `code`, `docx_editor.version` | Custom node payloads that could not be read, by code. |

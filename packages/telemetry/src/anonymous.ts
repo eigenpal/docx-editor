@@ -9,12 +9,88 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * numbers; this guard makes sure that stays true at the boundary, whatever version of the
  * engine produced the event. A string that is not a known enum value is dropped, never sent.
  */
-import { diagnosticCodes, explainDiagnostic } from '@docx-editor.dev/core';
+import { diagnosticCauses, diagnosticCodes, explainDiagnostic } from '@docx-editor.dev/core';
 import { nodeEnv } from './env.ts';
-import type { DiagnosticCode } from '@docx-editor.dev/core';
+import type {
+  DiagnosticCode,
+  DiagnosticErrorName,
+  DocumentPartKind,
+  FailureStage,
+  FormattingChangeKind,
+  ReviewChangeKind,
+  ReviewOperation,
+} from '@docx-editor.dev/core';
 import type { Attributes, AttributeValue, TelemetryEvent } from './pipeline.ts';
 
 const CODES: ReadonlySet<string> = new Set(diagnosticCodes());
+
+/** A closed list from a core type: a value the type gains fails the build here until listed. */
+function closed<T extends string>(values: Readonly<Record<T, true>>): ReadonlySet<string> {
+  return new Set(Object.keys(values));
+}
+
+const PART_KINDS = closed<DocumentPartKind>({
+  package: true,
+  'content-types': true,
+  relationships: true,
+  'main-document': true,
+  glossary: true,
+  styles: true,
+  numbering: true,
+  settings: true,
+  'web-settings': true,
+  'font-table': true,
+  theme: true,
+  header: true,
+  footer: true,
+  footnotes: true,
+  endnotes: true,
+  comments: true,
+  people: true,
+  'custom-xml': true,
+  'document-properties': true,
+  media: true,
+  embedding: true,
+  other: true,
+});
+const ERROR_NAMES = closed<DiagnosticErrorName>({
+  Error: true,
+  TypeError: true,
+  RangeError: true,
+  ReferenceError: true,
+  SyntaxError: true,
+  other: true,
+});
+const OPERATIONS = closed<ReviewOperation>({ accept: true, reject: true, reassign: true });
+const STAGES = closed<FailureStage>({
+  'open-mount': true,
+  'open-layout': true,
+  command: true,
+  'review-item': true,
+  automation: true,
+});
+const CHANGE_KINDS = closed<ReviewChangeKind>({
+  insert: true,
+  delete: true,
+  replace: true,
+  moveFrom: true,
+  moveTo: true,
+  format: true,
+  paragraphMark: true,
+  structural: true,
+});
+const FORMATTING_KINDS = closed<FormattingChangeKind>({
+  rPrChange: true,
+  pPrChange: true,
+  sectPrChange: true,
+  tblPrChange: true,
+  tblPrExChange: true,
+  tblGridChange: true,
+  trPrChange: true,
+  tcPrChange: true,
+  numberingChange: true,
+  other: true,
+});
 
 /** Allowed string values for each enum field of a diagnostic. */
 const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
@@ -40,6 +116,14 @@ const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
   engineVersion: /^[0-9A-Za-z.+-]{1,40}$/,
   status: new Set(['initializing', 'ready', 'disconnected', 'error', 'destroyed']),
   previous: new Set(['none', 'initializing', 'ready', 'disconnected', 'error', 'destroyed']),
+  // Failure detail: the engine's own reason and the anonymous context around it.
+  cause: new Set(diagnosticCauses()),
+  part: PART_KINDS,
+  errorName: ERROR_NAMES,
+  stage: STAGES,
+  operation: OPERATIONS,
+  changeKind: CHANGE_KINDS,
+  formattingKind: FORMATTING_KINDS,
 };
 
 const NUMBERS = new Set([

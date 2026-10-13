@@ -41,9 +41,9 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 
 | Kind | When | Fields |
 | --- | --- | --- |
-| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. An opened document also has `shape`, with part, paragraph, review item, and embedded font buckets. |
-| `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command`, `input`, or `automation`), `tracked`, and `command` for a refused `exec` call. |
-| `review.skipped` | Accepting, rejecting, or reassigning tracked changes skipped some of them. | `code` and `count`. |
+| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` and the [failure detail](#failure-detail) when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. An opened document also has `shape`, with part, paragraph, review item, and embedded font buckets. |
+| `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command`, `input`, or `automation`), `tracked`, `command` for a refused `exec` call, and the [failure detail](#failure-detail). |
+| `review.skipped` | Accepting, rejecting, or reassigning tracked changes skipped some of them. | `code`, `count`, and the [failure detail](#failure-detail): `operation`, `changeKind`, `formattingKind`, and `part`. |
 | `font.failed` | A font did not load, and the editor used a substitute. | `code`. |
 | `history` | An undo step did not group as the gesture intended. Informational. | `code`. |
 | `custom-node` | A custom node payload in the document could not be read. The node name is not included. | `code`. |
@@ -51,6 +51,37 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 | `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
 
 Sizes and counts are buckets, such as `4-8MiB` or `10-99`, so a combination of values cannot identify one document.
+
+## Failure detail
+
+A code tells you what failed. The failure detail narrows it to one engine condition and the place it happened, so an engineer can find the code path and build a test file without seeing your document. Every field is optional and comes from a closed list.
+
+| Field | On | What it holds |
+| --- | --- | --- |
+| `cause` | `document.open`, `edit.rejected`, `review.skipped` | The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, `split-not-clean` under `edit.unmapped-change`, or `unaddressed` (a change with no `w:id` or author) under `review.revision-unsupported`. For an error the engine did not expect, `exception`. |
+| `errorName` | `document.open`, `edit.rejected` | The class of the exception when `cause` is `exception`, such as `TypeError`. The message is never included, because it can quote the document. |
+| `stage` | `document.open`, `edit.rejected` | Where an exception was caught: `open-mount`, `open-layout`, `command`, `review-item` (accept or reject from a review card), or `automation` (an editing API batch). |
+| `part` | `document.open`, `review.skipped` | The role of the package part, such as `main-document`, `header`, `footnotes`, or `relationships`, never its name. A part under a nonstandard name reports `other`. |
+| `operation` | `review.skipped` | `accept`, `reject`, or `reassign`. |
+| `changeKind` | `review.skipped` | The kind of the skipped change: `insert`, `delete`, `replace`, `moveFrom`, `moveTo`, `format`, `paragraphMark`, or `structural`. |
+| `formattingKind` | `review.skipped` | For a formatting change, its property change, such as `rPrChange` or `tblGridChange`. Any other element reports `other`. |
+
+Match on `code` in your own code. Causes are the engine's internal reasons and can change between versions, so use `cause` to report and fix a failure, not to branch on it. To list every cause, call `diagnosticCauses()`.
+
+An open that throws reports `open.failed` with `cause: 'exception'`, and a command, a review card action, or an editing API batch that throws reports `edit.internal-invariant` with `cause: 'exception'`. The error still reaches your code as before. An exception from your own code inside `run()` is not reported.
+
+The following events are what a malformed header and a skipped formatting change look like:
+
+```json
+{ "kind": "document.open", "outcome": "rejected", "code": "open.xml-malformed",
+  "cause": "undeclared-prefix", "part": "header", "sizeBucket": "64-128KiB" }
+
+{ "kind": "review.skipped", "code": "review.revision-unsupported", "count": 3,
+  "operation": "accept", "changeKind": "format", "formattingKind": "tblGridChange",
+  "part": "main-document" }
+```
+
+When you report a problem, include the code, the failure detail, and the `engineVersion` that your telemetry adds. A refusal's `cause` names the engine condition that refused it. An exception's `errorName` and `stage` say what kind of error it was and where it was caught; they do not include a stack trace.
 
 ## Codes
 

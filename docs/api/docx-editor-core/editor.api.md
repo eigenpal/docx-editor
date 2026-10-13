@@ -2728,7 +2728,10 @@ export interface RemoteCaretLabelHost {
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
-export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode, tracked: boolean): void;
+export function reportAutomationException(editor: object, error: unknown, tracked: boolean): void;
+
+// @public
+export function reportAutomationRefusal(editor: object, code: EditDiagnosticCode, tracked: boolean, cause?: string): void;
 
 // @public
 export function resizePreservesAspect(handle: ImageResizeHandle, aspectLocked: boolean, shiftKey: boolean, textbox?: boolean): boolean;

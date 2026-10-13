@@ -10,14 +10,21 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   byteSizeBucket,
   createDiagnosticEmitter,
+  diagnosticCause,
+  diagnosticErrorName,
+  documentPartKind,
+  exceptionCause,
   openDiagnosticCode,
   type AutomationHost,
   type AutomationOperation,
   type ByteSizeBucket,
+  type DiagnosticErrorName,
   type DocumentOpenDiagnosticCode,
+  type DocumentPartKind,
   type EditDiagnosticCode,
 } from '@docx-editor.dev/core/automation';
 import type { DocxEditorError } from './errors.ts';
+import { refusalCause } from './batch.ts';
 
 /**
  * A diagnostic from a headless runtime: the open, and each refused batch.
@@ -43,18 +50,34 @@ export type RuntimeDiagnostic = {
       readonly outcome: 'rejected';
       readonly code: DocumentOpenDiagnosticCode;
       readonly sizeBucket?: ByteSizeBucket;
+      /** The engine's own reason. See `diagnosticCauses()`. */
+      readonly cause?: string;
+      /** The role of the part that failed. Never its name. */
+      readonly part?: DocumentPartKind;
+      /** The class of the exception when `cause` is `exception`. */
+      readonly errorName?: DiagnosticErrorName;
     }
   | {
       readonly kind: 'edit.rejected';
       readonly code: EditDiagnosticCode;
       readonly origin: 'automation';
       readonly tracked: boolean;
+      /** The engine's own reason. See `diagnosticCauses()`. */
+      readonly cause?: string;
+      /** The class of the exception when `cause` is `exception`. */
+      readonly errorName?: DiagnosticErrorName;
+      /** `automation` when `cause` is `exception`. */
+      readonly stage?: 'automation';
     }
 );
 
 export interface RuntimeDiagnostics {
-  openRejected(bytes: Uint8Array, reason: string, limit?: string): void;
+  openRejected(bytes: Uint8Array, reason: string, limit?: string, detail?: string): void;
+  /** The open threw: an engine fault, reported with the exception's class only. */
+  openCrashed(bytes: Uint8Array, error: unknown): void;
   opened(bytes: Uint8Array, durationMs: number): void;
+  /** A batch that threw an engine error: reported by class, never by message. */
+  crashed(error: unknown, host: AutomationHost, operations: readonly AutomationOperation[]): void;
   /** A refused batch, with its operations, so a tracking mode the batch staged still counts. */
   refused(
     error: DocxEditorError,
@@ -85,6 +108,18 @@ function tracking(host: AutomationHost): boolean {
   }
 }
 
+/** Whether a batch ran under change tracking: the mode it staged, or the host's after it. */
+export function trackedDuring(
+  host: AutomationHost,
+  operations: readonly AutomationOperation[]
+): boolean {
+  // A failed batch rolls back the mode it staged, so read the batch as well as the host.
+  const staged = operations.some(
+    (operation) => operation.op === 'setChangeTrackingMode' && operation.mode !== 'Off'
+  );
+  return staged || tracking(host);
+}
+
 /** The public code of a refused batch, and whether it ran under change tracking. */
 export function classifyRefusal(
   error: DocxEditorError,
@@ -95,13 +130,9 @@ export function classifyRefusal(
   const code: EditDiagnosticCode = inner?.startsWith('edit.')
     ? (inner as EditDiagnosticCode)
     : (RUNTIME_CODES[error.code] ?? 'edit.refused');
-  // A failed batch rolls back the mode it staged, so read the batch as well as the host.
-  const staged = operations.some(
-    (operation) => operation.op === 'setChangeTrackingMode' && operation.mode !== 'Off'
-  );
   // `tracked` says whether tracking was on, as the editor reports it; refusals about tracking
   // itself are routed by their code.
-  return { code, tracked: staged || tracking(host) };
+  return { code, tracked: trackedDuring(host, operations) };
 }
 
 /** Diagnostics for these listeners, or null when there are none. */
@@ -111,12 +142,26 @@ export function runtimeDiagnostics(
   if (listeners.length === 0) return null;
   const { deliver } = createDiagnosticEmitter<RuntimeDiagnostic>(() => listeners);
   return {
-    openRejected(bytes, reason, limit) {
+    openRejected(bytes, reason, limit, detail) {
+      const cause = diagnosticCause(reason);
+      const part = documentPartKind(detail);
       deliver({
         kind: 'document.open',
         outcome: 'rejected',
         code: openDiagnosticCode(reason, limit),
         sizeBucket: byteSizeBucket(bytes.byteLength),
+        ...(cause ? { cause } : {}),
+        ...(part ? { part } : {}),
+      });
+    },
+    openCrashed(bytes, error) {
+      deliver({
+        kind: 'document.open',
+        outcome: 'rejected',
+        code: 'open.failed',
+        sizeBucket: byteSizeBucket(bytes.byteLength),
+        cause: exceptionCause(),
+        errorName: diagnosticErrorName(error),
       });
     },
     opened(bytes, durationMs) {
@@ -127,11 +172,24 @@ export function runtimeDiagnostics(
         durationMs: Math.max(0, Math.round(durationMs)),
       });
     },
+    crashed(error, host, operations) {
+      deliver({
+        kind: 'edit.rejected',
+        code: 'edit.internal-invariant',
+        origin: 'automation',
+        tracked: trackedDuring(host, operations),
+        cause: exceptionCause(),
+        errorName: diagnosticErrorName(error),
+        stage: 'automation',
+      });
+    },
     refused(error, host, operations) {
+      const cause = refusalCause(error);
       deliver({
         kind: 'edit.rejected',
         origin: 'automation',
         ...classifyRefusal(error, host, operations),
+        ...(cause ? { cause } : {}),
       });
     },
   };

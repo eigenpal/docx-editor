@@ -69,6 +69,134 @@ describe('sentryExporter', () => {
       }),
     ]);
   });
+
+  test('a change the engine cannot resolve is an issue per kind; a stale one is a breadcrumb', () => {
+    const { sentry, issues, crumbs } = fakeSentry();
+    const telemetry = createTelemetry({ exporters: [sentryExporter(sentry)] });
+    const skipped = {
+      ...base,
+      kind: 'review.skipped',
+      code: 'review.revision-unsupported',
+      count: 2,
+      operation: 'accept',
+      changeKind: 'format',
+      formattingKind: 'rPrChange',
+      part: 'footnotes',
+    } as EditorDiagnostic;
+    telemetry.record(skipped);
+    telemetry.record({ ...skipped, code: 'review.stale-revision', count: 1 } as EditorDiagnostic);
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.context).toMatchObject({
+      fingerprint: [
+        'docx-editor',
+        'review.skipped',
+        'review.revision-unsupported',
+        'format',
+        'rPrChange',
+      ],
+      level: 'warning',
+      tags: {
+        'docx_editor.operation': 'accept',
+        'docx_editor.change_kind': 'format',
+        'docx_editor.formatting_kind': 'rPrChange',
+        'docx_editor.part': 'footnotes',
+      },
+    });
+    expect(crumbs).toEqual([
+      expect.objectContaining({
+        message:
+          'tracked changes skipped: review.stale-revision [accept, format, rPrChange, footnotes] x1',
+      }),
+    ]);
+  });
+
+  test('the engine reason splits one code into separate issues', () => {
+    const { sentry, issues } = fakeSentry();
+    const telemetry = createTelemetry({ exporters: [sentryExporter(sentry)] });
+    const crash = {
+      ...base,
+      kind: 'edit.rejected',
+      code: 'edit.internal-invariant',
+      origin: 'command',
+      tracked: true,
+      command: 'acceptRevision',
+      cause: 'exception',
+      errorName: 'TypeError',
+    } as EditorDiagnostic;
+    telemetry.record(crash);
+    const { errorName: _errorName, ...invariant } = crash as EditorDiagnostic & {
+      errorName?: string;
+    };
+    telemetry.record({ ...invariant, cause: 'tree-invariant' } as EditorDiagnostic);
+    expect(issues.map((issue) => (issue.context as { fingerprint: string[] }).fingerprint)).toEqual(
+      [
+        ['docx-editor', 'edit.rejected', 'edit.internal-invariant', 'exception', 'TypeError'],
+        ['docx-editor', 'edit.rejected', 'edit.internal-invariant', 'tree-invariant'],
+      ]
+    );
+    expect(issues[0]!.context).toMatchObject({
+      tags: { 'docx_editor.cause': 'exception', 'docx_editor.error_name': 'TypeError' },
+    });
+  });
+});
+
+describe('deduplication keeps distinct failures apart', () => {
+  test('two exception classes in one window are two events', () => {
+    const seen: string[] = [];
+    const telemetry = createTelemetry({
+      exporters: [
+        {
+          name: 'memory',
+          event: (event) => {
+            const fields = event as unknown as Record<string, unknown>;
+            seen.push(`${String(fields.errorName)}:${String(fields.repeated ?? 0)}`);
+          },
+        },
+      ],
+    });
+    const crash = {
+      ...base,
+      kind: 'edit.rejected',
+      code: 'edit.internal-invariant',
+      origin: 'command',
+      tracked: false,
+      cause: 'exception',
+      stage: 'command',
+    };
+    telemetry.record({ ...crash, errorName: 'TypeError' } as EditorDiagnostic);
+    telemetry.record({ ...crash, errorName: 'RangeError' } as EditorDiagnostic);
+    telemetry.record({ ...crash, errorName: 'TypeError' } as EditorDiagnostic);
+    void telemetry.flush();
+    expect(seen).toEqual(['TypeError:0', 'RangeError:0', 'TypeError:1']);
+  });
+});
+
+describe('failure detail passes the privacy check only from closed lists', () => {
+  test('known detail is kept; a value outside its list is dropped, never sent', () => {
+    const memory = { events: [] as Record<string, unknown>[] };
+    const telemetry = createTelemetry({
+      exporters: [{ name: 'memory', event: (event) => void memory.events.push({ ...event }) }],
+    });
+    telemetry.record({
+      ...openRejected,
+      code: 'open.xml-malformed',
+      cause: 'undeclared-prefix',
+      part: 'header',
+    } as EditorDiagnostic);
+    telemetry.record({
+      ...openRejected,
+      code: 'open.xml-malformed',
+      cause: 'word/client-matter-4471.xml',
+      part: 'client-matter-4471',
+      errorName: 'SecretError',
+    } as unknown as EditorDiagnostic);
+    expect(memory.events[0]).toMatchObject({ cause: 'undeclared-prefix', part: 'header' });
+    expect(memory.events[1]).not.toHaveProperty('cause');
+    expect(memory.events[1]).not.toHaveProperty('part');
+    expect(memory.events[1]).not.toHaveProperty('errorName');
+    expect(JSON.stringify(memory.events)).not.toContain('client-matter-4471');
+  });
 });
 
 describe('sentryExporter collaboration defaults', () => {
@@ -279,7 +407,7 @@ describe('prometheus', () => {
     const text = metrics.metrics();
     expect(text).toContain('# TYPE docx_editor_edit_rejections_total counter');
     expect(text).toContain(
-      'docx_editor_edit_rejections_total{code="edit.protected-content",docx_editor_version="development",origin="input",tracked="false"} 2'
+      'docx_editor_edit_rejections_total{cause="none",code="edit.protected-content",docx_editor_version="development",origin="input",tracked="false"} 2'
     );
     expect(text).toContain('# TYPE docx_editor_document_open_duration_seconds histogram');
     expect(text).toContain(

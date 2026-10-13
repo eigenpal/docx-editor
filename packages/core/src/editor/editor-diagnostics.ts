@@ -31,6 +31,28 @@ import {
 } from '@docx-editor.dev/core/automation';
 import { HarfBuzzShapingError } from '@docx-editor.dev/core/layout';
 import {
+  diagnosticCause,
+  diagnosticErrorName,
+  documentPartKind,
+  exceptionCause,
+  formattingChangeKind,
+  reviewChangeKind,
+} from '../automation/diagnostic-context.ts';
+import type { FailureStage, ReviewOperation } from '../automation/diagnostic-vocabulary.ts';
+import type { ReviewRevisionItem } from '../store/store/index.ts';
+import { READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
+
+/** A skipped change as the store reports it: the reason, the change, and the engine condition. */
+interface SkippedChange {
+  readonly reason: string;
+  readonly revision?: {
+    readonly revisionKind: string;
+    readonly partName: string;
+    readonly formattingKind?: string;
+  };
+  readonly detail?: string;
+}
+import {
   diagnosticCodeOfRefusal,
   fontDiagnosticCode,
   openDiagnosticCode,
@@ -74,6 +96,15 @@ function builtInCommand(command: EditorCommand): EditorCommand['type'] | undefin
   }
 }
 
+/** Whether a review command accepts or rejects. Other commands report no operation. */
+function reviewOperationOf(command: EditorCommand): ReviewOperation | undefined {
+  const type: string = command.type;
+  if (type === 'acceptRevision' || type === 'acceptAllRevisions') return 'accept';
+  if (type === 'rejectRevision' || type === 'rejectAllRevisions') return 'reject';
+  const action = (command as { action?: unknown }).action;
+  return action === 'accept' || action === 'reject' ? action : undefined;
+}
+
 /** Each editor's automation scope: input refusals inside it belong to an automation batch. */
 const AUTOMATION_SCOPES = new WeakMap<object, <T>(run: () => T) => T>();
 
@@ -89,20 +120,33 @@ export function runAsAutomation<T>(editor: object, run: () => T): T {
 /** Each editor's automation reporter, for a runtime that borrows the editor. */
 const AUTOMATION_REPORTERS = new WeakMap<
   object,
-  (code: EditDiagnosticCode, tracked: boolean) => void
+  (code: EditDiagnosticCode, tracked: boolean, cause?: string, error?: { thrown: unknown }) => void
 >();
 
 /**
  * Report a refused editing API batch into the diagnostics of the editor it ran on. A runtime
  * from `DocxEditor.createBrowser` calls this, so its refusals reach the editor's telemetry.
- * Does nothing for an object that is not an editor.
+ * Does nothing for an object that is not an editor. `cause` is the engine reason behind the
+ * refusal; a value the engine does not know is left out of the diagnostic.
  */
 export function reportAutomationRefusal(
   editor: object,
   code: EditDiagnosticCode,
-  tracked: boolean
+  tracked: boolean,
+  cause?: string
 ): void {
-  AUTOMATION_REPORTERS.get(editor)?.(code, tracked);
+  AUTOMATION_REPORTERS.get(editor)?.(code, tracked, cause);
+}
+
+/**
+ * Report an editing API batch that threw an engine error, not a refusal, into the diagnostics of
+ * the editor it ran on: `edit.internal-invariant` with the error's class, never its message.
+ * Does nothing for an object that is not an editor.
+ */
+export function reportAutomationException(editor: object, error: unknown, tracked: boolean): void {
+  AUTOMATION_REPORTERS.get(editor)?.('edit.internal-invariant', tracked, 'exception', {
+    thrown: error,
+  });
 }
 
 /** What the facade tells the reporter about the opening document. */
@@ -176,6 +220,69 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     ...options.performance,
   });
 
+  /**
+   * One `review.skipped` event for each code, engine condition, change kind, formatting kind and
+   * part role: what a fix needs, without the author, the key or the part's name.
+   */
+  const reportSkips = (
+    batches: readonly (readonly [readonly SkippedChange[], ReviewOperation | undefined])[]
+  ): void => {
+    const groups = new Map<string, { readonly event: Record<string, unknown>; count: number }>();
+    for (const [skipped, operation] of batches)
+      for (const { reason, revision, detail } of skipped) {
+        const code = reviewDiagnosticCode(reason);
+        if (!code) continue;
+        const changeKind = reviewChangeKind(revision?.revisionKind);
+        const formattingKind =
+          changeKind === 'format' ? formattingChangeKind(revision?.formattingKind) : undefined;
+        const part = documentPartKind(revision?.partName);
+        const cause = diagnosticCause(detail);
+        const key = [code, cause, operation, changeKind, formattingKind, part].join('|');
+        const group = groups.get(key);
+        if (group) group.count += 1;
+        else
+          groups.set(key, {
+            count: 1,
+            event: {
+              code,
+              ...(operation ? { operation } : {}),
+              ...(changeKind ? { changeKind } : {}),
+              ...(formattingKind ? { formattingKind } : {}),
+              ...(part ? { part } : {}),
+              ...(cause ? { cause } : {}),
+            },
+          });
+      }
+    for (const { event, count } of groups.values())
+      deliver({ kind: 'review.skipped', ...event, count } as Parameters<typeof deliver>[0]);
+  };
+  const reportSkipped = (command: EditorCommand, result: ExecResult): void =>
+    reportSkips([
+      [result.revisions?.skipped ?? [], reviewOperationOf(command)],
+      [result.revisionAuthors?.skipped ?? [], 'reassign'],
+    ]);
+  /** An exception the engine did not expect, reported by class and stage, never by message. */
+  const reportException = (
+    error: unknown,
+    stage: FailureStage,
+    event: { readonly tracked: boolean; readonly command?: EditorCommand['type'] }
+  ): void => {
+    // Reporting must never replace the error the caller sees.
+    try {
+      deliver({
+        kind: 'edit.rejected',
+        code: 'edit.internal-invariant',
+        origin: 'command',
+        ...event,
+        cause: exceptionCause(),
+        errorName: diagnosticErrorName(error),
+        stage,
+      });
+    } catch {
+      /* the caller's own error propagates */
+    }
+  };
+
   return {
     editorSessionId: emitter.editorSessionId,
 
@@ -205,16 +312,108 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         ...shapeOf(surface),
       });
     },
-    /** The open was refused. `limit` disambiguates the one reason two layers share. */
-    openRejected(reason: string, limit?: string): void {
+    /**
+     * The open was refused. `limit` disambiguates the one reason two layers share. `detail` is
+     * read only for the role of the part it names; it never leaves this function.
+     */
+    openRejected(reason: string, limit?: string, detail?: string): void {
       const sizeBucket = opening?.sizeBucket;
       opening = null;
+      const cause = diagnosticCause(reason);
+      const part = documentPartKind(detail);
       deliver({
         kind: 'document.open',
         outcome: 'rejected',
         code: openDiagnosticCode(reason, limit),
         ...(sizeBucket ? { sizeBucket } : {}),
+        ...(cause ? { cause } : {}),
+        ...(part ? { part } : {}),
       });
+    },
+    /** The open threw. Reported once as `open.failed`, with the exception's class only. */
+    openCrashed(error: unknown, stage: FailureStage = 'open-mount'): void {
+      if (!opening) return;
+      const { sizeBucket } = opening;
+      opening = null;
+      deliver({
+        kind: 'document.open',
+        outcome: 'rejected',
+        code: 'open.failed',
+        sizeBucket,
+        cause: exceptionCause(),
+        errorName: diagnosticErrorName(error),
+        stage,
+      });
+    },
+    /** Run a later slice of a progressive open; an exception in it fails the open, then rethrows. */
+    continueOpen<T>(run: () => T): T {
+      try {
+        return run();
+      } catch (error) {
+        this.openCrashed(error, 'open-layout');
+        throw error;
+      }
+    },
+    /**
+     * Wrap a single accept or reject from a review card, which does not go through `exec`. A
+     * refusal is reported as a skipped change with its kind; a throw as an engine defect.
+     */
+    reviewItem(
+      resolve: (key: string, action: 'accept' | 'reject') => ExecResult,
+      itemOf: (key: string) => ReviewRevisionItem | undefined,
+      describe: (
+        item: ReviewRevisionItem,
+        action: 'accept' | 'reject'
+      ) => { readonly partName?: string; readonly detail?: string },
+      tracked: () => boolean
+    ): (key: string, action: 'accept' | 'reject') => ExecResult {
+      return (key, action) => {
+        const item = itemOf(key);
+        let result: ExecResult;
+        try {
+          result = resolve(key, action);
+        } catch (error) {
+          if (execDepth === 0) reportException(error, 'review-item', { tracked: tracked() });
+          throw error;
+        }
+        // Inside `exec`, the command reports for itself.
+        if (result.ok || execDepth > 0) return result;
+        if (result.code === 'notFound' || (result.code === 'unsupported' && item)) {
+          // Read only on this failure path: the planner's preflight names the exact condition.
+          const described = item ? describe(item, action) : {};
+          const revision = item && {
+            revisionKind: item.revisionKind,
+            partName: described.partName ?? '',
+            ...(item.formattingKind ? { formattingKind: item.formattingKind } : {}),
+          };
+          const detail =
+            result.reason === READ_ONLY_REVISION_REASON
+              ? (described.detail ?? 'read-only')
+              : (diagnosticCause(result.reason) ?? described.detail);
+          reportSkips([
+            [
+              [
+                {
+                  reason: result.code === 'notFound' ? 'unknown-revision' : 'unsupported-revision',
+                  ...(revision ? { revision } : {}),
+                  detail,
+                },
+              ],
+              action,
+            ],
+          ]);
+          return result;
+        }
+        const cause = diagnosticCause(result.reason);
+        deliver({
+          kind: 'edit.rejected',
+          code: diagnosticCodeOfRefusal(result.reason, result.code),
+          origin: 'command',
+          tracked: tracked(),
+          ...(cause ? { cause } : {}),
+        });
+        return result;
+      };
     },
 
     /** Wraps `exec`, so its refusal and its skipped tracked changes are reported once. */
@@ -223,37 +422,49 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       let result: ExecResult;
       try {
         result = run();
+      } catch (error) {
+        // A command that throws is an engine defect: report its class, then let it propagate.
+        if (execDepth === 1) {
+          let type: EditorCommand['type'] | undefined;
+          try {
+            type = builtInCommand(command);
+          } catch {
+            type = undefined;
+          }
+          reportException(error, 'command', { tracked, ...(type ? { command: type } : {}) });
+        }
+        throw error;
       } finally {
         execDepth -= 1;
       }
       if (execDepth > 0) return result;
       if (!result.ok) {
         const type = builtInCommand(command);
+        const cause = diagnosticCause(result.reason);
         deliver({
           kind: 'edit.rejected',
           code: diagnosticCodeOfRefusal(result.reason, result.code),
           origin: 'command',
           tracked,
           ...(type ? { command: type } : {}),
+          ...(cause ? { cause } : {}),
         });
       }
-      const skipped = [
-        ...(result.revisions?.skipped ?? []),
-        ...(result.revisionAuthors?.skipped ?? []),
-      ];
-      const counts = new Map<string, number>();
-      for (const { reason } of skipped) counts.set(reason, (counts.get(reason) ?? 0) + 1);
-      for (const [reason, count] of counts) {
-        const code = reviewDiagnosticCode(reason);
-        if (code) deliver({ kind: 'review.skipped', code, count });
-      }
+      reportSkipped(command, result);
       return result;
     },
     /** A refusal from typing, the clipboard, a drag or the pointer. Inside `exec` it is not new. */
     inputRejected(reason: string, tracked: boolean): void {
       if (execDepth > 0 || automationDepth > 0) return;
       const code = diagnosticCodeOfRefusal(reason);
-      deliver({ kind: 'edit.rejected', code, origin: 'input', tracked });
+      const cause = diagnosticCause(reason);
+      deliver({
+        kind: 'edit.rejected',
+        code,
+        origin: 'input',
+        tracked,
+        ...(cause ? { cause } : {}),
+      });
     },
 
     fontFailed(code: string | undefined): void {
@@ -281,9 +492,20 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         editor,
         (command, result) => void this.exec(command, tracked(), () => result)
       );
-      AUTOMATION_REPORTERS.set(editor, (code, automationTracked) =>
-        deliver({ kind: 'edit.rejected', code, origin: 'automation', tracked: automationTracked })
-      );
+      AUTOMATION_REPORTERS.set(editor, (code, automationTracked, reason, exception) => {
+        // Checked again here: a cause must be one the engine knows, whoever passes it.
+        const cause = diagnosticCause(reason);
+        deliver({
+          kind: 'edit.rejected',
+          code,
+          origin: 'automation',
+          tracked: automationTracked,
+          ...(cause ? { cause } : {}),
+          ...(exception
+            ? { errorName: diagnosticErrorName(exception.thrown), stage: 'automation' as const }
+            : {}),
+        });
+      });
     },
 
     /** A layout or paint duration, or a press timestamp, from the surface. */

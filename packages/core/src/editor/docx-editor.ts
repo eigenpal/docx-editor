@@ -301,7 +301,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     mount: (bytes) => mountBytes(bytes),
     continueOpen: (budgetMs) => {
       if (!surface) return true;
-      const done = preparedOpen.continueOpen(surface, budgetMs);
+      const done = diagnostics.continueOpen(() => preparedOpen.continueOpen(surface!, budgetMs));
       if (done) diagnostics.openSettled(surface);
       return done;
     },
@@ -584,6 +584,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       mountBytesNow(...args);
       refreshHost?.mounted(args[0]);
     } catch (error) {
+      diagnostics.openCrashed(error);
       refreshHost?.mounted(args[0], error);
       if (!refreshing) throw error;
     }
@@ -703,7 +704,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       // The message names the reason only: `detail` can quote the file, and hosts log errors.
       emitError(editorError(result.reason, `failed to open document: ${result.reason}`));
-      diagnostics.openRejected(result.reason, result.limit);
+      diagnostics.openRejected(result.reason, result.limit, result.detail);
       return;
     }
     parseError = null;
@@ -1751,6 +1752,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       emitSelectionChange();
     },
+    report: { diagnostics, tracked: () => editingMode === 'suggesting' },
   });
   const { resolveReviewItem } = reviewCommands;
 

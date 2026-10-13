@@ -40,21 +40,31 @@ export interface ConsoleExporterOptions {
   readonly console?: Pick<Console, 'info' | 'warn'>;
 }
 
+/** The anonymous detail of a failure, as ` [cause, part]`, or nothing. */
+function detailText(event: TelemetryEvent): string {
+  const fields = event as unknown as Record<string, unknown>;
+  const parts = ['operation', 'changeKind', 'formattingKind', 'cause', 'errorName', 'stage', 'part']
+    .map((key) => fields[key])
+    .filter((value): value is string => typeof value === 'string');
+  return parts.length ? ` [${parts.join(', ')}]` : '';
+}
+
 /** The headline for an event, such as `edit refused: edit.read-only (command, untracked)`. */
 export function describeEvent(event: TelemetryEvent): string {
   const repeated = event.repeated ? ` (and ${event.repeated} more)` : '';
   switch (event.kind) {
     case 'document.open':
-      if (event.outcome === 'rejected') return `document refused: ${event.code}`;
+      if (event.outcome === 'rejected')
+        return `document refused: ${event.code}${detailText(event)}`;
       return event.pagesBucket === undefined
         ? `document opened: ${event.sizeBucket}, ${event.durationMs} ms`
         : `document opened: ${event.pagesBucket} pages, ${event.sizeBucket}, ${event.durationMs} ms`;
     case 'edit.rejected': {
       const via = event.command ? `${event.origin} ${event.command}` : event.origin;
-      return `edit refused: ${event.code} (${via}, ${event.tracked ? 'tracked' : 'untracked'})${repeated}`;
+      return `edit refused: ${event.code}${detailText(event)} (${via}, ${event.tracked ? 'tracked' : 'untracked'})${repeated}`;
     }
     case 'review.skipped':
-      return `tracked changes skipped: ${event.code} x${event.count}`;
+      return `tracked changes skipped: ${event.code}${detailText(event)} x${event.count}`;
     case 'font.failed':
       return `font substituted: ${event.code}${repeated}`;
     case 'history':

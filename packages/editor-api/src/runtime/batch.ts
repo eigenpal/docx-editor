@@ -21,7 +21,7 @@ import type {
   AutomationErrorCode,
   AutomationOperation,
 } from '@docx-editor.dev/core/automation';
-import { storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { diagnosticCause, storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { DocxEditorError, type DocxEditorErrorCode } from './errors.ts';
 import type { QueuedAction } from './queue.ts';
 
@@ -91,7 +91,7 @@ export function hostFailure(
   const code = HOST_CODES[error.code] ?? 'GeneralException';
   const stale = code === 'StaleDocument';
   const diagnostic = error.detail === undefined ? null : storeEditDiagnosticCode(error.detail);
-  return new DocxEditorError({
+  const failure = new DocxEditorError({
     code,
     ...(diagnostic === null ? {} : { diagnostic }),
     ...(context.target === undefined ? {} : { target: context.target }),
@@ -102,6 +102,20 @@ export function hostFailure(
       ? { actualRevision: context.actualRevision }
       : {}),
   });
+  const cause = diagnosticCause(error.detail);
+  if (cause) REFUSAL_CAUSES.set(failure, cause);
+  return failure;
+}
+
+/**
+ * The engine reason behind a refused batch, for its diagnostic only. Kept beside the error, not
+ * on it, so `DocxEditorError` keeps the Office.js shape.
+ */
+const REFUSAL_CAUSES = new WeakMap<DocxEditorError, string>();
+
+/** The engine reason a refusal came from, when the engine named one it knows. */
+export function refusalCause(error: DocxEditorError): string | undefined {
+  return REFUSAL_CAUSES.get(error);
 }
 
 /**

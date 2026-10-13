@@ -21,6 +21,7 @@ import {
   namedMoveRanges,
   orphanMoveDestinationSites,
 } from './tree-op-revisions.ts';
+import type { RevisionSiteRefusal } from './revision-site-refusal.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
 
 /** A canonical review decision. Keys are valid only in the open document. @public */
@@ -29,6 +30,8 @@ export interface RevisionBatchEntry {
   readonly author: string;
   readonly partName: string;
   readonly revisionKind: ReviewRevisionItem['revisionKind'];
+  /** For a formatting change, its OOXML property-change element, as the review item has it. */
+  readonly formattingKind?: string;
 }
 
 /** Why a requested decision remains pending. @public */
@@ -38,6 +41,19 @@ export type RevisionBatchSkipReason =
   | 'retained-structure'
   | 'unknown-revision';
 
+/**
+ * Why an `unsupported-revision` skip happened: a refused site, a formatting change whose earlier
+ * properties were not recorded so it cannot be rejected, a read-only review item, or a change
+ * with no sites in the part.
+ *
+ * @public
+ */
+export type RevisionBatchSkipDetail =
+  | RevisionSiteRefusal
+  | 'unrecorded-properties'
+  | 'read-only'
+  | 'no-sites';
+
 /** Outcome of one selected-set decision. Counts refer to review decisions, not XML markers. @public */
 export interface RevisionBatchResult {
   readonly resolved: readonly RevisionBatchEntry[];
@@ -45,6 +61,8 @@ export interface RevisionBatchResult {
     readonly key: string;
     readonly reason: RevisionBatchSkipReason;
     readonly revision?: RevisionBatchEntry;
+    /** For `unsupported-revision`, which engine condition refused it. */
+    readonly detail?: RevisionBatchSkipDetail;
   }[];
   /** All pending decisions in the addressed scope, including excluded and unsupported changes. */
   readonly remaining: number;
@@ -213,15 +231,15 @@ export function planRevisionBatch(
     groups.set(id, group);
   }
   const reasons = new Map<number, RevisionBatchSkipReason>();
+  const details = new Map<number, RevisionBatchSkipDetail>();
   for (const [id, group] of groups) {
-    if (
-      group.some(
-        (site) =>
-          site.refused ||
-          (action === 'reject' && site.propertyChange && recordedProperties(site.node) === null)
-      )
-    ) {
+    const refused = group.find((site) => site.refused);
+    const unrecorded =
+      action === 'reject' &&
+      group.some((site) => site.propertyChange && recordedProperties(site.node) === null);
+    if (refused || unrecorded) {
       reasons.set(id, 'unsupported-revision');
+      details.set(id, refused?.refusal ?? 'unrecorded-properties');
     } else if (group.some((site) => !selectedSites.has(site.node.id))) {
       reasons.set(id, 'incomplete-group');
     }
@@ -230,7 +248,10 @@ export function planRevisionBatch(
     if (!item.readOnly) continue;
     for (const id of revisionSiteNodeIdsOf(item)) {
       const index = indices.get(id);
-      if (index !== undefined) reasons.set(find(index), 'unsupported-revision');
+      if (index === undefined) continue;
+      reasons.set(find(index), 'unsupported-revision');
+      // An item is read-only BECAUSE a site refused it: keep that site's specific reason.
+      if (!details.has(find(index))) details.set(find(index), 'read-only');
     }
   }
   // Cell removal may remove its row; row removal may remove the containing table.
@@ -252,7 +273,11 @@ export function planRevisionBatch(
     visit(root);
     for (const [group, reason] of [...reasons]) {
       const root = find(group);
-      if (reasons.get(root) !== 'unsupported-revision') reasons.set(root, reason);
+      if (reasons.get(root) !== 'unsupported-revision') {
+        reasons.set(root, reason);
+        const detail = details.get(group);
+        if (detail) details.set(root, detail);
+      }
     }
   }
   const resolved: RevisionBatchEntry[] = [];
@@ -281,16 +306,28 @@ export function planRevisionBatch(
       author: item.author,
       partName: part.name,
       revisionKind: item.revisionKind,
+      ...(item.formattingKind ? { formattingKind: item.formattingKind } : {}),
     };
     const ids = revisionSiteNodeIdsOf(item);
     let reason: RevisionBatchSkipReason | undefined;
+    let detail: RevisionBatchSkipDetail | undefined;
     for (const id of ids) {
       const index = indices.get(id);
       reason = index === undefined ? 'incomplete-group' : reasons.get(find(index));
+      detail = index === undefined ? undefined : details.get(find(index));
       if (reason) break;
     }
-    if (!ids.length) reason = 'unsupported-revision';
-    if (reason) skipped.push({ key, reason, revision: entry });
+    if (!ids.length) {
+      reason = 'unsupported-revision';
+      detail = 'no-sites';
+    }
+    if (reason)
+      skipped.push({
+        key,
+        reason,
+        revision: entry,
+        ...(reason === 'unsupported-revision' && detail ? { detail } : {}),
+      });
     else {
       if (ids.some((id) => retainedRows.has(id)))
         skipped.push({ key, reason: 'retained-structure', revision: entry });

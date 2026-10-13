@@ -124,6 +124,7 @@ export {
   type FormattingRevisionAuthorFilter,
 } from './formattable-runs.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
+export type { RevisionSiteRefusal } from './revision-site-refusal.ts';
 export {
   commentAnchorsOfStory,
   commentsOfPart,
@@ -216,6 +217,7 @@ export {
   type RevisionBatchEntry,
   type RevisionBatchResult,
   type RevisionBatchSkipReason,
+  type RevisionBatchSkipDetail,
 } from './revision-batch.ts';
 export {
   planRevisionAuthorChange,

@@ -6,7 +6,7 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Record diagnostics from editors, collaboration clients, and agents that use the editing API. To install the package and read the privacy guarantees, see [Telemetry](/docs/2.x/telemetry).
+Record diagnostics from editors, collaboration clients, and agents that use the editing API. To install the package, see [Telemetry](/docs/2.x/telemetry). For what is sent and what is never sent, see [Privacy](/docs/2.x/telemetry/privacy).
 
 ## Set up an editor
 
@@ -216,7 +216,7 @@ The OpenTelemetry exporter adds events to the active span, so an event recorded 
 
 ## Send to Sentry
 
-`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. An open your app caused or the engine could not explain, a collaboration error that does not heal, a text shaper that did not load, and an engine invariant become Sentry issues. A corrupt or oversized file becomes a breadcrumb, because the app cannot fix the file. An expired collaboration token and a room the server compacted are breadcrumbs too, because the client rejoins. The fingerprint is the diagnostic code, so issues group by cause. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
+`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. These events become Sentry issues: an open your app caused or the engine could not explain, a collaboration error that does not heal, a text shaper that did not load, an engine invariant or an exception in a command, and a tracked change the engine could not accept or reject (`review.revision-unsupported` and `review.retained-structure`, as warnings). A corrupt or oversized file becomes a breadcrumb, because the app cannot fix the file. An expired collaboration token and a room the server compacted are breadcrumbs too, because the client rejoins. The fingerprint is the diagnostic code followed by the engine reason and the kind of change, so each distinct defect is its own issue. Issues carry the [failure detail](/docs/2.x/guides/diagnostics#failure-detail) as tags, such as `docx_editor.cause` and `docx_editor.change_kind`. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
 
 To change which events become issues, pass `issue: (event) => boolean`.
 

@@ -15,7 +15,9 @@ import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
 import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
 import { DiagnosticCode } from '@docx-editor.dev/core/automation';
+import { DiagnosticErrorName } from '@docx-editor.dev/core/automation';
 import { DocumentOpenDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { DocumentPartKind } from '@docx-editor.dev/core/automation';
 import { EditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 import { RevisionAuthorEntry } from '@docx-editor.dev/core/automation';
@@ -1332,14 +1334,20 @@ export type RuntimeDiagnostic = {
     readonly outcome: 'opened';
     readonly sizeBucket: ByteSizeBucket;
 } | {
+    readonly cause?: string;
     readonly code: DocumentOpenDiagnosticCode;
+    readonly errorName?: DiagnosticErrorName;
     readonly kind: 'document.open';
     readonly outcome: 'rejected';
+    readonly part?: DocumentPartKind;
     readonly sizeBucket?: ByteSizeBucket;
 } | {
+    readonly cause?: string;
     readonly code: EditDiagnosticCode;
+    readonly errorName?: DiagnosticErrorName;
     readonly kind: 'edit.rejected';
     readonly origin: 'automation';
+    readonly stage?: 'automation';
     readonly tracked: boolean;
 });
 

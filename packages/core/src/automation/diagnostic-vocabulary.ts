@@ -145,3 +145,87 @@ export type ByteSizeBucket =
 
 /** A coarse count: `'0'`, `'1'`, `'2-9'`, `'10-99'`, `'100-999'`, `'1000+'`. @public */
 export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+/**
+ * Which kind of package part a failure is in, by its role, never by its name: a part's real
+ * name is file data. A name outside the standard layout reports `'other'`.
+ *
+ * @public
+ */
+export type DocumentPartKind =
+  | 'package'
+  | 'content-types'
+  | 'relationships'
+  | 'main-document'
+  | 'glossary'
+  | 'styles'
+  | 'numbering'
+  | 'settings'
+  | 'web-settings'
+  | 'font-table'
+  | 'theme'
+  | 'header'
+  | 'footer'
+  | 'footnotes'
+  | 'endnotes'
+  | 'comments'
+  | 'people'
+  | 'custom-xml'
+  | 'document-properties'
+  | 'media'
+  | 'embedding'
+  | 'other';
+
+/**
+ * The class of an unexpected exception, for a failure the engine did not name. The message is
+ * never reported, because it can quote document content.
+ *
+ * @public
+ */
+export type DiagnosticErrorName =
+  | 'Error'
+  | 'TypeError'
+  | 'RangeError'
+  | 'ReferenceError'
+  | 'SyntaxError'
+  | 'other';
+
+/** What a tracked-change request was asked to do. @public */
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+/** The kind of a tracked change, as the review queue lists it. @public */
+export type ReviewChangeKind =
+  | 'insert'
+  | 'delete'
+  | 'replace'
+  | 'moveFrom'
+  | 'moveTo'
+  | 'format'
+  | 'paragraphMark'
+  | 'structural';
+
+/**
+ * Which property change a formatting change is, by its OOXML element. A name outside this list
+ * reports `'other'`.
+ *
+ * @public
+ */
+export type FormattingChangeKind =
+  | 'rPrChange'
+  | 'pPrChange'
+  | 'sectPrChange'
+  | 'tblPrChange'
+  | 'tblPrExChange'
+  | 'tblGridChange'
+  | 'trPrChange'
+  | 'tcPrChange'
+  | 'numberingChange'
+  | 'other';
+
+/**
+ * Where an exception the engine did not expect was caught: the mount of an open, a later layout
+ * slice of an open, a command, a single review action, or an editing API batch.
+ *
+ * @public
+ */
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';

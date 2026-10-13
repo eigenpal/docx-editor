@@ -11,6 +11,7 @@ import type { EditorFontErrorCode } from '../contracts/editor.ts';
 import type { ExecErrorCode } from '../contracts/types.ts';
 import type { TreeBindingRejection } from '@docx-editor.dev/core/binding';
 import { storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
+import { BINDING_CAUSES } from '../automation/diagnostic-context.ts';
 import { FORMS_WRITE_REASON, TRACKED_CHANGES_AUTHOR_REASON } from './command-protection.ts';
 import {
   COMMENTS_PROTECTION_REASON,
@@ -34,6 +35,16 @@ import {
 } from './surface-section-breaks.ts';
 
 export { openDiagnosticCode, reviewDiagnosticCode } from '@docx-editor.dev/core/automation';
+
+/** The binding's reasons and the diagnostic causes list the same tokens, in both directions. */
+type BindingCause = (typeof BINDING_CAUSES)[number];
+const BINDING_CAUSES_MATCH: [
+  Exclude<TreeBindingRejection, BindingCause>,
+  Exclude<BindingCause, TreeBindingRejection>,
+] extends [never, never]
+  ? true
+  : never = true;
+void BINDING_CAUSES_MATCH;
 
 /** Exhaustive over the binding reasons: a new one fails the type check until it has a code. */
 const BINDING_CODES: Readonly<Record<TreeBindingRejection, EditDiagnosticCode>> = {
