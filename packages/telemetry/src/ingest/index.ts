@@ -63,6 +63,14 @@ const REQUIRED: Readonly<
   performance: [['windowMs', isNumber]],
 };
 
+const SESSION_ACTIVITY = [
+  'durationMs',
+  'activeMs',
+  'inputEdits',
+  'commandEdits',
+  'automationEdits',
+] as const;
+
 /** Whether an event has every field its kind needs, so a log record is never half empty. */
 function complete(event: Fields): boolean {
   if (!isNumber(event.schemaVersion) || !isNumber(event.time)) return false;
@@ -71,6 +79,19 @@ function complete(event: Fields): boolean {
     return event.outcome === 'opened'
       ? isString(event.sizeBucket) && isNumber(event.durationMs)
       : event.outcome === 'rejected' && isString(event.code);
+  if (event.kind === 'document.save')
+    return (
+      isNumber(event.durationMs) &&
+      (event.outcome === 'saved'
+        ? isString(event.sizeBucket)
+        : event.outcome === 'rejected' && isString(event.code))
+    );
+  if (event.kind === 'session')
+    return (
+      event.phase === 'start' ||
+      ((event.phase === 'active' || event.phase === 'end') &&
+        SESSION_ACTIVITY.every((key) => isNumber(event[key])))
+    );
   const required = REQUIRED[event.kind as string];
   return !!required && required.every(([key, check]) => check(event[key]));
 }

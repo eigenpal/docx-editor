@@ -268,6 +268,45 @@ b.add(series('Open time, successful opens', [(quantile('docx_editor_document_ope
 b.add(top_table('Refused files by reason', f'sum by (code, cause, part) (increase(docx_editor_document_opens_total{{{F},outcome="rejected"}}[$__range]))', 'code',
                 'Why files did not open, most frequent first, with the engine reason and the role of the part that failed. Each code links to its hint.'), 8, 8)
 
+b.row('Sessions, edits, and saves')
+SESSIONS = 'docx_editor_editor_sessions_total'
+EDITS = 'docx_editor_edits_total'
+REFUSALS = 'docx_editor_edit_rejections_total'
+SAVES = 'docx_editor_document_saves_total'
+# A zero that means "nothing happened" only while editors report sessions; otherwise no data.
+sessions_reporting = f'sum(increase({SESSIONS}{{{F}}}[{W}])) * 0'
+edits_done = f'(sum(increase({EDITS}{{{F}}}[{W}])) or {sessions_reporting})'
+refused_all = f'(sum(increase({REFUSALS}{{{F}}}[{W}])) or {sessions_reporting})'
+refused_unexpected = f'(sum(increase({REFUSALS}{{{F},code!~"{EXPECTED_REFUSALS}"}}[{W}])) or {sessions_reporting})'
+saved = f'sum(increase({SAVES}{{{F},outcome="saved"}}[{W}]))'
+all_saves = f'sum(increase({SAVES}{{{F}}}[{W}]))'
+b.add(stat('Sessions started', f'round(sum(increase({SESSIONS}{{{F},phase="start"}}[{W}]))) or {sessions_reporting}', 'short',
+           'Editors created over the selected range. One editor is one session; a reload starts a new one.', decimals=0), 4, 4)
+b.add(stat('Active editing time', f'sum(increase(docx_editor_editor_active_time_seconds_total{{{F}}}[{W}])) or {sessions_reporting}', 's',
+           'Time people spent using editors over the selected range: key presses, clicks, and edits at most 30 s apart. Pauses do not count.',
+           decimals=0), 4, 4)
+b.add(stat('Session length, median', f'histogram_quantile(0.5, sum by (le) (increase(docx_editor_editor_session_duration_seconds_bucket{{{F}}}[{W}])))', 's',
+           'From the creation of an editor to its end, idle time included, for sessions that ended over the selected range. Estimated from the buckets.',
+           decimals=0, no_value='No ended sessions'), 4, 4)
+b.add(stat('Edits failing', f'{refused_unexpected} / ({edits_done} + {refused_all})', 'percentunit',
+           'Unexpected refusals out of all edit attempts (edits that changed the document plus refused edits), over the selected range. Expected refusals, such as edits in a read-only document, are left out of the top number.',
+           decimals=2, no_value='No edits'), 4, 4)
+b.add(stat('Saves succeeding', f'({saved} or {all_saves} * 0) / {all_saves}', 'percentunit',
+           'Calls to save() that returned the document, out of all calls, over the selected range.', decimals=2, no_value='No saves'), 4, 4)
+b.add(stat('Save time, 95th percentile', f'histogram_quantile(0.95, sum by (le) (increase(docx_editor_document_save_duration_seconds_bucket{{{F}}}[{W}])))', 's',
+           'From a save() call to the saved bytes, for successful saves over the selected range. Estimated from the buckets.', decimals=0, no_value='No saves'), 4, 4)
+b.add(series('People editing at once', [(f'sum(rate(docx_editor_editor_active_time_seconds_total{{{F}}}[$__rate_interval]))', 'active editors')],
+             'short', 'Seconds of use per second: about the number of people actively editing at the same time. Session summaries arrive up to a minute late.'), 8, 8)
+b.add(series('Sessions per hour', [(f'3600 * sum by (phase) (rate({SESSIONS}{{{F}}}[$__rate_interval]))', '{{phase}}')],
+             'short', 'Editors created (start) and destroyed or closed with their page (end), per hour.'), 8, 8)
+b.add(series('Edits per minute by source', [(f'60 * sum by (origin) (rate({EDITS}{{{F}}}[$__rate_interval]))', '{{origin}}')],
+             'short', 'Edits that changed the document: typing and other input, editor commands, or editing API batches. Edits by collaborators are counted by their own editor.', stack='normal'), 8, 8)
+b.add(series('Save time, successful saves', [(quantile('docx_editor_document_save_duration_seconds', 0.5), 'median'),
+                                            (quantile('docx_editor_document_save_duration_seconds', 0.95), '95th percentile')],
+             's', 'From a save() call to the saved bytes. Grows with document size.'), 12, 8)
+b.add(top_table('Failed saves by reason', f'sum by (code) (increase({SAVES}{{{F},outcome="rejected"}}[$__range]))', 'code',
+                'Why save() failed, most frequent first. Each code links to its hint.', no_value='No failed saves in this range'), 12, 8)
+
 b.row('Tracked changes')
 b.add(stat('Refused while suggesting', f'round(sum(increase(docx_editor_edit_rejections_total{{{F},tracked="true"}}[{W}]))) or {reporting}', 'short',
            'Edits, commands, and agent batches refused while changes were tracked, over the selected range.'), 8, 4)
@@ -294,7 +333,7 @@ b.add(top_table('Dropped telemetry by reason', f'sum by (reason) (increase(docx_
                 'Events the privacy check dropped, by reason.', code_links=False), 12, 6)
 
 # Filter values come from every editor metric, so an app that only reports failed opens appears too.
-EDITOR_METRICS = '__name__=~"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)"'
+EDITOR_METRICS = '__name__=~"docx_editor_(editor_interaction_duration_seconds_count|editor_sessions_total|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)"'
 editor_vars = [
     DATASOURCE,
     variable('env', 'Environment', f'label_values({{{EDITOR_METRICS}}}, deployment_environment)'),
@@ -304,7 +343,7 @@ editor_vars = [
 ]
 editor = dashboard(
     'docx-editor-experience', 'Editor experience',
-    'How editing feels to people: input delay, engine work, opens, and refusals.',
+    'How editing feels to people: input delay, engine work, opens, sessions, edits, saves, and refusals.',
     b, editor_vars,
     [annotation('Version started reporting', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} reports and did not 2 minutes earlier: a release, or reporting resumed after a gap', 'rgba(126, 178, 109, 1)', enable=False)],
     [('Docs', TELEMETRY_DOCS), ('Report an issue', ISSUES)])

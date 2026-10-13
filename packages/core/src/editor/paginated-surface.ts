@@ -557,6 +557,7 @@ export function mountPaginatedSurface(
     options.onRejection?.(raw);
     return reason;
   }
+  const reportEdit = (): void => options.onEdit?.(flushingTypeBuffer);
   const commitHistoryGroup = new CommitHistoryGroup();
   const typingHistory = new TypingHistory(() => session.currentPackage());
   const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
@@ -635,6 +636,7 @@ export function mountPaginatedSurface(
       if (collaborationSession) remoteCaret.expectHistory(false);
     }
     if (!result.changed) return;
+    reportEdit();
     // A shared undo restores the selection its step was made from, carried across the text
     // peers changed since.
     const carried =
@@ -3118,6 +3120,7 @@ export function mountPaginatedSurface(
         lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
       } else {
         lastRejection = null;
+        if (typeof result === 'boolean' ? result : result.committed) reportEdit();
         // The post-edit selection is installed BEFORE the paint, so the single render below
         // paints the new pages, mirrors the new caret into the DOM and reports one state
         // change. Committing first and calling `setSelection` afterwards wrote the superseded

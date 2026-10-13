@@ -14,7 +14,7 @@ Two Grafana dashboards report editor performance and collaboration server activi
 
 | File | What it is | Download |
 | --- | --- | --- |
-| `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
+| `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, sessions, edits, saves, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
 | `collaboration.json` | Grafana dashboard: server state, rooms and people, memory, server work, client status, and refusals. | [collaboration.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
 
 To download both files from a terminal, run:
@@ -54,6 +54,8 @@ export const telemetry = createTelemetry({
   exporters: [otelExporter()],
   include: {
     documentOpen: true,
+    documentSave: true,
+    sessions: true,
     editing: true,
     trackedChanges: true,
     fonts: true,

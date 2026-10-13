@@ -213,12 +213,15 @@ export function otelExporter(options: OtelExporterOptions = {}): TelemetryExport
       else target.record(record.value, attributes);
     },
     event(event) {
-      if (event.kind === 'document.open') {
-        const start = event.time - (event.outcome === 'opened' ? event.durationMs : 0);
+      // An open and a save are spans of their own, with their duration.
+      if (event.kind === 'document.open' || event.kind === 'document.save') {
+        const durationMs =
+          event.kind === 'document.save' || event.outcome === 'opened' ? event.durationMs : 0;
+        const start = event.time - durationMs;
         const span = tracerProviderNow()
           .getTracer(scope)
           .startSpan(
-            'docx_editor.document.open',
+            `docx_editor.${event.kind}`,
             { startTime: start, attributes: eventAttributes(event) },
             options.parentContext?.()
           );

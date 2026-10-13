@@ -26,6 +26,17 @@ export type DocumentOpenDiagnosticCode =
   | 'open.part-limit'
   | 'open.failed';
 
+/**
+ * Why `save()` did not return the document: no document was loaded, the document changed while
+ * a pending edit finished, or the save threw.
+ *
+ * @public
+ */
+export type DocumentSaveDiagnosticCode =
+  | 'save.no-document'
+  | 'save.document-changed'
+  | 'save.failed';
+
 /** Why an edit, a command or a tracked change was refused. @public */
 export type EditDiagnosticCode =
   | 'edit.read-only'
@@ -112,6 +123,7 @@ export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
 /** Every public diagnostic code. Codes are stable: a new one is additive, none is renamed. @public */
 export type DiagnosticCode =
   | DocumentOpenDiagnosticCode
+  | DocumentSaveDiagnosticCode
   | EditDiagnosticCode
   | ReviewDiagnosticCode
   | FontDiagnosticCode
@@ -228,4 +240,10 @@ export type FormattingChangeKind =
  *
  * @public
  */
-export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
+export type FailureStage =
+  | 'open-mount'
+  | 'open-layout'
+  | 'command'
+  | 'review-item'
+  | 'automation'
+  | 'save';

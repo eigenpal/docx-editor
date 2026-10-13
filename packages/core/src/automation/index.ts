@@ -156,6 +156,7 @@ export type {
   DiagnosticErrorName,
   DocumentOpenDiagnosticCode,
   DocumentPartKind,
+  DocumentSaveDiagnosticCode,
   FailureStage,
   FormattingChangeKind,
   ReviewChangeKind,

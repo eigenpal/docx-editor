@@ -1,0 +1,122 @@
+---
+title: 'Measure sessions, edits, and saves'
+description: 'Count editor sessions, active editing time, edits, edit failure rates, and saves.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+The `sessions` area reports when each editor starts and ends, how long people use it, and how many edits it commits. The `documentSave` area reports each `save()` call. Together with refused edits, they give you session counts, active editing time, edit failure rates, and save success rates.
+
+Both areas send counts and milliseconds only. They never send keys, positions, command arguments, or document text.
+
+## Session events
+
+A session is one editor instance, from its creation to its end. Each `session` event has a `phase`:
+
+| Phase | When | Fields |
+| --- | --- | --- |
+| `start` | The editor was created. | None besides the common fields. |
+| `active` | A window of use ended: a minute after its first activity, when the page became hidden, or before `end`. An idle editor sends none. | `durationMs`, `activeMs`, `inputEdits`, `commandEdits`, `automationEdits` for the window. |
+| `end` | The editor was destroyed, or its page closed. | The same fields as totals for the whole session. `durationMs` runs from creation to the end, idle time included. |
+
+The `end` totals include every `active` summary. To count edits or active time, sum the `active` summaries or read the `end` totals, not both. Sessions that end without a closing page, such as a crashed tab, have no `end`; their `active` summaries still count.
+
+Every event of one session has the same `editorSessionId`. A reload creates a new editor, so it starts a new session.
+
+## Active time
+
+`activeMs` counts the time between key presses, pointer presses, and edits that are at most 30 seconds apart. A longer pause counts as idle. A single key press after a long pause adds no active time; the time until the next press within 30 seconds does.
+
+`durationMs` on a `performance` event and on a session `end` includes idle time. Use `activeMs` to measure use.
+
+## Edits
+
+An edit is a change that this editor committed to the document. Edits are counted by origin:
+
+- `inputEdits`: typing, the clipboard, drag and drop, keyboard undo and redo, and other input. Typing commits about one change per character. Characters typed faster than the editor paints commit together and count once.
+- `commandEdits`: commands from `exec(...)` or the toolbar, including undo and redo. A command counts once, however many changes it makes.
+- `automationEdits`: editing API batches. A batch counts once.
+
+Refused edits are not edits; the editor reports them as `edit.rejected`. Edits that collaborators make are counted by their own editors, not by yours. An action that changes nothing, such as redo with nothing to redo, is not counted.
+
+To get an edit failure rate, divide refused edits by all edit attempts, which are edits plus refused edits. Use metrics for both counts. Events are deduplicated and sampled, so a rate from events is lower than the real rate.
+
+## Save events
+
+Each `save()` call sends one `document.save` event:
+
+- `outcome: 'saved'` with `sizeBucket` and `durationMs`, the time from the call to the bytes, pending edits included.
+- `outcome: 'rejected'` with `code` and `durationMs`. `save.no-document` means no document was loaded. `save.document-changed` means another document was loaded while the save waited. `save.failed` means the save threw; it includes `cause`, `errorName`, and `stage`, never the error message.
+
+The event measures the editor's part of the save. If your app then uploads the bytes, measure the upload in your app. With OpenTelemetry, the save is a span named `docx_editor.document.save`. With Sentry, `save.failed` becomes an issue.
+
+## Enable the areas
+
+If you omit `include`, every area is on. If you set it, list `sessions` and `documentSave`:
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({
+  exporters: [otelExporter()],
+  include: {
+    documentOpen: true,
+    documentSave: true,
+    editing: true,
+    sessions: { sampleRate: 0.2 },
+  },
+});
+```
+
+`sampleRate` for `sessions` selects editors, not events: a sampled editor sends its whole session, and other editors send none of it. Metrics count every session at any rate.
+
+When the page closes, the editor sends its last `active` summary and its `end` before other `pagehide` listeners run, and the client sends them at once. Your SDK's own flush on `pagehide` still works.
+
+## Metrics
+
+| Metric | What it counts |
+| --- | --- |
+| `docx_editor_editor_sessions_total` | Sessions by `phase`: `start` or `end`. |
+| `docx_editor_editor_session_duration_seconds` | Session length, from creation to end. |
+| `docx_editor_editor_active_time_seconds_total` | Seconds of use. |
+| `docx_editor_edits_total` | Edits by `origin`: `input`, `command`, or `automation`. |
+| `docx_editor_document_saves_total` | Saves by `outcome` and `code`. |
+| `docx_editor_document_save_duration_seconds` | Save time, for successful saves. |
+
+Edit and active time counts arrive with each `active` summary, up to a minute after the edit. For labels and types, see [Metrics](/docs/2.x/telemetry/metrics).
+
+These Prometheus queries give sessions per day, active editing hours per day, the share of edit attempts that failed, and the share of saves that succeeded:
+
+```text
+sum(increase(docx_editor_editor_sessions_total{phase="start"}[1d]))
+
+sum(increase(docx_editor_editor_active_time_seconds_total[1d])) / 3600
+
+sum(increase(docx_editor_edit_rejections_total[1d]))
+  / (sum(increase(docx_editor_edits_total[1d])) + sum(increase(docx_editor_edit_rejections_total[1d])))
+
+sum(increase(docx_editor_document_saves_total{outcome="saved"}[1d]))
+  / sum(increase(docx_editor_document_saves_total[1d]))
+```
+
+`sum(rate(docx_editor_editor_active_time_seconds_total[5m]))` is about the number of people editing at the same time. The **Editor experience** dashboard shows these values in its sessions row. For more information, see [Dashboards](/docs/2.x/telemetry/dashboards).
+
+## Log services
+
+In a log service, each event is one record. This SQL example gives sessions per day, the median session length, and edits per session from `end` records:
+
+```sql
+SELECT
+  date_trunc('day', dt) AS day,
+  count(*) AS sessions,
+  median(durationMs) / 1000 AS median_seconds,
+  avg(inputEdits + commandEdits + automationEdits) AS edits_per_session
+FROM logs
+WHERE kind = 'session' AND phase = 'end'
+GROUP BY day
+ORDER BY day
+```
+
+To count sessions that are still open, count `start` records whose `editorSessionId` has no `end` record and has an `active` record in the last few minutes. For other counting rules, see [Send to a log service](/docs/2.x/telemetry/log-services).

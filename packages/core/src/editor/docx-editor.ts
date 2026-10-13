@@ -644,8 +644,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...reviewModelOption(modules, reportDiagnostic),
-      onRejection: (reason) => diagnostics.inputRejected(reason, suggesting()),
-      onTiming: (phase, value) => diagnostics.timing(phase, value, surface ?? undefined),
+      ...diagnostics.surfaceHooks(suggesting, () => surface),
       ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }

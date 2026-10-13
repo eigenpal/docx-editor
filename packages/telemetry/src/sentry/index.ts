@@ -171,6 +171,9 @@ export function isSentryIssue(event: TelemetryEvent): boolean {
       // A corrupt or oversized file is the file's problem, not the app's: a breadcrumb. These
       // codes say the app passed something wrong, or the engine could not say why.
       return event.outcome === 'rejected' && ACTIONABLE_OPEN_CODES.has(event.code);
+    case 'document.save':
+      // A save that threw is the engine's defect; one without a document is the app's timing.
+      return event.outcome === 'rejected' && event.code === 'save.failed';
     case 'edit.rejected':
       return event.code === 'edit.internal-invariant';
     case 'review.skipped':
@@ -193,9 +196,11 @@ export function isSentryIssue(event: TelemetryEvent): boolean {
   }
 }
 
-/** An opened document, or a performance summary that needs no attention. */
+/** An opened or saved document, a session event, or a performance summary that needs no attention. */
 function isInformational(event: TelemetryEvent): boolean {
   if (event.kind === 'document.open') return event.outcome === 'opened';
+  if (event.kind === 'document.save') return event.outcome === 'saved';
+  if (event.kind === 'session') return true;
   return event.kind === 'performance' && event.code === undefined;
 }
 

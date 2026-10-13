@@ -12,6 +12,7 @@
     "log-recipes",
     "callbacks",
     "performance",
+    "sessions",
     "identifiers",
     "agents",
     "servers",

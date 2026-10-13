@@ -87,6 +87,18 @@ export function describeEvent(event: TelemetryEvent): string {
       const pages = event.pagesBucket === undefined ? '' : `, ${event.pagesBucket} pages`;
       return `performance over ${Math.round(event.windowMs / 1000)} s${pages}: ${parts.join('; ')}`;
     }
+    case 'document.save':
+      return event.outcome === 'saved'
+        ? `document saved: ${event.sizeBucket}, ${event.durationMs} ms`
+        : `save failed: ${event.code}${detailText(event)} after ${event.durationMs} ms`;
+    case 'session': {
+      if (event.phase === 'start') return 'editor session started';
+      const edits = event.inputEdits + event.commandEdits + event.automationEdits;
+      const activity = `${Math.round(event.activeMs / 1000)} s active, ${edits} ${edits === 1 ? 'edit' : 'edits'}`;
+      return event.phase === 'end'
+        ? `editor session ended after ${Math.round(event.durationMs / 1000)} s: ${activity}`
+        : `editor activity over ${Math.round(event.durationMs / 1000)} s: ${activity}`;
+    }
   }
 }
 
@@ -120,9 +132,12 @@ export function isFailure(event: TelemetryEvent): boolean {
   switch (event.kind) {
     case 'document.open':
       return event.outcome === 'rejected';
+    case 'document.save':
+      return event.outcome === 'rejected';
     case 'collab.participants':
     case 'history':
     case 'performance':
+    case 'session':
       return false;
     case 'collab.status':
       // An expired token and a compacted room end in a rejoin; they are not faults.

@@ -129,6 +129,11 @@ export interface PaginatedSurfaceOptions {
    */
   readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
   /**
+   * Told once for each local edit that changed the document, with `typing` true for buffered
+   * typing, which can land inside a later command's commit. Remote edits are not local.
+   */
+  readonly onEdit?: (typing: boolean) => void;
+  /**
    * A plain click on an external (or inert) hyperlink, for a host to open its popover with.
    *
    * Absent means such a click does nothing. That is deliberate: a host with no popover

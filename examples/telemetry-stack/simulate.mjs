@@ -1,9 +1,10 @@
 // Simulated people, so the dashboards have data to show.
 //
 // Opens headless browser pages on the telemetry examples and edits like people do: typing,
-// new paragraphs, a broken file now and then, and a picture insert while a picture is selected,
-// which the editor refuses. Every 20 seconds each page sends its performance summary early,
-// as it would when its tab goes to the background.
+// new paragraphs, a save now and then, a broken file, and a picture insert while a picture is
+// selected, which the editor refuses. Every 20 seconds each page sends its performance and
+// session summaries early, as it would when its tab goes to the background. At the end each
+// page navigates away, which ends its editor sessions.
 //
 //   node examples/telemetry-stack/simulate.mjs [minutes] [people]
 //
@@ -98,6 +99,8 @@ async function person(browser, url, id, deadline, suggesting) {
       if (suggesting) await suggest(page).catch(() => {});
     } else if (roll < 0.08) {
       await refusedPictureInsert(page).catch(() => {});
+    } else if (roll < 0.12) {
+      await page.keyboard.press('Control+s');
     } else {
       await clickIntoText(page).catch(() => {});
       await page.keyboard.press('End');
@@ -113,6 +116,9 @@ async function person(browser, url, id, deadline, suggesting) {
     }
   }
   await flush(page);
+  await pause(1_000);
+  // Leaving the page ends its editor sessions, as closing a tab does.
+  await page.goto('about:blank');
   await pause(1_000);
   await page.close();
   console.log(`person ${id} done`);

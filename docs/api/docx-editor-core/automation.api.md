@@ -1386,7 +1386,7 @@ export function diagnosticCause(reason: string | undefined): string | undefined;
 export function diagnosticCauses(): readonly string[];
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export function diagnosticCodes(): readonly DiagnosticCode[];
@@ -1422,6 +1422,9 @@ export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | '
 export function documentPartKind(detail: string | undefined): DocumentPartKind | undefined;
 
 // @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
@@ -1431,7 +1434,7 @@ export function exceptionCause(): string;
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
-export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
 
 // @public
 export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';

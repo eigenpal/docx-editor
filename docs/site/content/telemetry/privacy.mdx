@@ -39,8 +39,14 @@ Every event has `kind`, `schemaVersion`, `editorSessionId`, and `time`. The tele
 | `collab.status` | `status`, `previous`, `code`, `recovering`, `connectMs` | Session states, a failure code, a boolean, milliseconds. The room name is never sent. |
 | `collab.participants` | `count` | The number of people in the room. Names are never sent. |
 | `performance` | `interaction`, `layout`, `paint`, `windowMs`, `pagesBucket`, `code` | Timing summaries in milliseconds and band counts. No key, character, or position is recorded. |
+| `document.save` | `outcome`, `sizeBucket`, `durationMs`, `code`, `cause`, `errorName`, `stage` | `saved` or `rejected`, a size bucket, milliseconds, and for a failure a code and the class of the exception. The saved bytes are never sent. |
+| `session` | `phase`, `durationMs`, `activeMs`, `inputEdits`, `commandEdits`, `automationEdits` | `start`, `active`, or `end`; milliseconds; edit counts by origin. No key, position, command argument, or text is recorded. |
 
 Every closed list is part of the public API. To read them in code, call `diagnosticCodes()` and `diagnosticCauses()` from `@docx-editor.dev/core`. For what each field means, see [Diagnostics](/docs/2.x/guides/diagnostics).
+
+### Sessions
+
+Session events contain no content, but they show when an editor is used and for how long. If you send your own user identifier with them, they show when that person works. If your privacy review does not allow this, leave user identifiers out of `attributes`, sample the `sessions` area, or turn it off. Session metrics carry no identifiers beyond the labels that you list in `metricLabels`.
 
 ### Document shape
 

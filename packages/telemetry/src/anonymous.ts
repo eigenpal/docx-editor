@@ -73,6 +73,7 @@ const STAGES = closed<FailureStage>({
   command: true,
   'review-item': true,
   automation: true,
+  save: true,
 });
 const CHANGE_KINDS = closed<ReviewChangeKind>({
   insert: true,
@@ -109,9 +110,12 @@ const ENUMS: Readonly<Record<string, ReadonlySet<string> | RegExp>> = {
     'collab.status',
     'collab.participants',
     'performance',
+    'document.save',
+    'session',
   ]),
   code: CODES,
-  outcome: new Set(['opened', 'rejected']),
+  outcome: new Set(['opened', 'saved', 'rejected']),
+  phase: new Set(['start', 'active', 'end']),
   origin: new Set(['command', 'input', 'automation']),
   // A built-in command type such as `insertTable`; a host's own command is never named.
   command: new Set(diagnosticCommands()),
@@ -143,6 +147,10 @@ const NUMBERS = new Set([
   'connectMs',
   'participants',
   'windowMs',
+  'activeMs',
+  'inputEdits',
+  'commandEdits',
+  'automationEdits',
 ]);
 const BOOLEANS = new Set(['tracked', 'recovering']);
 

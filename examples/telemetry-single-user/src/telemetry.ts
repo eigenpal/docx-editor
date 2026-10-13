@@ -55,6 +55,8 @@ export const telemetry = createTelemetry({
   ],
   include: {
     documentOpen: true,
+    documentSave: true,
+    sessions: true,
     editing: true,
     trackedChanges: true,
     fonts: true,
