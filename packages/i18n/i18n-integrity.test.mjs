@@ -193,3 +193,8 @@ describe('shipped locales integrity (regression)', () => {
     });
   }
 });
+
+test('preserves separate exact branches across repeated uses of one variable', () => {
+  const message = '{n, plural, =0 {none} other {#}} / {n, plural, =1 {one} other {#}}';
+  expect(leaf(message, message).ok).toBe(true);
+});

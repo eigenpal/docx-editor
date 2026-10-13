@@ -190,7 +190,11 @@ function checkLeaf(key, enText, locText, code, violations) {
         });
       }
 
-      const locLabels = new Set(plural.branches.map((branch) => branch.label));
+      const locLabels = new Set(
+        locInfo.plurals
+          .filter((translated) => translated.name === plural.name)
+          .flatMap((translated) => translated.branches.map((branch) => branch.label)),
+      );
       for (const exact of enLabels) {
         if (!EXACT_BRANCH_RE.test(exact) || locLabels.has(exact)) continue;
         violations.push({
