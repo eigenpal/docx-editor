@@ -197,7 +197,14 @@ bun run i18n:status      # check translation coverage
 
 ## License
 
-The repository uses [Apache 2.0](LICENSE), with the package exceptions listed in [Packages](#packages). Bundled fonts retain their own licenses.
+The repository uses [Apache 2.0](LICENSE), except for the Pro packages. These packages use the EigenPal Pro License:
+
+- [`@docx-editor.dev/pro`](packages/pro/LICENSE.md): tracked changes, comments, collaboration, and custom nodes.
+- [`@docx-editor.dev/editor-api`](packages/editor-api/LICENSE.md): document automation in a browser or on a server.
+- [`@docx-editor.dev/docx-to-pdf`](packages/docx-to-pdf/LICENSE.md): PDF export on Node.js.
+- [`@docx-editor.dev/telemetry`](packages/telemetry/LICENSE.md): anonymous diagnostics, metrics, and error reporting.
+
+Production use of a Pro package requires a commercial agreement. Compare options on the [pricing page](https://www.docx-editor.dev/pricing). Bundled fonts retain their own licenses.
 
 ## Commercial support
 
