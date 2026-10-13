@@ -1,4 +1,5 @@
 import { DocumentSelectionHistory } from './document-selection-history.ts';
+import { timedLayout, timedPress } from './surface-timing.ts';
 import {
   armedFormatAt,
   armCaretFormat,
@@ -356,13 +357,6 @@ type ScaleMutableSurface = PaginatedSurface & {
 
 /** Body blocks a sliced opening lays out at mount, before its first yield. */
 const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
-/** Presses of these keys alone change nothing on the page, so they are not timed. */
-const MODIFIER_KEYS: ReadonlySet<string> = new Set([
-  ...['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'Hyper', 'Super', 'Symbol'],
-  ...['Fn', 'FnLock', 'CapsLock', 'NumLock', 'ScrollLock', 'SymbolLock'],
-]);
-/** Layouts that loading causes, not the person: untimed unless an edit joined the batch. */
-const LOADING_LAYOUTS = ['opening', 'fonts', 'drawing-resources'] as const;
 
 /**
  * Mount a paginated surface over DOCX bytes.
@@ -894,8 +888,7 @@ export function mountPaginatedSurface(
   // Timings for diagnostics. Layout is told per pass by the deferred layout, background slices
   // included; the opening layout is not told, because the open reports its own duration.
   const onInputTiming = (event: Event): void => {
-    if (!MODIFIER_KEYS.has((event as KeyboardEvent).key))
-      options.onTiming?.('input', event.timeStamp);
+    if (timedPress(event)) options.onTiming?.('input', event.timeStamp);
   };
 
   // Style and numbering indexes are identity-memoized and shared by every story.
@@ -1664,10 +1657,7 @@ export function mountPaginatedSurface(
       finishOpeningPass();
       deferredLayout.abandon();
       const steps = layoutDocumentSteps(scope.revision, scope);
-      const timed =
-        scope.paragraphIds.size > 0 ||
-        !LOADING_LAYOUTS.some((reason) => scope.dependencyKeys.has(reason));
-      const layout = deferredLayout.run(steps, scope.revision, timed);
+      const layout = deferredLayout.run(steps, scope.revision, timedLayout(scope));
       lastLayoutMs = now() - began;
       return layout;
     },
