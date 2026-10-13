@@ -983,12 +983,12 @@
     "movedToBackground": "Latar belakang tujuan perpindahan"
   },
   "formattingMarks": {
-    "columnBreak": "Hentian kolom",
-    "pageBreak": "Hentian halaman",
-    "sectionBreakContinuous": "Hentian bagian (berkelanjutan)",
-    "sectionBreakEvenPage": "Hentian bagian (halaman genap)",
-    "sectionBreakNextColumn": "Hentian bagian (kolom berikutnya)",
-    "sectionBreakNextPage": "Hentian bagian (halaman berikutnya)",
-    "sectionBreakOddPage": "Hentian bagian (halaman ganjil)"
+    "columnBreak": "Pemisah Kolom",
+    "pageBreak": "Pemisah Halaman",
+    "sectionBreakContinuous": "Pemisah Bagian (Berkelanjutan)",
+    "sectionBreakEvenPage": "Pemisah Bagian (Halaman Genap)",
+    "sectionBreakNextColumn": "Pemisah Bagian (Kolom Baru)",
+    "sectionBreakNextPage": "Pemisah Bagian (Halaman Berikutnya)",
+    "sectionBreakOddPage": "Pemisah Bagian (Halaman Ganjil)"
   }
 }

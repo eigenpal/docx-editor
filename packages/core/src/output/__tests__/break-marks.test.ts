@@ -119,7 +119,7 @@ test('section breaks replace the pilcrow and are named by the section that follo
     'Section break (continuous)',
     'Section break (even page)',
     'Section break (odd page)',
-    'Section break (next column)',
+    'Section break (new column)',
     'Section break (next page)',
   ]);
   for (const text of ['One', 'Two', 'Three', 'Four', 'Five']) {

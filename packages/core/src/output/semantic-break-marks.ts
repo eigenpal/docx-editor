@@ -43,7 +43,7 @@ export const DEFAULT_BREAK_MARK_STRINGS: BreakMarkStrings = Object.freeze({
   sectionBreakNextPage: 'Section break (next page)',
   sectionBreakEvenPage: 'Section break (even page)',
   sectionBreakOddPage: 'Section break (odd page)',
-  sectionBreakNextColumn: 'Section break (next column)',
+  sectionBreakNextColumn: 'Section break (new column)',
 });
 
 const KEYS = Object.keys(DEFAULT_BREAK_MARK_STRINGS) as readonly (keyof BreakMarkStrings)[];
@@ -199,6 +199,10 @@ export function paintBreakMarks(
     const label = document.createElement('span');
     label.className = 'docx-break-mark-label';
     label.textContent = text;
+    // The label is UI text, not document text: it takes the direction of its own language,
+    // so a right-to-left label keeps its parentheses in place inside a left-to-right page.
+    label.dir = 'auto';
+    label.style.unicodeBidi = 'isolate';
     label.style.flex = '0 1 auto';
     label.style.minWidth = '0';
     label.style.overflow = 'hidden';

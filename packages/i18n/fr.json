@@ -987,7 +987,7 @@
     "pageBreak": "Saut de page",
     "sectionBreakContinuous": "Saut de section (continu)",
     "sectionBreakEvenPage": "Saut de section (page paire)",
-    "sectionBreakNextColumn": "Saut de section (colonne suivante)",
+    "sectionBreakNextColumn": "Saut de section (nouvelle colonne)",
     "sectionBreakNextPage": "Saut de section (page suivante)",
     "sectionBreakOddPage": "Saut de section (page impaire)"
   }

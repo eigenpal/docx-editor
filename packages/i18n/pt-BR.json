@@ -987,7 +987,7 @@
     "pageBreak": "Quebra de página",
     "sectionBreakContinuous": "Quebra de seção (contínua)",
     "sectionBreakEvenPage": "Quebra de seção (página par)",
-    "sectionBreakNextColumn": "Quebra de seção (próxima coluna)",
+    "sectionBreakNextColumn": "Quebra de seção (nova coluna)",
     "sectionBreakNextPage": "Quebra de seção (próxima página)",
     "sectionBreakOddPage": "Quebra de seção (página ímpar)"
   }

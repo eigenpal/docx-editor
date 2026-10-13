@@ -766,7 +766,7 @@
     "sectionBreakNextPage": "Section break (next page)",
     "sectionBreakEvenPage": "Section break (even page)",
     "sectionBreakOddPage": "Section break (odd page)",
-    "sectionBreakNextColumn": "Section break (next column)"
+    "sectionBreakNextColumn": "Section break (new column)"
   },
   "image": {
     "unsupportedFormat": "Unsupported image format ({format})",

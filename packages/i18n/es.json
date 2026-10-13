@@ -985,10 +985,10 @@
   "formattingMarks": {
     "columnBreak": "Salto de columna",
     "pageBreak": "Salto de página",
-    "sectionBreakContinuous": "Salto de sección (continuo)",
-    "sectionBreakEvenPage": "Salto de sección (página par)",
-    "sectionBreakNextColumn": "Salto de sección (columna siguiente)",
-    "sectionBreakNextPage": "Salto de sección (página siguiente)",
-    "sectionBreakOddPage": "Salto de sección (página impar)"
+    "sectionBreakContinuous": "Salto de sección (Continua)",
+    "sectionBreakEvenPage": "Salto de sección (Página par)",
+    "sectionBreakNextColumn": "Salto de sección (Columna nueva)",
+    "sectionBreakNextPage": "Salto de sección (Página siguiente)",
+    "sectionBreakOddPage": "Salto de sección (Página impar)"
   }
 }
