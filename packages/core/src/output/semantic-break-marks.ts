@@ -104,12 +104,23 @@ export function breakMarkExtent(
   const edge = lineTerminatorEdge(line, paragraphRtl);
   const bandLeft = line.box.x;
   const bandRight = line.box.x + line.box.width;
-  if (!lineContentEdges(line.spans, line.drawings ?? [])) {
+  if (!lineHoldsContent(line)) {
     return { left: bandLeft, right: bandRight, rtl: edge.rtl };
   }
   return edge.rtl
     ? { left: Math.min(bandLeft, edge.x), right: edge.x, rtl: true }
     : { left: edge.x, right: Math.max(bandRight, edge.x), rtl: false };
+}
+
+/** Content other than the zero-width break characters themselves. */
+function lineHoldsContent(line: LineRecord): boolean {
+  if (!lineContentEdges(line.spans, line.drawings ?? [])) return false;
+  if ((line.drawings?.length ?? 0) > 0) return true;
+  return line.spans.some(
+    (span) =>
+      span.box.width > 0 ||
+      (span.text !== PAGE_BREAK_CHAR && span.text !== '\n' && span.text !== '')
+  );
 }
 
 function paintRule(document: Document): HTMLElement {
@@ -149,7 +160,7 @@ export function paintBreakMarks(
     readonly colors?: RevisionStyleContext;
     readonly boundary?: boolean;
   }
-): HTMLElement | null {
+): { readonly left: number; readonly right: number; readonly rtl: boolean } | null {
   if (labels.length === 0) return null;
   const { scale } = options;
   const extent = breakMarkExtent(line, options.paragraphRtl);
@@ -196,7 +207,7 @@ export function paintBreakMarks(
     container.append(segment);
   }
   lineElement.append(container);
-  return container;
+  return extent;
 }
 
 /** The revisions of the span holding a line's closing page or column break. */
@@ -251,15 +262,16 @@ function paintFragmentBreakMarks(
   const section = fragment.paragraphEnd
     ? breakMarks.sectionBreaks.get(fragment.paragraphId)
     : undefined;
-  // An empty mark paragraph that takes no flow height shares its line with the next block.
-  const boundary = fragment.outOfFlow === true && !fragment.positionedFrame;
+  // Out of flow without a frame: an empty section mark that shares its line with the next
+  // block, or the empty line kept before a leading page break, which paints nothing.
+  const collapsed = fragment.outOfFlow === true && !fragment.positionedFrame;
   let pilcrowAt: { x: number; rtl: boolean } | undefined;
   for (let index = 0; index <= lastIndex; index += 1) {
     const line = fragment.lines[index]!;
     const element = lineElements[index];
     if (!element) continue;
     const labels: BreakMarkLabel[] = [];
-    if (line.breakAfter) {
+    if (line.breakAfter && !collapsed) {
       const revisions = breakSpanRevisions(line);
       labels.push({
         text: lineBreakLabel(line.breakAfter, breakMarks.strings),
@@ -269,9 +281,11 @@ function paintFragmentBreakMarks(
     if (index === lastIndex && section) {
       labels.push({ text: sectionBreakLabel(section, breakMarks.strings) });
     }
-    if (!paintBreakMarks(document, line, element, labels, { ...options, boundary })) continue;
-    if (index === lastIndex) {
-      const extent = breakMarkExtent(line, options.paragraphRtl);
+    const extent = paintBreakMarks(document, line, element, labels, {
+      ...options,
+      boundary: collapsed,
+    });
+    if (extent && index === lastIndex) {
       pilcrowAt = { x: extent.rtl ? extent.left : extent.right, rtl: extent.rtl };
     }
   }

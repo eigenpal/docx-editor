@@ -251,3 +251,30 @@ test('furniture stories paint no break labels', () => {
   expect(furniture[0]!.querySelector('.docx-break-mark')).toBeNull();
   expect(furniture[0]!.querySelector('.docx-paragraph-mark')).not.toBeNull();
 });
+
+test('a centred line holding only a page break labels the whole band', () => {
+  const { layout, container } = paint(
+    '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:br w:type="page"/></w:r></w:p>' + sect()
+  );
+  const fragment = layout.pages[0]!.fragments[0]!;
+  if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+  const line = fragment.lines[0]!;
+  expect(line.breakAfter).toBe('page');
+  const mark = container.querySelector<HTMLElement>('.docx-break-mark')!;
+  expect(parseFloat(mark.style.left)).toBeCloseTo(line.box.x - line.contentX);
+  expect(parseFloat(mark.style.width)).toBeCloseTo(line.box.width);
+});
+
+test('the empty line kept before a leading page break paints no label', () => {
+  const { layout } = paint(
+    '<w:p><w:r><w:br w:type="page"/></w:r><w:r><w:t>Next</w:t></w:r></w:p>' + sect()
+  );
+  const fragment = layout.pages[0]!.fragments[0]!;
+  if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+  expect(fragment.lines[0]!.breakAfter).toBe('page');
+  const kept = { ...fragment, outOfFlow: true as const };
+  const lines = kept.lines.map(() => document.createElement('div'));
+  const breakMarks = breakMarksOfLayout(layout, DEFAULT_BREAK_MARK_STRINGS);
+  paintParagraphEndFurniture(document, kept, lines, { showParagraphMarks: true, breakMarks }, 1);
+  expect(lines[0]!.querySelector('.docx-break-mark')).toBeNull();
+});
