@@ -53,8 +53,9 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls with locale catalogs and custom strings. |
 | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
 | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
+| [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) | Send anonymous diagnostics and metrics to Sentry, OpenTelemetry, Prometheus, or a log service. No document content or personal data is sent. |
 
-Review, collaboration, the Editor API, and PDF export require separate packages under the EigenPal Pro License.
+Review, collaboration, the Editor API, PDF export, and telemetry require separate packages under the EigenPal Pro License.
 
 ## Packages
 
@@ -162,7 +163,7 @@ bun run typecheck
 
 Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
 
-Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh)
+Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh) | [Telemetry](examples/telemetry-single-user) | [Collaboration telemetry](examples/telemetry-collaboration)
 
 [Documentation](https://www.docx-editor.dev/docs) | [React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props) | [Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)
 
