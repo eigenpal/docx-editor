@@ -307,6 +307,28 @@ describe('createTelemetry behavior', () => {
     ]);
   });
 
+  test('a summary of a ready status does not repeat the join time', async () => {
+    const memory = memoryExporter();
+    const telemetry = createTelemetry({ exporters: [memory] });
+    const ready = {
+      ...base,
+      kind: 'collab.status',
+      status: 'ready',
+      previous: 'initializing',
+      recovering: false,
+      connectMs: 800,
+    } as EditorDiagnostic;
+    telemetry.record(ready);
+    telemetry.record(ready);
+    await telemetry.flush();
+    const [first, summary] = memory.events as ((typeof memory.events)[number] & {
+      connectMs?: number;
+    })[];
+    expect(first!.connectMs).toBe(800);
+    expect(summary!.repeated).toBe(1);
+    expect(summary).not.toHaveProperty('connectMs');
+  });
+
   test('a headless open prints no page count', () => {
     const lines: string[] = [];
     const telemetry = createTelemetry({

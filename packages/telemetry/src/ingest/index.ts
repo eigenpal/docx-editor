@@ -85,14 +85,15 @@ function allowed(value: unknown, keys: ReadonlySet<string>): Attributes {
 
 /**
  * The telemetry events in an untrusted request body, checked again with the package's own
- * closed lists. An event with an unknown kind or code, or without the fields its kind needs, is
- * dropped. A field outside its list is removed. The client's `resource` and `attributes` keep
- * only the keys in `attributeKeys`. Returns an empty list for a body that is not an array or is
- * longer than `maxEvents`.
+ * closed lists. An event with an unknown kind or code, a code of another kind, a value outside
+ * its list or range, or without the fields its kind needs, is dropped. An unknown field, a
+ * number or timing summary its kind does not carry, or a wall-clock span above its bound is
+ * removed. The client's `resource` and `attributes` keep only the keys in `attributeKeys`.
+ * Returns an empty list for a body that is not an array or is longer than `maxEvents`.
  *
- * The check proves that every value comes from the package's lists or is a number. It cannot
- * prove that a client told the truth: a script can send a well-formed event that never
- * happened. It can never send text.
+ * The check proves that every value comes from the package's lists or is a number in the range
+ * the engine produces. It cannot prove that a client told the truth: a script can send a
+ * well-formed event that never happened. It can never send text.
  *
  * @example
  * ```ts

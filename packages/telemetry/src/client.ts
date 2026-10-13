@@ -12,7 +12,7 @@ import type {
   TimingSummary,
 } from '@docx-editor.dev/core';
 import { METRICS, type MetricDefinition } from './metrics.ts';
-import { checkAttributes, checkEvent } from './anonymous.ts';
+import { checkAttributes, checkEvent, MAX_COUNT } from './anonymous.ts';
 import {
   ENGINE_VERSION,
   createPipeline,
@@ -202,6 +202,8 @@ function areaOf(event: EditorDiagnostic): TelemetryArea | null {
 
 /** Events that repeat in bursts, and the fields that make two of them the same. */
 function dedupeKey(event: EditorDiagnostic): string | null {
+  // People join and leave in bursts; inside a window only the latest count matters.
+  if (event.kind === 'collab.participants') return `${event.editorSessionId}|participants`;
   if (event.kind === 'edit.rejected')
     return [
       event.editorSessionId,
@@ -216,8 +218,6 @@ function dedupeKey(event: EditorDiagnostic): string | null {
   if (event.kind === 'font.failed') return `${event.editorSessionId}|font|${event.code}`;
   if (event.kind === 'history' || event.kind === 'custom-node')
     return `${event.editorSessionId}|${event.kind}|${event.code}`;
-  // People join and leave in bursts; inside a window only the latest count matters.
-  if (event.kind === 'collab.participants') return `${event.editorSessionId}|participants`;
   if (event.kind === 'collab.status')
     return `${event.editorSessionId}|status|${event.status}|${event.code ?? ''}|${event.recovering}`;
   return null;
@@ -348,7 +348,12 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       if ((open.latest as { count?: number }).count !== sent.count)
         send(enrich(withShape(open.latest, detailedShape), pipeline, open.event.attributes));
     } else if (open.repeated > 0) {
-      send({ ...open.event, repeated: open.repeated });
+      // The guard caps `repeated`; a longer burst still reports the cap, not nothing.
+      // A join time belongs to the first `ready` alone.
+      const { connectMs: _connectMs, ...first } = open.event as TelemetryEvent & {
+        connectMs?: number;
+      };
+      send({ ...first, repeated: Math.min(open.repeated, MAX_COUNT) } as TelemetryEvent);
     }
   }
 
