@@ -5,7 +5,8 @@
 //
 //   node assets/observability/screenshots/capture.mjs [time range, default now-10m]
 //
-// Each screenshot shows one part of a dashboard, cut at its row headers.
+// Each screenshot shows one part of a dashboard, cut at its row headers. They are written next to
+// the docs page that shows them, so the docs site builds them in without fetching anything.
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
@@ -14,6 +15,7 @@ const { chromium } = require('@playwright/test');
 
 const GRAFANA = process.env.GRAFANA_URL ?? 'http://localhost:3300';
 const FROM = process.argv[2] ?? 'now-10m';
+const OUT = path.resolve(import.meta.dirname, '../../../docs/site/content/telemetry/images');
 const SHOTS = [
   { uid: 'docx-editor-experience', file: 'editor-experience.png', from: null, to: 'Input delay by app version (95th percentile)' },
   { uid: 'docx-editor-experience', file: 'editor-tracked-changes.png', from: 'Tracked changes', to: null },
@@ -44,7 +46,7 @@ for (const shot of SHOTS) {
   const top = shot.from ? (await rowTop(shot.from)) - 6 : 0;
   const bottom = shot.to ? (await rowTop(shot.to)) - 12 : (await contentBottom()) + 12;
   await page.screenshot({
-    path: path.join(import.meta.dirname, shot.file),
+    path: path.join(OUT, shot.file),
     clip: { x: 0, y: top, width: 1440, height: bottom - top },
   });
   console.log('wrote', shot.file);

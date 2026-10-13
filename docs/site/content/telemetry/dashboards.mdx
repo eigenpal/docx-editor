@@ -8,7 +8,7 @@ category: 'Telemetry'
 
 Two Grafana dashboards report editor performance and collaboration server activity. They include measurements without predefined targets. Use a few weeks of your traffic to set targets and alert thresholds.
 
-![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
+![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](./images/editor-experience.png)
 
 ## Download
 
@@ -98,7 +98,7 @@ The remaining rows show:
 
 Every code in a table links to its hint in [Diagnostics](/docs/2.x/guides/diagnostics).
 
-![The tracked changes and refused edits rows of the Editor experience dashboard: refusals while suggesting, the share of refusals while suggesting, refused tracked changes by reason and by source, and all refused edits by reason and by source.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-tracked-changes.png)
+![The tracked changes and refused edits rows of the Editor experience dashboard: refusals while suggesting, the share of refusals while suggesting, refused tracked changes by reason and by source, and all refused edits by reason and by source.](./images/editor-tracked-changes.png)
 
 Input delay percentiles are estimates from timing bands. The highest finite boundary is 1 second. A percentile shown as 1 second falls in the band above 1 second. In that case, use **Presses over 1 s**.
 
@@ -106,7 +106,7 @@ Input delay percentiles are estimates from timing bands. The highest finite boun
 
 The first row summarizes server availability, successful room stores, refused connections, client errors, and room limit usage. Other rows show room activity, participants, connections, memory, resource usage, room age, and idle time. They also show load and store times, updates, client status changes, and refusal reasons.
 
-![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/collaboration.png)
+![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](./images/collaboration.png)
 
 Participant totals include all selected server instances. If instances share rooms through Redis, select one instance to avoid counting the same people more than once.
 

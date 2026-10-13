@@ -4,7 +4,7 @@ Import these Grafana dashboards to monitor editor performance and collaboration 
 
 The dashboards report measurements without setting targets. Use several weeks of your own traffic to set performance targets and alert thresholds.
 
-![Editor experience dashboard with input delay, document opens, and refused edits.](screenshots/editor-experience.png)
+![Editor experience dashboard with input delay, document opens, and refused edits.](../../docs/site/content/telemetry/images/editor-experience.png)
 
 ## Download
 
@@ -64,7 +64,7 @@ export const telemetry = createTelemetry({
 
 The summary shows input delay and editing reliability. Detailed charts compare input delay over time and across document sizes, app versions, and editor versions. Other panels show layout and paint times, document opens, refused files, refused and skipped tracked changes, and refused edits. Each refusal code links to its hint.
 
-![Editor experience panels showing refused and skipped tracked changes and refused edits by reason and source.](screenshots/editor-tracked-changes.png)
+![Editor experience panels showing refused and skipped tracked changes and refused edits by reason and source.](../../docs/site/content/telemetry/images/editor-tracked-changes.png)
 
 Input delay percentiles are estimates from the timing bands. A percentile of 1 second indicates a value in the band above 1 second. In that case, read **Presses over 1 s**.
 
@@ -72,7 +72,7 @@ Input delay percentiles are estimates from the timing bands. A percentile of 1 s
 
 The summary shows server availability, room save success rates, refused connections, client errors, and room limit usage. Detailed charts show room and participant counts, memory use, room age, server operations, client status, and refusals.
 
-![Collaboration dashboard with server status, room counts, participant counts, and memory use.](screenshots/collaboration.png)
+![Collaboration dashboard with server status, room counts, participant counts, and memory use.](../../docs/site/content/telemetry/images/collaboration.png)
 
 The people totals add up all selected server instances. If your instances share rooms through Redis, select one instance. Each instance counts the same participants.
 
@@ -102,6 +102,6 @@ python3 assets/observability/generate.py
 bun run format
 ```
 
-To refresh the screenshots, run the local stack and its simulation, then run `node assets/observability/screenshots/capture.mjs` from the repository root.
+To refresh the screenshots, run the local stack and its simulation, then run `node assets/observability/screenshots/capture.mjs`, which writes to `docs/site/content/telemetry/images/` from the repository root.
 
 For setup and options, see [Dashboards](https://docx-editor.dev/docs/2.x/telemetry/dashboards) in the telemetry docs. To report a problem, [open an issue](https://github.com/eigenpal/docx-editor/issues/new/choose).

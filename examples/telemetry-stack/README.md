@@ -4,7 +4,7 @@ This example runs an OpenTelemetry collector, Prometheus, Jaeger, and Grafana lo
 
 Use the dashboards to investigate input delay, failed document opens, refused edits, and collaboration server capacity. Compare performance across releases and document sizes. The dashboards report measurements without setting targets. This example loads the dashboard files from [`assets/observability`](../../assets/observability). You can import the same files into your own Grafana instance.
 
-![Editor experience dashboard with input delay, document opens, and refused edits.](../../assets/observability/screenshots/editor-experience.png)
+![Editor experience dashboard with input delay, document opens, and refused edits.](../../docs/site/content/telemetry/images/editor-experience.png)
 
 For download and setup instructions, see [Dashboards](https://docx-editor.dev/docs/2.x/telemetry/dashboards).
 
@@ -48,7 +48,7 @@ flowchart LR
 
 **Collaboration** shows server availability, room save success rates, refused connections, client errors, and room limit usage. Detailed charts show room and participant counts, memory use, room age, server operations, client status, and refusals.
 
-![Collaboration dashboard with server status, room counts, participant counts, and memory use.](../../assets/observability/screenshots/collaboration.png)
+![Collaboration dashboard with server status, room counts, participant counts, and memory use.](../../docs/site/content/telemetry/images/collaboration.png)
 
 **Editor experience** filters by environment, app, app version, and editor version. The examples send `deployment.environment` and `app.version` as allowed metric labels; see `metricLabels` in their `src/telemetry.ts`. The package adds `docx_editor_version` to every editor metric. **Collaboration** filters by server, server instance, and client app. The optional **Version started reporting** annotation marks versions that report after at least 2 minutes without data. This can indicate a release or resumed reporting.
 

@@ -23,7 +23,7 @@ The integration is in [`src/telemetry.ts`](src/telemetry.ts) and [`src/App.tsx`]
 
 3. Open the [editor](http://localhost:5181) and edit a document. Then open the [Editor experience dashboard](http://localhost:3300/d/docx-editor-experience).
 
-   ![Editor experience dashboard with input delay, document opens, and refused edits.](../../assets/observability/screenshots/editor-experience.png)
+   ![Editor experience dashboard with input delay, document opens, and refused edits.](../../docs/site/content/telemetry/images/editor-experience.png)
 
 The editor sends a performance summary after each minute of use and when you switch to another tab. Metrics reach Prometheus about 10 seconds later.
 

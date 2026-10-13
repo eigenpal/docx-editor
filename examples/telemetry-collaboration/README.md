@@ -36,7 +36,7 @@ The client integration is in [`src/telemetry.ts`](src/telemetry.ts) and [`src/Ap
 
 5. Open the [editor](http://localhost:5182). Select **Open a second person** to add a participant to the room. Then open the [Collaboration dashboard](http://localhost:3300/d/docx-editor-collaboration).
 
-   ![Collaboration dashboard with server status, room counts, participant counts, and memory use.](../../assets/observability/screenshots/collaboration.png)
+   ![Collaboration dashboard with server status, room counts, participant counts, and memory use.](../../docs/site/content/telemetry/images/collaboration.png)
 
 The server samples rooms every 10 seconds. To view editor metrics, open the **Editor experience** dashboard and select `telemetry-collaboration` in **App**.
 
