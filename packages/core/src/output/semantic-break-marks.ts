@@ -285,7 +285,8 @@ function paintFragmentBreakMarks(
       ...options,
       boundary: collapsed,
     });
-    if (extent && index === lastIndex) {
+    // A boundary label sits off the line's text, so a tracked pilcrow keeps its own seat.
+    if (extent && index === lastIndex && !collapsed) {
       pilcrowAt = { x: extent.rtl ? extent.left : extent.right, rtl: extent.rtl };
     }
   }
