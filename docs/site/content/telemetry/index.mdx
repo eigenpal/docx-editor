@@ -6,9 +6,9 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-`@docx-editor.dev/telemetry` sends the editor's anonymous [diagnostics](/docs/2.x/guides/diagnostics) and metrics to the observability tools that you already run. It covers single-user editors, collaboration clients, and collaboration servers.
+`@docx-editor.dev/telemetry` sends anonymous [diagnostics](/docs/2.x/guides/diagnostics) and metrics to your monitoring tools. It covers single-user editors, collaboration clients, and collaboration servers.
 
-The package sends nothing by itself. You choose the exporters, and you choose the areas to record. Every event contains only codes, booleans, bucketed sizes and counts, and timings. Document text, file names, part names, author names, font names, and room names are never sent.
+Configure exporters to send data, and choose which areas to record. Built-in diagnostics contain codes, booleans, bucketed sizes and counts, and timings. They exclude document text, file names, part names, author names, font names, and room names. You control any attributes you add and any data your monitoring SDKs collect.
 
 ```mermaid
 flowchart LR
@@ -22,7 +22,7 @@ flowchart LR
   X --> C[Your callback]
 ```
 
-## Choose a standard
+## Choose an exporter
 
 | Need | Use | Entry point |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ flowchart LR
 | A log service over HTTP, such as Better Stack, Axiom, or Datadog Logs | An HTTP exporter and a route on your server | `@docx-editor.dev/telemetry` and `@docx-editor.dev/telemetry/ingest` |
 | Any other tool, such as Datadog RUM, PostHog, or your logger | A callback | `@docx-editor.dev/telemetry` |
 
-OpenTelemetry is the source model. Prometheus names come from the OpenTelemetry names: `docx_editor.collab.room.load.duration` in seconds becomes `docx_editor_collab_room_load_duration_seconds`.
+Metrics use the OpenTelemetry model. Prometheus metric names replace dots with underscores and include units: `docx_editor.collab.room.load.duration` in seconds becomes `docx_editor_collab_room_load_duration_seconds`.
 
 ## Install
 
@@ -40,20 +40,26 @@ OpenTelemetry is the source model. Prometheus names come from the OpenTelemetry 
 npm install @docx-editor.dev/telemetry @docx-editor.dev/core
 ```
 
-Install the peer dependency for each exporter that you use: `@opentelemetry/api` for OpenTelemetry, `yjs` with `@docx-editor.dev/pro` for room telemetry, and `@hocuspocus/server` 4.6 or later for the Hocuspocus integration. The Sentry exporter takes the Sentry SDK your app already loads, and the Prometheus exporter has no dependencies. In an editor app, you also have `@docx-editor.dev/react` or `@docx-editor.dev/vue`, and `@docx-editor.dev/pro` for review and collaboration.
+Install the peer dependencies for the integrations you use:
+
+- OpenTelemetry: `@opentelemetry/api`.
+- Room telemetry: `yjs` and `@docx-editor.dev/pro`.
+- Hocuspocus: `@hocuspocus/server` 4.6 or later.
+
+The Sentry exporter uses your app's Sentry SDK. The Prometheus exporter has no dependencies. Editor apps also need `@docx-editor.dev/react` or `@docx-editor.dev/vue`. Add `@docx-editor.dev/pro` for review and collaboration.
 
 ## Privacy
 
 - The package never sends data by itself. It sends only to the exporters you configure.
-- Every diagnostic is built from closed lists of codes, booleans, bucketed sizes and counts, and timings. Document text, file and part names, author names, font names, and exception messages are never included.
+- Diagnostics use fixed sets of codes, booleans, bucketed sizes and counts, and timings. Document text, file and part names, author names, font names, and exception messages are never included.
 - The engine builds each event this way, and the package checks each event again before an exporter receives it.
-- The identifiers you add with `attributes`, `resource`, and `metricLabels`, and what your Sentry and OpenTelemetry SDKs collect, are yours to control.
+- You control identifiers in `attributes`, `resource`, and `metricLabels`. You also control what your Sentry and OpenTelemetry SDKs collect.
 
-For every field that can be sent and how the rules are enforced, see [Privacy](/docs/2.x/telemetry/privacy). For the settings you control, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+For fields and validation rules, see [Privacy](/docs/2.x/telemetry/privacy). To review your settings, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 
 ## Where to start
 
-Read the pages in this order. Each one is short and covers one task.
+Review data collection, set up your editor, then choose a destination. Use the other guides for specific tasks.
 
 1. [Privacy](/docs/2.x/telemetry/privacy): what is sent and what is never sent. Start here for a privacy review, then complete the [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 2. [Set up an editor](/docs/2.x/telemetry/editors): create the client, register its module, and choose what to record.
@@ -67,6 +73,6 @@ Read the pages in this order. Each one is short and covers one task.
    - [Identify rooms and users](/docs/2.x/telemetry/identifiers): your own identifiers, and thousands of open editors.
    - [Server agents](/docs/2.x/telemetry/agents): agents that use the editing API.
    - [Collaboration servers](/docs/2.x/telemetry/servers): set up metrics on your server. Then read [Rooms, people, and memory](/docs/2.x/telemetry/rooms) for what the room metrics mean.
-5. Watch it: [Dashboards](/docs/2.x/telemetry/dashboards) to download, and [Metrics](/docs/2.x/telemetry/metrics) for every name and label.
+5. Monitor your app with [Dashboards](/docs/2.x/telemetry/dashboards). For metric names and labels, see [Metrics](/docs/2.x/telemetry/metrics).
 
-For every diagnostic code and its hint, see [Diagnostics](/docs/2.x/guides/diagnostics). To run working setups, see the [one-person example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-single-user), the [collaboration example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-collaboration), and the [dashboards stack](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack).
+For every diagnostic code and its hint, see [Diagnostics](/docs/2.x/guides/diagnostics). For complete setups, see the [single-user example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-single-user), the [collaboration example](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-collaboration), and the [dashboards stack](https://github.com/eigenpal/docx-editor/tree/main/examples/telemetry-stack).

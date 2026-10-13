@@ -2,7 +2,7 @@
 
 Anonymous diagnostics, metrics, and error reporting for `@docx-editor.dev` editors and collaboration servers. Send them to OpenTelemetry, Prometheus, Sentry, or your own logger.
 
-Every event contains only codes, booleans, bucketed sizes and counts, and timings. Document text, file names, author names, font names, and room names are never sent. The package sends nothing by itself: you choose the exporters.
+Built-in diagnostics contain codes, booleans, bucketed sizes and counts, and timings. They exclude document text, file names, author names, font names, and room names. You control any attributes you add and any data your monitoring SDKs collect. The package sends data only through exporters you configure.
 
 ## Install the package
 
@@ -39,7 +39,7 @@ export const MODULES = [telemetry.module];
 // <DocxEditor document={bytes} modules={MODULES} />
 ```
 
-A refused tracked change explains itself. Here, an agent deleted a picture through the editing API while changes were tracked:
+Use `consoleExporter()` to view diagnostics during development. For example, the following diagnostic explains why the editing API refused a tracked picture deletion:
 
 ```text
 [docx-editor] edit refused: edit.tracked-operation-unsupported (automation, tracked)
@@ -71,7 +71,7 @@ For other Yjs servers, use `roomTelemetry` from `@docx-editor.dev/telemetry/serv
 
 ## Dashboards
 
-Ready Grafana dashboards show input delay, engine work, opens, and refused edits from your editors, and rooms, people, memory, and refusals from your collaboration server.
+Grafana dashboards show editor input delay, engine timings, document opens, and refused edits. They also show collaboration rooms, people, memory, and refusals.
 
 ![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/screenshots/editor-experience.png)
 

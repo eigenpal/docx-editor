@@ -1,15 +1,15 @@
 ---
 title: 'Send to a log service'
-description: 'Batch editor telemetry in the browser, check it again on your server, and forward it to Better Stack or any HTTP log intake, without exposing a token.'
+description: 'Send editor telemetry to an HTTP log service through your server without exposing its token.'
 category: 'Telemetry'
 ---
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Use this setup when you send telemetry to a log service over HTTP, such as Better Stack, Axiom, or Datadog Logs, instead of through an OpenTelemetry SDK. It has two parts:
+Use this setup to send telemetry over HTTP to Better Stack, Axiom, or Datadog Logs. It has two parts:
 
 1. In the browser, `httpExporter` batches events and posts them to a route on your own origin.
-2. On your server, `telemetryRoute` checks every event again and forwards it to the log service with a token that only the server knows.
+2. On your server, `telemetryRoute` validates each event and forwards it with a token that stays on the server.
 
 ```mermaid
 flowchart LR
@@ -17,11 +17,11 @@ flowchart LR
   R -- checked events --> L[Log service]
 ```
 
-A log service token in the browser can be read by anyone and used to send any data to your account. The route keeps the token on the server, and it is same-origin, so your Content Security Policy needs no change.
+Anyone can read a token in the browser and use it to send data to your log service account. The route keeps the token on the server. Requests use the same origin. Your Content Security Policy does not need to allow the external log service.
 
 ## Send events from the browser
 
-`httpExporter` posts batches of events to a route on your own origin. The following example records failures and performance, sends nothing for opens that succeed, and stops when the visitor sends Global Privacy Control or Do Not Track:
+`httpExporter` posts event batches to a route on your own origin. This example records failures and performance, and excludes successful opens. It stops collection when the browser sends Global Privacy Control or Do Not Track:
 
 ```ts
 import { browserPrivacySignals, createTelemetry, httpExporter } from '@docx-editor.dev/telemetry';
@@ -43,11 +43,13 @@ export const telemetry = createTelemetry({
 
 Register `telemetry.module` in the editor's `modules`, as in [Set up an editor](/docs/2.x/telemetry/editors).
 
-For every option, how delivery works while a page closes, and how to write the filter, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
+For options, filters, and delivery when a page closes, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
 
 ## Receive events on your server
 
-`telemetryRoute` returns a Fetch-style `POST` handler for Next.js route handlers, Hono, Bun, Deno, and Cloudflare Workers. It checks every event again with the closed lists the browser used, drops the fields the browser chose, and calls `forward` with the events that pass. It answers `204` to every request. `toLogRecord(event)` adds the `dt` and `message` fields that log services read. For each check, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
+`telemetryRoute` returns a Fetch-style `POST` handler for Next.js route handlers, Hono, Bun, Deno, and Cloudflare Workers. It validates each event against the same predefined values as the browser and drops browser-defined fields. It calls `forward` with valid events and returns `204` for every request.
+
+`toLogRecord(event)` adds the `dt` and `message` fields that log services read. For validation details, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
 
 ### Better Stack
 
@@ -75,11 +77,11 @@ export const POST = telemetryRoute({
 
 ## Privacy
 
-The route forwards only values from the package's closed lists, numbers, and the `attributeKeys` you allow, which must be identifier strings. The session identifier and the engine version must match the formats the engine creates. The route never forwards text with spaces, even if a client sends it.
+The route forwards predefined values, numbers, and attributes that you allow through `attributeKeys`. Allowed attribute values must be identifier strings. Session identifiers and engine versions must match the formats that the engine creates. The route never forwards text with spaces.
 
-These are syntax checks. They prove that an event has the right form, not that it is anonymous or that it happened. An identifier string can still name a person if you put a name in it, and anyone can post a well-formed event, so treat the counts as reported by browsers. For every field that can be sent, see [Privacy](/docs/2.x/telemetry/privacy).
+Validation checks event syntax. It cannot prove that an event is anonymous or that it happened. Identifier strings can still contain names, and anyone can submit a valid event. Treat event counts as browser reports. For the fields that events can contain, see [Privacy](/docs/2.x/telemetry/privacy).
 
 ## Next steps
 
 - To send to Axiom, Datadog Logs, or from a framework without Fetch requests, see [Other log services](/docs/2.x/telemetry/log-recipes).
-- To send events to a function of your own, such as Datadog RUM or PostHog, see [Send to your own code](/docs/2.x/telemetry/callbacks).
+- For custom functions, Datadog RUM, or PostHog, see [Send to your own code](/docs/2.x/telemetry/callbacks).

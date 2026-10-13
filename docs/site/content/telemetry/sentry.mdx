@@ -1,6 +1,6 @@
 ---
 title: 'Send to Sentry'
-description: 'Turn editor failures into grouped Sentry issues and breadcrumbs, and keep document content out of Replay, breadcrumbs, and URLs.'
+description: 'Send editor failures to Sentry and exclude document content from Replay, breadcrumbs, and URLs.'
 category: 'Telemetry'
 ---
 
@@ -10,13 +10,23 @@ The Sentry exporter turns failures into grouped issues and everything else into 
 
 ## Issues and breadcrumbs
 
-`sentryExporter` accepts the Sentry module of any Sentry JavaScript SDK. These events become Sentry issues: an open your app caused or the engine could not explain, a collaboration error that does not heal, a text shaper that did not load, an engine invariant or an exception in a command, and a tracked change the engine could not accept or reject (`review.revision-unsupported` and `review.retained-structure`, as warnings). A corrupt or oversized file becomes a breadcrumb, because the app cannot fix the file. An expired collaboration token and a room the server compacted are breadcrumbs too, because the client rejoins. The fingerprint is the diagnostic code followed by the engine reason and the kind of change, so each distinct defect is its own issue. Issues carry the [failure detail](/docs/2.x/guides/diagnostics#failure-detail) as tags, such as `docx_editor.cause` and `docx_editor.change_kind`. Other events become breadcrumbs, which appear next to your own errors and do not use your event quota.
+`sentryExporter` accepts the Sentry module from any Sentry JavaScript SDK. By default, it creates issues for these failures:
+
+- Document opens that fail because of the app or an unexplained engine error.
+- Collaboration errors that the client cannot recover from.
+- Text shaper loading failures.
+- Engine invariant failures and command exceptions.
+- Tracked changes that the engine cannot accept or reject. These produce warnings with `review.revision-unsupported` or `review.retained-structure`.
+
+Corrupt or oversized files produce breadcrumbs because the app cannot fix them. Expired collaboration tokens and compacted rooms also produce breadcrumbs because the client rejoins. Other events produce breadcrumbs, which appear beside your errors without using your event quota.
+
+The issue fingerprint combines the diagnostic code, engine reason, and change kind to group failures. Issues include [failure detail](/docs/2.x/guides/diagnostics#failure-detail) tags, such as `docx_editor.cause` and `docx_editor.change_kind`.
 
 To change which events become issues, pass `issue: (event) => boolean`.
 
 ## Keep document content out of Sentry
 
-Sentry records more of the page than your diagnostics. Session Replay records the page, and the page shows the document. Each click and key press becomes a breadcrumb that describes the element with its `alt`, `title`, and `aria-label` values, which inside the editor come from the document. Block the editor in Replay, and drop the editor's click and key press breadcrumbs:
+Session Replay can record document content from the page. Click and key press breadcrumbs can include element descriptions from `alt`, `title`, and `aria-label` values. Inside the editor, these values can contain document content. Block the editor in Replay and drop its click and key press breadcrumbs:
 
 ```ts
 import * as Sentry from '@sentry/react';
@@ -29,11 +39,11 @@ Sentry.init({
 });
 ```
 
-`EDITOR_SELECTORS` goes in `block`, which replaces the editor with a placeholder in Replay, so it does not need `mask` as well.
+Pass `EDITOR_SELECTORS` to `block` to replace the editor with a placeholder in Replay. You do not need to add these selectors to `mask`.
 
-Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Navigation and fetch breadcrumbs carry URLs too, so remove the identifier from them in `beforeBreadcrumb`. Sentry records console messages as breadcrumbs by default; drop the `console` category if your own code logs document details.
+Sentry also attaches the page URL to every event. If your URLs contain document, matter, or client identifiers, remove them in `beforeSend`. Remove these identifiers from navigation and fetch breadcrumb URLs in `beforeBreadcrumb` too. Sentry records console messages as breadcrumbs by default. If your code logs document details, drop the `console` category.
 
-To combine `dropEditorBreadcrumbs` with your own filter, call it first and pass on only what it keeps. The following example also keeps IP addresses out, drops console breadcrumbs, and removes the query string from page URLs:
+To combine `dropEditorBreadcrumbs` with your filter, call it first and pass on only the breadcrumbs it keeps. This example disables default personal data collection, drops console breadcrumbs, and removes query strings from page URLs:
 
 ```ts
 import * as Sentry from '@sentry/react';

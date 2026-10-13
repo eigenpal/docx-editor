@@ -10,7 +10,11 @@ Record rooms, connections, people, room memory, load and store times, and refusa
 
 ## Hocuspocus
 
-Wrap your Hocuspocus configuration. The wrapper adds one extension that runs before all others, so it times each load and store across every extension and hook. It also observes your hooks and the extensions in `extensions`, and records why one of them refused a connection or a message. Your hooks and extensions keep their arguments, return values, and errors. Extensions added later with `server.configure` are not observed. The telemetry flushes when Hocuspocus shuts down, so do not add your own signal handler for it. It requires `@hocuspocus/server` 4.6 or later.
+Use `withCollaborationTelemetry` to wrap your Hocuspocus configuration. It requires `@hocuspocus/server` 4.6 or later.
+
+The wrapper times each load and store across all configured extensions and hooks. It also records connection and message refusals from your hooks and the extensions in `extensions`. Your hooks and extensions keep their arguments, return values, and errors. The wrapper does not observe extensions added later with `server.configure`.
+
+Hocuspocus flushes telemetry during shutdown. You do not need a separate signal handler.
 
 ```ts
 import { Server } from '@hocuspocus/server';
@@ -37,7 +41,7 @@ const server = new Server({
   ...config,
   onRequest: serveMetrics(metrics, {
     rooms: { telemetry: rooms, path: '/rooms' },
-    // Throws at startup when METRICS_TOKEN is empty, so the endpoint never opens by accident.
+    // Reject startup if METRICS_TOKEN is empty.
     authorize: requireBearerToken(process.env.METRICS_TOKEN),
   }),
 });
@@ -45,11 +49,23 @@ const server = new Server({
 
 Pass every hook in the configuration you wrap. A hook set later, for example in the object you pass to `new Server`, is not observed.
 
-`serveMetrics` requires `authorize` when it serves the room list. To keep your own `onRequest`, pass it as `next`; `serveMetrics` calls it for every other path. The reason of a refusal is read from the error's `reason` property, then its `code`. It becomes a metric label only when it is a collaboration failure code, a common reason such as `unauthorized`, `forbidden`, `permission-denied`, `unknown-room`, or `rate-limited`, or a reason you list in the `reasons` option. Any other reason is counted as `other`, so free text never becomes a label. Hocuspocus's `Unauthorized` and `Forbidden` close events, and an error whose message is a common reason, such as `new Error('Unauthorized')`, count as that reason. A bare `throw` with no error counts as `permission-denied`, which is what Hocuspocus tells the client. An error with no reason, often a bug in the hook, counts as `other`. If your errors carry free text, map them with `reasonOf`: return a common reason, a collaboration failure code, or a value you list in `reasons`. Refusals thrown in `onConnect`, `onAuthenticate`, and `onTokenSync` are counted as admission refusals.
+`serveMetrics` requires `authorize` when it serves the room list. To keep your own `onRequest`, pass it as `next`. `serveMetrics` calls it for every other path.
 
-On the server, Hocuspocus writes each hook error message to the console, and Sentry's Node SDK records console output as breadcrumbs by default. Drop the `console` category in `beforeBreadcrumb` if those messages can name a user or a room.
+### Classify refusals
 
-Room telemetry sends metrics only. Use `otelExporter` or `prometheusRegistry` on a server; an exporter without a `metric` method, such as `sentryExporter`, receives nothing there, and the server warns at startup.
+The wrapper reads the refusal reason from the error's `reason` property, then its `code`. It accepts the following metric labels:
+
+- Collaboration failure codes.
+- Common reasons: `unauthorized`, `forbidden`, `permission-denied`, `unknown-room`, and `rate-limited`.
+- Values you list in the `reasons` option.
+
+Other reasons become `other`, so arbitrary text cannot become a label. Hocuspocus's `Unauthorized` and `Forbidden` close events use the corresponding reason. Error messages that match common reasons, such as `new Error('Unauthorized')`, also use that reason. A rejection without an error counts as `permission-denied`, which matches the reason Hocuspocus sends to the client. An error without a recognized reason counts as `other`.
+
+If your errors contain arbitrary text, use `reasonOf` to map them to accepted reasons. Refusals from `onConnect`, `onAuthenticate`, and `onTokenSync` count as admission refusals.
+
+Hocuspocus writes hook error messages to the server console. Sentry's Node SDK records console output as breadcrumbs by default. Drop the `console` category in `beforeBreadcrumb` if those messages can name a user or a room.
+
+Room telemetry sends metrics only. Use `otelExporter` or `prometheusRegistry` on a server. An exporter without a `metric` method, such as `sentryExporter`, receives no room telemetry. The server warns about these exporters at startup.
 
 ## Other Yjs servers
 

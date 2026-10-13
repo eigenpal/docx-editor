@@ -1,12 +1,12 @@
 # Editor telemetry for collaboration
 
-Editors in a shared Hocuspocus room report their collaboration status, room size, and editing performance, and the room server reports its rooms, people, memory, and refused connections to Prometheus. Room names never reach a metric.
+This example records collaboration status, room size, and editing performance for editors in a shared Hocuspocus room. The server reports room counts, participant counts, memory use, and refused connections to Prometheus. Metrics exclude room names.
 
-The client integration is in [`src/telemetry.ts`](src/telemetry.ts) and [`src/App.tsx`](src/App.tsx). The server integration is one call to `withCollaborationTelemetry` in [`server/server.ts`](server/server.ts).
+The client integration is in [`src/telemetry.ts`](src/telemetry.ts) and [`src/App.tsx`](src/App.tsx). The server calls `withCollaborationTelemetry` in [`server/server.ts`](server/server.ts).
 
 ## Run the example
 
-1. Build the packages once, because the server runs on Node and loads them from `dist/`:
+1. Build the packages. The server runs on Node.js and loads packages from `dist/`:
 
    ```bash
    bun install
@@ -34,24 +34,24 @@ The client integration is in [`src/telemetry.ts`](src/telemetry.ts) and [`src/Ap
    bun run dev
    ```
 
-5. Open http://localhost:5182, then **Open a second person** to add someone to the same room. Open the **Collaboration** dashboard at http://localhost:3300/d/docx-editor-collaboration.
+5. Open the [editor](http://localhost:5182). Select **Open a second person** to add a participant to the room. Then open the [Collaboration dashboard](http://localhost:3300/d/docx-editor-collaboration).
 
-   ![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](../../assets/observability/screenshots/collaboration.png)
+   ![Collaboration dashboard with server status, room counts, participant counts, and memory use.](../../assets/observability/screenshots/collaboration.png)
 
-The server samples rooms every 10 seconds. The editors' own metrics are on the **Editor experience** dashboard too: choose `telemetry-collaboration` in **App**.
+The server samples rooms every 10 seconds. To view editor metrics, open the **Editor experience** dashboard and select `telemetry-collaboration` in **App**.
 
 ## What to try
 
-- Open three people and type in each. Watch **Rooms, people, and connections** and **Room memory**.
+- Open three editor sessions and type in each. Watch **Rooms, people, and connections** and **Room memory**.
 - Stop the server and start it again. The editors report `collab.transport-disconnected`, then `ready`, in the event log and in **Client status changes**.
-- Open http://127.0.0.1:1235/metrics to see the Prometheus text the server serves.
+- Open the [metrics endpoint](http://127.0.0.1:1235/metrics) to view metrics in Prometheus text format.
 
 ## How it is built
 
 | File | What it does |
 | --- | --- |
-| `server/server.ts` | A Hocuspocus server whose hooks `withCollaborationTelemetry` wraps, with `/metrics` from `serveMetrics`. |
-| `src/telemetry.ts` | The client's telemetry, with every area on, collaboration included. |
+| `server/server.ts` | Wraps Hocuspocus hooks with `withCollaborationTelemetry` and exposes `/metrics` through `serveMetrics`. |
+| `src/telemetry.ts` | Enables all client telemetry areas, including collaboration. |
 | `src/App.tsx` | Passes `telemetry.module` to `useHocuspocusCollaboration`, which adds the collaboration module. |
 
 For the server options, see [Telemetry for collaboration servers](https://docx-editor.dev/docs/2.x/telemetry/servers).

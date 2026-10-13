@@ -1,10 +1,10 @@
 # Observability assets
 
-Grafana dashboards for `@docx-editor.dev/telemetry`. Import them into your own Grafana to see how editing feels to your users and how your collaboration server runs.
+Import these Grafana dashboards to monitor editor performance and collaboration servers with `@docx-editor.dev/telemetry`.
 
-The dashboards report measurements only and set no targets. Decide what is acceptable from a few weeks of your own traffic, then decide what to alert on.
+The dashboards report measurements without setting targets. Use several weeks of your own traffic to set performance targets and alert thresholds.
 
-![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, metric sources reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](screenshots/editor-experience.png)
+![Editor experience dashboard with input delay, document opens, and refused edits.](screenshots/editor-experience.png)
 
 ## Download
 
@@ -12,7 +12,7 @@ The dashboards report measurements only and set no targets. Decide what is accep
 | --- | --- | --- |
 | [`grafana/editor-experience.json`](grafana/editor-experience.json) | **Editor experience**: input delay, engine layout and paint time, opens, refused and skipped tracked changes, and all refused edits by code, filtered by environment, app, app version, and editor version. | [Raw file](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
 | [`grafana/collaboration.json`](grafana/collaboration.json) | **Collaboration**: server state, rooms and people, room memory and limits, room load and store time, client status, and refused connections and messages. | [Raw file](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
-| [`generate.py`](generate.py) | Generates every file above. |  |
+| [`generate.py`](generate.py) | Generates the dashboard JSON files. |  |
 
 To download both dashboards from a terminal, run:
 
@@ -62,23 +62,23 @@ export const telemetry = createTelemetry({
 
 ## Editor experience
 
-The first row shows how editing feels now. The rows below show input delay over time and by document size, app version, and editor version; engine layout and paint time; opens and refused files; refused and skipped tracked changes; and all refused edits, each code linked to its hint.
+The summary shows input delay and editing reliability. Detailed charts compare input delay over time and across document sizes, app versions, and editor versions. Other panels show layout and paint times, document opens, refused files, refused and skipped tracked changes, and refused edits. Each refusal code links to its hint.
 
-![The tracked changes and refused edits rows of the Editor experience dashboard: refusals while suggesting, their share of all refusals, refused tracked changes by reason and by source, and all refused edits by reason and by source.](screenshots/editor-tracked-changes.png)
+![Editor experience panels showing refused and skipped tracked changes and refused edits by reason and source.](screenshots/editor-tracked-changes.png)
 
-Input delay percentiles are estimates from the timing bands. The highest band ends at 1 second, so a percentile of 1 second means that it falls in the over 1 second band. In that case, read **Presses over 1 s**.
+Input delay percentiles are estimates from the timing bands. A percentile of 1 second indicates a value in the band above 1 second. In that case, read **Presses over 1 s**.
 
 ## Collaboration
 
-The first row shows whether the server answers, the share of room stores that succeed, refused connections, client errors, and room limit usage. The rows below show rooms and people, memory, room age, server work, client status, and refusals.
+The summary shows server availability, room save success rates, refused connections, client errors, and room limit usage. Detailed charts show room and participant counts, memory use, room age, server operations, client status, and refusals.
 
-![The Collaboration dashboard: server up, stores succeeding, refused connections, client errors, room limit usage, rooms and people now, and charts of rooms, people, connections, room memory, room limit usage, and room age and idle time.](screenshots/collaboration.png)
+![Collaboration dashboard with server status, room counts, participant counts, and memory use.](screenshots/collaboration.png)
 
-The people totals add up all selected server instances. If your instances share rooms through Redis, each instance counts the same people, so select one instance.
+The people totals add up all selected server instances. If your instances share rooms through Redis, select one instance. Each instance counts the same participants.
 
 ## Mark collaboration servers
 
-The server panels of the **Collaboration** dashboard read only targets with the `docx_editor="collaboration"` label. Add it to the scrape configuration of each collaboration server. Other targets in the same job then never appear, and a server that fails every scrape still shows. The client panels read the editor metrics, and only the **Client app** filter applies to them:
+The server panels of the **Collaboration** dashboard read only targets with the `docx_editor="collaboration"` label. Add it to the scrape configuration of each collaboration server. This excludes other targets in the same job. Servers still appear when every scrape fails. The client panels read the editor metrics, and only the **Client app** filter applies to them:
 
 ```yaml
 scrape_configs:

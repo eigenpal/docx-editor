@@ -1,8 +1,8 @@
 # Editor telemetry for one person
 
-An editor that reports anonymous diagnostics and editing performance to OpenTelemetry, Sentry, and the console: typing delay, layout and paint times, document opens, and refused edits with their hints. A panel beside the editor shows each event as your backends receive it.
+This example sends anonymous editor diagnostics and performance measurements to OpenTelemetry, Sentry, and the console. It records typing delay, layout and paint times, document opens, and refused edits with their hints. A panel beside the editor lists exported events.
 
-The whole integration is in [`src/telemetry.ts`](src/telemetry.ts) and three lines of [`src/App.tsx`](src/App.tsx). Events hold codes, enums, and bucketed numbers, never document content.
+The integration is in [`src/telemetry.ts`](src/telemetry.ts) and [`src/App.tsx`](src/App.tsx). Events contain codes, predefined values, and numbers grouped into ranges. They exclude document content.
 
 ## Run the example
 
@@ -21,15 +21,15 @@ The whole integration is in [`src/telemetry.ts`](src/telemetry.ts) and three lin
    bun run dev
    ```
 
-3. Open http://localhost:5181 and edit. Then open the **Editor experience** dashboard at http://localhost:3300/d/docx-editor-experience.
+3. Open the [editor](http://localhost:5181) and edit a document. Then open the [Editor experience dashboard](http://localhost:3300/d/docx-editor-experience).
 
-   ![The Editor experience dashboard: input delay median and 95th percentile, presses over 1 second, opens succeeding, open time, browser tabs reporting, unexpected refusals, and charts of input delay over time, by delay band, and by document size.](../../assets/observability/screenshots/editor-experience.png)
+   ![Editor experience dashboard with input delay, document opens, and refused edits.](../../assets/observability/screenshots/editor-experience.png)
 
-A performance summary arrives once a minute of use, and when you switch to another tab. Metrics reach Prometheus within about 10 seconds after that.
+The editor sends a performance summary after each minute of use and when you switch to another tab. Metrics reach Prometheus about 10 seconds later.
 
-To fill the dashboards without typing yourself, run `node examples/telemetry-stack/simulate.mjs` from the repository root.
+To generate sample data for the dashboards, run `node examples/telemetry-stack/simulate.mjs` from the repository root.
 
-To also send failures to Sentry, create `examples/telemetry-single-user/.env.local` with your DSN:
+To send failures to Sentry, add your Sentry data source name (DSN) to `examples/telemetry-single-user/.env.local`:
 
 ```bash
 VITE_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
@@ -40,15 +40,15 @@ VITE_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
 - Type, add paragraphs, and zoom. Watch **Typing delay** and **Engine work per edit**.
 - Open a file that is not a `.docx` file with **Open a .docx file**. The event log shows `open.zip-corrupt` with its hint.
 - Select a picture, then drop or paste another picture. The editor refuses the insert with `edit.picture-selected`.
-- Clear **Share anonymous diagnostics**. The editor stops recording new telemetry until you select it again. Metrics recorded before stay in the OpenTelemetry SDK and are still exported. Your Sentry and OpenTelemetry SDKs have their own consent settings; apply your consent choice to them as well.
+- Clear **Share anonymous diagnostics**. The editor stops recording new telemetry until you select it again. The OpenTelemetry SDK still exports previously recorded metrics. Apply the same consent choice to your Sentry and OpenTelemetry SDKs.
 
 ## How it is built
 
 | File | What it does |
 | --- | --- |
 | `src/telemetry.ts` | Creates the telemetry client with the OpenTelemetry, Sentry, console, and event log exporters, and the consent check. |
-| `src/opentelemetry.ts` | Starts the browser OpenTelemetry SDK. Your app already has its own. |
+| `src/opentelemetry.ts` | Starts the browser OpenTelemetry SDK. In your app, use your existing SDK setup. |
 | `src/App.tsx` | Registers `telemetry.module` in the editor's `modules`, next to `reviewModule()`. |
 | `../telemetry-stack/client/event-log.tsx` | The panel that lists sent events. |
 
-For the options, see [Set up an editor](https://docx-editor.dev/docs/2.x/telemetry/editors).
+For configuration options, see [Set up an editor](https://docx-editor.dev/docs/2.x/telemetry/editors).

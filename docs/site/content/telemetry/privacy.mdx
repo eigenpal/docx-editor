@@ -1,32 +1,32 @@
 ---
 title: 'Privacy'
-description: 'What editor and server telemetry contains, what it never contains, how that is enforced, and how to configure your own SDKs so that no personal data or document content leaves your app.'
+description: 'Review telemetry fields, privacy checks, and settings for your app and exporters.'
 category: 'Telemetry'
 ---
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-This page is for teams that must show, in a privacy or security review, what their editor telemetry sends. It lists every field the editor can send and the rules that keep personal data and document content out. For the settings in your own app and SDKs that you need to check, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+Use this reference to review telemetry fields and the checks that exclude document content. For app and SDK settings, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 
 ## Summary
 
-- The package never sends data by itself. It sends only to the exporters that you configure, and only to your own backends.
-- Diagnostics and metrics contain no document content and no personal data. Document text, file names, part names, relationship targets, author names, comment text, font names, element names from the file, and exception messages are never included.
-- Every value is a code from a closed list, a boolean, a bucketed size or count, or a timing in milliseconds.
-- Two independent checks enforce this: one where the engine builds the event, and one in the telemetry package before any exporter receives it.
-- Values that you add yourself, such as a room or user identifier, are your responsibility. So are the other things that your Sentry and OpenTelemetry SDKs collect.
+- The package sends data only through exporters that you configure.
+- Diagnostics and metrics contain no document content and no personal data. Events exclude document text, file names, part names, relationship targets, author names, and comment text. They also exclude font names, file-defined element names, and exception messages.
+- Diagnostic values use closed lists, booleans, size and count buckets, or timings in milliseconds.
+- The engine checks events when it creates them. The telemetry package checks them again before export.
+- You control added values, such as room or user identifiers. You also control other data that your Sentry and OpenTelemetry SDKs collect.
 
-## How it is enforced
+## Privacy checks
 
-The engine builds each diagnostic from closed lists when the event is made. It never copies a string from the document into an event: a part name becomes a role such as `header`, an exception becomes its class such as `TypeError`, and a count becomes a bucket such as `10-99`. An internal refusal message, which can describe the document, is mapped to a public code, and the message itself stays in the engine.
+The engine builds diagnostics from closed lists. It converts part names to roles such as `header` and exceptions to classes such as `TypeError`. It groups document counts into buckets such as `10-99`. It maps internal refusal messages to public codes. The messages stay in the engine because they can describe document content.
 
-The telemetry package checks every event again before an exporter receives it. A string field that is not in its allowed list is removed. An event with an unknown kind or code is dropped completely, and the `docx_editor_telemetry_dropped_events_total` metric counts it. This second check protects you when the engine and the telemetry package come from different versions.
+The telemetry package checks every event again before an exporter receives it. It removes string fields outside their allowed lists. It drops events with unknown kinds or codes and counts them in `docx_editor_telemetry_dropped_events_total`. This second check protects you when the engine and the telemetry package come from different versions.
 
 The test suites verify both checks with files that contain planted text, part names, and author names. Each test serializes every event and error message and fails if a planted string appears.
 
 ## What each event contains
 
-Every event has `kind`, `schemaVersion`, `editorSessionId`, and `time`, and the telemetry package adds `engineVersion`. The `editorSessionId` value is random for each editor instance and is never stored, so it identifies no person and no document. If you send it together with your own user identifier, it becomes linkable to that user.
+Every event has `kind`, `schemaVersion`, `editorSessionId`, and `time`. The telemetry package adds `engineVersion`. Each editor instance generates a random `editorSessionId` and does not persist it. This identifier does not encode a person or document. If you send it together with your own user identifier, it becomes linkable to that user.
 
 | Event | Fields | Values |
 | --- | --- | --- |
@@ -44,9 +44,9 @@ Every closed list is part of the public API. To read them in code, call `diagnos
 
 ### Document shape
 
-By default, an opened document reports only `sizeBucket` and `pagesBucket`. With `documentShape: 'detailed'`, it also reports four buckets: XML parts, paragraphs, tracked changes and comments, and embedded fonts. There is no option that sends exact counts.
+By default, an opened document reports only `sizeBucket` and `pagesBucket`. With `documentShape: 'detailed'`, it also reports buckets for XML parts, paragraphs, review items, and embedded fonts. There is no option that sends exact counts.
 
-One bucket says little about a document. Several buckets together form a combination, and a rare combination can stand out inside one organization. For this reason the detailed shape is off by default. Turn it on only if you need to group open times by document structure.
+Rare combinations of buckets can distinguish documents within an organization. Detailed shape reporting is off by default. Enable it only when you need to compare open times by document structure.
 
 ### Metrics
 
@@ -55,7 +55,7 @@ Metrics carry the same codes and buckets as labels. A metric label accepts only 
 ## Collaboration servers
 
 - Metrics never carry a room name.
-- `rooms.list()` labels each room with an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, pass `roomLabel: hmacRoomLabel(secret)`. Show real names only on an endpoint that only administrators can reach.
+- `rooms.list()` uses process-local room labels, such as `room-3`. For stable labels that conceal room names, pass `roomLabel: hmacRoomLabel(secret)`. Restrict endpoints that show real names to administrators.
 - `perRoomSeries: true` accepts only the default label or `hmacRoomLabel`, so a room name cannot become a metric label.
 - Refusal reasons from your hooks become a known reason or `other`. The error message is never recorded.
 
@@ -63,4 +63,4 @@ For more information, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms)
 
 ## Next step
 
-Check the settings that only you control, such as your own identifiers, consent, and your Sentry and OpenTelemetry SDKs, and test what your app sends, in [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+Use [Privacy review checklist](/docs/2.x/telemetry/privacy-review) to check identifiers, consent, SDK settings, and exported data.

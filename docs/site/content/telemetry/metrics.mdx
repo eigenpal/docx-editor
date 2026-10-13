@@ -6,9 +6,9 @@ category: 'Telemetry'
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-Every metric has an OpenTelemetry name, such as `docx_editor.collab.room.load.duration`, and a Prometheus name derived from it, such as `docx_editor_collab_room_load_duration_seconds`. Labels take only values from closed lists, so the number of series stays bounded.
+Each metric has an OpenTelemetry name and a derived Prometheus name. For example, `docx_editor.collab.room.load.duration` becomes `docx_editor_collab_room_load_duration_seconds`. Built-in labels use predefined values to limit the number of series. Optional per-room metrics use room identifiers.
 
-Every editor metric also has the `docx_editor.version` label, `docx_editor_version` in Prometheus: the version of the editor packages that measured it, so you can compare editor releases. Server metrics do not have it. Keys you list in `metricLabels`, such as `app.version`, are added to editor metrics too.
+Every editor metric includes `docx_editor.version`, which becomes `docx_editor_version` in Prometheus. This label identifies the editor package version, so you can compare releases. Server metrics omit this label. Editor metrics also include keys from `metricLabels`, such as `app.version`.
 
 | Prometheus name | Type | Labels | Description |
 | --- | --- | --- | --- |
@@ -43,6 +43,6 @@ Every editor metric also has the `docx_editor.version` label, `docx_editor_versi
 | `docx_editor_collab_message_refusals_total` | counter | `reason` | Messages refused before they applied, by reason, such as room-generation-changed. |
 | `docx_editor_collab_updates_total` | counter | none | Document updates applied to rooms. |
 | `docx_editor_collab_update_bytes_total` | counter | none | Bytes of document updates applied to rooms. |
-| `docx_editor_collab_room_participants_current` | gauge | `room` | People in each room, labeled by room. Recorded only with perRoomSeries. |
-| `docx_editor_collab_room_memory_current_bytes` | gauge | `room`, `kind` | Bytes each room holds, labeled by room and kind. Recorded only with perRoomSeries. |
+| `docx_editor_collab_room_participants_current` | gauge | `room` | People in each room, labeled by room. Recorded only with `perRoomSeries`. |
+| `docx_editor_collab_room_memory_current_bytes` | gauge | `room`, `kind` | Bytes each room holds, labeled by room and kind. Recorded only with `perRoomSeries`. |
 | `docx_editor_collab_migrations_total` | counter | `outcome` | Room migrations, by outcome. |

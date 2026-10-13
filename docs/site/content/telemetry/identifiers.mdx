@@ -1,18 +1,18 @@
 ---
 title: 'Identify rooms and users'
-description: 'Add your own room, user, and tenant identifiers to events, keep metrics bounded for thousands of editors, and link events to your own sessions.'
+description: 'Add room, user, and tenant identifiers to events while limiting metric series.'
 category: 'Telemetry'
 ---
 
 <Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
 
-With hundreds of editors open, dashboards show how the whole app behaves, and your own identifiers show which room or user had a problem.
+Add identifiers to telemetry events to find the room or user affected by a problem.
 
 ## Add your identifiers
 
 Add your own identifiers to events in two places:
 
-- `attributes` on the client: values for everyone on the page, such as the tenant or a pseudonymous user id. A function is read at each event.
+- `attributes` on the client: values shared across the page, such as a tenant or pseudonymous user ID. The package calls an attribute function for each event.
 - `telemetry.moduleFor(attributes)` for each editor: values for one editor, such as its collaboration room or document. Use it in place of `telemetry.module`.
 
 ```tsx
@@ -41,21 +41,21 @@ export function Editor({ bytes, roomId }: { bytes: Uint8Array; roomId: string })
 
 Every event then carries `tenant.id`, `user.id`, `tenant.tier`, and `room.id` in `attributes`. Sentry issues get them as tags, so you can search issues by room or user. OpenTelemetry span events get them under the same keys. A callback receives them in `event.attributes`.
 
-Metrics get only the keys you list in `metricLabels`, because each distinct value makes a new series. List keys with few values, such as a tenant tier, a region, or an app version. Never list a user, room, or document id: put those on events, and search them in a backend built for many distinct values, such as Sentry, Honeycomb, or a log store. After 50 distinct values of one key, later values become `other` in metrics; events keep the real value.
+Metrics include only the keys in `metricLabels`. Each distinct value creates a series. Choose keys with few values, such as tenant tier, region, or app version. Keep user, room, and document IDs on events. Search those identifiers in Sentry, Honeycomb, or a log store. After 50 distinct values for a key, metrics use `other` for later values. Events retain the original values.
 
-These values are your data, and they go only to your exporters. The engine never adds a value to `attributes`. Prefer pseudonymous ids over names or email addresses.
+These values are your data, and they go only to your exporters. The engine never adds a value to `attributes`. Use pseudonymous IDs instead of names or email addresses.
 
 ## Run many editors
 
-Telemetry for hundreds or thousands of open editors stays cheap when each signal goes to the place built for it:
+To limit telemetry volume across many editors:
 
 - Metrics labels come from closed lists, so the number of series does not grow with users. Avoid a label that differs per browser tab, such as a per-tab instance id. With cumulative counters, each tab becomes its own series. Send delta temporality from the browser SDK, and let your collector or backend add the tabs together.
-- Events carry your identifiers for drill-down. Each editor sends at most one performance summary a minute, identical refusals within 10 seconds become one event, and `sampleRate` limits events further.
+- Keep identifiers on events. Each editor collects performance measurements in 60-second windows. It sends pending measurements sooner when the page becomes hidden or the editor closes. The package combines identical refusals within 10 seconds. Use `sampleRate` to reduce event volume further.
 - On a collaboration server, `rooms.list()` gives a table with one row for each room, and `roomLabel` decides how rooms are named in it. For more information, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms).
 
 ## Link events to your own sessions
 
-Every event has an `editorSessionId` value. It is random for each editor instance and identifies no person and no document. Use it to join a slow performance summary or a refused edit to your own logs, traces, or error reports:
+Every event has a random `editorSessionId` for its editor instance. It does not encode a person or document. Use it to connect performance summaries and refused edits to your logs, traces, or error reports:
 
 ```ts
 import { callbackExporter, createTelemetry } from '@docx-editor.dev/telemetry';

@@ -27,6 +27,9 @@ export const telemetry = createTelemetry({
 
 To write your own exporter, implement `TelemetryExporter` with an `event` method, a `metric` method, or both. Add `flush` and `shutdown` if your exporter buffers events.
 
-An exporter can also implement `attach`. The client calls it once with a context: `consented()` tells whether consent is given now, and `pageClosing()` tells whether the page is hidden or closing, so a send must survive it. Check `consented()` before you send events that waited in a buffer.
+An exporter can also implement `attach`. The client calls it once with a context that provides two checks:
+
+- `consented()` reports whether the user allows telemetry. Check it before sending buffered events.
+- `pageClosing()` reports whether the page is hidden or closing. Use a transport that can complete the send in that state.
 
 Every event that reaches an exporter has passed the privacy checks. For what each event contains, see [Privacy](/docs/2.x/telemetry/privacy).

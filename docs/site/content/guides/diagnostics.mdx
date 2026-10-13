@@ -1,16 +1,16 @@
 ---
 title: 'Diagnostics'
-description: 'Find out why a document failed to open, an edit was refused, or a tracked change was skipped, with anonymous codes and fixed hints that are safe to send to an error tracker.'
+description: 'Use diagnostic codes to investigate document, editing, review, font, and collaboration failures.'
 category: 'Guides'
 ---
 
-The editor reports anonymous diagnostics when a document opens or fails to open, when an edit or a tracked change is refused, when a font fails to load, and when a collaboration session changes status. Each diagnostic carries a stable code and a fixed hint that explains the cause and the action to take.
+The editor reports diagnostics for document opening, editing, review, fonts, and collaboration. Failure diagnostics carry stable codes. Look up a code to get a fixed hint with its cause and recommended action.
 
-Diagnostics never contain document content. The editor builds them from closed lists of codes, booleans, and bucketed numbers. Document text, part names, relationship targets, author names, and font names are never included. You can send a diagnostic to an error tracker or a metrics backend without filtering it.
+Diagnostics never contain document content. The editor builds them from closed lists of codes, booleans, and bucketed numbers. Document text, part names, relationship targets, author names, and font names are never included. You can export these fields to an error tracker or metrics backend. Review any attributes that you add and any data your SDK collects. For more information, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
 
 ## Receive diagnostics
 
-Register a module with an `onDiagnostic` listener. A module receives the diagnostics of the document that you pass when the editor is created, because the editor opens that document before your code can call `editor.on`.
+Register a module with an `onDiagnostic` listener to receive diagnostics from the initial document open. The editor opens that document before your code can call `editor.on`.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -37,7 +37,7 @@ After the editor exists, you can also subscribe with `editor.on('diagnostic', li
 
 ## Diagnostic kinds
 
-Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `editorSessionId`, and `time`. The `editorSessionId` value is random for each editor instance and is never stored, so you can link an open failure to the edits that follow it.
+Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `editorSessionId`, and `time`. Each editor instance generates a random `editorSessionId` and does not persist it. Use it to connect diagnostics from the same instance.
 
 | Kind | When | Fields |
 | --- | --- | --- |
@@ -50,11 +50,11 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 | `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, `code` when something is wrong, and `connectMs` on the first `ready`. |
 | `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
 
-Sizes and counts are buckets, such as `4-8MiB` or `10-99`, so a combination of values cannot identify one document.
+Document sizes and counts use buckets, such as `4-8MiB` or `10-99`. Rare combinations can still distinguish documents within an organization. The telemetry package omits detailed shape buckets by default.
 
 ## Failure detail
 
-A code tells you what failed. The failure detail narrows it to one engine condition and the place it happened, so an engineer can find the code path and build a test file without seeing your document. Every field is optional and comes from a closed list.
+A code identifies the failure. Optional detail fields identify the engine condition and where it occurred. These fields use closed lists and help you investigate without document content.
 
 | Field | On | What it holds |
 | --- | --- | --- |
@@ -66,11 +66,11 @@ A code tells you what failed. The failure detail narrows it to one engine condit
 | `changeKind` | `review.skipped` | The kind of the skipped change: `insert`, `delete`, `replace`, `moveFrom`, `moveTo`, `format`, `paragraphMark`, or `structural`. |
 | `formattingKind` | `review.skipped` | For a formatting change, its property change, such as `rPrChange` or `tblGridChange`. Any other element reports `other`. |
 
-Match on `code` in your own code. Causes are the engine's internal reasons and can change between versions, so use `cause` to report and fix a failure, not to branch on it. To list every cause, call `diagnosticCauses()`.
+Use `code` for application logic. Use `cause` for investigation, because these internal reasons can change between versions. To list every cause, call `diagnosticCauses()`.
 
 An open that throws reports `open.failed` with `cause: 'exception'`, and a command, a review card action, or an editing API batch that throws reports `edit.internal-invariant` with `cause: 'exception'`. The error still reaches your code as before. An exception from your own code inside `run()` is not reported.
 
-The following events are what a malformed header and a skipped formatting change look like:
+These examples show a malformed header and a skipped formatting change:
 
 ```json
 { "kind": "document.open", "outcome": "rejected", "code": "open.xml-malformed",
@@ -139,14 +139,14 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="edit-operation-unsupported" />`edit.operation-unsupported` | This editing API operation or option is not supported by this runtime or host. Check the compatibility notes for the member you called. |
 | <a id="edit-unsupported-story" />`edit.unsupported-story` | This part of the document, such as a header, a footer or a note, does not support this edit. |
 | <a id="edit-unmapped-change" />`edit.unmapped-change` | The browser changed the page in a way the editor could not express as a document edit, so the change was undone. |
-| <a id="edit-stale-target" />`edit.stale-target` | The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry. |
+| <a id="edit-stale-target" />`edit.stale-target` | The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and reconsider the edit before you retry. |
 | <a id="edit-invalid-argument" />`edit.invalid-argument` | The command arguments are not valid for this target. Check the command type and its fields. |
 | <a id="edit-resource-limit" />`edit.resource-limit` | The edit would exceed a size or nesting limit. Split the change into smaller edits. |
 | <a id="edit-refresh-in-progress" />`edit.refresh-in-progress` | An external document refresh is in progress. Retry the edit after the refresh completes. |
 | <a id="edit-collaboration-not-ready" />`edit.collaboration-not-ready` | The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin. |
 | <a id="edit-collaboration-text-limit" />`edit.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
 | <a id="edit-internal-invariant" />`edit.internal-invariant` | The editor refused an edit to protect the document structure. This is an engine defect: report the code with the engine version. |
-| <a id="edit-refused" />`edit.refused` | The edit was refused for a reason without a specific code. Read snapshot().lastRejection for the local message. |
+| <a id="edit-refused" />`edit.refused` | The edit was refused for a reason without a specific code. Read `snapshot().lastRejection` for the local message. |
 
 ### Review
 
@@ -222,28 +222,28 @@ A collaboration code is `collab.` followed by the session's own failure code. It
 | <a id="collab-blob-digest-mismatch" />`collab.blob-digest-mismatch` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
 | <a id="collab-concurrent-seed" />`collab.concurrent-seed` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
 | <a id="collab-port-already-attached" />`collab.port-already-attached` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
-| <a id="collab-duplicate-paragraph-id" />`collab.duplicate-paragraph-id` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-invalid-relationships" />`collab.invalid-relationships` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-materialize-dropped-content" />`collab.materialize-dropped-content` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-missing-blob" />`collab.missing-blob` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-missing-root" />`collab.missing-root` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-remote-apply-failed" />`collab.remote-apply-failed` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-unknown-paragraph-id" />`collab.unknown-paragraph-id` | A remote update could not be applied yet. Edits pause and the session heals when a later update arrives. No action is needed unless it persists. |
-| <a id="collab-blob-store-full" />`collab.blob-store-full` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-blob-too-large" />`collab.blob-too-large` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-invalid-blob-descriptor" />`collab.invalid-blob-descriptor` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
-| <a id="collab-invalid-bound" />`collab.invalid-bound` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
-| <a id="collab-invalid-logical-id" />`collab.invalid-logical-id` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
+| <a id="collab-duplicate-paragraph-id" />`collab.duplicate-paragraph-id` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-invalid-relationships" />`collab.invalid-relationships` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-materialize-dropped-content" />`collab.materialize-dropped-content` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-missing-blob" />`collab.missing-blob` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-missing-root" />`collab.missing-root` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-remote-apply-failed" />`collab.remote-apply-failed` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-unknown-paragraph-id" />`collab.unknown-paragraph-id` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-blob-store-full" />`collab.blob-store-full` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-blob-too-large" />`collab.blob-too-large` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-invalid-blob-descriptor" />`collab.invalid-blob-descriptor` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
+| <a id="collab-invalid-bound" />`collab.invalid-bound` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
+| <a id="collab-invalid-logical-id" />`collab.invalid-logical-id` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
 | <a id="collab-invalid-string" />`collab.invalid-string` | A shared value is not valid XML text, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
 | <a id="collab-prototype-key" />`collab.prototype-key` | A shared state key would reach object internals, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
-| <a id="collab-text-too-long" />`collab.text-too-long` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-too-many-attributes" />`collab.too-many-attributes` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-too-many-children" />`collab.too-many-children` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-too-many-nodes" />`collab.too-many-nodes` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-too-many-parts" />`collab.too-many-parts` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-too-many-relationships" />`collab.too-many-relationships` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-tree-too-deep" />`collab.tree-too-deep` | Shared state reached a resource limit. A refused local edit is taken back automatically; a room over a limit must be recreated from a saved copy. |
-| <a id="collab-unknown-logical-id" />`collab.unknown-logical-id` | A value in the shared state is malformed or points at something that does not exist. A refused local edit is taken back automatically; a room that holds such a value must be recreated from a saved copy. |
+| <a id="collab-text-too-long" />`collab.text-too-long` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-attributes" />`collab.too-many-attributes` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-children" />`collab.too-many-children` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-nodes" />`collab.too-many-nodes` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-parts" />`collab.too-many-parts` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-relationships" />`collab.too-many-relationships` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-tree-too-deep" />`collab.tree-too-deep` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-unknown-logical-id" />`collab.unknown-logical-id` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
 | <a id="collab-unsafe-part-name" />`collab.unsafe-part-name` | A shared package part has an unsafe name, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
 | <a id="collab-invalid-saved-room" />`collab.invalid-saved-room` | The room server refused the saved room. Check the server storage, then rejoin. |
 | <a id="collab-saved-room-unavailable" />`collab.saved-room-unavailable` | The room server refused the saved room. Check the server storage, then rejoin. |
