@@ -35,6 +35,11 @@
       "import": "./dist/hocuspocus/index.js",
       "require": "./dist/hocuspocus/index.cjs"
     },
+    "./ingest": {
+      "types": "./dist/ingest/index.d.ts",
+      "import": "./dist/ingest/index.js",
+      "require": "./dist/ingest/index.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [

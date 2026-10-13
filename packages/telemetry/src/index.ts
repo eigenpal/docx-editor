@@ -7,8 +7,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /**
  * Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers.
  *
- * - `@docx-editor.dev/telemetry`: {@link createTelemetry} for editors, and the console,
- *   callback, and memory exporters.
+ * - `@docx-editor.dev/telemetry`: {@link createTelemetry} for editors, the console, callback,
+ *   memory, and HTTP exporters, and {@link browserPrivacySignals}.
+ * - `@docx-editor.dev/telemetry/ingest`: a route that receives telemetry from `httpExporter`
+ *   and forwards it to a log service.
  * - `@docx-editor.dev/telemetry/otel`: OpenTelemetry metrics and traces through your SDK.
  * - `@docx-editor.dev/telemetry/sentry`: Sentry issues and breadcrumbs.
  * - `@docx-editor.dev/telemetry/prometheus`: a `/metrics` endpoint.
@@ -26,6 +28,12 @@ export {
   type TelemetryInclude,
   type TelemetryOptions,
 } from './client.ts';
+export {
+  browserPrivacySignals,
+  httpExporter,
+  type BrowserPrivacySignalsOptions,
+  type HttpExporterOptions,
+} from './http.ts';
 export {
   callbackExporter,
   consoleExporter,

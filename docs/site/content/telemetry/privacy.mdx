@@ -85,7 +85,7 @@ export const telemetry = createTelemetry({
 
 ### Consent
 
-Pass `consent` when your app asks for consent. The editor reads it before each event and metric, and records nothing while it returns `false`. Events from that time are dropped, not buffered.
+Pass `consent` when your app asks for consent. The editor reads it before each event and metric, and records nothing while it returns `false`. Events from that time are dropped, not buffered. To follow Global Privacy Control, Do Not Track, and your own opt-out key, use `consent: browserPrivacySignals({ optOutKey })`, alone or combined with your consent manager.
 
 `consent` controls only what this package records. Your OpenTelemetry SDK still exports the metrics it recorded before, and your Sentry and OpenTelemetry SDKs have their own consent settings. Apply your consent decision to them as well.
 

@@ -29,6 +29,7 @@ flowchart LR
 | Metrics and traces in any backend that accepts OTLP, such as Datadog, Grafana, Honeycomb, or New Relic | OpenTelemetry, through your own SDK | `@docx-editor.dev/telemetry/otel` |
 | A scrape endpoint for Prometheus or Grafana Agent | Prometheus text format | `@docx-editor.dev/telemetry/prometheus` |
 | Grouped error issues for editor and server-agent failures | Sentry | `@docx-editor.dev/telemetry/sentry` |
+| A log service over HTTP, such as Better Stack, Axiom, or Datadog Logs | An HTTP exporter and a route on your server | `@docx-editor.dev/telemetry` and `@docx-editor.dev/telemetry/ingest` |
 | Any other tool, such as Datadog RUM, PostHog, or your logger | A callback | `@docx-editor.dev/telemetry` |
 
 OpenTelemetry is the source model. Prometheus names come from the OpenTelemetry names: `docx_editor.collab.room.load.duration` in seconds becomes `docx_editor_collab_room_load_duration_seconds`.

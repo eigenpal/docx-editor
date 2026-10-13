@@ -104,6 +104,17 @@ export interface TelemetryOptions extends TelemetryPipelineOptions {
    * ```
    */
   readonly attributes?: Attributes | (() => Attributes);
+  /**
+   * Which events go to your exporters, after the privacy check and sampling. Metrics still count
+   * every event. A filter that throws drops the event.
+   *
+   * @example
+   * ```ts
+   * // Failures and performance summaries only: no event for an open that succeeded.
+   * filter: (event) => isFailure(event) || event.kind === 'performance'
+   * ```
+   */
+  readonly filter?: (event: TelemetryEvent) => boolean;
 }
 
 /** A configured telemetry client. Create it once, outside any component. @public */
@@ -254,6 +265,15 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
   }
   const include = options.include ?? ALL_AREAS;
   const windowMs = options.dedupeWindowMs ?? 10_000;
+  /** Every event goes out here, so the host's filter sees summaries and repeats too. */
+  const send = (event: TelemetryEvent): void => {
+    try {
+      if (options.filter && !options.filter(event)) return;
+    } catch {
+      return;
+    }
+    pipeline.event(event);
+  };
   const detailedShape = options.documentShape === 'detailed';
   interface Window {
     readonly event: TelemetryEvent;
@@ -320,11 +340,9 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       // A count is a state, not a repeat: send the latest one if it differs.
       const sent = open.event as { count?: number };
       if ((open.latest as { count?: number }).count !== sent.count)
-        pipeline.event(
-          enrich(withShape(open.latest, detailedShape), pipeline, open.event.attributes)
-        );
+        send(enrich(withShape(open.latest, detailedShape), pipeline, open.event.attributes));
     } else if (open.repeated > 0) {
-      pipeline.event({ ...open.event, repeated: open.repeated });
+      send({ ...open.event, repeated: open.repeated });
     }
   }
 
@@ -360,7 +378,7 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     }
     if (!sampled(diagnostic, area!, sampleRate)) return;
     const event = enrich(withShape(diagnostic, detailedShape), pipeline, attributes);
-    pipeline.event(event);
+    send(event);
     if (key) {
       const timer = setTimeout(() => close(key), windowMs);
       (timer as { unref?: () => void }).unref?.();

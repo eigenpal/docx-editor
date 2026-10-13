@@ -69,6 +69,7 @@
     "telemetry/privacy",
     "telemetry/editors",
     "telemetry/servers",
+    "telemetry/log-services",
     "telemetry/dashboards",
     "telemetry/metrics",
     "---Editing API---",

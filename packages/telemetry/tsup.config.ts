@@ -11,6 +11,7 @@ const ENTRIES = {
   'prometheus/index': 'src/prometheus/index.ts',
   'server/index': 'src/server/index.ts',
   'hocuspocus/index': 'src/hocuspocus/index.ts',
+  'ingest/index': 'src/ingest/index.ts',
 };
 
 // One build for every entry, so the entries share one copy of the pipeline. Every peer stays

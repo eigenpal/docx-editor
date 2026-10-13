@@ -270,6 +270,8 @@ To see these metrics in Grafana, download the **Editor experience** dashboard fr
 
 ## Send to another tool
 
+To send events to a log service over HTTP, such as Better Stack, Axiom, or Datadog Logs, use `httpExporter` and a route on your server. For the setup, see [Send to a log service](/docs/2.x/telemetry/log-services).
+
 Use `callbackExporter` to forward events to any function:
 
 ```ts

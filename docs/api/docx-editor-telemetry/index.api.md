@@ -11,6 +11,14 @@ export type Attributes = Readonly<Record<string, AttributeValue>>;
 export type AttributeValue = string | number | boolean;
 
 // @public
+export function browserPrivacySignals(options?: BrowserPrivacySignalsOptions): () => boolean;
+
+// @public
+export interface BrowserPrivacySignalsOptions {
+    readonly optOutKey?: string;
+}
+
+// @public
 export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
 
 // @public
@@ -177,6 +185,18 @@ export interface HistoryDiagnosticEvent extends DiagnosticBase {
     readonly code: HistoryDiagnosticCode;
     // (undocumented)
     readonly kind: 'history';
+}
+
+// @public
+export function httpExporter(options: HttpExporterOptions): TelemetryExporter;
+
+// @public
+export interface HttpExporterOptions {
+    readonly batchSize?: number;
+    readonly flushIntervalMs?: number;
+    readonly headers?: Readonly<Record<string, string>>;
+    readonly onError?: (error: unknown) => void;
+    readonly url: string;
 }
 
 // @public
@@ -356,6 +376,7 @@ export interface TelemetryOptions extends TelemetryPipelineOptions {
     readonly attributes?: Attributes | (() => Attributes);
     readonly dedupeWindowMs?: number;
     readonly documentShape?: 'basic' | 'detailed';
+    readonly filter?: (event: TelemetryEvent) => boolean;
     readonly include?: TelemetryInclude;
 }
 

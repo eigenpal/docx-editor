@@ -1,4 +1,4 @@
 {
   "title": "Telemetry",
-  "pages": ["index", "privacy", "editors", "servers", "dashboards", "metrics"]
+  "pages": ["index", "privacy", "editors", "servers", "log-services", "dashboards", "metrics"]
 }

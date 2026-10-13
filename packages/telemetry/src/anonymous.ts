@@ -293,3 +293,20 @@ export function checkAttributes(
   }
   return out;
 }
+
+/**
+ * Attributes received from an untrusted client: well-formed keys, and values that are numbers,
+ * booleans, or identifier strings. A string with spaces or other text is dropped, not cut, so
+ * free text never passes a server that forwards it.
+ */
+export function checkIdentifierAttributes(value: unknown): Attributes | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: Record<string, AttributeValue> = {};
+  for (const [key, field] of Object.entries(value)) {
+    if (!KEY.test(key)) continue;
+    if (typeof field === 'boolean' || (typeof field === 'number' && Number.isFinite(field)))
+      out[key] = field;
+    else if (typeof field === 'string' && field && LABEL_VALUE.test(field)) out[key] = field;
+  }
+  return Object.keys(out).length ? out : undefined;
+}

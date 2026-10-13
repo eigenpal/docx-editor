@@ -345,6 +345,8 @@ export const PACKAGES = [
         prometheus: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
         server: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
         hocuspocus: ['Attributes', 'MetricDefinition', 'MetricRecord', 'TelemetryEvent'],
+        // The route re-exports `TelemetryEvent`, which the main entry and core define.
+        ingest: ['EditorDiagnostic', 'TelemetryEventContext'],
       },
     },
   },
