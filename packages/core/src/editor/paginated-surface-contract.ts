@@ -4,7 +4,7 @@ import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 
 import type { SurfaceParagraphFormat, ParagraphPropertyEdit } from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { BookmarkIndex } from '@docx-editor.dev/core/store';
+import type { BookmarkIndex, SelectionMark } from '@docx-editor.dev/core/store';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-op-types.ts';
 import type {
@@ -927,3 +927,21 @@ export type {
   ParagraphPropertyEdit,
   SurfaceParagraphFormat,
 } from './paragraph-format-contract.ts';
+
+/** The surface with the internal members that other editor modules reach by cast. */
+export type ScaleMutableSurface = PaginatedSurface & {
+  setScale(nextScale: number): boolean;
+  /**
+   * The gated, attributed session write for command lanes that live OUTSIDE this file —
+   * today the content-control commands. Same collaboration gate and actor attribution as
+   * the typing lane (`applyJournaledOps`); the command's own mode/lock gate has already
+   * run. Internal, reached by cast like `setScale` — see `applyGatedSurfaceTreeOps` in
+   * `content-controls.ts` for the accessor.
+   */
+  applyGatedTreeOps(
+    ops: readonly TreeDocOp[],
+    selectionBefore?: SelectionMark | null,
+    selectionAfter?: SelectionMark | null,
+    scope?: StoryScope
+  ): TreeApplyResult;
+};

@@ -250,6 +250,8 @@ test('the metrics page lists every metric with its type, labels, and description
       `${definition.kind} | ${labels} | ${definition.description}`,
     ];
   });
-  expect(expected.filter(([name, row]) => rows.get(name!) !== row)).toEqual([]);
+  // The page sets option names in code font; the catalog text, which exporters send, does not.
+  const plain = (row: string | undefined) => row?.replaceAll('`', '');
+  expect(expected.filter(([name, row]) => plain(rows.get(name!)) !== plain(row))).toEqual([]);
   expect([...rows.keys()].sort()).toEqual(expected.map(([name]) => name!).sort());
 });
