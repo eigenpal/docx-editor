@@ -24,7 +24,7 @@ A closing page has a total delivery budget of about 64 KiB. Delivery is best eff
 
 ## filter
 
-`filter` decides which events reach your exporters. Metrics still count every event. Filter by event kind to include summaries of repeated refusals. These summaries carry `repeated`. `isFailure` returns `false` for them.
+`filter` decides which events reach your exporters. Metrics still count every event. Filter by event kind to include summaries of repeated refusals. These summaries carry `repeated`. `isFailure` returns `false` for them. To count failures with summaries included, sum `failureCount(event)`.
 
 ## browserPrivacySignals
 

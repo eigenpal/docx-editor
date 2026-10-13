@@ -81,7 +81,7 @@ Download [`editor-experience.json`](https://raw.githubusercontent.com/eigenpal/d
 
 | Entry | Contents |
 | --- | --- |
-| `@docx-editor.dev/telemetry` | `createTelemetry`, `consoleExporter`, `callbackExporter`, `memoryExporter`, `isFailure`, `explainDiagnostic`, the metric catalog |
+| `@docx-editor.dev/telemetry` | `createTelemetry`, `consoleExporter`, `callbackExporter`, `memoryExporter`, `isFailure`, `failureCount`, `explainDiagnostic`, the metric catalog |
 | `@docx-editor.dev/telemetry/otel` | `otelExporter`, through your OpenTelemetry SDK |
 | `@docx-editor.dev/telemetry/sentry` | `sentryExporter`, `dropEditorBreadcrumbs`, `EDITOR_SELECTORS` |
 | `@docx-editor.dev/telemetry/prometheus` | `prometheusRegistry`, `metricsHandler`, `fetchMetricsHandler`, for server processes. Browser metrics go through `otelExporter()` and an OpenTelemetry collector. |

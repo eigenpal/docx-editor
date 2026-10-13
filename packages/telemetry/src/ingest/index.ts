@@ -17,6 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @packageDocumentation
  */
 import { checkEvent, checkIdentifierAttributes } from '../anonymous.ts';
+import { failureCount } from '../exporters.ts';
 import type { Attributes, TelemetryEvent } from '../pipeline.ts';
 
 /** Options for {@link validateTelemetryEvents}. @public */
@@ -132,18 +133,26 @@ export function validateTelemetryEvents(
   });
 }
 
-/** A log record with the fields log services read for time and summary. @public */
+/** A log record with the fields log services read for time, summary, and counts. @public */
 export type TelemetryLogRecord = Record<string, unknown> & {
   /** The event time in milliseconds since the epoch, which Better Stack and others read. */
   readonly dt: number;
   /** A one-line summary, such as `edit.rejected edit.picture-selected`. */
   readonly message: string;
+  /**
+   * How many times the event happened: `1`, or `repeated` for a deduplication summary, whose
+   * first event was already sent. Sum it to count events; do not count records.
+   */
+  readonly occurrences: number;
+  /** How many failures the record adds to a failure total. See `failureCount`. */
+  readonly failures: number;
 };
 
 /**
- * An event as a log record: `dt` for the time, `message` for the live tail, and every field of
- * the event except the fixed `hint` and `docs` text, which the code already identifies. Add
- * your own fixed fields, such as a service name, to the result.
+ * An event as a log record: `dt` for the time, `message` for the live tail, `occurrences` and
+ * `failures` to sum, and every field of the event except the fixed `hint` and `docs` text,
+ * which the code already identifies. Add your own fixed fields, such as a service name, to the
+ * result.
  *
  * @example
  * ```ts
@@ -162,7 +171,13 @@ export function toLogRecord(event: TelemetryEvent): TelemetryLogRecord {
     docs?: string;
   };
   const code = 'code' in event && event.code ? ` ${event.code}` : '';
-  return { ...fields, dt: event.time, message: `${event.kind}${code}` };
+  return {
+    ...fields,
+    dt: event.time,
+    message: `${event.kind}${code}`,
+    occurrences: event.repeated ?? 1,
+    failures: failureCount(event),
+  };
 }
 
 /** Options for {@link telemetryRoute}. @public */

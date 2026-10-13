@@ -160,6 +160,9 @@ export const ENGINE_VERSION: string;
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
+export function failureCount(event: TelemetryEvent): number;
+
+// @public
 export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
 
 // @public

@@ -383,6 +383,15 @@ describe('ingest', () => {
     expect(record).not.toHaveProperty('docs');
   });
 
+  test('a log record carries the counts to sum, so a summary counts its repeats', () => {
+    const [first, summary] = validateTelemetryEvents([sent, { ...sent, repeated: 4 }]);
+    // `edit.picture-selected` is a failure: not one of the expected refusals.
+    expect(toLogRecord(first!)).toMatchObject({ occurrences: 1, failures: 1 });
+    expect(toLogRecord(summary!)).toMatchObject({ occurrences: 4, failures: 4, repeated: 4 });
+    const [expected] = validateTelemetryEvents([{ ...sent, code: 'edit.read-only', repeated: 2 }]);
+    expect(toLogRecord(expected!)).toMatchObject({ occurrences: 2, failures: 0 });
+  });
+
   test('the route forwards checked events, limits bytes, and always answers 204', async () => {
     const forwarded: unknown[] = [];
     const errors: unknown[] = [];
