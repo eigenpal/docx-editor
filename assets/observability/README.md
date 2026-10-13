@@ -52,6 +52,8 @@ export const telemetry = createTelemetry({
     trackedChanges: true,
     fonts: true,
     performance: true,
+    // Only in apps with collaboration: the client panels of the Collaboration dashboard.
+    collaborationClient: true,
   },
   attributes: { 'deployment.environment': 'production', 'app.version': '4.2.0' },
   metricLabels: ['deployment.environment', 'app.version'],
@@ -76,7 +78,7 @@ The people totals add up all selected server instances. If your instances share 
 
 ## Mark collaboration servers
 
-The **Collaboration** dashboard reads only targets with the `docx_editor="collaboration"` label. Add it to the scrape configuration of each collaboration server. Other targets in the same job then never appear, and a server that fails every scrape still shows:
+The server panels of the **Collaboration** dashboard read only targets with the `docx_editor="collaboration"` label. Add it to the scrape configuration of each collaboration server. Other targets in the same job then never appear, and a server that fails every scrape still shows. The client panels read the editor metrics, and only the **Client app** filter applies to them:
 
 ```yaml
 scrape_configs:

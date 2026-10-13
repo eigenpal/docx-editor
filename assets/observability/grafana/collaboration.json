@@ -1,7 +1,7 @@
 {
   "uid": "docx-editor-collaboration",
   "title": "Collaboration",
-  "description": "The room server and the editors in its rooms: availability, rooms and people, server work, and refusals.",
+  "description": "Collaboration servers and the editors that join rooms: availability, rooms and people, server work, and refusals. Server filters apply to server panels; Client app applies to client panels.",
   "tags": ["docx-editor"],
   "timezone": "browser",
   "schemaVersion": 39,
@@ -315,7 +315,7 @@
     {
       "type": "stat",
       "title": "Client errors",
-      "description": "Times an editor reported an error status in the selected range. No data means no editor reported a status.",
+      "description": "Times an editor reported an error status in the selected range. No data means no editor reported a status. The Client app filter selects these editors; the Server filters do not apply to them.",
       "targets": [
         {
           "datasource": {
@@ -1344,7 +1344,7 @@
     },
     {
       "type": "row",
-      "title": "Clients",
+      "title": "Clients (filtered by Client app only)",
       "id": 22,
       "collapsed": false,
       "gridPos": {
@@ -1358,7 +1358,7 @@
     {
       "type": "timeseries",
       "title": "Client status changes per minute",
-      "description": "Ready, disconnected, and error statuses that editors reported, with the failure code.",
+      "description": "Ready, disconnected, and error statuses that editors reported, with the failure code. The Client app filter selects these editors; the Server filters do not apply to them.",
       "targets": [
         {
           "datasource": {
@@ -1416,7 +1416,7 @@
     {
       "type": "timeseries",
       "title": "Room size as clients saw it",
-      "description": "People in the room, sampled each time the count changed in an editor. For diagnosis; the server panels are the source of truth.",
+      "description": "People in the room, sampled each time the count changed in an editor. For diagnosis; the server panels are the source of truth. The Client app filter selects these editors; the Server filters do not apply to them.",
       "targets": [
         {
           "datasource": {

@@ -320,7 +320,7 @@ c.add(stat('Stores succeeding',
 c.add(stat('Refused connections', f'round(sum(increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))) or ((min(up{{{S}}}) == 1) * 0)', 'short',
            'Connections the server refused at admission, as recorded in the selected range. For whether the server is scraped now, see Server.'), 5, 4)
 c.add(stat('Client errors', f'round(sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job",status="error"}}[$__range]))) or (sum(increase(docx_editor_collab_client_status_transitions_total{{job=~"$job"}}[$__range])) * 0)', 'short',
-           'Times an editor reported an error status in the selected range. No data means no editor reported a status.', no_value='No client data'), 5, 4)
+           'Times an editor reported an error status in the selected range. No data means no editor reported a status. The Client app filter selects these editors; the Server filters do not apply to them.', no_value='No client data'), 5, 4)
 c.add(stat('Room limit p95, last 5 min', f'max(histogram_quantile(0.95, sum by (le, resource) (rate(docx_editor_collab_room_resource_usage_bucket{{{S}}}[5m]))))',
            'percentunit', 'The highest 95th percentile of any one room limit (nodes, relationships, parts, blob bytes) over the last 5 minutes. At 100%, a room refuses edits that need more of that resource.', decimals=0), 5, 4)
 
@@ -358,12 +358,12 @@ c.add(series('Update traffic', [(f'sum(rate(docx_editor_collab_update_bytes_tota
 c.add(top_table('Room migrations by outcome', f'sum by (outcome) (increase(docx_editor_collab_migrations_total{{{S}}}[$__range]))', 'outcome',
                 'Rooms migrated to a newer collaboration format, by outcome.', code_links=False, no_value='No migrations'), 8, 7)
 
-c.row('Clients')
+c.row('Clients (filtered by Client app only)')
 c.add(series('Client status changes per minute', [(f'60 * sum by (status, code) (rate(docx_editor_collab_client_status_transitions_total{{job=~"$job"}}[$__rate_interval]))', '{{status}} {{code}}')],
-             'short', 'Ready, disconnected, and error statuses that editors reported, with the failure code.', stack='normal'), 12, 8)
+             'short', 'Ready, disconnected, and error statuses that editors reported, with the failure code. The Client app filter selects these editors; the Server filters do not apply to them.', stack='normal'), 12, 8)
 c.add(series('Room size as clients saw it', [
     (f'sum(rate(docx_editor_collab_client_participants_sum{{job=~"$job"}}[$__rate_interval])) / sum(rate(docx_editor_collab_client_participants_count{{job=~"$job"}}[$__rate_interval]))', 'average')],
-             'short', 'People in the room, sampled each time the count changed in an editor. For diagnosis; the server panels are the source of truth.'), 12, 8)
+             'short', 'People in the room, sampled each time the count changed in an editor. For diagnosis; the server panels are the source of truth. The Client app filter selects these editors; the Server filters do not apply to them.'), 12, 8)
 
 c.row('Refusals')
 c.add(top_table('Refused connections by reason', f'sum by (reason) (increase(docx_editor_collab_admission_rejections_total{{{S}}}[$__range]))', 'reason',
@@ -382,7 +382,7 @@ collab_vars = [
 ]
 collab = dashboard(
     'docx-editor-collaboration', 'Collaboration',
-    'The room server and the editors in its rooms: availability, rooms and people, server work, and refusals.',
+    'Collaboration servers and the editors that join rooms: availability, rooms and people, server work, and refusals. Server filters apply to server panels; Client app applies to client panels.',
     c, collab_vars,
     [],
     [('Docs', f'{DOCS}/telemetry/servers'), ('Report an issue', ISSUES)])

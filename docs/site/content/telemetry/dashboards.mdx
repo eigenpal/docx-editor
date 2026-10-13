@@ -58,13 +58,15 @@ export const telemetry = createTelemetry({
     trackedChanges: true,
     fonts: true,
     performance: true,
+    // Only in apps with collaboration: the client panels of the Collaboration dashboard.
+    collaborationClient: true,
   },
   attributes: { 'deployment.environment': 'production', 'app.version': '4.2.0' },
   metricLabels: ['deployment.environment', 'app.version'],
 });
 ```
 
-Mark each collaboration server with the `docx_editor` target label. The **Collaboration** dashboard reads only targets with this label, so other targets in the same job never appear, and a server that fails every scrape still shows:
+Mark each collaboration server with the `docx_editor` target label. The server panels of the **Collaboration** dashboard read only targets with this label, so other targets in the same job never appear, and a server that fails every scrape still shows. Its client panels read the editor metrics instead, and only the **Client app** filter applies to them:
 
 ```yaml
 scrape_configs:
