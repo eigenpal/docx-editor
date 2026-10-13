@@ -1,0 +1,157 @@
+---
+title: 'Privacy'
+description: 'What editor and server telemetry contains, what it never contains, how that is enforced, and how to configure your own SDKs so that no personal data or document content leaves your app.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+This page is for teams that must show, in a privacy or security review, what their editor telemetry sends. It lists every field the editor can send, the rules that keep personal data and document content out, and the settings in your own SDKs that you need to check.
+
+## Summary
+
+- The package never sends data by itself. It sends only to the exporters that you configure, and only to your own backends.
+- Diagnostics and metrics contain no document content and no personal data. Document text, file names, part names, relationship targets, author names, comment text, font names, element names from the file, and exception messages are never included.
+- Every value is a code from a closed list, a boolean, a bucketed size or count, or a timing in milliseconds.
+- Two independent checks enforce this: one where the engine builds the event, and one in the telemetry package before any exporter receives it.
+- Values that you add yourself, such as a room or user identifier, are your responsibility. So are the other things that your Sentry and OpenTelemetry SDKs collect.
+
+## How it is enforced
+
+The engine builds each diagnostic from closed lists when the event is made. It never copies a string from the document into an event: a part name becomes a role such as `header`, an exception becomes its class such as `TypeError`, and a count becomes a bucket such as `10-99`. An internal refusal message, which can describe the document, is mapped to a public code, and the message itself stays in the engine.
+
+The telemetry package checks every event again before an exporter receives it. A string field that is not in its allowed list is removed. An event with an unknown kind or code is dropped completely, and the `docx_editor_telemetry_dropped_events_total` metric counts it. This second check protects you when the engine and the telemetry package come from different versions.
+
+The test suites verify both checks with files that contain planted text, part names, and author names. Each test serializes every event and error message and fails if a planted string appears.
+
+## What each event contains
+
+Every event has `kind`, `schemaVersion`, `editorSessionId`, and `time`, and the telemetry package adds `engineVersion`. The `editorSessionId` value is random for each editor instance and is never stored, so it identifies no person and no document. If you send it together with your own user identifier, it becomes linkable to that user.
+
+| Event | Fields | Values |
+| --- | --- | --- |
+| `document.open`, opened | `sizeBucket`, `pagesBucket`, `durationMs`, and `shape` if you allow it | Size in 15 power-of-two buckets, such as `1-2MiB`. Pages in 6 buckets: `0`, `1`, `2-9`, `10-99`, `100-999`, `1000+`. Duration in milliseconds. |
+| `document.open`, rejected | `code`, `sizeBucket`, `cause`, `part`, `errorName`, `stage` | A public code, the engine's reason token, the role of the failed part, and for an exception its class and where it was caught. |
+| `edit.rejected` | `code`, `origin`, `tracked`, `command`, `cause`, `errorName`, `stage` | A public code; `command`, `input`, or `automation`; a boolean; a built-in command name such as `insertTable`. A custom command name is never sent. |
+| `review.skipped` | `code`, `count`, `operation`, `changeKind`, `formattingKind`, `part`, `cause` | `accept`, `reject`, or `reassign`; the kind of tracked change; a known property-change element or `other`. The author and the change are never sent. |
+| `font.failed` | `code` | A code. The font family name is never sent. |
+| `history`, `custom-node` | `code` | A code. A custom node's name and data are never sent. |
+| `collab.status` | `status`, `previous`, `code`, `recovering`, `connectMs` | Session states, a failure code, a boolean, milliseconds. The room name is never sent. |
+| `collab.participants` | `count` | The number of people in the room. Names are never sent. |
+| `performance` | `interaction`, `layout`, `paint`, `windowMs`, `pagesBucket`, `code` | Timing summaries in milliseconds and band counts. No key, character, or position is recorded. |
+
+Every closed list is part of the public API. To read them in code, call `diagnosticCodes()` and `diagnosticCauses()` from `@docx-editor.dev/core`. For what each field means, see [Diagnostics](/docs/2.x/guides/diagnostics).
+
+### Document shape
+
+By default, an opened document reports only `sizeBucket` and `pagesBucket`. With `documentShape: 'detailed'`, it also reports four buckets: XML parts, paragraphs, tracked changes and comments, and embedded fonts. There is no option that sends exact counts.
+
+One bucket says little about a document. Several buckets together form a combination, and a rare combination can stand out inside one organization. For this reason the detailed shape is off by default. Turn it on only if you need to group open times by document structure.
+
+### Metrics
+
+Metrics carry the same codes and buckets as labels. A metric label accepts only short identifier values, matching `[A-Za-z0-9_.:+-]{0,64}`; any other value becomes `other`. Each label you add with `metricLabels` keeps at most 50 distinct values, and later values become `other`. For every metric and label, see [Metrics](/docs/2.x/telemetry/metrics).
+
+## Collaboration servers
+
+- Metrics never carry a room name.
+- `rooms.list()` labels each room with an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, pass `roomLabel: hmacRoomLabel(secret)`. Show real names only on an endpoint that only administrators can reach.
+- `perRoomSeries: true` accepts only the default label or `hmacRoomLabel`, so a room name cannot become a metric label.
+- Refusal reasons from your hooks become a known reason or `other`. The error message is never recorded.
+
+For more information, see [Collaboration servers](/docs/2.x/telemetry/servers).
+
+## What you are responsible for
+
+### Your own identifiers
+
+`attributes`, `resource`, and `metricLabels` send exactly what you give them. Event attributes accept any string up to 256 characters, so the package cannot tell a pseudonymous identifier from an email address.
+
+- Send pseudonymous identifiers that your backend issues, such as an internal user number or a random room token. Never send names, email addresses, document titles, matter numbers, or file names.
+- Add a key to `metricLabels` only if it has few values, such as an environment or an app version. A user or room identifier as a metric label creates one series per user or room.
+
+The following example sends an app version and a pseudonymous tenant identifier, and labels metrics by the version only:
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({
+  exporters: [otelExporter()],
+  attributes: { 'app.version': '4.2.0', 'tenant.id': 't_8f3a' },
+  metricLabels: ['app.version'],
+});
+```
+
+### Consent
+
+Pass `consent` when your app asks for consent. The editor reads it before each event and metric, and records nothing while it returns `false`. Events from that time are dropped, not buffered.
+
+`consent` controls only what this package records. Your OpenTelemetry SDK still exports the metrics it recorded before, and your Sentry and OpenTelemetry SDKs have their own consent settings. Apply your consent decision to them as well.
+
+### Sentry
+
+The Sentry SDK collects more than your diagnostics. Check each of these settings:
+
+- **Session Replay** records the page, and the page shows the document. Block the editor with `EDITOR_SELECTORS`, or turn Replay off on pages with the editor.
+- **Click and key breadcrumbs** describe the element that was clicked, and inside the editor its `alt`, `title`, and `aria-label` values come from the document. Remove them with `dropEditorBreadcrumbs`.
+- **Page URLs** are attached to every event and to navigation and fetch breadcrumbs. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend` and `beforeBreadcrumb`.
+- **IP addresses and user data** are sent when `sendDefaultPii` is `true`. Keep it `false`.
+- **Console breadcrumbs** record what your own code logs. Drop the `console` category if your code logs document details.
+- **Request bodies** on a server can be attached to an issue. If an endpoint receives document bytes or agent instructions, remove `event.request.data` in `beforeSend`.
+- **Uncaught errors** that your global error handler captures carry the JavaScript error message and stack trace. These come from the runtime, not from the document, but the package does not control them.
+
+The following example applies these settings:
+
+```ts
+import * as Sentry from '@sentry/react';
+import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
+
+Sentry.init({
+  dsn: import.meta.env.VITE_SENTRY_DSN,
+  sendDefaultPii: false,
+  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
+  beforeBreadcrumb: (crumb, hint) => {
+    const kept = dropEditorBreadcrumbs(crumb, hint);
+    return kept && kept.category === 'console' ? null : kept;
+  },
+  beforeSend: (event) => {
+    // Remove identifiers from the URL before the event leaves the browser.
+    if (event.request?.url) event.request.url = event.request.url.split('?')[0];
+    return event;
+  },
+});
+```
+
+### OpenTelemetry
+
+Your OpenTelemetry SDK adds resource attributes to every metric and span, such as `service.name`. Some instrumentations also add the browser's user agent or page URL. Check the resource and the instrumentations that you register, and keep identifiers out of them.
+
+## Verify it yourself
+
+You can check what the editor sends in your own test suite. Collect every event with `memoryExporter`, open, edit, and review a file that contains text you can recognize, and check that the text never appears in the events:
+
+```ts
+import { createTelemetry, memoryExporter } from '@docx-editor.dev/telemetry';
+
+export const memory = memoryExporter();
+export const telemetry = createTelemetry({ exporters: [memory] });
+
+/** Throws if any recorded event contains `text`. Call it after your test edits the file. */
+export function assertNoDocumentText(text: string): void {
+  if (JSON.stringify(memory.events).includes(text))
+    throw new Error('A telemetry event contains document text.');
+}
+```
+
+During development, `consoleExporter()` prints each event as it would be sent.
+
+## Review checklist
+
+- [ ] Exporters send only to backends that your organization controls or has approved.
+- [ ] `attributes` and `resource` contain only pseudonymous identifiers.
+- [ ] `metricLabels` lists only keys with few values.
+- [ ] `documentShape` is left at `'basic'`, or the detailed shape is approved.
+- [ ] `consent` reads your consent manager, and your Sentry and OpenTelemetry SDKs follow the same decision.
+- [ ] Sentry: Replay blocks the editor, `dropEditorBreadcrumbs` is set, `sendDefaultPii` is `false`, and URLs and request bodies are scrubbed.
+- [ ] Collaboration server: `rooms.list()` is behind an administrator endpoint, and `roomLabel` is the default or `hmacRoomLabel`.

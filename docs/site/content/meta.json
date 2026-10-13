@@ -66,6 +66,7 @@
     "pro/collaboration-versions",
     "---Telemetry---",
     "telemetry/index",
+    "telemetry/privacy",
     "telemetry/editors",
     "telemetry/servers",
     "telemetry/dashboards",
