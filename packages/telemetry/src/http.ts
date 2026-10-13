@@ -129,8 +129,12 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
     return null;
   };
 
-  /** Bytes sent since the page started closing. The browser's limit covers all of them. */
+  /**
+   * Bytes sent since the page was last hidden. The browser's limit covers all of them; a page that
+   * becomes visible again starts a new period, because what it sent before has been delivered.
+   */
   let closingSent = 0;
+  let wasClosing = false;
 
   const drain = (closing: boolean): void => {
     if (timer !== undefined) clearTimeout(timer);
@@ -140,7 +144,8 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
       queue = [];
       return;
     }
-    if (!closing) closingSent = 0;
+    if (!closing || !wasClosing) closingSent = 0;
+    wasClosing = closing;
     let dropped = 0;
     while (queue.length) {
       const batch = nextBatch(CLOSING_BUDGET_BYTES - (closing ? closingSent : 0));
@@ -160,12 +165,23 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
   };
 
   /** Whether the page is hidden or closing now, so a send must survive it. */
-  const closing = (): boolean => context?.pageClosing() ?? false;
+  const closing = (): boolean => {
+    const now = context?.pageClosing() ?? false;
+    if (!now) wasClosing = false;
+    return now;
+  };
+  // A page shown again starts a new hidden period, even when nothing was sent while it showed.
+  const page = globalThis.document as Document | undefined;
+  const onVisibility = () => {
+    if (page?.visibilityState === 'visible') wasClosing = false;
+  };
+  const stopWatching = () => page?.removeEventListener?.('visibilitychange', onVisibility);
 
   return {
     name: 'http',
     attach(attached) {
       context = attached;
+      page?.addEventListener?.('visibilitychange', onVisibility);
     },
     event(event) {
       queue.push(event);
@@ -180,6 +196,7 @@ export function httpExporter(options: HttpExporterOptions): TelemetryExporter {
       await Promise.all(pending);
     },
     async shutdown() {
+      stopWatching();
       drain(closing());
       await Promise.all(pending);
     },

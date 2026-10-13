@@ -46,27 +46,7 @@ The Sentry SDK collects more than your diagnostics. Check each of these settings
 - **Request bodies** on a server can be attached to an issue. If an endpoint receives document bytes or agent instructions, remove `event.request.data` in `beforeSend`.
 - **Uncaught errors** that your global error handler captures carry the JavaScript error message and stack trace. These come from the runtime, not from the document, but the package does not control them.
 
-The following example applies these settings:
-
-```ts
-import * as Sentry from '@sentry/react';
-import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
-
-Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN,
-  sendDefaultPii: false,
-  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
-  beforeBreadcrumb: (crumb, hint) => {
-    const kept = dropEditorBreadcrumbs(crumb, hint);
-    return kept && kept.category === 'console' ? null : kept;
-  },
-  beforeSend: (event) => {
-    // Remove identifiers from the URL before the event leaves the browser.
-    if (event.request?.url) event.request.url = event.request.url.split('?')[0];
-    return event;
-  },
-});
-```
+For a configuration that applies these settings, see [Keep document content out of Sentry](/docs/2.x/telemetry/sentry#keep-document-content-out-of-sentry).
 
 ## OpenTelemetry
 

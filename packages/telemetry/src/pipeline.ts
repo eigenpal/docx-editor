@@ -225,9 +225,13 @@ export function createPipeline(options: TelemetryPipelineOptions): Pipeline {
     return !closed && consentGiven();
   }
   let pageClosing = false;
+  // The document state too: the engine's own hide listeners send their last summaries before the
+  // window's listener, which sets the flag, runs.
+  const isPageClosing = (): boolean =>
+    pageClosing || globalThis.document?.visibilityState === 'hidden';
   for (const exporter of exporters) {
     try {
-      exporter.attach?.({ consented: consentGiven, pageClosing: () => pageClosing });
+      exporter.attach?.({ consented: consentGiven, pageClosing: isPageClosing });
     } catch (error) {
       report(error, exporter.name);
     }

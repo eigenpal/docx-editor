@@ -33,16 +33,24 @@ Sentry.init({
 
 Sentry also attaches the page URL to every event. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend`. Navigation and fetch breadcrumbs carry URLs too, so remove the identifier from them in `beforeBreadcrumb`. Sentry records console messages as breadcrumbs by default; drop the `console` category if your own code logs document details.
 
-To combine `dropEditorBreadcrumbs` with your own filter, call it first and pass on only what it keeps:
+To combine `dropEditorBreadcrumbs` with your own filter, call it first and pass on only what it keeps. The following example also keeps IP addresses out, drops console breadcrumbs, and removes the query string from page URLs:
 
 ```ts
 import * as Sentry from '@sentry/react';
-import { dropEditorBreadcrumbs } from '@docx-editor.dev/telemetry/sentry';
+import { dropEditorBreadcrumbs, EDITOR_SELECTORS } from '@docx-editor.dev/telemetry/sentry';
 
 Sentry.init({
+  dsn: import.meta.env.VITE_SENTRY_DSN,
+  sendDefaultPii: false,
+  integrations: [Sentry.replayIntegration({ block: [...EDITOR_SELECTORS] })],
   beforeBreadcrumb: (crumb, hint) => {
     const kept = dropEditorBreadcrumbs(crumb, hint);
     return kept?.category === 'console' ? null : kept;
+  },
+  beforeSend: (event) => {
+    // Remove identifiers from the URL before the event leaves the browser.
+    if (event.request?.url) event.request.url = event.request.url.split('?')[0];
+    return event;
   },
 });
 ```

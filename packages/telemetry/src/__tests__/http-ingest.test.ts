@@ -282,6 +282,57 @@ describe('httpExporter delivery limits', () => {
   });
 });
 
+describe('httpExporter hidden pages', () => {
+  const setVisibility = (state: string | undefined) => {
+    if (state === undefined) delete (document as { visibilityState?: unknown }).visibilityState;
+    else Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+    document.dispatchEvent(new Event('visibilitychange'));
+  };
+  afterEach(() => setVisibility(undefined));
+
+  test('a batch filled while the document is hidden, before the window hears it, uses sendBeacon', () => {
+    stubBeacon();
+    const posts: unknown[] = [];
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      posts.push(init);
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+    const telemetry = createTelemetry({
+      exporters: [httpExporter({ url: '/api/telemetry', batchSize: 2, flushIntervalMs: 60_000 })],
+    });
+    telemetry.record(refusal);
+    // The document is hidden; the engine's last summary arrives before the window's listener runs.
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    telemetry.record({ ...refusal, code: 'edit.read-only' } as EditorDiagnostic);
+    expect(posts).toEqual([]);
+    void telemetry.shutdown();
+  });
+
+  test('each hidden period gets the whole closing budget', async () => {
+    stubBeacon();
+    const errors: unknown[] = [];
+    const exporter = httpExporter({
+      url: '/api/telemetry',
+      flushIntervalMs: 60_000,
+      onError: (error) => errors.push(error),
+    });
+    let hidden = false;
+    exporter.attach!({ consented: () => true, pageClosing: () => hidden });
+    // About 40 KiB per period: two periods together pass the budget, each one alone does not.
+    const big = (index: number) =>
+      ({ ...refusal, editorSessionId: `e_${String(index).padStart(64, '0')}` }) as never;
+    for (let period = 0; period < 3; period += 1) {
+      setVisibility('visible');
+      hidden = true;
+      for (let index = 0; index < 220; index += 1) exporter.event!(big(index));
+      await exporter.flush!();
+      setVisibility('hidden');
+    }
+    expect(errors).toEqual([]);
+    await exporter.shutdown!();
+  });
+});
+
 describe('ingest', () => {
   const sent = {
     ...refusal,
