@@ -5,8 +5,8 @@
 // The list is rebuilt from the section enumeration on every pass, so a page reused by identity
 // can never carry a stale kind when only a later section's `w:type` changed.
 
-import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
-import type { DocumentSection } from './section-properties.ts';
+import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { enumerateDocumentSectionsFromBlocks, type DocumentSection } from './section-properties.ts';
 import type { SectionBreakMarkRecord, SemanticLayout } from './semantic-records.ts';
 
 /** The section breaks of one body, in document order. */
@@ -41,13 +41,20 @@ function sameMarks(
 /**
  * Attach the body's section breaks. Returns `layout` itself when they did not move, so a
  * no-change pass keeps the identity incremental consumers compare.
+ *
+ * `blocks` is the WHOLE body, never an opening slice: a slice ends in a stand-in final section
+ * that would name the last break in it by the body-level `w:sectPr` instead of the real next
+ * section, and the label would change when the full pass arrives.
  */
 export function withSectionBreakMarks(
   layout: SemanticLayout,
-  blocks: readonly OoxmlElement[],
-  sections: readonly DocumentSection[]
+  part: OoxmlPart,
+  blocks: readonly OoxmlElement[]
 ): SemanticLayout {
-  const marks = sectionBreakMarks(blocks, sections);
+  const marks = sectionBreakMarks(
+    blocks,
+    enumerateDocumentSectionsFromBlocks(part, blocks).sections
+  );
   if (sameMarks(layout.sectionBreaks, marks)) return layout;
   if (marks.length === 0) {
     const { sectionBreaks: _dropped, ...rest } = layout;

@@ -8,14 +8,18 @@
 import type {
   LineRecord,
   ParagraphFragmentRecord,
+  RevisionAttribution,
   SectionBreakType,
   SemanticLayout,
 } from '@docx-editor.dev/core/layout';
 import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
+import { lineContentEdges } from '../layout/pending-line.ts';
+import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import type { ResolvedRevisionMarkup } from '../contracts/revision-markup.ts';
 import type { RevisionStyleContext } from './revision-presentation.ts';
 import {
+  applyBreakRevision,
   lineTerminatorEdge,
   paintParagraphMark,
   seatTerminatorMark,
@@ -90,7 +94,8 @@ const LABEL_SIZE_PT = 8;
 
 /**
  * Where break labels may run on a line, in page points: from the content end to the far edge
- * of the line's band, on the paragraph's base-direction side.
+ * of the line's band, on the paragraph's base-direction side. A line with no content, such as
+ * an empty section-break paragraph, gives the labels its whole band whatever its alignment.
  */
 export function breakMarkExtent(
   line: LineRecord,
@@ -99,6 +104,9 @@ export function breakMarkExtent(
   const edge = lineTerminatorEdge(line, paragraphRtl);
   const bandLeft = line.box.x;
   const bandRight = line.box.x + line.box.width;
+  if (!lineContentEdges(line.spans, line.drawings ?? [])) {
+    return { left: bandLeft, right: bandRight, rtl: edge.rtl };
+  }
   return edge.rtl
     ? { left: Math.min(bandLeft, edge.x), right: edge.x, rtl: true }
     : { left: edge.x, right: Math.max(bandRight, edge.x), rtl: false };
@@ -114,23 +122,37 @@ function paintRule(document: Document): HTMLElement {
   return rule;
 }
 
+/** One label to paint: its text and the revisions of the break it names. */
+export interface BreakMarkLabel {
+  readonly text: string;
+  readonly revisions?: readonly RevisionAttribution[];
+}
+
 /**
  * Paint one or more labeled break rules at the end of `lineElement`.
  *
  * Several labels share the extent in equal parts, in reading order: a page break that ends
- * the paragraph holding a section break shows both. The rules sit on the line's text, their
- * centre a little above the baseline, like the dot a paragraph mark's strike would take.
+ * the paragraph holding a section break shows both. Each label takes its break's revision
+ * presentation. The rules sit on the line's text, half a label above its baseline. At
+ * `boundary` placement, used for a mark paragraph that takes no vertical space, the band is
+ * centred on the line's top edge instead, between the blocks around it, so it never runs
+ * through the text of the line that shares its position.
  */
 export function paintBreakMarks(
   document: Document,
   line: LineRecord,
   lineElement: HTMLElement,
-  labels: readonly string[],
-  paragraphRtl: boolean,
-  scale: number
+  labels: readonly BreakMarkLabel[],
+  options: {
+    readonly paragraphRtl: boolean;
+    readonly scale: number;
+    readonly colors?: RevisionStyleContext;
+    readonly boundary?: boolean;
+  }
 ): HTMLElement | null {
   if (labels.length === 0) return null;
-  const extent = breakMarkExtent(line, paragraphRtl);
+  const { scale } = options;
+  const extent = breakMarkExtent(line, options.paragraphRtl);
   const sizePx = LABEL_SIZE_PT * scale;
   const container = document.createElement('span');
   container.className = 'docx-break-mark';
@@ -141,10 +163,9 @@ export function paintBreakMarks(
   container.style.left = `${(extent.left - line.contentX) * scale}px`;
   container.style.width = `${Math.max(0, extent.right - extent.left) * scale}px`;
   container.style.height = `${sizePx}px`;
-  // Centre the label band on the text's x-height, half a label above the baseline.
-  container.style.bottom = `${Math.max(0, line.box.height - line.baseline) * scale}px`;
+  if (options.boundary) container.style.top = `${-sizePx / 2}px`;
+  else container.style.bottom = `${Math.max(0, line.box.height - line.baseline) * scale}px`;
   container.style.display = 'flex';
-  container.style.alignItems = 'center';
   container.style.overflow = 'hidden';
   container.style.pointerEvents = 'none';
   container.style.userSelect = 'none';
@@ -156,8 +177,14 @@ export function paintBreakMarks(
   container.style.lineHeight = `${sizePx}px`;
   container.style.color = 'var(--doc-revision-format)';
   if (extent.rtl) container.style.direction = 'rtl';
-  for (const text of labels) {
-    container.append(paintRule(document));
+  for (const { text, revisions } of labels) {
+    const segment = document.createElement('span');
+    segment.className = 'docx-break-mark-segment';
+    segment.style.flex = '1 1 0';
+    segment.style.minWidth = '0';
+    segment.style.display = 'flex';
+    segment.style.alignItems = 'center';
+    applyBreakRevision(segment, revisions, options.colors);
     const label = document.createElement('span');
     label.className = 'docx-break-mark-label';
     label.textContent = text;
@@ -165,11 +192,20 @@ export function paintBreakMarks(
     label.style.minWidth = '0';
     label.style.overflow = 'hidden';
     label.style.padding = `0 ${sizePx / 2}px`;
-    container.append(label);
-    container.append(paintRule(document));
+    segment.append(paintRule(document), label, paintRule(document));
+    container.append(segment);
   }
   lineElement.append(container);
   return container;
+}
+
+/** The revisions of the span holding a line's closing page or column break. */
+function breakSpanRevisions(line: LineRecord): readonly RevisionAttribution[] | undefined {
+  const text = line.breakAfter === 'page' ? PAGE_BREAK_CHAR : '\n';
+  for (let index = line.spans.length - 1; index >= 0; index -= 1) {
+    if (line.spans[index]!.text === text) return line.spans[index]!.revisions;
+  }
+  return undefined;
 }
 
 /** Break-label inputs resolved once per paint, from the whole layout. */
@@ -205,24 +241,37 @@ function paintFragmentBreakMarks(
   fragment: ParagraphFragmentRecord,
   lineElements: readonly HTMLElement[],
   breakMarks: BreakMarkPaint,
-  paragraphRtl: boolean,
-  scale: number
+  options: {
+    readonly paragraphRtl: boolean;
+    readonly scale: number;
+    readonly colors?: RevisionStyleContext;
+  }
 ): { readonly replacesPilcrow: boolean; readonly pilcrowAt?: { x: number; rtl: boolean } } {
   const lastIndex = fragment.lines.length - 1;
   const section = fragment.paragraphEnd
     ? breakMarks.sectionBreaks.get(fragment.paragraphId)
     : undefined;
+  // An empty mark paragraph that takes no flow height shares its line with the next block.
+  const boundary = fragment.outOfFlow === true && !fragment.positionedFrame;
   let pilcrowAt: { x: number; rtl: boolean } | undefined;
   for (let index = 0; index <= lastIndex; index += 1) {
     const line = fragment.lines[index]!;
     const element = lineElements[index];
     if (!element) continue;
-    const labels: string[] = [];
-    if (line.breakAfter) labels.push(lineBreakLabel(line.breakAfter, breakMarks.strings));
-    if (index === lastIndex && section) labels.push(sectionBreakLabel(section, breakMarks.strings));
-    if (!paintBreakMarks(document, line, element, labels, paragraphRtl, scale)) continue;
+    const labels: BreakMarkLabel[] = [];
+    if (line.breakAfter) {
+      const revisions = breakSpanRevisions(line);
+      labels.push({
+        text: lineBreakLabel(line.breakAfter, breakMarks.strings),
+        ...(revisions ? { revisions } : {}),
+      });
+    }
+    if (index === lastIndex && section) {
+      labels.push({ text: sectionBreakLabel(section, breakMarks.strings) });
+    }
+    if (!paintBreakMarks(document, line, element, labels, { ...options, boundary })) continue;
     if (index === lastIndex) {
-      const extent = breakMarkExtent(line, paragraphRtl);
+      const extent = breakMarkExtent(line, options.paragraphRtl);
       pilcrowAt = { x: extent.rtl ? extent.left : extent.right, rtl: extent.rtl };
     }
   }
@@ -244,6 +293,7 @@ export function paintParagraphEndFurniture(
   ctx: {
     readonly showParagraphMarks?: boolean;
     readonly breakMarks?: BreakMarkPaint;
+    readonly inertLinks?: boolean;
     readonly revisionStyles?: RevisionStyleContext;
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionKindColors?: boolean;
@@ -251,9 +301,15 @@ export function paintParagraphEndFurniture(
   scale: number
 ): void {
   const rtl = paragraphIsRtl(fragment.props);
-  const breaks = ctx.breakMarks
-    ? paintFragmentBreakMarks(document, fragment, lineElements, ctx.breakMarks, rtl, scale)
-    : null;
+  // Furniture stories (headers, footers, text boxes) never break a page or end a section.
+  const breaks =
+    ctx.breakMarks && !ctx.inertLinks
+      ? paintFragmentBreakMarks(document, fragment, lineElements, ctx.breakMarks, {
+          paragraphRtl: rtl,
+          scale,
+          ...(ctx.revisionStyles ? { colors: ctx.revisionStyles } : {}),
+        })
+      : null;
   const tracked = (fragment.markRevisions?.length ?? 0) > 0;
   const shown = ctx.showParagraphMarks && fragment.paragraphEnd && !breaks?.replacesPilcrow;
   if (!shown && !tracked) return;

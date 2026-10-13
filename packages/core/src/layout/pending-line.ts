@@ -174,12 +174,12 @@ export function placeLeadingIgnoredBreaks(line: PendingLine, pageBreaksIgnored: 
   }
 }
 
-/** The published break kind of a placed line: page wins, as it does in pagination. */
+/** The published break kind of a placed line: column first, as placement checks it. */
 export function lineBreakAfterFields(
   line: Pick<PendingLine, 'pageBreakAfter' | 'columnBreakAfter'>
 ): { readonly breakAfter?: 'page' | 'column' } {
-  if (line.pageBreakAfter) return { breakAfter: 'page' };
-  return line.columnBreakAfter ? { breakAfter: 'column' } : {};
+  if (line.columnBreakAfter) return { breakAfter: 'column' };
+  return line.pageBreakAfter ? { breakAfter: 'page' } : {};
 }
 
 /** Whether a line holds nothing but the page break that ends it. */

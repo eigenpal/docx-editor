@@ -408,7 +408,7 @@ function* layoutInModeSteps(
       projected = relabelListMarkers(projected, optionsWithLists.listItems, options.measurer);
     }
     const bounded = attachContentControlBoundaries(projected, part, controlToken);
-    const withBoundaries = withSectionBreakMarks(bounded, blocks, sections);
+    const withBoundaries = withSectionBreakMarks(bounded, part, allBlocks);
     carryLayoutReadCaches(layout, withBoundaries);
     if (options.session) {
       options.session.previous = withBoundaries;

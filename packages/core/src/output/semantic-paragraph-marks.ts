@@ -76,6 +76,39 @@ export function seatTerminatorMark(
 }
 
 /**
+ * Colour and attribute break furniture from the break character's OWN revision: the revision
+ * colour (or author colour), a strike or underline, and the `data-revision-*` attributes review
+ * chrome reads. Leaves the element untouched for an unrevised break.
+ */
+export function applyBreakRevision(
+  glyph: HTMLElement,
+  revisions: readonly RevisionAttribution[] | undefined,
+  colors: RevisionStyleContext | undefined
+): void {
+  const presentation = revisionPresentationOf(revisions, colors?.authorSlots, colors?.styles);
+  if (!presentation) return;
+  const { attribution } = presentation;
+  const authorStyle = colors?.styles.get(attribution.author);
+  const byAuthor = colors && (authorStyle?.color !== undefined || colors.others === 'author');
+  glyph.style.color = byAuthor ? presentation.authorColor : presentation.color;
+  glyph.dataset.revisionKind = attribution.kind;
+  glyph.dataset.revisionId = attribution.id;
+  glyph.dataset.reviewAuthor = attribution.author;
+  if (colors) {
+    glyph.dataset.reviewAuthorSlot = String(
+      (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
+    );
+    for (const token of colors.classTokens.get(attribution.author) ?? [])
+      glyph.classList.add(token);
+  }
+  if (presentation.line) {
+    glyph.style.textDecorationLine = presentation.line;
+    glyph.style.textDecorationStyle = presentation.decorationStyle;
+    glyph.style.textDecorationColor = glyph.style.color;
+  }
+}
+
+/**
  * Manual line-break furniture, seated at the end of `lineElement`. The zero-width model span
  * still owns the newline.
  */
@@ -98,28 +131,7 @@ export function paintManualLineBreak(
   glyph.style.userSelect = 'none';
   glyph.style.color = 'var(--doc-revision-format)';
   // Read the newline's own revision, never the preceding text's attribution.
-  const presentation = revisionPresentationOf(last?.revisions, colors?.authorSlots, colors?.styles);
-  if (presentation) {
-    const { attribution } = presentation;
-    const authorStyle = colors?.styles.get(attribution.author);
-    const byAuthor = colors && (authorStyle?.color !== undefined || colors.others === 'author');
-    glyph.style.color = byAuthor ? presentation.authorColor : presentation.color;
-    glyph.dataset.revisionKind = attribution.kind;
-    glyph.dataset.revisionId = attribution.id;
-    glyph.dataset.reviewAuthor = attribution.author;
-    if (colors) {
-      glyph.dataset.reviewAuthorSlot = String(
-        (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
-      );
-      for (const token of colors.classTokens.get(attribution.author) ?? [])
-        glyph.classList.add(token);
-    }
-    if (presentation.line) {
-      glyph.style.textDecorationLine = presentation.line;
-      glyph.style.textDecorationStyle = presentation.decorationStyle;
-      glyph.style.textDecorationColor = glyph.style.color;
-    }
-  }
+  applyBreakRevision(glyph, last?.revisions, colors);
   const size = last?.style.fontSizePt ?? DEFAULT_RUN_STYLE.fontSizePt;
   seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale);
 }

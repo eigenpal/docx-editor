@@ -5,7 +5,12 @@ import { readOoxmlPart } from '../../store/index.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/index.ts';
 import { withSectionBreakMarks } from '../../layout/section-break-marks.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
-import { breakMarkStringsFromTranslate } from '../semantic-break-marks.ts';
+import {
+  DEFAULT_BREAK_MARK_STRINGS,
+  breakMarkStringsFromTranslate,
+  breakMarksOfLayout,
+  paintParagraphEndFurniture,
+} from '../semantic-break-marks.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 function part(body: string) {
@@ -170,9 +175,79 @@ test('a tracked mark on a section break paragraph keeps its attributed pilcrow',
   expect(pilcrow.dataset.revisionId).toBe('7');
 });
 
-test('removing every section break drops the record', () => {
-  const { layout } = paint(`<w:p><w:pPr>${sect()}</w:pPr></w:p><w:p/>` + sect('oddPage'));
-  expect(layout.sectionBreaks).toHaveLength(1);
-  expect(withSectionBreakMarks(layout, [], [])).not.toBe(layout);
-  expect(withSectionBreakMarks(layout, [], []).sectionBreaks).toBeUndefined();
+test('section break records keep the layout identity and follow the whole body', () => {
+  const body =
+    `<w:p><w:pPr>${sect()}</w:pPr></w:p>` +
+    `<w:p><w:pPr>${sect('continuous')}</w:pPr></w:p><w:p/>` +
+    sect('oddPage');
+  const source = part(body);
+  const layout = layoutSemanticDocument(source, 0, { measurer: createFixedMeasurer(6, 14) });
+  expect(layout.sectionBreaks?.map((mark) => mark.kind)).toEqual(['continuous', 'oddPage']);
+  // An opening slice that stops at the first break still names it by the real next section.
+  const sliced = layoutSemanticDocument(source, 0, {
+    measurer: createFixedMeasurer(6, 14),
+    bodyBlockLimit: 1,
+  });
+  expect(sliced.sectionBreaks?.map((mark) => mark.kind)).toEqual(['continuous', 'oddPage']);
+  expect(withSectionBreakMarks(layout, source, [])).not.toBe(layout);
+  expect(withSectionBreakMarks(layout, source, []).sectionBreaks).toBeUndefined();
+});
+
+test('a collapsed empty section mark draws its label between blocks, across the whole band', () => {
+  const { layout, container } = paint(
+    '<w:p><w:r><w:t>Before</w:t></w:r></w:p>' +
+      `<w:p><w:pPr><w:jc w:val="center"/>${sect()}</w:pPr></w:p>` +
+      '<w:p><w:r><w:t>After</w:t></w:r></w:p>' +
+      sect('continuous')
+  );
+  const fragment = layout.pages[0]!.fragments.find(
+    (f) => f.kind === 'paragraph' && f.paragraphId === layout.sectionBreaks![0]!.paragraphId
+  );
+  if (fragment?.kind !== 'paragraph') throw new Error('expected the mark paragraph');
+  expect(fragment.outOfFlow).toBe(true);
+  const line = fragment.lines[0]!;
+  const mark = container.querySelector<HTMLElement>('.docx-break-mark')!;
+  expect(mark.textContent).toBe('Section break (continuous)');
+  // Centred on the line's top edge, not on its baseline, so it clears the next line's text.
+  expect(mark.style.top).toBe(`${-8 / 2}px`);
+  expect(mark.style.bottom).toBe('');
+  // The whole band, although the empty paragraph is centred.
+  expect(parseFloat(mark.style.left)).toBeCloseTo(line.box.x - line.contentX);
+  expect(parseFloat(mark.style.width)).toBeCloseTo(line.box.width);
+});
+
+test('a tracked page break label carries its revision', () => {
+  const { container } = paint(
+    '<w:p><w:r><w:t>Text</w:t></w:r><w:ins w:id="9" w:author="Ada"><w:r><w:br w:type="page"/></w:r></w:ins></w:p>' +
+      sect()
+  );
+  const segment = container.querySelector<HTMLElement>('.docx-break-mark-segment')!;
+  expect(segment.textContent).toBe('Page break');
+  expect(segment.dataset.revisionId).toBe('9');
+  expect(segment.dataset.revisionKind).toBe('insert');
+  expect(segment.dataset.reviewAuthor).toBe('Ada');
+});
+
+test('furniture stories paint no break labels', () => {
+  const { layout } = paint(
+    '<w:p><w:r><w:t>A</w:t></w:r><w:r><w:br w:type="page"/></w:r></w:p>' + sect()
+  );
+  const fragment = layout.pages[0]!.fragments[0]!;
+  if (fragment.kind !== 'paragraph') throw new Error('expected a paragraph');
+  const breakMarks = breakMarksOfLayout(layout, DEFAULT_BREAK_MARK_STRINGS);
+  const paintLines = () => fragment.lines.map(() => document.createElement('div'));
+  const body = paintLines();
+  paintParagraphEndFurniture(document, fragment, body, { showParagraphMarks: true, breakMarks }, 1);
+  expect(body[0]!.querySelector('.docx-break-mark')).not.toBeNull();
+  // Headers, footers and text boxes paint with inert links.
+  const furniture = paintLines();
+  paintParagraphEndFurniture(
+    document,
+    fragment,
+    furniture,
+    { showParagraphMarks: true, breakMarks, inertLinks: true },
+    1
+  );
+  expect(furniture[0]!.querySelector('.docx-break-mark')).toBeNull();
+  expect(furniture[0]!.querySelector('.docx-paragraph-mark')).not.toBeNull();
 });
