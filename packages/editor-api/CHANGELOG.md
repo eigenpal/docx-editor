@@ -1,5 +1,15 @@
 # @docx-editor.dev/editor-api
 
+## 2.29.0
+
+### Minor Changes
+
+- e3f8337: Add `debugInfo` to `DocxEditorError` in the Office.js shape, with `innerError` naming the engine's reason as a stable diagnostic code and a fixed hint, and report refused batches as anonymous diagnostics from `createServer` modules and from `createBrowser` into the borrowed editor.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.29.0
+
 ## 2.28.0
 
 ### Minor Changes

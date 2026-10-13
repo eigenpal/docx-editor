@@ -1,5 +1,36 @@
 # @docx-editor.dev/core
 
+## 2.29.0
+
+### Minor Changes
+
+- e3f8337: Failed opens, refused edits, and skipped tracked changes now carry anonymous failure detail: the engine reason, the role of the part, the class of an unexpected exception, and the kind of tracked change. An open or a command that throws is now reported too.
+- e3f8337: Report undo history and custom node payload diagnostics in the anonymous diagnostics stream, add the bucketed document shape to opened documents, and stop including font family and part names in font error messages.
+- e3f8337: Report anonymous diagnostics with stable codes and fixed hints when a document fails to open, an edit or tracked change is refused, or a font fails, through `editor.on('diagnostic')` and a module `onDiagnostic` listener. Open failure messages no longer include names from inside the file.
+- e3f8337: Editors report an anonymous `performance` diagnostic once per minute of use, with the time from a key press or click to the next frame and the engine layout and paint times, and the telemetry package records it in a new `performance` area.
+- b6fdbf5: With paragraph marks shown, page breaks, column breaks, and section breaks show a labeled dotted line that names the break type.
+
+### Patch Changes
+
+- e3f8337: A collaboration status diagnostic reports a connect time only when the editor saw the room join, so a room that was ready before the editor attached no longer reports a connect time near zero.
+- 75a3ce3: Text after a column break at the start of a paragraph now gets the paragraph's space before in the next column or page.
+- f90ab3a: Copying a selected computed field now copies its whole result as plain text. Fixes #1245
+- 838394b: Fix copied header and footer field results that repeat across pages.
+- 7146830: The first paragraph of a document no longer starts below the top margin when it uses automatic space before.
+- f397ea3: A table row with an exact height taller than the page now fills a page instead of failing the whole layout. Fixes #1220
+- 3741111: Table rows no longer grow by an extra line when a cell hides its end mark and ends with an empty paragraph.
+- 6dd82b5: Justified lines keep a word that contains a no-break space on the line when its spaces can shrink to fit.
+- 6dd82b5: Justified lines that contain a tab keep their last word on the line when the spaces after the tab can shrink to fit.
+- 4270ac9: Exact line spacing keeps the font baseline under `w:noExtraLineSpacing` in every compatibility mode, including mode 15. Fixes #1205
+- 15bcf38: Lay out documents whose nested table rows, cell pictures, balanced column sections, or chains of wrapped floating objects do not fit on one page, instead of rejecting them. Separate table rows by their cell spacing, and drop hidden empty paragraphs before tables.
+- 2f60b53: A page break directly followed by a line break no longer starts a new page, and a paragraph that opens with a column break keeps that break on a full page or column. Fixes #1219. Fixes #1222
+- e3f8337: Inserting a picture while a picture is selected is refused with a clear reason, the toolbar button explains it, and refused picture inserts and replacements now reach diagnostics.
+- 388c278: Table rows keep a minimum height when you drag their border, so a resized row can always be dragged back. Fixes #1270
+- a16db3a: Selecting text next to a tracked change or comment no longer highlights that change as active.
+- a768653: Formatting a selection that includes a generated table of contents now formats the rest of the selection instead of refusing the whole change.
+- c78d733: Underlines, including tracked insertion underlines, now draw as one unbroken line across spaces and descenders.
+- Updated dependencies: @docx-editor.dev/i18n@2.29.0
+
 ## 2.28.0
 
 ### Minor Changes
