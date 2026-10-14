@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { FocusEvent as ReactFocusEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { toolbarPopupLeft, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { isDomNode, toolbarPopupLeft, type ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
@@ -38,7 +38,7 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
     if (!open || !doc) return undefined;
     const onMouseDown = (event: globalThis.MouseEvent) => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (root && isDomNode(event.target) && root.contains(event.target)) return;
       setOpen(false);
     };
     doc.addEventListener('mousedown', onMouseDown, true);
@@ -124,7 +124,7 @@ function ToolbarTableInsertImpl({ className, hidden, icon, asChild, children }: 
           // never stays open behind the focus.
           onBlur={(event: ReactFocusEvent) => {
             const next = event.relatedTarget;
-            if (next instanceof Node && !rootRef.current?.contains(next)) setOpen(false);
+            if (isDomNode(next) && !rootRef.current?.contains(next)) setOpen(false);
           }}
           onKeyDown={(event) => {
             if (event.key !== 'Escape') return;

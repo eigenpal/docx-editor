@@ -21,6 +21,7 @@ export {
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { DocxEditorWindow, type DocxEditorWindowProps } from './editor/DocxEditorWindow';
 export { DocxEditorEquation } from './editor/DocxEditorEquation';
 
 export { useDocxEditor, ReviewRailContext, type ReviewRailRegistry } from './editor/context';
@@ -50,6 +51,10 @@ export {
   type ImageWrapTarget,
 } from './editor/useEditorValueCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
+export {
+  useEditorHostDocument,
+  type UseEditorHostDocumentReturn,
+} from './editor/useEditorHostDocument';
 export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { useEditorCaret, type EditorCaret } from './editor/useEditorCaret';

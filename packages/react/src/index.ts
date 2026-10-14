@@ -28,6 +28,7 @@ export {
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { DocxEditorWindow, type DocxEditorWindowProps } from './editor/DocxEditorWindow';
 export { DocxEditorEquation } from './editor/DocxEditorEquation';
 export {
   DocxEditorLoading,
@@ -292,6 +293,10 @@ export {
   type ToolbarContextValue,
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
+export {
+  useEditorHostDocument,
+  type UseEditorHostDocumentReturn,
+} from './editor/useEditorHostDocument';
 export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';

@@ -1,5 +1,5 @@
 import { ToolbarColorSwatch } from './toolbar/ColorSplit';
-import { observeContentControlPopup } from '@docx-editor.dev/core/editor';
+import { observeContentControlPopup, isDomNode } from '@docx-editor.dev/core/editor';
 import { defineComponent, getCurrentInstance, nextTick, ref, watch, type PropType } from 'vue';
 
 export function revisionColorToken(value: string): string {
@@ -42,7 +42,7 @@ export const RevisionMarkupColorPicker = defineComponent({
       if (!visible) return;
       const doc = root.value?.ownerDocument;
       const outside = (event: Event) => {
-        if (event.target instanceof Node && !root.value?.contains(event.target)) open.value = false;
+        if (isDomNode(event.target) && !root.value?.contains(event.target)) open.value = false;
       };
       doc?.addEventListener('pointerdown', outside, true);
       doc?.addEventListener('mousedown', outside, true);
@@ -64,7 +64,7 @@ export const RevisionMarkupColorPicker = defineComponent({
         ref={root}
         class="docx-revision-color-picker"
         onFocusout={(event) => {
-          if (!(event.relatedTarget instanceof Node) || !root.value?.contains(event.relatedTarget))
+          if (!isDomNode(event.relatedTarget) || !root.value?.contains(event.relatedTarget))
             open.value = false;
         }}
       >

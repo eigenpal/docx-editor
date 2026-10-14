@@ -12,6 +12,7 @@ export const VUE_COMPOSABLES = [
   'useEditorCaret',
   'useEditorCommand',
   'useEditorEvent',
+  'useEditorHostDocument',
   'useEditorSnapshot',
   'useEditorState',
   'useEditorValueCommand',

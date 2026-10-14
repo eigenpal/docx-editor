@@ -48,6 +48,30 @@ export {
 } from './font-resolver.ts';
 export { blankDocumentBytes } from './blank-document.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
+export {
+  copyEditorStyles,
+  openEditorWindow,
+  type EditorWindow,
+  type OpenEditorWindowOptions,
+} from './editor-window.ts';
+export {
+  editorHostDocument,
+  editorHostElement,
+  editorHostWindow,
+  hostDocumentOf,
+  hostTimers,
+  hostWindowOf,
+  isDomNode,
+  isElementNode,
+  isHTMLElementNode,
+  isInputEvent,
+  isKeyboardEvent,
+  isMouseEvent,
+  isPointerEvent,
+  isTextNode,
+  type HostTimers,
+  type HostWindow,
+} from './host-realm.ts';
 /**
  * The part a node id names, read from the live package.
  *
@@ -212,7 +236,7 @@ export {
 } from './docx-editor.ts';
 // `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
 // has to export the answer too.
-export type { FontMeasurementState } from './docx-editor-types.ts';
+export type { AttachOptions, FontMeasurementState } from './docx-editor-types.ts';
 // `DocxEditorConfig.fieldResults` takes it.
 export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 // `DocxEditorConfig.contentLockPolicy` takes it.

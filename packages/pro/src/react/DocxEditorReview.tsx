@@ -44,7 +44,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { reviewPaneListsItem } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, isDomNode, reviewPaneListsItem } from '@docx-editor.dev/core/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   REVIEW_PANE_GUTTER,
@@ -312,7 +312,7 @@ function ReviewRoot({
     if (!editor || !rail) return undefined;
     const onMouseDown = (event: MouseEvent): void => {
       const target = event.target;
-      if (!(target instanceof Node) || rail.contains(target)) return;
+      if (!isDomNode(target) || rail.contains(target)) return;
       const container = rail.offsetParent as HTMLElement | null;
       if (!container || !container.contains(target)) return;
       const surface = container.querySelector('.docx-paginated-surface');
@@ -321,8 +321,9 @@ function ReviewRoot({
     };
     // Capture: the surface calls `preventDefault` on its own pointer handling, and a
     // bubbling listener never sees a click that lands on the pages layer.
-    document.addEventListener('mousedown', onMouseDown, true);
-    return () => document.removeEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(rail);
+    doc.addEventListener('mousedown', onMouseDown, true);
+    return () => doc.removeEventListener('mousedown', onMouseDown, true);
     // `documentAbsent` and `hidden` for the same reason as the metrics effect: no rail element
     // exists while either holds.
   }, [editor, documentAbsent, hidden]);

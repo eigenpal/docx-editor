@@ -1,3 +1,4 @@
+import { isElementNode } from '@docx-editor.dev/core/editor';
 /*
 Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
@@ -14,7 +15,7 @@ export const CARD_OWN_CONTROLS =
 
 /** True when a click on `target` belongs to a control inside the card, not to the card. */
 export function isCardControl(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(CARD_OWN_CONTROLS) !== null;
+  return isElementNode(target) && target.closest(CARD_OWN_CONTROLS) !== null;
 }
 
 /**
@@ -25,6 +26,6 @@ export function isCardControl(target: EventTarget | null): boolean {
 export function keepsPressFocus(target: EventTarget | null): boolean {
   return (
     isCardControl(target) ||
-    (target instanceof Element && target.closest('[data-review-selectable]') !== null)
+    (isElementNode(target) && target.closest('[data-review-selectable]') !== null)
   );
 }

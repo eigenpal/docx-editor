@@ -15,6 +15,21 @@ export function useDocxEditor(): ShallowRef<DocxEditorInstance | null> {
   return inject(docxEditorKey, nullEditorRef);
 }
 
+/**
+ * The element the engine paints pages into, while one is attached. Chrome with no element of
+ * its own resolves the editor's document and window from it: a pop-out window or an iframe
+ * when the host moved the editor there.
+ *
+ * @internal
+ */
+export const editorContentElementKey: InjectionKey<ShallowRef<HTMLElement | null>> =
+  Symbol('editorContentElement');
+
+/** @internal */
+export function useEditorContentElement(): ShallowRef<HTMLElement | null> {
+  return inject(editorContentElementKey, shallowRef(null));
+}
+
 /** @internal */
 export function useEditorStateTick(): ShallowRef<number> {
   return inject(editorStateTickKey, shallowRef(0));

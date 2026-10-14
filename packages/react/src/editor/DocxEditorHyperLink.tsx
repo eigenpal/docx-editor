@@ -45,6 +45,7 @@ import {
   type UseHyperlinkPopupResult,
 } from './useHyperlinkPopup';
 import { Slot } from './toolbar/Slot';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 /** Keeps the caret: a mousedown that bubbles to the editor moves it. Inputs are exempt. */
 function guardMousedown(event: React.MouseEvent): void {
@@ -122,16 +123,17 @@ function HyperLinkRoot({ className, asChild, hidden, children, preset = true }: 
     };
     const onMouseDown = (event: MouseEvent): void => {
       const panel = panelRef.current;
-      if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+      if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
       close();
     };
     // Capture phase for the mousedown: the surface prevents default on its own pointerdown,
     // and a bubbling listener would never see a click that lands on the pages.
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(panelRef.current);
+    doc.addEventListener('keydown', onKeyDown);
+    doc.addEventListener('mousedown', onMouseDown, true);
     return () => {
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [state.mode, close]);
 

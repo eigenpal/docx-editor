@@ -1053,6 +1053,7 @@ export interface EditorEvents {
     error: (error: EditorError) => void;
     // (undocumented)
     historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
+    hostChange: (event: EditorHostChange) => void;
     reviewItemReveal: (event: ReviewItemRevealEvent) => void;
     revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
     selectionChange: (snapshot: EditorSnapshot) => void;
@@ -1121,6 +1122,16 @@ export interface EditorHighlights {
     getHighlightsAt<R extends HighlightRange = HighlightRange>(clientX: number, clientY: number): readonly HighlightHit<R>[];
     setHighlights(name: string, ranges: readonly HighlightRange[], options?: HighlightOptions): HighlightResult;
 }
+
+// @public
+export interface EditorHostChange {
+    readonly document: EditorHostDocument | null;
+}
+
+// @public
+export type EditorHostDocument = typeof globalThis extends {
+    readonly document: infer D;
+} ? D : object;
 
 // @public
 export interface EditorNoteCommands {

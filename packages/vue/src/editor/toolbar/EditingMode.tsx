@@ -4,6 +4,8 @@ import {
   runToolbarCommand,
   toolbarCommandState,
   type DocxEditorInstance,
+  isDomNode,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
@@ -120,12 +122,13 @@ export const ToolbarEditingMode = defineComponent({
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onMouseDown, true);
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown, true);
       onCleanup(() => {
-        document.removeEventListener('mousedown', onMouseDown, true);
+        doc.removeEventListener('mousedown', onMouseDown, true);
       });
     });
     // Escape through the shared rule: a host input keeps its own Escape.
@@ -140,7 +143,7 @@ export const ToolbarEditingMode = defineComponent({
 
     const onMenuKeyDown = (event: KeyboardEvent) => {
       const items = [...(menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS) ?? [])];
-      const at = items.indexOf(document.activeElement as HTMLButtonElement);
+      const at = items.indexOf(hostDocumentOf(rootRef.value).activeElement as HTMLButtonElement);
       const move = (to: number) => {
         event.preventDefault();
         items[(to + items.length) % items.length]?.focus();

@@ -25,6 +25,8 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   chromeSlotIsToggle,
   hasOpenNestedPopup,
+  hostDocumentOf,
+  isDomNode,
   listenForPopupEscape,
   listenForPopupFocusLeave,
   type ChromeSlotId,
@@ -172,7 +174,7 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
     if (!open) return undefined;
     const onPointerDown = (event: MouseEvent): void => {
       const target = event.target;
-      if (target instanceof Node && rootRef.current?.contains(target)) return;
+      if (isDomNode(target) && rootRef.current?.contains(target)) return;
       setOpen(false);
     };
     const root = rootRef.current;
@@ -195,9 +197,10 @@ export function ToolbarOverflow({ sections, className }: ToolbarOverflowProps) {
     const stopFocus = root
       ? listenForPopupFocusLeave({ popup: root, contains, close: () => setOpen(false) })
       : undefined;
-    document.addEventListener('mousedown', onPointerDown, true);
+    const doc = hostDocumentOf(root);
+    doc.addEventListener('mousedown', onPointerDown, true);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown, true);
+      doc.removeEventListener('mousedown', onPointerDown, true);
       stopEscape?.();
       stopFocus?.();
     };

@@ -718,3 +718,34 @@
 .citation-card:not(:popover-open) {
   display: none;
 }
+
+/* Pop-out demo (`?popout=1`): one panel that renders in this window or in the pop-out. */
+.popout-demo {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.popout-demo-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.popout-demo-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--doc-border, currentColor);
+}
+.popout-demo-status,
+.popout-demo-placeholder,
+.popout-demo-loading {
+  color: var(--doc-text-muted, inherit);
+  font-size: 13px;
+}
+.popout-demo-placeholder,
+.popout-demo-loading {
+  padding: 24px;
+}

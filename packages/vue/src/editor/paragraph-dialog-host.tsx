@@ -1,4 +1,5 @@
 import { useDialogHost } from './dialog-host';
+import { isHTMLElementNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 // Bridge the toolbar trigger to the per-editor dialog coordinator. A standalone
 // toolbar retains a local native dialog host, which outlives overflow controls.
 
@@ -39,9 +40,10 @@ export const ParagraphDialogHost = defineComponent({
 
     provide(PARAGRAPH_DIALOG, {
       open: (returnFocusTo?: HTMLElement | null) => {
-        opener.value =
-          returnFocusTo ??
-          (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        // This host renders no element of its own to resolve a window from. Chrome in a
+        // pop-out window passes its trigger, so the script's document is only the fallback.
+        const active = hostDocumentOf(returnFocusTo).activeElement;
+        opener.value = returnFocusTo ?? (isHTMLElementNode(active) ? active : null);
         open.value = true;
       },
     });

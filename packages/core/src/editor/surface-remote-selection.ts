@@ -29,6 +29,7 @@ import type {
   CollaborationSelectionKind,
 } from '../collaboration/index.ts';
 import type { CollaborationParagraph } from '../collaboration/replication.ts';
+import { isHTMLElementNode } from './host-realm.ts';
 
 /** Map a surface selection to the stable paragraph ids awareness publishes. */
 export function localCollaborationSelection(
@@ -306,7 +307,7 @@ export function paintRemoteSelections(
   paintSelectionOverlay(layer, layout, rects, { scale, pageOffsetX });
   [...layer.children].forEach((element, index) => {
     const color = safeParticipantColor(rectColors[index]);
-    if (!color || !(element instanceof HTMLElement)) return;
+    if (!color || !isHTMLElementNode(element)) return;
     element.style.setProperty('--doc-remote-color', color);
   });
   const document = layer.ownerDocument;

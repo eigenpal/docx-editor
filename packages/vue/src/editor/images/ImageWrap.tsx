@@ -1,4 +1,5 @@
 import { computed, defineComponent, ref, watch, type VNode } from 'vue';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import type { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -58,7 +59,7 @@ export const ImageWrap = defineComponent({
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
       const onKeyDown = (event: KeyboardEvent) => {
@@ -67,11 +68,12 @@ export const ImageWrap = defineComponent({
         open.value = false;
         triggerRef.value?.focus();
       };
-      document.addEventListener('mousedown', onMouseDown, true);
-      document.addEventListener('keydown', onKeyDown);
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown, true);
+      doc.addEventListener('keydown', onKeyDown);
       onCleanup(() => {
-        document.removeEventListener('mousedown', onMouseDown, true);
-        document.removeEventListener('keydown', onKeyDown);
+        doc.removeEventListener('mousedown', onMouseDown, true);
+        doc.removeEventListener('keydown', onKeyDown);
       });
     });
 

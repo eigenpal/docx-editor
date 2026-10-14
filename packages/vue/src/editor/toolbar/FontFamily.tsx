@@ -1,4 +1,5 @@
 import { usePickerKeyboard } from './usePickerKeyboard';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import {
   computed,
@@ -252,11 +253,12 @@ const FontFamilyRoot = defineComponent({
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
     });
 
     const context: FontFamilyContextValue = {

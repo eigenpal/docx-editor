@@ -19,7 +19,12 @@ import type { ReactNode } from 'react';
 // not applied.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  commandForSlotValue,
+  hostDocumentOf,
+  isDomNode,
+  type ChromeSlotId,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -424,11 +429,12 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
       if (!open) return undefined;
       const onMouseDown = (event: globalThis.MouseEvent) => {
         const root = rootRef.current;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         setOpen(false);
       };
-      document.addEventListener('mousedown', onMouseDown);
-      return () => document.removeEventListener('mousedown', onMouseDown);
+      const doc = hostDocumentOf(rootRef.current);
+      doc.addEventListener('mousedown', onMouseDown);
+      return () => doc.removeEventListener('mousedown', onMouseDown);
     }, [open]);
 
     const apply = useCallback(

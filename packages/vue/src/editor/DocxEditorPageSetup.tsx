@@ -1,4 +1,5 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import {
   Fragment,
   computed,
@@ -314,8 +315,10 @@ const PageSetupDialogImpl = defineComponent({
             if (
               event.key === 'Enter' &&
               !event.isComposing &&
-              !(event.target instanceof HTMLButtonElement) &&
-              !(event.target instanceof HTMLSelectElement) &&
+              !(
+                isHTMLElementNode(event.target) &&
+                (event.target.localName === 'button' || event.target.localName === 'select')
+              ) &&
               setup.isEnabled.value
             ) {
               event.preventDefault();

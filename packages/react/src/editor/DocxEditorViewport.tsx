@@ -20,6 +20,7 @@ import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
 import { zoomLevelForShortcut } from './zoom-levels';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
+import { isElementNode } from '@docx-editor.dev/core/editor';
 
 const selectPaneOpen = (snapshot: EditorSnapshot): boolean => snapshot.reviewPaneOpen ?? true;
 /** Fit modes must not animate nav padding: intermediate widths chase the page forever. */
@@ -80,7 +81,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       const target = event.target;
-      if (target instanceof Element && target.closest('input, textarea, select, [role="dialog"]')) {
+      if (isElementNode(target) && target.closest('input, textarea, select, [role="dialog"]')) {
         return;
       }
       const next = zoomLevelForShortcut(event.key, editor.getZoom());

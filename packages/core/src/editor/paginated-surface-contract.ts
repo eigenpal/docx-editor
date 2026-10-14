@@ -807,6 +807,23 @@ export interface PaginatedSurface {
   setTableInteractionLabel(
     resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string
   ): void;
+  /**
+   * Move the painted pages into `container`, which may belong to another document: a pop-out
+   * window or an iframe. The session, undo history, selection and collaboration replica stay
+   * as they are; only the DOM and the document- and window-level listeners move. Open
+   * content-control menus close.
+   */
+  moveTo(container: HTMLElement, options?: { readonly focus?: boolean }): void;
+  /**
+   * Take the pages out of their container and keep them, with all editing state, for a later
+   * `moveTo`. A parked surface still accepts commands and remote edits; it paints into a
+   * private, disconnected holder until it moves again.
+   */
+  park(): void;
+  /** Whether the surface is parked: mounted nowhere, state kept. */
+  parked(): boolean;
+  /** The element the pages are in now: the host's, or a private holder while parked. */
+  hostElement(): HTMLElement;
   destroy(): void;
   /**
    * The section a painted page belongs to, and the page that section starts on.

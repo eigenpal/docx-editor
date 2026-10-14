@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, toolbarCommandState } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
@@ -45,9 +45,10 @@ export function ToolbarReviewers({ className, hidden, icon }: ToolbarReviewersPr
       if (rootRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onMouseDown, true);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [open]);
   // Escape through the shared rule: a host input keeps its own Escape.
@@ -60,7 +61,7 @@ export function ToolbarReviewers({ className, hidden, icon }: ToolbarReviewersPr
     const items = [
       ...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]') ?? []),
     ];
-    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const at = items.indexOf(hostDocumentOf(menuRef.current).activeElement as HTMLButtonElement);
     const move = (to: number): void => {
       event.preventDefault();
       items[(to + items.length) % items.length]?.focus();

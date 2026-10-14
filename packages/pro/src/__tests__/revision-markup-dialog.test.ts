@@ -44,7 +44,14 @@ function setup(translate?: Parameters<typeof createDocxEditor>[0]['translate']) 
     container.remove();
   };
   dialog.open();
-  return { container, dialog, changes, set, get: () => editor.snapshot().revisionMarkup };
+  return {
+    container,
+    dialog,
+    changes,
+    set,
+    editor,
+    get: () => editor.snapshot().revisionMarkup,
+  };
 }
 
 test('stages settings, applies once, and reflects API changes in an open dialog', () => {
@@ -241,3 +248,18 @@ for (const [code, strings] of Object.entries(locales)) {
     expect(host.get().insertions.color).toBe('blue');
   });
 }
+
+test('moving the editor to another window closes the settings dialog', () => {
+  const host = setup();
+  expect(host.container.querySelector('dialog')).not.toBeNull();
+  const frame = document.createElement('iframe');
+  document.body.append(frame);
+  const away = frame.contentWindow!.document.createElement('div');
+  frame.contentWindow!.document.body.append(away);
+  host.editor.attach(away);
+  // Its pickers listen to the window it opened in, so a move closes it rather than carry it.
+  expect(away.querySelector('dialog')).toBeNull();
+  expect(host.container.querySelector('dialog')).toBeNull();
+  host.editor.attach(host.container);
+  frame.remove();
+});

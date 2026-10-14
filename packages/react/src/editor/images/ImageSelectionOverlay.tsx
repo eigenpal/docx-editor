@@ -13,8 +13,10 @@ import { createPortal } from 'react-dom';
 import {
   captureImageMutationPreconditions,
   computeMovedImagePosition,
+  hostWindowOf,
   IMAGE_OVERLAY_NUDGE_PT,
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
+  isElementNode,
   isStaleImageInteractionCommit,
   selectedDrawingOverlayTargetOf,
   type ImageInteractionSession,
@@ -127,7 +129,7 @@ export function ImageSelectionOverlay({
     const container = containerRef.current;
     if (!container) return undefined;
     const onPointerDown = (event: PointerEvent): void => {
-      const element = event.target instanceof Element ? event.target : null;
+      const element = isElementNode(event.target) ? event.target : null;
       if (element?.closest('.docx-drawing-textbox-content')) {
         focusRequestedForDrawingRef.current = null;
         return;
@@ -179,8 +181,9 @@ export function ImageSelectionOverlay({
     // pass still gets its observer, and a fresh selection re-measures a moved origin.
     refreshOrigin();
     const portal = portalRef.current;
-    if (!portal || typeof ResizeObserver !== 'function') return undefined;
-    const observer = new ResizeObserver(refreshOrigin);
+    const Observer = hostWindowOf(portal).ResizeObserver;
+    if (!portal || typeof Observer !== 'function') return undefined;
+    const observer = new Observer(refreshOrigin);
     observer.observe(portal);
     // The origin is a function of BOTH boxes: the surface's own width moves the centring
     // margin at a constant portal box (a page-size change), so observe the surface too.
@@ -508,13 +511,15 @@ export function ImageSelectionOverlay({
         );
       } else clearPreview();
     };
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', finish);
-    window.addEventListener('pointercancel', finish);
+    // The surface's own window: a drag in a pop-out window never reaches the opener's.
+    const win = hostWindowOf(containerRef.current);
+    win.addEventListener('pointermove', onPointerMove);
+    win.addEventListener('pointerup', finish);
+    win.addEventListener('pointercancel', finish);
     return () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', finish);
-      window.removeEventListener('pointercancel', finish);
+      win.removeEventListener('pointermove', onPointerMove);
+      win.removeEventListener('pointerup', finish);
+      win.removeEventListener('pointercancel', finish);
     };
   }, [clearPreview, commitSession, containerRef, editor, preview]);
 

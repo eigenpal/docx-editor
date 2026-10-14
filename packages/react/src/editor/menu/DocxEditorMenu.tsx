@@ -1,4 +1,9 @@
-import { editorInstanceScope } from '@docx-editor.dev/core/editor';
+import {
+  editorHostElement,
+  editorInstanceScope,
+  hostDocumentOf,
+  isDomNode,
+} from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../DocxEditorPrintDialog';
 import { usePopupConfig } from '../popup-config';
@@ -67,7 +72,8 @@ import {
 import { FIXED_ATTRIBUTE, useToolbarOverflow } from '../toolbar/useToolbarOverflow';
 import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
 import { download, downloadName } from './download';
-import { barTriggers, restoreExportFocus } from './menu-keyboard';
+import { barTriggers, isPoppedOutEditorTarget, restoreExportFocus } from './menu-keyboard';
+import { useEditorHostDocument } from '../useEditorHostDocument';
 import {
   Menu,
   MenuEntry,
@@ -280,12 +286,13 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     if (openMenu === null) return undefined;
     const onPointerDown = (event: globalThis.MouseEvent) => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (root && isDomNode(event.target) && root.contains(event.target)) return;
       setOpenMenu(null);
     };
-    document.addEventListener('mousedown', onPointerDown);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onPointerDown);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown);
+      doc.removeEventListener('mousedown', onPointerDown);
     };
   }, [openMenu]);
   // Escape from outside the bar, such as the pages, goes through the shared rule, and a host
@@ -295,7 +302,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     openMenu !== null,
     rootRef,
     () => setOpenMenu(null),
-    (event) => event.target instanceof Node && rootRef.current?.contains(event.target) === true
+    (event) => isDomNode(event.target) && rootRef.current?.contains(event.target) === true
   );
 
   // Opening a menu also claims the tab stop, so Escape has a trigger to return to and a
@@ -315,7 +322,14 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     // reported through the same channel a host's `onChange` uses.
     void editor
       .save()
-      .then((buffer) => download(buffer, downloadName(fileName ?? openedName ?? undefined)))
+      .then((buffer) =>
+        download(
+          buffer,
+          downloadName(fileName ?? openedName ?? undefined),
+          undefined,
+          rootRef.current
+        )
+      )
       .catch((error: unknown) => {
         console.error('[docx-editor] save failed', error);
       });
@@ -356,6 +370,9 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       : (onPageSetup ?? packagedPageSetup)
     : undefined;
 
+  // The editor's document: a pop-out window's when the pages live there.
+  const hostDocument = useEditorHostDocument();
+
   // Ctrl/Cmd+O, Ctrl/Cmd+S and Ctrl/Cmd+P, so the shortcut column tells the truth. All are
   // what the browser would otherwise handle (open a local file, save or print the page),
   // and an editor that leaves Cmd+S to the browser is the surprising one. Ctrl/Cmd+P is
@@ -377,7 +394,15 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       // back to the bar's own subtree, which is narrow but never wrong.
       const target = event.target as Node | null;
       const scope = editorInstanceScope(rootRef.current) ?? rootRef.current;
-      if (!target || !scope?.contains(target)) return;
+      if (!target) return;
+      const inScope =
+        (scope?.contains(target) ?? false) ||
+        isPoppedOutEditorTarget(
+          target,
+          hostDocumentOf(rootRef.current),
+          editor ? editorHostElement(editor) : null
+        );
+      if (!inScope) return;
       if (print) {
         // Checked first: on some layouts the P key types a character other than "p".
         if (!hasPdfExporter || !editor) return;
@@ -394,9 +419,23 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         resolvedOpen();
       }
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [resolvedOpen, resolvedSave, resolvedPrint, printPopupShown, hasPdfExporter, editor]);
+    // The bar's document, and the editor's when the pages live in another window.
+    const barDocument = hostDocumentOf(rootRef.current);
+    const docs =
+      hostDocument && hostDocument !== barDocument ? [barDocument, hostDocument] : [barDocument];
+    for (const doc of docs) doc.addEventListener('keydown', onKeyDown);
+    return () => {
+      for (const doc of docs) doc.removeEventListener('keydown', onKeyDown);
+    };
+  }, [
+    resolvedOpen,
+    resolvedSave,
+    resolvedPrint,
+    printPopupShown,
+    hasPdfExporter,
+    editor,
+    hostDocument,
+  ]);
 
   const context = useMemo<MenuContextValue>(
     () => ({
@@ -575,7 +614,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
           // Only the BAR's own arrows. Inside an open panel, Left/Right belong to the
           // submenu contract and the panel has already stopped them.
           const triggers = barTriggers(bar);
-          const index = triggers.indexOf(document.activeElement as HTMLElement);
+          const index = triggers.indexOf(hostDocumentOf(bar).activeElement as HTMLElement);
           if (index === -1) return;
           event.preventDefault();
           const step = event.key === 'ArrowRight' ? 1 : -1;

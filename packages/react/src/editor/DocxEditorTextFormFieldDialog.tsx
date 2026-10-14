@@ -1,7 +1,7 @@
 import { useEditorState } from './useEditorState';
 import { useEffect, useState } from 'react';
 import type { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
-import { TEXT_FORM_FORMATS } from '@docx-editor.dev/core/editor';
+import { isHTMLElementNode, TEXT_FORM_FORMATS } from '@docx-editor.dev/core/editor';
 import type { TextFormFieldOptions } from '@docx-editor.dev/core/store';
 import { useFormControlTranslate } from './form-control-translate';
 import {
@@ -124,7 +124,11 @@ function TextFormFieldForm({
           event.preventDefault();
           session.cancel();
         }
-        if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+        if (
+          event.key === 'Enter' &&
+          isHTMLElementNode(event.target) &&
+          event.target.localName === 'input'
+        ) {
           event.preventDefault();
           apply();
         }

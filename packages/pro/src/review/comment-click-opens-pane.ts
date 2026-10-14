@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // must not throw the pane open under the reader's typing.
 
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
+import { isElementNode } from '@docx-editor.dev/core/editor';
 
 /**
  * Listen for clicks in the page of the editor that `rail` belongs to. After each click that
@@ -28,7 +29,7 @@ export function listenForCommentClicks(
     if (event.defaultPrevented || event.button !== 0) return;
     if (!editor.snapshot().selectionCollapsed) return;
     const target = event.target;
-    if (!(target instanceof Element) || rail.contains(target)) return;
+    if (!isElementNode(target) || rail.contains(target)) return;
     const surface = target.closest('.docx-paginated-surface');
     if (!surface || !scroller.contains(surface)) return;
     const owner = surface.closest('.docx-editor__scroll-container');

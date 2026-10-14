@@ -80,10 +80,13 @@ export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLEleme
     }
     if (current.isConnected) positionContentControlPopup(panel, current);
   };
-  const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+  // The panel's own window: an observer from another one never reports this document's boxes.
+  const observer =
+    typeof view?.ResizeObserver === 'function' ? new view.ResizeObserver(update) : null;
   observer?.observe(panel);
   observer?.observe(current);
-  const mutation = typeof MutationObserver === 'undefined' ? null : new MutationObserver(update);
+  const mutation =
+    typeof view?.MutationObserver === 'function' ? new view.MutationObserver(update) : null;
   if (layer) mutation?.observe(layer, { childList: true, subtree: true });
   update();
   view?.addEventListener('resize', update);
@@ -138,7 +141,9 @@ export function contentControlPopupKeyDown(
 
 /** Capture a popup's opener, with the editable pages as fallback when no control had focus. @public */
 export function contentControlPopupOpener(anchor: HTMLElement | null): HTMLElement | null {
-  const owner = anchor?.ownerDocument ?? (typeof document === 'undefined' ? null : document);
+  const owner =
+    anchor?.ownerDocument ??
+    (typeof globalThis.document === 'undefined' ? null : globalThis.document);
   const active = owner?.activeElement as HTMLElement | null;
   return active && active !== owner?.body
     ? active

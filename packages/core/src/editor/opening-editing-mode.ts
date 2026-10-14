@@ -184,12 +184,13 @@ export function createSuggestingConfigurationReporter(input: {
   readonly log?: (message: string) => void;
 }): SuggestingConfigurationReporter {
   let reported = false;
-  let pending: ReturnType<typeof setTimeout> | null = null;
+  let pending: ReturnType<typeof globalThis.setTimeout> | null = null;
   const log = input.log ?? ((message: string) => console.error(message));
   return {
     report(rejection) {
       if (rejection !== SUGGESTING_AUTHOR_REASON || reported || pending !== null) return;
-      pending = setTimeout(() => {
+      // A deferred report, not UI timing: any window's task will do.
+      pending = globalThis.setTimeout(() => {
         pending = null;
         if (!input.stillMissing()) return;
         reported = true;
@@ -201,7 +202,7 @@ export function createSuggestingConfigurationReporter(input: {
       }, 0);
     },
     dispose() {
-      if (pending !== null) clearTimeout(pending);
+      if (pending !== null) globalThis.clearTimeout(pending);
       pending = null;
     },
   };

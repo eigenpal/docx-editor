@@ -158,7 +158,10 @@ import { createRevisionAuthorVisibility } from './revision-author-visibility.ts'
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
 import { withSavedFieldResults } from './surface-saved-field-results.ts';
-import { frameCoalescer } from './frame-coalescer.ts';
+import { bindSurfaceViewport, type SurfaceViewportBinding } from './surface-viewport-binding.ts';
+import { createSurfaceHostListeners } from './surface-host-listeners.ts';
+import { hostTimers, hostWindowOf } from './host-realm.ts';
+import { createSurfaceHosting } from './surface-host-move.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
@@ -232,6 +235,7 @@ import { createNextStyleWrites } from './surface-next-style.ts';
 import {
   createFurnitureSource,
   createSurfaceStyleDeps,
+  applyPageOffsets,
   equalPageSets,
   equalSurfaceExtents,
   surfaceExtent,
@@ -402,11 +406,14 @@ export function mountPaginatedSurface(
     return `${options.producer ?? defaults?.producer ?? 'fixed-measurer'}@scale:${scale}`;
   }
   let producer = producerIdentity();
-  const document = container.ownerDocument;
   // `lockedControlNavigation: 'atomic'`: inline controls with locked content are one caret unit.
   const atomicNavigation = options.lockedControlNavigation === 'atomic';
+  // Construction only. Everything read at RUN time (focus, selection, listeners, timers)
+  // resolves from `pagesLayer`, because `moveTo` can carry the pages to another window.
+  const mountDocument = container.ownerDocument;
 
-  const pagesLayer = document.createElement('div');
+  const pagesLayer = mountDocument.createElement('div');
+  const hostListeners = createSurfaceHostListeners(() => pagesLayer);
   pagesLayer.className = 'docx-pages';
   pagesLayer.style.position = 'relative';
   fieldScope.listeners(pagesLayer);
@@ -432,18 +439,18 @@ export function mountPaginatedSurface(
   // The one highlight the browser cannot draw. A SIBLING of the pages, never a child: the
   // page painter sweeps anything it did not paint out of its own subtree, and a stray child
   // of a contenteditable is editable content a keystroke could land in.
-  const overlayLayer = overlaySheet(document, 'docx-selection-overlay');
+  const overlayLayer = overlaySheet(mountDocument, 'docx-selection-overlay');
 
   // Commented text, highlighted the way Word highlights it. Its own layer OVER the pages —
   // under them the band is invisible, because a page paints an opaque sheet — and the band
   // multiplies rather than covers, which is what a real highlighter does: the yellow darkens
   // the paper and leaves the black glyphs black.
-  const commentLayer = overlaySheet(document, 'docx-comment-overlay');
+  const commentLayer = overlaySheet(mountDocument, 'docx-comment-overlay');
   // Host text highlights (search results, glossary terms): painted by a facade-owned painter.
-  const highlightLayer = overlaySheet(document, 'docx-text-highlight-overlay');
+  const highlightLayer = overlaySheet(mountDocument, 'docx-text-highlight-overlay');
   let highlightPainter: SurfaceOverlayPainter | null = null;
-  const remoteSelectionLayer = overlaySheet(document, 'docx-remote-selection-overlay');
-  const tableFurnitureLayer = overlaySheet(document, 'docx-table-furniture', false);
+  const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
+  const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
 
   container.style.position = 'relative';
   container.replaceChildren(
@@ -890,7 +897,7 @@ export function mountPaginatedSurface(
   let onDrawingResourcesChanged: (() => void) | null = null;
   const decodePort =
     options.imageDecodePort ??
-    tryCreateBrowserImageDecodePort(document) ??
+    tryCreateBrowserImageDecodePort(mountDocument) ??
     createHeadlessImageDecodePort();
   const drawingBundle = createInlineDrawingLayoutBundle({
     session,
@@ -1070,6 +1077,7 @@ export function mountPaginatedSurface(
   // The pages after the screen finish after the commit; see `surface-deferred-layout.ts`.
   const deferredLayout = createDeferredLayout({
     now,
+    view: () => hostWindowOf(pagesLayer),
     pageAfterView: () => {
       const visible = visiblePages();
       return visible && visible.size > 0 ? Math.max(...visible) + 1 : undefined;
@@ -1333,7 +1341,9 @@ export function mountPaginatedSurface(
 
   const navigation = createSurfaceNavigation({
     pagesLayer,
-    container,
+    get container() {
+      return container;
+    },
     scale: () => scale,
     layout: editingLayout,
     bookmarks: () => session.bookmarks(),
@@ -1441,7 +1451,9 @@ export function mountPaginatedSurface(
     return layout;
   }
 
-  let deferredPublishRender: ReturnType<typeof setTimeout> | null = null;
+  /** Timers on the pages' own window: an opener's timers are throttled while it is hidden. */
+  const timers = hostTimers(() => pagesLayer);
+  let deferredPublishRender: number | null = null;
   /** Nonzero while `commitNow` applies its ops; see `renderPublishedLayout`. */
   let commitRunDepth = 0;
   let commitPaintOwed = false;
@@ -1462,6 +1474,10 @@ export function mountPaginatedSurface(
       shouldRun: () =>
         editingMode !== 'view' && session.editable && session.packageRevision() === revisionAtArm,
       hasPendingInput: hasPendingBrowserInput,
+      schedule: (run, delayMs) => {
+        const handle = timers.setTimeout(run, delayMs);
+        return () => timers.clearTimeout(handle);
+      },
     });
   }
 
@@ -1488,7 +1504,7 @@ export function mountPaginatedSurface(
     // browser's input queue. One task catches the view up to the newest published layout;
     // ordinary isolated edits still render synchronously through the branch above.
     if (deferredPublishRender !== null) return;
-    deferredPublishRender = setTimeout(
+    deferredPublishRender = timers.setTimeout(
       fieldScope.wrap(() => {
         deferredPublishRender = null;
         // Superseded: a newer commit is already pending, so this layout is not the one the
@@ -1521,7 +1537,7 @@ export function mountPaginatedSurface(
   // teardown), so the selection at flush time is the selection the first
   // buffered key saw.
   let typeBuffer = '';
-  let typeFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  let typeFlushTimer: number | null = null;
   let flushingTypeBuffer = false;
 
   function flushTypeBuffer(): void {
@@ -1531,7 +1547,7 @@ export function mountPaginatedSurface(
     // flush point.
     if (flushingTypeBuffer) return;
     if (typeFlushTimer !== null) {
-      clearTimeout(typeFlushTimer);
+      timers.clearTimeout(typeFlushTimer);
       typeFlushTimer = null;
     }
     if (typeBuffer.length === 0) return;
@@ -1556,7 +1572,7 @@ export function mountPaginatedSurface(
   function enqueueType(text: string): void {
     typeBuffer += text;
     if (typeFlushTimer !== null) return;
-    typeFlushTimer = setTimeout(
+    typeFlushTimer = timers.setTimeout(
       fieldScope.wrap(() => {
         typeFlushTimer = null;
         flushTypeBuffer();
@@ -1666,8 +1682,8 @@ export function mountPaginatedSurface(
     // in a background tab, and a document that stops repainting when the tab is hidden is
     // the same stale-paint failure by another route.
     schedule: (run) => {
-      const handle = setTimeout(fieldScope.wrap(run), 0);
-      return () => clearTimeout(handle);
+      const handle = timers.setTimeout(fieldScope.wrap(run), 0);
+      return () => timers.clearTimeout(handle);
     },
     publish: (layout) => publishLayout(layout),
   });
@@ -1701,7 +1717,7 @@ export function mountPaginatedSurface(
     scheduler.invalidateAll(session.packageRevision(), 'drawing-resources');
     if (resourceFlushQueued) return;
     resourceFlushQueued = true;
-    setTimeout(
+    timers.setTimeout(
       fieldScope.wrap(() => {
         resourceFlushQueued = false;
         flushLayout();
@@ -2230,7 +2246,9 @@ export function mountPaginatedSurface(
   }
 
   const pictureWidget = createContentControlPictureWidget({
-    document,
+    get document() {
+      return pagesLayer.ownerDocument;
+    },
     layer: pagesLayer,
     find: findControl,
     layout: editingLayout,
@@ -2271,7 +2289,7 @@ export function mountPaginatedSurface(
       stopContentControlMenuDismiss = undefined;
     }
     const controlId = menu.dataset.docxCcId;
-    const restoreFocus = menu.contains(document.activeElement);
+    const restoreFocus = menu.contains(pagesLayer.ownerDocument.activeElement);
     menu.remove();
     if (controlId) setContentControlWidgetOpen(controlId, false);
     if (restoreFocus) pagesLayer.focus({ preventScroll: true });
@@ -2334,7 +2352,9 @@ export function mountPaginatedSurface(
   }
 
   const contentControlMenuHost: ContentControlMenuHost = {
-    document,
+    get document() {
+      return pagesLayer.ownerDocument;
+    },
     locale: () => dateLocale.get(),
     translate: (key) => translate?.(key) ?? key,
     setValue: (controlId, value) => contentControlsOps.setValue(controlId, value),
@@ -2569,20 +2589,27 @@ export function mountPaginatedSurface(
    * reached before its own state exists — the wiring below runs late, and a temporal dead
    * zone would be a ReferenceError thrown out of a repaint.
    */
-  let viewportObserver: ResizeObserver | null = null;
-  let observedScroller: HTMLElement | null = null;
-
-  function applyPageOffsets(extent: SurfaceExtent): void {
-    for (const page of currentLayout.pages) {
-      // The painter reconciles page children in record order, including virtual shells.
-      // Indexing that retained list is O(1); a selector here used to make one DOM query for
-      // every page on every keystroke (hundreds of queries in a long document).
-      const element = pagesLayer.children.item(page.index) as HTMLElement | null;
-      if (element?.dataset.pageIndex !== String(page.index)) continue;
-      const offsetX = extent.pageOffsetX.get(page.index) ?? 0;
-      element.style.left = `${(page.box.x + offsetX) * scale}px`;
-    }
-  }
+  let viewportBinding: SurfaceViewportBinding | null = null;
+  const hosting = createSurfaceHosting({
+    pagesLayer,
+    listeners: hostListeners,
+    viewport: () => viewportBinding,
+    container: () => container,
+    setContainer: (next) => (container = next),
+    destroyed: () => destroyed,
+    scale: () => scale,
+    settle: () => {
+      flushToPaint();
+      finishOpeningPass();
+      deferredLayout.finish();
+      removeExistingContentControlMenu();
+      pictureWidget.cancel();
+      pointer?.cancelGesture();
+      tableInteraction.cancelDrag();
+    },
+    repaint: () => render(false),
+    onHostMoved: (document) => options.onHostMoved?.(document),
+  });
 
   function render(notifyChange = true): void {
     // Any render catches the screen up to `currentLayout`, so a paint deferred under input
@@ -2590,9 +2617,18 @@ export function mountPaginatedSurface(
     // during a deferral used to paint the same layout twice. The deferred render was also
     // the commit's only state report, so this render inherits its notify duty.
     if (deferredPublishRender !== null) {
-      clearTimeout(deferredPublishRender);
+      timers.clearTimeout(deferredPublishRender);
       deferredPublishRender = null;
       notifyChange = true;
+    }
+    hosting.heal();
+    // Parked: no viewport, so a paint would build every page into a holder nobody sees. State
+    // still reports, and `moveTo` repaints in full.
+    if (hosting.parked()) {
+      commitPaintOwed = false;
+      paintHighlights(); // keeps host highlights mapped through each revision
+      if (notifyChange) options.onChange?.(currentState());
+      return;
     }
     // Reading the DOM selection BEFORE the paint replaces the nodes it lives in is what makes
     // a repaint carry a gesture the queued `selectionchange` has not delivered yet, rather
@@ -2650,7 +2686,7 @@ export function mountPaginatedSurface(
     // surface would collapse to zero — pages then escape whatever centres or scrolls it.
     // Size it from the records, which is the only place the extent is known.
     materializedExtent = surfaceExtent(currentLayout, materializedSet);
-    applyPageOffsets(materializedExtent);
+    applyPageOffsets(pagesLayer, currentLayout, materializedExtent, scale);
     pagesLayer.style.width = `${materializedExtent.width * scale}px`;
     pagesLayer.style.height = `${materializedExtent.height * scale}px`;
     container.style.width = `${materializedExtent.width * scale}px`;
@@ -2672,7 +2708,7 @@ export function mountPaginatedSurface(
     paintHighlights();
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
-    watchScrollerSize();
+    viewportBinding?.watchScrollerSize();
     selectionSync.mirrorToDom();
     followCaretIntoView(caretFollowPending);
     // SPENT either way. Kept alive through a suppressed pass it would only wait for the next
@@ -2720,10 +2756,12 @@ export function mountPaginatedSurface(
     preferredPageIndex: () => selectionSync.selectionPageIndex(),
     preferredLineId: () => selectionSync.selectionLineId(),
     pagesLayer,
-    container,
+    get container() {
+      return container;
+    },
     scroller: () => surfaceScroller(container),
     scale: () => scale,
-    scheduleRematerialize: () => scheduleRematerialize(),
+    scheduleRematerialize: () => viewportBinding?.schedule(),
   });
 
   function followCaretIntoView(force = false, mode: CaretFollowMode = 'caret'): void {
@@ -3335,7 +3373,6 @@ export function mountPaginatedSurface(
   const selectionSync = createSurfaceSelectionSync({
     session,
     storyScope,
-    document,
     pagesLayer,
     selection: () => selection,
     setSelection: (next) => setSelection(next),
@@ -5668,7 +5705,7 @@ export function mountPaginatedSurface(
     focus: () => {
       // An already-focused surface may have a newer native selection or active IME
       // composition. A redundant focus request must not overwrite either with the model.
-      if (document.activeElement === pagesLayer) return;
+      if (pagesLayer.ownerDocument.activeElement === pagesLayer) return;
       pagesLayer.focus({ preventScroll: true });
       // Returning from a toolbar input can place the browser caret at the document's
       // start. Restore the saved model range before selectionchange adopts that caret
@@ -5681,6 +5718,10 @@ export function mountPaginatedSurface(
     refreshTableInteractionLabels() {
       tableInteraction.refreshLabels();
     },
+    moveTo: hosting.moveTo,
+    park: hosting.park,
+    parked: hosting.parked,
+    hostElement: () => container,
     destroy() {
       if (destroyed) return;
       destroyed = true;
@@ -5693,7 +5734,6 @@ export function mountPaginatedSurface(
       try {
         flushToPaint();
       } finally {
-        document.removeEventListener('selectionchange', onSelectionChange);
         pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onInputTiming, { capture: true });
@@ -5707,10 +5747,9 @@ export function mountPaginatedSurface(
         pagesLayer.removeEventListener('paste', onPaste as EventListener);
         pagesLayer.removeEventListener('compositionstart', onCompositionStart);
         pagesLayer.removeEventListener('compositionend', onCompositionEnd);
-        document.removeEventListener('scroll', onScroll, { capture: true });
-        container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
-        viewportObserver?.disconnect();
-        observedScroller = null;
+        viewportBinding?.destroy();
+        hostListeners.clear();
+        hosting.destroy();
         // An open engine menu holds document-level dismiss listeners; a surface torn down
         // with its menu still up would leave them swallowing the next editor's Escape.
         removeExistingContentControlMenu();
@@ -5732,7 +5771,7 @@ export function mountPaginatedSurface(
         // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
         // another editor sharing this store would paint into a detached container.
         scheduler.cancel();
-        if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
+        if (deferredPublishRender !== null) timers.clearTimeout(deferredPublishRender);
         deferredPublishRender = null;
         if (cancelDerivationPrewarm) cancelDerivationPrewarm();
         cancelDerivationPrewarm = null;
@@ -5874,7 +5913,10 @@ export function mountPaginatedSurface(
       locale: dateLocale.get,
       translate: (key, params) => translate?.(key, params) ?? key,
       pagesLayer,
-      container,
+      get container() {
+        return container;
+      },
+      listeners: hostListeners,
       part: (paragraphId?: string) =>
         partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
       parts: () => session.storyParts(),
@@ -5983,9 +6025,6 @@ export function mountPaginatedSurface(
     dispatchBeforeInput(event);
   };
 
-  // Selection lives on the document, so this is where the browser reports it changing —
-  // whatever produced it: a drag, a double-click, Select All, or a caret move.
-  document.addEventListener('selectionchange', onSelectionChange);
   const { onDrawingPointerGesture, onDrawingKeyGesture } = createDrawingGestures({
     surface,
     textbox: () => textboxEditing,
@@ -6006,53 +6045,14 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('compositionstart', onCompositionStart);
   pagesLayer.addEventListener('compositionend', onCompositionEnd);
 
-  // Attached at mount, when the host's chrome — including the scroll container — already
-  // exists. Coalesced to a frame: a wheel fires far more scroll events than there are
-  // frames, and each repaint costs the same whether one event asked for it or twenty.
-  // BOUND TO THE DOCUMENT, RESOLVED PER EVENT. `scroll` does not bubble, but it does fire
-  // in the CAPTURE phase on every ancestor, and that is the only binding that survives the
-  // mount order: a host attaches the surface and only then wraps it in its viewport, so a
-  // scroller captured with `closest` at mount time is routinely null — and a null one meant
-  // no listener at all, so scrolling never built the pages it revealed. Every page past the
-  // first screenful stayed blank until some unrelated commit forced a repaint.
-  // Also covers StrictMode / provider-first attach before the Content node sits under the
-  // scroll container (footnotes and later sheets must rematerialize).
-  const scheduleRematerialize = frameCoalescer(document, fieldScope.wrap(rematerialize));
-
-  const onScroll = (event: Event): void => {
-    const scroller = surfaceScroller(container);
-    if (!scroller || event.target !== scroller) return;
-    scheduleRematerialize();
-  };
-  document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-
-  // WHICH PAGES ARE VISIBLE DEPENDS ON THE VIEWPORT'S SIZE, NOT ONLY ON ITS SCROLL OFFSET.
-  //
-  // `visiblePageSet` reads `clientHeight`, so a viewport that grows reveals pages the last
-  // paint had no reason to build — and a resize fires no `scroll`. Nothing asked for a
-  // repaint, so the newly uncovered sheets stayed blank until the user scrolled or typed:
-  // maximizing the window, closing a side panel, rotating a tablet, or the browser chrome
-  // collapsing on scroll-up all land there.
-  const onViewportResize = (): void => {
-    scheduleRematerialize();
-  };
-  const view = container.ownerDocument.defaultView;
-  view?.addEventListener('resize', onViewportResize, { passive: true });
-  // The window event covers a resized window; an observer covers everything that changes
-  // the scroller WITHOUT one — a collapsing panel, a wrapping toolbar, a CSS change. The
-  // scroller is resolved lazily for the same reason the scroll listener binds to the
-  // document: at mount the host has routinely not wrapped the surface in its viewport yet.
-  viewportObserver =
-    typeof view?.ResizeObserver === 'function' ? new view.ResizeObserver(onViewportResize) : null;
-  function watchScrollerSize(): void {
-    if (!viewportObserver) return;
-    const scroller = surfaceScroller(container);
-    if (scroller === observedScroller) return;
-    viewportObserver.disconnect();
-    observedScroller = scroller;
-    if (scroller) viewportObserver.observe(scroller);
-  }
-  watchScrollerSize();
+  // Selection, scroll and viewport size, from whichever window the pages live in.
+  viewportBinding = bindSurfaceViewport({
+    pagesLayer,
+    container: () => container,
+    listeners: hostListeners,
+    onSelectionChange,
+    rematerialize: fieldScope.wrap(rematerialize),
+  });
 
   textboxEditing = createTextboxEditing({
     session,
@@ -6072,7 +6072,10 @@ export function mountPaginatedSurface(
       onTextFormDoubleClick: (event) => textFormInteraction?.doubleClick(event) ?? false,
       onTextFormPointerUp: (event) => textFormInteraction?.pointerUp(event),
       pagesLayer,
-      container,
+      get container() {
+        return container;
+      },
+      listeners: hostListeners,
       scale: () => scale,
       // Pages of differing width are centred individually, so a landscape page among
       // portrait ones is painted at an x its record does not carry. Without this the
@@ -6179,6 +6182,7 @@ export function mountPaginatedSurface(
   const tableInteraction = createSurfaceTableInteraction({
     pagesLayer,
     furnitureLayer: tableFurnitureLayer,
+    listeners: hostListeners,
     scale: () => scale,
     pageOffsetX: (pageIndex) => materializedExtent?.pageOffsetX.get(pageIndex) ?? 0,
     read: () => ({

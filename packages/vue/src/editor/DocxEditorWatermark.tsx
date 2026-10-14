@@ -27,6 +27,7 @@ import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { selectDocumentAbsent } from './document-presence';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { editorHostDocument, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { useWatermark } from './useWatermark';
 import {
   DEFAULT_WATERMARK_FIELDS,
@@ -93,6 +94,7 @@ const WatermarkPreview = defineComponent({
   name: 'DocxEditorWatermarkDialogPreviewView',
   setup() {
     const dialog = useWatermarkDialog();
+    const editorRef = useDocxEditor();
     const pageSetup = useEditorState(selectPageSetup);
     const previewPage = computed(() => watermarkPreviewPage(pageSetup.value));
     const pictureUrl = ref<string | null>(null);
@@ -141,7 +143,13 @@ const WatermarkPreview = defineComponent({
                 font-style={text.fontStyle}
                 fill={text.fill}
                 fill-opacity={text.opacity}
-                transform={watermarkPreviewTextTransform(text, watermarkPreviewInk(text))}
+                transform={watermarkPreviewTextTransform(
+                  text,
+                  watermarkPreviewInk(
+                    text,
+                    editorRef.value ? editorHostDocument(editorRef.value) : null
+                  )
+                )}
               >
                 {text.text}
               </text>
@@ -234,7 +242,7 @@ const WatermarkDialogImpl = defineComponent({
         pictureFailed.value = false;
         // Focus follows the seed: the checked kind, not the first choice.
         void nextTick(() => {
-          document
+          editorHostDocument(editor)
             .querySelector<HTMLInputElement>(`input[name="${id}-kind"]:checked`)
             ?.focus({ preventScroll: true });
         });
@@ -618,8 +626,10 @@ const WatermarkDialogImpl = defineComponent({
             if (
               event.key === 'Enter' &&
               !event.isComposing &&
-              target instanceof HTMLInputElement &&
-              (target.type === 'text' || target.type === 'number') &&
+              isHTMLElementNode(target) &&
+              target.localName === 'input' &&
+              ((target as HTMLInputElement).type === 'text' ||
+                (target as HTMLInputElement).type === 'number') &&
               canApply.value
             ) {
               event.preventDefault();

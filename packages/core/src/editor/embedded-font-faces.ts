@@ -50,14 +50,23 @@ export interface EmbeddedFontFaceRegistration {
    * painting fall back to the declared family alone.
    */
   readonly alias: (family: string) => string | undefined;
+  /**
+   * Register the same faces in another document's `FontFaceSet`, once per document. A set is
+   * per document, so a surface that moves to a pop-out window or an iframe paints in
+   * fallback glyphs until its new document has them too.
+   */
+  showIn(document: Document): void;
   dispose(): void;
 }
 
 const NO_REGISTRATION: EmbeddedFontFaceRegistration = Object.freeze({
   installed: 0,
   alias: () => undefined,
+  showIn() {},
   dispose() {},
 });
+
+type FaceDescriptors = { readonly weight: string; readonly style: 'normal' | 'italic' };
 
 /**
  * The alias for one document's face set.
@@ -80,16 +89,25 @@ function aliasForFamily(hashes: readonly string[]): string {
 /** Match the family normalization used by measurement's fontRequestKey. */
 const familyKey = (family: string): string => family.trim().toLowerCase();
 
-function defaultEnvironment(): EmbeddedFontFaceEnvironment {
-  const doc = typeof document !== 'undefined' ? document : undefined;
-  const fontSet = (doc as { fonts?: FontFaceSetLike } | undefined)?.fonts;
-  if (!fontSet || typeof FontFace === 'undefined') return {};
+/**
+ * The font machinery of `doc`, or of the script's own document when none is given.
+ *
+ * Both halves come from the SAME window: a `FontFace` made by one window's constructor is
+ * refused by another window's `FontFaceSet`.
+ */
+export function fontFaceEnvironmentOf(doc?: Document | null): EmbeddedFontFaceEnvironment {
+  const target =
+    doc ?? (typeof globalThis.document !== 'undefined' ? globalThis.document : undefined);
+  const fontSet = (target as { fonts?: FontFaceSetLike } | undefined)?.fonts;
+  const FontFaceCtor = (target?.defaultView as (Window & typeof globalThis) | null | undefined)
+    ?.FontFace;
+  if (!fontSet || typeof FontFaceCtor !== 'function') return {};
   return {
     fontSet,
     createFontFace: (family, bytes, descriptors) =>
       // A copy, not the admitted view: FontFace snapshots its source, but slicing keeps
       // the engine's buffers from ever being aliased by browser internals.
-      new FontFace(family, bytes.slice().buffer, descriptors) as unknown as FontFaceLike,
+      new FontFaceCtor(family, bytes.slice().buffer, descriptors) as unknown as FontFaceLike,
   };
 }
 
@@ -110,7 +128,7 @@ function defaultEnvironment(): EmbeddedFontFaceEnvironment {
  */
 export async function registerEmbeddedFontFaces(
   sources: readonly FontSource[],
-  environment: EmbeddedFontFaceEnvironment = defaultEnvironment(),
+  environment: EmbeddedFontFaceEnvironment = fontFaceEnvironmentOf(),
   substitutions: readonly FontSourceSubstitution[] = []
 ): Promise<EmbeddedFontFaceRegistration> {
   const { fontSet, createFontFace } = environment;
@@ -126,7 +144,9 @@ export async function registerEmbeddedFontFaces(
   }
 
   const aliases = new Map<string, string>();
-  const added: FontFaceLike[] = [];
+  const added: { readonly set: FontFaceSetLike; readonly face: FontFaceLike }[] = [];
+  /** What each accepted face was made from, so `showIn` can make it again elsewhere. */
+  const accepted: { alias: string; bytes: Uint8Array; descriptors: FaceDescriptors }[] = [];
   await Promise.all(
     [...byFamily].map(async ([family, faces]) => {
       const alias = aliasForFamily(faces.map((face) => `${face.hash}:face:${face.faceIndex}`));
@@ -154,13 +174,15 @@ export async function registerEmbeddedFontFaces(
                 : face.bytes;
             if (!isCollection && face.faceIndex !== 0)
               throw new Error('Font face index requires a collection');
-            const fontFace = createFontFace(alias, browserBytes, {
+            const descriptors: FaceDescriptors = {
               weight: String(face.request.weight),
               style: face.request.style,
-            });
+            };
+            const fontFace = createFontFace(alias, browserBytes, descriptors);
             await fontFace.load();
             fontSet.add(fontFace);
-            added.push(fontFace);
+            added.push({ set: fontSet, face: fontFace });
+            accepted.push({ alias, bytes: browserBytes, descriptors });
             anyLoaded = true;
           } catch {
             // Paint fidelity is best-effort; the face still measures shaped.
@@ -186,15 +208,34 @@ export async function registerEmbeddedFontFaces(
   }
 
   let disposed = false;
+  const shownIn = new WeakSet<object>([fontSet]);
   return {
     installed: added.length,
     alias: (family) => (disposed ? undefined : aliases.get(familyKey(family))),
+    showIn(doc) {
+      if (disposed) return;
+      const target = fontFaceEnvironmentOf(doc);
+      if (!target.fontSet || !target.createFontFace || shownIn.has(target.fontSet)) return;
+      shownIn.add(target.fontSet);
+      for (const { alias, bytes, descriptors } of accepted) {
+        try {
+          const face = target.createFontFace(alias, bytes, descriptors);
+          // Added before it loads: a set renders a face as soon as its bytes parse, and text
+          // already painted under the alias re-renders then.
+          target.fontSet.add(face);
+          added.push({ set: target.fontSet, face });
+          void face.load().catch(() => {});
+        } catch {
+          // Paint fidelity is best-effort; the face still measures shaped.
+        }
+      }
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const face of added) {
+      for (const { set, face } of added) {
         try {
-          fontSet.delete(face);
+          set.delete(face);
         } catch {
           /* removing from a torn-down set is not an error */
         }

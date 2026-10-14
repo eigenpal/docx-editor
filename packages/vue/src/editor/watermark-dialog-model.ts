@@ -376,22 +376,34 @@ export function watermarkPreviewText(
   };
 }
 
-let inkContext: CanvasRenderingContext2D | null | undefined;
+const inkContexts = new WeakMap<Document, CanvasRenderingContext2D | null>();
+
+/** One measuring canvas per document: a pop-out editor measures with its own window's fonts. */
+function inkContextOf(doc: Document | null): CanvasRenderingContext2D | null {
+  if (!doc) return null;
+  let context = inkContexts.get(doc);
+  if (context === undefined) {
+    try {
+      context = doc.createElement('canvas').getContext('2d');
+    } catch {
+      context = null;
+    }
+    inkContexts.set(doc, context);
+  }
+  return context;
+}
 
 /**
- * The glyph ink of the preview text, measured on a canvas. Without a canvas the ink is an
- * estimate: 0.55 em per character across and 0.7 em above the baseline.
+ * The glyph ink of the preview text, measured on a canvas in `doc`, the editor's document.
+ * Without a canvas the ink is an estimate: 0.55 em per character across and 0.7 em above
+ * the baseline.
  */
-export function watermarkPreviewInk(text: WatermarkPreviewText): WatermarkPreviewInk {
+export function watermarkPreviewInk(
+  text: WatermarkPreviewText,
+  doc: Document | null
+): WatermarkPreviewInk {
   const size = WATERMARK_PREVIEW_FONT_SIZE;
-  if (inkContext === undefined) {
-    try {
-      inkContext =
-        typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
-    } catch {
-      inkContext = null;
-    }
-  }
+  const inkContext = inkContextOf(doc);
   if (inkContext) {
     inkContext.font = `${text.fontStyle} ${text.fontWeight} ${size}px ${text.fontFamily}`;
     const metrics = inkContext.measureText(text.text);

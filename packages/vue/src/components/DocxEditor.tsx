@@ -36,6 +36,7 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
+import { DocxEditorWindow } from '../editor/DocxEditorWindow';
 import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
@@ -203,6 +204,8 @@ export interface DocxEditorNamespace {
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
+  /** The editor panel in a pop-out window while `open`; see the pop-out guide. */
+  readonly Window: typeof DocxEditorWindow;
   readonly Toolbar: typeof DocxEditorToolbar;
   readonly Menu: typeof DocxEditorMenu;
   readonly Loading: typeof DocxEditorLoading;
@@ -675,6 +678,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
+  Window: DocxEditorWindow,
   Toolbar: DocxEditorToolbar,
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,

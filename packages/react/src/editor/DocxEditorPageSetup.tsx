@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useTranslation } from '../i18n';
 import { usePageSetup } from './usePageSetup';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 /**
  * Common page sizes in twips, PORTRAIT-normalized (width < height). Matching tolerates
@@ -241,7 +242,12 @@ function PageSetupDialogRoot({
       onClose={onClose}
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose();
-        if (event.key === 'Enter' && event.target instanceof HTMLInputElement && isEnabled) {
+        if (
+          event.key === 'Enter' &&
+          isHTMLElementNode(event.target) &&
+          event.target.localName === 'input' &&
+          isEnabled
+        ) {
           event.preventDefault();
           handleApply();
         }

@@ -45,7 +45,7 @@ function enter(editor: DocxEditorInstance, text: string): void {
 for (const deferred of [false, true]) {
   for (const move of ['detach', 'attach'] as const) {
     for (const input of ['03/04/2030', 'invalid']) {
-      test(`${move} preserves ${JSON.stringify(input)} across a ${deferred ? 'deferred' : 'synchronous'} remount`, async () => {
+      test(`${move} preserves ${JSON.stringify(input)} across a move of a ${deferred ? 'large' : 'small'} document`, async () => {
         const first = container();
         const second = container();
         const editor = createDocxEditor({
@@ -59,12 +59,12 @@ for (const deferred of [false, true]) {
           editor.setLocale('en-US');
           if (move === 'detach') editor.detach();
           editor.attach(second);
-          expect(editor.snapshot().isOpening).toBe(deferred);
+          // A move is not a remount: nothing reopens, the live input travels with the pages.
+          expect(editor.snapshot().isOpening).toBe(false);
           if (deferred) {
-            // Reclaiming and rescheduling the same bytes must retain their input state.
             editor.detach();
             editor.attach(first);
-            expect(editor.snapshot().isOpening).toBe(true);
+            expect(editor.snapshot().isOpening).toBe(false);
           }
           if (input === 'invalid') {
             await expect(editor.save()).rejects.toMatchObject({ code: 'invalidArgs' });
@@ -114,7 +114,7 @@ for (const scheduled of [false, true]) {
   });
 }
 
-test('destroying a deferred remount clears input before another editor uses its container', async () => {
+test('destroying a moved editor clears input before another editor uses its container', async () => {
   const element = container();
   const editor = createDocxEditor({ container: element, document: LARGE_FORM, locale: 'en-GB' });
   try {
@@ -122,7 +122,7 @@ test('destroying a deferred remount clears input before another editor uses its 
     enter(editor, 'invalid');
     editor.detach();
     editor.attach(element);
-    expect(editor.snapshot().isOpening).toBe(true);
+    expect(editor.snapshot().isOpening).toBe(false);
   } finally {
     editor.destroy();
   }

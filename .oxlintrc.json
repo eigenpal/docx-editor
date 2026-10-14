@@ -206,6 +206,125 @@
       }
     },
 
+    // Host window (#1312): the editor can be mounted in a pop-out window or an iframe, and can
+    // move between windows while mounted. Focus, selection, scroll, resize, pointer release,
+    // timers and observers belong to the window the pages live in, so editor DOM code resolves
+    // that window from a node and never reads the script's globals. `instanceof` against a DOM
+    // constructor is false for another window's node or event, so it is banned too.
+    {
+      "files": [
+        "packages/core/src/editor/**/*.ts",
+        "packages/core/src/output/**/*.ts",
+        "packages/react/src/**/*.{ts,tsx}",
+        "packages/vue/src/**/*.{ts,tsx}",
+        "packages/pro/src/react/**/*.{ts,tsx}",
+        "packages/pro/src/vue/**/*.{ts,tsx}",
+        "packages/pro/src/review/**/*.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "document",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "window",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "navigator",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "setTimeout",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "clearTimeout",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "setInterval",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "clearInterval",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "requestAnimationFrame",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "cancelAnimationFrame",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "requestIdleCallback",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "cancelIdleCallback",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "getComputedStyle",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "getSelection",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "matchMedia",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "ResizeObserver",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "MutationObserver",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "IntersectionObserver",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "innerWidth",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "innerHeight",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "visualViewport",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "devicePixelRatio",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          },
+          {
+            "name": "FontFace",
+            "message": "The editor can be mounted in another window (a pop-out or an iframe), so editor DOM code uses that window, not the script's: hostDocumentOf(node) / hostWindowOf(node), or editorHostDocument(editor) / editorHostWindow(editor), from core/editor/host-realm.ts. Write globalThis.<name> only where any window will do, and say why."
+          }
+        ],
+        "docx/no-cross-realm-instanceof": "error"
+      }
+    },
+    {
+      "files": [
+        "packages/*/src/**/__tests__/**",
+        "packages/*/src/**/*.test.{ts,tsx}",
+        "packages/vue/src/**/*.spec.{ts,tsx}"
+      ],
+      "rules": { "no-restricted-globals": "off", "docx/no-cross-realm-instanceof": "off" }
+    },
+
     // Per-file `max-lines` caps. scripts/check-max-lines-caps.mjs holds each one within 150
     // lines of the file's length, so a cap is a ratchet, not a permanent ceiling.
 

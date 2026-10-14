@@ -27,7 +27,8 @@ export interface EditorFormatPainterCommands {
    * direct paragraph properties as well.
    *
    * Non-mutating: the capture lives on the editor, not in the document, and it survives
-   * until the next capture or until the editor is detached.
+   * until the next capture, a document load, or `destroy()`, including across a `detach()`
+   * and a later `attach()`.
    */
   copyFormatting: Record<never, never>;
   /**

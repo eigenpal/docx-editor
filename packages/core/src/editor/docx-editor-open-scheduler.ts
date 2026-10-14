@@ -11,6 +11,8 @@
 // environment without `requestAnimationFrame` — headless and server hosts mount
 // synchronously by definition.
 
+import { hostTimers, hostWindowOf } from './host-realm.ts';
+
 /**
  * The UNCOMPRESSED size past which an open earns a painted loading frame first.
  *
@@ -105,6 +107,12 @@ export interface OpenSchedulerHooks {
    * (`isOpening`) until one answers true. `flush` runs the rest at once.
    */
   readonly continueOpen?: (budgetMs: number) => boolean;
+  /**
+   * The element the document will paint in. Its window's frames and timers pace the open: a
+   * frame requested from a hidden opener never comes, and its timers are throttled. Pending
+   * steps follow the element to another window and leave a window that closes.
+   */
+  readonly node?: () => Node | null;
 }
 
 /** One scheduled open: its bytes, whether `mount` already ran, and how to stop it. */
@@ -121,9 +129,9 @@ const OPEN_SLICE_MS = 40;
  * Queue `run` as a new task. A message port, not a timer: nested timers are clamped to 4 ms
  * each, which a few hundred slices would turn into idle seconds.
  */
-function queueTask(run: () => void): void {
+function queueTask(run: () => void, view: Window): void {
   if (typeof MessageChannel !== 'function') {
-    setTimeout(run, 0);
+    view.setTimeout(run, 0);
     return;
   }
   const channel = new MessageChannel();
@@ -154,6 +162,7 @@ export interface OpenScheduler {
 
 export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
   let scheduled: ScheduledOpen | null = null;
+  const viewOf = (): Window => hostWindowOf(hooks.node?.() ?? null);
 
   const cancel = (): Uint8Array | null => {
     if (!scheduled) return null;
@@ -167,8 +176,8 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
     // The zipped size is a shortcut, not the measure: a file already past the limit
     // zipped cannot be under it unpacked in any way that mounts fast.
     shouldYield: (bytes) =>
-      typeof requestAnimationFrame === 'function' &&
-      typeof cancelAnimationFrame === 'function' &&
+      typeof viewOf().requestAnimationFrame === 'function' &&
+      typeof viewOf().cancelAnimationFrame === 'function' &&
       (bytes.byteLength >= OPEN_PAINT_YIELD_CONTENT_BYTES ||
         zipContentExceeds(bytes, OPEN_PAINT_YIELD_CONTENT_BYTES)),
 
@@ -179,8 +188,9 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
     // plain-timer fallback mounts anyway: a document opened in the background must be
     // there when the tab is next looked at, not still waiting for a frame.
     schedule(bytes) {
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      let fallback: ReturnType<typeof setTimeout> | null = null;
+      const timers = hostTimers(() => hooks.node?.() ?? null);
+      let timer: number | null = null;
+      let fallback: number | null = null;
       /** The next prepare step, each in a task of its own; null once preparing is done. */
       let step: PrepareStep | null = hooks.prepare ? () => hooks.prepare!(bytes) : null;
       let cancelled = false;
@@ -212,22 +222,22 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
           if (typeof work === 'function') {
             step = work;
             // A message task, not a timer: a chain of nested timers waits 4 ms between steps.
-            queueTask(run);
+            queueTask(run, viewOf());
             return;
           }
           if (!work) {
             // The mount gets its own task, so input and paint can run in between.
-            timer = setTimeout(run, 0);
+            timer = timers.setTimeout(run, 0);
             return;
           }
           let waiting = true;
           const proceed = () => {
             if (!waiting) return;
             waiting = false;
-            if (timer !== null) clearTimeout(timer);
-            timer = setTimeout(run, 0);
+            if (timer !== null) timers.clearTimeout(timer);
+            timer = timers.setTimeout(run, 0);
           };
-          timer = setTimeout(proceed, PREPARED_WORK_WAIT_MS);
+          timer = timers.setTimeout(proceed, PREPARED_WORK_WAIT_MS);
           work.then(proceed, proceed);
           return;
         }
@@ -236,22 +246,22 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
         const slice = () => {
           if (cancelled || scheduled !== entry) return;
           if (hooks.continueOpen && !endOnThrow(() => hooks.continueOpen!(OPEN_SLICE_MS))) {
-            queueTask(slice);
+            queueTask(slice, viewOf());
             return;
           }
           scheduled = null;
           if (hooks.continueOpen) hooks.scheduled();
         };
-        if (hooks.continueOpen) queueTask(slice);
+        if (hooks.continueOpen) queueTask(slice, viewOf());
         else scheduled = null;
       };
-      const raf = requestAnimationFrame(() => {
-        if (fallback !== null) clearTimeout(fallback);
+      const raf = timers.requestAnimationFrame(() => {
+        if (fallback !== null) timers.clearTimeout(fallback);
         fallback = null;
-        timer = setTimeout(run, 0);
+        timer = timers.setTimeout(run, 0);
       });
-      fallback = setTimeout(() => {
-        cancelAnimationFrame(raf);
+      fallback = timers.setTimeout(() => {
+        timers.cancelAnimationFrame(raf);
         run();
       }, 250);
       const entry: ScheduledOpen = {
@@ -259,9 +269,9 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
         mounted: () => mounted,
         cancel: () => {
           cancelled = true;
-          cancelAnimationFrame(raf);
-          if (timer !== null) clearTimeout(timer);
-          if (fallback !== null) clearTimeout(fallback);
+          timers.cancelAnimationFrame(raf);
+          if (timer !== null) timers.clearTimeout(timer);
+          if (fallback !== null) timers.clearTimeout(fallback);
         },
       };
       scheduled = entry;

@@ -187,7 +187,7 @@ describe('the browser host over a mounted editor', () => {
 });
 
 describe('a detached or destroyed editor', () => {
-  test('a detached editor has no document, and re-attaching gives one back', () => {
+  test('a detached editor keeps its document, and re-attaching moves it back unchanged', () => {
     const { host, editor } = mount();
     const { paragraphs } = handles(host);
     host.execute({
@@ -197,16 +197,14 @@ describe('a detached or destroyed editor', () => {
 
     editor.detach();
     const detached = host.execute({ operations: [{ op: 'getDocument' }] });
-    expect(detached.ok).toBe(false);
-    expect(errorCodeAt(detached, 0)).toBe('document-unavailable');
+    expect(detached.ok).toBe(true);
 
     editor.attach(document.createElement('div'));
     const reattached = host.execute({ operations: [{ op: 'getDocument' }] });
     expect(reattached.ok).toBe(true);
-    // A remount is a fresh session whose own revision restarts, but the host's revision must
-    // never go backwards or an expectedRevision from before the detach could be satisfied
-    // by coincidence.
-    expect(host.revision()).toBeGreaterThan(beforeDetach);
+    // The same session moved: its revision never goes backwards, so an expectedRevision from
+    // before the detach still names the document it was read from.
+    expect(host.revision()).toBeGreaterThanOrEqual(beforeDetach);
   });
 
   test('paragraph handles from before a remount are refused rather than silently retargeted', () => {

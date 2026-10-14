@@ -201,7 +201,7 @@ function setAttributeIfChanged(element: Element, name: string, value: string | n
 
 function setDrawingInteractivity(root: ParentNode, interactive: boolean): void {
   const nodes = root.querySelectorAll<HTMLElement>(
-    root instanceof Element && root.classList.contains('docx-drawing-layer')
+    root.nodeType === 1 && (root as Element).classList.contains('docx-drawing-layer')
       ? ':scope > *'
       : ':scope > .docx-drawing-layer > *'
   );

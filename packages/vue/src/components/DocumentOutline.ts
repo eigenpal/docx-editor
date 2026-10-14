@@ -1,4 +1,5 @@
-import { defineComponent, h, onMounted, ref, type PropType } from 'vue';
+import { defineComponent, getCurrentInstance, h, onMounted, ref, type PropType } from 'vue';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from './ui/Icons';
 import { useTranslation } from '../i18n';
@@ -32,8 +33,10 @@ export const DocumentOutline = defineComponent({
     const { t } = useTranslation();
     const open = ref(false);
 
+    const instance = getCurrentInstance();
     onMounted(() => {
-      requestAnimationFrame(() => {
+      // The outline's own window: a pop-out window runs its frames while the opener is hidden.
+      hostWindowOf(instance?.proxy?.$el as Node | null).requestAnimationFrame(() => {
         open.value = true;
       });
     });

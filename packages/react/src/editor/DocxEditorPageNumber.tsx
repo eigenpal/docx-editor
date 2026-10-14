@@ -8,6 +8,7 @@ import { useNavigationViewportElement } from './navigation/navigation-layout';
 import { useEditorState } from './useEditorState';
 import { useScopeClassName } from './scope-context';
 import { useViewportOverlayHost } from './viewport-context';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 const HIDE_DELAY_MS = 600;
 // No count while a document opens: its layout is still partial, so a total would be wrong.
@@ -63,17 +64,19 @@ export function DocxEditorPageNumber({ className, style }: DocxEditorPageNumberP
     setVisible(false);
     if (!editor || !viewport || total <= 1) return undefined;
     setCurrent(editor.getCurrentPage('viewport'));
-    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+    // The viewport's own window: a hidden opener throttles its timers.
+    const win = hostWindowOf(viewport);
+    let hideTimer: number | null = null;
     const onScroll = () => {
       setCurrent(editor.getCurrentPage('viewport'));
       setVisible(true);
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => setVisible(false), HIDE_DELAY_MS);
+      if (hideTimer !== null) win.clearTimeout(hideTimer);
+      hideTimer = win.setTimeout(() => setVisible(false), HIDE_DELAY_MS);
     };
     viewport.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       viewport.removeEventListener('scroll', onScroll);
-      if (hideTimer) clearTimeout(hideTimer);
+      if (hideTimer !== null) win.clearTimeout(hideTimer);
     };
   }, [editor, total, viewport]);
 

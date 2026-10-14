@@ -25,6 +25,7 @@ import { useDocxEditor } from './context';
 import { guardToolbarMousedown } from './toolbar/ToolbarButton';
 import { useNotePropertiesState, useNoteScopeState } from './useNoteScopeState';
 import { useScopedChromeAnchor } from './useScopedChromeAnchor';
+import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 
 const NOTE_SCOPE_RE = /^(footnote|endnote):(-?\d{1,10})$/;
 
@@ -50,9 +51,10 @@ type NotePreview = {
   readonly y: number;
 };
 
-function isTouchPrimary(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(pointer: coarse)').matches;
+function isTouchPrimary(node: Node | null): boolean {
+  const view = hostWindowOf(node);
+  if (typeof view.matchMedia !== 'function') return false;
+  return view.matchMedia('(pointer: coarse)').matches;
 }
 
 function useCommandGate(command: EditorCommand): { enabled: boolean; reason: string | null } {
@@ -78,8 +80,9 @@ function NoteStoryOptions(props: {
       if (menuRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener('mousedown', onDocumentMouseDown);
-    return () => document.removeEventListener('mousedown', onDocumentMouseDown);
+    const doc = hostDocumentOf(menuRef.current);
+    doc.addEventListener('mousedown', onDocumentMouseDown);
+    return () => doc.removeEventListener('mousedown', onDocumentMouseDown);
   }, [open]);
 
   return (
@@ -147,7 +150,8 @@ export function DocxEditorNotesChrome({
     y: number;
   } | null>(null);
   const [propsOpen, setPropsOpen] = useState(false);
-  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The handle and the window that issued it: a note in a pop-out window owns its timer.
+  const hideTimer = useRef<{ win: Window; handle: number } | null>(null);
   const findActiveNoteArea = useCallback(
     (viewport: HTMLElement) => {
       if (!noteScope) return null;
@@ -165,7 +169,7 @@ export function DocxEditorNotesChrome({
   const anchor = useScopedChromeAnchor(findActiveNoteArea, 'story-label');
 
   const clearPreview = useCallback(() => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (hideTimer.current) hideTimer.current.win.clearTimeout(hideTimer.current.handle);
     hideTimer.current = null;
     setPreview(null);
   }, []);
@@ -211,8 +215,8 @@ export function DocxEditorNotesChrome({
     };
 
     const onPointerOver = (event: Event) => {
-      if (isTouchPrimary()) return;
       const target = event.target as HTMLElement | null;
+      if (isTouchPrimary(target)) return;
       const ref = target?.closest<HTMLElement>('[data-docx-note-ref]');
       if (!ref?.dataset.docxNoteScope) {
         clearPreview();
@@ -222,10 +226,12 @@ export function DocxEditorNotesChrome({
       const engineText = editor.getNotePreviewText(scopeId);
       const text = engineText ?? ref.getAttribute('aria-description') ?? t('notes.previewFallback');
       const rect = ref.getBoundingClientRect();
-      if (hideTimer.current) clearTimeout(hideTimer.current);
-      hideTimer.current = setTimeout(() => {
+      if (hideTimer.current) hideTimer.current.win.clearTimeout(hideTimer.current.handle);
+      const win = hostWindowOf(ref);
+      const handle = win.setTimeout(() => {
         setPreview({ scopeId, text, x: rect.left, y: rect.bottom + 4 });
       }, 400);
+      hideTimer.current = { win, handle };
     };
 
     root.addEventListener('click', onClick);

@@ -19,6 +19,7 @@ import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { selectDocumentAbsent } from './document-presence';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
+import { editorHostDocument, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { useWatermark } from './useWatermark';
 import {
   DEFAULT_WATERMARK_FIELDS,
@@ -117,6 +118,7 @@ function WatermarkPreview({
   [attribute: string]: unknown;
 }): ReactElement {
   const { values } = useWatermarkDialog();
+  const editor = useDocxEditor();
   const pageSetup = useEditorState(selectPageSetup);
   const page = useMemo(() => watermarkPreviewPage(pageSetup), [pageSetup]);
   const pictureUrl = usePictureUrl(values.kind === 'picture' ? values.imageData : null);
@@ -154,7 +156,10 @@ function WatermarkPreview({
             fontStyle={text.fontStyle}
             fill={text.fill}
             fillOpacity={text.opacity}
-            transform={watermarkPreviewTextTransform(text, watermarkPreviewInk(text))}
+            transform={watermarkPreviewTextTransform(
+              text,
+              watermarkPreviewInk(text, editor ? editorHostDocument(editor) : null)
+            )}
           >
             {text.text}
           </text>
@@ -352,8 +357,10 @@ function WatermarkDialogRoot({
         const target = event.target;
         if (
           event.key === 'Enter' &&
-          target instanceof HTMLInputElement &&
-          (target.type === 'text' || target.type === 'number') &&
+          isHTMLElementNode(target) &&
+          target.localName === 'input' &&
+          ((target as HTMLInputElement).type === 'text' ||
+            (target as HTMLInputElement).type === 'number') &&
           canApply
         ) {
           event.preventDefault();

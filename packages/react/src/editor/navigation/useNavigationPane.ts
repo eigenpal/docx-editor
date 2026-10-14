@@ -12,7 +12,7 @@
 
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
+import { hostWindowOf, ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { ReviewRailContext, useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -181,7 +181,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     }
     const measure = () => {
       setViewportWidth(viewport.clientWidth);
-      const style = getComputedStyle(viewport);
+      const style = hostWindowOf(viewport).getComputedStyle(viewport);
       const padding = Number.parseFloat(style.paddingInlineEnd);
       setInlineEndReservation(Number.isFinite(padding) ? padding : 0);
       // The review gutter's mirrored strip, standing on the SAME edge the shift pads. The
@@ -191,8 +191,9 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
       setInlineStartReservation(Number.isFinite(strip) ? strip : 0);
     };
     measure();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(measure);
+    const Observer = hostWindowOf(viewport).ResizeObserver;
+    if (typeof Observer === 'undefined') return undefined;
+    const observer = new Observer(measure);
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [viewport, open, reviewPaneOpen, rail?.mounted, reviewGutter]);
@@ -211,13 +212,13 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
   const widestTracker = useRef<WidestPageTracker | null>(null);
   useEffect(() => {
     if (!open || !editor) return undefined;
-    const tracker = trackWidestPage(editor, setWidestPage);
+    const tracker = trackWidestPage(editor, setWidestPage, () => viewport);
     widestTracker.current = tracker;
     return () => {
       tracker.dispose();
       if (widestTracker.current === tracker) widestTracker.current = null;
     };
-  }, [open, editor]);
+  }, [open, editor, viewport]);
   useEffect(() => widestTracker.current?.nudge(), [pageCount, pageWidthTwips]);
 
   const reservation = navigationPaneReservation(paneWidth);

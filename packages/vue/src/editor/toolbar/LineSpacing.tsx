@@ -1,6 +1,6 @@
 import { defineComponent, ref } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -142,7 +142,7 @@ export const ToolbarLineSpacing = defineComponent({
                   const trigger = rootRef.value?.querySelector(
                     '.docx-toolbar__line-spacing-trigger'
                   );
-                  paragraphDialog?.open(trigger instanceof HTMLElement ? trigger : null);
+                  paragraphDialog?.open(isHTMLElementNode(trigger) ? trigger : null);
                 }}
               >
                 {label('lineSpacing.options')}

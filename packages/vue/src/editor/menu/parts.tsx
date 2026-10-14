@@ -22,6 +22,7 @@ import {
   type ChromeMenuEntry,
   type ChromeMenuId,
   type ChromeSlotId,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -905,7 +906,7 @@ export const Menu = defineComponent({
                 const panel = panelRef.value;
                 if (!panel) return;
                 const items = panelItems(panel);
-                const focused = document.activeElement;
+                const focused = hostDocumentOf(panel).activeElement;
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   focusBy(items, focused, 1);

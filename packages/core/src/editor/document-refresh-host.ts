@@ -2,6 +2,7 @@ import type { DocxEditorInstance } from './docx-editor-types.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { surfaceScroller } from './surface-pages.ts';
 import { setRefreshWriteGuard } from './refresh-write-guard.ts';
+import { hostWindowOf } from './host-realm.ts';
 
 export interface RefreshHost {
   surface(): PaginatedSurface | null;
@@ -100,7 +101,7 @@ export function registerRefreshHost(
           0,
           Math.min(load.left, scroller.scrollWidth - scroller.clientWidth)
         );
-        scroller.dispatchEvent(new Event('scroll'));
+        scroller.dispatchEvent(new (hostWindowOf(scroller).Event)('scroll'));
       }
       if (pending !== load) return;
       pending = null;

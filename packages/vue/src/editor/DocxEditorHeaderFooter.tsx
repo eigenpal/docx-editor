@@ -1,4 +1,5 @@
 import { computed, defineComponent, h, ref, watch, type CSSProperties, type PropType } from 'vue';
+import { hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
@@ -65,8 +66,9 @@ const OptionsMenu = defineComponent({
         if (menuRef.value?.contains(event.target as Node)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onDocMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onDocMouseDown));
+      const doc = hostDocumentOf(menuRef.value);
+      doc.addEventListener('mousedown', onDocMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onDocMouseDown));
     });
 
     watch(
@@ -297,7 +299,9 @@ export const DocxEditorHeaderFooterChrome = defineComponent({
         'div',
         {
           ref: (el: unknown) => {
-            anchor.ref(el instanceof HTMLDivElement ? el : null);
+            anchor.ref(
+              isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null
+            );
           },
           class: `docx-context-bar docx-hf-chrome${props.className ? ` ${props.className}` : ''}`,
           role: 'region',

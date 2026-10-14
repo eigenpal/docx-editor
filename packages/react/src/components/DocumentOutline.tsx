@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from './ui/Icons';
 import { useTranslation } from '../i18n';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 /**
  * One heading of the engine's outline (`Editor.getOutline()`): text, level,
@@ -56,6 +57,7 @@ export const DocumentOutline = React.memo(function DocumentOutline({
 }: DocumentOutlineProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const navRef = useRef<HTMLElement | null>(null);
 
   // Indent relative to the shallowest heading present, not the absolute level.
   // A doc whose top sections are Heading 2 (level 1, e.g. a memo with no H1)
@@ -65,11 +67,12 @@ export const DocumentOutline = React.memo(function DocumentOutline({
 
   useEffect(() => {
     // Trigger slide-in on next frame
-    requestAnimationFrame(() => setOpen(true));
+    hostWindowOf(navRef.current).requestAnimationFrame(() => setOpen(true));
   }, []);
 
   return (
     <nav
+      ref={navRef}
       className="docx-outline-nav"
       role="navigation"
       aria-label={t('documentOutline.ariaLabel')}

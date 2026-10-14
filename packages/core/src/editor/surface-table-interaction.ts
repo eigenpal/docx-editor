@@ -17,6 +17,8 @@ import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { findTableOnPage, offeredHit, partOfTableIn } from './surface-table-story.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
+import { hostTimers, isDomNode, isHTMLElementTag } from './host-realm.ts';
+import type { SurfaceHostListeners } from './surface-host-listeners.ts';
 import {
   planTableCommand,
   planTableRowHeightResize,
@@ -65,6 +67,8 @@ export interface SurfaceTableInteractionInput {
 export interface SurfaceTableInteractionHost {
   readonly pagesLayer: HTMLElement;
   readonly furnitureLayer: HTMLElement;
+  /** Document-level listeners that follow the pages to another window. */
+  readonly listeners: SurfaceHostListeners;
   scale(): number;
   pageOffsetX(pageIndex: number): number;
   read(): SurfaceTableInteractionInput;
@@ -77,6 +81,8 @@ export interface SurfaceTableInteraction {
   update(): void;
   /** Repaint visible insertion furniture labels from the current resolver. */
   refreshLabels(): void;
+  /** Drop a border drag in progress: the surface is moving to another window. */
+  cancelDrag(): void;
   destroy(): void;
 }
 
@@ -167,7 +173,8 @@ export function createSurfaceTableInteraction(
   layer.style.top = '0';
   layer.style.pointerEvents = 'none';
 
-  let hideTimer: ReturnType<typeof setTimeout> | null = null;
+  const timers = hostTimers(() => layer);
+  let hideTimer: number | null = null;
   let hoverHit: TableInteractionHit | null = null;
   let index: TableInteractionIndex | null = null;
   let indexedLayoutRevision: number | null = null;
@@ -182,14 +189,14 @@ export function createSurfaceTableInteraction(
 
   function isInsertButton(node: Node): node is HTMLButtonElement {
     return (
-      node instanceof HTMLButtonElement &&
+      isHTMLElementTag(node, 'button') &&
       (node.classList.contains('docx-table-insert-row') ||
         node.classList.contains('docx-table-insert-column'))
     );
   }
 
   function focusedInsertButton(): HTMLButtonElement | null {
-    const active = document.activeElement;
+    const active = layer.ownerDocument.activeElement;
     if (
       active !== null &&
       isInsertButton(active) &&
@@ -213,7 +220,7 @@ export function createSurfaceTableInteraction(
 
   function clearTimers(): void {
     if (hideTimer !== null) {
-      clearTimeout(hideTimer);
+      timers.clearTimeout(hideTimer);
       hideTimer = null;
     }
   }
@@ -234,7 +241,7 @@ export function createSurfaceTableInteraction(
 
   function clearAllFurniture(restorePagesFocus: boolean): void {
     const button = insertButton ?? focusedInsertButton();
-    const wasFocused = button !== null && document.activeElement === button;
+    const wasFocused = button !== null && layer.ownerDocument.activeElement === button;
     resetInsertState();
     layer.replaceChildren();
     if (restorePagesFocus && wasFocused) host.pagesLayer.focus({ preventScroll: true });
@@ -280,7 +287,7 @@ export function createSurfaceTableInteraction(
     const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
     if (!found) return;
     const { table, origin } = found;
-    const preview = document.createElement('div');
+    const preview = layer.ownerDocument.createElement('div');
     preview.className = 'docx-table-resize-preview';
     preview.style.position = 'absolute';
     preview.style.pointerEvents = 'none';
@@ -299,7 +306,7 @@ export function createSurfaceTableInteraction(
   }
 
   function createInsertButtonShell(): HTMLButtonElement {
-    const button = document.createElement('button');
+    const button = layer.ownerDocument.createElement('button');
     button.type = 'button';
     button.textContent = '+';
     button.style.position = 'absolute';
@@ -318,7 +325,7 @@ export function createSurfaceTableInteraction(
 
   function onInsertBlur(): void {
     queueMicrotask(() => {
-      if (!insertButton || document.activeElement === insertButton) return;
+      if (!insertButton || layer.ownerDocument.activeElement === insertButton) return;
       if (overInsertControl) return;
       if (hoverHit?.kind === 'insertRow' || hoverHit?.kind === 'insertColumn') return;
       insertButton.remove();
@@ -409,7 +416,7 @@ export function createSurfaceTableInteraction(
       const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
       if (!found) return;
       const { table, origin } = found;
-      const handle = document.createElement('div');
+      const handle = layer.ownerDocument.createElement('div');
       handle.className =
         hit.kind === 'rightEdge'
           ? 'docx-table-edge-handle-right layout-table-edge-handle-right'
@@ -431,7 +438,7 @@ export function createSurfaceTableInteraction(
       const found = findTableOnPage(input.layout, hit.tableId, hit.pageIndex);
       if (!found) return;
       const { table, origin } = found;
-      const handle = document.createElement('div');
+      const handle = layer.ownerDocument.createElement('div');
       handle.className = 'docx-table-row-divider-handle layout-table-row-resize-handle';
       handle.style.position = 'absolute';
       handle.style.pointerEvents = 'auto';
@@ -753,7 +760,7 @@ export function createSurfaceTableInteraction(
 
   function retireRetainedInsertButton(): void {
     const button = insertButton ?? focusedInsertButton();
-    const wasFocused = button !== null && document.activeElement === button;
+    const wasFocused = button !== null && layer.ownerDocument.activeElement === button;
     resetInsertState();
     if (button && layer.contains(button)) button.remove();
     if (wasFocused) host.pagesLayer.focus({ preventScroll: true });
@@ -806,7 +813,7 @@ export function createSurfaceTableInteraction(
     }
     // The insert control can overlap another table's hit region. Keep its target
     // stable while the pointer moves onto it, so it survives through the click.
-    if (event.target instanceof Node && insertButton?.contains(event.target)) {
+    if (isDomNode(event.target) && insertButton?.contains(event.target)) {
       clearTimers();
       return;
     }
@@ -830,8 +837,9 @@ export function createSurfaceTableInteraction(
     const offered = offeredHit(hit, input.selection.head.paragraphId);
     if (!offered) {
       if (overInsertControl) return;
+      timers.migrate();
       if (!hideTimer && hoverHit) {
-        hideTimer = setTimeout(() => {
+        hideTimer = timers.setTimeout(() => {
           hideTimer = null;
           hoverHit = null;
           clearFurniture();
@@ -840,7 +848,7 @@ export function createSurfaceTableInteraction(
       return;
     }
     if (hideTimer) {
-      clearTimeout(hideTimer);
+      timers.clearTimeout(hideTimer);
       hideTimer = null;
     }
     if (
@@ -873,9 +881,11 @@ export function createSurfaceTableInteraction(
   }
 
   host.pagesLayer.addEventListener('pointermove', onPointerMove);
-  document.addEventListener('pointermove', onPointerMove);
-  document.addEventListener('pointerup', onPointerUp);
-  document.addEventListener('pointercancel', onPointerCancel);
+  const unlisten = [
+    host.listeners.onDocument('pointermove', onPointerMove),
+    host.listeners.onDocument('pointerup', onPointerUp),
+    host.listeners.onDocument('pointercancel', onPointerCancel),
+  ];
   host.pagesLayer.addEventListener('keydown', onKeyDown);
 
   return {
@@ -904,6 +914,7 @@ export function createSurfaceTableInteraction(
       layer.style.width = host.pagesLayer.style.width;
       layer.style.height = host.pagesLayer.style.height;
     },
+    cancelDrag,
     refreshLabels() {
       const input = host.read();
       if (input.editingMode === 'view') return;
@@ -927,9 +938,7 @@ export function createSurfaceTableInteraction(
       resetInsertState();
       clearFurniture();
       host.pagesLayer.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointerup', onPointerUp);
-      document.removeEventListener('pointercancel', onPointerCancel);
+      for (const remove of unlisten) remove();
       host.pagesLayer.removeEventListener('keydown', onKeyDown);
       layer.remove();
     },

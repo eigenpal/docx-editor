@@ -5,7 +5,7 @@
 // menu bar, and the enabled state still comes from the engine through the slot.
 
 import { defineComponent, h, nextTick, ref, watch, type PropType, type VNode } from 'vue';
-import { toolbarPopupLeft, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { toolbarPopupLeft, type ChromeSlotId, isDomNode } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { mergeHostClass } from '../../lib/mergeHostClass';
@@ -49,7 +49,7 @@ export const ToolbarTableInsert = defineComponent({
       if (!isOpen || !doc) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         open.value = false;
       };
       doc.addEventListener('mousedown', onMouseDown, true);
@@ -138,7 +138,7 @@ export const ToolbarTableInsert = defineComponent({
               // never stays open behind the focus.
               onFocusout={(event: FocusEvent) => {
                 const next = event.relatedTarget;
-                if (next instanceof Node && !rootRef.value?.contains(next)) open.value = false;
+                if (isDomNode(next) && !rootRef.value?.contains(next)) open.value = false;
               }}
               onKeydown={(event: KeyboardEvent) => {
                 if (event.key !== 'Escape') return;

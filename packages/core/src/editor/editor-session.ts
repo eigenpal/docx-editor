@@ -41,12 +41,13 @@ function browserClock(): SessionClock {
   return {
     now: () => globalThis.performance?.now() ?? Date.now(),
     setTimer: (callback, ms) => {
-      const timer = setTimeout(callback, ms);
+      const timer = globalThis.setTimeout(callback, ms);
       // A pending summary must not keep a server process alive.
       (timer as { unref?: () => void }).unref?.();
       return timer;
     },
-    clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+    clearTimer: (timer) =>
+      globalThis.clearTimeout(timer as ReturnType<typeof globalThis.setTimeout>),
   };
 }
 

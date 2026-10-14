@@ -17,6 +17,7 @@ import {
   type ComputedRef,
   type PropType,
 } from 'vue';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { ReviewRailValue } from './review-context.ts';
@@ -60,15 +61,14 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
 
         onMounted(() => {
           const root = getCurrentInstance()?.proxy?.$el;
-          if (root instanceof HTMLElement) {
+          if (isHTMLElementNode(root)) {
             measuredBy = rail.value.measure;
             measuredBy(root, COMPOSE_KEY);
           }
           if (rail.value.readOnly) return;
-          const input =
-            root instanceof HTMLElement
-              ? root.querySelector('[data-testid="review-draft-input"]')
-              : null;
+          const input = isHTMLElementNode(root)
+            ? root.querySelector('[data-testid="review-draft-input"]')
+            : null;
           (input as HTMLInputElement | null)?.focus({ preventScroll: true });
         });
         onBeforeUnmount(() => {

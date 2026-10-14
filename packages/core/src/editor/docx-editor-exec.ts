@@ -14,6 +14,7 @@ import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardRich } from './clipboard-write.ts';
+import { hostElementOfEditor, hostWindowOf } from './host-realm.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
 import { NOTHING_TO_COPY_FORMATTING, NOTHING_TO_PAINT } from './surface-format-painter-contract.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
@@ -510,7 +511,7 @@ export function execEditorCommand(
       // The gate already refused a collapsed selection, so this read is non-empty.
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
-      writeClipboardRich(flavours.text, flavours.html);
+      writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       return { ok: true, changed: false };
     }
     case 'cut': {
@@ -518,7 +519,7 @@ export function execEditorCommand(
       // is what removes it.
       const flavours = mounted.copyFlavours();
       if (flavours.reason) return { ok: false, code: 'unsupported', reason: flavours.reason };
-      writeClipboardRich(flavours.text, flavours.html);
+      writeClipboardRich(flavours.text, flavours.html, clipboardWindow(options?.editor));
       mounted.deleteSelection();
       break;
     }
@@ -594,6 +595,11 @@ export function execEditorCommand(
 }
 
 /** The scope id of the note whose painted fragments hold `paragraphId`, or null. */
+/** The window whose clipboard a copy writes to: the editor's, a pop-out's when it is there. */
+function clipboardWindow(editor: object | undefined): Window | undefined {
+  return editor ? hostWindowOf(hostElementOfEditor(editor)) : undefined;
+}
+
 function noteScopeHolding(mounted: PaginatedSurface, paragraphId: string): string | null {
   for (const page of mounted.layout().pages) {
     for (const area of [page.footnotes, page.endnotes]) {

@@ -1,3 +1,4 @@
+import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 // Handing saved bytes to the browser, and naming the file.
 //
 // The name comes from a user-typed document title, and a host that populates `title` from
@@ -115,22 +116,28 @@ export function downloadName(title: string | undefined): string {
   return `${base}.docx`;
 }
 
-/** Hand DOCX bytes to the browser as a download. */
+/**
+ * Hand DOCX bytes to the browser as a download.
+ *
+ * `owner` is a node of the editor's chrome: the link is clicked in ITS document, which is not
+ * the script's own when the editor renders into a pop-out window or an iframe.
+ */
 export function download(
   buffer: ArrayBuffer,
   name: string,
-  mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  owner?: Node | null
 ): void {
   const url = URL.createObjectURL(
     new Blob([buffer], {
       type: mimeType,
     })
   );
-  const anchor = document.createElement('a');
+  const anchor = hostDocumentOf(owner).createElement('a');
   anchor.href = url;
   anchor.download = name;
   anchor.click();
   // Revoked on the next task, not inline: some browsers have not finished reading the
   // blob when `click()` returns, and a revoked URL cancels the download.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  hostWindowOf(owner).setTimeout(() => URL.revokeObjectURL(url), 0);
 }

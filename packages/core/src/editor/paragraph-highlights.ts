@@ -7,6 +7,7 @@ import type {
   RefreshHighlightAnimation,
   RefreshHighlightOptions,
 } from './document-refresh-types.ts';
+import { hostTimers, hostWindowOf } from './host-realm.ts';
 
 const DEFAULT_EASING = 'cubic-bezier(0.23, 1, 0.32, 1)';
 
@@ -82,11 +83,12 @@ export function createParagraphHighlights(
   let exitDuration = 180;
   let configuredEasing: string | undefined;
   let easing = DEFAULT_EASING;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timers = hostTimers(() => host.container());
+  let timer: number | undefined;
   let timerVersion = 0;
   const stopTimer = () => {
     timerVersion++;
-    if (timer !== undefined) clearTimeout(timer);
+    if (timer !== undefined) timers.clearTimeout(timer);
     timer = undefined;
   };
 
@@ -347,7 +349,7 @@ export function createParagraphHighlights(
         fade(key, band, 0, exitDuration);
       }
     }
-    observer ??= new MutationObserver(paint);
+    observer ??= new (hostWindowOf(container).MutationObserver)(paint);
     observer.observe(container, { childList: true, subtree: true });
   };
   const clear = () => {
@@ -421,7 +423,7 @@ export function createParagraphHighlights(
       stopTimer();
       if (nextTimeout !== null) {
         const version = timerVersion;
-        timer = setTimeout(() => {
+        timer = timers.setTimeout(() => {
           if (version !== timerVersion) return;
           timer = undefined;
           hide();

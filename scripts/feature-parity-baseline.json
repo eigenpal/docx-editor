@@ -355,6 +355,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorWindow": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["close", "default", "emits", "props", "type"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/content-control-widget/parts": {
       "propsAddedInReact": ["key"],
       "propsAddedInVue": ["class", "class", "class"],

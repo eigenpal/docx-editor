@@ -153,6 +153,28 @@ useEditorEvent('change', (change) => {
 });
 ```
 
+## `useEditorHostDocument`
+
+Use `useEditorHostDocument` in custom chrome that adds document listeners, reads focus, or injects a `<style>` element. It returns a read-only ref to the document that the editor's pages are mounted in. If you render the editor in a pop-out window or an iframe, that is the other window's document, not the global `document`. The ref changes when the editor moves, so watchers that depend on it bind again:
+
+```ts
+import { watch } from 'vue';
+import { useEditorHostDocument } from '@docx-editor.dev/vue';
+
+const hostDocument = useEditorHostDocument();
+watch(
+  hostDocument,
+  (doc, _previous, onCleanup) => {
+    if (!doc) return;
+    doc.addEventListener('keydown', onShortcut);
+    onCleanup(() => doc.removeEventListener('keydown', onShortcut));
+  },
+  { immediate: true }
+);
+```
+
+The ref is `null` during server rendering. For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
+
 ## `useEditorCaret`
 
 Returns the caret as `{ paragraphId, offset }`. Write APIs accept this shape as their `at` value.

@@ -11,6 +11,7 @@ import { useEditorValueCommand } from '../useEditorValueCommand';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 /** Props for `DocxEditorToolbar.ImageAltText`. @public */
 export interface ImageAltTextProps {
@@ -44,7 +45,7 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
     const onMouseDown = (event: MouseEvent): void => {
       const root = rootRef.current;
       if (
-        event.target instanceof Node &&
+        isDomNode(event.target) &&
         (root?.contains(event.target) ||
           root?.ownerDocument.getElementById(panelId)?.contains(event.target))
       )
@@ -57,11 +58,12 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
       setOpen(false);
       triggerRef.current?.focus();
     };
-    document.addEventListener('mousedown', onMouseDown, true);
-    document.addEventListener('keydown', onKeyDown);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onMouseDown, true);
+    doc.addEventListener('keydown', onKeyDown);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown, true);
-      document.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
     };
   }, [open, panelId]);
 

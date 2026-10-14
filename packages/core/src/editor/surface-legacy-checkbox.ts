@@ -15,6 +15,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import { isElementNode, isHTMLElementNode } from './host-realm.ts';
 
 interface Host {
   readonly pagesLayer: HTMLElement;
@@ -33,7 +34,7 @@ function checkboxAtTarget(
   host: Host,
   target: EventTarget | null
 ): { paragraphId: string; field: LegacyCheckboxFieldRange } | null {
-  const element = target instanceof Element ? target : null;
+  const element = isElementNode(target) ? target : null;
   const span = element?.closest<HTMLElement>('[data-docx-form-checkbox][data-start]');
   const paragraphId = span?.closest<HTMLElement>('[data-paragraph-id]')?.dataset.paragraphId;
   if (!span || !paragraphId) return null;
@@ -85,7 +86,7 @@ export function createLegacyCheckboxInteraction(host: Host): {
   host.pagesLayer.addEventListener('pointerdown', onPointerDown, { capture: true });
   const onFocus = (event: FocusEvent): void => {
     const hit = checkboxAtTarget(host, event.target);
-    if (hit && event.target instanceof HTMLElement) {
+    if (hit && isHTMLElementNode(event.target)) {
       event.target.setAttribute('aria-disabled', String(!host.editable() || !hit.field.enabled));
     }
   };

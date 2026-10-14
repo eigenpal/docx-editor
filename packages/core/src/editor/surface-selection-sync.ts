@@ -35,13 +35,12 @@ export interface SurfaceSelectionSyncDeps {
   /** Active story for IME commits and composition — body or open furniture. */
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   /**
-   * The document the surface was MOUNTED into, never the ambient global.
+   * The painted pages: the only subtree a selection endpoint may map through.
    *
-   * The selection is a property of one document, and a surface mounted into an iframe or a
-   * detached document would otherwise read and write the wrong one.
+   * Their `ownerDocument`, read per call, is the document whose selection this reads and
+   * writes, never the ambient global: the surface can be mounted in an iframe or a pop-out
+   * window, and can move between them while mounted.
    */
-  readonly document: Document;
-  /** The painted pages: the only subtree a selection endpoint may map through. */
   readonly pagesLayer: HTMLElement;
   /** The CURRENT model selection — read per call, never captured. */
   selection(): SemanticSelection;
@@ -227,7 +226,9 @@ export interface SurfaceSelectionSync {
 }
 
 export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): SurfaceSelectionSync {
-  const { document, pagesLayer, session } = deps;
+  const { pagesLayer, session } = deps;
+  /** The selection's document is the pages' own, wherever they are now. */
+  const hostDocument = (): Document => pagesLayer.ownerDocument;
 
   let applyingSelection = false;
   let lastMirroredSelection: SemanticSelection | null = null;
@@ -318,7 +319,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    */
   function adoptPendingDomSelection(): boolean {
     if (deps.selectionLocked?.()) return false;
-    const domSelection = document.getSelection();
+    const domSelection = hostDocument().getSelection();
     const next = semanticSelectionFromDom(pagesLayer, domSelection);
     if (!next) return false;
     rememberSelectionPage(domSelection);
@@ -336,12 +337,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * yank away without an interaction.
    */
   function ownsSelection(): boolean {
-    const active = document.activeElement;
+    const active = hostDocument().activeElement;
     if (active && pagesLayer.contains(active)) return true;
     // Text inputs can own focus while the document Selection is empty or still
     // points into our pages. Their native caret is not represented by that Selection.
-    if (active && active !== document.body && active !== document.documentElement) return false;
-    const domSelection = document.getSelection();
+    if (active && active !== hostDocument().body && active !== hostDocument().documentElement)
+      return false;
+    const domSelection = hostDocument().getSelection();
     if (!domSelection || domSelection.rangeCount === 0) return true;
     const anchor = domSelection.anchorNode;
     if (!anchor) return true;
@@ -355,7 +357,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
   /** Mirror the native selection into the model. Ignores selections outside painted text. */
   const adoptDomSelection = (): void => {
     if (deps.selectionLocked?.()) return;
-    const domSelection = document.getSelection();
+    const domSelection = hostDocument().getSelection();
     const next = semanticSelectionFromDom(pagesLayer, domSelection);
     if (!next) {
       // NOT MAPPING IS NOT NOTHING HAPPENING.
@@ -396,7 +398,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       pagesLayer,
       paragraphId,
       modelText,
-      document.getSelection()?.anchorNode ?? null
+      hostDocument().getSelection()?.anchorNode ?? null
     );
     if (painted === null) return;
     const plan = paragraphReplacePlan(paragraphId, modelText, painted);
@@ -494,13 +496,13 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // Reading it back is how a caret the DOM could not express became a caret at the
     // paragraph start.
     if (!lastMirroredSelection) return true;
-    const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+    const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
     return reported !== null && selectionsEqual(reported, lastMirroredSelection);
   }
 
   /** Arm one adoption opportunity. Secondary buttons are not a caret gesture. */
   function noteUserSelectionGesture(event: Event): void {
-    if (event instanceof PointerEvent && event.button !== 0) return;
+    if (event.type.startsWith('pointer') && (event as PointerEvent).button !== 0) return;
     // A drag or multi-click starting a native selection while locked. Refused here rather than
     // with `user-select: none`, which would also hide the highlight of a selection the host sets.
     if (event.type === 'selectstart' && deps.selectionLocked?.()) {
@@ -532,7 +534,7 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
     // This write is the new baseline. Matching DOM carets after it are echoes until the
     // user starts another selection gesture.
     userSelectionGesture = false;
-    const native = document.getSelection();
+    const native = hostDocument().getSelection();
     const preferredPageIndex = preferredSelectionPage(native);
     const preferredLineId = selectionLineId();
     const wrote = applySelectionToDom(pagesLayer, next, native, {
@@ -649,8 +651,11 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
       // already MATCHES the model does not spend the one-shot: it is this surface's own
       // mirror reporting back, and spending on it would leave a park that lands on a later
       // task unguarded.
-      if (browserSelectionFixup && domSelectionTouchesPages(pagesLayer, document.getSelection())) {
-        const reported = semanticSelectionFromDom(pagesLayer, document.getSelection());
+      if (
+        browserSelectionFixup &&
+        domSelectionTouchesPages(pagesLayer, hostDocument().getSelection())
+      ) {
+        const reported = semanticSelectionFromDom(pagesLayer, hostDocument().getSelection());
         if (reported === null || !selectionsEqual(reported, deps.selection())) {
           browserSelectionFixup = false;
           if (!userSelectionGesture) {

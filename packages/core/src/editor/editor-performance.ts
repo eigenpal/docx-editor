@@ -66,16 +66,17 @@ function browserClock(): PerformanceClock {
       // The frame callback runs before the browser paints; a task queued from it runs after.
       frame(() => {
         onFrame();
-        setTimeout(onPainted, 0);
+        globalThis.setTimeout(onPainted, 0);
       });
       return true;
     },
     setTimer(callback, ms) {
-      const timer = setTimeout(callback, ms);
+      const timer = globalThis.setTimeout(callback, ms);
       (timer as { unref?: () => void }).unref?.();
       return timer;
     },
-    clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+    clearTimer: (timer) =>
+      globalThis.clearTimeout(timer as ReturnType<typeof globalThis.setTimeout>),
   };
 }
 

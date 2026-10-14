@@ -9,12 +9,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   computed,
   defineComponent,
+  getCurrentInstance,
   h,
   onBeforeUnmount,
   onMounted,
   type PropType,
   type VNode,
 } from 'vue';
+import { isDomNode, hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { Slot, useTranslation } from '@docx-editor.dev/vue';
 import {
   ACCEPT_ICON,
@@ -512,12 +514,14 @@ export const ReviewCard = markPart(
       let resolvedDetailsNode: HTMLDetailsElement | null = null;
       const bindResolvedDetails = (vnode: VNode) => {
         resolvedDetailsNode =
-          vnode.el instanceof HTMLDetailsElement ? vnode.el : resolvedDetailsNode;
+          isHTMLElementNode(vnode.el) && vnode.el.localName === 'details'
+            ? (vnode.el as HTMLDetailsElement)
+            : resolvedDetailsNode;
       };
       const closeOnOutsidePointer = (event: PointerEvent) => {
         if (
           resolvedDetailsNode?.open &&
-          event.target instanceof Node &&
+          isDomNode(event.target) &&
           !resolvedDetailsNode.contains(event.target)
         ) {
           rail.value.setExpandedResolvedKey(null);
@@ -525,10 +529,17 @@ export const ReviewCard = markPart(
           resolvedDetailsNode.open = false;
         }
       };
-      onMounted(() => document.addEventListener('pointerdown', closeOnOutsidePointer, true));
-      onBeforeUnmount(() =>
-        document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
-      );
+      // The card's own document: a rail in a pop-out window dismisses on presses there.
+      let listening: Document | null = null;
+      const instance = getCurrentInstance();
+      onMounted(() => {
+        listening = hostDocumentOf(instance?.proxy?.$el as Node | null);
+        listening.addEventListener('pointerdown', closeOnOutsidePointer, true);
+      });
+      onBeforeUnmount(() => {
+        listening?.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+        listening = null;
+      });
       return () => {
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;

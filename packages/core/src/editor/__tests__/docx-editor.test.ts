@@ -793,24 +793,32 @@ describe('createDocxEditor', () => {
     expect(container.textContent).toContain('hello');
   });
 
-  test('detach() stashes the CURRENT content; a later attach restores it', () => {
+  test('detach() keeps the live document; a later attach moves it in with its history', () => {
     const editor = createDocxEditor({ document: docx(p('hello')) });
     const first = document.createElement('div');
     editor.attach(first);
     editor.exec({ type: 'insertText', text: 'X' });
     expect(editor.surface!.session.bodyText()).toBe('Xhello');
+    const surface = editor.surface;
 
     const beforeDetach = editor.stateVersion();
     editor.detach();
-    expect(editor.surface).toBeNull();
+    // Parked: the element the editor left is empty and unstyled, the document is not gone.
+    expect(editor.surface).toBe(surface);
+    expect(editor.surface!.parked()).toBe(true);
     expect(first.childNodes.length).toBe(0);
+    expect(first.style.width).toBe('');
     expect(editor.stateVersion()).toBeGreaterThan(beforeDetach);
 
     const second = document.createElement('div');
     editor.attach(second);
-    // The edit survives; the undo stack does not (a mount from bytes is a new session).
+    // The same session moved in: the edit AND the undo stack survive.
+    expect(editor.surface).toBe(surface);
     expect(second.textContent).toContain('Xhello');
-    expect(editor.snapshot().canUndo).toBe(false);
+    expect(editor.snapshot().canUndo).toBe(true);
+    editor.exec({ type: 'undo' });
+    expect(editor.surface!.session.bodyText()).toBe('hello');
+    editor.destroy();
   });
 
   test('attach after destroy is a refused no-op with a typed error', () => {
