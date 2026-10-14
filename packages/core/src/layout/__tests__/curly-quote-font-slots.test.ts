@@ -177,3 +177,56 @@ describe('curly quotes use the authored hAnsi face without an East Asian hint', 
     expect(serializeOoxmlPart(loaded.part)).toBe(before);
   });
 });
+
+describe('dashes, ellipses, low quotes, and the middle dot use hAnsi without a hint', () => {
+  const marks = ['–', '—', '…', '‚', '„', '·'];
+
+  test.each(marks)('%s keeps its font slot beside Han text', (mark) => {
+    for (const text of [`甲${mark}乙`, `${mark}甲`, `甲${mark}`, mark]) {
+      const item = itemizeScriptFontSlots(text, 0, ltr(text)).find(({ from, to }) =>
+        text.slice(from, to).includes(mark)
+      );
+      expect(item).toMatchObject({ slot: 'hAnsi', script: 'Zyyy' });
+      const offset = text.indexOf(mark);
+      const ranges = eastAsiaRunsOfSegments([text]);
+      expect(ranges.some(({ from, to }) => from <= offset && offset < to)).toBe(false);
+      expect(eastAsiaRunsOfSegments([text], [true])).toEqual([
+        { segment: 0, from: 0, to: text.length },
+      ]);
+    }
+  });
+
+  test.each([
+    ['SimSun', 'zh-CN', ''],
+    ['SimSun', 'zh-CN', ' w:hint="eastAsia"'],
+    ['Yu Mincho', 'ja-JP', ''],
+    ['MS Mincho', 'ja-JP', ' w:hint="eastAsia"'],
+  ])('layout measures each mark in the authored face (%s, %s, hint %s)', (face, lang, hint) => {
+    const text = `汉${marks.join('汉')}汉`;
+    const xml =
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:body><w:p><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Arial" ' +
+      `w:eastAsia="${face}"${hint}/><w:lang w:val="en-US" w:eastAsia="${lang}"/>` +
+      `</w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`;
+    const loaded = readOoxmlPart(xml, {
+      name: '/word/document.xml',
+      contentType: 'application/xml',
+    });
+    if (!loaded.ok) throw Error(loaded.reason);
+    const before = serializeOoxmlPart(loaded.part);
+    const layout = layoutSemanticDocument(loaded.part, 0, { measurer: createFixedMeasurer(7, 14) });
+    const spans = layout.pages.flatMap((page) =>
+      page.fragments.flatMap((fragment) =>
+        fragment.kind === 'paragraph' ? fragment.lines.flatMap((line) => line.spans) : []
+      )
+    );
+    expect(spans.map((span) => span.text).join('')).toBe(text);
+    const markFace = hint ? face : 'Arial';
+    for (const span of spans) {
+      const family = styleForFontSlot(span.style, span.fontSlot).fontFamily;
+      for (const character of span.text)
+        expect([character, family]).toEqual([character, character === '汉' ? face : markFace]);
+    }
+    expect(serializeOoxmlPart(loaded.part)).toBe(before);
+  });
+});
