@@ -25,6 +25,44 @@ export function prepareTerminalBorderPlan(
   bottom: number,
   deps: TableFlowDeps
 ): TerminalBorderPlan | undefined {
+  const measured = measureTerminalRow(structure, row, left, top, bottom, deps);
+  return measured && !measured.overflows ? measured.plan : undefined;
+}
+
+/** Room below a fitting row in which its closing border is checked: compound rules included. */
+const CLOSING_EDGE_BAND_PT = 18;
+
+/**
+ * The height a row that fits at `naturalHeight` must count instead: a row that ends its page
+ * closes it with its own bottom border, which must fit above `bottom` too. Undefined when
+ * the row fits that way, keeps the edge it already has, or a following row fits below it
+ * (`nextFits`), so it does not end the page.
+ */
+export function closingEdgeOverflowHeight(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  left: number,
+  top: number,
+  bottom: number,
+  deps: TableFlowDeps,
+  naturalHeight: number,
+  nextFits: (room: number) => boolean
+): number | undefined {
+  const room = bottom - top - naturalHeight;
+  if (room < -0.001 || room > CLOSING_EDGE_BAND_PT) return undefined;
+  const measured = measureTerminalRow(structure, row, left, top, bottom, deps);
+  if (!measured?.overflows || nextFits(room)) return undefined;
+  return measured.plan.height;
+}
+
+function measureTerminalRow(
+  structure: SemanticTableStructure,
+  row: SemanticTableRow,
+  left: number,
+  top: number,
+  bottom: number,
+  deps: TableFlowDeps
+): { readonly plan: TerminalBorderPlan; readonly overflows: boolean } | undefined {
   if (
     structure.cellSpacingPt > 0 ||
     structure.float ||
@@ -48,8 +86,10 @@ export function prepareTerminalBorderPlan(
     nextLineId: () => `probe-terminal-border-${line++}`,
   };
   const placed = layoutRowFragment(row, structure.columnWidthsPt, left, top, false, 0, probeDeps);
-  if (placed.remainder !== null || placed.bottom > bottom + 0.001) return undefined;
-  return { height: placed.record.box.height, deps: terminalDeps, probe: placed.record };
+  return {
+    plan: { height: placed.record.box.height, deps: terminalDeps, probe: placed.record },
+    overflows: placed.remainder !== null || placed.bottom > bottom + 0.001,
+  };
 }
 
 /** Changing vertical clearance must not silently add or remove already committed content. */

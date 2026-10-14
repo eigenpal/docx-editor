@@ -29,7 +29,10 @@ import {
 } from './semantic-table-layout.ts';
 import { closingCellSpacingPt } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
-import { prepareTerminalBorderPlan } from './table-terminal-border-plan.ts';
+import {
+  closingEdgeOverflowHeight,
+  prepareTerminalBorderPlan,
+} from './table-terminal-border-plan.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
@@ -642,22 +645,20 @@ export function* paginateTableInFlowSteps(
       if (rows.length === 0 && clearance.clear(clearance.pending)) admitSpans(bodyRowIndex, row);
     }
 
+    const terminalAt = () =>
+      [structure, row, tableLeft, flow.cursorY, contentHeight(), rowDeps()] as const;
+    // The room a row that ends the page needs below it for its own closing border.
+    let closingEdge = 0;
     const tryTerminalFit = (): void => {
-      if (
-        terminalDeps ||
-        isContinuation ||
-        heldByOpenSpan ||
-        naturalHeight <= contentHeight() - flow.cursorY + 0.001
-      )
+      if (terminalDeps || isContinuation || heldByOpenSpan) return;
+      if (naturalHeight <= contentHeight() - flow.cursorY + 0.001) {
+        const [next, below] = [bodyRows[bodyRowIndex + 1], flow.cursorY + naturalHeight];
+        const fits = (room: number) => !!next && rowHeightOf(next, below) <= room;
+        const closed = closingEdgeOverflowHeight(...terminalAt(), naturalHeight, fits);
+        closingEdge = closed === undefined ? 0 : closed - naturalHeight;
         return;
-      const plan = prepareTerminalBorderPlan(
-        structure,
-        row,
-        tableLeft,
-        flow.cursorY,
-        contentHeight(),
-        rowDeps()
-      );
+      }
+      const plan = prepareTerminalBorderPlan(...terminalAt());
       if (!plan) return;
       terminalDeps = plan.deps;
       naturalHeight = plan.height;
@@ -743,7 +744,7 @@ export function* paginateTableInFlowSteps(
         })) ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
-        flow.cursorY + naturalHeight > contentHeight() + 0.001 &&
+        flow.cursorY + naturalHeight + closingEdge > contentHeight() + 0.001 &&
         flow.cursorY > 0 &&
         (keepsWholeAt(flow.cursorY) ||
           row.height.rule === 'exact' ||
@@ -752,7 +753,7 @@ export function* paginateTableInFlowSteps(
             structure.columnWidthsPt,
             tableLeft,
             flow.cursorY,
-            contentHeight(),
+            contentHeight() - closingEdge,
             false,
             0,
             rowDeps(),
