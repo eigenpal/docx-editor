@@ -1,5 +1,35 @@
 # @docx-editor.dev/core
 
+## 2.30.0
+
+### Minor Changes
+
+- 8488733: Set `contentLockPolicy.allowFormattingInLockedContent` in `createDocxEditor`, `createServerAutomationHost`, or the React and Vue `contentLockPolicy` prop to let users format content-locked controls while their text stays protected.
+- f09b44b: Add the `fontShaping` option, which sets the largest font file that text shaping accepts, separately from font loading limits.
+- 4d55c5b: Set `lockedControlNavigation: 'atomic'` in `createDocxEditor`, or the React and Vue `lockedControlNavigation` prop, to make arrow keys, Shift selection, and clicks treat a content-locked inline control as one unit.
+- 0c1b370: Apply both runs’ kerning thresholds and require an East Asian font as the default East Asian face for full-width punctuation compression, while honoring `w:noPunctuationKerning` and preserving Latin font kerning. Keep kana advances on non-full lines and preserve authored text, formatting, and collaboration operations.
+- 306337a: Preserve supported equation run formatting and bars while refusing compact replacements that would discard source properties.
+
+### Patch Changes
+
+- bf0eb44: Keep cells inside their row bounds when merged text extends a table with cell spacing.
+- 78a6f6a: Keep the visible part of a text line in a fixed-height table row without changing its authored height.
+- 7d53f73: Paint the selected TrueType collection face while preserving its tables, including face signature tables.
+- b25afe8: Stop stale font error delivery after a listener replaces the document or destroys the editor.
+- b25afe8: Discard deferred font errors after document replacement or editor destruction.
+- 38ce956: Release offscreen image elements and URLs, then recreate them when you return to the page.
+- d5b1fdc: Render Office Math letters with their mathematical style while preserving source text and normal-text runs.
+- 926bcdc: Refuse conflicting content control deletion and insertion before changing the document.
+- 926bcdc: `insertContentControl` with `returnHandle`, and Office.js `range.insertContentControl()`, return a handle to their own control when one batch creates several controls.
+- 49fe893: Hash complete blocks directly from the caller's byte view and allocate only the 64- or 128-byte padding tail. Preserve digest encoding, native hashing, and caller bytes while avoiding a payload-sized copy in the pure SHA-256 path.
+- 7d53f73: Keep complete font collections for first-face painting and preserve selected signature tables for other faces.
+- 306337a: Keep equations with unknown run properties or structure children in the bounded fallback.
+- b0abf51: Editors report session starts and ends, active editing time, committed edits by origin, and each `save()` call, and telemetry records them as events and metrics for session counts, edit failure rates, and save success rates.
+- f6b64cc: Use the authored hAnsi face for curly quotes without an East Asian font hint, while preserving complex-script overrides.
+- 4c9da7e: Use the authored hAnsi face for en and em dashes, ellipses, low quotes, and middle dots beside Han text without an East Asian font hint. Fixes #1301
+- bf0eb44: Keep text and cached fields visible when protected vertically merged body cells continue across pages. Measure the carried cursor again after each page cut and grow the last non-exact row for the remaining text.
+- Updated dependencies: @docx-editor.dev/i18n@2.30.0
+
 ## 2.29.0
 
 ### Minor Changes
