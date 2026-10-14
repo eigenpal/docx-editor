@@ -55,6 +55,7 @@ import type {
 import { createSuccessfulValueCache, provisionWithExportDeadline } from './export-deadline.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
+export type { FontShapingOptions } from '@docx-editor.dev/core/layout';
 export {
   forEachSemanticDrawing,
   HARD_MAX_AGGREGATE_FONT_BYTES,
@@ -319,11 +320,24 @@ export async function openDocumentForExport(
   source: ExportDocumentSource,
   options: OpenMarkdownDocumentForExportOptions = {}
 ): Promise<OpenMarkdownDocumentForExportResult> {
-  const { fonts: _fonts, fallbackFonts: _fallbackFonts, ...coreOptions } = options;
+  const {
+    fonts: _fonts,
+    fallbackFonts: _fallbackFonts,
+    fontShaping: requestedExecution,
+    ...coreOptions
+  } = options;
+  const fontShaping =
+    requestedExecution === undefined
+      ? undefined
+      : Object.freeze({ maxFontBytes: requestedExecution.maxFontBytes });
   if (options.measurer) {
-    if (options.fontPolicy !== undefined || options.onFontResolution !== undefined) {
+    if (
+      options.fontPolicy !== undefined ||
+      options.onFontResolution !== undefined ||
+      fontShaping !== undefined
+    ) {
       throw new TypeError(
-        'fontPolicy and onFontResolution cannot verify a caller-supplied measurer; ' +
+        'fontPolicy, onFontResolution and fontShaping cannot verify a caller-supplied measurer; ' +
           'omit measurer to use document-aware Core font resolution'
       );
     }
@@ -342,6 +356,7 @@ export async function openDocumentForExport(
       ...coreOptions,
       reuseAcrossRevisions: false,
       fonts: [...callerFonts, packagedExportFonts, ...missingFonts],
+      fontShaping,
       onFontResolution: options.onFontResolution,
     });
     return markdownFontBackedOpenResult(opened);
@@ -363,7 +378,9 @@ export async function openDocumentForExport(
   // should pass the exact measurer already used by their editor.
   const shared = await provisionWithExportDeadline(
     (signal) =>
-      defaultFonts(signal).then((loaded) => acquireSharedExportShaping(loaded.configuration)),
+      defaultFonts(signal).then((loaded) =>
+        acquireSharedExportShaping(loaded.configuration, undefined, fontShaping)
+      ),
     options
   );
   return markdownOpenResult(

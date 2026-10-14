@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Admitted font bytes could exceed the fixed shaping execution ceiling without a host option to select a bounded execution policy.",
+  "after": "Hosts can explicitly select a per-face execution ceiling. Default limits and canonical document data remain unchanged; producer identity includes the selected refusal policy.",
+  "reason": "The option changes local shaping admission, not canonical OOXML, tree operations or room data. Peers seeking the same geometry must supply the same host font and execution configuration.",
+  "tests": [
+    "packages/core/src/layout/__tests__/font-shaping-policy.test.ts",
+    "packages/core/src/export/__tests__/font-shaping-api.test.ts",
+    "packages/core/src/export/__tests__/font-shaping-cache.test.ts",
+    "packages/core/src/editor/__tests__/font-shaping-host.test.ts",
+    "packages/pro/src/collaboration/__tests__/font-shaping.test.ts"
+  ],
+  "changeset": "font-execution-budget",
+  "migration": null
+}

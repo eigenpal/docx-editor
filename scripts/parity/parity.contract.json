@@ -10,6 +10,7 @@
       "popups",
       "document",
       "fonts",
+      "fontShaping",
       "hyperlinkPopup",
       "i18n",
       "locale",

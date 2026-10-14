@@ -52,6 +52,7 @@ export type {
   ChromeMenuSubmenuEntry,
   ContentLockPolicy,
   FieldResultsMode,
+  FontShapingOptions,
   FontLoadFailureReason,
   FontResolutionRequest,
   FontMeasurementState,

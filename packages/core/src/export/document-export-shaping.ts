@@ -18,6 +18,7 @@ import {
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
 import { EXPORT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
+import { fontShapingPolicy, type FontShapingOptions } from '../layout/font-shaping-policy.ts';
 import { HARD_MAX_AGGREGATE_FONT_BYTES, type FontRequest } from '../layout/font-resource.ts';
 import {
   complexSymbolFieldFonts,
@@ -97,6 +98,8 @@ export interface DocumentExportShaping extends SessionExportShaping {
 
 /** Cancellation and deadline controls for document-specific font resolution. @internal */
 export interface DocumentExportShapingOptions extends DocumentExportFontResolutionOptions {
+  /** Explicit per-face shaping execution ceiling. Defaults to 16 MiB. */
+  readonly fontShaping?: FontShapingOptions;
   /** Host supports document optional ligatures in measurement and glyph output. */
   readonly documentLigatures?: boolean;
   readonly glyphFallbacks?: readonly FontRequest[];
@@ -136,6 +139,8 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   OpenDocumentForExportOptions,
   'measurer' | 'reuseAcrossRevisions'
 > {
+  /** Explicit per-face shaping execution ceiling; defaults to 16 MiB. */
+  readonly fontShaping?: FontShapingOptions;
   /** Apply document optional ligatures to both layout measurement and exported glyphs. */
   readonly documentLigatures?: boolean;
   /** Immutable font-backed byte sessions reject incremental revision reuse. */
@@ -251,6 +256,7 @@ export async function openFontBackedDocumentForExport(
     onFontResolution,
     glyphFallbacks,
     documentLigatures,
+    fontShaping,
     ...sessionOptions
   } = options;
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
@@ -269,6 +275,7 @@ export async function openFontBackedDocumentForExport(
       fontPolicy,
       glyphFallbacks,
       documentLigatures,
+      fontShaping,
       lastResortFonts: lastResort,
       onFontResolution: (report) => {
         fontResolution = report;
@@ -370,6 +377,7 @@ export async function acquireDocumentExportShaping(
   origins: readonly FontOrigin[],
   options: DocumentExportShapingOptions = {}
 ): Promise<DocumentExportShaping | undefined> {
+  const executionPolicy = fontShapingPolicy(options.fontShaping, EXPORT_HARFBUZZ_SHAPER_POLICY);
   if ((options.glyphFallbacks?.length ?? 0) > 16)
     throw new RangeError('At most 16 glyph fallback faces are supported');
   const timeoutMs = normalizedTimeout(options.timeoutMs);
@@ -415,7 +423,7 @@ export async function acquireDocumentExportShaping(
           {
             onOriginFailure: (failure) => originFailures.push(failure),
             reserveOwnedBytes: fontByteLease.reserve,
-            maxExecutionFontBytes: EXPORT_HARFBUZZ_SHAPER_POLICY.maxFontBytes,
+            maxExecutionFontBytes: executionPolicy.maxFontBytes,
           }
         );
         throwIfAborted(controller.signal);
@@ -439,7 +447,8 @@ export async function acquireDocumentExportShaping(
           prepareOwnedLayoutFontConfiguration(configuration),
           undefined,
           options.glyphFallbacks,
-          options.documentLigatures
+          options.documentLigatures,
+          { maxFontBytes: executionPolicy.maxFontBytes }
         );
         throwIfAborted(controller.signal);
         const report = fontResolutionReport(

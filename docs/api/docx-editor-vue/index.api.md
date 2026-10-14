@@ -78,6 +78,7 @@ import { FontOrigin } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
 import { FontResolverMark } from '@docx-editor.dev/core/editor';
+import { FontShapingOptions } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
@@ -3751,6 +3752,7 @@ export interface DocxEditorProps {
     fieldResults?: FieldResultsMode;
     // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fontShaping?: FontShapingOptions;
     // (undocumented)
     hyperlinkPopup?: boolean;
     // (undocumented)
@@ -3932,6 +3934,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<FieldResultsMode>;
     };
+    fontShaping: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps['fontShaping']>;
+    };
     fonts: {
         default: undefined;
         type: PropType<DocxEditorRootProps['fonts']>;
@@ -3995,6 +4001,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<FieldResultsMode>;
     };
+    fontShaping: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps['fontShaping']>;
+    };
     fonts: {
         default: undefined;
         type: PropType<DocxEditorRootProps['fonts']>;
@@ -4044,6 +4054,7 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     contentLockPolicy: ContentLockPolicy;
     document: DocumentSource;
     fieldResults: FieldResultsMode;
+    fontShaping: _docx_editor_dev_core.FontShapingOptions | undefined;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
     locale: string;
@@ -4078,6 +4089,7 @@ export interface DocxEditorRootProps {
     fieldResults?: FieldResultsMode;
     // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fontShaping?: FontShapingOptions;
     // (undocumented)
     imageDecodePort?: ImageDecodePort;
     locale?: string;

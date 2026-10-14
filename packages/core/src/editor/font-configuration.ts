@@ -12,9 +12,21 @@ import {
   disposeLayoutShaping,
   type LayoutShapingInstrumentation,
   type LayoutShapingOptions,
+  type FontShapingOptions,
 } from '@docx-editor.dev/core/layout';
 
+import { fontShapingPolicy } from '../layout/font-shaping-policy.ts';
+
 export type { LayoutShapingInstrumentation };
+
+/** Freeze the host execution selection before document or font loading can yield. @internal */
+export function sampleFontShapingOptions(
+  options: FontShapingOptions | undefined
+): FontShapingOptions | undefined {
+  return options === undefined
+    ? undefined
+    : Object.freeze({ maxFontBytes: fontShapingPolicy(options).maxFontBytes });
+}
 
 function publicRequest(request: FontFaceRequest): FontFaceRequest {
   return Object.freeze({ family: request.family, weight: request.weight, style: request.style });
@@ -66,10 +78,11 @@ export function toEditorFontError(error: unknown): EditorFontError {
 
 export async function createLayoutShaping(
   configuration: FontConfiguration,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  execution?: FontShapingOptions
 ): Promise<LayoutShapingOptions> {
   try {
-    return await createNeutralLayoutShaping(configuration, instrumentation);
+    return await createNeutralLayoutShaping(configuration, instrumentation, execution);
   } catch (error) {
     throw toEditorFontError(error);
   }

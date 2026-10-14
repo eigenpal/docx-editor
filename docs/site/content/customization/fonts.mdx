@@ -88,6 +88,14 @@ Font errors belong to the active document load. Replacing the document or destro
 
 Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.
 
+Font loading and text layout have separate limits. `fonts.maxFontBytes` limits which font files your configuration accepts. Text layout uses up to 16 MiB per face by default. For larger admitted files, set `fontShaping: { maxFontBytes }` when creating the editor. The maximum is 64 MiB. Other font-count, total-byte, and text-work limits remain unchanged.
+
+React and Vue keep the editor instance when a new `fontShaping` object has the same `maxFontBytes` value. Changing that value creates another editor instance and resets selection and undo history. The editor reads the limit before opening the document. A face cached by another editor with a larger limit still must meet your editor's limit.
+
+`createDocxEditor` throws a `RangeError` before opening when `maxFontBytes` is not a positive safe integer or exceeds 64 MiB. Omit it to use the default limit. The `FontShapingOptions` type is exported from `@docx-editor.dev/core` and `@docx-editor.dev/core/editor`.
+
+DOM-free `createLayoutShaping` accepts `fontShaping` as its third argument, after instrumentation. Font-backed Core, Markdown, and PDF exports also accept it. It does not affect a custom measurer; Markdown rejects that combination. Peers need the same font bytes and limit for matching layout. Document font names and collaboration data stay unchanged.
+
 ## Load Google Fonts on demand
 
 Combine packaged fonts with the Google Fonts provider. The `allow` list limits which Google families the editor can download.

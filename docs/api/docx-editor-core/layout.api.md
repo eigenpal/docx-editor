@@ -645,7 +645,7 @@ export function createLayoutSession(): LayoutSession;
 export function createLayoutShapedMeasurer(shaping: LayoutShapingOptions, options: Pick<ShapedMeasurerOptions, 'resolveFont' | 'fallback'>): TextMeasurer;
 
 // @public
-export function createLayoutShaping(configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<LayoutShapingOptions>;
+export function createLayoutShaping(configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation, execution?: FontShapingOptions): Promise<LayoutShapingOptions>;
 
 // @public
 export function createListCounterState(index: NumberingIndex): ListCounterState;
@@ -1192,6 +1192,11 @@ export interface FontResourceSnapshotOptions {
     readonly substitutions?: readonly DeclaredFontSubstitution[];
     // (undocumented)
     readonly validateFont: FontByteValidator;
+}
+
+// @public
+export interface FontShapingOptions {
+    readonly maxFontBytes?: number;
 }
 
 // @public

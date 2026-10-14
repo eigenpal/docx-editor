@@ -35,7 +35,6 @@ import {
 } from './review-replacement-pairs.ts';
 import { captureSearchResult } from './document-search-result.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
-
 import {
   anchorLineY,
   commentBodyText,
@@ -165,6 +164,7 @@ import {
 import {
   createLayoutShaping,
   disposeLayoutShaping,
+  sampleFontShapingOptions,
   toEditorFontError,
 } from './font-configuration.ts';
 import {
@@ -225,7 +225,6 @@ import type {
   EquationChromeHandlers,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
-
 export type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -259,6 +258,7 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
  * @public
  */
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
+  const fontShaping = sampleFontShapingOptions(config.fontShaping);
   let refreshHost: RefreshHost | undefined = undefined;
   let deferredRefreshBytes: Uint8Array | null = null;
   /** The opening document's session between the prepare and mount tasks, for font work. */
@@ -945,7 +945,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return;
       }
-      let shaping = await createLayoutShaping(fonts);
+      let shaping = await createLayoutShaping(fonts, undefined, fontShaping);
       // A newer load (or a destroy) landed while this one awaited: the shaping can never
       // be installed, so release its wasm objects rather than dropping it unreferenced,
       // and clear the in-flight flag only if this load is still the current one. Reads
@@ -1007,7 +1007,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             documentFonts
           );
           if (fonts.sources.length === 0) return bailToFixed(superseded);
-          shaping = await createLayoutShaping(fonts);
+          shaping = await createLayoutShaping(fonts, undefined, fontShaping);
           disposeLayoutShaping(superseded);
           if (supersededNow()) return;
           const refusedAfterRebuild = refusedIn(shaping, fonts);
@@ -1027,7 +1027,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               documentFonts
             );
             if (fonts.sources.length === 0) return bailToFixed(rejected);
-            shaping = await createLayoutShaping(fonts);
+            shaping = await createLayoutShaping(fonts, undefined, fontShaping);
             disposeLayoutShaping(rejected);
             if (supersededNow()) return;
           }

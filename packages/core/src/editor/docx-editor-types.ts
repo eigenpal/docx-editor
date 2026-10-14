@@ -5,6 +5,7 @@ import type {
 import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { ReviewPaneOptions } from '../contracts/review-pane.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
+import type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 import type {
   PopupChromeRegistrationOptions,
   ContentControlWidgetChromeHandlers,
@@ -82,6 +83,8 @@ export interface DocxEditorConfig {
    * requests — the engine never supplies one, so that stays your call.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping execution limits. Omitted, the per-face byte ceiling remains 16 MiB. */
+  fontShaping?: FontShapingOptions;
   author?: string;
   /** BCP-47 locale for regional date input and generated labels; defaults to en-US. */
   locale?: string;

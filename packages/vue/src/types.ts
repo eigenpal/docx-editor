@@ -1,6 +1,7 @@
 import type {
   ContentLockPolicy,
   FieldResultsMode,
+  FontShapingOptions,
   RevisionMarkupOptions,
   ReviewDisplayMode,
 } from '@docx-editor.dev/core/editor';
@@ -41,6 +42,8 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 export interface DocxEditorProps {
   popups?: import('./editor/popup-config').DocxEditorPopups;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
+  fontShaping?: FontShapingOptions;
   colorMode?: 'light' | 'dark' | 'system';
   /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;
