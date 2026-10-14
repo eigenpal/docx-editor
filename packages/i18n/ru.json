@@ -262,6 +262,30 @@
       "applyToDocument": "Ко всему документу",
       "applyToSection": "К текущему разделу"
     },
+    "watermark": {
+      "title": "Подложка",
+      "noWatermark": "Без подложки",
+      "picture": "Рисунок",
+      "selectPicture": "Выбрать рисунок…",
+      "noPictureSelected": "(Рисунок не выбран)",
+      "currentPicture": "(Текущий рисунок)",
+      "pictureFailed": "Не удалось прочитать рисунок.",
+      "scale": "Масштаб",
+      "auto": "Авто",
+      "washout": "Обесцветить",
+      "text": "Текст",
+      "textLabel": "Текст",
+      "font": "Шрифт",
+      "size": "Размер",
+      "bold": "Полужирный",
+      "italic": "Курсив",
+      "transparency": "Прозрачность",
+      "color": "Цвет",
+      "layout": "Расположение",
+      "horizontal": "Горизонтально",
+      "diagonal": "По диагонали",
+      "refused": "Не удалось применить подложку."
+    },
     "footnoteProperties": {
       "title": "Параметры сносок и концевых сносок",
       "footnotes": "Сноски",
@@ -757,6 +781,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Не удалось вставить рисунок",
       "emptyFile": "Выбранный файл пуст.",
       "invalidSignature": "Файл не является поддерживаемым изображением PNG, JPEG или GIF.",
       "oversize": "Изображение превышает максимально допустимый размер.",
