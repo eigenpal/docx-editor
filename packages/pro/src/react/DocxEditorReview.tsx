@@ -71,6 +71,7 @@ import { ResolvedDisclosureProvider } from './review-comment-resolution.tsx';
 import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 import type { ReviewProps } from './review-types.ts';
+import { stackRailCards } from '../review/rail-stack.ts';
 import { ReviewContext, ReviewItemContext, type ReviewRailValue } from './review-context.ts';
 import {
   COLLAPSED_CARD_HEIGHT,
@@ -417,34 +418,23 @@ function ReviewRoot({
     return merged;
   }, [heights, roots]);
 
+  // The open card stays beside its text; see `stackRailCards`.
   const { stacked, collapsedKeys } = useMemo(() => {
-    const scale = metrics.scale;
-    const positions = new Map<string, number>();
-    const collapsed = new Set<string>();
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const entry of stackInput) {
-      // Geometry can be unavailable for an otherwise valid review item (for example while
-      // its distant page has not produced a placement). Leaving that slot without `top`
-      // puts it back into normal flow at the start of this relative container, underneath
-      // the absolutely positioned cards. Keep it in the same column after the preceding
-      // card instead; when geometry arrives a later pass can move it to its true anchor.
-      const top =
-        entry.anchorY === null
-          ? Number.isFinite(cursor)
-            ? cursor
-            : 0
-          : Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      const displacedPx = entry.anchorY === null ? 0 : (top - entry.anchorY) * scale;
-      const isActive = 'isActive' in entry && entry.isActive;
-      const collapse =
-        displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
-      if (collapse) collapsed.add(entry.key);
-      const height = collapse
-        ? COLLAPSED_CARD_HEIGHT
-        : (estimatedHeights.get(entry.key) ?? DEFAULT_CARD_HEIGHT);
-      cursor = top + (height + gap) / scale;
-    }
+    const { positions, collapsed } = stackRailCards(
+      stackInput.map((entry) => ({
+        key: entry.key,
+        anchorY: entry.anchorY,
+        isActive: 'isActive' in entry && entry.isActive,
+      })),
+      {
+        gap,
+        scale: metrics.scale,
+        collapseAfterPx: COLLAPSE_DISPLACEMENT_PX,
+        heightOf: (key, folded) =>
+          folded ? COLLAPSED_CARD_HEIGHT : (estimatedHeights.get(key) ?? DEFAULT_CARD_HEIGHT),
+        collapsible: (entry) => entry.key !== COMPOSE_KEY,
+      }
+    );
     return { stacked: positions, collapsedKeys: collapsed };
   }, [stackInput, estimatedHeights, gap, metrics.scale]);
   // Compact takes the RAW anchor: the stacking run pushes the box below the estimated
