@@ -4,47 +4,60 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { onUnmounted, ref } from 'vue';
+import { onUnmounted } from 'vue';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 /** Observe rendered review cards and report their heights to the rail stacker. */
 export function useReviewSlotSizing(
   measure: (key: string, height: number) => void
 ): (node: HTMLElement | null, key: string) => void {
-  const slotSizes = ref(new WeakMap<Element, string>());
-  const slotElements = ref(new Map<string, Element>());
-  const sizeObserver = ref<ResizeObserver | null>(null);
-
-  const observeSlot = (node: HTMLElement | null, key: string) => {
-    const previous = slotElements.value.get(key);
-    if (!node) {
-      if (previous) {
-        sizeObserver.value?.unobserve(previous);
-        slotSizes.value.delete(previous);
-        slotElements.value.delete(key);
-      }
-      return;
-    }
-    if (typeof ResizeObserver === 'undefined') return;
-    measure(key, node.offsetHeight);
-    sizeObserver.value ??= new ResizeObserver((entries) => {
+  const slotSizes = new WeakMap<Element, string>();
+  const slotElements = new Map<string, Element>();
+  // One observer per window: an observer only reports elements in its own window's
+  // documents, and a rail in a pop-out window is not in the script's.
+  const sizeObservers = new Map<Window, ResizeObserver>();
+  const observerFor = (node: Element): ResizeObserver | null => {
+    const view = hostWindowOf(node);
+    const existing = sizeObservers.get(view);
+    if (existing) return existing;
+    if (typeof view.ResizeObserver === 'undefined') return null;
+    const observer = new view.ResizeObserver((entries) => {
       for (const entry of entries) {
-        const owner = slotSizes.value.get(entry.target);
+        const owner = slotSizes.get(entry.target);
         if (owner) measure(owner, (entry.target as HTMLElement).offsetHeight);
       }
     });
-    if (previous === node && slotSizes.value.get(node) === key) return;
-    if (previous) {
-      sizeObserver.value.unobserve(previous);
-      slotSizes.value.delete(previous);
+    sizeObservers.set(view, observer);
+    return observer;
+  };
+
+  const observeSlot = (node: HTMLElement | null, key: string) => {
+    const previous = slotElements.get(key);
+    if (!node) {
+      if (previous) {
+        sizeObservers.get(hostWindowOf(previous))?.unobserve(previous);
+        slotSizes.delete(previous);
+        slotElements.delete(key);
+      }
+      return;
     }
-    slotSizes.value.set(node, key);
-    slotElements.value.set(key, node);
-    sizeObserver.value.observe(node);
+    const observer = observerFor(node);
+    if (!observer) return;
+    measure(key, node.offsetHeight);
+    if (previous === node && slotSizes.get(node) === key) return;
+    if (previous) {
+      sizeObservers.get(hostWindowOf(previous))?.unobserve(previous);
+      slotSizes.delete(previous);
+    }
+    slotSizes.set(node, key);
+    slotElements.set(key, node);
+    observer.observe(node);
   };
 
   onUnmounted(() => {
-    sizeObserver.value?.disconnect();
-    slotElements.value.clear();
+    for (const observer of sizeObservers.values()) observer.disconnect();
+    sizeObservers.clear();
+    slotElements.clear();
   });
 
   return observeSlot;

@@ -7,8 +7,26 @@
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { cn } from '../../lib/utils';
+import { hostDocumentOf } from '@docx-editor.dev/core/editor';
 
-const Select = SelectPrimitive.Root;
+/**
+ * The open trigger, so the portal lands in the trigger's own document: a select inside an
+ * editor in a pop-out window or an iframe must not open its list in the opener.
+ */
+const SelectTriggerContext = React.createContext<{
+  readonly trigger: HTMLButtonElement | null;
+  readonly setTrigger: (element: HTMLButtonElement | null) => void;
+} | null>(null);
+
+function Select(props: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) {
+  const [trigger, setTrigger] = React.useState<HTMLButtonElement | null>(null);
+  const value = React.useMemo(() => ({ trigger, setTrigger }), [trigger]);
+  return (
+    <SelectTriggerContext.Provider value={value}>
+      <SelectPrimitive.Root {...props} />
+    </SelectTriggerContext.Provider>
+  );
+}
 const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
@@ -18,8 +36,10 @@ function SelectTrigger({
   onMouseDown,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>) {
+  const setTrigger = React.useContext(SelectTriggerContext)?.setTrigger;
   return (
     <SelectPrimitive.Trigger
+      ref={setTrigger}
       className={cn(
         'flex h-8 items-center justify-between gap-1 rounded px-2 py-1',
         'text-sm text-foreground bg-transparent',
@@ -48,13 +68,17 @@ function SelectContent({
   children,
   position = 'popper',
   onCloseAutoFocus,
+  onKeyDown,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>) {
   // Radix renders into a portal outside the editor's `.docx-editor.dark` subtree,
   // so the wrapper must re-assert the theme for tokens to resolve in dark mode.
-  const isDark = typeof document !== 'undefined' && !!document.querySelector('.docx-editor.dark');
+  const trigger = React.useContext(SelectTriggerContext)?.trigger ?? null;
+  const doc =
+    typeof globalThis.document === 'undefined' && !trigger ? null : hostDocumentOf(trigger);
+  const isDark = !!doc?.querySelector('.docx-editor.dark');
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal {...(doc?.body ? { container: doc.body } : {})}>
       {/* Wrap in .docx-editor so Tailwind scoped utilities apply inside the portal */}
       <div className={cn('docx-editor', isDark && 'dark')}>
         <SelectPrimitive.Content
@@ -74,6 +98,10 @@ function SelectContent({
             e.preventDefault();
             onCloseAutoFocus?.(e);
           }}
+          onKeyDown={(e) => {
+            onKeyDown?.(e);
+            if (!e.defaultPrevented) moveOptionFocus(e);
+          }}
           {...props}
         >
           <SelectPrimitive.Viewport
@@ -90,6 +118,37 @@ function SelectContent({
       </div>
     </SelectPrimitive.Portal>
   );
+}
+
+const OPTION_KEYS = new Set(['ArrowDown', 'ArrowUp', 'Home', 'End']);
+
+/**
+ * Arrow, Home and End for a list in ANOTHER window (a pop-out, an iframe). Radix reads focus
+ * from the script's global `document`, which is the opener there, so its own handling skips
+ * options. Prevented here, Radix's handler stands down; in the script's window it runs as-is.
+ */
+function moveOptionFocus(event: React.KeyboardEvent<HTMLDivElement>): void {
+  const content = event.currentTarget;
+  if (content.ownerDocument === globalThis.document || !OPTION_KEYS.has(event.key)) return;
+  event.preventDefault();
+  const options = Array.from(
+    content.querySelectorAll<HTMLElement>('[role="option"]:not([data-disabled])')
+  );
+  if (options.length === 0) return;
+  // Radix's open focus also reads the opener, so focus can still be on the list itself: start
+  // from the selected option then, as Radix does in its own window.
+  const focused = options.indexOf(content.ownerDocument.activeElement as HTMLElement);
+  const at =
+    focused >= 0 ? focused : options.findIndex((option) => option.dataset.state === 'checked');
+  const next =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? options.length - 1
+        : event.key === 'ArrowDown'
+          ? Math.min(options.length - 1, at + 1)
+          : Math.max(0, at < 0 ? 0 : at - 1);
+  options[next]!.focus({ preventScroll: false });
 }
 
 function SelectLabel({

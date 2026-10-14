@@ -22,6 +22,8 @@
 // FOCUS: a popup also closes when focus moves somewhere outside it and outside the pages,
 // such as the find field or a host input. See `listenForPopupFocusLeave`.
 
+import { isDomNode, isElementNode } from './host-realm.ts';
+
 /** How {@link listenForPopupEscape} decides and acts. @internal */
 export interface PopupEscapeOptions {
   /** The popup's root. Its `ownerDocument` receives the listener. */
@@ -71,7 +73,7 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
     if (options.skip?.(event)) return;
     const path = event.composedPath();
     const origin = path[0] ?? event.target;
-    const target = origin instanceof Node ? origin : null;
+    const target = isDomNode(origin) ? origin : null;
     const fromInside = target !== null && options.contains(target);
     // A modal dialog above the popup, which the popup may have opened, owns its own Escape.
     if (!fromInside && inEditorModalDialog(target, options.popup)) return;
@@ -99,7 +101,7 @@ export function listenForPopupEscape(options: PopupEscapeOptions): () => void {
  * closes the popup.
  */
 function inEditorModalDialog(node: Node | null, popup: Element): boolean {
-  const element = node instanceof Element ? node : (node?.parentElement ?? null);
+  const element = isElementNode(node) ? node : (node?.parentElement ?? null);
   const dialog = element?.closest('[aria-modal="true"], [data-docx-modal]');
   if (!dialog) return false;
   if (dialog.hasAttribute('data-docx-dialog') || dialog.hasAttribute('data-docx-modal'))
@@ -144,8 +146,8 @@ export function listenForPopupFocusLeave(options: PopupFocusLeaveOptions): () =>
   const owner = options.popup.ownerDocument;
   const onFocusIn = (event: FocusEvent): void => {
     const origin = event.composedPath()[0] ?? event.target;
-    if (!(origin instanceof Node) || options.contains(origin)) return;
-    const element = origin instanceof Element ? origin : origin.parentElement;
+    if (!isDomNode(origin) || options.contains(origin)) return;
+    const element = isElementNode(origin) ? origin : origin.parentElement;
     // Focus that falls to <body> moves to no control, for example while a dialog unmounts.
     if (element === null || element === owner.body || element === owner.documentElement) return;
     if (element.closest('.docx-pages') || inEditorModalDialog(element, options.popup)) return;

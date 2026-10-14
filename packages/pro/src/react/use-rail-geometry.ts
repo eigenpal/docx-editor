@@ -10,6 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // composition logic.
 
 import { useEffect, useState } from 'react';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 /** Where the rail is, in the coordinates of its positioning container. */
 export interface RailMetrics {
@@ -126,21 +127,23 @@ export function useRailMetrics(
       });
     };
     sync();
-    const observer = new ResizeObserver(sync);
+    // The rail's own window: a pop-out editor has its own observers and frames.
+    const view = hostWindowOf(rail);
+    const observer = new view.ResizeObserver(sync);
     if (parent) observer.observe(parent);
     if (surface) observer.observe(surface);
     if (!trackScroll || !parent) return () => observer.disconnect();
     let frame = 0;
     const onScroll = (): void => {
       if (frame === 0)
-        frame = requestAnimationFrame(() => {
+        frame = view.requestAnimationFrame(() => {
           frame = 0;
           sync();
         });
     };
     parent.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      if (frame !== 0) cancelAnimationFrame(frame);
+      if (frame !== 0) view.cancelAnimationFrame(frame);
       parent.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };
@@ -166,6 +169,7 @@ export function useRailWindow(
     const rail = railRef.current;
     const scroller = rail?.offsetParent as HTMLElement | null;
     if (!scroller) return undefined;
+    const view = hostWindowOf(scroller);
     let frame = 0;
     const sync = (): void => {
       frame = 0;
@@ -184,18 +188,18 @@ export function useRailWindow(
     // itself moves read as a second, faster scroll layered over the document.
     let settle = 0;
     const onScroll = (): void => {
-      if (frame === 0) frame = requestAnimationFrame(sync);
+      if (frame === 0) frame = view.requestAnimationFrame(sync);
       rail?.setAttribute('data-scrolling', '');
-      window.clearTimeout(settle);
-      settle = window.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
+      view.clearTimeout(settle);
+      settle = view.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
     };
     sync();
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    const observer = new ResizeObserver(onScroll);
+    const observer = new view.ResizeObserver(onScroll);
     observer.observe(scroller);
     return () => {
-      if (frame !== 0) cancelAnimationFrame(frame);
-      window.clearTimeout(settle);
+      if (frame !== 0) view.cancelAnimationFrame(frame);
+      view.clearTimeout(settle);
       scroller.removeEventListener('scroll', onScroll);
       observer.disconnect();
     };

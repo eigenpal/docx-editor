@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Mount once inside `DocxEditor.Root`.
 
 import { useEffect } from 'react';
-import { useDocxEditor } from '@docx-editor.dev/react';
+import { useDocxEditor, useEditorHostDocument } from '@docx-editor.dev/react';
 import {
   CUSTOM_NODE_IDENTITY_PATTERN,
   type ActivatedCustomNode,
@@ -80,16 +80,20 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
   const { onNodeClick, onNodeHover } = props;
   const editor = useDocxEditor();
   const nodes = useCustomNodeDefinitions(props.nodes);
+  // The pages' own document: a pop-out window's when the editor is mounted in one.
+  const hostDocument = useEditorHostDocument();
 
   // Colours are host-authored; validated anyway so a typo cannot produce a broken rule.
   useEffect(() => {
-    const style = document.createElement('style');
+    if (!hostDocument) return undefined;
+    const CSSApi = hostDocument.defaultView?.CSS ?? CSS;
+    const style = hostDocument.createElement('style');
     const rules: string[] = [];
     for (const definition of nodes) {
       const selectors = layerSelectors(definition);
       if (selectors.length === 0) continue;
       const color =
-        definition.chrome?.color !== undefined && CSS.supports('color', definition.chrome.color)
+        definition.chrome?.color !== undefined && CSSApi.supports('color', definition.chrome.color)
           ? definition.chrome.color
           : 'var(--doc-accent)';
       rules.push(
@@ -104,11 +108,12 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       );
     }
     style.textContent = rules.join('\n');
-    document.head.append(style);
+    hostDocument.head.append(style);
     return () => style.remove();
-  }, [nodes]);
+  }, [nodes, hostDocument]);
 
   useEffect(() => {
+    if (!hostDocument) return undefined;
     // Press and release, not `click`. Pressing a chip moves the caret into it, which repaints
     // the control and detaches the boundary the press landed on — leaving the browser no common
     // ancestor to dispatch `click` on, so it fires none.
@@ -116,7 +121,10 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
     let pressedTag: string | null = null;
     // By point, not by target: the event's own target may already be detached.
     const controlAt = (event: PointerEvent) =>
-      resolveCustomNodeActivation(document.elementFromPoint(event.clientX, event.clientY), nodes);
+      resolveCustomNodeActivation(
+        hostDocument.elementFromPoint(event.clientX, event.clientY),
+        nodes
+      );
     const onDown = (event: PointerEvent) => {
       // Primary button only: a right-click belongs to the context menu.
       const resolved = event.button === 0 ? controlAt(event) : null;
@@ -148,15 +156,15 @@ export function CustomNodeChrome(props: CustomNodeChromeProps): null {
       resolved.definition.onHover?.(node);
       onNodeHover?.(node);
     };
-    document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('pointerup', onUp, true);
-    document.addEventListener('mouseover', onOver);
+    hostDocument.addEventListener('pointerdown', onDown, true);
+    hostDocument.addEventListener('pointerup', onUp, true);
+    hostDocument.addEventListener('mouseover', onOver);
     return () => {
-      document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('pointerup', onUp, true);
-      document.removeEventListener('mouseover', onOver);
+      hostDocument.removeEventListener('pointerdown', onDown, true);
+      hostDocument.removeEventListener('pointerup', onUp, true);
+      hostDocument.removeEventListener('mouseover', onOver);
     };
-  }, [nodes, editor, onNodeClick, onNodeHover]);
+  }, [nodes, editor, onNodeClick, onNodeHover, hostDocument]);
 
   return null;
 }

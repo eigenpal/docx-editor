@@ -146,3 +146,24 @@ export function equalSurfaceExtents(left: SurfaceExtent, right: SurfaceExtent): 
   }
   return true;
 }
+
+/**
+ * Place each built page horizontally inside the extent.
+ *
+ * The painter reconciles page children in record order, including virtual shells, so indexing
+ * that retained list is O(1); a selector here used to make one DOM query for every page on
+ * every keystroke (hundreds of queries in a long document).
+ */
+export function applyPageOffsets(
+  pagesLayer: HTMLElement,
+  layout: SemanticLayout,
+  extent: SurfaceExtent,
+  scale: number
+): void {
+  for (const page of layout.pages) {
+    const element = pagesLayer.children.item(page.index) as HTMLElement | null;
+    if (element?.dataset.pageIndex !== String(page.index)) continue;
+    const offsetX = extent.pageOffsetX.get(page.index) ?? 0;
+    element.style.left = `${(page.box.x + offsetX) * scale}px`;
+  }
+}

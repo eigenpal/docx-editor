@@ -11,6 +11,7 @@ import type {
   HighlightRange,
   HighlightResult,
 } from '../contracts/editor.ts';
+import { hostElementOfEditor, hostTimers } from './host-realm.ts';
 
 /**
  * Ranges for `watchHighlights` and `useHighlights`: an array, or a function of the editor
@@ -70,7 +71,9 @@ export function watchHighlights(
   let currentOptions: HighlightOptions = initial;
   let result = EMPTY_RESULT;
   let stopped = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // The editor's own window: an opener's timers are throttled while it is hidden.
+  const timers = hostTimers(() => hostElementOfEditor(editor));
+  let timer: number | undefined;
   let firstAt = 0;
 
   const report = (next: HighlightResult) => {
@@ -79,7 +82,7 @@ export function watchHighlights(
     onResult?.(next);
   };
   const apply = () => {
-    clearTimeout(timer);
+    timers.clearTimeout(timer);
     timer = undefined;
     firstAt = 0;
     if (stopped) return;
@@ -89,9 +92,9 @@ export function watchHighlights(
   const schedule = () => {
     const now = Date.now();
     if (firstAt === 0) firstAt = now;
-    clearTimeout(timer);
+    timers.clearTimeout(timer);
     const wait = Math.min(HIGHLIGHT_REFRESH_MS, HIGHLIGHT_REFRESH_MAX_WAIT_MS - (now - firstAt));
-    timer = setTimeout(apply, Math.max(0, wait));
+    timer = timers.setTimeout(apply, Math.max(0, wait));
   };
 
   const off = editor.on('change', (change) => {
@@ -121,7 +124,7 @@ export function watchHighlights(
     stop() {
       if (stopped) return;
       stopped = true;
-      clearTimeout(timer);
+      timers.clearTimeout(timer);
       off();
       editor.clearHighlights(name);
     },

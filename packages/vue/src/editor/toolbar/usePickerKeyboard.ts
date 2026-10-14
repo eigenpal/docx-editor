@@ -1,5 +1,10 @@
 import { watch, type Ref } from 'vue';
-import { listenForPopupEscape, listenForPopupFocusLeave } from '@docx-editor.dev/core/editor';
+import {
+  listenForPopupEscape,
+  listenForPopupFocusLeave,
+  isDomNode,
+  isElementNode,
+} from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
 
 /** Bind keyboard dismissal and option navigation to this mounted picker. */
@@ -52,7 +57,7 @@ function bindPickerKeyboard(
     options[next]?.focus();
   };
   const focusout = (event: FocusEvent) => {
-    if (event.relatedTarget instanceof Node && !root.contains(event.relatedTarget)) close();
+    if (isDomNode(event.relatedTarget) && !root.contains(event.relatedTarget)) close();
   };
   // Escape is not handled here: the capture listener below hears it before the surface,
   // also when a click opened the picker and focus stayed in the pages.
@@ -63,7 +68,7 @@ function bindPickerKeyboard(
     editorElements: () => [viewport()],
     // The editable size input owns its draft and its Escape.
     skip: (event) =>
-      event.target instanceof Element &&
+      isElementNode(event.target) &&
       root.contains(event.target) &&
       event.target.matches('input[role="combobox"]'),
     close: (fromInside) => {

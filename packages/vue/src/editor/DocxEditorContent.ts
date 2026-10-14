@@ -10,9 +10,14 @@ import {
   shallowRef,
   watch,
 } from 'vue';
-import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
+import {
+  clipboardDropLandsText,
+  clipboardPasteLandsContent,
+  isElementNode,
+  isHTMLElementNode,
+} from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
-import { useDocxEditor } from './context';
+import { useDocxEditor, useEditorContentElement } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay';
 import { mergeHostClass } from '../lib/mergeHostClass';
@@ -43,6 +48,7 @@ export const DocxEditorContent = defineComponent({
     const elementRef = shallowRef<HTMLDivElement | null>(null);
     const portalRef = shallowRef<HTMLDivElement | null>(null);
 
+    const contentElement = useEditorContentElement();
     const attach = () => {
       const editor = editorRef.value;
       const el = elementRef.value;
@@ -55,8 +61,12 @@ export const DocxEditorContent = defineComponent({
         if (editor.snapshot().openFailure?.code !== 'open.failed') throw error;
         console.error('[docx-editor] The document failed to open.', error);
       }
+      contentElement.value = el;
     };
-    const detach = () => editorRef.value?.detach();
+    const detach = () => {
+      editorRef.value?.detach();
+      if (contentElement.value === elementRef.value) contentElement.value = null;
+    };
 
     watch([editorRef, elementRef], attach, { immediate: true, flush: 'post' });
     onDeactivated(detach);
@@ -100,7 +110,7 @@ export const DocxEditorContent = defineComponent({
         // destroys the session — so the drop is swallowed instead of released. Resolved
         // through the nearest annotated ancestor: `isContentEditable` does not exist on
         // SVG elements (painted vector shapes). Mirrors the React adapter.
-        const target = event.target instanceof Element ? event.target : null;
+        const target = isElementNode(event.target) ? event.target : null;
         if (target?.closest('[contenteditable]')?.getAttribute('contenteditable') === 'true') {
           return;
         }
@@ -116,7 +126,8 @@ export const DocxEditorContent = defineComponent({
         'div',
         {
           ref: (el: unknown) => {
-            portalRef.value = el instanceof HTMLDivElement ? el : null;
+            portalRef.value =
+              isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null;
             if (dialogs) dialogs.target.value = portalRef.value;
           },
           class: 'docx-content-mount',
@@ -124,7 +135,8 @@ export const DocxEditorContent = defineComponent({
         [
           h('div', {
             ref: (el: unknown) => {
-              elementRef.value = el instanceof HTMLDivElement ? el : null;
+              elementRef.value =
+                isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null;
             },
             class: mergeHostClass('docx-paginated-surface', props.class, props.className),
             onPaste,

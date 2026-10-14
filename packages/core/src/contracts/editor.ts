@@ -50,6 +50,8 @@ export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
 export type {
   DocumentChange,
   EditorEvents,
+  EditorHostChange,
+  EditorHostDocument,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
 } from './editor-events.ts';

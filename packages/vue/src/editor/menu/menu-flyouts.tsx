@@ -1,7 +1,11 @@
 import { warnMissingSubmenuLabel } from './menu-warnings';
 import { defineComponent, provide, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
-import { type ChromeMenuItemEntry, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  type ChromeMenuItemEntry,
+  type ChromeSlotId,
+  hostDocumentOf,
+} from '@docx-editor.dev/core/editor';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MenuRowTabIndexContext, useMenuContext, useMenuLabel } from './menu-context';
@@ -101,7 +105,10 @@ export const MenuSubmenu = defineComponent({
             open.value = false;
           }}
           onKeydown={(event) => {
-            if (event.key === 'ArrowRight' && document.activeElement === parentRef.value) {
+            if (
+              event.key === 'ArrowRight' &&
+              hostDocumentOf(parentRef.value).activeElement === parentRef.value
+            ) {
               event.preventDefault();
               open.value = true;
               queueMicrotask(() => {
@@ -168,11 +175,11 @@ export const MenuSubmenu = defineComponent({
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   event.stopPropagation();
-                  focusBy(items, document.activeElement, 1);
+                  focusBy(items, hostDocumentOf(panel).activeElement, 1);
                 } else if (event.key === 'ArrowUp') {
                   event.preventDefault();
                   event.stopPropagation();
-                  focusBy(items, document.activeElement, -1);
+                  focusBy(items, hostDocumentOf(panel).activeElement, -1);
                 }
               }}
             >

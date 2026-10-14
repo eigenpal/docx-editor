@@ -114,8 +114,8 @@ function useStalled(waiting: boolean): boolean {
   useEffect(() => {
     setStalled(false);
     if (!waiting) return;
-    const timer = setTimeout(() => setStalled(true), STALLED_AFTER_MS);
-    return () => clearTimeout(timer);
+    const timer = globalThis.setTimeout(() => setStalled(true), STALLED_AFTER_MS);
+    return () => globalThis.clearTimeout(timer);
   }, [waiting]);
   return waiting && stalled;
 }
@@ -141,8 +141,8 @@ function useRefusedRecently(sessionId: string | null, failureCount: number, stat
   }, [sessionId, failureCount, status]);
   useEffect(() => {
     if (shown === 0) return;
-    const timer = setTimeout(() => setShown(0), EDIT_REFUSED_NOTICE_MS);
-    return () => clearTimeout(timer);
+    const timer = globalThis.setTimeout(() => setShown(0), EDIT_REFUSED_NOTICE_MS);
+    return () => globalThis.clearTimeout(timer);
   }, [shown]);
   return shown !== 0;
 }

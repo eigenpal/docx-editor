@@ -1,4 +1,5 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
+import { isHTMLElementNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { renderPopup } from './popup-renderer';
 import { useEditorState } from './useEditorState';
 import {
@@ -46,8 +47,10 @@ function createHost(config: () => DocxEditorPopups | undefined) {
   const open = (kind: 'pageSetup' | 'paragraph', focus?: HTMLElement | null) => {
     close();
     if (config()?.[kind] === false) return;
-    opener =
-      focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    // The focused element of the document the editor's dialogs mount in, which is a pop-out
+    // window's document when the editor moved there.
+    const focused = hostDocumentOf(target.value).activeElement;
+    opener = focus ?? (isHTMLElementNode(focused) ? focused : null);
     active.value = kind;
   };
   return {

@@ -3139,6 +3139,7 @@ export interface DocxEditorNamespace {
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
+    readonly Window: typeof DocxEditorWindow;
 }
 
 // @public (undocumented)
@@ -4535,6 +4536,85 @@ export interface DocxEditorViewportProps {
     className?: string;
     // (undocumented)
     style?: CSSProperties;
+}
+
+// @public
+export const DocxEditorWindow: vue.DefineComponent<vue.ExtractPropTypes<{
+    features: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    name: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    open: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    styles: {
+        default: undefined;
+        type: PropType<DocxEditorWindowProps['styles']>;
+    };
+    title: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    url: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {
+    'update:open': (_open: boolean) => true;
+    close: () => true;
+}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    features: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    name: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    open: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    styles: {
+        default: undefined;
+        type: PropType<DocxEditorWindowProps['styles']>;
+    };
+    title: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    url: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{
+    "onUpdate:open"?: ((_open: boolean) => any) | undefined;
+    onClose?: (() => any) | undefined;
+}>, {
+    features: string;
+    name: string;
+    styles: boolean | ((from: Document, to: Document) => () => void) | undefined;
+    title: string;
+    url: string;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorWindowProps {
+    children?: DocxEditorChildren;
+    features?: string;
+    name?: string;
+    onClose?: () => void;
+    open: boolean;
+    styles?: boolean | ((from: Document, to: Document) => () => void);
+    title?: string;
+    url?: string;
 }
 
 // @public (undocumented)
@@ -6811,6 +6891,12 @@ export function useEditorCommand(target: MaybeRefOrGetter<ChromeSlotId | EditorC
 
 // @public (undocumented)
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
+
+// @public
+export function useEditorHostDocument(): UseEditorHostDocumentReturn;
+
+// @public
+export type UseEditorHostDocumentReturn = Readonly<ShallowRef<Document | null>>;
 
 // @public (undocumented)
 export function useEditorSnapshot(editor: MaybeRefOrGetter<Editor | null>): Ref<number>;

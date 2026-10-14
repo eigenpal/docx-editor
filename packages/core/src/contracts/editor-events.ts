@@ -54,7 +54,44 @@ export interface EditorEvents {
    * ```
    */
   reviewItemReveal: (event: ReviewItemRevealEvent) => void;
+  /**
+   * The editor's pages are now in another document: it was attached for the first time, moved
+   * into another element or window, detached (`document` is `null`), or found its element
+   * moved to another window by the host. Custom chrome that listens on the editor's document
+   * or measures its window re-binds here.
+   *
+   * @example
+   * ```ts
+   * editor.on('hostChange', ({ document }) => {
+   *   stopShortcuts?.();
+   *   stopShortcuts = document ? listenForShortcuts(document) : undefined;
+   * });
+   * ```
+   */
+  hostChange: (event: EditorHostChange) => void;
 }
+
+/**
+ * The payload of the `hostChange` event.
+ *
+ * @public
+ */
+export interface EditorHostChange {
+  /** The document the pages are mounted in now, or `null` while the editor is detached. */
+  readonly document: EditorHostDocument | null;
+}
+
+/**
+ * The DOM `Document`, wherever DOM types are loaded (every browser host).
+ *
+ * Read from `globalThis` rather than named, so this contract also compiles in the engine's
+ * DOM-free lanes and on servers, where it falls back to `object`.
+ *
+ * @public
+ */
+export type EditorHostDocument = typeof globalThis extends { readonly document: infer D }
+  ? D
+  : object;
 
 /**
  * The payload of the `reviewItemReveal` event.

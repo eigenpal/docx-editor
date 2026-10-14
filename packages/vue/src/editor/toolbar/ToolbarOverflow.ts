@@ -16,6 +16,8 @@ import {
   listenForPopupEscape,
   listenForPopupFocusLeave,
   type ChromeSlotId,
+  isDomNode,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { useNavigationViewportElement } from '../navigation/navigation-layout';
 import { useEditorCommand } from '../useEditorCommand';
@@ -189,7 +191,7 @@ export const ToolbarOverflow = defineComponent({
       if (!isOpen) return;
       const onPointerDown = (event: MouseEvent) => {
         const target = event.target;
-        if (target instanceof Node && rootRef.value?.contains(target)) return;
+        if (isDomNode(target) && rootRef.value?.contains(target)) return;
         open.value = false;
       };
       const root = rootRef.value;
@@ -218,9 +220,10 @@ export const ToolbarOverflow = defineComponent({
             },
           })
         : undefined;
-      document.addEventListener('mousedown', onPointerDown, true);
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onPointerDown, true);
       onCleanup(() => {
-        document.removeEventListener('mousedown', onPointerDown, true);
+        doc.removeEventListener('mousedown', onPointerDown, true);
         stopEscape?.();
         stopFocus?.();
       });

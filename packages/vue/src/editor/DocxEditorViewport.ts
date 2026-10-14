@@ -1,4 +1,5 @@
 import { useTranslation } from '../i18n';
+import { isElementNode, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import {
   computed,
   defineComponent,
@@ -69,7 +70,7 @@ export const DocxEditorViewport = defineComponent({
       const editor = editorRef.value;
       if (!editor || !(event.metaKey || event.ctrlKey) || event.altKey) return;
       const target = event.target;
-      if (target instanceof Element && target.closest('input, textarea, select, [role="dialog"]')) {
+      if (isElementNode(target) && target.closest('input, textarea, select, [role="dialog"]')) {
         return;
       }
       const next = zoomLevelForShortcut(event.key, editor.getZoom());
@@ -81,7 +82,7 @@ export const DocxEditorViewport = defineComponent({
     return () => {
       const attrs: Record<string, unknown> = {
         ref: (el: unknown) => {
-          viewportEl = el instanceof HTMLElement ? el : null;
+          viewportEl = isHTMLElementNode(el) ? el : null;
           layoutStore?.setViewport(viewportEl);
           if (viewportEl) {
             viewportEl.style.setProperty('--docx-nav-shift', `${navShift.value}px`);

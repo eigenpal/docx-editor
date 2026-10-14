@@ -17,6 +17,7 @@ import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../lib/colorMode';
 import { useDocxEditor } from '../editor/context';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
+import { DocxEditorWindow } from '../editor/DocxEditorWindow';
 import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import {
   DocxEditorAuthorStyle,
@@ -512,6 +513,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
+  /** The editor panel in a pop-out window while `open`; see the pop-out guide. */
+  readonly Window: typeof DocxEditorWindow;
   readonly Toolbar: typeof DocxEditorToolbar;
   /**
    * The menu bar — File · Format · Insert · Help — with its parts as statics (`.File`,
@@ -591,6 +594,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
+  Window: DocxEditorWindow,
   Toolbar: DocxEditorToolbar,
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,

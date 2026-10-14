@@ -1,3 +1,5 @@
+import { isElementNode } from './host-realm.ts';
+
 /**
  * Dismiss a widget menu on an outside press or Escape.
  *
@@ -26,7 +28,7 @@ export function armContentControlMenuDismiss(
       return;
     }
     const target = event.target as Element | null;
-    const widget = target instanceof Element ? target.closest('[data-docx-cc-widget]') : null;
+    const widget = isElementNode(target) ? target.closest('[data-docx-cc-widget]') : null;
     if (target && (menu.contains(target) || widget?.getAttribute('data-docx-cc-id') === controlId))
       return;
     cleanup();

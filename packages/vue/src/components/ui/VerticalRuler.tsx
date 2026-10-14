@@ -1,4 +1,5 @@
 import { defineComponent, ref, watch, type CSSProperties, type PropType, type VNode } from 'vue';
+import { hostDocumentOf } from '@docx-editor.dev/core/editor';
 import type { RulerPageSetup } from './HorizontalRuler';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
 import { useTranslation } from '../../i18n';
@@ -92,11 +93,12 @@ export const VerticalRuler = defineComponent({
 
     watch(dragging, (current, _, onCleanup) => {
       if (!current) return;
-      document.addEventListener('mousemove', handleDrag);
-      document.addEventListener('mouseup', handleDragEnd);
+      const doc = hostDocumentOf(rulerRef.value);
+      doc.addEventListener('mousemove', handleDrag);
+      doc.addEventListener('mouseup', handleDragEnd);
       onCleanup(() => {
-        document.removeEventListener('mousemove', handleDrag);
-        document.removeEventListener('mouseup', handleDragEnd);
+        doc.removeEventListener('mousemove', handleDrag);
+        doc.removeEventListener('mouseup', handleDragEnd);
       });
     });
 

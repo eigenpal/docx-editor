@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type { RevisionDisplay } from '@docx-editor.dev/core/editor';
 import type { ReviewItemView } from './useReview.ts';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 type BalloonReviewItem = Extract<ReviewItemView, { readonly kind: 'revision' }>;
 
@@ -104,7 +105,7 @@ function findAnchorElement(
 ): HTMLElement | null {
   let first: HTMLElement | null = null;
   for (const node of scroller.querySelectorAll('[data-revision-id]')) {
-    if (!(node instanceof HTMLElement) || node.dataset.revisionId !== anchor.revisionId) continue;
+    if (!isHTMLElementNode(node) || node.dataset.revisionId !== anchor.revisionId) continue;
     if ((node.dataset.reviewAuthor ?? '') !== anchor.author) continue;
     if (node.dataset.formattingKind !== anchor.formattingKind) continue;
     if (node.classList.contains('docx-table-row--revision') !== anchor.structuralSite) continue;
@@ -198,7 +199,7 @@ export function findPaintedRevisionElement(
   const ids = new Set(addresses.map((address) => address.id));
   const formattingKind = item.item.formattingKind;
   for (const node of scroller.querySelectorAll('[data-revision-id]')) {
-    if (!(node instanceof HTMLElement)) continue;
+    if (!isHTMLElementNode(node)) continue;
     const revisionId = node.dataset.revisionId;
     if (!revisionId || !ids.has(revisionId)) continue;
     const addressMatches = addresses.some(

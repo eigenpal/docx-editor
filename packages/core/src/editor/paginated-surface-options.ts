@@ -152,6 +152,12 @@ export interface PaginatedSurfaceOptions {
    */
   readonly onRejection?: (reason: string) => void;
   /**
+   * The pages turned up in another document without a `moveTo`: a host moved the mount
+   * element itself (a Vue `Teleport` retargeted, or a plain `appendChild`). The surface has
+   * already re-bound its own listeners; the owner re-registers what is per document.
+   */
+  readonly onHostMoved?: (document: Document) => void;
+  /**
    * Told the milliseconds of each layout pass and each paint. For `'input'`, told the browser
    * timestamp of each key press or pointer press on the pages, so a listener can time it to
    * the next frame. Numbers only.

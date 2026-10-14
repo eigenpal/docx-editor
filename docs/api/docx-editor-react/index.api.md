@@ -979,6 +979,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
+    readonly Window: typeof DocxEditorWindow;
 }
 
 // @public
@@ -1658,6 +1659,21 @@ export interface DocxEditorViewportProps {
     className?: string;
     // (undocumented)
     style?: CSSProperties;
+}
+
+// @public
+export function DocxEditorWindow(input: DocxEditorWindowProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorWindowProps {
+    children?: DocxEditorChildren;
+    features?: string;
+    name?: string;
+    onClose?: () => void;
+    open: boolean;
+    styles?: boolean | ((from: Document, to: Document) => () => void);
+    title?: string;
+    url?: string;
 }
 
 // @public
@@ -3012,6 +3028,12 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
 
 // @public
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
+
+// @public
+export function useEditorHostDocument(): UseEditorHostDocumentReturn;
+
+// @public
+export type UseEditorHostDocumentReturn = Document | null;
 
 // @public
 export function useEditorSnapshot(editor: Editor | null): number;

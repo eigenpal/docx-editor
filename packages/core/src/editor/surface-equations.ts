@@ -16,6 +16,7 @@ import {
   type StoryScope,
   type EquationExpression,
 } from '@docx-editor.dev/core/store';
+import { isElementNode } from './host-realm.ts';
 
 const SUGGESTING_EQUATION_REFUSAL =
   'equation replacement and removal are not supported in suggesting mode';
@@ -233,7 +234,7 @@ export function createEquationInteraction(deps: {
     null;
   const targetFrom = (value: EventTarget | null): HTMLElement | null => {
     const view = deps.pagesLayer.ownerDocument.defaultView;
-    if (!view || !(value instanceof view.Element)) return null;
+    if (!view || !isElementNode(value)) return null;
     const target = value.closest<HTMLElement>('[data-docx-equation]');
     return target && deps.pagesLayer.contains(target) ? target : null;
   };

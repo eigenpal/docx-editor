@@ -78,6 +78,7 @@ import {
 } from './parts';
 import { useScopeClassName } from '../scope-context';
 import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
+import { hostDocumentOf, hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 /** Distance kept between the panel and the window edge when it flips. @internal */
 const VIEWPORT_INSET = 8;
@@ -388,7 +389,7 @@ export function DocxEditorContextMenu({
       // The engine's own listener sits INSIDE this one and has already recorded which table
       // of contents the press landed on, so reading it here is reading it current.
       setTocId(editor?.snapshot().tocContext?.id ?? null);
-      setTarget(keyboard || !(event.target instanceof HTMLElement) ? null : event.target);
+      setTarget(keyboard || !isHTMLElementNode(event.target) ? null : event.target);
       setAnchor(
         keyboard ? { x: box.left + 16, y: box.top + 16 } : { x: event.clientX, y: event.clientY }
       );
@@ -426,17 +427,21 @@ export function DocxEditorContextMenu({
     // Capture, because the scroll that matters is the editor's own scroller and scroll
     // events do not bubble to the window from it.
     const onScroll = () => close();
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    window.addEventListener('blur', onScroll);
-    window.addEventListener('resize', onScroll);
+    // The editor's own document and window, which are not the script's globals when the
+    // editor renders into a pop-out window or an iframe.
+    const doc = hostDocumentOf(hostRef.current ?? panelRef.current);
+    const win = hostWindowOf(hostRef.current ?? panelRef.current);
+    doc.addEventListener('pointerdown', onPointerDown, true);
+    doc.addEventListener('keydown', onKeyDown);
+    doc.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    win.addEventListener('blur', onScroll);
+    win.addEventListener('resize', onScroll);
     return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('blur', onScroll);
-      window.removeEventListener('resize', onScroll);
+      doc.removeEventListener('pointerdown', onPointerDown, true);
+      doc.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('scroll', onScroll, true);
+      win.removeEventListener('blur', onScroll);
+      win.removeEventListener('resize', onScroll);
     };
   }, [anchor, close]);
 
@@ -445,8 +450,9 @@ export function DocxEditorContextMenu({
     const panel = panelRef.current;
     if (!anchor || !panel) return;
     const { width, height } = panel.getBoundingClientRect();
-    const maxX = window.innerWidth - width - VIEWPORT_INSET;
-    const maxY = window.innerHeight - height - VIEWPORT_INSET;
+    const view = hostWindowOf(panel);
+    const maxX = view.innerWidth - width - VIEWPORT_INSET;
+    const maxY = view.innerHeight - height - VIEWPORT_INSET;
     // Flip to the other side of the pointer when there is no room past it, then clamp BOTH
     // ends. The low end is not theoretical: a keyboard-invoked menu anchors on the scroller's
     // client rect, whose `top` is far negative once the reader is on page ten, and an
@@ -547,10 +553,10 @@ export function DocxEditorContextMenu({
                 const items = panelItems(panel);
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
-                  focusBy(items, document.activeElement, 1);
+                  focusBy(items, hostDocumentOf(panel).activeElement, 1);
                 } else if (event.key === 'ArrowUp') {
                   event.preventDefault();
-                  focusBy(items, document.activeElement, -1);
+                  focusBy(items, hostDocumentOf(panel).activeElement, -1);
                 } else if (event.key === 'Home') {
                   event.preventDefault();
                   focusEdge(items, 'first');

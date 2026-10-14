@@ -42,6 +42,38 @@ export type { ReviewAdoptOptions };
  * must yield ({@link notificationYieldsToTask}) — moves the refresh to a task so queued
  * events share it and React's maximum-update-depth guard never sees an unbroken chain.
  */
+let pendingFlushes: (() => void)[] = [];
+let flushChannel: MessageChannel | null = null;
+/**
+ * Run `task` in a later task through a message, not a timer: the script's timers belong to
+ * the opener when the editor renders into a pop-out window, and a hidden opener throttles
+ * them to one run a second.
+ */
+function yieldTask(task: () => void): void {
+  if (typeof MessageChannel !== 'function') {
+    globalThis.setTimeout(task, 0);
+    return;
+  }
+  if (!flushChannel) {
+    flushChannel = new MessageChannel();
+    flushChannel.port1.onmessage = () => {
+      const tasks = pendingFlushes;
+      pendingFlushes = [];
+      for (const run of tasks) {
+        try {
+          run();
+        } catch (error) {
+          queueMicrotask(() => {
+            throw error;
+          });
+        }
+      }
+    };
+  }
+  pendingFlushes.push(task);
+  if (pendingFlushes.length === 1) flushChannel.port2.postMessage(null);
+}
+
 function deferredReviewNotifier(onStoreChange: () => void): () => void {
   let scheduled = false;
   return () => {
@@ -51,10 +83,10 @@ function deferredReviewNotifier(onStoreChange: () => void): () => void {
       return;
     }
     scheduled = true;
-    setTimeout(() => {
+    yieldTask(() => {
       scheduled = false;
       onStoreChange();
-    }, 0);
+    });
   };
 }
 

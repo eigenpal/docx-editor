@@ -16,6 +16,7 @@ import { MaterialSymbol } from './MaterialSymbol';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 // ============================================================================
 // TYPES
@@ -142,7 +143,7 @@ export function FontSizePicker({
       setInputValue(displayValue);
       setIsDropdownOpen(true);
       // Focus input after state update
-      requestAnimationFrame(() => {
+      hostWindowOf(inputRef.current).requestAnimationFrame(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
       });

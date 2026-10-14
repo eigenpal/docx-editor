@@ -8,6 +8,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties, RefObject } from 'react';
+import { hostDocumentOf, hostWindowOf, isElementNode } from '@docx-editor.dev/core/editor';
 
 export interface UseFixedDropdownOptions {
   isOpen: boolean;
@@ -23,11 +24,11 @@ export interface UseFixedDropdownReturn {
   handleMouseDown: (e: React.MouseEvent) => void;
 }
 
-/** Keep a fixed dropdown fully inside the viewport with a small gutter. */
-function clampToViewport(top: number, left: number, width: number, height: number) {
+/** Keep a fixed dropdown fully inside its own window's viewport with a small gutter. */
+function clampToViewport(view: Window, top: number, left: number, width: number, height: number) {
   const gutter = 8;
-  const maxLeft = Math.max(gutter, window.innerWidth - width - gutter);
-  const maxTop = Math.max(gutter, window.innerHeight - height - gutter);
+  const maxLeft = Math.max(gutter, view.innerWidth - width - gutter);
+  const maxTop = Math.max(gutter, view.innerHeight - height - gutter);
   return {
     top: Math.min(Math.max(gutter, top), maxTop),
     left: Math.min(Math.max(gutter, left), maxLeft),
@@ -50,10 +51,12 @@ export function useFixedDropdown({
     if (align === 'right') {
       // We need the dropdown width to right-align, but it's not rendered yet.
       // Use a rAF to measure after first paint.
-      requestAnimationFrame(() => {
+      const view = hostWindowOf(containerRef.current);
+      view.requestAnimationFrame(() => {
         if (dropdownRef.current) {
           const dropRect = dropdownRef.current.getBoundingClientRect();
           const next = clampToViewport(
+            view,
             rect.bottom + 4,
             rect.right - dropRect.width,
             dropRect.width,
@@ -106,9 +109,9 @@ export function useFixedDropdown({
       // Horizontal toolbar overflow scrolls to reveal a clipped trigger — that
       // must not dismiss the menu (table "More" sits at the right edge).
       if (
-        target instanceof Element &&
-        target !== document.documentElement &&
-        target !== document.body &&
+        isElementNode(target) &&
+        target !== target.ownerDocument.documentElement &&
+        target !== target.ownerDocument.body &&
         containerRef.current &&
         target.contains(containerRef.current)
       ) {
@@ -117,14 +120,18 @@ export function useFixedDropdown({
       onClose();
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    window.addEventListener('scroll', handleScroll, true);
+    // The trigger's own document and window: a pop-out window or an iframe is not the
+    // script's.
+    const doc = hostDocumentOf(containerRef.current);
+    const win = hostWindowOf(containerRef.current);
+    doc.addEventListener('mousedown', handleClickOutside);
+    doc.addEventListener('keydown', handleEscape);
+    win.addEventListener('scroll', handleScroll, true);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('scroll', handleScroll, true);
+      doc.removeEventListener('mousedown', handleClickOutside);
+      doc.removeEventListener('keydown', handleEscape);
+      win.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen, onClose]);
 

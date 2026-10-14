@@ -44,6 +44,8 @@ import type {
   SemanticLayout,
   TextMeasurer,
 } from '../layout/semantic-records.ts';
+import { hostTimers, isHTMLElementNode } from './host-realm.ts';
+import type { SurfaceHostListeners } from './surface-host-listeners.ts';
 import {
   findEmptyFurnitureBandAtSheetPoint,
   findNoteAtSheetPoint,
@@ -73,7 +75,10 @@ export interface EnterHeaderFooterPointerRequest extends ActiveHeaderFooterPoint
 /** What the controller needs from the surface it drives. */
 export interface PointerHost {
   readonly pagesLayer: HTMLElement;
+  /** The element the pages are mounted in. Read per use: the surface can move to another one. */
   readonly container: HTMLElement;
+  /** Window-level listeners that follow the pages to another window. */
+  readonly listeners: SurfaceHostListeners;
   /**
    * Points to CSS pixels, read per gesture rather than captured.
    *
@@ -186,6 +191,8 @@ export interface PointerController {
    * through it.
    */
   dragging(): boolean;
+  /** End a gesture in progress where it stands: the surface is moving to another window. */
+  cancelGesture(): void;
   destroy(): void;
 }
 
@@ -251,13 +258,14 @@ export function createPointerController(
   options: PointerControllerOptions = {}
 ): PointerController {
   if (options.mode === 'native') {
-    return { dragging: () => false, destroy: () => {} };
+    return { dragging: () => false, cancelGesture: () => {}, destroy: () => {} };
   }
 
-  const { pagesLayer, container } = host;
+  const { pagesLayer } = host;
   const atomicInlineControls = options.atomicInlineControls === true;
-  const document = pagesLayer.ownerDocument;
-  const view = document.defaultView;
+  const frames = hostTimers(() => pagesLayer);
+  /** The document a live gesture's release listeners are bound to. */
+  let gestureDocument: Document | null = null;
 
   let gesture: Gesture | null = null;
   /** Cached for the life of one gesture, and dropped whenever the page can have moved. */
@@ -449,15 +457,6 @@ export function createPointerController(
   // ---------------------------------------------------------------------------------
 
   /**
-   * The element the `scroll` listener is REGISTERED on, captured once.
-   *
-   * `destroy()` used to look the scroller up again, and `closest` returns null once the
-   * container has been unparented — so the listener stayed attached to an element that then
-   * retained the whole surface through this closure.
-   */
-  const scrollHost: HTMLElement | null = container.closest('.docx-editor__scroll-container');
-
-  /**
    * The scroller to FOLLOW during a drag, looked up live.
    *
    * Deliberately not `scrollHost`: a host is free to build its chrome after mounting, so the
@@ -466,7 +465,7 @@ export function createPointerController(
    * capture-phase listener on the window below.
    */
   function scroller(): HTMLElement | null {
-    return container.closest('.docx-editor__scroll-container');
+    return host.container.closest('.docx-editor__scroll-container');
   }
 
   /** How far the view should move this frame, from how deep into the edge zone the drag is. */
@@ -484,7 +483,7 @@ export function createPointerController(
 
   function stopAutoScroll(): void {
     if (autoScrollHandle === null) return;
-    view?.cancelAnimationFrame(autoScrollHandle);
+    frames.cancelAnimationFrame(autoScrollHandle);
     autoScrollHandle = null;
   }
 
@@ -499,7 +498,7 @@ export function createPointerController(
     autoScrollHandle = null;
     const active = gesture;
     const element = scroller();
-    if (!active || !element || !view) return;
+    if (!active || !element) return;
     const rect = element.getBoundingClientRect();
     const delta = autoScrollDelta(rect.top, rect.bottom, active.clientY);
     if (delta === 0) return;
@@ -509,16 +508,16 @@ export function createPointerController(
     // a second source of truth for where the pages are.
     layerRect = null;
     extendTo(active.clientX, active.clientY);
-    autoScrollHandle = view.requestAnimationFrame(tickAutoScroll);
+    autoScrollHandle = frames.requestAnimationFrame(tickAutoScroll);
   }
 
   function maybeAutoScroll(): void {
-    if (autoScrollHandle !== null || !view || !gesture) return;
+    if (autoScrollHandle !== null || !gesture) return;
     const element = scroller();
     if (!element) return;
     const rect = element.getBoundingClientRect();
     if (autoScrollDelta(rect.top, rect.bottom, gesture.clientY) === 0) return;
-    autoScrollHandle = view.requestAnimationFrame(tickAutoScroll);
+    autoScrollHandle = frames.requestAnimationFrame(tickAutoScroll);
   }
 
   // ---------------------------------------------------------------------------------
@@ -759,7 +758,7 @@ export function createPointerController(
         event.preventDefault();
         host.focus();
         host.enterHeaderFooter?.(enterRequestFromStoryHit(storyHit, positionInStory(storyHit)));
-      } else if (furnitureDom instanceof HTMLElement) {
+      } else if (isHTMLElementNode(furnitureDom)) {
         const rId = furnitureDom.dataset.docxRId;
         const kindAttr = furnitureDom.dataset.docxHf;
         const pageAttr = furnitureDom.closest('[data-page-index]')?.getAttribute('data-page-index');
@@ -828,9 +827,11 @@ export function createPointerController(
       // Capture is an optimisation, not a requirement — the document listeners below see the
       // rest of the gesture wherever the pointer goes.
     }
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-    document.addEventListener('pointercancel', onPointerUp);
+    // The pages' own document, read now: the surface may have moved since it was created.
+    gestureDocument = pagesLayer.ownerDocument;
+    gestureDocument.addEventListener('pointermove', onPointerMove);
+    gestureDocument.addEventListener('pointerup', onPointerUp);
+    gestureDocument.addEventListener('pointercancel', onPointerUp);
 
     const count = clicks();
     const granularity = event.shiftKey
@@ -1002,9 +1003,10 @@ export function createPointerController(
     gesture = null;
     layerRect = null;
     stopAutoScroll();
-    document.removeEventListener('pointermove', onPointerMove);
-    document.removeEventListener('pointerup', onPointerUp);
-    document.removeEventListener('pointercancel', onPointerUp);
+    gestureDocument?.removeEventListener('pointermove', onPointerMove);
+    gestureDocument?.removeEventListener('pointerup', onPointerUp);
+    gestureDocument?.removeEventListener('pointercancel', onPointerUp);
+    gestureDocument = null;
   }
 
   // A scroll moves the pages under the pointer, so anything cached about where they are is
@@ -1014,22 +1016,22 @@ export function createPointerController(
   };
 
   pagesLayer.addEventListener('pointerdown', onPointerDown);
-  scrollHost?.addEventListener('scroll', onScroll, { passive: true });
-  // Anything that can move the layer under a live pointer invalidates the cached origin, not
-  // only the scroller this surface sits in: an ancestor or the window can scroll, and a
-  // resize re-centres the page stack. Capture phase, because a scroll on an inner element
-  // does not bubble.
-  view?.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  view?.addEventListener('resize', onScroll, { passive: true });
+  // Anything that can move the layer under a live pointer invalidates the cached origin: the
+  // scroller this surface sits in, an ancestor or the window can scroll, and a resize
+  // re-centres the page stack. Capture phase on the window, because a scroll on an inner
+  // element does not bubble but does pass the window on its way down.
+  const unlisten = [
+    host.listeners.onWindow('scroll', onScroll, { capture: true, passive: true }),
+    host.listeners.onWindow('resize', onScroll, { passive: true }),
+  ];
 
   return {
     dragging: () => gesture !== null,
+    cancelGesture: endGesture,
     destroy() {
       endGesture();
       pagesLayer.removeEventListener('pointerdown', onPointerDown);
-      scrollHost?.removeEventListener('scroll', onScroll);
-      view?.removeEventListener('scroll', onScroll, { capture: true });
-      view?.removeEventListener('resize', onScroll);
+      for (const remove of unlisten) remove();
     },
   };
 }

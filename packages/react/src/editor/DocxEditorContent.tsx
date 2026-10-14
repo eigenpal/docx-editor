@@ -11,7 +11,11 @@ import { DialogMount } from './dialog-host';
 // Paste and drop of supported raster formats route through the shared image-insert path.
 
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
+import {
+  clipboardDropLandsText,
+  clipboardPasteLandsContent,
+  isElementNode,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
@@ -31,8 +35,9 @@ export interface DocxEditorContentProps {
 
 /**
  * The element the engine paints pages into. Must render inside a
- * `DocxEditor.Viewport`; the facade attaches here and detaches on unmount (stashing
- * the live document bytes, so remounting elsewhere restores the content).
+ * `DocxEditor.Viewport`; the facade attaches here and detaches on unmount. Detaching parks
+ * the editor, so mounting the content elsewhere, even in another window, moves it with its
+ * undo history, selection and reading position.
  *
  * Its centring margin lives in the STYLESHEET, not in an inline style here, and behind
  * `:where()` so it carries no specificity: a host that places the page itself — inside its
@@ -108,7 +113,7 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         // is swallowed instead of released. Resolved through the nearest annotated
         // ancestor: `isContentEditable` does not exist on SVG elements (painted vector
         // shapes), where a direct read answered undefined for an editable position.
-        const target = event.target instanceof Element ? event.target : null;
+        const target = isElementNode(event.target) ? event.target : null;
         if (target?.closest('[contenteditable]')?.getAttribute('contenteditable') === 'true') {
           return;
         }

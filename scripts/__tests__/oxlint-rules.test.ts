@@ -53,6 +53,21 @@ const COMPAT_MODE = [
   'export const ok2 = deps.compatibilityMode;',
   'export const ok3 = mode === undefined || legacy.length > 0;',
 ].join('\n');
+// Lines 1-3 declare; lines 4-9 are banned; lines 10-12 are allowed.
+const HOST_REALM = [
+  'declare const node: Node;',
+  'declare const ev: Event;',
+  'declare const view: Window & typeof globalThis;',
+  'export const a = document.activeElement;',
+  'export const b = window.innerWidth;',
+  'setTimeout(() => {}, 0);',
+  'export const c = node instanceof HTMLElement;',
+  'export const d = ev instanceof KeyboardEvent;',
+  'export const e = node instanceof view.Element;',
+  'export const ok = globalThis.setTimeout;',
+  'export const ok2 = node.ownerDocument?.defaultView;',
+  'export const ok3 = node instanceof Map;',
+].join('\n');
 const PRELUDE = [
   'declare const el: HTMLElement;',
   'declare const popup: Window;',
@@ -141,6 +156,12 @@ const FILES: Record<string, string> = {
     'export const a = <Row>text</Row>;',
     '',
   ].join('\n'),
+  // Editor DOM code reads the window it is mounted in, never the script's globals; tests may.
+  'packages/core/src/editor/realm-sample.ts': `${HOST_REALM}\n`,
+  'packages/vue/src/realm-sample.ts': `${HOST_REALM}\n`,
+  'packages/react/src/__tests__/realm-sample.test.ts': `${HOST_REALM}\n`,
+  // The engine lanes are DOM-free and out of the rule's scope.
+  'packages/core/src/layout/realm-sample.ts': `${HOST_REALM}\n`,
   // The global cap.
   'packages/core/src/layout/long.ts': Array.from(
     { length: 1001 },
@@ -151,7 +172,8 @@ const FILES: Record<string, string> = {
 };
 
 /** The rules under test; everything else in the fixture is noise. */
-const CHECKED = /^(docx\(|eslint\(no-restricted-imports\)|eslint\(max-lines\))/;
+const CHECKED =
+  /^(docx\(|eslint\(no-restricted-imports\)|eslint\(no-restricted-globals\)|eslint\(max-lines\))/;
 
 /** `file:line rule` for every finding of a checked rule, sorted. */
 function reports(): string[] {
@@ -209,6 +231,14 @@ test('every banned shape is reported where the configuration applies it, and now
   const restrictedImport = 'eslint(no-restricted-imports)';
   const rawMode = 'docx(no-raw-compatibility-mode)';
   const vueSlots = 'docx(vue-function-slots)';
+  const realmLines = (file: string) => [
+    `${file}:4 eslint(no-restricted-globals)`,
+    `${file}:5 eslint(no-restricted-globals)`,
+    `${file}:6 eslint(no-restricted-globals)`,
+    `${file}:7 docx(no-cross-realm-instanceof)`,
+    `${file}:8 docx(no-cross-realm-instanceof)`,
+    `${file}:9 docx(no-cross-realm-instanceof)`,
+  ];
   const rawModeLines = (file: string) =>
     [5, 6, 7, 8, 9, 10].map((line) => `${file}:${line} ${rawMode}`);
   const sinkLines = (file: string, first: number) => [
@@ -224,6 +254,8 @@ test('every banned shape is reported where the configuration applies it, and now
   expect(reports()).toEqual(
     [
       'packages/core/src/layout/long.ts:1001 eslint(max-lines)',
+      ...realmLines('packages/core/src/editor/realm-sample.ts'),
+      ...realmLines('packages/vue/src/realm-sample.ts'),
       `packages/vue/src/slots-sample.tsx:4 ${vueSlots}`,
       `packages/vue/src/slots-sample.tsx:5 ${vueSlots}`,
       ...rawModeLines('packages/core/src/layout/compat-sample.ts'),

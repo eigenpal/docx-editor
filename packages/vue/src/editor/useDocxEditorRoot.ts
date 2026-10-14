@@ -48,6 +48,7 @@ import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
 import {
   docxEditorKey,
+  editorContentElementKey,
   editorStateTickKey,
   ReviewRailContext,
   type ReviewRailRegistry,
@@ -171,6 +172,7 @@ export function useDocxEditorRootOwner(
   const tick = shallowRef(0);
   provide(docxEditorKey, editorRef);
   provide(editorStateTickKey, tick);
+  provide(editorContentElementKey, shallowRef<HTMLElement | null>(null));
   provide(navigationLayoutKey, createNavigationLayoutStore());
   provide(docxEditorRootOwnerKey, true);
   const revisionStyleRegistry = createRevisionStyleRegistry();
@@ -256,7 +258,7 @@ export function useDocxEditorRootOwner(
   };
 
   const createEditor = () => {
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis.window === 'undefined') return;
     destroyEditor();
     const p = toValue(props);
     createdFieldResults = p.fieldResults;
@@ -330,7 +332,7 @@ export function useDocxEditorRootOwner(
     );
   });
 
-  if (typeof window !== 'undefined') {
+  if (typeof globalThis.window !== 'undefined') {
     watch(
       [
         () => toValue(props).document,

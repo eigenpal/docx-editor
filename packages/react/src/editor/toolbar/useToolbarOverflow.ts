@@ -13,9 +13,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  hostWindowOf,
   sameOverflow,
-  toolbarOverflowGroups,
   TOOLBAR_OVERFLOW_HYSTERESIS,
+  toolbarOverflowGroups,
   type ToolbarFitInput,
 } from '@docx-editor.dev/core/editor';
 import {
@@ -77,7 +78,8 @@ export function useToolbarOverflow(
   const measure = useCallback(() => {
     const bar = barRef.current;
     if (!bar || !enabled) return;
-    const style = getComputedStyle(bar);
+    const view = hostWindowOf(bar);
+    const style = view.getComputedStyle(bar);
     const gap = readColumnGap(style);
     const available = readAvailableWidth(bar, style);
     // Every collapsible group is costed WITH a leading separator slot — width, inline
@@ -87,7 +89,7 @@ export function useToolbarOverflow(
     const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
     let separatorLeading = gap * 2;
     if (separator) {
-      const sepStyle = getComputedStyle(separator);
+      const sepStyle = view.getComputedStyle(separator);
       const margins = readInlineMargins(sepStyle);
       separatorLeading = separatorLeadingCost(
         separator.offsetWidth,
@@ -162,13 +164,15 @@ export function useToolbarOverflow(
   // locale with longer labels, a host restyling a control).
   useEffect(() => {
     const bar = barRef.current;
-    if (!enabled || !bar || typeof ResizeObserver === 'undefined') return undefined;
+    // The bar's own window: its frames keep running while a hidden opener's stop.
+    const view = bar ? hostWindowOf(bar) : null;
+    if (!enabled || !bar || !view || typeof view.ResizeObserver === 'undefined') return undefined;
     let frame = 0;
-    const observer = new ResizeObserver(() => {
+    const observer = new view.ResizeObserver(() => {
       // Coalesced: a window drag delivers a callback per frame per observed element, and
       // the answer only ever depends on the final geometry of the frame.
       if (frame !== 0) return;
-      frame = requestAnimationFrame(() => {
+      frame = view.requestAnimationFrame(() => {
         frame = 0;
         measure();
       });
@@ -183,7 +187,7 @@ export function useToolbarOverflow(
       observer.observe(element);
     }
     return () => {
-      if (frame !== 0) cancelAnimationFrame(frame);
+      if (frame !== 0) view.cancelAnimationFrame(frame);
       observer.disconnect();
     };
     // Re-observes when the composition changes: a group that just came back into the bar is

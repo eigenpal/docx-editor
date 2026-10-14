@@ -146,6 +146,22 @@ function embedOf(surface: PaginatedSurface): string {
 }
 
 describe('picture content controls', () => {
+  test('moving the surface to another window closes an open picture picker', async () => {
+    const { surface, container } = await mount(pictureDocx(PICTURE_SDT));
+    press(container.querySelector<HTMLElement>('[data-docx-cc-widget="picture"]')!);
+    expect(container.querySelector('.docx-content-control-picture-picker')).not.toBeNull();
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    const away = frame.contentWindow!.document.createElement('div');
+    frame.contentWindow!.document.body.append(away);
+    surface.moveTo(away);
+    // Its dismiss listeners belong to the window it opened in, so the move closes it.
+    expect(away.querySelector('.docx-content-control-picture-picker')).toBeNull();
+    expect(away.querySelector('[data-docx-content-control][data-open]')).toBeNull();
+    surface.moveTo(container);
+    frame.remove();
+  });
+
   test('paint a picker widget; a host session replaces the image and keeps the size', async () => {
     const sessions: ContentControlWidgetSession[] = [];
     const { surface, container } = await mount(pictureDocx(PICTURE_SDT), (session) => {

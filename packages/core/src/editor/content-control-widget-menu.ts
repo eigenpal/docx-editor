@@ -21,6 +21,7 @@ import {
 } from './content-control-popup-behavior.ts';
 import { createContentControlListNavigation } from './content-control-list-navigation.ts';
 import { textFormTranslate } from './text-form-field-translations.ts';
+import { hostWindowOf } from './host-realm.ts';
 
 let listSequence = 0;
 
@@ -104,7 +105,7 @@ export function placeContentControlMenu(
   hostLayer.append(menu);
   if (anchor.element) {
     const stop = observeContentControlPopup(menu, anchor.element);
-    const observer = new MutationObserver(() => {
+    const observer = new (hostWindowOf(menu).MutationObserver)(() => {
       if (!menu.isConnected) {
         stop();
         observer.disconnect();

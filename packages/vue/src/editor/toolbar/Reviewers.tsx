@@ -2,7 +2,7 @@ import { computed, defineComponent, nextTick, ref, watch, type PropType } from '
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
-import { toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { toolbarCommandState, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
@@ -51,9 +51,10 @@ export const ToolbarReviewers = Object.assign(
             if (rootRef.value?.contains(event.target as Node)) return;
             open.value = false;
           };
-          document.addEventListener('mousedown', onMouseDown, true);
+          const doc = hostDocumentOf(rootRef.value);
+          doc.addEventListener('mousedown', onMouseDown, true);
           onCleanup(() => {
-            document.removeEventListener('mousedown', onMouseDown, true);
+            doc.removeEventListener('mousedown', onMouseDown, true);
           });
         },
         { flush: 'post' }
@@ -73,7 +74,7 @@ export const ToolbarReviewers = Object.assign(
           ...(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemcheckbox"]') ??
             []),
         ];
-        const at = items.indexOf(document.activeElement as HTMLButtonElement);
+        const at = items.indexOf(hostDocumentOf(menuRef.value).activeElement as HTMLButtonElement);
         const move = (to: number) => {
           event.preventDefault();
           items[(to + items.length) % items.length]?.focus();

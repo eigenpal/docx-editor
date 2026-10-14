@@ -6,9 +6,13 @@ import type {
   HighlightRange,
   HighlightResult,
 } from '@docx-editor.dev/core/contracts/editor';
-import { HIGHLIGHT_REFRESH_MS, type HighlightSource } from '@docx-editor.dev/core/editor';
+import {
+  HIGHLIGHT_REFRESH_MS,
+  type HighlightSource,
+  hostTimers,
+} from '@docx-editor.dev/core/editor';
 import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
-import { useDocxEditor } from './context';
+import { useDocxEditor, useEditorContentElement } from './context';
 
 export { HIGHLIGHT_REFRESH_MS, type HighlightSource };
 
@@ -40,6 +44,7 @@ export function useHighlights(
   options?: MaybeRefOrGetter<HighlightOptions>
 ): ComputedRef<HighlightResult> {
   const editorRef = useDocxEditor();
+  const contentElement = useEditorContentElement();
   const result = shallowRef(EMPTY_RESULT);
   // Bumped after document changes, so a function source runs again.
   const documentTick = shallowRef(0);
@@ -107,7 +112,14 @@ export function useHighlights(
     () => editorRef.value,
     (editor, _previous, onCleanup) => {
       if (!editor) return;
-      let timer: ReturnType<typeof setTimeout> | undefined;
+      // The editor's own window: a pop-out keeps its timers running while the opener is
+      // hidden, and pending work moves home if the pop-out closes first.
+      const timers = hostTimers(() => contentElement.value);
+      let timer: number | undefined;
+      const cancel = () => {
+        timers.clearTimeout(timer);
+        timer = undefined;
+      };
       let firstAt = 0;
       const bump = () => {
         timer = undefined;
@@ -115,7 +127,7 @@ export function useHighlights(
         documentTick.value += 1;
       };
       const off = editor.on('change', (change) => {
-        clearTimeout(timer);
+        cancel();
         if (change.source === 'refresh' || change.source === 'recovery') {
           // A refresh removes every set; ranges of the same document apply again.
           refreshTick.value += 1;
@@ -133,7 +145,7 @@ export function useHighlights(
         }
         const now = Date.now();
         if (firstAt === 0) firstAt = now;
-        timer = setTimeout(
+        timer = timers.setTimeout(
           bump,
           Math.max(
             0,
@@ -143,7 +155,7 @@ export function useHighlights(
       });
       onCleanup(() => {
         off();
-        clearTimeout(timer);
+        cancel();
       });
     },
     { immediate: true }

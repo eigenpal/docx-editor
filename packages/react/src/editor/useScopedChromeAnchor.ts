@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import type { CSSProperties, RefCallback } from 'react';
 import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
 import { absolutePointInScroller } from './scroller-geometry.ts';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 type AnchorPlacement = 'before' | 'after' | 'story-label';
 
@@ -32,9 +33,11 @@ export function useScopedChromeAnchor(
       chrome?.parentElement?.querySelector<HTMLElement>('.docx-editor__scroll-container');
     if (!chrome || !viewport) return undefined;
 
+    // The viewport's own window: a pop-out editor has its own observers, frames and resizes.
+    const view = hostWindowOf(viewport);
     let frame = 0;
     let observedAnchor: HTMLElement | null = null;
-    const resizeObserver = new ResizeObserver(() => schedule());
+    const resizeObserver = new view.ResizeObserver(() => schedule());
 
     const update = () => {
       frame = 0;
@@ -84,12 +87,12 @@ export function useScopedChromeAnchor(
 
     const schedule = () => {
       if (frame) return;
-      frame = requestAnimationFrame(update);
+      frame = view.requestAnimationFrame(update);
     };
 
     resizeObserver.observe(viewport);
     resizeObserver.observe(chrome);
-    const mutationObserver = new MutationObserver(schedule);
+    const mutationObserver = new view.MutationObserver(schedule);
     mutationObserver.observe(viewport, {
       subtree: true,
       childList: true,
@@ -97,15 +100,15 @@ export function useScopedChromeAnchor(
       attributeFilter: ['data-docx-hf-active', 'data-docx-note-scope'],
     });
     viewport.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
+    view.addEventListener('resize', schedule);
     update();
 
     return () => {
-      if (frame) cancelAnimationFrame(frame);
+      if (frame) view.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       mutationObserver.disconnect();
       viewport.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
+      view.removeEventListener('resize', schedule);
     };
   }, [chrome, findAnchor, placement]);
 

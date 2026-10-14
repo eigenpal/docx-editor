@@ -1,4 +1,5 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 // The Paragraph dialog — the Vue twin of the React part. Alignment, indentation with its
 // Special/By pair, spacing with its line-spacing rule and value, and the flags. The whole
 // form is written back as ONE `setParagraphFormat` on OK, so the dialog is a single undo
@@ -754,13 +755,13 @@ const ParagraphDialogImpl = defineComponent({
             if (
               event.key !== 'Enter' ||
               event.isComposing ||
-              event.target instanceof HTMLButtonElement ||
-              event.target instanceof HTMLSelectElement
+              (isHTMLElementNode(event.target) &&
+                (event.target.localName === 'button' || event.target.localName === 'select'))
             )
               return;
             event.preventDefault();
             if (
-              event.target instanceof HTMLElement &&
+              isHTMLElementNode(event.target) &&
               event.target.dataset.docxTabEntry !== undefined
             ) {
               setTabStop();

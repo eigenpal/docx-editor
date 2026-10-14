@@ -41,6 +41,7 @@ import {
   type TabAlignment,
   type TabLeaderName,
 } from './paragraph-dialog-fields';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 /** Props for `DocxEditor.ParagraphDialog`. @public */
 export interface DocxEditorParagraphDialogProps extends DialogCustomizationProps {
@@ -449,14 +450,14 @@ function ParagraphDialogRoot({
         // arrowed to, and submitting the whole dialog out from under that gesture closes
         // the form before the user has finished choosing.
         const ownsEnter =
-          event.target instanceof HTMLButtonElement || event.target instanceof HTMLSelectElement;
+          isHTMLElementNode(event.target) &&
+          (event.target.localName === 'button' || event.target.localName === 'select');
         if (event.key === 'Enter' && !ownsEnter) {
           // Enter inside the tab-stop entry row means "Set", the way it does in Word.
           // Submitting the whole form there threw the pending row away without a word:
           // it is not part of `tabStops` yet, so OK closed and wrote nothing.
           const target = event.target;
-          const inTabEntry =
-            target instanceof HTMLElement && target.dataset.docxTabEntry !== undefined;
+          const inTabEntry = isHTMLElementNode(target) && target.dataset.docxTabEntry !== undefined;
           if (inTabEntry) {
             setTabStop();
             return;

@@ -13,6 +13,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import { isHTMLElementNode, hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { mergeArrangement } from '../merge-arrangement';
 import { flattenChildren } from '../../lib/flattenChildren';
@@ -317,21 +318,26 @@ export const DocxEditorContextMenu = defineComponent({
       }
     );
 
+    /** The scroller the open menu came from: its document and window own the menu. */
+    let menuScroller: HTMLElement | null = null;
     watchEffect((onCleanup) => {
       void stateTick.value;
       if (props.disabled) return;
       const scroller =
         scrollerFor(hostRef.value) ??
-        (typeof document !== 'undefined'
-          ? document.querySelector<HTMLElement>('.docx-editor__scroll-container')
+        (hostRef.value
+          ? hostDocumentOf(hostRef.value).querySelector<HTMLElement>(
+              '.docx-editor__scroll-container'
+            )
           : null);
       if (!scroller) return;
       const onContextMenu = (event: MouseEvent) => {
         event.preventDefault();
         const keyboard = event.button === -1 || (event.clientX === 0 && event.clientY === 0);
         const box = scroller.getBoundingClientRect();
+        menuScroller = scroller;
         tocId.value = editorRef.value?.snapshot().tocContext?.id ?? null;
-        target.value = keyboard || !(event.target instanceof HTMLElement) ? null : event.target;
+        target.value = keyboard || !isHTMLElementNode(event.target) ? null : event.target;
         anchor.value = keyboard
           ? { x: box.left + 16, y: box.top + 16 }
           : { x: event.clientX, y: event.clientY };
@@ -356,17 +362,19 @@ export const DocxEditorContextMenu = defineComponent({
           }
         };
         const onScroll = () => close();
-        document.addEventListener('pointerdown', onPointerDown, true);
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-        window.addEventListener('blur', onScroll);
-        window.addEventListener('resize', onScroll);
+        const doc = hostDocumentOf(menuScroller ?? hostRef.value);
+        const win = hostWindowOf(menuScroller ?? hostRef.value);
+        doc.addEventListener('pointerdown', onPointerDown, true);
+        doc.addEventListener('keydown', onKeyDown);
+        doc.addEventListener('scroll', onScroll, { capture: true, passive: true });
+        win.addEventListener('blur', onScroll);
+        win.addEventListener('resize', onScroll);
         onCleanup(() => {
-          document.removeEventListener('pointerdown', onPointerDown, true);
-          document.removeEventListener('keydown', onKeyDown);
-          document.removeEventListener('scroll', onScroll, true);
-          window.removeEventListener('blur', onScroll);
-          window.removeEventListener('resize', onScroll);
+          doc.removeEventListener('pointerdown', onPointerDown, true);
+          doc.removeEventListener('keydown', onKeyDown);
+          doc.removeEventListener('scroll', onScroll, true);
+          win.removeEventListener('blur', onScroll);
+          win.removeEventListener('resize', onScroll);
         });
       },
       { flush: 'sync' }
@@ -381,8 +389,9 @@ export const DocxEditorContextMenu = defineComponent({
         const panel = panelRef.value;
         if (!panel || !anchor.value) return;
         const { width, height } = panel.getBoundingClientRect();
-        const maxX = window.innerWidth - width - VIEWPORT_INSET;
-        const maxY = window.innerHeight - height - VIEWPORT_INSET;
+        const win = hostWindowOf(panel);
+        const maxX = win.innerWidth - width - VIEWPORT_INSET;
+        const maxY = win.innerHeight - height - VIEWPORT_INSET;
         const x = Math.max(
           VIEWPORT_INSET,
           anchor.value.x > maxX ? anchor.value.x - width : anchor.value.x
@@ -472,7 +481,10 @@ export const DocxEditorContextMenu = defineComponent({
         'div',
         {
           ref: (element: unknown) => {
-            hostRef.value = element instanceof HTMLDivElement ? element : null;
+            hostRef.value =
+              isHTMLElementNode(element) && element.localName === 'div'
+                ? (element as HTMLDivElement)
+                : null;
           },
           class: 'docx-contextmenu-host',
           style: {
@@ -489,7 +501,10 @@ export const DocxEditorContextMenu = defineComponent({
                 'div',
                 {
                   ref: (element: unknown) => {
-                    panelRef.value = element instanceof HTMLDivElement ? element : null;
+                    panelRef.value =
+                      isHTMLElementNode(element) && element.localName === 'div'
+                        ? (element as HTMLDivElement)
+                        : null;
                   },
                   role: 'menu',
                   'aria-label':
@@ -504,10 +519,10 @@ export const DocxEditorContextMenu = defineComponent({
                     const items = panelItems(panel);
                     if (event.key === 'ArrowDown') {
                       event.preventDefault();
-                      focusBy(items, document.activeElement, 1);
+                      focusBy(items, hostDocumentOf(panel).activeElement, 1);
                     } else if (event.key === 'ArrowUp') {
                       event.preventDefault();
-                      focusBy(items, document.activeElement, -1);
+                      focusBy(items, hostDocumentOf(panel).activeElement, -1);
                     } else if (event.key === 'Home') {
                       event.preventDefault();
                       focusEdge(items, 'first');

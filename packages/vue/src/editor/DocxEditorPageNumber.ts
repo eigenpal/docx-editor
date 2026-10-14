@@ -9,6 +9,7 @@ import {
   type InjectionKey,
   type PropType,
 } from 'vue';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
@@ -79,19 +80,20 @@ export const DocxEditorPageNumber = defineComponent({
         visible.value = false;
         if (!editor || !vp || pageTotal <= 1) return;
         current.value = editor.getCurrentPage('viewport');
-        let hideTimer: ReturnType<typeof setTimeout> | null = null;
+        const win = hostWindowOf(vp);
+        let hideTimer: number | null = null;
         const onScroll = () => {
           current.value = editor.getCurrentPage('viewport');
           visible.value = true;
-          if (hideTimer) clearTimeout(hideTimer);
-          hideTimer = setTimeout(() => {
+          if (hideTimer) win.clearTimeout(hideTimer);
+          hideTimer = win.setTimeout(() => {
             visible.value = false;
           }, HIDE_DELAY_MS);
         };
         vp.addEventListener('scroll', onScroll, { passive: true });
         onCleanup(() => {
           vp.removeEventListener('scroll', onScroll);
-          if (hideTimer) clearTimeout(hideTimer);
+          if (hideTimer) win.clearTimeout(hideTimer);
         });
       },
       { flush: 'post' }

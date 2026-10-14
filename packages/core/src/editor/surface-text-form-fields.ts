@@ -24,6 +24,8 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { planTextFormSave } from './text-form-save-plan.ts';
+import { hostWindowOf } from './host-realm.ts';
+import type { SurfaceHostListeners } from './surface-host-listeners.ts';
 
 /** Input provenance belongs to the open document, including during a font remount. */
 export type PendingTextFormInput = readonly {
@@ -32,12 +34,22 @@ export type PendingTextFormInput = readonly {
   readonly text: string;
   readonly locale: string;
 }[];
+// Keyed by the PAGES LAYER, which moves with the surface; the container does not (`moveTo`).
 const inputSnapshots = new WeakMap<HTMLElement, () => PendingTextFormInput>();
 const inputSaves = new WeakMap<HTMLElement, () => string | null>();
 
+/** The surface's pages layer inside `container`, wherever the surface has moved it. */
+function pagesLayerIn(container: HTMLElement): HTMLElement | null {
+  for (const child of Array.from(container.children)) {
+    if (child.classList.contains('docx-pages')) return child as HTMLElement;
+  }
+  return null;
+}
+
 /** Finalize valid pending input before exporting; a refusal leaves the input intact. */
 export function commitTextFormInput(container: HTMLElement): string | null {
-  return inputSaves.get(container)?.() ?? null;
+  const pages = pagesLayerIn(container);
+  return (pages && inputSaves.get(pages)?.()) ?? null;
 }
 
 function fieldsInPart(part: OoxmlPart): TextFormFieldRange[] {
@@ -49,14 +61,18 @@ function fieldsInPart(part: OoxmlPart): TextFormFieldRange[] {
 
 /** Capture pending input before the current surface is destroyed. */
 export function snapshotTextFormInput(container: HTMLElement): PendingTextFormInput | undefined {
-  return inputSnapshots.get(container)?.();
+  const pages = pagesLayerIn(container);
+  return pages ? inputSnapshots.get(pages)?.() : undefined;
 }
 
 interface Host {
   translate?: EditorTranslate;
   locale?(): string;
   readonly pagesLayer: HTMLElement;
+  /** The element the pages are mounted in now. Read per use: the surface can move. */
   readonly container: HTMLElement;
+  /** Document-level listeners that follow the pages to another window. */
+  readonly listeners: SurfaceHostListeners;
   part(paragraphId?: string): OoxmlPart;
   onInvalidRequest?: ((session: InvalidTextFormFieldSession) => boolean) | undefined;
   onRequest?: ((session: TextFormFieldDialogSession) => boolean) | undefined;
@@ -109,7 +125,6 @@ export function createTextFormFieldInteraction(
   destroy(): void;
 } {
   const t = textFormTranslate(host.translate);
-  const document = host.container.ownerDocument;
   let contextual: { paragraphId: string; fieldNodeId: string } | null | undefined;
   let committing = false;
   type DirtyFields = Map<string, { text: string; locale: string }>;
@@ -182,7 +197,7 @@ export function createTextFormFieldInteraction(
       committing = false;
     }
   };
-  inputSaves.set(host.container, saveInput);
+  inputSaves.set(host.pagesLayer, saveInput);
   const snapshotInput = (): PendingTextFormInput => {
     if (!dirtyBaseline.size) return [];
     // Node IDs encode parse paths and can change when an earlier field gains a result run.
@@ -194,7 +209,7 @@ export function createTextFormFieldInteraction(
       })
     );
   };
-  inputSnapshots.set(host.container, snapshotInput);
+  inputSnapshots.set(host.pagesLayer, snapshotInput);
   let incoming: { paragraphId: string; fieldNodeId: string } | null | undefined;
   const rawValue = (paragraphId: string, field: TextFormFieldRange) =>
     (paragraphTextOf(host.part(), paragraphId) ?? '').slice(field.start, field.end);
@@ -389,8 +404,10 @@ export function createTextFormFieldInteraction(
     // recorded identity against the current tree instead of requiring the old span.
     select(started.paragraphId, field, 'press');
   };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointercancel', cancelPress);
+  const unlisten = [
+    host.listeners.onDocument('pointermove', move),
+    host.listeners.onDocument('pointercancel', cancelPress),
+  ];
   host.pagesLayer.addEventListener('click', singleClick);
 
   const doubleClick = (event: MouseEvent): boolean => {
@@ -461,7 +478,7 @@ export function createTextFormFieldInteraction(
       })
     );
   };
-  const status = document.createElement('span');
+  const status = host.pagesLayer.ownerDocument.createElement('span');
   status.className = 'docx-text-form-status';
   host.container.append(status);
 
@@ -778,7 +795,11 @@ export function createTextFormFieldInteraction(
         contextual = undefined;
         event.preventDefault();
         host.pagesLayer.dispatchEvent(
-          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: -1 })
+          new (hostWindowOf(host.pagesLayer).MouseEvent)('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            button: -1,
+          })
         );
         return true;
       }
@@ -851,11 +872,10 @@ export function createTextFormFieldInteraction(
     destroy() {
       destroyed = true;
       invalidate();
-      if (inputSaves.get(host.container) === saveInput) inputSaves.delete(host.container);
-      if (inputSnapshots.get(host.container) === snapshotInput)
-        inputSnapshots.delete(host.container);
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointercancel', cancelPress);
+      if (inputSaves.get(host.pagesLayer) === saveInput) inputSaves.delete(host.pagesLayer);
+      if (inputSnapshots.get(host.pagesLayer) === snapshotInput)
+        inputSnapshots.delete(host.pagesLayer);
+      for (const remove of unlisten) remove();
       host.pagesLayer.removeEventListener('click', singleClick);
       host.pagesLayer.removeEventListener('contextmenu', onContext);
       status.remove();

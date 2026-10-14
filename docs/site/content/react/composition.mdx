@@ -670,6 +670,21 @@ export function Workspace({ bytes }: { bytes: Uint8Array }) {
 
 Composition lets you mount each part explicitly. Omitted parts do not render an interface. The packaged `<DocxEditor>` mounts the default part set.
 
+## Pop-out window
+
+Wrap parts of the composition in `DocxEditor.Window` to show them in their own browser window. The root stays in the main window, so the editor keeps its document, undo history, and selection as it moves. The following example pops out the toolbar and the pages:
+
+```tsx
+<DocxEditor.Window open={popped} onClose={() => setPopped(false)}>
+  <DocxEditor.Toolbar />
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Window>
+```
+
+For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
+
 ## Layout constraints
 
 Import the stylesheet once and give the editor container a height. Use a flex column when chrome shares that height. Packaged controls and the viewport apply their own `.docx-editor` scope. The wrapper in [Primitives](#primitives) also makes editor styles and tokens available to custom controls.

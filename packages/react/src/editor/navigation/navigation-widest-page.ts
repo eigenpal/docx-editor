@@ -1,3 +1,4 @@
+import { hostTimers } from '@docx-editor.dev/core/editor';
 // The widest laid-out page, which is the width of the page stack the navigation pane must
 // clear. Both adapters carry an identical copy of this file.
 //
@@ -50,12 +51,20 @@ export interface WidestPageTracker {
   dispose(): void;
 }
 
-/** Read the widest page now, then again after each settled burst of changes. */
+/**
+ * Read the widest page now, then again after each settled burst of changes.
+ *
+ * `owner` names a node of the editor's chrome. The settle timer runs on ITS window, which a
+ * pop-out editor does not share with the script: a hidden opener throttles its timers.
+ */
 export function trackWidestPage(
   source: WidestPageSource,
-  publish: (widest: number | null) => void
+  publish: (widest: number | null) => void,
+  owner: () => Node | null = () => null
 ): WidestPageTracker {
-  let timer: ReturnType<typeof setTimeout> | null = null;
+  // The owner's window, resolved per call; pending work moves home if a pop-out closes.
+  const timers = hostTimers(owner);
+  let timer: number | null = null;
   let disposed = false;
   const read = () => {
     timer = null;
@@ -63,8 +72,8 @@ export function trackWidestPage(
   };
   const nudge = () => {
     if (disposed) return;
-    if (timer !== null) clearTimeout(timer);
-    timer = setTimeout(read, WIDEST_PAGE_SETTLE_MS);
+    timers.clearTimeout(timer);
+    timer = timers.setTimeout(read, WIDEST_PAGE_SETTLE_MS);
   };
   const offChange = source.on('change', (change) => {
     if (changesPageSizes(change)) nudge();
@@ -74,7 +83,7 @@ export function trackWidestPage(
     nudge,
     dispose() {
       disposed = true;
-      if (timer !== null) clearTimeout(timer);
+      timers.clearTimeout(timer);
       timer = null;
       offChange();
     },

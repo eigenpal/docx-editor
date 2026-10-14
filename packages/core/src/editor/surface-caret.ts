@@ -43,6 +43,7 @@ import {
 import { paragraphLinesFor } from '../layout/paragraph-lines.ts';
 import { clipParagraphBox } from '../layout/paragraph-frame-clip.ts';
 import { selectionRunStyle } from './surface-formatting.ts';
+import { hostTimers } from './host-realm.ts';
 
 /** What the caret reads at paint time. Both move independently of the caret itself. */
 export interface SurfaceCaretInput {
@@ -102,8 +103,7 @@ export function createSurfaceCaret(
   scale: () => number,
   read: () => SurfaceCaretInput
 ): SurfaceCaret {
-  const document = pagesLayer.ownerDocument;
-  const element = document.createElement('div');
+  const element = pagesLayer.ownerDocument.createElement('div');
   element.className = CARET_CLASS;
   // Named for a host that wants to find it; the REFUSAL is the marker attribute below.
   element.dataset.docxCaret = '';
@@ -129,14 +129,16 @@ export function createSurfaceCaret(
 
   /** The browser needs its own caret while an input method is holding text. */
   let composing = false;
-  let steadyTimer: ReturnType<typeof setTimeout> | null = null;
+  // The pages' own window: an opener's timers are throttled while the opener is hidden.
+  const timers = hostTimers(() => pagesLayer);
+  let steadyTimer: number | null = null;
   /** The geometry last painted, so a repaint in place is told from a real move. */
   let placed: string | null = null;
   /** Last scoped host whose native caret was suppressed. */
   let suppressedHost: HTMLElement | null = null;
 
   function hasFocus(): boolean {
-    const active = document.activeElement;
+    const active = pagesLayer.ownerDocument.activeElement;
     return active === pagesLayer || (!!active && pagesLayer.contains(active));
   }
 
@@ -151,7 +153,7 @@ export function createSurfaceCaret(
   function hide(): void {
     placed = null;
     if (steadyTimer !== null) {
-      clearTimeout(steadyTimer);
+      timers.clearTimeout(steadyTimer);
       steadyTimer = null;
     }
     element.classList.remove(STEADY_CLASS);
@@ -164,8 +166,8 @@ export function createSurfaceCaret(
   /** Hold the caret solid while it is moving, then let the blink resume. */
   function markMoving(): void {
     element.classList.add(STEADY_CLASS);
-    if (steadyTimer !== null) clearTimeout(steadyTimer);
-    steadyTimer = setTimeout(() => {
+    if (steadyTimer !== null) timers.clearTimeout(steadyTimer);
+    steadyTimer = timers.setTimeout(() => {
       steadyTimer = null;
       element.classList.remove(STEADY_CLASS);
     }, STEADY_MS);

@@ -4,6 +4,8 @@ import {
   toolbarOverflowGroups,
   TOOLBAR_OVERFLOW_HYSTERESIS,
   type ToolbarFitInput,
+  hostWindowOf,
+  type HostWindow,
 } from '@docx-editor.dev/core/editor';
 import {
   collapsibleGroupCost,
@@ -38,6 +40,8 @@ export function useToolbarOverflow(
   const overflow = ref<ReadonlySet<string>>(NONE);
   let frame = 0;
   let observer: ResizeObserver | undefined;
+  /** The window that issued `frame`, so a bar that moved windows still cancels it. */
+  let frameWindow: HostWindow | null = null;
 
   const isEnabled = () => (typeof enabled === 'function' ? enabled() : enabled.value);
   const getGroups = () => (typeof groups === 'function' ? groups() : groups.value);
@@ -46,13 +50,14 @@ export function useToolbarOverflow(
   const measure = () => {
     const bar = barRef.value;
     if (!bar || !isEnabled()) return;
-    const style = getComputedStyle(bar);
+    const win = hostWindowOf(bar);
+    const style = win.getComputedStyle(bar);
     const gap = readColumnGap(style);
     const available = readAvailableWidth(bar, style);
     const separator = bar.querySelector<HTMLElement>('.docx-toolbar__separator');
     let separatorLeading = gap * 2;
     if (separator) {
-      const sepStyle = getComputedStyle(separator);
+      const sepStyle = win.getComputedStyle(separator);
       const margins = readInlineMargins(sepStyle);
       separatorLeading = separatorLeadingCost(
         separator.offsetWidth,
@@ -109,15 +114,19 @@ export function useToolbarOverflow(
   const setupObserver = () => {
     observer?.disconnect();
     if (frame !== 0) {
-      cancelAnimationFrame(frame);
+      frameWindow?.cancelAnimationFrame(frame);
       frame = 0;
     }
     const bar = barRef.value;
-    if (!isEnabled() || !bar || typeof ResizeObserver === 'undefined') return;
+    // The bar's own window: a toolbar rendered in a pop-out window is observed and measured
+    // there, and its frames keep running while the opener is hidden.
+    const win = bar ? hostWindowOf(bar) : null;
+    if (!isEnabled() || !bar || !win || typeof win.ResizeObserver === 'undefined') return;
 
-    observer = new ResizeObserver(() => {
+    observer = new win.ResizeObserver(() => {
       if (frame !== 0) return;
-      frame = requestAnimationFrame(() => {
+      frameWindow = win;
+      frame = win.requestAnimationFrame(() => {
         frame = 0;
         measure();
       });
@@ -152,7 +161,7 @@ export function useToolbarOverflow(
   });
 
   onBeforeUnmount(() => {
-    if (frame !== 0) cancelAnimationFrame(frame);
+    if (frame !== 0) frameWindow?.cancelAnimationFrame(frame);
     observer?.disconnect();
   });
 

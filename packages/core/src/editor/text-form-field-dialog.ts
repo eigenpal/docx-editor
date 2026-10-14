@@ -5,6 +5,7 @@ import {
   type TextFormFieldType,
   type TextFormFieldRange,
 } from '@docx-editor.dev/core/store';
+import { isHTMLElementTag } from './host-realm.ts';
 
 /** The same accessible options dialog is mounted by every adapter. */
 export function textFormFieldDialog(
@@ -139,7 +140,7 @@ export function textFormFieldDialog(
   };
   apply.addEventListener('click', submit);
   panel.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) {
+    if (event.key === 'Enter' && !event.isComposing && isHTMLElementTag(event.target, 'input')) {
       event.preventDefault();
       submit();
     }

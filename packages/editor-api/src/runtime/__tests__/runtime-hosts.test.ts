@@ -512,15 +512,28 @@ describe('DocxEditor.createBrowser', () => {
       context.trackedObjects.add(first);
       return first;
     });
+    // A detached editor keeps its document (it can be attached again, even in another window),
+    // so a script still edits it; a destroyed one has no document left.
     detached.editor.detach();
+    await detachedRuntime.run(comment, async (context) => {
+      comment.delete();
+      await context.sync();
+    });
+    const remaining = await detachedRuntime.run(async (context) => {
+      const comments = context.document.comments;
+      comments.load('items');
+      await context.sync();
+      return comments.items.length;
+    });
+    expect(remaining).toBe(0);
+    detached.editor.destroy();
     await expect(
-      detachedRuntime.run(comment, async (context) => {
-        comment.delete();
+      detachedRuntime.run(async (context) => {
+        context.document.comments.load('items');
         await context.sync();
       })
     ).rejects.toMatchObject({ code: 'DocumentUnavailable' });
     detachedRuntime.dispose();
-    detached.editor.destroy();
   });
 
   test('server and browser delete resolved comments with the same public script', async () => {

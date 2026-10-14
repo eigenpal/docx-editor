@@ -27,6 +27,7 @@
     "examples/docx-to-pdf",
     "examples/document-refresh",
     "examples/anchor-navigation",
+    "examples/popout-window",
     "benchmarks/collaboration-server"
   ],
   "type": "module",
@@ -160,7 +161,8 @@
     "check:docs-style": "node scripts/check-docs-style.mjs",
     "check:docs": "bun run check:docs-style && bun run check:example-readmes && bun run check:docs-mdx && bun run check:docs-chrome-slots && bun run check:docs-vue-refs && bun run check:public-docs-surface",
     "dev:refresh": "bun run --filter './examples/document-refresh' dev",
-    "dev:anchors": "bun run --filter './examples/anchor-navigation' dev"
+    "dev:anchors": "bun run --filter './examples/anchor-navigation' dev",
+    "dev:popout": "bun run --filter './examples/popout-window' dev"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

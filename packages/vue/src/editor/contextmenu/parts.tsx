@@ -1,8 +1,8 @@
 import { computed, defineComponent, h, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
-import { tableChromeIconPaths } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
+import { tableChromeIconPaths, hostWindowOf, type HostWindow } from '@docx-editor.dev/core/editor';
+import { useDocxEditor, useEditorContentElement } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import { MenuRow, menuRowSlot } from '../menu/parts';
@@ -115,6 +115,7 @@ export const ContextMenuPaste = defineComponent({
   },
   setup(props) {
     const editorRef = useDocxEditor();
+    const contentElement = useEditorContentElement();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
     const cmd = useEditorCommand({ type: 'paste', text: ' ' });
@@ -133,7 +134,9 @@ export const ContextMenuPaste = defineComponent({
           onSelect={() => {
             void (async () => {
               try {
-                const { text, html } = await readClipboardPayload();
+                const { text, html } = await readClipboardPayload(
+                  hostWindowOf(contentElement.value)
+                );
                 if (text || html) {
                   editorRef.value?.exec({ type: 'paste', text, ...(html ? { html } : {}) });
                 }
@@ -162,9 +165,13 @@ ContextMenuPaste.docxRow = 'edit.paste' as const;
  * Some engines strip attributes from async-read HTML — the engine's paste router degrades
  * to the surviving flavours, so the read never has to guess what made it through.
  */
-async function readClipboardPayload(): Promise<{ text: string; html: string | null }> {
-  const clipboard = navigator.clipboard;
-  if (typeof clipboard.read === 'function' && typeof ClipboardItem !== 'undefined') {
+async function readClipboardPayload(
+  win: HostWindow
+): Promise<{ text: string; html: string | null }> {
+  // The editor's own window: a pop-out window has focus there, and the opener's clipboard
+  // refuses a read from a window that does not.
+  const clipboard = win.navigator.clipboard;
+  if (typeof clipboard.read === 'function' && typeof win.ClipboardItem !== 'undefined') {
     try {
       const items = await clipboard.read();
       let text = '';
@@ -202,6 +209,7 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
   },
   setup(props) {
     const editorRef = useDocxEditor();
+    const contentElement = useEditorContentElement();
     const { close, clipboardRefusal, reportClipboardRefusal } = useContextMenuContext();
     const label = useMenuLabel();
     const cmd = useEditorCommand({ type: 'pasteWithoutFormatting', text: ' ' });
@@ -220,7 +228,9 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
           onSelect={() => {
             void (async () => {
               try {
-                const text = await navigator.clipboard.readText();
+                const text = await hostWindowOf(
+                  contentElement.value
+                ).navigator.clipboard.readText();
                 if (text) editorRef.value?.exec({ type: 'pasteWithoutFormatting', text });
               } catch (error) {
                 reportClipboardRefusal(

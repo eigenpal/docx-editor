@@ -19,10 +19,13 @@
  * A missing `navigator.clipboard` — an insecure origin, a non-browser host running the
  * engine headless — is a no-op rather than an error, for the same reason: the caller asked
  * the document a question, and the document answered.
+ *
+ * `view` is the window the editor is mounted in. Its clipboard is the one with focus when the
+ * editor lives in a pop-out window; the opener's rejects the write there.
  */
-export function writeClipboardText(text: string): void {
+export function writeClipboardText(text: string, view?: Window): void {
   if (text === '') return;
-  const clipboard = globalThis.navigator?.clipboard;
+  const clipboard = (view ?? globalThis).navigator?.clipboard;
   if (!clipboard?.writeText) return;
   try {
     // `void` the promise explicitly: a rejected clipboard write must not surface as an
@@ -41,26 +44,30 @@ export function writeClipboardText(text: string): void {
  * (Firefox behind a flag, headless hosts), the plain text still lands via `writeText`;
  * the richer flavour is an enhancement, never the difference between copy working and not.
  */
-export function writeClipboardRich(text: string, html: string | null): void {
+export function writeClipboardRich(text: string, html: string | null, view?: Window): void {
   if (text === '' && (html === null || html === '')) return;
-  const clipboard = globalThis.navigator?.clipboard;
+  // One window for all of it: a clipboard rejects a `ClipboardItem` or `Blob` from another.
+  const realm = (view ?? globalThis) as Window & {
+    ClipboardItem?: new (items: Record<string, Blob>) => ClipboardItem;
+    Blob?: typeof Blob;
+  };
+  const clipboard = realm.navigator?.clipboard;
   if (!clipboard) return;
-  const ClipboardItemCtor = (
-    globalThis as { ClipboardItem?: new (items: Record<string, Blob>) => ClipboardItem }
-  ).ClipboardItem;
-  if (html && clipboard.write && ClipboardItemCtor && typeof Blob !== 'undefined') {
+  const ClipboardItemCtor = realm.ClipboardItem;
+  const BlobCtor = realm.Blob;
+  if (html && clipboard.write && ClipboardItemCtor && BlobCtor) {
     try {
       const item = new ClipboardItemCtor({
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new BlobCtor([text], { type: 'text/plain' }),
+        'text/html': new BlobCtor([html], { type: 'text/html' }),
       });
       void clipboard.write([item]).catch(() => {
-        writeClipboardText(text);
+        writeClipboardText(text, view);
       });
       return;
     } catch {
       // Fall through to the plain write below.
     }
   }
-  writeClipboardText(text);
+  writeClipboardText(text, view);
 }

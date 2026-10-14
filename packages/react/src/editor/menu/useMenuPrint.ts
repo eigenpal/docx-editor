@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom';
 import {
   ChromeExportError,
   ChromePrintError,
+  hostDocumentOf,
   runChromePrint,
   type ChromeExportHandlers,
   type ChromePrintJob,
@@ -80,7 +81,7 @@ export function useMenuPrint(
       setError('');
       setUrl('');
       try {
-        const prepared = await runChromePrint(editor, exporters, container ?? document);
+        const prepared = await runChromePrint(editor, exporters, container ?? hostDocumentOf(null));
         if (current.current !== token) {
           prepared.dispose();
           return;

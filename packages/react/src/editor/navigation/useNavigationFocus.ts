@@ -25,6 +25,7 @@ import {
   returnFocus,
 } from './navigation-keys';
 import type { UseNavigationPaneResult } from './useNavigationPane';
+import { hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 /** @internal */
 export interface NavigationFocus {
@@ -51,7 +52,7 @@ export function useNavigationFocus(
   // Drop whatever is still pending once the event's updates have flushed.
   const expireRequests = useCallback(() => {
     const token = ++requestToken.current;
-    setTimeout(() => {
+    hostWindowOf(rootRef.current).setTimeout(() => {
       if (requestToken.current !== token) return;
       focusRequest.current = false;
       restoreRequest.current = false;
@@ -136,7 +137,7 @@ export function useNavigationFocus(
       if (!ownsShortcutTarget(event.target, rootRef.current, viewport)) return;
       event.preventDefault();
       const active = doc.activeElement;
-      if (active instanceof HTMLElement && !rootRef.current?.contains(active)) {
+      if (isHTMLElementNode(active) && !rootRef.current?.contains(active)) {
         opener.current = active;
       }
       restoreRequest.current = false;

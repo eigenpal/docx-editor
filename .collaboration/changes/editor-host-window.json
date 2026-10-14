@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Detaching an editor tore down its surface and released the collaboration replica; attaching again remounted from saved bytes and re-attached the replica as a fresh session.",
+  "after": "Detaching parks the surface with its session and replica still attached, so remote edits keep applying; attaching, including into another window, moves the same surface without re-attaching.",
+  "reason": "Shared data, operations, presence payloads and the update protocol are unchanged. Only when a local participant is mounted changes, and its replica stays attached through a move instead of being re-created.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-host-window-move.test.ts",
+    "packages/core/src/editor/__tests__/host-window-move.test.ts"
+  ],
+  "changeset": "editor-host-window",
+  "migration": null
+}

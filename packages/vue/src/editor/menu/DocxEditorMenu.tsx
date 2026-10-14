@@ -1,4 +1,9 @@
-import { editorInstanceScope } from '@docx-editor.dev/core/editor';
+import {
+  editorHostElement,
+  editorInstanceScope,
+  hostDocumentOf,
+  isDomNode,
+} from '@docx-editor.dev/core/editor';
 import { DocxEditorExportDialog } from '../DocxEditorExportDialog';
 import { DocxEditorPrintDialog } from '../DocxEditorPrintDialog';
 import { usePopupConfig } from '../popup-config';
@@ -46,7 +51,8 @@ import {
   type MenuId,
 } from './menu-context';
 import { download, downloadName } from './download';
-import { barTriggers, restoreExportFocus } from './menu-keyboard';
+import { barTriggers, isPoppedOutEditorTarget, restoreExportFocus } from './menu-keyboard';
+import { useEditorHostDocument } from '../useEditorHostDocument';
 import { flattenChildren } from '../../lib/flattenChildren';
 import {
   Menu,
@@ -226,12 +232,13 @@ const DocxEditorMenuRoot = defineComponent({
       if (current === null) return;
       const onPointerDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (root && isDomNode(event.target) && root.contains(event.target)) return;
         openMenu.value = null;
       };
-      document.addEventListener('mousedown', onPointerDown);
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onPointerDown);
       onCleanup(() => {
-        document.removeEventListener('mousedown', onPointerDown);
+        doc.removeEventListener('mousedown', onPointerDown);
       });
     });
     // Escape from outside the bar, such as the pages, goes through the shared rule, and a
@@ -242,7 +249,7 @@ const DocxEditorMenuRoot = defineComponent({
       () => {
         openMenu.value = null;
       },
-      (event) => event.target instanceof Node && rootRef.value?.contains(event.target) === true
+      (event) => isDomNode(event.target) && rootRef.value?.contains(event.target) === true
     );
 
     const packagedOpen = () => fileInputRef.value?.click();
@@ -305,11 +312,23 @@ const DocxEditorMenuRoot = defineComponent({
         : undefined
     );
 
+    // The editor's document: a pop-out window's when the pages live there.
+    const hostDocument = useEditorHostDocument();
     watch(
-      () => [resolvedOpen.value, resolvedSave.value, resolvedPrint.value] as const,
-      ([openFn, saveFn, printFn], _, onCleanup) => {
+      // The root is a source too: the shortcuts listen in the document the menu renders in,
+      // which is known only once it mounts, and may be a pop-out window's document. So is the
+      // editor's document, when the pages live in another window than the bar.
+      () =>
+        [
+          resolvedOpen.value,
+          resolvedSave.value,
+          resolvedPrint.value,
+          rootRef.value,
+          hostDocument.value,
+        ] as const,
+      ([openFn, saveFn, printFn, rootElement, editorDocument], _, onCleanup) => {
         // Immediate watchers also run during server rendering, where there is no document.
-        if (typeof document === 'undefined') return;
+        if (typeof globalThis.document === 'undefined') return;
         const onKeyDown = (event: KeyboardEvent) => {
           if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
           const key = event.key.toLowerCase();
@@ -319,7 +338,14 @@ const DocxEditorMenuRoot = defineComponent({
           const scope = editorInstanceScope(rootRef.value) ?? rootRef.value;
           const root = rootRef.value;
           if (!target) return;
-          const inScope = (scope?.contains(target) ?? false) || (root?.contains(target) ?? false);
+          const inScope =
+            (scope?.contains(target) ?? false) ||
+            (root?.contains(target) ?? false) ||
+            isPoppedOutEditorTarget(
+              target,
+              hostDocumentOf(rootElement),
+              editorRef.value ? editorHostElement(editorRef.value) : null
+            );
           if (!inScope) return;
           if (print) {
             // Checked first: on some layouts the P key types a character other than "p".
@@ -339,8 +365,16 @@ const DocxEditorMenuRoot = defineComponent({
             openFn();
           }
         };
-        document.addEventListener('keydown', onKeyDown);
-        onCleanup(() => document.removeEventListener('keydown', onKeyDown));
+        // The bar's document, and the editor's when the pages live in another window.
+        const barDocument = hostDocumentOf(rootElement);
+        const docs =
+          editorDocument && editorDocument !== barDocument
+            ? [barDocument, editorDocument]
+            : [barDocument];
+        for (const doc of docs) doc.addEventListener('keydown', onKeyDown);
+        onCleanup(() => {
+          for (const doc of docs) doc.removeEventListener('keydown', onKeyDown);
+        });
       },
       // Immediate: an editor that is ready before the menu mounts changes none of the
       // handlers, so a lazy watch would never bind the shortcuts.
@@ -497,7 +531,7 @@ const DocxEditorMenuRoot = defineComponent({
               const bar = rootRef.value;
               if (!bar) return;
               const triggers = barTriggers(bar);
-              const index = triggers.indexOf(document.activeElement as HTMLElement);
+              const index = triggers.indexOf(hostDocumentOf(bar).activeElement as HTMLElement);
               if (index === -1) return;
               event.preventDefault();
               const step = event.key === 'ArrowRight' ? 1 : -1;

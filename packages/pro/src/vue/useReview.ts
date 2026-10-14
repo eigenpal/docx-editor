@@ -17,6 +17,7 @@ import type {
 } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, type MaybeRefOrGetter } from '@docx-editor.dev/vue';
 import { useEditorRenderRevision, type EditorRenderRevision } from './useEditorRenderRevision.ts';
+import { nextTask } from './next-task.ts';
 
 function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T | undefined {
   if (source === undefined) return undefined;
@@ -160,25 +161,26 @@ function useReviewOfInternal(
         let key = reviewRevisionKey(editor);
         ownedRevision!.value = key;
         let disposed = false;
-        let scheduled: ReturnType<typeof setTimeout> | null = null;
+        // A message task, not a timer: see `next-task.ts`.
+        let scheduled = false;
         const notify = () => {
           if (!disposed) readActivatedKey(editor);
-          if (disposed || scheduled !== null) return;
-          scheduled = setTimeout(() => {
-            scheduled = null;
+          if (disposed || scheduled) return;
+          scheduled = true;
+          nextTask(() => {
+            scheduled = false;
             if (disposed) return;
             const next = reviewRevisionKey(editor);
             if (next === key) return;
             key = next;
             ownedRevision!.value = next;
-          }, 0);
+          });
         };
         const offDocument = editor.on('change', notify);
         const offSelection = editor.on('selectionChange', notify);
         const offError = editor.on('error', notify);
         onCleanup(() => {
           disposed = true;
-          if (scheduled !== null) clearTimeout(scheduled);
           offDocument();
           offSelection();
           offError();

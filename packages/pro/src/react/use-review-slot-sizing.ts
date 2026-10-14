@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // ResizeObserver wiring for review-card height reporting.
 
 import { useCallback, useEffect, useRef } from 'react';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 /** Observe rendered review cards and report their heights to the rail stacker. */
 export function useReviewSlotSizing(
@@ -13,40 +14,55 @@ export function useReviewSlotSizing(
 ): (node: HTMLElement | null, key: string) => void {
   const slotSizes = useRef(new WeakMap<Element, string>());
   const slotElements = useRef(new Map<string, Element>());
-  const sizeObserver = useRef<ResizeObserver | null>(null);
-  const observeSlot = useCallback(
-    (node: HTMLElement | null, key: string) => {
-      const previous = slotElements.current.get(key);
-      if (!node) {
-        if (previous) {
-          sizeObserver.current?.unobserve(previous);
-          slotSizes.current.delete(previous);
-          slotElements.current.delete(key);
-        }
-        return;
-      }
-      if (typeof ResizeObserver === 'undefined') return;
-      measure(key, node.offsetHeight);
-      sizeObserver.current ??= new ResizeObserver((entries) => {
+  // One observer per window: an observer only reports elements in its own window's
+  // documents, and a rail in a pop-out window is not in the script's.
+  const sizeObservers = useRef(new Map<Window, ResizeObserver>());
+  const observerFor = useCallback(
+    (node: Element): ResizeObserver | null => {
+      const view = hostWindowOf(node);
+      const existing = sizeObservers.current.get(view);
+      if (existing) return existing;
+      if (typeof view.ResizeObserver === 'undefined') return null;
+      const observer = new view.ResizeObserver((entries) => {
         for (const entry of entries) {
           const owner = slotSizes.current.get(entry.target);
           if (owner) measure(owner, (entry.target as HTMLElement).offsetHeight);
         }
       });
+      sizeObservers.current.set(view, observer);
+      return observer;
+    },
+    [measure]
+  );
+  const observeSlot = useCallback(
+    (node: HTMLElement | null, key: string) => {
+      const previous = slotElements.current.get(key);
+      if (!node) {
+        if (previous) {
+          sizeObservers.current.get(hostWindowOf(previous))?.unobserve(previous);
+          slotSizes.current.delete(previous);
+          slotElements.current.delete(key);
+        }
+        return;
+      }
+      const observer = observerFor(node);
+      if (!observer) return;
+      measure(key, node.offsetHeight);
       if (previous === node && slotSizes.current.get(node) === key) return;
       if (previous) {
-        sizeObserver.current.unobserve(previous);
+        sizeObservers.current.get(hostWindowOf(previous))?.unobserve(previous);
         slotSizes.current.delete(previous);
       }
       slotSizes.current.set(node, key);
       slotElements.current.set(key, node);
-      sizeObserver.current.observe(node);
+      observer.observe(node);
     },
-    [measure]
+    [measure, observerFor]
   );
   useEffect(
     () => () => {
-      sizeObserver.current?.disconnect();
+      for (const observer of sizeObservers.current.values()) observer.disconnect();
+      sizeObservers.current.clear();
       slotElements.current.clear();
     },
     []

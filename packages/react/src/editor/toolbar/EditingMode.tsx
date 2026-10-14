@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
+  hostDocumentOf,
+  isDomNode,
   runToolbarCommand,
   toolbarCommandState,
   type DocxEditorInstance,
@@ -123,7 +125,7 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
 
   const onMenuKeyDown = useCallback((event: React.KeyboardEvent): void => {
     const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS) ?? [])];
-    const at = items.indexOf(document.activeElement as HTMLButtonElement);
+    const at = items.indexOf(hostDocumentOf(menuRef.current).activeElement as HTMLButtonElement);
     const move = (to: number): void => {
       event.preventDefault();
       items[(to + items.length) % items.length]?.focus();
@@ -138,14 +140,15 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
     if (!open) return undefined;
     const onMouseDown = (event: MouseEvent): void => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (root && isDomNode(event.target) && root.contains(event.target)) return;
       setOpen(false);
     };
     // Capture, like the link popover: the surface prevents default on its own pointer
     // handling, so a bubbling listener never sees a click that lands on the pages.
-    document.addEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onMouseDown, true);
     return () => {
-      document.removeEventListener('mousedown', onMouseDown, true);
+      doc.removeEventListener('mousedown', onMouseDown, true);
     };
   }, [open]);
   // Escape through the shared rule: a host input keeps its own Escape.

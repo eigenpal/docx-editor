@@ -1,6 +1,10 @@
 import { ref, shallowRef, watch, type ShallowRef } from 'vue';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { REVIEW_MARKERS_GUTTER_PX, reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
+import {
+  REVIEW_MARKERS_GUTTER_PX,
+  reviewPaneEntitledZoom,
+  hostWindowOf,
+} from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
@@ -140,8 +144,9 @@ export function useViewportClientWidth(): ShallowRef<number | null> {
         width.value = element.clientWidth;
       };
       sync();
-      if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(sync);
+      const win = hostWindowOf(element);
+      if (typeof win.ResizeObserver === 'undefined') return;
+      const observer = new win.ResizeObserver(sync);
       observer.observe(element);
       onCleanup(() => observer.disconnect());
     },
@@ -184,8 +189,10 @@ export function useReviewGutter(): ShallowRef<ReviewGutter> {
         if (next !== gutter.value) gutter.value = next;
       };
       sync();
-      if (!element || typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(sync);
+      if (!element) return;
+      const win = hostWindowOf(element);
+      if (typeof win.ResizeObserver === 'undefined') return;
+      const observer = new win.ResizeObserver(sync);
       observer.observe(element);
       onCleanup(() => observer.disconnect());
     },
