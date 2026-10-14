@@ -1,7 +1,11 @@
 // Read only the run properties whose typography the equation lane represents.
 // Unknown properties retain the bounded fallback rather than being discarded.
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from './ooxml-shared.ts';
-import { equationControlPropertiesAreDefault } from './omml-control-defaults.ts';
+import {
+  EQUATION_DEFAULT_MATH_FONT,
+  equationControlPropertiesAreDefault,
+  equationRunPropertiesAreDefault,
+} from './omml-control-defaults.ts';
 import type { OoxmlElement, OoxmlGenericElementNode, OoxmlNode } from './ooxml-tree.ts';
 
 const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
@@ -96,8 +100,23 @@ function readRunProperties(child: OoxmlElement, word: boolean, format: MutableRu
   return true;
 }
 
-/** Null means unsupported source. An empty format preserves existing math defaults. */
+// Default run properties that hold a size or language draw in the math face, like a run
+// without them. The face is the format: it marks the run as formatted source.
+const DEFAULT_RUN_FORMAT: EquationRunFormat = Object.freeze({
+  fontFamily: EQUATION_DEFAULT_MATH_FONT,
+});
+
+/**
+ * Null means unsupported source. An empty format preserves existing math defaults. Default
+ * run properties (see `equationRunPropertiesAreDefault`) are always supported.
+ */
 export function equationRunFormat(run: OoxmlElement): EquationRunFormat | null {
+  const format = readRunFormat(run);
+  if (format !== null || !equationRunPropertiesAreDefault(run)) return format;
+  return DEFAULT_RUN_FORMAT;
+}
+
+function readRunFormat(run: OoxmlElement): EquationRunFormat | null {
   if (run.attributes.length !== 0) return null;
   const format: MutableRunFormat = {};
   const seen = new Set<string>();

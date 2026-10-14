@@ -71,9 +71,10 @@ test.each(['top', 'bot'])(
 
 test.each(['', '<m:barPr/>'])('places a bar without a position below its body: %s', (pr) => {
   const projection = project(`<m:bar>${pr}<m:e>${run('N', font)}</m:e></m:bar>`);
+  // The only run carries default run properties, so it projects without format.
   expect(projection.expression).toEqual({
     kind: 'bar',
-    body: { kind: 'text', value: 'N', format: { fontFamily: 'Cambria Math' } },
+    body: { kind: 'text', value: 'N' },
     position: 'bottom',
   });
 });
@@ -92,7 +93,7 @@ test.each([
   '<m:rPr><m:unknown/></m:rPr>',
   '<w:rPr><w:constructor/></w:rPr>',
   '<m:rPr><m:__proto__/></m:rPr>',
-  '<w:rPr><w:sz w:val="28"/></w:rPr>',
+  '<w:rPr><w:sz w:val="28"/><w:szCs w:val="24"/></w:rPr>',
 ])('keeps unsupported source typography in the bounded fallback', (properties) => {
   const projection = project(
     `<m:sSup><m:e>${run('Q', properties)}</m:e><m:sup>${run('2')}</m:sup></m:sSup>`

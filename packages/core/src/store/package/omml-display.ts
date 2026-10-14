@@ -64,7 +64,11 @@ export function projectOmmlDisplay(node: OoxmlNode): OmmlEquationProjection | nu
       if (index > 0) items.push(Object.freeze({ kind: 'text', value: DISPLAY_EQUATION_GAP }));
       items.push(projection.expression);
     });
+    // One shared run size sizes the display; otherwise it takes the surrounding size.
+    const fontSizePt = projections[0]!.fontSizePt;
+    const shared = projections.every((projection) => projection.fontSizePt === fontSizePt);
     result = Object.freeze({
+      ...(shared && fontSizePt !== undefined ? { fontSizePt } : {}),
       sourceNodeId: projections[0]!.sourceNodeId,
       expression: Object.freeze({ kind: 'row', items: Object.freeze(items) }),
       fallbackText: projections.map((projection) => projection.fallbackText).join(' '),
