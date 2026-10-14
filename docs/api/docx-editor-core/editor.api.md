@@ -1240,6 +1240,9 @@ export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
 export const DEFAULT_TABLE_CHROME_DRAFT: TableChromeDraft;
 
 // @public
+export const DEFAULT_WATERMARK_FONT = "Calibri";
+
+// @public
 export function defaultChromeGroups(): readonly ChromeGroup[];
 
 // @public
@@ -3864,6 +3867,17 @@ export function watchHighlights(editor: Editor, name: string, source: HighlightS
 // @public
 export interface WatchHighlightsOptions extends HighlightOptions {
     readonly onResult?: (result: HighlightResult) => void;
+}
+
+// @public
+export function watermarkShapeBox(watermark: Watermark, area: WatermarkSize, measurer?: TextMeasurer): WatermarkSize | null;
+
+// @public
+export interface WatermarkSize {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
 }
 
 // @public

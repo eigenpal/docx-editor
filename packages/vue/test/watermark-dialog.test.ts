@@ -11,6 +11,12 @@ import { DocxEditorMenu } from '../src/editor/menu';
 import { DocxEditorWatermarkDialog } from '../src/editor/DocxEditorWatermark';
 import { mountEditorTree } from './helpers/mount';
 
+/** The `matrix(a b c d e f)` fit of a preview text transform. */
+function fitOf(text: Element): number[] {
+  const match = /matrix\(([^)]*)\)/.exec(text.getAttribute('transform') ?? '');
+  return match ? match[1]!.split(' ').map(Number) : [];
+}
+
 const PNG_1X1 = Uint8Array.from(
   atob(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
@@ -250,7 +256,7 @@ describe('DocxEditor.WatermarkDialog (Vue)', () => {
     expect(text.getAttribute('fill')).toBe('#C0C0C0');
     expect(text.getAttribute('fill-opacity')).toBe('0.5');
     expect(text.getAttribute('transform')).toContain('rotate(-45');
-    expect(text.getAttribute('lengthAdjust')).toBe('spacingAndGlyphs');
+    expect(fitOf(text)).toHaveLength(6);
 
     await type(control('Text'), 'SECRET');
     await type(control('Color'), '#ff0000');
@@ -262,17 +268,18 @@ describe('DocxEditor.WatermarkDialog (Vue)', () => {
     expect(text.getAttribute('fill')).toBe('#FF0000');
     expect(text.getAttribute('fill-opacity')).toBe('0.75');
     expect(text.getAttribute('font-weight')).toBe('bold');
-    expect(text.getAttribute('transform')).toBeNull();
+    expect(text.getAttribute('transform')).not.toContain('rotate');
 
-    // The preview uses the page's box rule: Auto fills the 6.5 inch text area of a Letter
-    // page, and a fixed size draws the glyphs at that size.
+    // The preview uses the page's box rule. Auto fills the 6.5 inch text area of a Letter
+    // page, so the box starts at the 72 point margin and the ink at the 7.2 point inset.
+    // A fixed 72 point size is a 79.2 point estimated advance centered on the page.
     await type(control('Text'), 'xd');
     text = preview().querySelector('[data-docx-watermark-preview="text"]')!;
     expect(text.textContent).toBe('xd');
-    expect(text.getAttribute('textLength')).toBe('468');
+    expect(fitOf(text)[4]).toBeCloseTo(79.2, 3);
     await type(control('Size'), '72');
     text = preview().querySelector('[data-docx-watermark-preview="text"]')!;
-    expect(text.getAttribute('font-size')).toBe('72');
+    expect(fitOf(text)[4]).toBeCloseTo(273.6, 3);
 
     await choose(control('No watermark') as HTMLInputElement);
     expect(preview().querySelector('[data-docx-watermark-preview]')).toBeNull();

@@ -78,9 +78,10 @@ async function shapeSizes(editor: DocxEditorInstance): Promise<Array<[number, nu
     .sort()
     .map((name) => {
       const xml = strFromU8(files[name]!);
-      const style = /id="(?:PowerPlusWaterMarkObject|WordPictureWatermark)\d+"[^>]*style="([^"]*)"/.exec(
-        xml
-      )?.[1];
+      const style =
+        /id="(?:PowerPlusWaterMarkObject|WordPictureWatermark)\d+"[^>]*style="([^"]*)"/.exec(
+          xml
+        )?.[1];
       const side = (key: string) => Number(new RegExp(`${key}:([\\d.]+)pt`).exec(style ?? '')?.[1]);
       return [side('width'), side('height')];
     });
