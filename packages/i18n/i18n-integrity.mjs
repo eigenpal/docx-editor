@@ -159,7 +159,7 @@ function checkLeaf(key, enText, locText, code, violations) {
       const enLabels = new Set(
         enInfo.plurals
           .filter((source) => source.name === plural.name)
-          .flatMap((source) => source.branches.map((branch) => branch.label)),
+          .flatMap((source) => source.branches.map((branch) => branch.label))
       );
       if (enPluralNames.size > 0) {
         if (!enPluralNames.has(plural.name)) {
@@ -193,7 +193,7 @@ function checkLeaf(key, enText, locText, code, violations) {
       const locLabels = new Set(
         locInfo.plurals
           .filter((translated) => translated.name === plural.name)
-          .flatMap((translated) => translated.branches.map((branch) => branch.label)),
+          .flatMap((translated) => translated.branches.map((branch) => branch.label))
       );
       for (const exact of enLabels) {
         if (!EXACT_BRANCH_RE.test(exact) || locLabels.has(exact)) continue;
@@ -218,8 +218,7 @@ function checkLeaf(key, enText, locText, code, violations) {
     violations.push({
       key,
       code: 'malformed_braces',
-      message:
-        'stray braces or unrecognized syntax within a plural block',
+      message: 'stray braces or unrecognized syntax within a plural block',
     });
   }
 }
