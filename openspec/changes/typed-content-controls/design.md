@@ -26,6 +26,8 @@ A lock enforced in the widget layer is a suggestion. The store is the only write
 
 The surface still reads the lock, but only to disable controls and explain why. Telling the user before they type is UX; refusing the op is correctness. Both are required, and the second one is what makes the claim true.
 
+A host's opt-in `contentLockPolicy.allowFormattingInLockedContent` lets formatting past the content half of a lock. The exception lives in the same validator, so every caller is still answered identically.
+
 The lock vocabulary is `ST_Lock`: `sdtLocked`, `contentLocked`, `sdtContentLocked`, `unlocked`. Collapsing it to a boolean loses the distinction between "you may edit this but not delete the field" and the reverse, which is the entire point of a template.
 
 The comprehensive fixture declares no lock, but `block-sdt-comprehensive.docx`, `block-sdt-widgets.docx`, `block-sdt-showcase.docx`, and `inline-checkbox-controls.docx` each declare `sdtContentLocked`, so enforcement is testable today. `tasks.md` §6 adds only the `ST_Lock` values and the nesting case those files lack.
@@ -69,7 +71,7 @@ The fixture's four checkbox-style controls are Word-authored checkbox content co
 
 The `w:sym` is their **content**, which is exactly how Word renders a checkbox: the control's state selects between `w14:checkedState` and `w14:uncheckedState`, and the chosen glyph is written into `w:sdtContent`. So the toggle operation is real, and it is not "swap a character" — it sets `w14:checked` and rewrites the content glyph from the control's own declared states.
 
-Two consequences. First, the fixture is a valid checkbox fixture and `inline-checkbox-controls.docx` is a second one, so this path needs no new file. Second, `w14:checkbox` is a Microsoft extension outside `CT_SdtPr`'s type choice, which means a control can carry it *and* declare no ECMA-376 type element — so "untyped" and "checkbox" are not mutually exclusive, and the model must read the extension before concluding a control is untyped. Three controls in the comprehensive fixture are genuinely untyped; the other four are checkboxes.
+Two consequences. First, the fixture is a valid checkbox fixture and `inline-checkbox-controls.docx` is a second one, so this path needs no new file. Second, `w14:checkbox` is a Microsoft extension outside `CT_SdtPr`'s type choice, which means a control can carry it _and_ declare no ECMA-376 type element — so "untyped" and "checkbox" are not mutually exclusive, and the model must read the extension before concluding a control is untyped. Three controls in the comprehensive fixture are genuinely untyped; the other four are checkboxes.
 
 ### S6: Data binding is preserved and refused, not half-supported
 

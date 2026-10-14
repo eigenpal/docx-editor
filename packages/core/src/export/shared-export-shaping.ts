@@ -6,6 +6,7 @@ import {
   createHarfBuzzTextShaper,
   createLayoutShapedMeasurer,
   HARD_MAX_AGGREGATE_FONT_BYTES,
+  HARD_MAX_FONT_BYTES,
   initializeHarfBuzz,
   type PreparedLayoutFontConfiguration,
   type LayoutShapingInstrumentation,
@@ -19,7 +20,15 @@ import {
   type FontRequest,
   type ResolvedFont,
 } from '../layout/font-resource.ts';
-import { EXPORT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
+import {
+  EXPORT_HARFBUZZ_SHAPER_POLICY,
+  layoutShaperExecutionPolicyFingerprint,
+} from '../layout/layout-shaper-policy.ts';
+import {
+  fontShapingPolicy,
+  withFontShapingPolicy,
+  type FontShapingOptions,
+} from '../layout/font-shaping-policy.ts';
 import {
   configurationOfPreparedLayoutFonts,
   createLayoutShapingWithTextShaper,
@@ -60,10 +69,11 @@ interface SharedExportShapingSubstrate {
 const sharedShaping = new Map<string, Promise<SharedExportShapingSubstrate>>();
 const sharedShapingViews = new WeakMap<
   PreparedLayoutFontConfiguration,
-  Promise<SharedExportShapingCapabilities>
+  Map<string, Promise<SharedExportShapingCapabilities>>
 >();
 let retainedOrReservedFontBytes = 0;
 let processWideExportShaper: Promise<TextShaper> | undefined;
+let defaultExportShaperView: Promise<TextShaper> | undefined;
 
 /** Process-wide ceiling preventing host-derived cache keys from retaining unbounded font sets. @public */
 export const MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS = 32;
@@ -76,15 +86,32 @@ export const MAX_SHARED_EXPORT_SHAPING_FONT_BYTES = HARD_MAX_AGGREGATE_FONT_BYTE
  * A rejected initialization is retryable, matching failed substrate initialization below.
  * @internal
  */
-export function acquireProcessWideExportShaper(): Promise<TextShaper> {
+function acquireNativeProcessWideExportShaper(): Promise<TextShaper> {
   if (processWideExportShaper) return processWideExportShaper;
   const pending = (async (): Promise<TextShaper> => {
     await initializeHarfBuzz();
-    return createHarfBuzzTextShaper(EXPORT_HARFBUZZ_SHAPER_POLICY);
+    return createHarfBuzzTextShaper({
+      ...EXPORT_HARFBUZZ_SHAPER_POLICY,
+      maxFontBytes: HARD_MAX_FONT_BYTES,
+    });
   })();
   processWideExportShaper = pending;
   void pending.catch(() => {
     if (processWideExportShaper === pending) processWideExportShaper = undefined;
+  });
+  return pending;
+}
+
+/** Default-bound view of the one process-wide native shaper. @internal */
+export function acquireProcessWideExportShaper(): Promise<TextShaper> {
+  if (defaultExportShaperView) return defaultExportShaperView;
+  const pending = acquireNativeProcessWideExportShaper().then((shaper) => {
+    const bounded = withFontShapingPolicy(shaper, EXPORT_HARFBUZZ_SHAPER_POLICY);
+    return Object.freeze({ shape: bounded.shape });
+  });
+  defaultExportShaperView = pending;
+  void pending.catch(() => {
+    if (defaultExportShaperView === pending) defaultExportShaperView = undefined;
   });
   return pending;
 }
@@ -111,17 +138,19 @@ export async function createSessionExportShaping(
   prepared: PreparedLayoutFontConfiguration,
   instrumentation?: LayoutShapingInstrumentation,
   glyphFallbacks: readonly FontRequest[] = [],
-  documentLigatures = false
+  documentLigatures = false,
+  execution?: FontShapingOptions
 ): Promise<SessionExportShaping> {
   if (!isPreparedLayoutFontConfiguration(prepared)) {
     throw new TypeError('Session exporter shaping requires a prepared font handle');
   }
-  const shaper = await acquireProcessWideExportShaper();
+  const policy = fontShapingPolicy(execution, EXPORT_HARFBUZZ_SHAPER_POLICY);
+  const shaper = await acquireNativeProcessWideExportShaper();
   const shaping = withExportGlyphFallbacks(
     await createLayoutShapingWithTextShaper(
       prepared,
       shaper,
-      EXPORT_HARFBUZZ_SHAPER_POLICY,
+      policy,
       instrumentation,
       documentLigatures
     ),
@@ -153,17 +182,21 @@ export async function createSessionExportShaping(
  */
 export function acquireSharedExportShaping(
   prepared: PreparedLayoutFontConfiguration,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  execution?: FontShapingOptions
 ): Promise<SharedExportShapingCapabilities> {
   if (!isPreparedLayoutFontConfiguration(prepared)) {
     return Promise.reject(new TypeError('Shared exporter shaping requires a prepared font handle'));
   }
-  const existingView = sharedShapingViews.get(prepared);
+  const policy = fontShapingPolicy(execution, EXPORT_HARFBUZZ_SHAPER_POLICY);
+  const policyKey = layoutShaperExecutionPolicyFingerprint(policy);
+  let views = sharedShapingViews.get(prepared);
+  const existingView = views?.get(policyKey);
   if (existingView) return existingView;
   // A host epoch invalidates that host's operation caches, but cannot change an already owned
   // immutable byte/configuration snapshot. Key the process-wide native substrate by the latter:
   // otherwise byte-identical reloads consume one permanent slot and byte budget per epoch.
-  const cacheKey = sharedShapingFingerprintOfPreparedLayoutFonts(prepared);
+  const cacheKey = `${sharedShapingFingerprintOfPreparedLayoutFonts(prepared)}|${policyKey}`;
   let substrate = sharedShaping.get(cacheKey);
   if (!substrate) {
     if (sharedShaping.size >= MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS) {
@@ -190,11 +223,11 @@ export function acquireSharedExportShaping(
       retainedOrReservedFontBytes += byteSize;
       let shaping: LayoutShapingOptions;
       try {
-        const shaper = await acquireProcessWideExportShaper();
+        const shaper = await acquireNativeProcessWideExportShaper();
         shaping = await createLayoutShapingWithTextShaper(
           prepared,
           shaper,
-          EXPORT_HARFBUZZ_SHAPER_POLICY,
+          policy,
           instrumentation
         );
       } catch (error) {
@@ -232,9 +265,10 @@ export function acquireSharedExportShaping(
         extensionFingerprint,
       })
   );
-  sharedShapingViews.set(prepared, pending);
+  if (!views) sharedShapingViews.set(prepared, (views = new Map()));
+  views.set(policyKey, pending);
   void pending.catch(() => {
-    if (sharedShapingViews.get(prepared) === pending) sharedShapingViews.delete(prepared);
+    if (views?.get(policyKey) === pending) views.delete(policyKey);
   });
   return pending;
 }

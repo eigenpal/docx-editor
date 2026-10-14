@@ -272,6 +272,11 @@ export interface FontRequest {
 }
 
 // @public
+export interface FontShapingOptions {
+    readonly maxFontBytes?: number;
+}
+
+// @public
 export interface FontSubstitution {
     // (undocumented)
     readonly lineMetrics?: {
@@ -693,6 +698,7 @@ export type OpenDocumentForExportResult = {
 export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExportOptions {
     readonly fallbackFonts?: MarkdownFontsSource;
     readonly fontPolicy?: 'best-effort' | 'strict';
+    readonly fontShaping?: FontShapingOptions;
     readonly fonts?: MarkdownFontsSource;
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
     readonly reuseAcrossRevisions?: boolean;

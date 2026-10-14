@@ -14,6 +14,9 @@ Every editor metric includes `docx_editor.version`, which becomes `docx_editor_v
 | --- | --- | --- | --- |
 | `docx_editor_document_opens_total` | counter | `outcome`, `code`, `cause`, `part`, `docx_editor.version` | Documents opened or refused, by outcome, refusal code, engine reason, and part role. |
 | `docx_editor_document_open_duration_seconds` | histogram | `docx_editor.version` | Time from the start of an open to the laid-out document. |
+| `docx_editor_document_saves_total` | counter | `outcome`, `code`, `docx_editor.version` | Calls to save() that returned the document or failed, by outcome and failure code. |
+| `docx_editor_document_save_duration_seconds` | histogram | `docx_editor.version` | Time from a save() call to the saved bytes, pending edits included. Successful saves only. |
+| `docx_editor_edits_total` | counter | `origin`, `docx_editor.version` | Edits that changed the document, by origin: input, command, or automation. Refused edits are in docx_editor.edit.rejections, and edits by collaborators are not counted. Counted when a session summary is sent, up to a minute after the edit. |
 | `docx_editor_edit_rejections_total` | counter | `code`, `cause`, `origin`, `tracked`, `docx_editor.version` | Edits, commands, and tracked changes refused, by public code and engine reason. |
 | `docx_editor_review_skipped_total` | counter | `code`, `cause`, `operation`, `change_kind`, `docx_editor.version` | Tracked changes skipped by accept, reject, or reassign requests, by engine reason, operation, and change kind. |
 | `docx_editor_font_failures_total` | counter | `code`, `docx_editor.version` | Font faces that failed to load and were substituted. |
@@ -22,6 +25,9 @@ Every editor metric includes `docx_editor.version`, which becomes `docx_editor_v
 | `docx_editor_collab_client_status_transitions_total` | counter | `status`, `code`, `docx_editor.version` | Collaboration status changes on clients, by new status and failure code. |
 | `docx_editor_collab_client_connect_duration_seconds` | histogram | `docx_editor.version` | Time from an editor attaching a room to its first ready status, when the editor attached before the room was ready. |
 | `docx_editor_collab_client_participants` | histogram | `docx_editor.version` | People in the room, as each client sees it when the count changes. |
+| `docx_editor_editor_sessions_total` | counter | `phase`, `docx_editor.version` | Editor sessions started and ended, by phase. An editor ends when it is destroyed or its page closes. |
+| `docx_editor_editor_session_duration_seconds` | histogram | `docx_editor.version` | Time from the creation of an editor to its end, idle time included. Recorded when the session ends. |
+| `docx_editor_editor_active_time_seconds_total` | counter | `docx_editor.version` | Seconds of use: time between key presses, pointer presses, and edits that are at most 30 seconds apart. Counted when a session summary is sent. |
 | `docx_editor_editor_interaction_duration_seconds` | histogram | `pages`, `docx_editor.version` | Key presses and pointer presses on the pages, to the next frame on screen, by page count bucket. Bucket counts are exact; the sum is estimated from the bands. |
 | `docx_editor_editor_layout_duration_seconds` | histogram | `pages`, `docx_editor.version` | Engine layout passes after edits and view changes, background work included, by page count bucket. Bucket counts are exact; the sum is estimated from the bands. |
 | `docx_editor_editor_paint_duration_seconds` | histogram | `pages`, `docx_editor.version` | Engine paints of the pages, by page count bucket. Bucket counts are exact; the sum is estimated from the bands. |

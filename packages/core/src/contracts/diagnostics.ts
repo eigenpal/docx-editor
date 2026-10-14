@@ -18,6 +18,7 @@ export const DIAGNOSTIC_SCHEMA_VERSION = 1;
 
 import type {
   DocumentOpenDiagnosticCode,
+  DocumentSaveDiagnosticCode,
   EditDiagnosticCode,
   ReviewDiagnosticCode,
   FontDiagnosticCode,
@@ -38,6 +39,7 @@ import type {
 
 export type {
   DocumentOpenDiagnosticCode,
+  DocumentSaveDiagnosticCode,
   EditDiagnosticCode,
   ReviewDiagnosticCode,
   FontDiagnosticCode,
@@ -127,6 +129,78 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
         readonly part?: DocumentPartKind;
       })
   );
+
+/**
+ * A `save()` call returned the document, or failed. Reported for each call, by the editor that
+ * saved. A save the host does afterwards, such as an upload, is the host's to measure.
+ *
+ * @public
+ */
+export type DocumentSaveDiagnostic = DiagnosticBase & {
+  readonly kind: 'document.save';
+} & (
+    | {
+        readonly outcome: 'saved';
+        /** Size of the saved bytes. */
+        readonly sizeBucket: ByteSizeBucket;
+        /** Milliseconds from the `save()` call to the bytes, pending edits included. */
+        readonly durationMs: number;
+      }
+    | (DiagnosticFailureDetail & {
+        readonly outcome: 'rejected';
+        readonly code: DocumentSaveDiagnosticCode;
+        /** Milliseconds from the `save()` call to the failure. */
+        readonly durationMs: number;
+      })
+  );
+
+/**
+ * What an editor did over a window of use or over its whole session. Counts and milliseconds
+ * only: no key, position, command argument or text.
+ *
+ * @public
+ */
+export interface SessionActivity {
+  /**
+   * For `active`, milliseconds from the window's first activity to the summary. For `end`,
+   * milliseconds from the editor's creation to its end, idle time included.
+   */
+  readonly durationMs: number;
+  /**
+   * Milliseconds of use: the time between key presses, pointer presses and edits that are at
+   * most 30 seconds apart. A longer pause counts as idle.
+   */
+  readonly activeMs: number;
+  /**
+   * Edits from typing, the clipboard, drag and drop, keyboard undo, and other input that changed
+   * the document. Each committed change counts once: typing commits about one change per
+   * character, and characters typed faster than the editor paints commit together.
+   */
+  readonly inputEdits: number;
+  /** Editor commands, from `exec(...)` or the toolbar, that changed the document. */
+  readonly commandEdits: number;
+  /** Editing API batches that changed the document. */
+  readonly automationEdits: number;
+}
+
+/**
+ * The lifecycle and activity of one editor instance, without any content.
+ *
+ * - `start`: the editor was created.
+ * - `active`: a summary of one window of use. Sent after a minute of activity, when the page is
+ *   hidden, and before `end`, if anything happened since the last summary. An idle editor sends
+ *   none, so `active` is not a heartbeat.
+ * - `end`: the editor was destroyed, or the page closed. Carries totals for the whole session.
+ *
+ * Edits count changes this editor committed. Refused edits are in `edit.rejected`, and edits
+ * that collaborators made are not counted. Sum `active` summaries or read `end` totals, not
+ * both: the totals include every summary.
+ *
+ * @public
+ */
+export type SessionDiagnostic = DiagnosticBase & {
+  readonly kind: 'session';
+} & ({ readonly phase: 'start' } | (SessionActivity & { readonly phase: 'active' | 'end' }));
 
 /** Where a refused edit came from. @public */
 export type EditRejectionOrigin = 'command' | 'input' | 'automation';
@@ -255,7 +329,11 @@ export interface PerformanceDiagnostic extends DiagnosticBase {
    * presses were timed and more than one in 20 took over 200 ms.
    */
   readonly code?: PerformanceDiagnosticCode;
-  /** Milliseconds from the window's first timing to the summary. */
+  /**
+   * Milliseconds from the window's first timing to the summary, one minute or less. Idle time
+   * inside the window counts, so this is not active editing time. Use the `count` of
+   * `interaction` to measure activity.
+   */
   readonly windowMs: number;
   /** Pages in the document at the last paint. */
   readonly pagesBucket?: CountBucket;
@@ -299,7 +377,9 @@ export type EditorDiagnostic =
   | CustomNodeDiagnosticEvent
   | CollaborationStatusDiagnostic
   | CollaborationParticipantsDiagnostic
-  | PerformanceDiagnostic;
+  | PerformanceDiagnostic
+  | DocumentSaveDiagnostic
+  | SessionDiagnostic;
 
 /** The `kind` of every {@link EditorDiagnostic}. @public */
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];

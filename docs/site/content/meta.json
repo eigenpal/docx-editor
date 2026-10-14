@@ -76,6 +76,7 @@
     "telemetry/log-recipes",
     "telemetry/callbacks",
     "telemetry/performance",
+    "telemetry/sessions",
     "telemetry/identifiers",
     "telemetry/agents",
     "telemetry/servers",

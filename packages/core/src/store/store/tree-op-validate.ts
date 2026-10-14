@@ -18,7 +18,8 @@ import { validateInsertBuildingBlock } from './building-block-insert.ts';
 // Application lives in tree-op-apply.ts; public entry is tree-ops.ts.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { findNode } from '../package/ooxml-edit.ts';
+import { findNode, type EditOptions } from '../package/ooxml-edit.ts';
+import { restylePassesContentLock } from './content-lock-policy.ts';
 import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equation.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { isDangerousKey } from '../package/safe-record.ts';
@@ -247,7 +248,12 @@ export function namedOwnerRefusal(
 }
 
 /** Structural validation, run before any tree work so a rejection changes nothing. */
-export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
+export function validateTreeOp(
+  part: OoxmlPart,
+  op: TreeDocOp,
+  options?: Pick<EditOptions, 'contentLockPolicy'>
+): TreeOpRejection | null {
+  const policy = options?.contentLockPolicy;
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
   if (
     (op.op === 'insertText' || op.op === 'deleteText') &&
@@ -272,7 +278,11 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
     if (owner) return owner;
   }
 
-  if (op.op !== 'deleteBlock') {
+  // OPT-IN: restyling does not rewrite what a control SAYS, so a host that protects the words and
+  // not their look lets it past the content half of the lock. Neither op it covers removes a
+  // control, so the removal half has nothing to ask; `w:dataBinding` still refuses below.
+  const restylePasses = restylePassesContentLock(op, policy);
+  if (op.op !== 'deleteBlock' && !restylePasses) {
     const lockRefusal = contentControlLockRefusal(part, op);
     if (lockRefusal) return lockRefusal;
   }
@@ -625,7 +635,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       // A named automation insertion was already resolved against that owner's exact landing
       // site above. Re-resolving the raw caret with editor boundary bias can select a sibling.
       if (op.inside !== undefined) return null;
-      return rejectContentEdit(part, paragraph, op.offset, op.offset, op.bias);
+      return rejectContentEdit(part, paragraph, op.offset, op.offset, { bias: op.bias });
     }
     case 'setListLevel': {
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision))
@@ -664,7 +674,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'invalid-property-value';
       }
       if (isBoundAt(part, op.paragraphId)) return 'bound';
-      if (effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
+      if (!restylePasses && effectiveContentLockAt(part, op.paragraphId).content) return 'locked';
       return null;
     case 'setParagraphTabStops': {
       // Bounded here because nothing downstream is: `w:pos` is a layout dimension, and a
@@ -824,7 +834,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
       if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
         return 'invalid-property-value';
       }
-      return rejectContentEdit(part, paragraph, op.start, op.end);
+      return rejectContentEdit(part, paragraph, op.start, op.end, { restyle: restylePasses });
     }
     case 'setParagraphProperties': {
       const propertiesRejection = validateProperties(op.properties, PARAGRAPH_PROPERTY_SET);

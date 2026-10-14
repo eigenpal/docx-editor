@@ -208,15 +208,13 @@ export function breakParagraph(
     flow?.tocLinkStyleRanges,
     changeSites
   );
-  const paragraphRtl =
-    flow?.paragraphRtl ??
-    paragraphIsRtl(
-      propertiesOf(
-        'children' in paragraph
-          ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
-          : undefined
-      )
+  const paragraphProperties = () =>
+    propertiesOf(
+      'children' in paragraph
+        ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
+        : undefined
     );
+  const paragraphRtl = flow?.paragraphRtl ?? paragraphIsRtl(paragraphProperties());
   const allPieces = bidiPieces(
     rawPieces,
     paragraphRtl,
@@ -258,16 +256,9 @@ export function breakParagraph(
       },
     ];
   });
-  const typography =
-    flow?.typography ??
-    resolveCjkTypography(
-      propertiesOf(
-        'children' in paragraph
-          ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
-          : undefined
-      )
-    );
-  const pieces = compressCjkPieces(visiblePieces, typography, measurer, preserveColonAdvances);
+  const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
+  const keepColon = preserveColonAdvances;
+  const pieces = compressCjkPieces(visiblePieces, typography, measurer, keepColon, available);
   const colonNaturalWidths = cjkColonNaturalWidths(pieces, visiblePieces, measurer);
   const opticalParagraph =
     typography.settings?.compression !== undefined &&

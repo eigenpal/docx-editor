@@ -25,6 +25,10 @@ The paragraph acceptance fixture SHALL cover run font family, half-point size, c
 - **WHEN** the private React and paired adapter fixtures exercise the paragraph slice
 - **THEN** every accepted run property, paragraph property, inline page-break token, section-pagination case, and content token has load, semantic model, layout, edit where applicable, normalized save, and reopen assertions
 
+#### Scenario: Engine tests do not upgrade public support
+- **WHEN** engine tests pass for non-bottom paragraph borders, continuous sections, or multi-column flow without paired adapter acceptance
+- **THEN** the public support matrix remains unchanged until paired acceptance and all public contract gates pass
+
 #### Scenario: Deferred inline feature is present
 - **WHEN** a paragraph also contains a hyperlink, field, comment, tracked change, image, table, content control, header/footer reference, or note reference
 - **THEN** that feature follows its declared preservation status and is excluded from paragraph support claims

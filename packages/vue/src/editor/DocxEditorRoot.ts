@@ -3,6 +3,8 @@ import type {
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
   FieldResultsMode,
+  ContentLockPolicy,
+  LockedControlNavigation,
 } from '@docx-editor.dev/core/editor';
 import { DialogHost } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
@@ -125,6 +127,10 @@ export const DocxEditorRoot = defineComponent({
       type: [Object, Function] as PropType<DocxEditorRootProps['fonts']>,
       default: undefined,
     },
+    fontShaping: {
+      type: Object as PropType<DocxEditorRootProps['fontShaping']>,
+      default: undefined,
+    },
     author: { type: String, default: undefined },
     locale: { type: String, default: undefined },
     translate: { type: Function as PropType<DocxEditorRootProps['translate']>, default: undefined },
@@ -133,6 +139,11 @@ export const DocxEditorRoot = defineComponent({
     revisionMarkup: Object as PropType<RevisionMarkupOptions>,
     reviewDisplayMode: String as PropType<ReviewDisplayMode>,
     fieldResults: { type: String as PropType<FieldResultsMode>, default: undefined },
+    contentLockPolicy: { type: Object as PropType<ContentLockPolicy>, default: undefined },
+    lockedControlNavigation: {
+      type: String as PropType<LockedControlNavigation>,
+      default: undefined,
+    },
     zoom: { type: Number, default: undefined },
     zoomMode: { type: [Object, String] as PropType<ZoomMode | 'auto'>, default: undefined },
     tableInteractionLabel: {

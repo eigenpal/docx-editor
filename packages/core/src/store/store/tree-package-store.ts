@@ -17,6 +17,8 @@ import { capturePackageSelections, selectionForHistory } from './package-history
 // note lifecycle ops commit through `applyLifecycleOp` with atomic package undo/redo.
 
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
+import type { ContentLockPolicy } from '../package/ooxml-edit.ts';
+import { contentLockPolicyOf } from './content-lock-policy.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
@@ -66,6 +68,7 @@ import {
   type SelectionMark,
   type TransactOptions,
   type TreeDocumentCheckpoint,
+  type TreeDocumentStoreOptions,
   type TreeModelChange,
   type TreeStoryRef,
   type TransactionContext,
@@ -157,6 +160,8 @@ export const DEFAULT_MAX_EDITABLE_STORY_PARTS = 64;
 /** How a package store is constructed: limits, history depth, and review contributions. */
 export interface TreePackageStoreOptions {
   readonly historyLimit?: number;
+  /** Opt-in relaxation of `w:lock` for run-property writes, for the body and every story store. */
+  readonly contentLockPolicy?: ContentLockPolicy;
   /** Bound on opened story stores; defaults to {@link DEFAULT_MAX_EDITABLE_STORY_PARTS}. */
   readonly maxEditableStoryParts?: number;
   /**
@@ -183,6 +188,7 @@ export class TreePackageStore {
   private readonly redoOrder: HistoryPointer[] = [];
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
+  private readonly contentLockPolicy: ContentLockPolicy | undefined;
   private readonly maxEditableStoryParts: number;
   private readonly cascadeNoteReferences: NoteCascadeFn;
   private lastChange: TreeModelChange | null = null;
@@ -218,9 +224,25 @@ export class TreePackageStore {
     readonly result: OoxmlPackage;
   } | null = null;
 
+  /**
+   * What the body and every story store open with. `settingsPart` is the SAME live getter for
+   * all of them: a story store is built from a PART, whose synthetic package holds no
+   * `settings.xml`, and a store keeps its own working copy, so a replaced `settings.xml` left one
+   * story reading stale protection. Protection that holds in a header but not the body is worse
+   * than none: it looks enforced. The lock policy reaches every story for the same reason.
+   */
+  private storyStoreOptions(): TreeDocumentStoreOptions {
+    return {
+      historyLimit: this.historyLimit,
+      settingsPart: () => settingsPartOf(this.pkg),
+      ...(this.contentLockPolicy ? { contentLockPolicy: this.contentLockPolicy } : {}),
+    };
+  }
+
   constructor(pkg: OoxmlPackage, main: OoxmlPart, options: TreePackageStoreOptions = {}) {
     this.pkg = withPart(pkg, main);
     this.historyLimit = options.historyLimit ?? 200;
+    this.contentLockPolicy = contentLockPolicyOf(options.contentLockPolicy);
     this.maxEditableStoryParts = options.maxEditableStoryParts ?? DEFAULT_MAX_EDITABLE_STORY_PARTS;
     this.cascadeNoteReferences =
       options.cascadeDeletedNoteReferences ?? cascadeDeletedNoteReferences;
@@ -228,14 +250,7 @@ export class TreePackageStore {
     // a comment's story markers plus its body in `comments.xml` plus the relationship and
     // content-type override — needs the package as its working set; a store handed one part
     // rebuilds a stub package the invariant check refuses.
-    this.body = new TreeDocumentStore(this.pkg, main.name, {
-      historyLimit: this.historyLimit,
-      // The SAME live getter the story stores get. A store keeps its own working copy, so a
-      // `settings.xml` replaced through the coordinator left the body reading stale protection —
-      // making the body the one story a protected document still let you edit. Protection that
-      // holds in a header but not the body is worse than none: it looks enforced.
-      settingsPart: () => settingsPartOf(this.pkg),
-    });
+    this.body = new TreeDocumentStore(this.pkg, main.name, this.storyStoreOptions());
     this.body.setStoryRef({ kind: 'body', partName: main.name });
     registerUndoHistoryPosition(this, {
       current: () => this.undoOrder.at(-1) ?? null,
@@ -1123,12 +1138,7 @@ export class TreePackageStore {
       };
     }
     const normalized = normalizeParagraphIdentity(part);
-    const store = new TreeDocumentStore(normalized, {
-      historyLimit: this.historyLimit,
-      // A story store is built from a PART, whose synthetic package holds no `settings.xml`
-      // — so without this a protected document refused a body edit and accepted a header one.
-      settingsPart: () => settingsPartOf(this.pkg),
-    });
+    const store = new TreeDocumentStore(normalized, this.storyStoreOptions());
     const story: TreeStoryRef = {
       kind: 'notesPart',
       partName: normalized.name,
@@ -1181,12 +1191,7 @@ export class TreePackageStore {
     }
 
     const normalized = normalizeParagraphIdentity(located.part);
-    const store = new TreeDocumentStore(normalized, {
-      historyLimit: this.historyLimit,
-      // A story store is built from a PART, whose synthetic package holds no `settings.xml`
-      // — so without this a protected document refused a body edit and accepted a header one.
-      settingsPart: () => settingsPartOf(this.pkg),
-    });
+    const store = new TreeDocumentStore(normalized, this.storyStoreOptions());
     const story: TreeStoryRef = {
       kind: 'headerFooter',
       partName: normalized.name,

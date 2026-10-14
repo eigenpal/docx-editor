@@ -20,10 +20,14 @@ import {
 } from './harfbuzz-shaper.ts';
 import { FIXED_MEASURER_FINGERPRINT } from './fixed-measurer.ts';
 import {
-  LAYOUT_HARFBUZZ_SHAPER_POLICY,
   layoutShaperExecutionPolicyFingerprint,
   type LayoutHarfBuzzShaperPolicy,
 } from './layout-shaper-policy.ts';
+import {
+  fontShapingPolicy,
+  withFontShapingPolicy,
+  type FontShapingOptions,
+} from './font-shaping-policy.ts';
 import type { LayoutShapingOptions } from './shaped-measurer.ts';
 
 // The shipped browser adapter called createShapedMeasurer without explicit OpenType features.
@@ -593,7 +597,11 @@ async function createLayoutShapingInternal(
   });
   return Object.freeze({
     fonts,
-    shaper: sharedShaper ?? createHarfBuzzTextShaper(shaperPolicy),
+    shaper: withFontShapingPolicy(
+      sharedShaper ?? createHarfBuzzTextShaper(shaperPolicy),
+      shaperPolicy,
+      sharedShaper === undefined
+    ),
     defaultFont,
     environment,
     ligatureCaretPolicy: LIGATURE_CARET_POLICY,
@@ -610,13 +618,14 @@ async function createLayoutShapingInternal(
 /** Build one shaped-layout environment without importing an editor or DOM lane. @public */
 export async function createLayoutShaping(
   configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration,
-  instrumentation?: LayoutShapingInstrumentation
+  instrumentation?: LayoutShapingInstrumentation,
+  execution?: FontShapingOptions
 ): Promise<LayoutShapingOptions> {
   return createLayoutShapingInternal(
     configuration,
     instrumentation,
     undefined,
-    LAYOUT_HARFBUZZ_SHAPER_POLICY
+    fontShapingPolicy(execution)
   );
 }
 

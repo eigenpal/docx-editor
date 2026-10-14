@@ -20,6 +20,7 @@ import {
 const SUGGESTING_EQUATION_REFUSAL =
   'equation replacement and removal are not supported in suggesting mode';
 const paragraphEquationCache = new WeakMap<OoxmlParagraphNode, readonly SurfaceEquation[]>();
+const sourcePreservingEquations = new WeakSet<SurfaceEquation>();
 
 /** One addressable inline equation and its compact editable projection. */
 export interface SurfaceEquation {
@@ -55,17 +56,19 @@ function equationsInParagraph(part: OoxmlPart, paragraphId: string): readonly Su
     for (const node of equationsOfAtom(segment.node)) {
       const projection = projectOmmlEquation(node);
       if (!projection) continue;
-      equations.push(
-        Object.freeze({
-          id: node.id,
-          paragraphId,
-          start: segment.start,
-          end: segment.end,
-          linear: equationExpressionToLinearMath(projection.expression),
-          fallbackText: projection.fallbackText,
-          supported: expressionIsSupported(projection.expression),
-        })
-      );
+      const equation = Object.freeze({
+        id: node.id,
+        paragraphId,
+        start: segment.start,
+        end: segment.end,
+        linear: equationExpressionToLinearMath(projection.expression),
+        fallbackText: projection.fallbackText,
+        supported: expressionIsSupported(projection.expression),
+      });
+      if (expressionNeedsSourcePreservation(projection.expression)) {
+        sourcePreservingEquations.add(equation);
+      }
+      equations.push(equation);
     }
   }
   const result = Object.freeze(equations);
@@ -89,12 +92,52 @@ export function equationPlainText(
   return here.map((equation) => equation.linear || equation.fallbackText).join(' ');
 }
 
+function expressionNeedsSourcePreservation(expression: EquationExpression): boolean {
+  switch (expression.kind) {
+    case 'bar':
+      return true;
+    case 'text':
+      return expression.format !== undefined;
+    case 'fallback':
+      return false;
+    case 'row':
+      return expression.items.some(expressionNeedsSourcePreservation);
+    case 'fraction':
+      return (
+        expressionNeedsSourcePreservation(expression.numerator) ||
+        expressionNeedsSourcePreservation(expression.denominator)
+      );
+    case 'radical':
+      return (
+        expressionNeedsSourcePreservation(expression.radicand) ||
+        (expression.degree !== undefined && expressionNeedsSourcePreservation(expression.degree))
+      );
+    case 'script':
+      return (
+        expressionNeedsSourcePreservation(expression.base) ||
+        (expression.subscript !== undefined &&
+          expressionNeedsSourcePreservation(expression.subscript)) ||
+        (expression.superscript !== undefined &&
+          expressionNeedsSourcePreservation(expression.superscript))
+      );
+    case 'nary':
+      return (
+        expressionNeedsSourcePreservation(expression.body) ||
+        (expression.lowerLimit !== undefined &&
+          expressionNeedsSourcePreservation(expression.lowerLimit)) ||
+        (expression.upperLimit !== undefined &&
+          expressionNeedsSourcePreservation(expression.upperLimit))
+      );
+  }
+}
+
 function expressionIsSupported(expression: EquationExpression): boolean {
   switch (expression.kind) {
     case 'fallback':
+    case 'bar':
       return false;
     case 'text':
-      return true;
+      return expression.format === undefined;
     case 'row':
       return expression.items.every(expressionIsSupported);
     case 'fraction':
@@ -310,6 +353,13 @@ export function createEquationOps(deps: EquationOpsDeps): EquationOps {
     // `applyTreeOps`, or Suggesting would make the change permanent and unreviewable.
     if (deps.editingMode() === 'suggest') {
       return { ok: false, code: 'unsupported', reason: SUGGESTING_EQUATION_REFUSAL };
+    }
+    if (action === 'replace' && sourcePreservingEquations.has(equation)) {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: 'compact linear editing cannot preserve this equation source formatting',
+      };
     }
     const op: EquationTreeOp =
       action === 'replace'

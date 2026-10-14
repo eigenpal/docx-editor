@@ -11,7 +11,6 @@ import { createSessionPackageWriter } from './session-package-writer.ts';
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
 import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
-import type { Node as PMNode } from 'prosemirror-model';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
 import {
   canApplyLocalReviewPatch,
@@ -19,7 +18,6 @@ import {
   reviewQueueKeptByStructure,
   patchLocalReviewItems,
 } from './review-patch.ts';
-import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import {
   addPackageComment,
   deletePackageComments,
@@ -61,7 +59,6 @@ import {
   type HeaderFooterSectionResolution,
   type OoxmlElement,
   type OoxmlPackage,
-  type OoxmlPackageRejection,
   type OoxmlPart,
   type RelationshipRecord,
   type StoryScope,
@@ -118,28 +115,18 @@ import type {
   TreeDocxSessionView,
 } from './tree-session-contract.ts';
 export type { TreeApplyOptions, TreeApplyResult, TreeDocxSessionView };
-
-/**
- * Binding-only session methods that exchange ProseMirror projections.
- *
- * Editor surfaces expose {@link TreeDocxSessionView}. Only the binding lane sees this extension.
- */
-export interface TreeDocxSession extends TreeDocxSessionView {
-  /** Project the current BODY revision into a ProseMirror doc. */
-  projectDoc(): PMNode;
-  /** Re-project incrementally from the last committed change, reusing untouched paragraphs. */
-  reconcile(previousDoc: PMNode): PMNode;
-  /**
-   * Whether the last commit changed the BLOCK SEQUENCE (a split, join, insert or delete).
-   *
-   * A host needs this to decide whether the view must be re-projected at all. After a pure
-   * text edit, the view already holds what the model holds. Re-projecting wastes work and
-   * races the next keystroke.
-   */
-  lastCommitWasStructural(): boolean;
-  /** Map an edited BODY doc to tree ops and commit them as one transaction. */
-  applyPmDoc(doc: PMNode): TreeApplyResult;
-}
+import type {
+  OpenTreeSessionOptions,
+  OpenTreeSessionResult,
+  TreeDocxSession,
+  TreeSessionRejection,
+} from './tree-session-options.ts';
+export type {
+  OpenTreeSessionOptions,
+  OpenTreeSessionResult,
+  TreeDocxSession,
+  TreeSessionRejection,
+};
 
 export type { DocumentStyleEntry } from './document-catalog.ts';
 export type { DocumentThemeColorEntry, ThemeColorSlot } from './document-theme.ts';
@@ -147,35 +134,8 @@ export type { DocumentOutlineEntry } from './document-outline.ts';
 export type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
 export type { StoryScope, StoryTargetRejection } from '@docx-editor.dev/core/store';
 
-/**
- * Why bytes could not be opened: any bounded-reader rejection, plus the package that parsed but
- * carried no main document tree.
- */
-export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';
-
-/**
- * An open session, or a typed refusal.
- *
- * A result rather than a throw: every failure here is a property of the FILE, and a host needs to
- * tell "this is not a package" from "this package is malicious" from "this document has no body".
- */
-export type OpenTreeSessionResult =
-  | { readonly ok: true; readonly session: TreeDocxSession }
-  | Extract<OoxmlPackageResult, { readonly ok: false }>
-  | { readonly ok: false; readonly reason: 'no-main-document-tree'; readonly detail?: string };
-
 /** One frozen empty queue, so a module-less `reviewItems()` is reference-stable. */
 const EMPTY_REVIEW_ITEMS: readonly ReviewItem[] = Object.freeze([]);
-
-export interface OpenTreeSessionOptions {
-  /**
-   * The review module's derivation hooks, contributed through the editor's
-   * `EditorModule` seam. Absent — the free engine — the session's
-   * `reviewItems()` reports the typed empty queue; parse, preservation, and
-   * `hasReviewContent` are unaffected.
-   */
-  readonly reviewModel?: ReviewModuleContribution;
-}
 
 /**
  * Open DOCX bytes into a tree-backed session.
@@ -220,7 +180,8 @@ export function openTreeSessionFromPackage(
   // Empty prompt-bearing controls open showing their glossary placeholder, as Word shows it.
   const packageStore = new TreePackageStore(
     pkgLoaded,
-    materializeGlossaryPlaceholders(pkgLoaded, normalized)
+    materializeGlossaryPlaceholders(pkgLoaded, normalized),
+    options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
   );
 
   let headerFooterBySection: {

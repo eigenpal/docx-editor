@@ -67,6 +67,12 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The package has more XML parts than the open limit allows. For a trusted file, the server API accepts a higher limit: limits.maxXmlParts in createServer.',
   'open.failed':
     'The document could not be opened for a reason without a specific code. Report it with the engine version.',
+  'save.no-document':
+    'save() ran before a document was loaded, or after it failed to open. Wait for the open to finish, and check the document.open event for a refusal.',
+  'save.document-changed':
+    'A new document was loaded while save() waited for a pending edit. Save again after the new document opens.',
+  'save.failed':
+    'save() threw. The errorName and stage fields name the class of the error; its message is never reported. Report it with the editor version.',
 
   'edit.read-only':
     'The document is open for viewing or is protected as read-only, so edits are refused. Change the editing mode, or remove the protection.',

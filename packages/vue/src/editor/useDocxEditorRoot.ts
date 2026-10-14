@@ -3,9 +3,14 @@ import type {
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
   FieldResultsMode,
+  ContentLockPolicy,
+  FontShapingOptions,
+  LockedControlNavigation,
 } from '@docx-editor.dev/core/editor';
 import { formControlTranslateKey } from './form-control-translate';
 import { warnFieldResultsChanged } from './field-results-warning';
+import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
+import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import {
   computed,
   inject,
@@ -60,6 +65,8 @@ export interface DocxEditorRootProps {
   popups?: import('./popup-config').DocxEditorPopups;
   document?: DocumentSource;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling; a changed maxFontBytes value remounts. */
+  fontShaping?: FontShapingOptions;
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
   /**
@@ -93,6 +100,20 @@ export interface DocxEditorRootProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
 
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
@@ -141,6 +162,10 @@ export function useDocxEditorRootOwner(
   const editorRef = shallowRef<DocxEditorInstance | null>(null);
   /** The `fieldResults` the current instance was created with. */
   let createdFieldResults: DocxEditorRootProps['fieldResults'];
+  /** The `contentLockPolicy` the current instance was created with. */
+  let createdContentLockPolicy: DocxEditorRootProps['contentLockPolicy'];
+  /** The `lockedControlNavigation` the current instance was created with. */
+  let createdLockedControlNavigation: DocxEditorRootProps['lockedControlNavigation'];
   const markupRevision = shallowRef(0);
   let applyingMarkup = false;
   const tick = shallowRef(0);
@@ -235,15 +260,22 @@ export function useDocxEditorRootOwner(
     destroyEditor();
     const p = toValue(props);
     createdFieldResults = p.fieldResults;
+    createdContentLockPolicy = p.contentLockPolicy;
+    createdLockedControlNavigation = p.lockedControlNavigation;
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
+      ...(p.fontShaping ? { fontShaping: p.fontShaping } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate: translateResolver.value,
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
       ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.contentLockPolicy !== undefined ? { contentLockPolicy: p.contentLockPolicy } : {}),
+      ...(p.lockedControlNavigation !== undefined
+        ? { lockedControlNavigation: p.lockedControlNavigation }
+        : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(revisionStyleRegistry.current() !== undefined
         ? { revisionStyles: revisionStyleRegistry.current() }
@@ -300,8 +332,12 @@ export function useDocxEditorRootOwner(
 
   if (typeof window !== 'undefined') {
     watch(
-      () =>
-        [toValue(props).document, toValue(props).fonts, toValue(props).imageDecodePort] as const,
+      [
+        () => toValue(props).document,
+        () => toValue(props).fonts,
+        () => toValue(props).fontShaping?.maxFontBytes,
+        () => toValue(props).imageDecodePort,
+      ],
       createEditor,
       { immediate: true, flush: 'post' }
     );
@@ -396,6 +432,26 @@ export function useDocxEditorRootOwner(
     () => [editorRef.value, toValue(props).fieldResults] as const,
     ([editor, fieldResults]) => {
       if (editor) warnFieldResultsChanged(createdFieldResults, fieldResults);
+    },
+    { flush: 'post' }
+  );
+
+  // Compared by value, so an inline policy object re-created on each render does not warn.
+  watch(
+    () => [editorRef.value, toValue(props).contentLockPolicy] as const,
+    ([editor, contentLockPolicy]) => {
+      if (editor) warnContentLockPolicyChanged(createdContentLockPolicy, contentLockPolicy);
+    },
+    { flush: 'post' }
+  );
+
+  // Read once at creation, like `fieldResults`.
+  watch(
+    () => [editorRef.value, toValue(props).lockedControlNavigation] as const,
+    ([editor, lockedControlNavigation]) => {
+      if (editor) {
+        warnLockedControlNavigationChanged(createdLockedControlNavigation, lockedControlNavigation);
+      }
     },
     { flush: 'post' }
   );

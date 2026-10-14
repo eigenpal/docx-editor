@@ -74,6 +74,23 @@ function assertFiniteGeometry(node: EquationGeometry): void {
   }
 }
 
+test('display-only mathematical letters keep one canonical equation position', () => {
+  const part = load(
+    '<w:p><w:r><w:t>A</w:t></w:r><m:oMath><m:r><m:t>QN</m:t></m:r></m:oMath><w:r><w:t>Z</w:t></w:r></w:p>'
+  );
+  const before = canonicalOoxmlFingerprint(part);
+  const result = layoutSemanticDocument(part, 1, { measurer });
+  const spans = linesOf(result).flatMap((line) => line.spans);
+  expect(spans.map((span) => span.text)).toEqual(['A', '\uFFFC', 'Z']);
+  const equation = spans.find((span) => span.equation)!;
+  expect(equation.range.end - equation.range.start).toBe(1);
+  expect(equation.equation?.fallbackText).toBe('QN');
+  const geometry = equation.equation?.geometry;
+  if (geometry?.kind !== 'text') throw new Error('Missing equation text');
+  expect(geometry.text).toBe('𝑄𝑁');
+  expect(canonicalOoxmlFingerprint(part)).toBe(before);
+});
+
 const complexEquation =
   '<m:oMath>' +
   '<m:f><m:num><m:r><m:t>a+b</m:t></m:r></m:num>' +
@@ -179,10 +196,24 @@ describe('atomic equation paragraph layout', () => {
     expect(multiple.box.height).toBeLessThan(single.box.height * 1.5);
   });
 
+  test('publishes a supported bar decoration through paragraph layout', () => {
+    const span = equationSpan(
+      '<w:p><m:oMath><m:bar><m:barPr><m:pos m:val="top"/></m:barPr>' +
+        '<m:e><m:r><m:t>N</m:t></m:r></m:e></m:bar></m:oMath></w:p>'
+    );
+    const geometry = span.equation?.geometry;
+    expect(geometry?.kind).toBe('bar');
+    if (geometry?.kind !== 'bar') throw new Error('missing bar decoration');
+    expect(geometry.body.kind).toBe('text');
+    expect(geometry.bar.y + geometry.bar.height).toBeLessThan(geometry.body.box.y);
+    expect(geometry.box.width).toBe(geometry.body.box.width);
+    expect(span.equation?.fallbackText).toBe('N');
+  });
+
   test('publishes bounded fallback text geometry for unsupported OMML', () => {
     const span = equationSpan(
-      '<w:p><m:oMath><m:bar><m:e><m:r><m:t>safe fallback</m:t></m:r>' +
-        '</m:e></m:bar></m:oMath></w:p>'
+      '<w:p><m:oMath><m:groupChr><m:e><m:r><m:t>safe fallback</m:t></m:r>' +
+        '</m:e></m:groupChr></m:oMath></w:p>'
     );
     expect(span.equation).toMatchObject({
       fallbackText: 'safe fallback',

@@ -76,3 +76,17 @@ export function contentControlSelectionRange(
   scanParagraphs(deps.searchRoots());
   return found;
 }
+
+/** A control's content children: those of its `w:sdtContent`, never its properties. */
+export function contentChildrenOf(control: OoxmlElement): readonly OoxmlNode[] {
+  for (const child of control.children) {
+    if (child.kind === 'textValue') continue;
+    if (
+      (child as { kind: string }).kind === 'contentControlContent' ||
+      child.localName === 'sdtContent'
+    ) {
+      return child.children;
+    }
+  }
+  return [];
+}

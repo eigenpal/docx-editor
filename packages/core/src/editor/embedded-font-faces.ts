@@ -18,6 +18,8 @@
 // gets the embedded glyphs; the declared name keeps whatever it means to the host page.
 
 import type { FontSource, FontSourceSubstitution } from '../contracts/editor.ts';
+import { boundedStructuralFontValidator } from '../layout/font-resource.ts';
+import { materializeCollectionFace } from './font-collection-face.ts';
 
 /** The slice of `FontFace` this module needs; injectable for tests. */
 export interface FontFaceLike {
@@ -127,12 +129,32 @@ export async function registerEmbeddedFontFaces(
   const added: FontFaceLike[] = [];
   await Promise.all(
     [...byFamily].map(async ([family, faces]) => {
-      const alias = aliasForFamily(faces.map((face) => face.hash));
+      const alias = aliasForFamily(faces.map((face) => `${face.hash}:face:${face.faceIndex}`));
       let anyLoaded = false;
       await Promise.all(
         faces.map(async (face) => {
           try {
-            const fontFace = createFontFace(alias, face.bytes, {
+            const isCollection =
+              face.bytes.length >= 4 &&
+              face.bytes[0] === 0x74 &&
+              face.bytes[1] === 0x74 &&
+              face.bytes[2] === 0x63 &&
+              face.bytes[3] === 0x66;
+            if (
+              isCollection &&
+              face.faceIndex === 0 &&
+              !boundedStructuralFontValidator(face.bytes, 0).valid
+            )
+              throw new Error('Invalid collection face');
+            // FontFace selects the first face from an unchanged collection. Keep its
+            // signature and all tables; only other faces require materialization.
+            const browserBytes =
+              isCollection && face.faceIndex !== 0
+                ? materializeCollectionFace(face.bytes, face.faceIndex)
+                : face.bytes;
+            if (!isCollection && face.faceIndex !== 0)
+              throw new Error('Font face index requires a collection');
+            const fontFace = createFontFace(alias, browserBytes, {
               weight: String(face.request.weight),
               style: face.request.style,
             });

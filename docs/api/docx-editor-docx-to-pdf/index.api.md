@@ -106,6 +106,11 @@ export interface FontRequest {
 }
 
 // @public
+export interface FontShapingOptions {
+    readonly maxFontBytes?: number;
+}
+
+// @public
 export interface FontSubstitution {
     // (undocumented)
     readonly lineMetrics?: {

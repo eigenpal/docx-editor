@@ -1,5 +1,8 @@
 import type {
+  ContentLockPolicy,
   FieldResultsMode,
+  FontShapingOptions,
+  LockedControlNavigation,
   RevisionMarkupOptions,
   ReviewDisplayMode,
 } from '@docx-editor.dev/core/editor';
@@ -40,6 +43,8 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 export interface DocxEditorProps {
   popups?: import('./editor/popup-config').DocxEditorPopups;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
+  fontShaping?: FontShapingOptions;
   colorMode?: 'light' | 'dark' | 'system';
   /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;
@@ -77,6 +82,20 @@ export interface DocxEditorProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
 
   /**
    * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.

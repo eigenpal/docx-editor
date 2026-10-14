@@ -27,9 +27,11 @@ export const telemetry = createTelemetry({
   exporters: [sentryExporter(Sentry), otelExporter()],
   include: {
     documentOpen: true,
+    documentSave: true,
     trackedChanges: true,
     editing: true,
     performance: true,
+    sessions: true,
   },
   consent: () => consentManager.analytics === true, // your consent manager
 });
@@ -48,6 +50,8 @@ Use `consoleExporter()` to view diagnostics during development. For example, the
 ```
 
 The `performance` area measures typing delay and engine layout and paint times. Send it to an exporter that records metrics, such as `otelExporter()`. The Sentry exporter records performance only as breadcrumbs.
+
+The `sessions` area counts editor sessions, active editing time, and edits by origin, so you can compute edit failure rates. The `documentSave` area reports each `save()` call with its outcome and duration. For queries and dashboards, see [Measure sessions, edits, and saves](https://docx-editor.dev/docs/2.x/telemetry/sessions).
 
 ## Collaboration servers
 
@@ -81,7 +85,7 @@ Download [`editor-experience.json`](https://raw.githubusercontent.com/eigenpal/d
 
 | Entry | Contents |
 | --- | --- |
-| `@docx-editor.dev/telemetry` | `createTelemetry`, `consoleExporter`, `callbackExporter`, `memoryExporter`, `isFailure`, `explainDiagnostic`, the metric catalog |
+| `@docx-editor.dev/telemetry` | `createTelemetry`, `consoleExporter`, `callbackExporter`, `memoryExporter`, `isFailure`, `failureCount`, `explainDiagnostic`, the metric catalog |
 | `@docx-editor.dev/telemetry/otel` | `otelExporter`, through your OpenTelemetry SDK |
 | `@docx-editor.dev/telemetry/sentry` | `sentryExporter`, `dropEditorBreadcrumbs`, `EDITOR_SELECTORS` |
 | `@docx-editor.dev/telemetry/prometheus` | `prometheusRegistry`, `metricsHandler`, `fetchMetricsHandler`, for server processes. Browser metrics go through `otelExporter()` and an OpenTelemetry collector. |

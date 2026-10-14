@@ -8,6 +8,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { eastAsianLanguage, type CjkParagraphTypography } from './cjk-typography.ts';
 import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
+import { isRunKerningEnabled } from './run-kerning.ts';
 
 const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
@@ -82,6 +83,7 @@ interface CompressionSlice {
 function compressionSlices(
   pieces: readonly FieldAwarePiece[],
   includeKana: boolean,
+  includePunctuation: boolean,
   measurer: TextMeasurer,
   preserveColonAdvances: boolean
 ): ReadonlyMap<FieldAwarePiece, readonly CompressionSlice[]> {
@@ -96,6 +98,30 @@ function compressionSlices(
     })
     .join('');
   const slices = new Map<FieldAwarePiece, CompressionSlice[]>();
+  const ownerAt = (offset: number): FieldAwarePiece | undefined => {
+    let low = 0;
+    let high = starts.length;
+    while (low + 1 < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (starts[middle]! <= offset) low = middle;
+      else high = middle;
+    }
+    return pieces[low];
+  };
+  const pairEnabled = (left: number, right: number): boolean => {
+    if (!includePunctuation) return false;
+    const a = ownerAt(left);
+    const b = ownerAt(right);
+    return Boolean(
+      a &&
+      b &&
+      [a, b].every(
+        (piece) =>
+          isRunKerningEnabled(styleForFontSlot(piece.style, piece.fontSlot)) &&
+          !/^ko(?:-|$)/i.test(eastAsianLanguage(piece.props) ?? '')
+      )
+    );
+  };
   let pieceIndex = 0;
   const clusters = segmentGraphemes(text);
   for (let clusterIndex = 0; clusterIndex < clusters.length; clusterIndex++) {
@@ -108,9 +134,14 @@ function compressionSlices(
     // Remove one shared half-em at a punctuation seam, not both neighbours'
     // bearings. Ordinary text and authored spaces are never compression triggers.
     // Paragraph and manual-line boundaries do not supply a neighbouring bearing.
-    const trimLeft = OPENING.test(cluster.text) && previous !== undefined && OPENING.test(previous);
+    const trimLeft =
+      OPENING.test(cluster.text) &&
+      previous !== undefined &&
+      OPENING.test(previous) &&
+      pairEnabled(clusters[clusterIndex - 1]!.utf16From, cluster.utf16From);
     const trimRight =
       next !== undefined &&
+      pairEnabled(cluster.utf16From, clusters[clusterIndex + 1]!.utf16From) &&
       ((CLOSING.test(cluster.text) &&
         (OPENING.test(next) || CLOSING.test(next) || next === '：')) ||
         // Retain the following opening's left bearing. It receives a centred
@@ -206,18 +237,28 @@ export function compressCjkPieces(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography,
   measurer: TextMeasurer,
-  preserveColonAdvances = false
+  preserveColonAdvances = false,
+  available?: number
 ): readonly FieldAwarePiece[] {
   const compression = policy.settings?.compression;
-  if (!compression || compression === 'doNotCompress') return pieces;
+  const punctuation =
+    policy.settings?.punctuationKerning !== false && policy.settings?.sourceEastAsianFont === true;
+  const kana =
+    compression === 'compressPunctuationAndJapaneseKana' &&
+    (available === undefined ||
+      (Number.isFinite(available) &&
+        available > 0 &&
+        pieces.reduce(
+          (sum, piece) =>
+            sum +
+            measureDisplayText(piece.text, styleForFontSlot(piece.style, piece.fontSlot), measurer),
+          0
+        ) >
+          available + 0.001));
+  if (!punctuation && !kana) return pieces;
   const result: FieldAwarePiece[] = [];
   const derived = new WeakMap<ResolvedRunStyle, Map<number, ResolvedRunStyle>>();
-  const slices = compressionSlices(
-    pieces,
-    compression === 'compressPunctuationAndJapaneseKana',
-    measurer,
-    preserveColonAdvances
-  );
+  const slices = compressionSlices(pieces, kana, punctuation, measurer, preserveColonAdvances);
   for (const piece of pieces) {
     const compressedSlices = slices.get(piece);
     if (!compressedSlices) {

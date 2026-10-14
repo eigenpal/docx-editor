@@ -17,6 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @packageDocumentation
  */
 import { checkEvent, checkIdentifierAttributes } from '../anonymous.ts';
+import { failureCount } from '../exporters.ts';
 import type { Attributes, TelemetryEvent } from '../pipeline.ts';
 
 /** Options for {@link validateTelemetryEvents}. @public */
@@ -63,6 +64,14 @@ const REQUIRED: Readonly<
   performance: [['windowMs', isNumber]],
 };
 
+const SESSION_ACTIVITY = [
+  'durationMs',
+  'activeMs',
+  'inputEdits',
+  'commandEdits',
+  'automationEdits',
+] as const;
+
 /** Whether an event has every field its kind needs, so a log record is never half empty. */
 function complete(event: Fields): boolean {
   if (!isNumber(event.schemaVersion) || !isNumber(event.time)) return false;
@@ -71,6 +80,19 @@ function complete(event: Fields): boolean {
     return event.outcome === 'opened'
       ? isString(event.sizeBucket) && isNumber(event.durationMs)
       : event.outcome === 'rejected' && isString(event.code);
+  if (event.kind === 'document.save')
+    return (
+      isNumber(event.durationMs) &&
+      (event.outcome === 'saved'
+        ? isString(event.sizeBucket)
+        : event.outcome === 'rejected' && isString(event.code))
+    );
+  if (event.kind === 'session')
+    return (
+      event.phase === 'start' ||
+      ((event.phase === 'active' || event.phase === 'end') &&
+        SESSION_ACTIVITY.every((key) => isNumber(event[key])))
+    );
   const required = REQUIRED[event.kind as string];
   return !!required && required.every(([key, check]) => check(event[key]));
 }
@@ -84,14 +106,15 @@ function allowed(value: unknown, keys: ReadonlySet<string>): Attributes {
 
 /**
  * The telemetry events in an untrusted request body, checked again with the package's own
- * closed lists. An event with an unknown kind or code, or without the fields its kind needs, is
- * dropped. A field outside its list is removed. The client's `resource` and `attributes` keep
- * only the keys in `attributeKeys`. Returns an empty list for a body that is not an array or is
- * longer than `maxEvents`.
+ * closed lists. An event with an unknown kind or code, a code of another kind, a value outside
+ * its list or range, or without the fields its kind needs, is dropped. An unknown field, a
+ * number or timing summary its kind does not carry, or a wall-clock span above its bound is
+ * removed. The client's `resource` and `attributes` keep only the keys in `attributeKeys`.
+ * Returns an empty list for a body that is not an array or is longer than `maxEvents`.
  *
- * The check proves that every value comes from the package's lists or is a number. It cannot
- * prove that a client told the truth: a script can send a well-formed event that never
- * happened. It can never send text.
+ * The check proves that every value comes from the package's lists or is a number in the range
+ * the engine produces. It cannot prove that a client told the truth: a script can send a
+ * well-formed event that never happened. It can never send text.
  *
  * @example
  * ```ts
@@ -132,18 +155,26 @@ export function validateTelemetryEvents(
   });
 }
 
-/** A log record with the fields log services read for time and summary. @public */
+/** A log record with the fields log services read for time, summary, and counts. @public */
 export type TelemetryLogRecord = Record<string, unknown> & {
   /** The event time in milliseconds since the epoch, which Better Stack and others read. */
   readonly dt: number;
   /** A one-line summary, such as `edit.rejected edit.picture-selected`. */
   readonly message: string;
+  /**
+   * How many times the event happened: `1`, or `repeated` for a deduplication summary, whose
+   * first event was already sent. Sum it to count events; do not count records.
+   */
+  readonly occurrences: number;
+  /** How many failures the record adds to a failure total. See `failureCount`. */
+  readonly failures: number;
 };
 
 /**
- * An event as a log record: `dt` for the time, `message` for the live tail, and every field of
- * the event except the fixed `hint` and `docs` text, which the code already identifies. Add
- * your own fixed fields, such as a service name, to the result.
+ * An event as a log record: `dt` for the time, `message` for the live tail, `occurrences` and
+ * `failures` to sum, and every field of the event except the fixed `hint` and `docs` text,
+ * which the code already identifies. Add your own fixed fields, such as a service name, to the
+ * result.
  *
  * @example
  * ```ts
@@ -162,7 +193,13 @@ export function toLogRecord(event: TelemetryEvent): TelemetryLogRecord {
     docs?: string;
   };
   const code = 'code' in event && event.code ? ` ${event.code}` : '';
-  return { ...fields, dt: event.time, message: `${event.kind}${code}` };
+  return {
+    ...fields,
+    dt: event.time,
+    message: `${event.kind}${code}`,
+    occurrences: event.repeated ?? 1,
+    failures: failureCount(event),
+  };
 }
 
 /** Options for {@link telemetryRoute}. @public */

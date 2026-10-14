@@ -8,7 +8,13 @@ import type { FieldAwarePiece } from '../field-pieces.ts';
 const measurer = createFixedMeasurer(12, 14);
 const policy = {
   ...DEFAULT_CJK_TYPOGRAPHY,
-  settings: { compression: 'compressPunctuation' as const, strict: false, before: {}, after: {} },
+  settings: {
+    compression: 'compressPunctuation' as const,
+    sourceEastAsianFont: true,
+    strict: false,
+    before: {},
+    after: {},
+  },
 };
 function compress(text: string, split = text.length) {
   const pieces: FieldAwarePiece[] = [text.slice(0, split), text.slice(split)]
@@ -17,7 +23,7 @@ function compress(text: string, split = text.length) {
       text,
       start: index === 0 ? 0 : split,
       end: index === 0 ? split : split + text.length,
-      style: { ...DEFAULT_RUN_STYLE, fontSizePt: 11 },
+      style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, fontSizePt: 11 },
       props: [],
     }));
   return compressCjkPieces(pieces, policy, measurer);
@@ -78,7 +84,12 @@ test('opening glyphs move by the removed left bearing; closing glyphs keep their
 
 test('punctuation compression removes natural bearings, not authored tracking', () => {
   for (const tracking of [2, -2, -10]) {
-    const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 11, characterSpacingPt: tracking };
+    const style = {
+      ...DEFAULT_RUN_STYLE,
+      kerningMinPt: 1,
+      fontSizePt: 11,
+      characterSpacingPt: tracking,
+    };
     const pieces = compressCjkPieces(
       [{ text: '（（', start: 0, end: 2, props: [], style }],
       policy,
@@ -99,7 +110,7 @@ test('outlined punctuation retains its bearing for the extended ink', () => {
     start: 0,
     end: 5,
     props: [],
-    style: { ...DEFAULT_RUN_STYLE, textOutline: { widthPt: 1, color: 'FF0000' } },
+    style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, textOutline: { widthPt: 1, color: 'FF0000' } },
   };
   expect(compressCjkPieces([piece], policy, measurer)).toEqual([piece]);
 });
@@ -110,12 +121,19 @@ test('decorated, linked-style, and tracked punctuation retains native ink and se
     start: 0,
     end: 5,
     props: [],
-    style: DEFAULT_RUN_STYLE,
+    style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1 },
   };
   const decorated: FieldAwarePiece[] = [
-    { ...base, style: { ...DEFAULT_RUN_STYLE, underline: { variant: 'single', color: null } } },
-    { ...base, style: { ...DEFAULT_RUN_STYLE, strike: true } },
-    { ...base, style: { ...DEFAULT_RUN_STYLE, doubleStrike: true } },
+    {
+      ...base,
+      style: {
+        ...DEFAULT_RUN_STYLE,
+        kerningMinPt: 1,
+        underline: { variant: 'single', color: null },
+      },
+    },
+    { ...base, style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, strike: true } },
+    { ...base, style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, doubleStrike: true } },
     { ...base, props: [{ localName: 'rPrChange', attributes: { id: '1' } }] },
     ...(['insertion', 'deletion', 'moveFrom', 'moveTo'] as const).map((kind) => ({
       ...base,

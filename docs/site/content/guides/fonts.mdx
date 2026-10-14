@@ -9,6 +9,12 @@ The editor uses HarfBuzz when it has usable font bytes. Without them, a browser 
 
 The document still opens with fallback measurement. Neither fallback guarantees Word-compatible line wraps or page breaks.
 
+## Font slots in mixed text
+
+Some punctuation uses the authored `hAnsi` face without an East Asian font hint: curly quotes (‘, ’, “, ”), low quotes (‚, „), en and em dashes (–, —), the ellipsis (…), and the middle dot (·). Adjacent Han characters do not change that choice. An explicit `w:hint="eastAsia"` keeps its existing East Asian font behavior. Combining marks retain the face of their base character. Existing complex-script overrides still apply. Font selection does not change document text or font attributes.
+
+This follows [Word's run font selection rules](https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/aef3c9a6-5d6c-434b-90b7-85e761fd8e62).
+
 ## Font picker choices
 
 The toolbar always offers the standard font choices, including Arial, Calibri, Georgia, Times New Roman, and Courier New. Configured and document-specific families extend this list. Configured providers also contribute their supported families, even before those fonts load. The default dropdown includes a search field. Empty documents offer the same provider catalog as populated documents.

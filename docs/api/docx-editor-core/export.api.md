@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export function acquireSharedExportShaping(prepared: PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<SharedExportShapingCapabilities>;
+export function acquireSharedExportShaping(prepared: PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation, execution?: FontShapingOptions): Promise<SharedExportShapingCapabilities>;
 
 // @public
 export function createNodeImageDecodePort(options?: {
@@ -278,6 +278,7 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumen
     readonly documentLigatures?: boolean;
     readonly fontPolicy?: 'best-effort' | 'strict';
     readonly fontResolutionTimeoutMs?: number;
+    readonly fontShaping?: FontShapingOptions;
     readonly fonts: FontOrigin | readonly FontOrigin[];
     readonly glyphFallbacks?: readonly FontRequest[];
     readonly lastResortFonts?: FontOrigin | readonly FontOrigin[];

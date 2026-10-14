@@ -35,7 +35,6 @@ import {
 } from './review-replacement-pairs.ts';
 import { captureSearchResult } from './document-search-result.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
-
 import {
   anchorLineY,
   commentBodyText,
@@ -123,6 +122,7 @@ import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
+import { configSurfaceOptions } from './docx-editor-surface-config.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import {
   customNodeDiagnosticReporter,
@@ -165,6 +165,7 @@ import {
 import {
   createLayoutShaping,
   disposeLayoutShaping,
+  sampleFontShapingOptions,
   toEditorFontError,
 } from './font-configuration.ts';
 import {
@@ -225,7 +226,6 @@ import type {
   EquationChromeHandlers,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
-
 export type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -259,6 +259,7 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
  * @public
  */
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
+  const fontShaping = sampleFontShapingOptions(config.fontShaping);
   let refreshHost: RefreshHost | undefined = undefined;
   let deferredRefreshBytes: Uint8Array | null = null;
   /** The opening document's session between the prepare and mount tasks, for font work. */
@@ -307,7 +308,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     // Fonts resolved before the mount are laid out once, by the mount; see `preparedOpenHook`.
     prepare: preparedOpen.preparedOpenHook(
-      () => reviewModelOption(modules, reportDiagnostic),
+      () => preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
       (bytes, session) => {
         if (deferredRefreshBytes === bytes) return null;
         preparedFontSession = session;
@@ -643,18 +644,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // default (`all-markup`), which is what the review rail annotates.
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
-      ...reviewModelOption(modules, reportDiagnostic),
-      onRejection: (reason) => diagnostics.inputRejected(reason, suggesting()),
-      onTiming: (phase, value) => diagnostics.timing(phase, value, surface ?? undefined),
+      ...preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
+      ...diagnostics.surfaceHooks(suggesting, () => surface),
       ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
         ? { measurer: shapedMeasurer, ...(shapedProducer ? { producer: shapedProducer } : {}) }
         : {}),
       ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
-      ...(config.tableInteractionLabel
-        ? { tableInteractionLabel: config.tableInteractionLabel }
-        : {}),
-      ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
+      ...configSurfaceOptions(config),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
@@ -833,24 +830,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     } else mountBytes(bytes);
   }
 
-  function reportFontError(error: EditorFontError): void {
-    reportEditorFontError(error, { config, events, diagnostics });
+  function reportFontError(error: EditorFontError, sequence = loadSeq): void {
+    reportEditorFontError(
+      error,
+      { config, events, diagnostics },
+      () => !destroyed && sequence === loadSeq
+    );
   }
 
-  // Fonts resolve asynchronously (HarfBuzz init + validation) PER LOAD, composing the
-  // app's `config.fonts` with the faces the document itself embeds — explicit sources
-  // beat embedded ones, and both beat substitutions. A large open resolves them between its
-  // prepare and mount tasks, so its mount lays out once, shaped. Otherwise the document opens
-  // on the fixed measurer and is measured again when fonts arrive (or by its later mount).
-  //
-  // Failure is DEGRADATION, never a blocked load: a face the validator refuses drops
-  // with a typed report and the remaining faces admit; a wholly failed resolution leaves
-  // the document editable on the fixed measurer.
+  // Fonts resolve per load: explicit sources beat embedded faces, then substitutions.
+  // A large open shapes between prepare/mount; otherwise it remeasures the fixed measurer later.
+  // Refused faces report and drop; remaining faces admit, or fixed measurement keeps editing usable.
   async function resolveDocumentFonts(
     seq: number,
     mounted: { readonly session: preparedOpen.FontSession },
     families: readonly string[]
   ): Promise<void> {
+    const reportForLoad = (error: EditorFontError) => reportFontError(error, seq);
     const configured = config.fonts;
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
@@ -875,7 +871,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             ? await composeFontOrigins(
                 [resolvedFontConfiguration, defineFontResolver((next) => configured(next))],
                 request,
-                { onOriginFailure: ({ cause }) => reportFontError(toEditorFontError(cause)) }
+                { onOriginFailure: ({ cause }) => reportForLoad(toEditorFontError(cause)) }
               )
             : await configured(request);
       const explicit: FontConfigurationBase | undefined =
@@ -902,7 +898,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const boundedExplicit = boundedExplicitFontSources(explicit?.sources ?? [], maxFontBytes);
       const initialExplicitSources = boundedExplicit.sources;
       for (const source of boundedExplicit.dropped) {
-        reportFontError(explicitFontBudgetError(source));
+        reportForLoad(explicitFontBudgetError(source));
       }
       let fromDocument = embeddedFontSourcesAfterExplicit(
         embedded,
@@ -919,7 +915,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (documentDropsReported) return;
         documentDropsReported = true;
         for (const drop of fromDocument.dropped) {
-          reportFontError(embeddedFontDropError(drop));
+          reportForLoad(embeddedFontDropError(drop));
         }
       };
       let fonts = applyDocumentFontSubstitutions(
@@ -938,7 +934,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         fontsResolving = false;
         bump();
         if (explicit) {
-          reportFontError(
+          reportForLoad(
             new EditorFontError(
               'missing',
               'the supplied font configuration contains no usable sources; the fixed measurer stays in effect'
@@ -947,7 +943,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return;
       }
-      let shaping = await createLayoutShaping(fonts);
+      let shaping = await createLayoutShaping(fonts, undefined, fontShaping);
       // A newer load (or a destroy) landed while this one awaited: the shaping can never
       // be installed, so release its wasm objects rather than dropping it unreferenced,
       // and clear the in-flight flag only if this load is still the current one. Reads
@@ -975,7 +971,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         for (const source of composed.sources ?? []) {
           const resolved = snapshot.fonts.resolve(source.request);
           if (resolved instanceof FontResolutionError) {
-            reportFontError(toEditorFontError(resolved));
+            reportForLoad(toEditorFontError(resolved));
             refused.add(fontRequestKey(source.request));
           }
         }
@@ -1009,7 +1005,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             documentFonts
           );
           if (fonts.sources.length === 0) return bailToFixed(superseded);
-          shaping = await createLayoutShaping(fonts);
+          shaping = await createLayoutShaping(fonts, undefined, fontShaping);
           disposeLayoutShaping(superseded);
           if (supersededNow()) return;
           const refusedAfterRebuild = refusedIn(shaping, fonts);
@@ -1029,7 +1025,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               documentFonts
             );
             if (fonts.sources.length === 0) return bailToFixed(rejected);
-            shaping = await createLayoutShaping(fonts);
+            shaping = await createLayoutShaping(fonts, undefined, fontShaping);
             disposeLayoutShaping(rejected);
             if (supersededNow()) return;
           }
@@ -1144,7 +1140,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (destroyed || seq !== loadSeq) return;
       fontsResolving = false;
       bump();
-      reportFontError(toEditorFontError(error));
+      reportForLoad(toEditorFontError(error));
     }
   }
 

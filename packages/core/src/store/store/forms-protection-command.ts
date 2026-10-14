@@ -1,4 +1,5 @@
-import { findNode } from '../package/ooxml-edit.ts';
+import { findNode, type ContentLockPolicy } from '../package/ooxml-edit.ts';
+import { restylePassesContentLock } from './content-lock-policy.ts';
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { paragraphTextOf } from './tree-op-apply.ts';
 import { deepParagraphOrderOfPart } from './review-paragraph-order.ts';
@@ -22,6 +23,8 @@ export interface FormsProtectionCommand {
   /** Absent means deletion. An empty string is also the clipboard toolbar's probe. */
   readonly text?: string;
   readonly fieldId?: string;
+  /** The host's lock policy, so restyling a content-locked control is answered as the commit. */
+  readonly contentLockPolicy?: ContentLockPolicy | undefined;
   readonly paste?: boolean;
 }
 
@@ -34,7 +37,9 @@ export function formsProtectionCommandRefusal(
   if (!enforcesFormsProtection(settings)) return null;
   const refusal = (op: TreeDocOp, current = part) =>
     formsProtectionRefusal(current, settings, op, command.fieldId) ??
-    contentControlLockRefusal(current, op) ??
+    (restylePassesContentLock(op, command.contentLockPolicy)
+      ? null
+      : contentControlLockRefusal(current, op)) ??
     contentControlBindingRefusal(current, op);
   if (command.intent === 'document') return 'locked';
   let { anchor: from, head: to } = command.selection;

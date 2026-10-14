@@ -87,6 +87,18 @@ export function describeEvent(event: TelemetryEvent): string {
       const pages = event.pagesBucket === undefined ? '' : `, ${event.pagesBucket} pages`;
       return `performance over ${Math.round(event.windowMs / 1000)} s${pages}: ${parts.join('; ')}`;
     }
+    case 'document.save':
+      return event.outcome === 'saved'
+        ? `document saved: ${event.sizeBucket}, ${event.durationMs} ms`
+        : `save failed: ${event.code}${detailText(event)} after ${event.durationMs} ms`;
+    case 'session': {
+      if (event.phase === 'start') return 'editor session started';
+      const edits = event.inputEdits + event.commandEdits + event.automationEdits;
+      const activity = `${Math.round(event.activeMs / 1000)} s active, ${edits} ${edits === 1 ? 'edit' : 'edits'}`;
+      return event.phase === 'end'
+        ? `editor session ended after ${Math.round(event.durationMs / 1000)} s: ${activity}`
+        : `editor activity over ${Math.round(event.durationMs / 1000)} s: ${activity}`;
+    }
   }
 }
 
@@ -112,17 +124,47 @@ function timingText(label: string, summary?: TimingSummary): string {
  * });
  * ```
  *
+ * A deduplication summary returns `false`: it repeats an event already reported. To total
+ * failures with summaries included, use {@link failureCount}.
+ *
  * @public
  */
 export function isFailure(event: TelemetryEvent): boolean {
-  // A deduplication summary repeats an event already reported.
-  if (event.repeated !== undefined) return false;
+  return event.repeated === undefined && isFailureKind(event);
+}
+
+/**
+ * How many failures an event adds to a failure total: `0` when it is not a failure, `1` for a
+ * failure, and `repeated` for a deduplication summary of one. The sum over every event a
+ * client sends equals the number of failures the editor reported, which {@link isFailure}
+ * alone undercounts. Sampling still applies: a sampled area sends a share of its events.
+ *
+ * @example
+ * ```ts
+ * let failures = 0;
+ * callbackExporter((event) => {
+ *   failures += failureCount(event);
+ * });
+ * ```
+ *
+ * @public
+ */
+export function failureCount(event: TelemetryEvent): number {
+  if (!isFailureKind(event)) return 0;
+  return event.repeated ?? 1;
+}
+
+/** Whether the event's kind and code are a failure, for the first event or its summary. */
+function isFailureKind(event: TelemetryEvent): boolean {
   switch (event.kind) {
     case 'document.open':
+      return event.outcome === 'rejected';
+    case 'document.save':
       return event.outcome === 'rejected';
     case 'collab.participants':
     case 'history':
     case 'performance':
+    case 'session':
       return false;
     case 'collab.status':
       // An expired token and a compacted room end in a rejoin; they are not faults.

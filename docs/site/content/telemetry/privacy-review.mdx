@@ -77,6 +77,7 @@ During development, `consoleExporter()` prints each event as it would be sent.
 - [ ] `attributes` and `resource` contain only pseudonymous identifiers.
 - [ ] `metricLabels` lists only keys with few values.
 - [ ] `documentShape` is left at `'basic'`, or the detailed shape is approved.
+- [ ] If events carry a user identifier, sending session times with it is approved, or the `sessions` area is off.
 - [ ] `consent` reads your consent manager, and your Sentry and OpenTelemetry SDKs follow the same decision.
 - [ ] Sentry: Replay blocks the editor, `dropEditorBreadcrumbs` is set, `sendDefaultPii` is `false`, and URLs and request bodies are scrubbed.
 - [ ] Collaboration server: `rooms.list()` is behind an administrator endpoint, and `roomLabel` is the default or `hmacRoomLabel`.

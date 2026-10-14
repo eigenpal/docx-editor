@@ -17,7 +17,7 @@ import {
   signedFirstLine,
 } from './surface-formatting.ts';
 import { firstEditableNoteOffset } from './surface-note-ops.ts';
-import { placeholderSelectionRange } from './surface-pointer.ts';
+import { placeholderSelectionRange } from './surface-atomic-controls.ts';
 
 /** Word's Increase/Decrease Indent step: one default tab stop. */
 export const INDENT_STEP_TWIPS = 720;

@@ -37,7 +37,7 @@ import {
 } from './tree-op-content-controls.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from './tree-op-tracked-properties.ts';
-import type { TransactionRevisionIds } from '../package/ooxml-edit.ts';
+import type { ContentLockPolicy, TransactionRevisionIds } from '../package/ooxml-edit.ts';
 
 /**
  * The ops whose tracked appliers write a revision wrapper. They get the transaction's
@@ -64,6 +64,7 @@ const TRACKED_WRAPPER_OPS: ReadonlySet<string> = new Set([
  */
 const IMPORTS_REVISION_IDS: ReadonlySet<string> = new Set(['insertDrawing']);
 import { applyTreeOp } from './tree-ops.ts';
+import { contentLockPolicyOf } from './content-lock-policy.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
@@ -250,6 +251,8 @@ export class TreeDocumentStore {
   private readonly historyLimit: number;
   /** See {@link TreeDocumentStoreOptions.settingsPart}. */
   private readonly settingsPartOverride: (() => OoxmlPart | null | undefined) | undefined;
+  /** See {@link TreeDocumentStoreOptions.contentLockPolicy}. */
+  private readonly contentLockPolicy: ContentLockPolicy | undefined;
   /** Package-aware story tag applied to publishes (including undo/redo). */
   private storyRef: TreeStoryRef | null = null;
 
@@ -285,6 +288,7 @@ export class TreeDocumentStore {
     this.storyPartName = storyPartName ?? (isPart ? source.name : source.mainDocumentPart);
     this.historyLimit = options.historyLimit ?? 200;
     this.settingsPartOverride = options.settingsPart;
+    this.contentLockPolicy = contentLockPolicyOf(options.contentLockPolicy);
   }
 
   /**
@@ -603,6 +607,7 @@ export class TreeDocumentStore {
           : null;
       const editOptions = {
         deferValidation: true,
+        ...(this.contentLockPolicy ? { contentLockPolicy: this.contentLockPolicy } : {}),
         ...(revisionIds ? { revisionIds } : {}),
         ...(trackedRevisionIds ? { trackedRevisionIds } : {}),
       };

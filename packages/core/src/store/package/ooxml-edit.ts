@@ -40,6 +40,25 @@ export type OoxmlEditResult =
   | { readonly ok: false; readonly issues: readonly OoxmlInvariantIssue[] };
 
 /**
+ * An opt-in relaxation of `ST_Lock` for hosts that protect WHAT a control says, not how it looks.
+ *
+ * ECMA-376 `contentLocked` forbids editing the control's contents and Word reads formatting as
+ * part of that, which is the default here. A host that puts protected text in a control (a
+ * template placeholder the user must not retype) but lets authors style it sets
+ * `allowFormattingInLockedContent`: a run-property write (bold, colour, font, size, highlight …),
+ * on runs or on a paragraph mark, then passes the CONTENT half of the lock. The exception never
+ * admits a property that hides text (`w:vanish`, `w:specVanish`, `w:webHidden`), which the
+ * run-property vocabulary refuses today anyway. Text edits, deletion of the content, paragraph properties,
+ * removal of a `sdtLocked` wrapper and `w:dataBinding` refusals are unchanged.
+ *
+ * @public
+ */
+export interface ContentLockPolicy {
+  /** Let run formatting pass a content lock; text and removal stay refused. Default `false`. */
+  readonly allowFormattingInLockedContent?: boolean;
+}
+
+/**
  * How an edit primitive validates its result.
  *
  * By default every primitive runs the full-part invariant validation before handing its
@@ -51,6 +70,11 @@ export type OoxmlEditResult =
  */
 export interface EditOptions {
   readonly deferValidation?: boolean;
+  /**
+   * How a content control's `w:lock` is read for ops that only restyle text. Absent means
+   * the default: `contentLocked` / `sdtContentLocked` refuse every write, formatting included.
+   */
+  readonly contentLockPolicy?: ContentLockPolicy;
   /**
    * A shared minter for `@w:id` on a NEW revision, for the ops of one transaction.
    *

@@ -43,7 +43,7 @@ export function isApplePlatform(): boolean;
 export const ja: PartialLocaleStrings;
 
 // @public
-export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'tr' | 'zh-CN';
+export type LocaleCode = 'en' | 'de' | 'es' | 'fr' | 'he' | 'hi' | 'id' | 'ja' | 'pl' | 'pt-BR' | 'ru' | 'tr' | 'zh-CN';
 
 // @public
 export const locales: Record<LocaleCode, PartialLocaleStrings>;
@@ -67,6 +67,9 @@ export function platformShortcut(text: string): string;
 
 // @public
 export const ptBR: PartialLocaleStrings;
+
+// @public
+export const ru: PartialLocaleStrings;
 
 // @public
 export type TFunction = (key: TranslationKey, vars?: Record<string, string | number>) => string;

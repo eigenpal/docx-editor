@@ -84,6 +84,7 @@ export {
   type HarfBuzzTextShaperOptions,
 } from './harfbuzz-shaper.ts';
 export { setHarfBuzzWasmUrl } from './harfbuzz-wasm-binary.ts';
+export type { FontShapingOptions } from './font-shaping-policy.ts';
 export {
   LayoutShapingConfigurationError,
   createLayoutShaping,
@@ -165,6 +166,7 @@ export {
   type BlockFragmentRecord,
   type ContentControlBoundaryRecord,
   type ContentControlGeometryFragment,
+  type ContentControlModelRange,
   type ContentControlLevel,
   type ContentControlLock,
   type ContentControlMappedType,
@@ -400,6 +402,7 @@ export { createFixedMeasurer } from './fixed-measurer.ts';
 export type { CjkTypographySettings } from './cjk-typography.ts';
 export {
   layoutEquation,
+  type EquationBarGeometry,
   type EquationFractionGeometry,
   type EquationGeometry,
   type EquationNaryGeometry,

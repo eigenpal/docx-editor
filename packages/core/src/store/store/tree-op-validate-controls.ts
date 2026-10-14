@@ -133,13 +133,16 @@ export function contentControlAtCaret(
  * `dataBinding` refuses before placeholder/temporary transitions. A `w:temporary` control
  * whose wrapper cannot be removed (effective `sdtLocked` / `sdtContentLocked`) refuses the
  * whole content edit with `locked` — temporary's contract is unwrap-on-edit.
+ *
+ * `restyle` skips only the content-lock answers, for a write a host's `ContentLockPolicy` lets
+ * past them (`restylePassesContentLock`); `bound` and the temporary wrapper refusal still hold.
  */
 export function rangeTouchesContentRestriction(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   start: number,
   end: number,
-  bias?: 'left' | 'right'
+  { bias, restyle = false }: ContentEditCheck = {}
 ): TreeOpRejection | null {
   // The landing resolver moved this insert out of where the run rule below would put it, so
   // validate the place it actually lands.
@@ -180,7 +183,7 @@ export function rangeTouchesContentRestriction(
   }
   for (const runId of overlappingRunIds) {
     if (isBoundAt(part, runId)) return 'bound';
-    if (effectiveContentLockAt(part, runId).content) return 'locked';
+    if (!restyle && effectiveContentLockAt(part, runId).content) return 'locked';
   }
   const control = contentControlAtCaret(part, paragraph, start, end, bias);
   if (control) {
@@ -193,7 +196,7 @@ export function rangeTouchesContentRestriction(
     // Empty paragraphs have no overlapping runs, so content lock must be read from the
     // control itself — otherwise an empty `contentLocked` / `sdtContentLocked` control
     // would admit the first insertion.
-    if (effectiveLockOf(part, control).content) return 'locked';
+    if (!restyle && effectiveLockOf(part, control).content) return 'locked';
     if (isTemporaryControl(control) && effectiveLockOf(part, control).wrapper) {
       return 'locked';
     }
@@ -207,15 +210,21 @@ export function holds(node: OoxmlNode, id: string): boolean {
   return node.children.some((child) => holds(child, id));
 }
 
+/** How a content-bearing range is checked: the insertion bias, and whether a host policy lets a restyle past the lock. */
+export interface ContentEditCheck {
+  readonly bias?: 'left' | 'right' | undefined;
+  readonly restyle?: boolean;
+}
+
 /** Refuse a content-bearing edit that would rewrite a locked or bound region. */
 export function rejectContentEdit(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   start: number,
   end: number,
-  bias?: 'left' | 'right'
+  check: ContentEditCheck = {}
 ): TreeOpRejection | null {
-  return rangeTouchesContentRestriction(part, paragraph, start, end, bias);
+  return rangeTouchesContentRestriction(part, paragraph, start, end, check);
 }
 
 /**

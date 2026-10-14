@@ -22,8 +22,12 @@ export function createEditorEvents(snapshot: () => EditorSnapshot) {
     reviewItemReveal: new Set(),
   };
   return {
-    emitError(error: EditorError) {
-      for (const handler of [...handlers.error]) handler(error);
+    emitError(error: EditorError, isCurrent?: () => boolean) {
+      for (const handler of [...handlers.error]) {
+        // A listener can load another document or destroy the editor before the next listener.
+        if (isCurrent && !isCurrent()) return;
+        handler(error);
+      }
     },
     emitDocumentChange(change: DocumentChange) {
       for (const handler of [...handlers.change]) handler(change);

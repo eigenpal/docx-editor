@@ -20,7 +20,7 @@ import {
 } from '../surface-indent-step.ts';
 import { MAX_PARAGRAPH_INDENT_TWIPS } from '../../layout/paragraph-indent.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
-import { placeholderSelectionRange } from '../surface-pointer.ts';
+import { placeholderSelectionRange } from '../surface-atomic-controls.ts';
 import {
   mount as mountFixture,
   selectCellRectangle,

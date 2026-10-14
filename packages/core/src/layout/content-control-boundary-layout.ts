@@ -49,6 +49,8 @@ import {
   contentControlSubtreeToken,
 } from './content-control-context-token.ts';
 
+import { modelRangeOf, sameModelRange } from './content-control-model-range.ts';
+
 export { contentControlContextToken };
 
 export interface CollectedControl {
@@ -741,6 +743,7 @@ function sameBoundaryRecord(
     left.bound === right.bound &&
     left.nestingDepth === right.nestingDepth &&
     left.level === right.level &&
+    sameModelRange(left.range, right.range) &&
     sameGeometryFragments(left.fragments, right.fragments)
   );
 }
@@ -990,5 +993,6 @@ function recordWithoutGeometry(collected: CollectedControl): ContentControlBound
     nestingDepth: collected.nestingDepth,
     level: collected.level,
     fragments: [],
+    ...modelRangeOf(collected),
   };
 }

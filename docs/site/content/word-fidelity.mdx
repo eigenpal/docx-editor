@@ -68,6 +68,14 @@ The matrix reports editing, rendering, and round-trip support separately. A feat
 
 Raised and lowered text contributes to automatic and minimum line heights. This includes inherited `w:position` values combined with subscript or superscript. Exact line spacing retains its authored height.
 
+#### Equation source formatting
+
+Latin and Greek letters in equations use mathematical italic glyphs from the math font, unless `m:sty` specifies plain, bold, or bold italic. Run fonts, bold, and italic do not change these letters. Plain-style runs keep the run font, and a font other than Cambria Math also keeps run bold and italic. Normal-text runs keep their original characters and run formatting. Measurement and paint use the same display string; saved OMML retains the original text.
+
+Equations retain their canonical Office Math source when you save the document. Literal text and normal text project within fractions, radicals, scripts, and other supported structures. Upper and lower bars without control properties (`m:ctrlPr`) also project as math.
+
+Compact equation replacement is disabled when it cannot preserve run formatting or bars. You can remove the equation and edit ordinary text beside it. This restriction applies to the equation, not the document. Unsupported source properties retain the text fallback and remain unchanged on save.
+
 ### Paragraphs and styles
 
 <FeatureMatrix category="paragraphs" />
@@ -254,6 +262,8 @@ Changes to numbering and document properties update field text and table paginat
 
 Merges that enter or leave the measured group retain ordinary row placement. Active floating content also uses ordinary row placement when it changes the available width.
 
+Fixed-height horizontal cells display the part of a line that starts inside their content box. A taller line does not enlarge the row. Text below the box stays in the document and does not continue on another page.
+
 Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
 
 ### Fields and paragraph spacing
@@ -288,7 +298,9 @@ Modern Latin justification includes terminal footnote and endnote citations when
 
 East Asian font hints select the document's East Asian face for supported punctuation, symbols, Greek, and Cyrillic ranges. Combining marks and joined emoji keep their base character's slot across text runs. Explicit symbol fonts retain their selected face.
 
-Document settings control kinsoku, Japanese strict rules, and language-specific break restrictions. They also control Korean character wrapping, punctuation overflow, and punctuation or kana compression. Punctuation compression removes shared side bearings and preserves the ink position during native text selection. Compression removes shared spacing between adjacent punctuation. Paragraph and manual line-break boundaries retain their advance widths.
+Document settings control kinsoku, Japanese strict rules, Korean character wrapping, and punctuation overflow. Adjacent full-width punctuation shares a half-cell bearing when both runs enable `w:kern` at their font size. `w:noPunctuationKerning` disables this compression. The East Asian face of the document defaults (`w:rPrDefault`) must be an East Asian font. A known Chinese, Japanese, or Korean font qualifies. A known Latin font, such as Arial, does not. Another face qualifies only when the font table gives it a Shift JIS, Hangul, GB2312, or Big5 `w:charset`. An East Asian theme font with an empty theme slot qualifies. Korean-language runs retain their advances. Close/open, close/close, open/open, comma/period, and colon/open pairs compress; open/close pairs do not. The run's own font, bold, italic, and authored tracking do not select the rule. Run boundaries do not disable it. Paragraph and manual line-break boundaries retain their advance widths.
+
+`w:characterSpacingControl` does not enable or disable this pair rule. Latin punctuation keeps the font's HarfBuzz kerning, including with `w:noPunctuationKerning`.
 
 Run language uses `w:lang` elements and attributes in the WordprocessingML namespace across styles and direct formatting. Foreign language extensions remain saved but do not select the layout language.
 

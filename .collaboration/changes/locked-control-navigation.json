@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The caret walked through the characters of a content-locked inline control.",
+  "after": "With lockedControlNavigation set to atomic, keyboard motions and engine pointer gestures treat a content-locked inline control as one unit. Without the option, behavior is unchanged.",
+  "reason": "The option changes only local caret placement and selection. It adds no operation and writes no shared state; a selection over a control is published as an ordinary range, and layout publishes the control's model range as derived, unshared data.",
+  "tests": [
+    "packages/core/src/editor/__tests__/atomic-navigation.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-locked-control-navigation.test.ts"
+  ],
+  "changeset": "locked-control-navigation",
+  "migration": null
+}

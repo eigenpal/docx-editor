@@ -12,7 +12,7 @@ import type {
   TimingSummary,
 } from '@docx-editor.dev/core';
 import { METRICS, type MetricDefinition } from './metrics.ts';
-import { checkAttributes, checkEvent } from './anonymous.ts';
+import { checkAttributes, checkEvent, MAX_COUNT } from './anonymous.ts';
 import {
   ENGINE_VERSION,
   createPipeline,
@@ -37,11 +37,16 @@ import {
  * - `collaborationClient`: collaboration status changes and room size (`collab.*`).
  * - `performance`: how fast the editor responds: key presses and clicks to the next frame,
  *   and engine layout and paint times, as one summary per minute of use (`performance`).
+ * - `documentSave`: calls to `save()` that returned the document or failed (`document.save`).
+ * - `sessions`: when each editor starts and ends, how long it is used, and how many edits it
+ *   commits, as one summary per minute of use (`session`).
  *
  * @public
  */
 export type TelemetryArea =
   | 'documentOpen'
+  | 'documentSave'
+  | 'sessions'
   | 'editing'
   | 'trackedChanges'
   | 'fonts'
@@ -55,8 +60,8 @@ export interface TelemetryAreaOptions {
   /**
    * Share of events to send, from 0 to 1. Metrics count every event, except that a
    * `performance` rate of 0 turns performance off, metrics included. Defaults to 1.
-   * Each event is sampled on its own, except in `performance`: there the choice is made once
-   * for each editor, which sends all of its summaries or none.
+   * Each event is sampled on its own, except in `performance` and `sessions`: there the choice
+   * is made once for each editor, which sends all of its summaries or none.
    */
   readonly sampleRate?: number;
 }
@@ -158,6 +163,8 @@ export interface Telemetry {
 
 const ALL_AREAS: TelemetryInclude = {
   documentOpen: true,
+  documentSave: true,
+  sessions: true,
   editing: true,
   trackedChanges: true,
   fonts: true,
@@ -180,6 +187,10 @@ function areaOf(event: EditorDiagnostic): TelemetryArea | null {
   switch (event.kind) {
     case 'document.open':
       return 'documentOpen';
+    case 'document.save':
+      return 'documentSave';
+    case 'session':
+      return 'sessions';
     case 'edit.rejected':
       return event.tracked || TRACKING_CODES.has(event.code) ? 'trackedChanges' : 'editing';
     case 'review.skipped':
@@ -202,6 +213,8 @@ function areaOf(event: EditorDiagnostic): TelemetryArea | null {
 
 /** Events that repeat in bursts, and the fields that make two of them the same. */
 function dedupeKey(event: EditorDiagnostic): string | null {
+  // People join and leave in bursts; inside a window only the latest count matters.
+  if (event.kind === 'collab.participants') return `${event.editorSessionId}|participants`;
   if (event.kind === 'edit.rejected')
     return [
       event.editorSessionId,
@@ -216,8 +229,6 @@ function dedupeKey(event: EditorDiagnostic): string | null {
   if (event.kind === 'font.failed') return `${event.editorSessionId}|font|${event.code}`;
   if (event.kind === 'history' || event.kind === 'custom-node')
     return `${event.editorSessionId}|${event.kind}|${event.code}`;
-  // People join and leave in bursts; inside a window only the latest count matters.
-  if (event.kind === 'collab.participants') return `${event.editorSessionId}|participants`;
   if (event.kind === 'collab.status')
     return `${event.editorSessionId}|status|${event.status}|${event.code ?? ''}|${event.recovering}`;
   return null;
@@ -294,16 +305,20 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     return Math.min(1, Math.max(0, setting.sampleRate ?? 1));
   }
 
-  /** For `performance`, one choice per editor, so one person's summaries stay together. */
+  /**
+   * For `performance` and `sessions`, one choice per editor and area, so one person's summaries,
+   * and a session's start and end, stay together.
+   */
   const editorSamples = new Map<string, boolean>();
   function sampled(diagnostic: EditorDiagnostic, area: TelemetryArea, sampleRate: number) {
     if (sampleRate >= 1) return true;
-    if (area !== 'performance') return Math.random() < sampleRate;
-    let keep = editorSamples.get(diagnostic.editorSessionId);
+    if (area !== 'performance' && area !== 'sessions') return Math.random() < sampleRate;
+    const key = `${area}|${diagnostic.editorSessionId}`;
+    let keep = editorSamples.get(key);
     if (keep === undefined) {
       if (editorSamples.size >= 1000) editorSamples.clear();
       keep = Math.random() < sampleRate;
-      editorSamples.set(diagnostic.editorSessionId, keep);
+      editorSamples.set(key, keep);
     }
     return keep;
   }
@@ -348,7 +363,12 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       if ((open.latest as { count?: number }).count !== sent.count)
         send(enrich(withShape(open.latest, detailedShape), pipeline, open.event.attributes));
     } else if (open.repeated > 0) {
-      send({ ...open.event, repeated: open.repeated });
+      // The guard caps `repeated`; a longer burst still reports the cap, not nothing.
+      // A join time belongs to the first `ready` alone.
+      const { connectMs: _connectMs, ...first } = open.event as TelemetryEvent & {
+        connectMs?: number;
+      };
+      send({ ...first, repeated: Math.min(open.repeated, MAX_COUNT) } as TelemetryEvent);
     }
   }
 
@@ -382,9 +402,16 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
       else open.repeated += 1;
       return;
     }
-    if (!sampled(diagnostic, area!, sampleRate)) return;
+    // A session end is the last thing an editor sends, often while its page closes, after the
+    // page's own flush may already have run: send it, and the metrics it recorded, right away.
+    const ending = diagnostic.kind === 'session' && diagnostic.phase === 'end';
+    if (!sampled(diagnostic, area!, sampleRate)) {
+      if (ending) void flush();
+      return;
+    }
     const event = enrich(withShape(diagnostic, detailedShape), pipeline, attributes);
     send(event);
+    if (ending) void flush();
     if (key) {
       const timer = setTimeout(() => close(key), windowMs);
       (timer as { unref?: () => void }).unref?.();
@@ -396,10 +423,13 @@ export function createTelemetry(options: TelemetryOptions): Telemetry {
     return Object.freeze({
       id: 'telemetry',
       onDiagnostic: (event: EditorDiagnostic) => record(event, attributes),
-      // The editor times key presses only while performance would be recorded.
+      // The editor times key presses only while performance would be recorded, and tracks a
+      // session only while sessions would be.
       wantsDiagnostic: (kind: EditorDiagnosticKind) =>
         !closed &&
-        (kind !== 'performance' || ((rate('performance') ?? 0) > 0 && pipeline.consented())),
+        (kind === 'session'
+          ? rate('sessions') !== null
+          : kind !== 'performance' || ((rate('performance') ?? 0) > 0 && pipeline.consented())),
     });
   }
 
@@ -519,8 +549,45 @@ function recordMetrics(pipeline: Pipeline, event: EditorDiagnostic, labels: Attr
       recordTiming(labelled, METRICS.editorInteractionDuration, pages, event.interaction);
       recordTiming(labelled, METRICS.editorLayoutDuration, pages, event.layout);
       recordTiming(labelled, METRICS.editorPaintDuration, pages, event.paint);
+      return;
     }
+    case 'document.save':
+      labelled.metric(METRICS.documentSaves, 1, {
+        outcome: event.outcome,
+        code: event.outcome === 'rejected' ? event.code : 'none',
+      });
+      if (event.outcome === 'saved')
+        labelled.metric(METRICS.documentSaveDuration, event.durationMs / 1000);
+      return;
+    case 'session':
+      recordSession(labelled, event);
   }
+}
+
+/**
+ * A session's metrics. Counts come from the `active` summaries only: the `end` totals repeat
+ * them, so recording both would count every edit twice.
+ */
+function recordSession(
+  pipeline: Pick<Pipeline, 'metric'>,
+  event: Extract<EditorDiagnostic, { kind: 'session' }>
+): void {
+  if (event.phase === 'start') {
+    pipeline.metric(METRICS.editorSessions, 1, { phase: 'start' });
+    return;
+  }
+  if (event.phase === 'end') {
+    pipeline.metric(METRICS.editorSessions, 1, { phase: 'end' });
+    pipeline.metric(METRICS.editorSessionDuration, event.durationMs / 1000);
+    return;
+  }
+  if (event.activeMs > 0) pipeline.metric(METRICS.editorActiveTime, event.activeMs / 1000);
+  for (const [origin, count] of [
+    ['input', event.inputEdits],
+    ['command', event.commandEdits],
+    ['automation', event.automationEdits],
+  ] as const)
+    if (count > 0) pipeline.metric(METRICS.edits, count, { origin });
 }
 
 /**

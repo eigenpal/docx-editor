@@ -4,6 +4,13 @@
 // small immutable expression tree and creates fresh generic OMML for supported user input.
 
 import { XML_NAMESPACE_URI } from './ooxml-shared.ts';
+import {
+  equationRunFormat,
+  equationMathChild as namedChild,
+  equationMathChildren as namedChildren,
+  equationRunIsSupported as isSupportedRun,
+  equationTextIsSupported,
+} from './omml-run-format.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
 import type {
@@ -33,7 +40,19 @@ export interface OmmlLimits {
 
 export type EquationExpression =
   | { readonly kind: 'row'; readonly items: readonly EquationExpression[] }
-  | { readonly kind: 'text'; readonly value: string }
+  | {
+      readonly kind: 'text';
+      readonly value: string;
+      readonly format?: {
+        readonly fontFamily?: string;
+        readonly bold?: boolean;
+        readonly italic?: boolean;
+        readonly literal?: boolean;
+        readonly normalText?: boolean;
+        readonly mathStyle?: 'p' | 'b' | 'i' | 'bi';
+      };
+    }
+  | { readonly kind: 'bar'; readonly body: EquationExpression; readonly position: 'top' | 'bottom' }
   | {
       readonly kind: 'fraction';
       readonly numerator: EquationExpression;
@@ -179,25 +198,6 @@ function collectFallbackText(node: OoxmlNode, state: ProjectionState, depth: num
   }
 }
 
-function namedChild(
-  node: OoxmlGenericElementNode,
-  localName: string
-): OoxmlGenericElementNode | null {
-  for (const child of childrenOf(node)) {
-    if (isMathElement(child, localName)) return child;
-  }
-  return null;
-}
-
-function namedChildren(
-  node: OoxmlGenericElementNode,
-  localName: string
-): readonly OoxmlGenericElementNode[] {
-  return childrenOf(node).filter((child): child is OoxmlGenericElementNode =>
-    isMathElement(child, localName)
-  );
-}
-
 function hasOnlyMathChildren(
   node: OoxmlGenericElementNode,
   counts: Readonly<Record<string, { readonly min: number; readonly max: number }>>
@@ -205,7 +205,7 @@ function hasOnlyMathChildren(
   if (node.attributes.length > 0) return false;
   const seen = new Map<string, number>();
   for (const child of childrenOf(node)) {
-    if (!isMathElement(child) || counts[child.localName] === undefined) return false;
+    if (!isMathElement(child) || !Object.hasOwn(counts, child.localName)) return false;
     seen.set(child.localName, (seen.get(child.localName) ?? 0) + 1);
   }
   return Object.entries(counts).every(([name, range]) => {
@@ -231,37 +231,25 @@ function hasOnlyMathVal(node: OoxmlGenericElementNode, accepted?: ReadonlySet<st
   return value !== undefined && (accepted === undefined || accepted.has(value));
 }
 
-function isSupportedRun(node: OoxmlGenericElementNode): boolean {
-  if (node.attributes.length > 0) return false;
-  const properties = namedChildren(node, 'rPr');
-  const texts = namedChildren(node, 't');
-  if (properties.length > 1 || texts.length === 0) return false;
-  if (properties[0] && !isEmptyProperty(properties[0])) return false;
-  if (properties.length + texts.length !== childrenOf(node).length) return false;
-  return texts.every(
-    (text) =>
-      text.attributes.every(
-        (attribute) =>
-          attribute.namespaceUri === XML_NAMESPACE_URI &&
-          attribute.localName === 'space' &&
-          (attribute.value === 'preserve' || attribute.value === 'default')
-      ) && childrenOf(text).every((child) => child.kind === 'textValue')
-  );
-}
-
 function isSupportedExpressionNode(node: OoxmlNode): boolean {
   if (node.kind === 'textValue') return true;
   if (!isMathElement(node)) return false;
   if (node.localName === 'r') return isSupportedRun(node);
-  if (node.localName === 't') {
-    return (
-      node.attributes.every(
-        (attribute) =>
-          attribute.namespaceUri === XML_NAMESPACE_URI &&
-          attribute.localName === 'space' &&
-          (attribute.value === 'preserve' || attribute.value === 'default')
-      ) && childrenOf(node).every((child) => child.kind === 'textValue')
-    );
+  if (node.localName === 't') return equationTextIsSupported(node);
+  if (node.localName === 'bar') {
+    if (!hasOnlyMathChildren(node, { barPr: { min: 0, max: 1 }, e: { min: 1, max: 1 } }))
+      return false;
+    const property = namedChild(node, 'barPr');
+    if (
+      property &&
+      !isEmptyProperty(property) &&
+      !(
+        hasOnlyMathChildren(property, { pos: { min: 1, max: 1 } }) &&
+        hasOnlyMathVal(namedChildren(property, 'pos')[0]!, new Set(['top', 'bot']))
+      )
+    )
+      return false;
+    return childrenOf(namedChildren(node, 'e')[0]!).every(isSupportedExpressionNode);
   }
   if (node.localName === 'f') {
     if (
@@ -385,6 +373,15 @@ function projectStructured(
   depth: number
 ): EquationExpression | null {
   if (!isSupportedExpressionNode(node)) return null;
+  if (node.localName === 'bar') {
+    const property = namedChild(node, 'barPr');
+    const position = property ? namedChild(property, 'pos') : null;
+    return Object.freeze({
+      kind: 'bar',
+      body: projectContainer(namedChildren(node, 'e')[0]!, state, depth + 1),
+      position: position && mathVal(position) === 'top' ? 'top' : 'bottom',
+    });
+  }
   if (node.localName === 'f') {
     const numerator = namedChild(node, 'num');
     const denominator = namedChild(node, 'den');
@@ -466,9 +463,20 @@ function projectNode(node: OoxmlNode, state: ProjectionState, depth: number): Eq
     return projectContainer(node, state, depth);
   }
   if (node.localName === 'r') {
-    return isSupportedExpressionNode(node)
-      ? projectContainer(node, state, depth, 'rPr')
-      : fallbackOf(node, state, depth + 1);
+    if (!isSupportedExpressionNode(node)) return fallbackOf(node, state, depth + 1);
+    const format = equationRunFormat(node)!;
+    return frozenRow(
+      namedChildren(node, 't').map((text) => {
+        const projected = projectContainer(text, state, depth + 1);
+        const formatted = (value: EquationExpression): EquationExpression =>
+          value.kind === 'text'
+            ? Object.freeze({ ...value, ...(Object.keys(format).length ? { format } : {}) })
+            : value;
+        return projected.kind === 'row'
+          ? frozenRow(projected.items.map(formatted))
+          : formatted(projected);
+      })
+    );
   }
   if (node.localName === 't') {
     return isSupportedExpressionNode(node)
@@ -850,6 +858,25 @@ function expressionNodes(expression: EquationExpression, nextId: NextNodeId): re
               nextId,
               textAttributes(expression.text)
             ),
+          ],
+          nextId
+        ),
+      ];
+    case 'bar':
+      return [
+        mathElement(
+          'bar',
+          [
+            mathElement(
+              'barPr',
+              [
+                mathElement('pos', [], nextId, [
+                  mathAttribute('val', expression.position === 'top' ? 'top' : 'bot'),
+                ]),
+              ],
+              nextId
+            ),
+            mathElement('e', expressionNodes(expression.body, nextId), nextId),
           ],
           nextId
         ),

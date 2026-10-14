@@ -36,6 +36,7 @@ import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { ensureHyperlinkRelationship } from '../store/package/hyperlink-part.ts';
 import { runObservedStoreTransaction } from '../store/package/canonical-primitive-capture.ts';
 import { normalizeParagraphIdentity } from '../store/package/para-id.ts';
+import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { TreePackageStore, type StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -113,6 +114,11 @@ export interface ServerAutomationHostOptions {
    * not attach a replica.
    */
   readonly collaborationModel?: CollaborationModuleContribution;
+  /**
+   * Opt-in relaxation of `w:lock` for run-property writes (`setFont`): content-locked controls
+   * can be restyled but not retyped. Absent, they refuse both.
+   */
+  readonly contentLockPolicy?: ContentLockPolicy;
 }
 
 const BODY: StoryScope = Object.freeze({ kind: 'body' as const });
@@ -146,7 +152,8 @@ export function createServerAutomationHost(
   }
   const store = new TreePackageStore(
     loaded.package,
-    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main))
+    materializeGlossaryPlaceholders(loaded.package, normalizeParagraphIdentity(main)),
+    options.contentLockPolicy ? { contentLockPolicy: options.contentLockPolicy } : {}
   );
   const collaboration = options.collaborationModel?.session;
   let detachCollaboration = (): void => {};

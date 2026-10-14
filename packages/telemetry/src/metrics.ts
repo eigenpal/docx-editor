@@ -53,6 +53,7 @@ const PEOPLE = [1, 2, 3, 5, 10, 20, 50, 100, 250];
 const NODES = [1_000, 10_000, 50_000, 100_000, 250_000, 500_000, 1_000_000];
 const RATIO = [0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 1];
 const LIFETIME = [60, 300, 900, 3_600, 4 * 3_600, 24 * 3_600, 7 * 24 * 3_600];
+const SESSION = [10, 30, 60, 300, 900, 1_800, 3_600, 2 * 3_600, 4 * 3_600, 8 * 3_600, 24 * 3_600];
 
 function metric(
   name: string,
@@ -92,6 +93,28 @@ export const METRICS = Object.freeze({
     'Time from the start of an open to the laid-out document.',
     [EDITOR_VERSION],
     SECONDS
+  ),
+  documentSaves: metric(
+    'docx_editor.document.saves',
+    'counter',
+    '{save}',
+    'Calls to save() that returned the document or failed, by outcome and failure code.',
+    ['outcome', 'code', EDITOR_VERSION]
+  ),
+  documentSaveDuration: metric(
+    'docx_editor.document.save.duration',
+    'histogram',
+    's',
+    'Time from a save() call to the saved bytes, pending edits included. Successful saves only.',
+    [EDITOR_VERSION],
+    SECONDS
+  ),
+  edits: metric(
+    'docx_editor.edits',
+    'counter',
+    '{edit}',
+    'Edits that changed the document, by origin: input, command, or automation. Refused edits are in docx_editor.edit.rejections, and edits by collaborators are not counted. Counted when a session summary is sent, up to a minute after the edit.',
+    ['origin', EDITOR_VERSION]
   ),
   editRejections: metric(
     'docx_editor.edit.rejections',
@@ -150,6 +173,29 @@ export const METRICS = Object.freeze({
     'People in the room, as each client sees it when the count changes.',
     [EDITOR_VERSION],
     PEOPLE
+  ),
+
+  editorSessions: metric(
+    'docx_editor.editor.sessions',
+    'counter',
+    '{session}',
+    'Editor sessions started and ended, by phase. An editor ends when it is destroyed or its page closes.',
+    ['phase', EDITOR_VERSION]
+  ),
+  editorSessionDuration: metric(
+    'docx_editor.editor.session.duration',
+    'histogram',
+    's',
+    'Time from the creation of an editor to its end, idle time included. Recorded when the session ends.',
+    [EDITOR_VERSION],
+    SESSION
+  ),
+  editorActiveTime: metric(
+    'docx_editor.editor.active_time',
+    'counter',
+    's',
+    'Seconds of use: time between key presses, pointer presses, and edits that are at most 30 seconds apart. Counted when a session summary is sent.',
+    [EDITOR_VERSION]
   ),
 
   editorInteractionDuration: metric(

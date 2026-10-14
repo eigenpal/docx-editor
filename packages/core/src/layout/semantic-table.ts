@@ -210,6 +210,8 @@ export interface SemanticTableCell {
   readonly gridColumnId?: string;
   /** A vMerge cell that is not the restart continues the cell above: box, no content. */
   readonly vMergeContinue: boolean;
+  /** This cell starts a vertical merge that the next row continues. */
+  readonly headsVerticalMerge?: true;
   /** `w:hideMark` excludes the end-of-cell glyph from row sizing. */
   readonly hideEndMark?: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
@@ -659,6 +661,7 @@ function readTableStructureUncached(
   // continues such a cell (17.4.85). Below an unmerged cell, or in the first row, it has
   // nothing to continue, so it starts its own merge and paints its own content.
   let mergedAbove = new Set<number>();
+  let cellsAbove: SemanticTableCell[] = [];
   for (let rowIndex = 0; rowIndex < plans.length; rowIndex += 1) {
     const plan = plans[rowIndex]!;
     const rowNode = plan.node;
@@ -721,6 +724,12 @@ function readTableStructureUncached(
       const ownBorders = cellProperties ? readCellBorders(cellProperties) : EMPTY_CELL_BORDER_BOX;
       const vMerge = readVMerge(cellProperties);
       if (vMerge !== 'none') mergedHere.add(gridColumn);
+      if (vMerge === 'continue' && mergedAbove.has(gridColumn)) {
+        const above = cellsAbove.findIndex((c) => c.gridColumn === gridColumn);
+        const head = cellsAbove[above];
+        if (head && !head.vMergeContinue && !head.headsVerticalMerge)
+          cellsAbove[above] = { ...head, headsVerticalMerge: true };
+      }
       cells.push({
         id: cellNode.id,
         ...revisionCellMetadata(cellProperties, displayMode, authorFilter, plan.revision),
@@ -742,6 +751,7 @@ function readTableStructureUncached(
       });
     }
     mergedAbove = mergedHere;
+    cellsAbove = cells;
     const rowRevision = plan.revision;
     const rowRevisionKind = rowRevision
       ? rowRevision.localName === 'ins'

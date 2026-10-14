@@ -1,6 +1,7 @@
 // Construction and transaction options of the tree document store.
 
 import type { FieldResultsMode } from '../package/field-result-mode.ts';
+import type { ContentLockPolicy } from '../package/ooxml-edit.ts';
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import type { HistoryGroup } from './history-group.ts';
 import type { ImpactClass } from './tree-op-types.ts';
@@ -62,4 +63,9 @@ export interface TreeDocumentStoreOptions {
    * document can gain or lose protection while its stories stay open.
    */
   readonly settingsPart?: () => OoxmlPart | null | undefined;
+  /**
+   * Opt-in relaxation of `w:lock` for run-property writes. See {@link ContentLockPolicy};
+   * absent, `contentLocked` and `sdtContentLocked` refuse formatting like any other write.
+   */
+  readonly contentLockPolicy?: ContentLockPolicy;
 }

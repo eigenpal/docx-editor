@@ -10,6 +10,7 @@
       "popups",
       "document",
       "fonts",
+      "fontShaping",
       "hyperlinkPopup",
       "i18n",
       "locale",
@@ -24,7 +25,9 @@
       "zoomMode",
       "revisionMarkup",
       "reviewDisplayMode",
-      "fieldResults"
+      "fieldResults",
+      "contentLockPolicy",
+      "lockedControlNavigation"
     ],
     "deferredInVue": {},
     "reactCallbacksAsVueEmits": {

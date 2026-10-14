@@ -15,7 +15,7 @@ import {
   setPaginatedSurfaceScale,
   type PaginatedSurface,
 } from '../paginated-surface.ts';
-import { absorbPlaceholderControls } from '../surface-pointer.ts';
+import { absorbAtomicControls } from '../surface-atomic-controls.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -829,7 +829,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
     const mounted = mount(`<w:p>${run('aa')}${inlinePlc('Enter name')}${run('zz')}</w:p>`);
     const paragraphId = mounted.surface.session.paragraphIds()[0]!;
     // Simulate Shift+Arrow landing mid-prompt: a partial range must snap to the unit.
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId, offset: 0 },
       head: { paragraphId, offset: 5 },
     });
@@ -845,7 +845,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
       )}</w:tbl>`
     );
     const paragraphId = mounted.surface.session.paragraphIds()[0]!;
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId, offset: 0 },
       head: { paragraphId, offset: 5 },
     });
@@ -868,7 +868,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
     expect(ids.length).toBeGreaterThanOrEqual(6);
     const firstCell = ids[1]!;
     const lastCell = ids[4]!;
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId: firstCell, offset: 0 },
       head: { paragraphId: firstCell, offset: 1 },
     });
@@ -888,7 +888,7 @@ describe('showingPlcHdr placeholder selection is atomic', () => {
       )
     );
     const paragraphId = mounted.surface.session.paragraphIds()[0]!;
-    const absorbed = absorbPlaceholderControls(mounted.surface.layout(), {
+    const absorbed = absorbAtomicControls(mounted.surface.layout(), {
       anchor: { paragraphId, offset: 3 },
       head: { paragraphId, offset: 6 },
     });

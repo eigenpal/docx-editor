@@ -35,6 +35,7 @@ import { ContentControlListNavigation } from '@docx-editor.dev/core/editor';
 import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
+import { ContentLockPolicy } from '@docx-editor.dev/core/editor';
 import { createDocumentRefresh } from '@docx-editor.dev/core/editor';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'vue';
@@ -77,6 +78,7 @@ import { FontOrigin } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
 import { FontResolverMark } from '@docx-editor.dev/core/editor';
+import { FontShapingOptions } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
@@ -101,6 +103,7 @@ import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { LocaleStrings } from '@docx-editor.dev/i18n';
+import { LockedControlNavigation } from '@docx-editor.dev/core/editor';
 import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { MaybeRef } from 'vue';
@@ -3789,6 +3792,7 @@ export interface DocxEditorProps {
     class?: string;
     // (undocumented)
     colorMode?: 'light' | 'dark' | 'system';
+    contentLockPolicy?: ContentLockPolicy;
     // (undocumented)
     contextMenu?: boolean | DocxEditorContextMenuProps;
     // (undocumented)
@@ -3796,11 +3800,13 @@ export interface DocxEditorProps {
     fieldResults?: FieldResultsMode;
     // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fontShaping?: FontShapingOptions;
     // (undocumented)
     hyperlinkPopup?: boolean;
     // (undocumented)
     i18n?: Translations;
     locale?: string;
+    lockedControlNavigation?: LockedControlNavigation;
     // (undocumented)
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
@@ -3965,6 +3971,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
+    contentLockPolicy: {
+        default: undefined;
+        type: PropType<ContentLockPolicy>;
+    };
     document: {
         default: undefined;
         type: PropType<DocumentSource>;
@@ -3972,6 +3982,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fieldResults: {
         default: undefined;
         type: PropType<FieldResultsMode>;
+    };
+    fontShaping: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps['fontShaping']>;
     };
     fonts: {
         default: undefined;
@@ -3984,6 +3998,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     locale: {
         default: undefined;
         type: StringConstructor;
+    };
+    lockedControlNavigation: {
+        default: undefined;
+        type: PropType<LockedControlNavigation>;
     };
     mode: {
         default: undefined;
@@ -4024,6 +4042,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
+    contentLockPolicy: {
+        default: undefined;
+        type: PropType<ContentLockPolicy>;
+    };
     document: {
         default: undefined;
         type: PropType<DocumentSource>;
@@ -4031,6 +4053,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     fieldResults: {
         default: undefined;
         type: PropType<FieldResultsMode>;
+    };
+    fontShaping: {
+        default: undefined;
+        type: PropType<DocxEditorRootProps['fontShaping']>;
     };
     fonts: {
         default: undefined;
@@ -4043,6 +4069,10 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     locale: {
         default: undefined;
         type: StringConstructor;
+    };
+    lockedControlNavigation: {
+        default: undefined;
+        type: PropType<LockedControlNavigation>;
     };
     mode: {
         default: undefined;
@@ -4078,11 +4108,14 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     onRevisionMarkupChange?: ((_settings: ResolvedRevisionMarkup) => any) | undefined;
 }>, {
     author: string;
+    contentLockPolicy: ContentLockPolicy;
     document: DocumentSource;
     fieldResults: FieldResultsMode;
+    fontShaping: _docx_editor_dev_core.FontShapingOptions | undefined;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
     locale: string;
+    lockedControlNavigation: LockedControlNavigation;
     mode: "edit" | "suggesting" | "view";
     modules: readonly EditorModule[];
     tableInteractionLabel: ((key: 'table.insertRowBelow' | 'table.insertColumnRight') => string) | undefined;
@@ -4108,14 +4141,17 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
+    contentLockPolicy?: ContentLockPolicy;
     // (undocumented)
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
     // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fontShaping?: FontShapingOptions;
     // (undocumented)
     imageDecodePort?: ImageDecodePort;
     locale?: string;
+    lockedControlNavigation?: LockedControlNavigation;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
     // (undocumented)

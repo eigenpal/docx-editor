@@ -249,6 +249,7 @@ export {
   removeNode,
   replaceChildren,
   replaceNode,
+  type ContentLockPolicy,
   type EditOptions,
   type OoxmlEditResult,
   type TransactionRevisionIds,

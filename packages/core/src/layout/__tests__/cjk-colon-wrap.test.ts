@@ -15,7 +15,13 @@ import { squareWrapZone } from './float-over-table-harness.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const policy = {
   ...DEFAULT_CJK_TYPOGRAPHY,
-  settings: { compression: 'compressPunctuation' as const, strict: false, before: {}, after: {} },
+  settings: {
+    compression: 'compressPunctuation' as const,
+    sourceEastAsianFont: true,
+    strict: false,
+    before: {},
+    after: {},
+  },
 };
 // Hiragino Mincho ProN W3 gives these characters 1000-unit advances. Its colon ink
 // reaches 570 units, so retaining a half-em colon at a line edge crosses the margin.
@@ -31,12 +37,15 @@ function part(xml: string) {
   return read.part;
 }
 const doc = part(
-  `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Hiragino Mincho ProN" w:eastAsia="Hiragino Mincho ProN"/><w:sz w:val="24"/></w:rPr><w:t>甲甲甲甲：【乙丙丁</w:t></w:r></w:p></w:body></w:document>`
+  `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Hiragino Mincho ProN" w:eastAsia="Hiragino Mincho ProN"/><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>甲甲甲甲：【乙丙丁</w:t></w:r></w:p></w:body></w:document>`
 );
 const settings = part(
   `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
 );
-const cascade = buildStyleCascadeTable(null, undefined, settings.root);
+const styles = part(
+  `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Hiragino Mincho ProN"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+);
+const cascade = buildStyleCascadeTable(styles.root, undefined, settings.root);
 function layout(width: number, session = createLayoutSession(), enabled = true, source = doc) {
   return layoutSemanticDocument(source, 0, {
     measurer,
@@ -79,7 +88,13 @@ test('Word restores colon compression after wrapping and cache reuse', () => {
 
 test('a centered colon retains the complete band for highlight and shading', () => {
   for (const decoration of [{ shading: '000000' }, { highlight: 'yellow' as const }]) {
-    const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 12, color: 'FFFFFF', ...decoration };
+    const style = {
+      ...DEFAULT_RUN_STYLE,
+      kerningMinPt: 1,
+      fontSizePt: 12,
+      color: 'FFFFFF',
+      ...decoration,
+    };
     const pieces = [
       { text: '：', start: 0, end: 1, props: [], style },
       {
@@ -87,7 +102,7 @@ test('a centered colon retains the complete band for highlight and shading', () 
         start: 1,
         end: 3,
         props: [],
-        style: { ...DEFAULT_RUN_STYLE, fontSizePt: 12 },
+        style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, fontSizePt: 12 },
       },
     ];
     const compressed = compressCjkPieces(pieces, policy, measurer);
@@ -100,7 +115,8 @@ test('a centered colon retains the complete band for highlight and shading', () 
 // The origins come from Word's PDF content, independently of this measurer.
 test('Word narrow-line origins survive every source-run split', () => {
   const text = '甲甲甲甲：【乙丙丁';
-  const run = (value: string) => `<w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:t>${value}</w:t></w:r>`;
+  const run = (value: string) =>
+    `<w:r><w:rPr><w:sz w:val="24"/><w:kern w:val="2"/></w:rPr><w:t>${value}</w:t></w:r>`;
   for (let split = 0; split <= text.length; split++) {
     const source = part(
       `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr>${run(text.slice(0, split))}${run(text.slice(split))}</w:p></w:body></w:document>`
@@ -134,6 +150,7 @@ test('colon fit widths retain authored tracking, size, and scale', () => {
         props: [],
         style: {
           ...DEFAULT_RUN_STYLE,
+          kerningMinPt: 1,
           fontSizePt: 18,
           horizontalScalePercent: 50,
           characterSpacingPt,
@@ -155,7 +172,7 @@ test('anchor prediction uses the colon fit width before its shared bearing reduc
       start: 0,
       end: 9,
       props: [],
-      style: { ...DEFAULT_RUN_STYLE, fontSizePt: 12 },
+      style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, fontSizePt: 12 },
     },
   ];
   const pieces = compressCjkPieces(originals, policy, measurer);

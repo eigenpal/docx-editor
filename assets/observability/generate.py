@@ -148,8 +148,13 @@ def text(content):
             'transparent': True, 'datasource': None}
 
 
-def quantile(metric, p, by='le', selector=F, window='$__rate_interval'):
-    return f'histogram_quantile({p}, sum by ({by}) (rate({metric}_bucket{{{selector}}}[{window}])))'
+def quantile(metric, p, by='le', selector=F, window='$__rate_interval', min_count=0):
+    """A percentile from the bands. With `min_count`, a group with fewer samples in the window has no value."""
+    expr = f'histogram_quantile({p}, sum by ({by}) (rate({metric}_bucket{{{selector}}}[{window}])))'
+    if not min_count:
+        return expr
+    groups = ', '.join(label.strip() for label in by.split(',') if label.strip() != 'le')
+    return f'{expr} and on({groups}) sum by ({groups}) (increase({metric}_count{{{selector}}}[{window}])) >= {min_count}'
 
 
 def variable(name, label, query, all_value='.*'):
@@ -194,25 +199,33 @@ counted_opens = f'sum(increase(docx_editor_document_opens_total{{{F},code=~"none
 open_ok = f'({opened} or {counted_opens} * 0) / {counted_opens}'
 # A zero that means "nothing happened" only while editors report; otherwise no data.
 reporting = f'sum(increase({INTERACTION}_count{{{F}}}[{W}])) * 0'
+OPEN_TIME = 'docx_editor_document_open_duration_seconds'
+LAYOUT = 'docx_editor_editor_layout_duration_seconds'
+# A percentile or share from a few samples follows one slow press or open, so it has no value.
+MIN_PRESSES, MIN_OPENS = 20, 5
+enough_presses = f'and on() sum(increase({INTERACTION}_count{{{F}}}[{W}])) >= {MIN_PRESSES}'
+enough_opens = f'and on() sum(increase({OPEN_TIME}_count{{{F}}}[{W}])) >= {MIN_OPENS}'
+TOO_FEW_PRESSES = f'Too few presses. The value appears after {MIN_PRESSES} presses in the window.'
+TOO_FEW_OPENS = f'Too few opens. The value appears after {MIN_OPENS} opens in the window.'
 b = Board()
 b.row('At a glance')
 ESTIMATE = (' Estimated from the timing bands. The highest finite band ends at 1 s, so a value of 1 s means'
-            ' the percentile is in the over 1 s band; see Presses over 1 s.')
-b.add(stat('Input delay, 95th percentile', f'histogram_quantile(0.95, sum by (le) (increase({INTERACTION}_bucket{{{F}}}[{W}])))', 's',
+            ' the percentile is in the over 1 s band; see Presses by delay band.')
+b.add(stat('Input delay, 95th percentile', f'histogram_quantile(0.95, sum by (le) (increase({INTERACTION}_bucket{{{F}}}[{W}]))) {enough_presses}', 's',
            'Time from a key press or click on the pages to the next frame on screen, over the selected range. 95 in 100 presses were faster.' + ESTIMATE,
-           decimals=0), 5, 4)
-b.add(stat('Input delay, median', f'histogram_quantile(0.5, sum by (le) (increase({INTERACTION}_bucket{{{F}}}[{W}])))', 's',
+           decimals=0, no_value='Too few presses'), 5, 4)
+b.add(stat('Input delay, median', f'histogram_quantile(0.5, sum by (le) (increase({INTERACTION}_bucket{{{F}}}[{W}]))) {enough_presses}', 's',
            'Time from a key press or click on the pages to the next frame on screen, over the selected range. Half the presses were faster.' + ESTIMATE,
-           decimals=0), 5, 4)
-b.add(stat('Presses over 1 s', f'1 - sum(increase({INTERACTION}_bucket{{{F},le="1"}}[{W}])) / sum(increase({INTERACTION}_count{{{F}}}[{W}]))', 'percentunit',
-           'Share of timed presses that took more than 1 s to reach the screen, over the selected range. The percentiles cannot measure these presses.',
-           decimals=2), 4, 4)
+           decimals=0, no_value='Too few presses'), 5, 4)
+b.add(stat('Presses over 200 ms', f'(1 - sum(increase({INTERACTION}_bucket{{{F},le="0.2"}}[{W}])) / sum(increase({INTERACTION}_count{{{F}}}[{W}]))) {enough_presses}', 'percentunit',
+           'Share of timed presses that took more than 200 ms to reach the screen, over the selected range. People notice a delay of this length. Presses over 1 s are rare and usually happen while a document loads; see Presses by delay band.',
+           decimals=2, no_value='Too few presses'), 4, 4)
 b.add(stat('Opens succeeding', open_ok, 'percentunit',
            'Successful opens out of successful opens plus failures the app causes, over the selected range. Broken files are left out; see Refused files.',
            decimals=2, no_value='No opens'), 5, 4)
-b.add(stat('Open time, 95th percentile', f'histogram_quantile(0.95, sum by (le) (increase(docx_editor_document_open_duration_seconds_bucket{{{F}}}[{W}])))', 's',
-           'From the start of an open to the first laid-out page, for successful opens over the selected range. Estimated from the timing bands.',
-           decimals=0, no_value='No opens'), 5, 4)
+b.add(stat('Open time, median', f'histogram_quantile(0.5, sum by (le) (increase({OPEN_TIME}_bucket{{{F}}}[{W}]))) {enough_opens}', 's',
+           'From the start of an open to the first laid-out page, for successful opens over the selected range. Half the opens were faster. Estimated from the timing bands. The median is shown because a few large files decide the 95th percentile; see Open time for both.',
+           decimals=1, no_value='Too few opens'), 5, 4)
 b.add(stat('Sources reporting, last 5 minutes', f'count(count by (job, instance) (rate({INTERACTION}_count{{{F}}}[5m]) > 0)) or vector(0)', 'short',
            'Distinct metric sources (job and instance) that sent timings in the last 5 minutes. With a random service.instance.id per page, as in the examples, each source is one open page, and a reload is a new one. A collector that aggregates browsers reports fewer sources. Zero while people edit means telemetry stopped, not that editing is healthy.'), 8, 4)
 b.add(stat('Unexpected refusals per 1,000 presses',
@@ -223,9 +236,9 @@ b.add(stat('Dropped telemetry events', f'round(sum(increase(docx_editor_telemetr
            'short', 'Events the privacy check dropped. Not zero usually means core and telemetry versions differ. No data means no editor reported.', decimals=0), 8, 4)
 
 b.row('Interaction')
-b.add(series('Input delay', [(quantile(INTERACTION, 0.5), 'median'), (quantile(INTERACTION, 0.95), '95th percentile'),
-                             (quantile(INTERACTION, 0.99), '99th percentile')], 's',
-             'Key press or click to the next frame on screen: the delay a person feels.' + ESTIMATE), 12, 8)
+b.add(series('Input delay', [(quantile(INTERACTION, p, min_count=MIN_PRESSES), legend)
+                             for p, legend in [(0.5, 'median'), (0.95, '95th percentile'), (0.99, '99th percentile')]], 's',
+             'Key press or click to the next frame on screen: the delay a person feels.' + ESTIMATE + ' ' + TOO_FEW_PRESSES), 12, 8)
 b.add(series('Presses timed', [(f'60 * sum(rate({INTERACTION}_count{{{F}}}[$__rate_interval]))', 'presses per minute')],
              'short', 'Key presses and clicks timed, per minute. Shows how much editing the other panels describe.'), 12, 8)
 BANDS = [('0.016', None, 'up to 16 ms'), ('0.033', '0.016', '16 to 33 ms'), ('0.05', '0.033', '33 to 50 ms'),
@@ -241,32 +254,74 @@ def band(upper, lower, metric=INTERACTION):
 bands = series('Presses by delay band', [(band(u, l), legend) for u, l, legend in BANDS], 'percent',
                'Share of presses in each delay band. Growth in the upper bands means editing got slower.', stack='percent', fill=60)
 b.add(bands, 12, 8)
-b.add(series('Input delay by document size (95th percentile)', [(quantile(INTERACTION, 0.95, 'le, pages', selector=F + ',pages!=""'), '{{pages}} pages')], 's',
-             'Large documents lay out more per edit. If only the large buckets are slow, the delay follows document size.'), 12, 8)
-b.add(series('Input delay by app version (95th percentile)', [(quantile(INTERACTION, 0.95, 'le, app_version', selector=F + ',app_version!=""'), '{{app_version}}')], 's',
-             'Your app releases, from the app.version attribute you send. A release slower than the one before points to it.'), 12, 8)
-b.add(series('Input delay by editor version (95th percentile)', [(quantile(INTERACTION, 0.95, 'le, docx_editor_version', selector=F + ',docx_editor_version!=""'), '{{docx_editor_version}}')], 's',
-             'The docx-editor packages that measured it. Compare editor upgrades.'), 12, 8)
+b.add(series('Input delay by document size (95th percentile)', [(quantile(INTERACTION, 0.95, 'le, pages', selector=F + ',pages!=""', min_count=MIN_PRESSES), '{{pages}} pages')], 's',
+             'Large documents lay out more per edit. If only the large buckets are slow, the delay follows document size. ' + TOO_FEW_PRESSES), 12, 8)
+b.add(series('Input delay by app version (95th percentile)', [(quantile(INTERACTION, 0.95, 'le, app_version', selector=F + ',app_version!=""', min_count=MIN_PRESSES), '{{app_version}}')], 's',
+             'Your app releases, from the app.version attribute you send. A release slower than the one before points to it. ' + TOO_FEW_PRESSES), 12, 8)
+b.add(series('Input delay by editor version (95th percentile)', [(quantile(INTERACTION, 0.95, 'le, docx_editor_version', selector=F + ',docx_editor_version!=""', min_count=MIN_PRESSES), '{{docx_editor_version}}')], 's',
+             'The docx-editor packages that measured it. Compare editor upgrades. ' + TOO_FEW_PRESSES), 12, 8)
 b.add(series('Input delay, now and a week ago (95th percentile)', [
-    (quantile(INTERACTION, 0.95), 'now'),
+    (quantile(INTERACTION, 0.95, min_count=MIN_PRESSES), 'now'),
     (f'histogram_quantile(0.95, sum by (le) (rate({INTERACTION}_bucket{{{F}}}[$__rate_interval] offset 7d)))', 'a week ago')],
              's', 'The same time a week earlier. Empty until the stack has a week of data.'), 12, 8)
 
 b.row('Engine work')
-for metric, name in [('docx_editor_editor_layout_duration_seconds', 'Layout'), ('docx_editor_editor_paint_duration_seconds', 'Paint')]:
+for metric, name in [(LAYOUT, 'Layout'), ('docx_editor_editor_paint_duration_seconds', 'Paint')]:
     engine = series(f'{name} passes by duration band', [(band(u, l, metric), legend) for u, l, legend in BANDS], 'percent',
                     f'Share of engine {name.lower()} passes after edits and view changes in each duration band. Each pass is timed alone, so many short passes can still add up to a slow press.',
                     stack='percent', fill=60)
-    b.add(engine, 12, 7)
+    b.add(engine, 8, 8)
+b.add(series('Layout time by document size (95th percentile)', [(quantile(LAYOUT, 0.95, 'le, pages', selector=F + ',pages!=""', min_count=MIN_PRESSES), '{{pages}} pages')], 's',
+             'Engine layout passes by page count bucket. If one size is much slower than the others, layout of that size causes the input delay. A size needs '
+             f'{MIN_PRESSES} passes in the window to show a value.'), 8, 8)
 
 b.row('Documents')
 b.add(series('Opens per minute', [(f'60 * sum by (outcome) (rate(docx_editor_document_opens_total{{{F}}}[$__rate_interval]))', '{{outcome}}')],
              'short', 'Documents opened and refused, per minute.'), 8, 8)
-b.add(series('Open time, successful opens', [(quantile('docx_editor_document_open_duration_seconds', 0.5), 'median'),
-                                            (quantile('docx_editor_document_open_duration_seconds', 0.95), '95th percentile')],
-             's', 'From the start of an open to the first laid-out page, for opens that succeeded.'), 8, 8)
+b.add(series('Open time', [(quantile(OPEN_TIME, 0.5, min_count=MIN_OPENS), 'median'),
+                            (quantile(OPEN_TIME, 0.95, min_count=MIN_OPENS), '95th percentile')],
+             's', 'From the start of an open to the first laid-out page, for opens that succeeded. ' + TOO_FEW_OPENS), 8, 8)
 b.add(top_table('Refused files by reason', f'sum by (code, cause, part) (increase(docx_editor_document_opens_total{{{F},outcome="rejected"}}[$__range]))', 'code',
                 'Why files did not open, most frequent first, with the engine reason and the role of the part that failed. Each code links to its hint.'), 8, 8)
+
+b.row('Sessions, edits, and saves')
+SESSIONS = 'docx_editor_editor_sessions_total'
+EDITS = 'docx_editor_edits_total'
+REFUSALS = 'docx_editor_edit_rejections_total'
+SAVES = 'docx_editor_document_saves_total'
+# A zero that means "nothing happened" only while editors report sessions; otherwise no data.
+sessions_reporting = f'sum(increase({SESSIONS}{{{F}}}[{W}])) * 0'
+edits_done = f'(sum(increase({EDITS}{{{F}}}[{W}])) or {sessions_reporting})'
+refused_all = f'(sum(increase({REFUSALS}{{{F}}}[{W}])) or {sessions_reporting})'
+refused_unexpected = f'(sum(increase({REFUSALS}{{{F},code!~"{EXPECTED_REFUSALS}"}}[{W}])) or {sessions_reporting})'
+saved = f'sum(increase({SAVES}{{{F},outcome="saved"}}[{W}]))'
+all_saves = f'sum(increase({SAVES}{{{F}}}[{W}]))'
+b.add(stat('Sessions started', f'round(sum(increase({SESSIONS}{{{F},phase="start"}}[{W}]))) or {sessions_reporting}', 'short',
+           'Editors created over the selected range. One editor is one session; a reload starts a new one.', decimals=0), 4, 4)
+b.add(stat('Active editing time', f'sum(increase(docx_editor_editor_active_time_seconds_total{{{F}}}[{W}])) or {sessions_reporting}', 's',
+           'Time people spent using editors over the selected range: key presses, clicks, and edits at most 30 s apart. Pauses do not count.',
+           decimals=0), 4, 4)
+b.add(stat('Session length, median', f'histogram_quantile(0.5, sum by (le) (increase(docx_editor_editor_session_duration_seconds_bucket{{{F}}}[{W}])))', 's',
+           'From the creation of an editor to its end, idle time included, for sessions that ended over the selected range. Estimated from the buckets.',
+           decimals=0, no_value='No ended sessions'), 4, 4)
+b.add(stat('Edits failing', f'{refused_unexpected} / ({edits_done} + {refused_all})', 'percentunit',
+           'Unexpected refusals out of all edit attempts (edits that changed the document plus refused edits), over the selected range. Expected refusals, such as edits in a read-only document, are left out of the top number.',
+           decimals=2, no_value='No edits'), 4, 4)
+b.add(stat('Saves succeeding', f'({saved} or {all_saves} * 0) / {all_saves}', 'percentunit',
+           'Calls to save() that returned the document, out of all calls, over the selected range.', decimals=2, no_value='No saves'), 4, 4)
+b.add(stat('Save time, 95th percentile', f'histogram_quantile(0.95, sum by (le) (increase(docx_editor_document_save_duration_seconds_bucket{{{F}}}[{W}])))', 's',
+           'From a save() call to the saved bytes, for successful saves over the selected range. Estimated from the buckets.', decimals=0, no_value='No saves'), 4, 4)
+b.add(series('People editing at once', [(f'sum(rate(docx_editor_editor_active_time_seconds_total{{{F}}}[$__rate_interval]))', 'active editors')],
+             'short', 'Seconds of use per second: about the number of people actively editing at the same time. Session summaries arrive up to a minute late.'), 8, 8)
+b.add(series('Sessions per hour', [(f'3600 * sum by (phase) (rate({SESSIONS}{{{F}}}[$__rate_interval]))', '{{phase}}')],
+             'short', 'Editors created (start) and destroyed or closed with their page (end), per hour.'), 8, 8)
+b.add(series('Edits per minute by source', [(f'60 * sum by (origin) (rate({EDITS}{{{F}}}[$__rate_interval]))', '{{origin}}')],
+             'short', 'Edits that changed the document: typing and other input, editor commands, or editing API batches. Edits by collaborators are counted by their own editor.', stack='normal'), 8, 8)
+b.add(series('Save time, successful saves', [(quantile('docx_editor_document_save_duration_seconds', 0.5), 'median'),
+                                            (quantile('docx_editor_document_save_duration_seconds', 0.95), '95th percentile')],
+             's', 'From a save() call to the saved bytes. Grows with document size.'), 12, 8)
+b.add(top_table('Failed saves by reason', f'sum by (code) (increase({SAVES}{{{F},outcome="rejected"}}[$__range]))', 'code',
+                'Why save() failed, most frequent first. Each code links to its hint.', no_value='No failed saves in this range'), 12, 8)
 
 b.row('Tracked changes')
 b.add(stat('Refused while suggesting', f'round(sum(increase(docx_editor_edit_rejections_total{{{F},tracked="true"}}[{W}]))) or {reporting}', 'short',
@@ -294,7 +349,7 @@ b.add(top_table('Dropped telemetry by reason', f'sum by (reason) (increase(docx_
                 'Events the privacy check dropped, by reason.', code_links=False), 12, 6)
 
 # Filter values come from every editor metric, so an app that only reports failed opens appears too.
-EDITOR_METRICS = '__name__=~"docx_editor_(editor_interaction_duration_seconds_count|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)"'
+EDITOR_METRICS = '__name__=~"docx_editor_(editor_interaction_duration_seconds_count|editor_sessions_total|document_opens_total|edit_rejections_total|telemetry_dropped_events_total)"'
 editor_vars = [
     DATASOURCE,
     variable('env', 'Environment', f'label_values({{{EDITOR_METRICS}}}, deployment_environment)'),
@@ -304,7 +359,7 @@ editor_vars = [
 ]
 editor = dashboard(
     'docx-editor-experience', 'Editor experience',
-    'How editing feels to people: input delay, engine work, opens, and refusals.',
+    'How editing feels to people: input delay, engine work, opens, sessions, edits, saves, and refusals.',
     b, editor_vars,
     [annotation('Version started reporting', f'count by (app_version) ({INTERACTION}_count{{{F}}}) unless count by (app_version) ({INTERACTION}_count{{{F}}} offset 2m)', 'Version {{app_version}} reports and did not 2 minutes earlier: a release, or reporting resumed after a gap', 'rgba(126, 178, 109, 1)', enable=False)],
     [('Docs', TELEMETRY_DOCS), ('Report an issue', ISSUES)])

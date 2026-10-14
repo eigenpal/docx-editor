@@ -869,7 +869,7 @@ describe('drawing membership belongs to the immutable layout', () => {
     expect([...collectUsedDrawingResourceKeys(ready)]).toEqual([READY_PNG.resourceKey]);
   });
 
-  test('offscreen repaint retains resource and image until layout removal or detach', () => {
+  test('offscreen repaint releases resources and recreates them on return', () => {
     const layout = layoutWithResource();
     const { port, revoked } = fakeUrlPort();
     const container = document.createElement('div');
@@ -880,16 +880,17 @@ describe('drawing membership belongs to the immutable layout', () => {
     const url = image!.getAttribute('src');
     paintSemanticLayout(container, layout, { ...options, materialize: new Set<number>() });
     expect(container.querySelector('img')).toBeNull();
-    expect(revoked).toEqual([]);
-    expect(image!.getAttribute('src')).toBe(url);
-    paintSemanticLayout(container, layout, options);
-    expect(container.querySelector('img')).toBe(image);
-    expect(revoked).toEqual([]);
-    paintSemanticLayout(container, Object.freeze({ ...layout, pages: Object.freeze([]) }), options);
     expect(revoked).toEqual([url!]);
     expect(image!.getAttribute('src')).toBeNull();
     paintSemanticLayout(container, layout, options);
-    detachDrawingUrlRegistry(container);
+    expect(container.querySelector('img')).not.toBe(image);
+    expect(container.querySelector('img')!.getAttribute('src')).toBe(url);
+    expect(revoked).toEqual([url!]);
+    paintSemanticLayout(container, Object.freeze({ ...layout, pages: Object.freeze([]) }), options);
     expect(revoked).toEqual([url!, url!]);
+    expect(image!.getAttribute('src')).toBeNull();
+    paintSemanticLayout(container, layout, options);
+    detachDrawingUrlRegistry(container);
+    expect(revoked).toEqual([url!, url!, url!]);
   });
 });

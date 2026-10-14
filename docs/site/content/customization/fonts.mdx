@@ -61,6 +61,8 @@ The failure reasons are `networkError`, `httpError`, `hashMismatch`, `overLimit`
 
 Use `createFontSource` when you already hold bytes from a file input, bundle, or application storage. It accepts a face descriptor and returns either a source or a typed failure. It also accepts `faceIndex`, an application `id`, and `maxFontBytes` where specified by its types.
 
+Browser painting uses the selected collection `faceIndex`, like text shaping. The first face uses the complete admitted collection, including its signature. Other faces use a standalone copy that preserves every selected table, including `DSIG`. Collection-header signatures do not block selecting a face. Each selected face has a separate private browser alias. Registration does not verify signatures or establish their validity after extraction. Invalid faces receive no alias. Font admission and shaping execution limits still apply.
+
 A `FontResolver` receives requested `families`, `defaultFamily`, an optional cancellation `signal`, and optional `resolvedFaces`. Use `resolvedFaces` to avoid loading faces supplied by an earlier origin. Return a configuration, fragment, or `undefined` when the resolver covers none of the requested fonts. The editor calls the resolver after loading a document and when editing requests another family.
 
 Use an application-owned family lookup to select remote assets. Do not turn document font names directly into network URLs. A network-backed resolver makes document opening fetch the assets your application approves.
@@ -82,7 +84,17 @@ A selectable family does not prove that its bytes are loaded. The font catalog i
 
 Embedded document fonts enter the font pipeline automatically when usable. Opening a document does not automatically fetch remote font declarations. A CSS `@font-face` rule changes browser rendering but does not supply the shaping pipeline with bytes. Missing font coverage can change line breaks and page layout. Use `onFontError` for initialization failures and the loader's failure list for individual URL failures.
 
+Font errors belong to the active document load. Replacing the document or destroying the editor discards delayed errors from older loads. If `onFontError` replaces the document or destroys the editor, the editor does not forward that old error event. If an `error` event listener replaces the document or destroys the editor, later listeners do not receive that error. A throwing callback does not suppress the current error event.
+
 Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.
+
+Font loading and text layout have separate limits. `fonts.maxFontBytes` limits which font files your configuration accepts. Text layout uses up to 16 MiB per face by default. For larger admitted files, set `fontShaping: { maxFontBytes }` when creating the editor. The maximum is 64 MiB. Other font-count, total-byte, and text-work limits remain unchanged.
+
+React and Vue keep the editor instance when a new `fontShaping` object has the same `maxFontBytes` value. Changing that value creates another editor instance and resets selection and undo history. The editor reads the limit before opening the document. A face cached by another editor with a larger limit still must meet your editor's limit.
+
+`createDocxEditor` throws a `RangeError` before opening when `maxFontBytes` is not a positive safe integer or exceeds 64 MiB. Omit it to use the default limit. The `FontShapingOptions` type is exported from `@docx-editor.dev/core` and `@docx-editor.dev/core/editor`.
+
+DOM-free `createLayoutShaping` accepts `fontShaping` as its third argument, after instrumentation. Font-backed Core, Markdown, and PDF exports also accept it. It does not affect a custom measurer; Markdown rejects that combination. Peers need the same font bytes and limit for matching layout. Document font names and collaboration data stay unchanged.
 
 ## Load Google Fonts on demand
 

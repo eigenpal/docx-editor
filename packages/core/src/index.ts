@@ -50,7 +50,9 @@ export type {
   ChromeMenuItemEntry,
   ChromeMenuSeparatorEntry,
   ChromeMenuSubmenuEntry,
+  ContentLockPolicy,
   FieldResultsMode,
+  FontShapingOptions,
   FontLoadFailureReason,
   FontResolutionRequest,
   FontMeasurementState,
@@ -58,6 +60,7 @@ export type {
   FontUrlSource,
   HyperlinkActivation,
   HyperlinkChromeHandlers,
+  LockedControlNavigation,
   SurfaceHyperlink,
 } from './editor/index.ts';
 

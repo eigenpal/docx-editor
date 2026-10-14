@@ -44,7 +44,9 @@ import {
   cellSpacingGapPt,
   cellSpacingGeometry,
   closingCellSpacingPt,
+  sumCols,
 } from './table-cell-spacing.ts';
+import { cellLineFits, clipsExactCellRow } from './table-cell-paragraph-options.ts';
 import { exclusionLayoutToken } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
@@ -345,11 +347,7 @@ export interface TableFlowDeps {
   readonly onCellBreakKey?: (key: string) => void;
 }
 
-export function sumCols(cols: readonly number[], from: number, to: number): number {
-  let sum = 0;
-  for (let index = from; index < to && index < cols.length; index += 1) sum += cols[index]!;
-  return sum;
-}
+export { sumCols } from './table-cell-spacing.ts';
 
 /**
  * Place one paragraph's broken lines sequentially from `top`, producing a single fragment.
@@ -633,7 +631,7 @@ function placeCellParagraph(
       isLastLine && !collapseHeight
         ? Math.max(lineBottom, options?.cellEndMarkMinBottom ?? lineBottom)
         : lineBottom;
-    if (requiredBottom > maxBottom + 0.001) {
+    if (!cellLineFits(requiredBottom, maxBottom, probeY + skipBefore, collapseHeight, options)) {
       if (placesOversizedLine(options, deps, lineTops.length, skipBefore)) lineTops.push(probeY);
       break;
     }
@@ -901,6 +899,8 @@ function placeCellParagraph(
         mergeBoundariesOf(mergeGroup, resolvedMode, deps.revisionAuthorFilter)
       )
     : rawRecords;
+  const clipToBox = options?.clipOverflow === true && bottom > maxBottom + 0.001;
+  const placedBottom = clipToBox ? Math.max(top, Math.min(maxBottom, bottom)) : bottom;
   const fragment = {
     kind: 'paragraph' as const,
     id: `${paragraphId}#f${fragmentIndex}`,
@@ -927,6 +927,7 @@ function placeCellParagraph(
     ...markRevisionFields(markRevisions, markFormatRevision),
     ...(markChangeSites.length > 0 ? { markChangeSites } : {}),
     lines: records,
+    ...(clipToBox ? { clipToBox: true as const } : {}),
     ...emptyParagraphStyleFields(
       records,
       layoutInputs.markRunProperties,
@@ -934,10 +935,10 @@ function placeCellParagraph(
       complete
     ),
     box: {
-      x: fragmentX,
+      x: clipToBox ? originX : fragmentX,
       y: top,
-      width: available,
-      height: bottom - top,
+      width: clipToBox ? cellContentWidth : available,
+      height: placedBottom - top,
     },
   };
 
@@ -1000,7 +1001,7 @@ function placeCellParagraph(
     );
   return {
     fragment,
-    bottom,
+    bottom: placedBottom,
     spaceAfter: deps.styleCascade?.fixedParagraphSpacing ? 0 : appliedAfter,
     nextLineIndex: priorLineCount + nextLineIndex,
     nextStartOffset: lines[nextLineIndex]?.start ?? lines.at(-1)!.end,
@@ -1056,7 +1057,8 @@ function flowBlocksInBoxBounded(
   inTableCell = false,
   cellEndMarkMinBottom?: number,
   hideEndMark = false,
-  applyWidowControl = true
+  applyWidowControl = true,
+  clipOverflow = false
 ): {
   readonly blocks: BlockFragmentRecord[];
   readonly bottom: number;
@@ -1150,6 +1152,7 @@ function flowBlocksInBoxBounded(
         aloneOnPage: !fitted && deps.rowAtPageStart !== false,
         fragmentIndex: paragraphFragmentIndex,
         maxBottom,
+        clipOverflow,
         includeAfter: true,
         includeBottomBorder: true,
         firstInCell: blockIndex === 0,
@@ -1410,7 +1413,15 @@ export function layoutRowFragmentBounded(
           : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
         cell.hideEndMark,
         // Fixed cell boxes clip; their bottom is not a paragraph page break.
-        !vertical && (isDetached || exactHeightPt === undefined)
+        !vertical && (isDetached || exactHeightPt === undefined),
+        clipsExactCellRow(
+          vertical,
+          exactHeightPt,
+          isDetached,
+          cell.headsVerticalMerge === true,
+          rowTop,
+          maxBottom
+        )
       );
 
     if (!cell.vMergeContinue && !waits(cell)) {

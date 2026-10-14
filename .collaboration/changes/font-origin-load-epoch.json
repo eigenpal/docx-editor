@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A deferred local font failure can report after its document load ends.",
+  "after": "Only the current document load reports local font failures.",
+  "reason": "This change affects local diagnostics only. Shared operations, canonical XML, model offsets, selections, awareness, and layout geometry stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/font-origin-load-epoch.test.ts",
+    "packages/pro/src/collaboration/__tests__/font-origin-load-epoch-editors.test.ts"
+  ],
+  "changeset": "font-origin-load-epoch",
+  "migration": null
+}

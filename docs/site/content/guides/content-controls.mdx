@@ -148,6 +148,31 @@ The inspector state carries `tag`, `alias`, `id`, `controlType`, `locked`, `remo
 
 A data-bound control rejects a direct write: its content comes from the Custom XML store, so writing it here would not persist in Word. `setValueDisabledReason` reports the reason instead of dropping the write.
 
+### Caret movement in content-locked controls
+
+By default, the caret walks through the characters of a content-locked inline control, as in Word. The reader cannot type there, so a long locked control takes one arrow press per character to pass. If your template uses locked controls as markers, set `lockedControlNavigation` to `'atomic'`:
+
+```ts
+const editor = createDocxEditor({
+  container,
+  document: bytes,
+  lockedControlNavigation: 'atomic',
+});
+```
+
+In React and Vue, pass the same value as the `lockedControlNavigation` prop. The editor reads it once, when it is created.
+
+With `'atomic'`, an inline control whose effective lock is `contentLocked` or `sdtContentLocked` is one caret unit, as a placeholder prompt is:
+
+- Left and right arrows step over the control.
+- Shift with an arrow selects the whole control.
+- A press, a drag, or a double click inside the control selects the whole control.
+- A press on the control's edge places a caret beside it, where typed text lands outside the control.
+
+A press inside a computed field, such as `PAGE`, places the caret at the nearer edge of the field. A press inside a locked control selects the whole control instead, so you can see which control you hit.
+
+The option applies in the document body, headers, and footers. Footnotes, endnotes, and text boxes keep character navigation, because the layout does not publish control boundaries there. The option applies to keyboard navigation and to pointer gestures that the editor handles. A selection that your code sets, for example with `setSelection` or a search, stays where you put it. With `pointer: 'native'`, the browser places the caret. The option changes navigation only, and locks refuse the same edits as before.
+
 ## Creating a control in the editor
 
 `insertContentControl` authors a new control in the open document, as one undoable step. Select text to wrap it in a control, or leave the caret where it is to insert an empty control that shows Word's prompt for its type:
@@ -236,6 +261,33 @@ A new dropdown or combo box has no items. Add its items in Word, or fill a contr
 | Fill | The value does not match the control type | `typeMismatch` |
 | Create | The selection crosses paragraphs | Inline controls cannot wrap block content |
 | Create | The position is inside a hyperlink, field, or inline control | The new control has no valid sibling position |
+
+## Formatting content-locked controls
+
+A content lock (`contentLocked` or `sdtContentLocked`) refuses every edit inside a control, including formatting, as Word does. If your template uses controls for placeholders that authors style but must not retype, set `contentLockPolicy` when you create the editor or the server host:
+
+```ts
+const editor = createDocxEditor({
+  container,
+  document: bytes,
+  contentLockPolicy: { allowFormattingInLockedContent: true },
+});
+
+const host = createServerAutomationHost(bytes, {
+  contentLockPolicy: { allowFormattingInLockedContent: true },
+});
+```
+
+In React and Vue, pass the same value as the `contentLockPolicy` prop. The editor reads it once, when it is created.
+
+With the option, run formatting passes the content lock: bold, italic, color, font, size, and highlight, on the control's text or on its paragraph marks. The toolbar, keyboard shortcuts, and automation `setFont` all follow the same rule. These edits are still refused with `locked`:
+
+- Typing, pasting, cutting, or deleting text in the control.
+- Paragraph properties, such as alignment or indents.
+- Removing a control whose wrapper is locked.
+- Tracked formatting in suggesting mode. Its revision would sit inside the lock, where nobody could accept or reject it.
+
+A control with `w:dataBinding` still refuses formatting with `bound`. The option does not change the document: the saved `w:lock` value stays the same. The option applies only to local edits. In a collaboration session, every participant receives formatting from a participant that set the option.
 
 ## Checkbox, dropdown, date, gallery, and picture interactions
 

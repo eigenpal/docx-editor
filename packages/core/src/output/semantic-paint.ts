@@ -829,7 +829,9 @@ function paintSpan(
       element.dataset.end = String(span.range.end);
     }
     applyRunFaceStyle(element, faceStyle, ctx);
-    mountEquationGeometry(document, element, span.equation, ctx.scale);
+    mountEquationGeometry(document, element, span.equation, ctx.scale, (run, style) =>
+      applyRunFaceStyle(run, style, ctx)
+    );
     applyRevisionPresentation(element, span, ctx);
     return element;
   }
@@ -2429,9 +2431,14 @@ export function paintSemanticLayoutWithAuthorSlots(
   container.dataset.revision = String(layout.revision);
 
   if (urlRegistry) {
+    // Keep decoded images and URLs only for painted pages, including selection pins.
+    const paintedLayout = {
+      ...layout,
+      pages: pages.filter((entry) => entry.materialized).map((entry) => entry.record),
+    };
     urlRegistry.reconcile(
-      collectUsedDrawingResourceKeys(layout),
-      collectUsedDrawingElementKeys(layout)
+      collectUsedDrawingResourceKeys(paintedLayout),
+      collectUsedDrawingElementKeys(paintedLayout)
     );
   }
 

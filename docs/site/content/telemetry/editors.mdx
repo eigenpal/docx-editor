@@ -73,6 +73,8 @@ Use `include` to choose telemetry areas. If you omit it, all areas are enabled. 
 | Area | Records |
 | --- | --- |
 | `documentOpen` | Successful opens, with size and page buckets and open duration. Refused opens, with the reason. |
+| `documentSave` | Each `save()` call: saved, with a size bucket and duration, or failed, with the reason. |
+| `sessions` | When each editor starts and ends, active editing time, and edits by origin. See [Measure sessions, edits, and saves](/docs/2.x/telemetry/sessions). |
 | `editing` | Edits and commands that were refused while changes were not tracked. |
 | `trackedChanges` | Refused tracked edits and tracking errors, such as a missing author or document protection. Tracked changes skipped during accept, reject, or reassign requests. |
 | `fonts` | Fonts that failed to load and were substituted. |
@@ -81,9 +83,9 @@ Use `include` to choose telemetry areas. If you omit it, all areas are enabled. 
 | `collaborationClient` | Collaboration status changes, failure codes, connect time, and the number of people in the room. |
 | `performance` | Time from a key press or click to the next frame, plus engine layout and paint times. See [Measure performance](/docs/2.x/telemetry/performance). |
 
-Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event. The one exception is `performance`: a rate of 0 turns it off, metrics included.
+Each area accepts `{ sampleRate }`, from 0 to 1. Sampling applies to events only; metrics count every event. The one exception is `performance`: a rate of 0 turns it off, metrics included. For `performance` and `sessions`, the rate selects editors, so each sampled editor sends all of its summaries.
 
-The areas whose failures can become Sentry issues are `documentOpen`, `editing`, `trackedChanges`, `fonts`, and `collaborationClient`. For the rule, see [Send to Sentry](/docs/2.x/telemetry/sentry).
+The areas whose failures can become Sentry issues are `documentOpen`, `documentSave`, `editing`, `trackedChanges`, `fonts`, and `collaborationClient`. For the rule, see [Send to Sentry](/docs/2.x/telemetry/sentry).
 
 By default, document-open events include size and page buckets. Set `documentShape: 'detailed'` to include part, paragraph, review item, and embedded font buckets. Combined counts reveal more about a document, so enable this option only when you need it.
 
@@ -114,3 +116,4 @@ If an agent deletes a picture through the editing API while changes are tracked,
 - To send events to a backend, see [Send to Sentry](/docs/2.x/telemetry/sentry), [Send to OpenTelemetry](/docs/2.x/telemetry/opentelemetry), [Send to a log service](/docs/2.x/telemetry/log-services), or [Send to your own code](/docs/2.x/telemetry/callbacks).
 - To add your own room or user identifiers, see [Identify rooms and users](/docs/2.x/telemetry/identifiers).
 - To measure how fast editing feels, see [Measure performance](/docs/2.x/telemetry/performance).
+- To count sessions, active time, edits, and saves, see [Measure sessions, edits, and saves](/docs/2.x/telemetry/sessions).

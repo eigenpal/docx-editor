@@ -7,7 +7,7 @@ import { buildStyleCascadeTable, resolveParagraphLayoutInputs } from '../style-c
 import { anchorLineStartsByModelOffset } from '../anchor-line-probe.ts';
 import { cjkParagraphBreaks } from '../cjk-paragraph-breaks.ts';
 import { compressCjkPieces } from '../cjk-spacing.ts';
-import { DEFAULT_RUN_STYLE } from '../run-style.ts';
+import { DEFAULT_RUN_STYLE, NO_THEME_FONTS } from '../run-style.ts';
 import type { FieldAwarePiece } from '../field-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -24,10 +24,28 @@ function paragraph(parts: readonly string[], pPr = '', rPr = ''): OoxmlElement {
     `<w:p xmlns:w="${W}"><w:pPr><w:overflowPunct w:val="0"/>${pPr}</w:pPr>${parts.map((text) => `<w:r><w:rPr><w:sz w:val="22"/>${rPr}</w:rPr><w:t xml:space="preserve">${escape(text)}</w:t></w:r>`).join('')}</w:p>`
   );
 }
-function layout(parts: readonly string[], width: number, pPr = '', rPr = '', settings = '') {
+function layout(
+  parts: readonly string[],
+  width: number,
+  pPr = '',
+  rPr = '',
+  settings = '',
+  sourceDefaults = false
+) {
   const p = paragraph(parts, pPr, rPr);
   const settingsRoot = root(`<w:settings xmlns:w="${W}">${settings}</w:settings>`);
-  const props = resolveParagraphLayoutInputs(p, width, undefined).props;
+  const cascade = sourceDefaults
+    ? buildStyleCascadeTable(
+        root(
+          `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+        ),
+        // The font table gives the probe face an East Asian charset.
+        { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
+        settingsRoot
+      )
+    : undefined;
+  const inputs = resolveParagraphLayoutInputs(p, width, cascade);
+  const props = inputs.props;
   return breakParagraph(
     p,
     'p',
@@ -36,11 +54,16 @@ function layout(parts: readonly string[], width: number, pPr = '', rPr = '', set
     measurer,
     undefined,
     null,
-    [],
+    inputs.inheritedRunProperties,
     undefined,
     undefined,
     undefined,
-    { typography: resolveCjkTypography(props, cjkTypographyFromSettings(settingsRoot)) }
+    {
+      typography: resolveCjkTypography(
+        props,
+        cascade?.typography ?? cjkTypographyFromSettings(settingsRoot)
+      ),
+    }
   );
 }
 const textLines = (...args: Parameters<typeof layout>) =>
@@ -213,32 +236,39 @@ describe('CJK follow-up: document and paragraph policy', () => {
     ]);
     expect(textLines(['天地。。人'], 12, '<w:overflowPunct/>')).toEqual(['天', '地。。', '人']);
   });
-  test('compression changes advances, keeps text and model ranges, and respects dont-compress', () => {
+  test('authored punctuation thresholds act independently of characterSpacingControl', () => {
     const ordinary = layout(['天地。。'], 21);
-    const compressed = layout(
-      ['天地。。'],
-      21,
+    expect(ordinary).toHaveLength(2);
+    for (const settings of [
       '',
-      '',
-      '<w:characterSpacingControl w:val="compressPunctuation"/>'
-    );
-    expect(ordinary.length).toBe(2);
-    expect(compressed.length).toBe(1);
-    expect(compressed[0]!.width).toBe(21);
-    expect(compressed[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
-    expect(compressed[0]!.end).toBe(4);
-    expect(
-      textLines(['天地。。'], 21, '', '', '<w:characterSpacingControl w:val="doNotCompress"/>')
-    ).toEqual(['天', '地。。']);
-    expect(
-      layout(
-        ['アイ'],
-        12,
-        '',
-        '',
-        '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>'
-      )[0]!.width
-    ).toBe(10.5);
+      '<w:characterSpacingControl w:val="doNotCompress"/>',
+      '<w:characterSpacingControl w:val="compressPunctuation"/>',
+      '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>',
+    ]) {
+      const compressed = layout(['天地。。'], 21, '', '<w:kern w:val="2"/>', settings, true);
+      expect(compressed).toHaveLength(1);
+      expect(compressed[0]!.width).toBe(21);
+      expect(compressed[0]!.spans.map((span) => span.text).join('')).toBe('天地。。');
+      expect(compressed[0]!.end).toBe(4);
+      expect(layout(['天地。。'], 21, '', '<w:kern w:val="2"/>', settings)).toHaveLength(2);
+      for (const kern of [0, 60])
+        expect(
+          layout(['天地。。'], 21, '', `<w:kern w:val="${kern}"/>`, settings, true)
+        ).toHaveLength(2);
+      expect(
+        layout(
+          ['天地。。'],
+          21,
+          '',
+          '<w:kern w:val="2"/>',
+          settings + '<w:noPunctuationKerning/>',
+          true
+        )
+      ).toHaveLength(2);
+    }
+    const kanaSettings = '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>';
+    expect(layout(['アイ'], 12, '', '', kanaSettings)[0]!.width).toBe(12);
+    expect(layout(['アイ'], 11, '', '', kanaSettings)[0]!.width).toBe(10.5);
   });
   test('contextual compression preserves the explicit hanging punctuation switch', () => {
     const settings = '<w:characterSpacingControl w:val="compressPunctuation"/>';

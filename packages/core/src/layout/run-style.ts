@@ -206,6 +206,8 @@ export interface ThemeFonts {
   readonly minorSupplemental?: Readonly<Record<string, string>>;
   /** Lower-cased font table names that declare a Chinese character set. */
   readonly chineseFontTableFaces?: readonly string[];
+  /** Lower-cased font table names that declare an East Asian character set. */
+  readonly eastAsianFontTableFaces?: readonly string[];
 }
 
 /** A document with no theme part: every theme reference falls back to its explicit name. */

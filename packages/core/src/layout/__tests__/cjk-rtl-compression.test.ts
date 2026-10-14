@@ -9,14 +9,20 @@ import type { FieldAwarePiece } from '../field-pieces.ts';
 const measurer = createFixedMeasurer(6, 14);
 const policy = {
   ...DEFAULT_CJK_TYPOGRAPHY,
-  settings: { compression: 'compressPunctuation' as const, strict: false, before: {}, after: {} },
+  settings: {
+    compression: 'compressPunctuation' as const,
+    sourceEastAsianFont: true,
+    strict: false,
+    before: {},
+    after: {},
+  },
 };
 const piece = (text: string): FieldAwarePiece => ({
   text,
   start: 0,
   end: text.length,
   props: [],
-  style: DEFAULT_RUN_STYLE,
+  style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1 },
 });
 
 test('odd-direction mirrored punctuation retains its complete glyph advances', () => {
@@ -34,6 +40,7 @@ test('LTR CJK punctuation still compresses when another piece has odd direction'
     ...piece('（'),
     style: {
       ...DEFAULT_RUN_STYLE,
+      kerningMinPt: 1,
       shaping: { script: 'Hani', direction: 'rtl' as const, level: 1, baseLevel: 1 },
     },
   };
@@ -43,6 +50,7 @@ test('LTR CJK punctuation still compresses when another piece has odd direction'
     end: 6,
     style: {
       ...DEFAULT_RUN_STYLE,
+      kerningMinPt: 1,
       shaping: { script: 'Hani', direction: 'ltr' as const, level: 2, baseLevel: 1 },
     },
   };

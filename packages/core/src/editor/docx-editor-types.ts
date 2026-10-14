@@ -5,12 +5,15 @@ import type {
 import type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 import type { ReviewPaneOptions } from '../contracts/review-pane.ts';
 import type { ReviewDisplayMode } from '../layout/revision-projection.ts';
+import type { FontShapingOptions } from '../layout/font-shaping-policy.ts';
 import type {
   PopupChromeRegistrationOptions,
   ContentControlWidgetChromeHandlers,
   InvalidTextFormFieldChromeHandlers,
 } from './popup-sessions.ts';
 import type { TextFormFieldChromeHandlers } from './text-form-field-session.ts';
+import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+import type { LockedControlNavigation } from './paginated-surface-options.ts';
 /**
  * Instance-level types for `createDocxEditor` — kept out of the composition root so
  * `docx-editor.ts` stays under the max-lines gate. Re-exported from `docx-editor.ts`
@@ -81,6 +84,8 @@ export interface DocxEditorConfig {
    * requests — the engine never supplies one, so that stays your call.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping execution limits. Omitted, the per-face byte ceiling remains 16 MiB. */
+  fontShaping?: FontShapingOptions;
   author?: string;
   /** BCP-47 locale for regional date input and generated labels; defaults to en-US. */
   locale?: string;
@@ -93,6 +98,14 @@ export interface DocxEditorConfig {
    * reason. See {@link EditorModule}.
    */
   modules?: readonly EditorModule[];
+  /**
+   * Opt-in relaxation of content-control `w:lock`: with `allowFormattingInLockedContent`,
+   * `contentLocked` / `sdtContentLocked` controls refuse typing, pasting and deleting their
+   * text as always, but accept run formatting (toolbar, shortcuts, automation `setFont`) —
+   * for hosts that protect WHAT a control says and let authors style it. Default: Word's
+   * behaviour, where a content lock refuses every edit including formatting.
+   */
+  contentLockPolicy?: ContentLockPolicy;
   /**
    * The mode the editor opens in — one prop, matching the toolbar's three-state pill.
    *
@@ -149,6 +162,12 @@ export interface DocxEditorConfig {
    * shared paragraph text keeps every field one unit.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * How the caret moves through an inline control with a content lock. `'atomic'` makes such a
+   * control one caret unit; `'characters'` (the default) walks through its characters, as Word
+   * does. Fixed for the instance.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**

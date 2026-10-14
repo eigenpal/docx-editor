@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Painted pages retain image elements and object URLs after they leave the viewport.",
+  "after": "Only materialized pages retain image elements and object URLs. Revisiting a page recreates them from its original resources.",
+  "reason": "The change affects local paint resources only. Shared fields, operations, snapshots, document content, and protocol messages do not change.",
+  "tests": ["packages/core/src/output/__tests__/semantic-paint-materialized-images.test.ts"],
+  "changeset": null,
+  "migration": null
+}

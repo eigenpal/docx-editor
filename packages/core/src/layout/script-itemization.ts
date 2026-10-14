@@ -42,6 +42,21 @@ type Classified = Omit<ScriptItem, 'from' | 'to' | 'direction' | 'bidiLevel'> | 
 
 const inRange = (value: number, from: number, to: number): boolean => value >= from && value <= to;
 
+// Punctuation that takes the hAnsi face without an East Asian hint, even beside Han text.
+const HANSI_PUNCTUATION: ReadonlySet<number> = new Set([
+  0x00b7, // middle dot
+  0x2013, // en dash
+  0x2014, // em dash
+  0x2018, // left single quotation mark
+  0x2019, // right single quotation mark
+  0x201a, // single low-9 quotation mark
+  0x201c, // left double quotation mark
+  0x201d, // right double quotation mark
+  0x201e, // double low-9 quotation mark
+  0x2026, // horizontal ellipsis
+]);
+const isHAnsiPunctuation = (codePoint: number): boolean => HANSI_PUNCTUATION.has(codePoint);
+
 /**
  * A code point whose script this engine does not itemize.
  *
@@ -65,6 +80,13 @@ export class UnsupportedScriptError extends Error {
  * strong item on conflicts, and the following strong item only for leading Common text.
  */
 const classify = (codePoint: number): Classified => {
+  // MS-OI29500 2.1.88: curly quotes, low quotes, en and em dashes, the ellipsis and the
+  // middle dot use hAnsi without an East Asian hint. They keep the Common script, but never
+  // inherit a neighbouring Han font slot.
+  // eastAsiaRunsOfSegments applies an explicit hint before this default classification.
+  if (isHAnsiPunctuation(codePoint)) {
+    return { slot: 'hAnsi', script: 'Zyyy' };
+  }
   // Full-width forms draw in the East Asian face, letters and digits included. The letters
   // keep their Latin script for shaping; the rest are punctuation, symbols and digits.
   if (inRange(codePoint, 0xff21, 0xff3a) || inRange(codePoint, 0xff41, 0xff5a)) {

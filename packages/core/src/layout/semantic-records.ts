@@ -30,6 +30,7 @@ import type { ResolvedCellBorders } from './table-borders.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
 import type { PageBorderDisplay, PageBorderSide, PageBorderZOrder } from './page-borders.ts';
 import type { SemanticReviewArtifactRecord } from './review-artifact-records.ts';
+import type { ContentControlBoundaryRecord } from './semantic-control-records.ts';
 
 export type {
   InlineDrawingRecord,
@@ -59,6 +60,14 @@ export type {
   TableBorderStrokeRecord,
   TableBorderStyle,
 } from './table-borders.ts';
+export type {
+  ContentControlBoundaryRecord,
+  ContentControlGeometryFragment,
+  ContentControlLevel,
+  ContentControlLock,
+  ContentControlMappedType,
+  ContentControlModelRange,
+} from './semantic-control-records.ts';
 
 /** A half-open UTF-16 range inside one paragraph, addressed by its canonical node id. */
 export interface SourceRange {
@@ -871,75 +880,6 @@ export interface NoteAreaRecord {
  * - `endnote-overflow`: sheets inserted to finish sectEnd/docEnd collections.
  */
 export type PageNoteStream = 'footnote-drain' | 'endnote-overflow';
-
-/**
- * Raw `w:lock/@w:val` on one control, or `unlocked` when absent / unrecognised.
- *
- * Effective permissions across a nesting chain are the union of every ancestor's lock on two
- * axes (content edit / removal); see {@link ContentControlBoundaryRecord.effectiveLock}.
- */
-export type ContentControlLock = 'unlocked' | 'sdtLocked' | 'contentLocked' | 'sdtContentLocked';
-
-/**
- * Mapped control type for layout / chrome — same members as the shipped public
- * `ContentControlType`. Untyped and preserved-only kinds report as `richText`.
- */
-export type ContentControlMappedType =
-  | 'richText'
-  | 'plainText'
-  | 'checkbox'
-  | 'dropdown'
-  | 'comboBox'
-  | 'date'
-  | 'picture'
-  | 'buildingBlockGallery'
-  | 'repeatingSection';
-
-/** Where the control sits in the tree relative to its content. */
-export type ContentControlLevel = 'block' | 'inline' | 'row' | 'cell';
-
-/**
- * One piece of a control's content geometry.
- *
- * A block control that crosses a page break publishes one fragment per page rather than a
- * single rectangle covering the inter-page gap. An inline control publishes one fragment per
- * LINE it touches, covering the text's vertical extent (line-spacing leading excluded), so a
- * wrapped control never claims the words beside it. Coordinates match fragment boxes
- * (page-content space).
- */
-export interface ContentControlGeometryFragment {
-  readonly pageIndex: number;
-  readonly box: LayoutBox;
-}
-
-/**
- * Layout-published boundary for one content control (`w:sdt` / typed `contentControl`).
- *
- * Chrome, lock feedback, and hit resolution read this record — never painted DOM. The wrapper
- * itself is not a layout box; `fragments` cover the content that already flowed in place.
- */
-export interface ContentControlBoundaryRecord {
-  /** Canonical node id of the control wrapper — not `w:id`. */
-  readonly id: string;
-  readonly alias?: string;
-  readonly tag?: string;
-  readonly controlType: ContentControlMappedType;
-  /** This control's own `w:lock`, before ancestor union. */
-  readonly lock: ContentControlLock;
-  /**
-   * Nested lock union with every ancestor control, collapsed back to a single `ST_Lock`
-   * vocabulary value (both axes locked → `sdtContentLocked`).
-   */
-  readonly effectiveLock: ContentControlLock;
-  /** `w:showingPlcHdr` is present on the control's properties. */
-  readonly placeholder: boolean;
-  /** `w:dataBinding` is present — content edits are refused as bound. */
-  readonly bound: boolean;
-  /** 0 for a top-level control; increments through nested wrappers under the shared nesting bound. */
-  readonly nestingDepth: number;
-  readonly level: ContentControlLevel;
-  readonly fragments: readonly ContentControlGeometryFragment[];
-}
 
 /**
  * One laid-out page: the sheet, the content area, and everything that landed on it.

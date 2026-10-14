@@ -3,11 +3,16 @@ import type {
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
   FieldResultsMode,
+  ContentLockPolicy,
+  FontShapingOptions,
+  LockedControlNavigation,
 } from '@docx-editor.dev/core/editor';
 import { FormControlTranslateProvider } from './form-control-translate';
 import { DialogProvider } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
 import { warnFieldResultsChanged } from './field-results-warning';
+import { warnContentLockPolicyChanged } from './content-lock-policy-warning';
+import { warnLockedControlNavigationChanged } from './locked-control-navigation-warning';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // Provider-first host for the docx editor facade.
 //
@@ -63,8 +68,8 @@ import {
 } from './revision-style-registry';
 
 /**
- * Props for `DocxEditor.Root`. Only `document`, `fonts`, and `imageDecodePort` identity remounts
- * the editor. Later `author`, `locale`, `mode`, `translate`, `zoom`, and `zoomMode` changes use
+ * Props for `DocxEditor.Root`. `document`, `fonts` and `imageDecodePort` identity changes remount
+ * the editor. Changing `fontShaping.maxFontBytes` also remounts. Later `author`, `locale`, `mode`, `translate`, `zoom`, and `zoomMode` changes use
  * instance setters. `modules` is sampled at mount only.
  *
  * @public
@@ -85,6 +90,8 @@ export interface DocxEditorRootProps {
    * failures degrade to the fixed measurer and report through `onFontError`.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling; a changed maxFontBytes value remounts. */
+  fontShaping?: FontShapingOptions;
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
   /**
@@ -140,6 +147,20 @@ export interface DocxEditorRootProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
 
   /** Fired once per instance, after it is published to the tree (and after any
    *  `DocxEditor.Content` in the same commit has attached its mount point). A large
@@ -240,6 +261,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const {
     document: doc,
     fonts,
+    fontShaping,
     author,
     locale,
     translate,
@@ -264,10 +286,15 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const [markupRevision, setMarkupRevision] = useState(0);
   const propsRef = useRef(props);
   propsRef.current = props;
+  const fontShapingMaxFontBytes = fontShaping?.maxFontBytes;
 
   const [editor, setEditor] = useState<DocxEditorInstance | null>(null);
   /** The `fieldResults` the current instance was created with. */
   const createdFieldResults = useRef(props.fieldResults);
+  /** The `contentLockPolicy` the current instance was created with. */
+  const createdContentLockPolicy = useRef(props.contentLockPolicy);
+  /** The `lockedControlNavigation` the current instance was created with. */
+  const createdLockedControlNavigation = useRef(props.lockedControlNavigation);
 
   // The channel `<DocxEditor.ColorByChangeType>` / `<DocxEditor.AuthorStyle>` declare through.
   // A store: declarations register from anywhere in the subtree, and identity must hold
@@ -291,15 +318,22 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     // FIRST paint is already styled — no kind-coloured frame.
     const declaredStyles = revisionStyleRegistry.current();
     createdFieldResults.current = p.fieldResults;
+    createdContentLockPolicy.current = p.contentLockPolicy;
+    createdLockedControlNavigation.current = p.lockedControlNavigation;
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
+      ...(p.fontShaping ? { fontShaping: p.fontShaping } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
       translate,
       ...(p.revisionMarkup !== undefined ? { revisionMarkup: p.revisionMarkup } : {}),
       ...(p.reviewDisplayMode !== undefined ? { reviewDisplayMode: p.reviewDisplayMode } : {}),
       ...(p.fieldResults !== undefined ? { fieldResults: p.fieldResults } : {}),
+      ...(p.contentLockPolicy !== undefined ? { contentLockPolicy: p.contentLockPolicy } : {}),
+      ...(p.lockedControlNavigation !== undefined
+        ? { lockedControlNavigation: p.lockedControlNavigation }
+        : {}),
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
       ...(p.modules !== undefined ? { modules: p.modules } : {}),
@@ -323,7 +357,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, imageDecodePort, revisionStyleRegistry]);
+  }, [doc, fonts, fontShapingMaxFontBytes, imageDecodePort, revisionStyleRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -438,6 +472,22 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   useEffect(() => {
     if (editor) warnFieldResultsChanged(createdFieldResults.current, props.fieldResults);
   }, [editor, props.fieldResults]);
+
+  // Compared by value, so an inline policy object re-created on each render does not warn.
+  useEffect(() => {
+    if (editor)
+      warnContentLockPolicyChanged(createdContentLockPolicy.current, props.contentLockPolicy);
+  }, [editor, props.contentLockPolicy]);
+
+  // Read once at creation, like `fieldResults`.
+  useEffect(() => {
+    if (editor) {
+      warnLockedControlNavigationChanged(
+        createdLockedControlNavigation.current,
+        props.lockedControlNavigation
+      );
+    }
+  }, [editor, props.lockedControlNavigation]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

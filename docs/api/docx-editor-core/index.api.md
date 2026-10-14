@@ -969,6 +969,11 @@ export interface ContentControlSummary {
 export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
 
 // @public
+export interface ContentLockPolicy {
+    readonly allowFormattingInLockedContent?: boolean;
+}
+
+// @public
 export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
 
 // @public
@@ -1028,7 +1033,7 @@ export interface DiagnosticBase {
 export function diagnosticCauses(): readonly string[];
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export function diagnosticCodeOfRefusal(reason: string, execCode?: ExecErrorCode): EditDiagnosticCode;
@@ -1385,6 +1390,22 @@ export interface DocumentProtectionState {
 }
 
 // @public
+export type DocumentSaveDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.save';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'saved';
+    readonly sizeBucket: ByteSizeBucket;
+} | (DiagnosticFailureDetail & {
+    readonly code: DocumentSaveDiagnosticCode;
+    readonly durationMs: number;
+    readonly outcome: 'rejected';
+}));
+
+// @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
 export interface DocumentShape {
     // (undocumented)
     readonly embeddedFonts: CountBucket;
@@ -1422,11 +1443,14 @@ export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
     container?: HTMLElement;
+    contentLockPolicy?: ContentLockPolicy;
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+    fontShaping?: FontShapingOptions;
     imageDecodePort?: ImageDecodePort;
     locale?: string;
+    lockedControlNavigation?: LockedControlNavigation;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
     // (undocumented)
@@ -1941,7 +1965,7 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
-export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic;
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic | DocumentSaveDiagnostic | SessionDiagnostic;
 
 // @public
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
@@ -2282,7 +2306,7 @@ export interface Extent {
 }
 
 // @public
-export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
 
 // @public
 export type FieldResultsMode = 'atomic' | 'editable';
@@ -2415,6 +2439,11 @@ export type FontResolver = (request: FontResolutionRequest) => FontConfiguration
 // @public
 export interface FontResolverMark {
     readonly 'docx-editor.dev/font-resolver': true;
+}
+
+// @public
+export interface FontShapingOptions {
+    readonly maxFontBytes?: number;
 }
 
 // @public
@@ -2753,6 +2782,9 @@ export interface LoadFontsResult extends FontConfigurationFragment {
     // (undocumented)
     readonly sources: readonly FontSource[];
 }
+
+// @public
+export type LockedControlNavigation = 'characters' | 'atomic';
 
 // @public
 export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
@@ -3463,6 +3495,24 @@ export type SemanticTarget = {
     readonly objectId: string;
     readonly scope: ViewScope;
 };
+
+// @public
+export interface SessionActivity {
+    readonly activeMs: number;
+    readonly automationEdits: number;
+    readonly commandEdits: number;
+    readonly durationMs: number;
+    readonly inputEdits: number;
+}
+
+// @public
+export type SessionDiagnostic = DiagnosticBase & {
+    readonly kind: 'session';
+} & ({
+    readonly phase: 'start';
+} | (SessionActivity & {
+    readonly phase: 'active' | 'end';
+}));
 
 // @public
 export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({

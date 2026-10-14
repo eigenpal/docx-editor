@@ -40,7 +40,13 @@ const wordLines = [
 ] as const;
 const policy = {
   ...DEFAULT_CJK_TYPOGRAPHY,
-  settings: { compression: 'compressPunctuation' as const, strict: false, before: {}, after: {} },
+  settings: {
+    compression: 'compressPunctuation' as const,
+    sourceEastAsianFont: true,
+    strict: false,
+    before: {},
+    after: {},
+  },
 };
 // Songti's measured advances isolate compression from platform font availability.
 const measurer: TextMeasurer = {
@@ -62,7 +68,7 @@ function piece(text: string, start: number, fontSizePt = 12): FieldAwarePiece {
     start,
     end: start + text.length,
     props: [],
-    style: { ...DEFAULT_RUN_STYLE, fontSizePt },
+    style: { ...DEFAULT_RUN_STYLE, kerningMinPt: 1, fontSizePt },
   };
 }
 for (const fixture of wordLines)

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Each insertContentControl operation with returnHandle in one batch answered a handle to the first control that the batch created.",
+  "after": "Each operation answers a handle to the control that it created in its own paragraph.",
+  "reason": "The change only selects which existing control id the response handle names. The tree operations, the written document, shared state, and protocol messages are unchanged.",
+  "tests": [
+    "packages/core/src/automation/__tests__/automation-content-control-insert.test.ts",
+    "packages/editor-api/src/model/__tests__/model-control-creation.test.ts"
+  ],
+  "changeset": "return-handle-per-control",
+  "migration": null
+}

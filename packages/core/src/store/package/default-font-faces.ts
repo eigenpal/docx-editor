@@ -1,4 +1,5 @@
-// The faces a document uses when it names none, and which faces count as Chinese fonts.
+// The faces a document uses when it names none, and which faces count as Chinese or East
+// Asian fonts.
 //
 // Every table here was measured against reference output with anonymous probe documents:
 // one run per case, the face read back from each drawn glyph. Keep them together so layout,
@@ -120,50 +121,83 @@ const CHINESE_FACES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Common faces with another character set: their own set wins over the font table (probes
- * c16 and k-latin-ft86-ja give a GB2312 table entry to Meiryo and Verdana).
+ * Common Latin faces: their own character set wins over the font table (probe
+ * k-latin-ft86-ja gives a GB2312 table entry to Verdana).
  */
-const NON_CHINESE_FACES: ReadonlySet<string> = new Set([
+const LATIN_FACES: ReadonlySet<string> = new Set([
   'arial',
+  'arial black',
+  'arial narrow',
   'aptos',
   'aptos display',
+  'book antiqua',
   'calibri',
   'calibri light',
   'cambria',
   'candara',
+  'century gothic',
   'consolas',
   'constantia',
   'corbel',
   'courier new',
+  'garamond',
   'georgia',
+  'helvetica',
+  'helvetica neue',
+  'palatino linotype',
   'segoe ui',
   'tahoma',
   'times new roman',
   'trebuchet ms',
   'verdana',
+]);
+
+/**
+ * Common Japanese and Korean faces, by lower-cased name. Their own character set wins over
+ * the font table (probe c16 gives a GB2312 table entry to Meiryo).
+ */
+const JAPANESE_KOREAN_FACES: ReadonlySet<string> = new Set([
   'ms mincho',
   'ms gothic',
   'ms pmincho',
   'ms pgothic',
+  'ms ui gothic',
   'meiryo',
   'meiryo ui',
   'yu mincho',
   'yu gothic',
   'yu gothic ui',
   'yu gothic light',
+  'yu gothic medium',
   'hiragino mincho pron',
+  'hiragino kaku gothic pron',
   'hiragino sans',
+  'ｍｓ 明朝',
+  'ｍｓ ゴシック',
+  'メイリオ',
+  '游明朝',
+  '游ゴシック',
   'malgun gothic',
   'batang',
   'batangche',
   'gulim',
+  'gulimche',
   'dotum',
+  'dotumche',
   'gungsuh',
+  'gungsuhche',
   'apple sd gothic neo',
+  '맑은 고딕',
+  '바탕',
+  '굴림',
+  '돋움',
+  '궁서',
 ]);
 
 // `w:charset` values of the Chinese character sets: GB2312 and Big5.
 const CHINESE_CHARSETS: ReadonlySet<string> = new Set(['86', '88']);
+// `w:charset` values of the East Asian character sets: Shift JIS, Hangul, GB2312, and Big5.
+const EAST_ASIAN_CHARSETS: ReadonlySet<string> = new Set(['80', '81', '86', '88']);
 
 /**
  * Whether an East Asian face is a Chinese font. A known face answers by its own character set.
@@ -177,8 +211,24 @@ export function isChineseFace(
   const name = face?.trim().toLowerCase();
   if (!name || name.startsWith('@')) return false;
   if (CHINESE_FACES.has(name)) return true;
-  if (NON_CHINESE_FACES.has(name)) return false;
+  if (LATIN_FACES.has(name) || JAPANESE_KOREAN_FACES.has(name)) return false;
   return fontTableChineseFaces?.includes(name) ?? false;
+}
+
+/**
+ * Whether a face is an East Asian font: Chinese, Japanese, or Korean. A known face answers by
+ * its own character set. Any other face answers by the font table's `w:charset`. A
+ * vertical-writing name is not one.
+ */
+export function isEastAsianFace(
+  face: string | null | undefined,
+  fontTableEastAsianFaces: readonly string[] | undefined
+): boolean {
+  const name = face?.trim().toLowerCase();
+  if (!name || name.startsWith('@')) return false;
+  if (CHINESE_FACES.has(name) || JAPANESE_KOREAN_FACES.has(name)) return true;
+  if (LATIN_FACES.has(name)) return false;
+  return fontTableEastAsianFaces?.includes(name) ?? false;
 }
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
@@ -187,6 +237,18 @@ function isElement(node: OoxmlNode): node is OoxmlElement {
 
 /** Lower-cased names of the font table entries that declare a Chinese `w:charset`. */
 export function fontTableChineseFaces(fontTableRoot: OoxmlElement | null): readonly string[] {
+  return fontTableFacesWithCharset(fontTableRoot, CHINESE_CHARSETS);
+}
+
+/** Lower-cased names of the font table entries that declare an East Asian `w:charset`. */
+export function fontTableEastAsianFaces(fontTableRoot: OoxmlElement | null): readonly string[] {
+  return fontTableFacesWithCharset(fontTableRoot, EAST_ASIAN_CHARSETS);
+}
+
+function fontTableFacesWithCharset(
+  fontTableRoot: OoxmlElement | null,
+  charsets: ReadonlySet<string>
+): readonly string[] {
   if (!fontTableRoot) return [];
   const names: string[] = [];
   for (const font of fontTableRoot.children as readonly OoxmlNode[]) {
@@ -196,7 +258,7 @@ export function fontTableChineseFaces(fontTableRoot: OoxmlElement | null): reado
     for (const child of font.children as readonly OoxmlNode[]) {
       if (!isElement(child) || child.localName !== 'charset') continue;
       const value = child.attributes.find((attribute) => attribute.localName === 'val')?.value;
-      if (value && CHINESE_CHARSETS.has(value.toLowerCase())) {
+      if (value && charsets.has(value.toLowerCase())) {
         names.push(name.trim().toLowerCase());
       }
     }

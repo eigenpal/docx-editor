@@ -80,7 +80,7 @@ export interface DiagnosticBase {
 }
 
 // @public
-export type DiagnosticCode = DocumentOpenDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
 
 // @public
 export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
@@ -121,6 +121,22 @@ export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-c
 export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
 
 // @public
+export type DocumentSaveDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.save';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'saved';
+    readonly sizeBucket: ByteSizeBucket;
+} | (DiagnosticFailureDetail & {
+    readonly code: DocumentSaveDiagnosticCode;
+    readonly durationMs: number;
+    readonly outcome: 'rejected';
+}));
+
+// @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
 export interface DocumentShape {
     // (undocumented)
     readonly embeddedFonts: CountBucket;
@@ -134,7 +150,7 @@ export interface DocumentShape {
 export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
-export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic;
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic | DocumentSaveDiagnostic | SessionDiagnostic;
 
 // @public
 export type EditorDiagnosticKind = EditorDiagnostic['kind'];
@@ -160,7 +176,10 @@ export const ENGINE_VERSION: string;
 export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
 
 // @public
-export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation';
+export function failureCount(event: TelemetryEvent): number;
+
+// @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
 
 // @public
 export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
@@ -254,11 +273,17 @@ export const METRICS: Readonly<{
     customNodeDiagnostics: MetricDefinition;
     documentOpenDuration: MetricDefinition;
     documentOpens: MetricDefinition;
+    documentSaveDuration: MetricDefinition;
+    documentSaves: MetricDefinition;
     droppedEvents: MetricDefinition;
     editRejections: MetricDefinition;
+    editorActiveTime: MetricDefinition;
     editorInteractionDuration: MetricDefinition;
     editorLayoutDuration: MetricDefinition;
     editorPaintDuration: MetricDefinition;
+    editorSessionDuration: MetricDefinition;
+    editorSessions: MetricDefinition;
+    edits: MetricDefinition;
     fontFailures: MetricDefinition;
     historyDiagnostics: MetricDefinition;
     messageRefusals: MetricDefinition;
@@ -324,6 +349,24 @@ export interface ReviewSkippedDiagnostic extends DiagnosticBase {
 }
 
 // @public
+export interface SessionActivity {
+    readonly activeMs: number;
+    readonly automationEdits: number;
+    readonly commandEdits: number;
+    readonly durationMs: number;
+    readonly inputEdits: number;
+}
+
+// @public
+export type SessionDiagnostic = DiagnosticBase & {
+    readonly kind: 'session';
+} & ({
+    readonly phase: 'start';
+} | (SessionActivity & {
+    readonly phase: 'active' | 'end';
+}));
+
+// @public
 export interface Telemetry {
     flush(): Promise<void>;
     readonly module: EditorModule;
@@ -333,7 +376,7 @@ export interface Telemetry {
 }
 
 // @public
-export type TelemetryArea = 'documentOpen' | 'editing' | 'trackedChanges' | 'fonts' | 'history' | 'customNodes' | 'collaborationClient' | 'performance';
+export type TelemetryArea = 'documentOpen' | 'documentSave' | 'sessions' | 'editing' | 'trackedChanges' | 'fonts' | 'history' | 'customNodes' | 'collaborationClient' | 'performance';
 
 // @public
 export interface TelemetryAreaOptions {

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { readOoxmlPart, serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import {
   buildStyleCascadeTable,
   createFixedMeasurer,
@@ -17,9 +17,13 @@ function part(xml: string, name = '/word/document.xml') {
   if (!read.ok) throw new Error(read.reason);
   return read.part;
 }
-function documentPart(text: string, pPr = '<w:jc w:val="both"/>') {
+const authoredStyles = part(
+  `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Yu Mincho"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
+  '/word/styles.xml'
+);
+function documentPart(text: string, pPr = '<w:jc w:val="both"/>', kern?: number) {
   return part(
-    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/>${pPr}</w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/>${pPr}</w:pPr><w:r><w:rPr><w:sz w:val="22"/>${kern === undefined ? '' : `<w:kern w:val="${kern}"/>`}</w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`
   );
 }
 const geometry = { width: 50, height: 500, margin: { top: 10, bottom: 10, left: 10, right: 10 } };
@@ -51,8 +55,8 @@ test('CJK compression uses the same spacing in layout and DOM paint', () => {
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`,
     '/word/settings.xml'
   );
-  const styleCascade = buildStyleCascadeTable(null, undefined, settings.root);
-  const layout = layoutSemanticDocument(documentPart('天地。。', ''), 0, {
+  const styleCascade = buildStyleCascadeTable(authoredStyles.root, undefined, settings.root);
+  const layout = layoutSemanticDocument(documentPart('天地。。', '', 2), 0, {
     measurer,
     geometry,
     styleCascade,
@@ -68,8 +72,8 @@ test('CJK compression uses the same spacing in layout and DOM paint', () => {
   expect(line.spans.at(-1)!.box.x + line.spans.at(-1)!.box.width - line.spans[0]!.box.x).toBe(21);
 });
 
-test('typography settings invalidate cached layout without a text edit', () => {
-  const document = documentPart('天地玄黄。。人。', '');
+test('authored typography eligibility invalidates cached layout without a text edit', () => {
+  const document = documentPart('天地玄黄。。人。', '', 2);
   const session = createLayoutSession();
   const settings = part(
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
@@ -84,12 +88,12 @@ test('typography settings invalidate cached layout without a text edit', () => {
     measurer,
     geometry,
     session,
-    styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+    styleCascade: buildStyleCascadeTable(authoredStyles.root, undefined, settings.root),
   });
   const clean = layoutSemanticDocument(document, 0, {
     measurer,
     geometry,
-    styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+    styleCascade: buildStyleCascadeTable(authoredStyles.root, undefined, settings.root),
   });
   expect(updated.pages).toEqual(clean.pages);
   expect(JSON.stringify(updated.pages)).not.toBe(JSON.stringify(initial.pages));
@@ -99,9 +103,9 @@ test('headers and table cells consume the same document typography settings', ()
   const settings = part(
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
   );
-  const styleCascade = buildStyleCascadeTable(null, undefined, settings.root);
+  const styleCascade = buildStyleCascadeTable(authoredStyles.root, undefined, settings.root);
   const p =
-    '<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>天地。。</w:t></w:r></w:p>';
+    '<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr><w:r><w:rPr><w:sz w:val="22"/><w:kern w:val="2"/></w:rPr><w:t>天地。。</w:t></w:r></w:p>';
   const header = part(`<w:hdr xmlns:w="${W}">${p}</w:hdr>`, '/word/header1.xml');
   const story = layoutHeaderFooterStory(header, 21, measurer, 'cjk-test', undefined, styleCascade);
   const headerParagraph = story.fragments[0]!;
@@ -126,10 +130,10 @@ test('compressed opening punctuation translates only ink and retains layout care
   const settings = part(
     `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/></w:settings>`
   );
-  const layout = layoutSemanticDocument(documentPart('（（甲）', ''), 0, {
+  const layout = layoutSemanticDocument(documentPart('（（甲）', '', 2), 0, {
     measurer,
     geometry,
-    styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+    styleCascade: buildStyleCascadeTable(authoredStyles.root, undefined, settings.root),
   });
   const line = layout.pages[0]!.fragments[0]!.lines[0]!;
   const container = document.createElement('div');
@@ -193,3 +197,37 @@ test('scaled revision punctuation retains natural advances and native decoration
     }
   }
 });
+
+for (const { kind, kern, eastAsia, noPunctuation } of [
+  { kind: 'missing authored East Asian default', kern: 2, eastAsia: false, noPunctuation: false },
+  { kind: 'disabled run kerning', kern: 0, eastAsia: true, noPunctuation: false },
+  { kind: 'kerning threshold above run size', kern: 60, eastAsia: true, noPunctuation: false },
+  { kind: 'noPunctuationKerning', kern: 2, eastAsia: true, noPunctuation: true },
+]) {
+  test(`ineligible punctuation retains authored spacing in layout and DOM paint: ${kind}`, () => {
+    const doc = documentPart('天地。。', '', kern);
+    const original = serializeOoxmlPart(doc);
+    const settings = part(
+      `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuation"/>${noPunctuation ? '<w:noPunctuationKerning/>' : ''}</w:settings>`,
+      '/word/settings.xml'
+    );
+    const layout = layoutSemanticDocument(doc, 0, {
+      measurer,
+      geometry,
+      styleCascade: buildStyleCascadeTable(
+        eastAsia ? authoredStyles.root : null,
+        undefined,
+        settings.root
+      ),
+    });
+    const spans = layout.pages[0]!.fragments[0]!.lines[0]!.spans;
+    expect(spans.map((span) => span.text).join('')).toBe('天地。。');
+    expect(spans.every((span) => span.style.characterSpacingPt === 0)).toBe(true);
+    expect(spans.every((span) => span.glyphOffsetPt === undefined)).toBe(true);
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    expect(container.textContent).toBe('天地。。');
+    expect(container.querySelector('[data-docx-shifted-ink]')).toBeNull();
+    expect(serializeOoxmlPart(doc)).toBe(original);
+  });
+}

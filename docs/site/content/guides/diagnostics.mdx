@@ -50,6 +50,8 @@ Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `edi
 | `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, and `code` when something is wrong. The first `ready` includes `connectMs` only when the editor observed the wait. |
 | `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
 | `performance` | The editor summarizes timings after a minute, when the page becomes hidden, or when the editor closes. | `windowMs`, optional `pagesBucket`, and optional `interaction`, `layout`, and `paint` summaries. Slow interactions also include `code`. See [Measure performance](/docs/2.x/telemetry/performance). |
+| `document.save` | A `save()` call returned the document or failed. | `outcome` (`saved` or `rejected`) and `durationMs`, with `sizeBucket` when saved, or `code` and the [failure detail](#failure-detail) when rejected. |
+| `session` | An editor started, was used, or ended. | `phase` (`start`, `active`, or `end`). An `active` summary and an `end` event also have `durationMs`, `activeMs`, `inputEdits`, `commandEdits`, and `automationEdits`. See [Measure sessions, edits, and saves](/docs/2.x/telemetry/sessions). |
 
 Document sizes and counts use buckets, such as `4-8MiB` or `10-99`. Rare combinations can still distinguish documents within an organization. The telemetry package omits detailed shape buckets by default.
 
@@ -59,9 +61,9 @@ A code identifies the failure. Optional detail fields identify the engine condit
 
 | Field | On | What it holds |
 | --- | --- | --- |
-| `cause` | `document.open`, `edit.rejected`, `review.skipped` | The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, `split-not-clean` under `edit.unmapped-change`, or `unaddressed` (a change with no `w:id` or author) under `review.revision-unsupported`. For an error the engine did not expect, `exception`. |
-| `errorName` | `document.open`, `edit.rejected` | The class of the exception when `cause` is `exception`, such as `TypeError`. The message is never included, because it can quote the document. |
-| `stage` | `document.open`, `edit.rejected` | Where an exception was caught: `open-mount`, `open-layout`, `command`, `review-item` (accept or reject from a review card), or `automation` (an editing API batch). |
+| `cause` | `document.open`, `document.save`, `edit.rejected`, `review.skipped` | The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, `split-not-clean` under `edit.unmapped-change`, or `unaddressed` (a change with no `w:id` or author) under `review.revision-unsupported`. For an error the engine did not expect, `exception`. |
+| `errorName` | `document.open`, `document.save`, `edit.rejected` | The class of the exception when `cause` is `exception`, such as `TypeError`. The message is never included, because it can quote the document. |
+| `stage` | `document.open`, `document.save`, `edit.rejected` | Where an exception was caught: `open-mount`, `open-layout`, `command`, `review-item` (accept or reject from a review card), `automation` (an editing API batch), or `save`. |
 | `part` | `document.open`, `review.skipped` | The role of the package part, such as `main-document`, `header`, `footnotes`, or `relationships`, never its name. A part under a nonstandard name reports `other`. |
 | `operation` | `review.skipped` | `accept`, `reject`, or `reassign`. |
 | `changeKind` | `review.skipped` | The kind of the skipped change: `insert`, `delete`, `replace`, `moveFrom`, `moveTo`, `format`, `paragraphMark`, or `structural`. |
@@ -69,7 +71,7 @@ A code identifies the failure. Optional detail fields identify the engine condit
 
 Use `code` for application logic. Use `cause` for investigation, because these internal reasons can change between versions. To list every cause, call `diagnosticCauses()`.
 
-An open that throws reports `open.failed` with `cause: 'exception'`, and a command, a review card action, or an editing API batch that throws reports `edit.internal-invariant` with `cause: 'exception'`. The error still reaches your code as before. An exception from your own code inside `run()` is not reported.
+An open that throws reports `open.failed` with `cause: 'exception'`. A save that throws reports `save.failed` with `cause: 'exception'`. A command, a review card action, or an editing API batch that throws reports `edit.internal-invariant` with `cause: 'exception'`. The error still reaches your code as before. An exception from your own code inside `run()` is not reported.
 
 These examples show a malformed header and a skipped formatting change:
 
@@ -110,6 +112,14 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="open-relationship-limit" />`open.relationship-limit` | The package has more relationships than the open limit allows. For a trusted file, the server API accepts a higher limit: limits.maxRelationships in createServer. |
 | <a id="open-part-limit" />`open.part-limit` | The package has more XML parts than the open limit allows. For a trusted file, the server API accepts a higher limit: limits.maxXmlParts in createServer. |
 | <a id="open-failed" />`open.failed` | The document could not be opened for a reason without a specific code. Report it with the engine version. |
+
+### Save
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="save-no-document" />`save.no-document` | save() ran before a document was loaded, or after it failed to open. Wait for the open to finish, and check the document.open event for a refusal. |
+| <a id="save-document-changed" />`save.document-changed` | A new document was loaded while save() waited for a pending edit. Save again after the new document opens. |
+| <a id="save-failed" />`save.failed` | save() threw. The errorName and stage fields name the class of the error; its message is never reported. Report it with the editor version. |
 
 ### Edit
 

@@ -225,7 +225,7 @@ function runElement(nextId: () => string, children: readonly OoxmlNode[]): Ooxml
  * quadratic in document size.
  */
 export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOptions): TreeOpResult {
-  const rejection = validateTreeOp(part, op);
+  const rejection = validateTreeOp(part, op, options);
   if (rejection) return { ok: false, reason: rejection };
 
   if (op.op === 'replaceStoryBlocks') {

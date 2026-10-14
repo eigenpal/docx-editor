@@ -3,6 +3,7 @@
 import type { EquationExpression, OmmlEquationProjection } from '@docx-editor.dev/core/store';
 import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
+import { equationDisplayText } from './equation-display-text.ts';
 
 const SCRIPT_SCALE = 0.7;
 const NARY_OPERATOR_SCALE = 1.25;
@@ -26,6 +27,8 @@ export interface EquationTextGeometry extends EquationGeometryBase {
   readonly kind: 'text' | 'fallback';
   readonly text: string;
   readonly fontSizePt: number;
+  /** The same resolved face used by measurement and the trusted paint sink. */
+  readonly runStyle?: ResolvedRunStyle;
 }
 
 export interface EquationRowGeometry extends EquationGeometryBase {
@@ -45,6 +48,12 @@ export interface EquationRadicalGeometry extends EquationGeometryBase {
   readonly sign: EquationTextGeometry;
   readonly radicand: EquationGeometry;
   readonly degree?: EquationGeometry;
+  readonly bar: LayoutBox;
+}
+
+export interface EquationBarGeometry extends EquationGeometryBase {
+  readonly kind: 'bar';
+  readonly body: EquationGeometry;
   readonly bar: LayoutBox;
 }
 
@@ -68,6 +77,7 @@ export type EquationGeometry =
   | EquationRowGeometry
   | EquationFractionGeometry
   | EquationRadicalGeometry
+  | EquationBarGeometry
   | EquationScriptGeometry
   | EquationNaryGeometry;
 
@@ -91,6 +101,10 @@ function shifted<T extends EquationGeometry>(node: T, x: number, y: number): T {
 }
 
 interface EquationLayoutCache {
+  readonly formats: WeakMap<
+    object,
+    { readonly style: ResolvedRunStyle; readonly cache: EquationLayoutCache }
+  >;
   readonly styles: Map<number, ResolvedRunStyle>;
   readonly metrics: Map<number, ReturnType<TextMeasurer['lineMetrics']>>;
 }
@@ -197,6 +211,7 @@ function textGeometry(
     kind,
     text,
     fontSizePt: resolved.fontSizePt,
+    runStyle: resolved,
     box: box(0, 0, measureDisplayText(text, resolved, measurer), metrics.height),
     baseline: metrics.baseline,
   });
@@ -238,8 +253,40 @@ function layoutExpression(
   cache: EquationLayoutCache
 ): EquationGeometry {
   switch (expression.kind) {
-    case 'text':
-      return textGeometry('text', expression.value, measurer, style, scale, cache);
+    case 'text': {
+      const authoredFamily = expression.format?.fontFamily;
+      const display = equationDisplayText(expression, authoredFamily ?? style.fontFamily);
+      const familyStyle =
+        authoredFamily && !display.mathematicalGlyphs
+          ? withFontFamily(style, authoredFamily)
+          : style;
+      const formatKey = expression.format ?? expression;
+      let formatted = cache.formats.get(formatKey);
+      if (!formatted) {
+        const face = Object.freeze({
+          ...familyStyle,
+          // Mathematical alphanumeric glyphs already carry their style in this
+          // regular face. Do not request a second italic or bold font program.
+          bold:
+            display.mathStyle === null
+              ? (expression.format?.bold ?? familyStyle.bold)
+              : !display.mathematicalGlyphs &&
+                (display.mathStyle === 'b' || display.mathStyle === 'bi'),
+          italic:
+            display.mathStyle === null
+              ? (expression.format?.italic ??
+                (expression.format?.normalText ? false : familyStyle.italic))
+              : !display.mathematicalGlyphs &&
+                (display.mathStyle === 'i' || display.mathStyle === 'bi'),
+        });
+        formatted = {
+          style: face,
+          cache: { styles: new Map(), metrics: new Map(), formats: new WeakMap() },
+        };
+        cache.formats.set(formatKey, formatted);
+      }
+      return textGeometry('text', display.text, measurer, formatted.style, scale, formatted.cache);
+    }
     case 'fallback':
       return textGeometry('fallback', expression.text || '…', measurer, style, scale, cache);
     case 'row':
@@ -305,6 +352,21 @@ function layoutExpression(
         bar: box(radicandX, 0, radicand.box.width, barThickness),
         box: box(0, 0, radicandX + radicand.box.width, height),
         baseline,
+      });
+    }
+    case 'bar': {
+      const resolved = scaledStyle(style, scale, cache);
+      const body = layoutExpression(expression.body, measurer, style, scale, cache);
+      const thickness = Math.max(0.55, resolved.fontSizePt * 0.05);
+      const gap = Math.max(0.35, resolved.fontSizePt * 0.035);
+      const bodyY = expression.position === 'top' ? thickness + gap : 0;
+      const barY = expression.position === 'top' ? 0 : body.box.height + gap;
+      return Object.freeze({
+        kind: 'bar',
+        body: shifted(body, 0, bodyY),
+        bar: box(0, barY, body.box.width, thickness),
+        box: box(0, 0, body.box.width, body.box.height + gap + thickness),
+        baseline: body.baseline + bodyY,
       });
     }
     case 'script': {
@@ -402,7 +464,11 @@ export function layoutEquation(
   style: ResolvedRunStyle
 ): EquationSpanRecord {
   const mathStyle = equationRunStyle(style);
-  const cache: EquationLayoutCache = { styles: new Map(), metrics: new Map() };
+  const cache: EquationLayoutCache = {
+    styles: new Map(),
+    metrics: new Map(),
+    formats: new WeakMap(),
+  };
   return Object.freeze({
     sourceNodeId: projection.sourceNodeId,
     geometry: layoutExpression(projection.expression, measurer, mathStyle, 1, cache),

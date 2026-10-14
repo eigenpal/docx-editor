@@ -9,6 +9,7 @@
 import type {
   ByteSizeBucket,
   CollaborationDiagnosticCode,
+  DocumentSaveDiagnosticCode,
   DocumentShape,
   EditDiagnosticCode,
   EditorDiagnostic,
@@ -60,6 +61,8 @@ import {
 } from './diagnostic-codes.ts';
 import { warnFontFailureOnce } from './font-configuration.ts';
 import { createPerformanceSampler, type PerformanceClock } from './editor-performance.ts';
+import { createSessionTracker, type SessionClock } from './editor-session.ts';
+import { onPageClose } from './page-close.ts';
 import { setCommandReporter } from './command-reporting.ts';
 import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts';
 
@@ -176,6 +179,16 @@ export interface EditorDiagnosticsOptions {
   readonly now?: () => number;
   /** Performance window and scheduling, for tests. */
   readonly performance?: { readonly windowMs?: number; readonly clock?: PerformanceClock };
+  /** Session window and scheduling, for tests. */
+  readonly session?: { readonly windowMs?: number; readonly clock?: SessionClock };
+}
+
+/** The `save()` failure codes, from the facade's error codes. */
+function saveDiagnosticCode(error: unknown): DocumentSaveDiagnosticCode {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === 'notFound') return 'save.no-document';
+  if (code === 'invalidState') return 'save.document-changed';
+  return 'save.failed';
 }
 
 const HISTORY_KINDS: ReadonlySet<string> = new Set([
@@ -199,6 +212,8 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
   let execDepth = 0;
   /** Depth of editing API batches on this editor; their refusals are reported as automation. */
   let automationDepth = 0;
+  /** Whether the outermost command or batch running now has counted its edit: one per call. */
+  let callEditCounted = false;
   // History and custom-node diagnostics keep their own channels and join this one by code only:
   // the history reason and the node's name and payload issues stay out of it.
   options.events.on('historyDiagnostic', (diagnostic) => {
@@ -210,14 +225,28 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     if (code === 'payload-invalid' || code === 'payload-missing')
       deliver({ kind: 'custom-node', code: `custom-node.${code}` });
   });
-  const session = options.modules.collaboration?.session;
-  const stopCollaboration = session ? observeCollaboration(session, deliver, clock) : () => {};
+  const collaboration = options.modules.collaboration?.session;
+  const stopCollaboration = collaboration
+    ? observeCollaboration(collaboration, deliver, clock)
+    : () => {};
   const performance = createPerformanceSampler({
     deliver,
     enabled: () =>
       options.events.hasDiagnosticHandlers?.() === true ||
       options.modules.wantsDiagnostic('performance'),
     ...options.performance,
+  });
+  const session = createSessionTracker({
+    deliver,
+    enabled: () =>
+      options.events.hasDiagnosticHandlers?.() === true ||
+      options.modules.wantsDiagnostic('session'),
+    ...options.session,
+  });
+  // A closed tab rarely destroys its editors: the page closing sends the last summaries.
+  const stopPageClose = onPageClose(() => {
+    performance.flush();
+    session.end();
   });
 
   /**
@@ -283,8 +312,32 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     }
   };
 
+  /**
+   * One edit for each outermost command or editing API batch, and one for each input commit.
+   * Buffered typing is input, also when a command's commit flushes it.
+   */
+  const edited = (typing: boolean): void => {
+    if (typing || (execDepth === 0 && automationDepth === 0)) {
+      session.edit('input');
+      return;
+    }
+    if (callEditCounted) return;
+    callEditCounted = true;
+    session.edit(automationDepth > 0 ? 'automation' : 'command');
+  };
+
   return {
     editorSessionId: emitter.editorSessionId,
+
+    /** What the surface reports: refusals, timings, and committed edits. */
+    surfaceHooks(tracked: () => boolean, surface: () => PaginatedSurface | null | undefined) {
+      return {
+        onRejection: (reason: string) => this.inputRejected(reason, tracked()),
+        onTiming: (phase: 'layout' | 'paint' | 'input', value: number) =>
+          this.timing(phase, value, surface() ?? undefined),
+        onEdit: edited,
+      };
+    },
 
     /** A new document starts opening. A remount of the same document is not a new open. */
     openStarted(bytes: Uint8Array): void {
@@ -416,8 +469,18 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       };
     },
 
-    /** Wraps `exec`, so its refusal and its skipped tracked changes are reported once. */
-    exec(command: EditorCommand, tracked: boolean, run: () => ExecResult): ExecResult {
+    /**
+     * Wraps `exec`, so its refusal and its skipped tracked changes are reported once. `changed`
+     * tells whether the document changed, for a command such as undo that edits without a
+     * surface commit.
+     */
+    exec(
+      command: EditorCommand,
+      tracked: boolean,
+      run: () => ExecResult,
+      changed?: () => boolean
+    ): ExecResult {
+      if (execDepth === 0 && automationDepth === 0) callEditCounted = false;
       execDepth += 1;
       let result: ExecResult;
       try {
@@ -438,6 +501,10 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         execDepth -= 1;
       }
       if (execDepth > 0) return result;
+      if (result.ok && !callEditCounted && changed?.()) {
+        callEditCounted = true;
+        session.edit(automationDepth > 0 ? 'automation' : 'command');
+      }
       if (!result.ok) {
         const type = builtInCommand(command);
         const cause = diagnosticCause(result.reason);
@@ -475,11 +542,25 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
      * Report `exec` refusals and automation refusals for this editor instance: wraps `exec`, and
      * lets a runtime borrowing the editor report its refused batches into the same stream.
      */
-    attach(editor: { exec: DocxEditorInstance['exec'] }, tracked: () => boolean): void {
+    attach(
+      editor: Pick<DocxEditorInstance, 'exec' | 'save' | 'getDocumentHandle'>,
+      tracked: () => boolean
+    ): void {
       const execNow = editor.exec;
-      editor.exec = (command, options) =>
-        this.exec(command, tracked(), () => execNow(command, options));
+      const revision = () => editor.getDocumentHandle().revision;
+      editor.exec = (command, options) => {
+        const before = revision();
+        return this.exec(
+          command,
+          tracked(),
+          () => execNow(command, options),
+          () => revision() !== before
+        );
+      };
+      const saveNow = editor.save;
+      editor.save = () => this.save(() => saveNow.call(editor));
       AUTOMATION_SCOPES.set(editor, (run) => {
+        if (execDepth === 0 && automationDepth === 0) callEditCounted = false;
         automationDepth += 1;
         try {
           return run();
@@ -508,8 +589,47 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       });
     },
 
+    /** Wraps `save`, so each call reports its outcome, size bucket, and duration once. */
+    async save(run: () => Promise<ArrayBuffer>): Promise<ArrayBuffer> {
+      const start = clock();
+      const elapsed = () => Math.max(0, Math.round(clock() - start));
+      let bytes: ArrayBuffer;
+      try {
+        bytes = await run();
+      } catch (error) {
+        // Reporting must never replace the error the caller sees.
+        try {
+          const code = saveDiagnosticCode(error);
+          deliver({
+            kind: 'document.save',
+            outcome: 'rejected',
+            code,
+            durationMs: elapsed(),
+            ...(code === 'save.failed'
+              ? {
+                  cause: exceptionCause(),
+                  errorName: diagnosticErrorName(error),
+                  stage: 'save' as const,
+                }
+              : {}),
+          });
+        } catch {
+          /* the caller's own error propagates */
+        }
+        throw error;
+      }
+      deliver({
+        kind: 'document.save',
+        outcome: 'saved',
+        sizeBucket: byteSizeBucket(bytes.byteLength),
+        durationMs: elapsed(),
+      });
+      return bytes;
+    },
+
     /** A layout or paint duration, or a press timestamp, from the surface. */
     timing(phase: 'layout' | 'paint' | 'input', value: number, surface?: PaginatedSurface): void {
+      if (phase === 'input') session.activity();
       performance.timing(
         phase,
         value,
@@ -518,12 +638,14 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
       );
     },
     /**
-     * Send the last performance summary and stop observing the collaboration session. The
-     * editor calls this when destroyed, before it drops its event handlers.
+     * Send the last performance summary, end the session, and stop observing the collaboration
+     * session. The editor calls this when destroyed, before it drops its event handlers.
      */
     dispose(): void {
       performance.dispose();
       stopCollaboration();
+      session.end();
+      stopPageClose();
     },
   };
 }
@@ -607,13 +729,18 @@ export interface FontErrorReporting {
   readonly config: { readonly onFontError?: (error: EditorFontError) => void };
   readonly events: {
     readonly hasErrorHandlers: () => boolean;
-    readonly emitError: (error: EditorError) => void;
+    readonly emitError: (error: EditorError, isCurrent?: () => boolean) => void;
   };
   readonly diagnostics: EditorDiagnostics;
 }
 
 /** Reports one font failure to the host's handler, the `error` event and the diagnostics. */
-export function reportEditorFontError(error: EditorFontError, host: FontErrorReporting): void {
+export function reportEditorFontError(
+  error: EditorFontError,
+  host: FontErrorReporting,
+  isCurrent: () => boolean = () => true
+): void {
+  if (!isCurrent()) return;
   // A shaper that never loaded is not a per-face degradation: NOTHING measures correctly,
   // and the fault is the host's build rather than the document's content. Said out loud
   // exactly once, and only when nobody is listening — a host that reports it in its own
@@ -634,6 +761,7 @@ export function reportEditorFontError(error: EditorFontError, host: FontErrorRep
   } catch {
     /* the host's reporting problem, not the document's */
   }
-  host.events.emitError(error);
-  host.diagnostics.fontFailed(shaperNeverLoaded ? 'wasmUnavailable' : error.code);
+  if (!isCurrent()) return;
+  host.events.emitError(error, isCurrent);
+  if (isCurrent()) host.diagnostics.fontFailed(shaperNeverLoaded ? 'wasmUnavailable' : error.code);
 }

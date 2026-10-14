@@ -13,6 +13,7 @@ import {
   BUILT_IN_EAST_ASIAN_FACES,
   DEFAULT_EAST_ASIAN_SCRIPT,
   fontTableChineseFaces,
+  fontTableEastAsianFaces,
   THEME_EAST_ASIAN_DEFAULTS,
 } from './default-font-faces.ts';
 
@@ -41,6 +42,8 @@ export interface ThemeSchemeFaces {
   readonly minorSupplemental?: Readonly<Record<string, string>>;
   /** Lower-cased font table names that declare a Chinese character set. */
   readonly chineseFontTableFaces?: readonly string[];
+  /** Lower-cased font table names that declare an East Asian character set. */
+  readonly eastAsianFontTableFaces?: readonly string[];
 }
 
 /** The theme's font slots, fully resolved, for resolving `w:rFonts` theme attributes. */
@@ -146,7 +149,8 @@ const fontTableFacesMemo = new WeakMap<
  * language: Simplified Chinese when the theme language names no East Asian script. A slot
  * the theme leaves empty takes the script's default face (`default-font-faces.ts`), or the
  * built-in theme's face when the package has no theme part. The font table's Chinese faces
- * ride along for the East Asian hint (`isChineseFace`).
+ * ride along for the East Asian hint (`isChineseFace`), and its East Asian faces for the
+ * default-face check of punctuation compression (`isEastAsianFace`).
  */
 export function collectThemeSchemeFaces(
   themeRoot: OoxmlElement | null,
@@ -156,12 +160,17 @@ export function collectThemeSchemeFaces(
   const resolved = resolveThemeLanguages(themeRoot, settingsRoot);
   if (!fontTableRoot) return resolved;
   const chinese = fontTableChineseFaces(fontTableRoot);
-  if (chinese.length === 0) return resolved;
+  const eastAsian = fontTableEastAsianFaces(fontTableRoot);
+  if (eastAsian.length === 0) return resolved;
   let byFaces = fontTableFacesMemo.get(fontTableRoot);
   if (!byFaces) fontTableFacesMemo.set(fontTableRoot, (byFaces = new WeakMap()));
   const cached = byFaces.get(resolved);
   if (cached) return cached;
-  const withTable = Object.freeze({ ...resolved, chineseFontTableFaces: chinese });
+  const withTable = Object.freeze({
+    ...resolved,
+    ...(chinese.length > 0 ? { chineseFontTableFaces: chinese } : {}),
+    eastAsianFontTableFaces: eastAsian,
+  });
   byFaces.set(resolved, withTable);
   return withTable;
 }

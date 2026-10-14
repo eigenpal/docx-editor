@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Curly quotes beside Han text inherit the East Asian font slot without a font hint.",
+  "after": "Curly quotes use the authored hAnsi face unless an East Asian font hint applies.",
+  "reason": "Only local font selection and layout change. Canonical OOXML, replicated offsets, operations, and awareness remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/curly-quote-font-slots.test.ts",
+    "packages/pro/src/collaboration/__tests__/curly-quote-font-slots.test.ts"
+  ],
+  "changeset": "unhinted-curly-quote-font-slots",
+  "migration": null
+}

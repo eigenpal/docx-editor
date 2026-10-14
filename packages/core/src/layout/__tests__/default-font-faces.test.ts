@@ -5,7 +5,12 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPart, type OoxmlElement } from '../../store/package/ooxml-tree.ts';
 import { collectThemeSchemeFaces } from '../../store/package/theme-font-scheme.ts';
-import { fontTableChineseFaces, isChineseFace } from '../../store/package/default-font-faces.ts';
+import {
+  fontTableChineseFaces,
+  fontTableEastAsianFaces,
+  isChineseFace,
+  isEastAsianFace,
+} from '../../store/package/default-font-faces.ts';
 import { openHeadlessDocument } from '../../store/headless-document-view.ts';
 import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts';
 import { resolveRunStyle } from '../run-style.ts';
@@ -101,7 +106,6 @@ describe('Chinese fonts for the East Asian hint', () => {
     );
     expect(fontTableChineseFaces(table)).toEqual(['gb face', 'big5 face']);
   });
-
   test('a font table charset makes an unavailable face Chinese for the hint (probe c02)', () => {
     const fonts = collectThemeSchemeFaces(
       emptyTheme,
@@ -159,5 +163,43 @@ describe('Chinese fonts for the East Asian hint', () => {
     );
     if (!opened.ok) throw new Error(opened.reason);
     expect(opened.view.documentThemeFonts().chineseFontTableFaces).toEqual(['noto sans sc']);
+  });
+});
+
+describe('East Asian default faces for punctuation compression', () => {
+  test.each([
+    ['Yu Mincho', [], true],
+    ['MS Gothic', [], true],
+    ['SimSun', [], true],
+    ['PMingLiU', [], true],
+    ['Batang', [], true],
+    ['Malgun Gothic', [], true],
+    ['Arial', [], false],
+    ['Times New Roman', [], false],
+    ['Arial', ['arial'], false],
+    ['Unknown Face', [], false],
+    ['Unknown Face', ['unknown face'], true],
+    ['@Yu Mincho', [], false],
+  ] as const)('%s with table %j is East Asian: %s', (face, table, eastAsian) => {
+    expect(isEastAsianFace(face, table)).toBe(eastAsian);
+  });
+
+  test('the font table names Shift JIS, Hangul, GB2312, and Big5 faces', () => {
+    const table = fontTable(
+      '<w:font w:name="Jis Face"><w:charset w:val="80"/></w:font>' +
+        '<w:font w:name="Hangul Face"><w:charset w:val="81"/></w:font>' +
+        '<w:font w:name="Gb Face"><w:charset w:val="86"/></w:font>' +
+        '<w:font w:name="Big5 Face"><w:charset w:val="88"/></w:font>' +
+        '<w:font w:name="Ansi Face"><w:charset w:val="00"/></w:font>'
+    );
+    expect(fontTableEastAsianFaces(table)).toEqual([
+      'jis face',
+      'hangul face',
+      'gb face',
+      'big5 face',
+    ]);
+    expect(collectThemeSchemeFaces(null, null, table).eastAsianFontTableFaces).toEqual(
+      fontTableEastAsianFaces(table)
+    );
   });
 });

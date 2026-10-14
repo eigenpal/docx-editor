@@ -9,6 +9,8 @@ import {
   type FormsProtectionCommand,
 } from '../store/store/forms-protection-command.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+import { contentLockPolicyOf } from '../store/store/content-lock-policy.ts';
 import { COMMENTS_PROTECTION_REASON, READ_ONLY_PROTECTION_REASON } from './opening-editing-mode.ts';
 
 const formFieldIdentities = new WeakMap<PaginatedSurface, () => string | null>();
@@ -19,6 +21,17 @@ export function registerFormFieldIdentity(
   read: () => string | null
 ): void {
   formFieldIdentities.set(surface, read);
+}
+
+const contentLockPolicies = new WeakMap<PaginatedSurface, ContentLockPolicy>();
+
+/** Share the host's lock policy with admission, so a preflight answers as the commit will. */
+export function registerContentLockPolicy(
+  surface: PaginatedSurface,
+  policy: ContentLockPolicy | undefined
+): void {
+  const kept = contentLockPolicyOf(policy);
+  if (kept) contentLockPolicies.set(surface, kept);
 }
 
 export const TRACKED_CHANGES_AUTHOR_REASON =
@@ -126,6 +139,7 @@ export function commandProtectionRefusal(
       text,
       paste,
       fieldId: formFieldIdentities.get(surface)?.() ?? undefined,
+      contentLockPolicy: contentLockPolicies.get(surface),
     })
   );
   return refused ? { ok: false, code: 'locked', reason: FORMS_WRITE_REASON } : null;

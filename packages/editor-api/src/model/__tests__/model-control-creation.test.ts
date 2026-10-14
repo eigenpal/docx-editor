@@ -231,3 +231,43 @@ test('creates a real date-picker control and preserves its type after reopen', a
     runtime.dispose();
   }
 });
+
+test('controls created in one batch each answer their own control', async () => {
+  const runtime = await serverRuntime(docx(p('First') + p('Second')));
+  try {
+    await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items');
+      await context.sync();
+      // Two creations queued before one sync: each proxy must name the control its own
+      // paragraph received, not the first control the batch created.
+      const first = paragraphs.items[0]!.getRange('Content').insertContentControl('PlainText');
+      const second = paragraphs.items[1]!.getRange('Content').insertContentControl('PlainText');
+      await context.sync();
+      first.tag = 'first';
+      second.tag = 'second';
+      await context.sync();
+    });
+    const next = await reopen(runtime);
+    try {
+      await next.run(async (context) => {
+        const first = context.document.contentControls.getByTag('first');
+        const second = context.document.contentControls.getByTag('second');
+        first.load('items');
+        second.load('items');
+        await context.sync();
+        expect(first.items).toHaveLength(1);
+        expect(second.items).toHaveLength(1);
+        first.items[0]!.load('text');
+        second.items[0]!.load('text');
+        await context.sync();
+        expect(first.items[0]!.text).toBe('First');
+        expect(second.items[0]!.text).toBe('Second');
+      });
+    } finally {
+      next.dispose();
+    }
+  } finally {
+    runtime.dispose();
+  }
+});

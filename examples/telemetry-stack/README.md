@@ -44,7 +44,7 @@ flowchart LR
 
 ## What the dashboards show
 
-**Editor experience** shows input delay, document open success rates, open times, reporting sources, unexpected refusals, and dropped telemetry. It includes median and 95th percentile input delay, plus the share of key presses over 1 second. Unexpected refusals use a rate per 1,000 key presses. Detailed charts compare input delay over time, across document sizes and versions, and against the previous week. Other panels show layout and paint times, document opens, refused and skipped tracked changes, and refused edits. Each refusal code links to its hint.
+**Editor experience** shows input delay, document open success rates, open times, reporting sources, unexpected refusals, and dropped telemetry. A sessions row shows sessions started, active editing time, session length, the share of failing edits, save success and save time, and people editing at once. It includes median and 95th percentile input delay, plus the share of key presses over 1 second. Unexpected refusals use a rate per 1,000 key presses. Detailed charts compare input delay over time, across document sizes and versions, and against the previous week. Other panels show layout and paint times, document opens, refused and skipped tracked changes, and refused edits. Each refusal code links to its hint.
 
 **Collaboration** shows server availability, room save success rates, refused connections, client errors, and room limit usage. Detailed charts show room and participant counts, memory use, room age, server operations, client status, and refusals.
 
@@ -57,7 +57,7 @@ flowchart LR
 - Browser counters: each tab is a temporary source with its own totals and `service.instance.id`. Prometheus 3 receives OpenTelemetry Protocol (OTLP) data directly with `created-timestamp-zero-ingestion` enabled. This preserves each tab's first count in `increase()`. If your backend scrapes a collector, it can miss that first count.
 - Series count: each reporting tab creates a series. For many users, aggregate in your collector or use a backend that accepts delta temporality.
 - Targets: use several weeks of your own traffic to set performance targets and alert thresholds.
-- Measurement limits: the package counts refused edits and opens. It does not count edit attempts or time spent connected to a room. Edit reliability uses refusals per 1,000 key presses. Collaboration has no measure of client connection availability.
+- Measurement limits: the package counts edits, refused edits, opens, saves, and editor sessions. It does not measure time spent connected to a room, so collaboration has no measure of client connection availability. Edit and session counts arrive with session summaries, up to a minute after the edit.
 - Engine work: layout and paint times use bands of 16, 33, 50, 100, 200, 500, and 1000 ms. Percentiles estimate values within each band.
 
 | File | What it does |
@@ -66,5 +66,5 @@ flowchart LR
 | `otel-collector.yaml` | OTLP in, with CORS for local apps; metrics to Prometheus and spans to Jaeger. |
 | `prometheus.yml` | The OTLP receiver settings and the scrape of the collaboration server. |
 | `grafana/provisioning/` | Loads the dashboards from `assets/observability/grafana` and adds the Prometheus and Jaeger data sources. |
-| `simulate.mjs` | Simulates typing, opening an invalid file, and attempting a refused picture insert. |
+| `simulate.mjs` | Simulates typing, saving, opening an invalid file, and attempting a refused picture insert. |
 | `client/` | Code both editor examples share: the event log panel, its styles, and the Vite setup. |

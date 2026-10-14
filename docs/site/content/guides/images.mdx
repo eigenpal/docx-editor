@@ -7,6 +7,8 @@ seoTitle: 'Images and floating pictures'
 
 The editor displays inline and floating DrawingML pictures (`w:drawing` with `pic:pic`). React and Vue provide controls to insert pictures, change wrapping, resize pictures, and edit alternative text. Saving preserves the picture markup and media.
 
+The editor releases image elements and object URLs when their pages leave the painted viewport. Pages kept visible for the selection retain their images. Returning to a page recreates its images from the original package resources. Saving preserves the original media.
+
 ## Supported formats
 
 | Format | Insert | Layout & paint | Round-trip |

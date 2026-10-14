@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/index.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
+import { NO_THEME_FONTS } from '../run-style.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { linesOf, type TextMeasurer } from '../semantic-records.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -45,17 +46,27 @@ function layout(
   width: number,
   split = text.length,
   measure = measurer,
-  runProps = ''
+  runProps = '',
+  sourcePolicy?: { readonly eastAsianDefaults?: boolean; readonly kern?: number }
 ) {
   const run = (value: string) =>
-    `<w:r><w:rPr><w:sz w:val="24"/>${runProps}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
+    `<w:r><w:rPr><w:sz w:val="24"/>${sourcePolicy?.kern === undefined ? '' : `<w:kern w:val="${sourcePolicy.kern}"/>`}${runProps}</w:rPr><w:t xml:space="preserve">${value}</w:t></w:r>`;
   const source = part(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr>${split === -1 ? [...text].map(run).join('') : run(text.slice(0, split)) + run(text.slice(split))}</w:p></w:body></w:document>`
   );
   return linesOf(
     layoutSemanticDocument(source, 0, {
       measurer: measure,
-      styleCascade: buildStyleCascadeTable(null, undefined, settings.root),
+      styleCascade: buildStyleCascadeTable(
+        sourcePolicy?.eastAsianDefaults
+          ? part(
+              `<w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:eastAsia="Test CJK"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`
+            ).root
+          : null,
+        // The font table gives the probe face an East Asian charset.
+        { ...NO_THEME_FONTS, eastAsianFontTableFaces: ['test cjk'] },
+        settings.root
+      ),
       geometry: {
         width: width + 20,
         height: 500,
@@ -64,6 +75,14 @@ function layout(
     })
   );
 }
+// Positive pair vectors explicitly author EA defaults and kern on both real runs.
+const qualifiedLayout = (
+  text: string,
+  width: number,
+  split = text.length,
+  measure = measurer,
+  runProps = ''
+) => layout(text, width, split, measure, runProps, { eastAsianDefaults: true, kern: 2 });
 // Native Word PDFs from three independent width/group experiments, Songti SC 12 pt.
 const word = [
   {
@@ -117,7 +136,7 @@ const word = [
 ];
 for (const fixture of word)
   test(`Word optical fit at ${fixture.width}: ${fixture.text}`, () => {
-    const lines = layout(fixture.text, fixture.width);
+    const lines = qualifiedLayout(fixture.text, fixture.width);
     expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(
       fixture.lines
     );
@@ -136,7 +155,7 @@ for (const fixture of word)
 test('optical Word vectors survive each source-run seam', () => {
   for (const fixture of word) {
     for (let split = 0; split <= fixture.text.length; split++) {
-      const lines = layout(fixture.text, fixture.width, split);
+      const lines = qualifiedLayout(fixture.text, fixture.width, split);
       expect({
         text: fixture.text,
         split,
@@ -281,7 +300,13 @@ test('Word colon/closing compression includes authored tracking at wide and narr
   for (const width of [37, 200])
     for (const spacing of [0, 30])
       for (let split = -1; split <= text.length; split++) {
-        const lines = layout(text, width, split, measurer, `<w:spacing w:val="${spacing}"/>`);
+        const lines = qualifiedLayout(
+          text,
+          width,
+          split,
+          measurer,
+          `<w:spacing w:val="${spacing}"/>`
+        );
         expect(geometry(lines)).toEqual([
           { text, origins: spacing ? [0, 13500, 20250, 33750] : [0, 12000, 18000, 30000] },
         ]);
@@ -311,10 +336,24 @@ test('Word compresses the colon before closing classes with left and centered co
     for (const closing of '、。）】』，') {
       const text = `甲：${closing}乙`;
       for (let split = -1; split <= text.length; split++)
-        expect(geometry(layout(text, 200, split, measure))).toEqual([
+        expect(geometry(qualifiedLayout(text, 200, split, measure))).toEqual([
           { text, origins: [0, 12000, 18000, 30000] },
         ]);
     }
+});
+
+test('unqualified punctuation pairs keep natural advances', () => {
+  for (const sourcePolicy of [
+    undefined,
+    { kern: 2 },
+    { eastAsianDefaults: true },
+    { eastAsianDefaults: true, kern: 0 },
+    { eastAsianDefaults: true, kern: 60 },
+  ])
+    for (let split = -1; split <= 4; split++)
+      expect(geometry(layout('甲：、乙', 200, split, measurer, '', sourcePolicy))).toEqual([
+        { text: '甲：、乙', origins: [0, 12000, 24000, 36000] },
+      ]);
 });
 
 test('colon/closing pairs retain natural advances without safe measured pair bounds', () => {

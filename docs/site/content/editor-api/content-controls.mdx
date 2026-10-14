@@ -63,6 +63,8 @@ For an existing placeholder, prefer replacing the control value. For untracked r
 
 The runtime combines lock assignments on the same proxy. Changing one lock preserves the other without loading it first. Effective ancestor locks and binding checks still apply; lock setters do not bypass protection. `ContentControlLockState` exports `unlocked`, `sdtLocked`, `contentLocked`, and `sdtContentLocked` as vocabulary. There is no public combined `lock` property taking that alias.
 
+If you create the browser runtime over an editor that sets `contentLockPolicy.allowFormattingInLockedContent`, untracked font writes pass a content lock. Text writes, and font writes while `document.changeTrackingMode` tracks changes, still refuse. The server runtime does not take this option. For more information, see [Content controls](/docs/2.x/guides/content-controls#formatting-content-locked-controls).
+
 ## Create a text or date control
 
 `Range.insertContentControl(type?)` supports `RichText`, `PlainText`, and `DatePicker`; the default is `RichText`. The range must be an eligible single-paragraph span. Sync creation before setting metadata:
@@ -94,6 +96,8 @@ Set `context.document.changeTrackingMode = 'TrackMineOnly'` before `insertConten
 ## Address or remove control content
 
 `getRange(location?)` accepts `Whole`, `Content`, `Start`, `End`, `Before`, and `After`. Resolve the returned range before dependent use. `delete(true)` removes the wrapper and preserves its content. `delete(false)` removes both wrapper and content. Deletion and value changes can fail because of protection, XML binding, unsupported structure, or tracking mode.
+
+A batch that inserts a control or paragraph inside a control and deletes that control with `delete(false)` refuses with `ConflictingChanges` before it writes. Use separate sync calls for these edits. Text writes and nested control deletions in one batch succeed.
 
 Do not delete a binding or wrapper to force a failed template write. Read again and report an ineligible control to the application or template author.
 

@@ -1,7 +1,7 @@
 {
   "OfficeExtension.ClientRequestContext#sync": {
     "status": "partial",
-    "notes": "One atomic write batch targets one story. Main-body, header, footer, and other story writes need separate sync calls. Mixed-story writes refuse with ConflictingChanges without committing that batch. Reads can span stories. Earlier successful syncs remain committed after a later failure."
+    "notes": "One atomic write batch targets one story. Main-body, header, footer, and other story writes need separate sync calls. Mixed-story writes refuse with ConflictingChanges without committing that batch. Reads can span stories. Earlier successful syncs remain committed after a later failure. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing."
   },
   "Word.run": {
     "status": "different",
@@ -629,7 +629,7 @@
   },
   "Word.Range#insertContentControl": {
     "status": "partial",
-    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. A range whose text moved since it was read refuses with StaleDocument."
+    "notes": "Creates RichText, PlainText, and DatePicker controls around an eligible single-paragraph range. Other types refuse. Sync before configuring the returned proxy. DatePicker creates a real date SDT; typed date configuration accessors remain unavailable. TrackMineOnly can wrap nonempty ordinary text in PlainText, RichText, or DatePicker controls outside collaboration. Accept keeps the control; Reject restores the original formatted text. The author can set the pending control\u2019s tag and title. Empty ranges, existing review markup, and other control structure changes refuse. A range whose text moved since it was read refuses with StaleDocument. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing."
   },
   "Word.ContentControl#tag": {
     "status": "partial",
@@ -641,11 +641,11 @@
   },
   "Word.ContentControl#delete": {
     "status": "partial",
-    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically."
+    "notes": "With keepContent=true removes the wrapper while preserving its contents; false removes both. Protected, bound, or unsupported control structures refuse atomically. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing. Deleting nested controls in one batch succeeds."
   },
   "Word.ContentControl#cannotEdit": {
     "status": "partial",
-    "notes": "Writes one lock axis without requiring a prior load. Assignments on the same proxy coalesce and preserve the other axis. Effective ancestor locks and bound controls remain enforced; this is not a protection bypass."
+    "notes": "Writes one lock axis without requiring a prior load. Assignments on the same proxy coalesce and preserve the other axis. Effective ancestor locks and bound controls remain enforced; this is not a protection bypass. A browser runtime over an editor created with contentLockPolicy.allowFormattingInLockedContent lets untracked font writes pass a content lock; text writes and tracked font writes still refuse. The server runtime does not take this option and refuses both, as Word does."
   },
   "Word.ContentControl#cannotDelete": {
     "status": "partial",

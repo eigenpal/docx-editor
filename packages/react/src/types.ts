@@ -3,6 +3,9 @@ import type {
   ResolvedRevisionMarkup,
   ReviewDisplayMode,
   FieldResultsMode,
+  ContentLockPolicy,
+  FontShapingOptions,
+  LockedControlNavigation,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorPopups } from './editor/popup-config';
 import type { DocxEditorChildren } from './docx-editor-children';
@@ -66,6 +69,8 @@ export interface DocxEditorProps {
    * measured. Omit it to mount in one line; supply it when break positions matter.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
+  fontShaping?: FontShapingOptions;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them
@@ -254,6 +259,20 @@ export interface DocxEditorProps {
    * with a collaboration module.
    */
   fieldResults?: FieldResultsMode;
+  /**
+   * Opt-in relaxation of content-control locks. With `allowFormattingInLockedContent: true`,
+   * readers can format `contentLocked` and `sdtContentLocked` controls while their text stays
+   * protected. Read once, when the editor is created: a later change in value is ignored,
+   * with a development warning.
+   */
+  contentLockPolicy?: ContentLockPolicy;
+  /**
+   * How the caret moves through an inline content control whose content is locked.
+   * `'characters'` (the default) walks through its characters, as Word does. `'atomic'` makes
+   * the control one caret unit. Read once, when the editor is created: a later change is
+   * ignored, with a development warning.
+   */
+  lockedControlNavigation?: LockedControlNavigation;
 
   /**
    * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.

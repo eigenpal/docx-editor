@@ -14,7 +14,7 @@ Two Grafana dashboards report editor performance and collaboration server activi
 
 | File | What it is | Download |
 | --- | --- | --- |
-| `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
+| `editor-experience.json` | Grafana dashboard: input delay, engine work, opens, sessions, edits, saves, and refused edits and tracked changes. | [editor-experience.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/editor-experience.json) |
 | `collaboration.json` | Grafana dashboard: server state, rooms and people, memory, server work, client status, and refusals. | [collaboration.json](https://raw.githubusercontent.com/eigenpal/docx-editor/main/assets/observability/grafana/collaboration.json) |
 
 To download both files from a terminal, run:
@@ -54,6 +54,8 @@ export const telemetry = createTelemetry({
   exporters: [otelExporter()],
   include: {
     documentOpen: true,
+    documentSave: true,
+    sessions: true,
     editing: true,
     trackedChanges: true,
     fonts: true,
@@ -86,12 +88,12 @@ scrape_configs:
 
 ## Editor experience
 
-The first row summarizes input delay, presses over 1 second, open success rate, and open time. It also shows reporting metric sources, unexpected refusals per 1,000 presses, and dropped telemetry events.
+The first row summarizes input delay, presses over 200 ms, open success rate, and median open time. It also shows reporting metric sources, unexpected refusals per 1,000 presses, and dropped telemetry events.
 
 The remaining rows show:
 
 - **Interaction:** input delay over time and presses by delay band. Compare delay by document size, app version, editor version, or the same time a week earlier.
-- **Engine work:** engine layout and paint passes by duration band.
+- **Engine work:** engine layout and paint passes by duration band, and layout time by document size.
 - **Documents:** opens per minute, open time, and refused files by reason.
 - **Tracked changes:** edits refused while suggesting, by reason and source. Skipped accept, reject, and reassign requests appear by reason, operation, and change kind.
 - **All refused edits:** refusal codes by source, font substitutions, and dropped telemetry.
@@ -100,7 +102,9 @@ Every code in a table links to its hint in [Diagnostics](/docs/2.x/guides/diagno
 
 ![The tracked changes and refused edits rows of the Editor experience dashboard: refusals while suggesting, the share of refusals while suggesting, refused tracked changes by reason and by source, and all refused edits by reason and by source.](./images/editor-tracked-changes.png)
 
-Input delay percentiles are estimates from timing bands. The highest finite boundary is 1 second. A percentile shown as 1 second falls in the band above 1 second. In that case, use **Presses over 1 s**.
+Input delay percentiles are estimates from timing bands. The highest finite boundary is 1 second. A percentile shown as 1 second falls in the band above 1 second. In that case, use **Presses by delay band**.
+
+A percentile or share from a few samples follows one slow press or one large file. Input delay and layout values appear only after 20 samples in the window, and open time values after 5 opens. Until then, the panel shows no value.
 
 ## Collaboration
 

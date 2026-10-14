@@ -31,7 +31,11 @@ import {
 } from '@docx-editor.dev/core/store';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
 import { stableHash } from '../store/comparators/canonical.ts';
-import { cjkTypographyFromSettings, type CjkTypographySettings } from './cjk-typography.ts';
+import {
+  cjkTypographyFromSettings,
+  defaultsSelectEastAsianFace,
+  type CjkTypographySettings,
+} from './cjk-typography.ts';
 import {
   indentTwips,
   paragraphAlignment,
@@ -463,7 +467,7 @@ export function buildStyleCascadeTable(
   themeFonts: ThemeFonts = NO_THEME_FONTS,
   settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
-  const typography = cjkTypographyFromSettings(settingsRoot);
+  let typography = cjkTypographyFromSettings(settingsRoot);
   // One read of the compatibility profile; the cache token folds every rule it turns on.
   const compatibility = compatibilityProfileFromSettings(settingsRoot);
   const ligaturesEnabled = compatibility.has('optionalLigatures');
@@ -504,6 +508,8 @@ export function buildStyleCascadeTable(
   }
 
   const authoredDefaults = readDocDefaults(stylesRoot);
+  const sourceEastAsianFont = defaultsSelectEastAsianFace(authoredDefaults.run, themeFonts);
+  typography = Object.freeze({ ...typography, sourceEastAsianFont });
   const defaults = {
     ...authoredDefaults,
     run: [...applicationRunDefaults(stylesRoot, ligaturesEnabled), ...authoredDefaults.run],
@@ -886,14 +892,9 @@ export function resolveParagraphLayoutInputs(
       // geometry unbounded — `w:hanging="999999999"` resolved to 50,000,000pt.
       const h = indentTwips(property.attributes?.hanging);
       const f = indentTwips(property.attributes?.firstLine);
-      // `w:hanging` and `w:firstLine` are MUTUALLY EXCLUSIVE (§17.3.1.10, §17.3.1.12): they
-      // are two spellings of one first-line offset, so an `w:ind` that states either one
-      // replaces BOTH. Accumulating them independently let a style's hanging indent survive a
-      // paragraph that explicitly cancelled it with `w:firstLine="0"` — the first line of
-      // every body paragraph then hung out into the left margin while the rest sat indented.
-      //
-      // An `w:ind` that states NEITHER (a bare `w:left`) leaves the inherited offset alone,
-      // which is why this is gated rather than reset on every `ind`.
+      // `w:hanging` and `w:firstLine` are mutually exclusive spellings of one offset.
+      // Either stated attribute replaces both; otherwise an inherited hanging may survive
+      // firstLine="0" and shift body text into the margin. An ind with neither keeps the offset.
       if (
         property.attributes?.hanging !== undefined ||
         property.attributes?.firstLine !== undefined

@@ -4,12 +4,15 @@
 // mounts must never share one. An entry whose mount never comes dies with its bytes.
 
 import { openTreeSession, type OpenTreeSessionResult } from '@docx-editor.dev/core/binding';
-import { openTreeSessionFromPackage } from '../binding/tree-session.ts';
+import {
+  openTreeSessionFromPackage,
+  type OpenTreeSessionOptions,
+} from '../binding/tree-session.ts';
 import { readOoxmlPackageSteps } from '../store/package/ooxml-package.ts';
-import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { nodeIndexSteps } from '../store/package/ooxml-edit.ts';
+import { contentLockPolicyOf } from '../store/store/content-lock-policy.ts';
 import {
   warmResolverGlyphFontFamilies,
   warmResolverGlyphFontTableRows,
@@ -32,15 +35,27 @@ export type FontSession = Pick<
 
 const prepared = new WeakMap<Uint8Array, OpenTreeSessionResult>();
 
-/** Open `bytes` now with the review model the mount will pass, and return the result. */
+/** The session options a prepared open must share with the mount it stands in for. */
+export type PreparedOpenOptions = Pick<OpenTreeSessionOptions, 'reviewModel' | 'contentLockPolicy'>;
+
+/**
+ * The session options of one mount: `review` plus the host's lock policy. The prepared open of a
+ * large document takes the same, or its session would ignore the policy the mount was given.
+ */
+export function sessionOpenOptions(
+  review: Pick<OpenTreeSessionOptions, 'reviewModel'>,
+  config: Pick<OpenTreeSessionOptions, 'contentLockPolicy'>
+): PreparedOpenOptions {
+  const contentLockPolicy = contentLockPolicyOf(config.contentLockPolicy);
+  return contentLockPolicy ? { ...review, contentLockPolicy } : review;
+}
+
+/** Open `bytes` now with the session options the mount will pass, and return the result. */
 export function prepareOpen(
   bytes: Uint8Array,
-  review: { readonly reviewModel?: ReviewModuleContribution }
+  options: PreparedOpenOptions
 ): OpenTreeSessionResult {
-  const opened = openTreeSession(
-    bytes,
-    review.reviewModel ? { reviewModel: review.reviewModel } : {}
-  );
+  const opened = openTreeSession(bytes, options);
   prepared.set(bytes, opened);
   return opened;
 }
@@ -52,7 +67,7 @@ export function prepareOpen(
  */
 export function prepareOpenSteps(
   bytes: Uint8Array,
-  review: { readonly reviewModel?: ReviewModuleContribution },
+  options: PreparedOpenOptions,
   then: (opened: OpenTreeSessionResult) => ReturnType<Step>
 ): Step {
   const reader = readOoxmlPackageSteps(bytes);
@@ -61,10 +76,7 @@ export function prepareOpenSteps(
     for (;;) {
       const next = reader.next();
       if (next.done) {
-        const opened = openTreeSessionFromPackage(
-          next.value,
-          review.reviewModel ? { reviewModel: review.reviewModel } : {}
-        );
+        const opened = openTreeSessionFromPackage(next.value, options);
         prepared.set(bytes, opened);
         return then(opened);
       }
@@ -93,12 +105,12 @@ export function takePreparedOpen(bytes: Uint8Array): {
  * session for font work (null declines), then warm fonts and reads while it stays current.
  */
 export function preparedOpenHook(
-  review: () => { readonly reviewModel?: ReviewModuleContribution },
+  sessionOptions: () => PreparedOpenOptions,
   adopt: (bytes: Uint8Array, session: TreeDocxSessionView) => (() => boolean) | null,
   startFonts: () => void | Promise<unknown>
 ): (bytes: Uint8Array) => Step {
   return (bytes) =>
-    prepareOpenSteps(bytes, review(), (opened) => {
+    prepareOpenSteps(bytes, sessionOptions(), (opened) => {
       const current = opened.ok ? adopt(bytes, opened.session) : null;
       return opened.ok && current ? openSteps(opened.session, current, startFonts) : undefined;
     });

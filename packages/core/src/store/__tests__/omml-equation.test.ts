@@ -121,8 +121,8 @@ describe('bounded OMML equation projection', () => {
 
   test('uses descendant text for unsupported OMML without changing source', () => {
     const part = readDocument(
-      '<m:oMath><m:bar><m:e><m:r><m:t>&lt;img onerror="x"&gt;</m:t></m:r>' +
-        '</m:e></m:bar></m:oMath>'
+      '<m:oMath><m:groupChr><m:e><m:r><m:t>&lt;img onerror="x"&gt;</m:t></m:r>' +
+        '</m:e></m:groupChr></m:oMath>'
     );
     const before = canonicalOoxmlFingerprint(part);
     const projection = projectOmmlEquation(equationOf(part));

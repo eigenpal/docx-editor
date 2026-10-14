@@ -93,10 +93,20 @@ export function planContentControlInsertion(
     answer: (post) => {
       if (!operation.returnHandle) return { kind: 'applied' };
       const after = post.story(story.story);
-      const created =
-        after && allControlsUnder(after.root).find((node) => !existingControlIds.has(node.id));
-      if (!created) throw new Error('content control insertion did not create a control');
-      return { kind: 'handle', handle: handles.contentControl(created.id, story.story) };
+      // Looked for in the paragraph this operation wrapped, not in the whole story: every
+      // operation of a batch plans against the same `existingControlIds`, so a story-wide search
+      // answered the FIRST control created by the batch to each of them. The paragraph is
+      // claimed by this operation alone, so exactly one new control can be in it. A paragraph a
+      // later operation removed has no control to name, and searching the story instead would
+      // name another operation's control, so that is refused rather than guessed.
+      const paragraph = after?.node(range.start.paragraphId);
+      const created = paragraph
+        ? allControlsUnder(paragraph).filter((node) => !existingControlIds.has(node.id))
+        : [];
+      if (created.length !== 1) {
+        throw new Error('content control insertion did not create a control');
+      }
+      return { kind: 'handle', handle: handles.contentControl(created[0]!.id, story.story) };
     },
   };
 }

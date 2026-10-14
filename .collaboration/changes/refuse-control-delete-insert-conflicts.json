@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A batch could commit control deletion and then throw while answering a removed insertion.",
+  "after": "Conflicting control deletion and insertion refuse before the batch writes.",
+  "reason": "The planner changes admission only. Stored operations and shared formats remain unchanged.",
+  "tests": [
+    "packages/core/src/automation/__tests__/automation-content-control-insert.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-batched-control-insert.test.ts"
+  ],
+  "changeset": "refuse-control-delete-insert-conflicts",
+  "migration": null
+}

@@ -18,6 +18,8 @@ Each event has up to three timing summaries:
 
 Each summary includes `count`, `p50Ms`, `p95Ms`, `maxMs`, and timing counts in `bands`. The bands end at 16, 33, 50, 100, 200, 500, and 1000 ms, with a final band above 1000 ms. Events also include `windowMs` and `pagesBucket`. They contain no keys, positions, or text.
 
+`windowMs` is the time from the first timing in the window to the summary, one minute or less. It includes idle time, so it is not active editing time. To measure activity, use `interaction.count`.
+
 The editor reports `performance.slow-interaction` when it times at least 20 presses and more than 5% take over 200 ms. The event includes a hint. The console exporter prints a warning. The Sentry exporter records a warning breadcrumb.
 
 The following example sends performance events from about one editor in ten. Sampling selects editors once, so each editor's summaries stay together. With a nonzero `sampleRate`, all editors measure performance and contribute metrics. Sampling limits only events, such as span events and breadcrumbs. Set `sampleRate` to `0` to stop performance measurement, including metrics.
