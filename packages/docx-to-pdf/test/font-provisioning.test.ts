@@ -41,6 +41,27 @@ test('installed discovery includes the default family when no run names it', asy
   });
 });
 
+test('installed discovery finds Garamond by its short file names', async () => {
+  await directory(async (root) => {
+    const face = new URL(
+      '../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf',
+      import.meta.url
+    );
+    for (const name of ['GARA.ttf', 'GARABD.ttf', 'GARAIT.ttf', 'GARABDIT.ttf'])
+      await copyFile(face, join(root, name));
+    const result = await installedWordFontResolver([root])({
+      families: ['Garamond'],
+      defaultFamily: 'Unavailable Font',
+    });
+    expect(result.sources.map((source) => source.request)).toEqual([
+      { family: 'Garamond', weight: 400, style: 'normal' },
+      { family: 'Garamond', weight: 700, style: 'normal' },
+      { family: 'Garamond', weight: 400, style: 'italic' },
+      { family: 'Garamond', weight: 700, style: 'italic' },
+    ]);
+  });
+});
+
 test('a collection without the requested family never substitutes its first face', async () => {
   await directory(async (root) => {
     await copyFile(
