@@ -7950,6 +7950,22 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-dialog__button--primary:where(:active) {
   background: var(--doc-primary-hover);
 }
+/* Host actions sit beside Close, so the row wraps on a narrow screen and long translated
+   labels wrap inside their button rather than pushing the row past the panel. */
+.docx-editor .docx-dialog:where([data-docx-dialog='openFailure']) .docx-dialog__footer,
+.docx-editor.docx-dialog:where([data-docx-dialog='openFailure']) .docx-dialog__footer {
+  flex-wrap: wrap;
+}
+.docx-editor :where([data-docx-dialog='openFailure']) .docx-dialog__button,
+.docx-editor:where([data-docx-dialog='openFailure']) .docx-dialog__button {
+  height: auto;
+  min-height: 32px;
+  max-width: 100%;
+  padding-block: 6px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
 .docx-editor .docx-dialog__link-button {
   display: inline-flex;
   align-items: center;

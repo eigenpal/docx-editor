@@ -24,11 +24,11 @@ The `reason` groups the codes by what a person can do:
 
 | `reason` | Codes | Packaged message |
 | --- | --- | --- |
-| `damaged` | `open.zip-corrupt`, `open.zip-invalid-entry-name`, `open.xml-malformed`, `open.content-types-invalid`, `open.relationships-invalid` | The file is damaged. Open it in a desktop word processor, save it again as .docx, and then try again. |
-| `not-docx` | `open.unsupported-source`, `open.missing-main-document` | This file is not a .docx document. It may be another file type with a .docx name. |
-| `too-large` | `open.zip-entry-limit`, `open.zip-size-limit`, `open.zip-ratio-limit`, `open.xml-part-size-limit`, `open.xml-depth-limit`, `open.xml-element-limit`, `open.relationship-limit`, `open.part-limit` | This file is larger or more complex than the editor can open. |
-| `blocked` | `open.xml-dtd-forbidden` | This file contains XML features that the editor blocks for security. |
-| `unknown` | `open.invalid-limits`, `open.failed` | Something went wrong while opening this file. |
+| `damaged` | `open.zip-corrupt`, `open.zip-invalid-entry-name`, `open.xml-malformed`, `open.content-types-invalid`, `open.relationships-invalid` | The file could not be read. It may be damaged, or it may be another type of file. Open it in a desktop word processor, save it as .docx, and then try again. |
+| `not-docx` | `open.unsupported-source`, `open.missing-main-document` | This file is not a .docx document. Choose a .docx file, or save this file as .docx in a desktop word processor and then try again. |
+| `too-large` | `open.zip-entry-limit`, `open.zip-size-limit`, `open.zip-ratio-limit`, `open.xml-part-size-limit`, `open.xml-depth-limit`, `open.xml-element-limit`, `open.relationship-limit`, `open.part-limit` | This file is too large or too complex to open here. Try a smaller copy, for example one with fewer pages or images. |
+| `blocked` | `open.xml-dtd-forbidden` | This file contains content that the editor does not open, for security reasons. Save it again as .docx in a desktop word processor, and then try again. |
+| `unknown` | `open.invalid-limits`, `open.failed` | Something went wrong while opening this file. Try again. If the problem continues, try another copy of the file. |
 
 The packaged messages are translated into every bundled language. The keys are under `openFailure` in `@docx-editor.dev/i18n`. To change a string in every editor, override its key in the catalog that you pass to `i18n`. For more information, see [@docx-editor.dev/i18n](/docs/2.x/i18n). To change it for one editor, use the options in [Change the text](#change-the-text).
 
@@ -187,7 +187,7 @@ Pass `children` in React, or the `default` slot in Vue, to replace the header, b
       <div className="upload-error">
         <h2>{message}</h2>
         <p>Reference: {failure.code}</p>
-        <DocxEditor.OpenFailure.Action variant="primary" onClick={dismiss}>
+        <DocxEditor.OpenFailure.Action variant="primary" dismiss onClick={openFilePicker}>
           Choose another file
         </DocxEditor.OpenFailure.Action>
       </div>
@@ -209,7 +209,7 @@ Pass `children` in React, or the `default` slot in Vue, to replace the header, b
       <div class="upload-error">
         <h2>{{ message }}</h2>
         <p>Reference: {{ failure.code }}</p>
-        <DocxEditorOpenFailureAction variant="primary" @click="dismiss">
+        <DocxEditorOpenFailureAction variant="primary" dismiss @click="openFilePicker">
           Choose another file
         </DocxEditorOpenFailureAction>
       </div>
@@ -223,6 +223,8 @@ Pass `children` in React, or the `default` slot in Vue, to replace the header, b
 
 </Framework>
 </FrameworkTabs>
+
+`openFilePicker` is your own function, such as one that clicks a hidden file input. With `dismiss`, the action closes the dialog after it runs.
 
 If you compose the editor from parts, the dialog is not included. Add `DocxEditor.OpenFailure` inside `DocxEditor.Root`, as in the previous example.
 
@@ -280,7 +282,7 @@ Mount the banner in the default slot of `<DocxEditor :document="bytes" :open-fai
 </Framework>
 </FrameworkTabs>
 
-`dismiss` hides the current refusal. The next refusal shows again, even for the same file.
+`dismiss` hides the current refusal. The next refusal shows again, even for the same file. When a toast closes later than it opened, pass the failure that it showed, as in `dismiss(failure)`. Then a late close cannot hide a newer refusal.
 
 The dialog is an alert, so a click on the backdrop does not close it. **Close**, your own actions, and Escape close it.
 

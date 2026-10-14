@@ -79,6 +79,15 @@ describe('snapshot().openFailure', () => {
     expect(editor.snapshot().isLoading).toBe(false);
   });
 
+  test('a refusal outside a mount emits, so event-driven hosts see it', () => {
+    const editor = createDocxEditor({ container: document.createElement('div') });
+    editor.on('error', () => {});
+    let emitted = 0;
+    editor.on('selectionChange', () => (emitted += 1));
+    editor.load('not-a-source' as 'blank');
+    expect(emitted).toBeGreaterThan(0);
+  });
+
   test('load() of a source that is not bytes keeps a mounted document and no refusal', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),

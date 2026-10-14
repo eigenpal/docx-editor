@@ -39,6 +39,14 @@ const MESSAGE_KEYS = {
   unknown: 'openFailure.reasons.unknown',
 } as const satisfies Record<DocumentOpenFailureReason, string>;
 
+/**
+ * Whether a `dismiss` argument names an older refusal. Anything that is not a failure, such as
+ * the click event of `onClick={dismiss}`, means "the one on screen".
+ */
+function isStaleFailure(shown: unknown, current: DocumentOpenFailure | null): boolean {
+  return typeof shown === 'object' && shown !== null && 'reason' in shown && shown !== current;
+}
+
 const selectOpenFailure = (snapshot: EditorSnapshot): DocumentOpenFailure | null =>
   snapshot.openFailure ?? null;
 
@@ -48,8 +56,12 @@ export interface UseOpenFailureReturn {
   readonly failure: DocumentOpenFailure | null;
   /** The packaged, translated message for {@link UseOpenFailureReturn.failure}. */
   readonly message: string | null;
-  /** Hide this refusal. A later refusal shows again, even for the same file. */
-  dismiss(): void;
+  /**
+   * Hide this refusal. A later refusal shows again, even for the same file. Pass the failure
+   * your UI showed, such as from a toast's close callback, so a late call cannot hide a newer
+   * refusal.
+   */
+  dismiss(failure?: DocumentOpenFailure): void;
 }
 
 /** Options for {@link useOpenFailure}. @public */
@@ -67,7 +79,7 @@ export interface UseOpenFailureOptions {
  * function OpenFailureToast() {
  *   const { failure, message, dismiss } = useOpenFailure();
  *   if (!failure) return null;
- *   return <Toast title={message} detail={failure.code} onClose={dismiss} />;
+ *   return <Toast title={message} detail={failure.code} onClose={() => dismiss(failure)} />;
  * }
  * ```
  *
@@ -81,7 +93,12 @@ export function useOpenFailure(options: UseOpenFailureOptions = {}): UseOpenFail
   // next refusal of the same file show again.
   const [dismissed, setDismissed] = useState<DocumentOpenFailure | null>(null);
   const failure = current !== null && current !== dismissed ? current : null;
-  const dismiss = useCallback(() => setDismissed(current), [current]);
+  const dismiss = useCallback(
+    (failure?: DocumentOpenFailure) => {
+      if (!isStaleFailure(failure, current)) setDismissed(current);
+    },
+    [current]
+  );
   return { failure, message: failure ? t(MESSAGE_KEYS[failure.reason]) : null, dismiss };
 }
 
@@ -265,7 +282,7 @@ function DocxEditorOpenFailureImpl({
   if (!failure || packaged === null) return null;
 
   const close = () => {
-    dismiss();
+    dismiss(failure);
     onDismiss?.(failure);
   };
   const context: DocxEditorOpenFailureContext = { failure, message: packaged, dismiss: close };

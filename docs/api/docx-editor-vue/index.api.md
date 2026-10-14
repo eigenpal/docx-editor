@@ -3065,8 +3065,15 @@ export interface DocxEditorMenuProps {
 
 // @public (undocumented)
 export interface DocxEditorNamespace {
-    // (undocumented)
-    (props: DocxEditorProps): VNode;
+    (props: DocxEditorProps, context?: {
+        slots: {
+            default?: () => VNode[];
+            loadingIndicator?: () => VNode[];
+            openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
+            titleBarLeft?: () => VNode[];
+            titleBarRight?: () => VNode[];
+        };
+    }): VNode;
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     // (undocumented)
@@ -6948,7 +6955,7 @@ export interface UseOpenFailureOptions {
 
 // @public
 export interface UseOpenFailureReturn {
-    dismiss(): void;
+    dismiss(failure?: DocumentOpenFailure): void;
     readonly failure: ComputedRef<DocumentOpenFailure | null>;
     readonly message: ComputedRef<string | null>;
 }

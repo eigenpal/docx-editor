@@ -568,11 +568,11 @@
   "openFailure": {
     "title": "Diese Datei konnte nicht geöffnet werden",
     "reasons": {
-      "damaged": "Die Datei ist beschädigt. Öffnen Sie sie in einer Desktop-Textverarbeitung, speichern Sie sie erneut als .docx und versuchen Sie es noch einmal.",
-      "notDocx": "Diese Datei ist kein .docx-Dokument. Möglicherweise ist es ein anderer Dateityp mit der Endung .docx.",
-      "tooLarge": "Diese Datei ist größer oder komplexer, als der Editor öffnen kann.",
-      "blocked": "Diese Datei enthält XML-Funktionen, die der Editor aus Sicherheitsgründen blockiert.",
-      "unknown": "Beim Öffnen dieser Datei ist ein Fehler aufgetreten."
+      "damaged": "Die Datei konnte nicht gelesen werden. Sie ist möglicherweise beschädigt oder hat ein anderes Format. Öffnen Sie sie in einer Desktop-Textverarbeitung, speichern Sie sie als .docx und versuchen Sie es dann erneut.",
+      "notDocx": "Diese Datei ist kein .docx-Dokument. Wählen Sie eine .docx-Datei aus, oder speichern Sie diese Datei in einer Desktop-Textverarbeitung als .docx und versuchen Sie es dann erneut.",
+      "tooLarge": "Diese Datei ist zu groß oder zu komplex, um sie hier zu öffnen. Versuchen Sie es mit einer kleineren Kopie, zum Beispiel mit weniger Seiten oder Bildern.",
+      "blocked": "Diese Datei enthält Inhalte, die der Editor aus Sicherheitsgründen nicht öffnet. Speichern Sie sie in einer Desktop-Textverarbeitung erneut als .docx und versuchen Sie es dann erneut.",
+      "unknown": "Beim Öffnen dieser Datei ist ein Fehler aufgetreten. Versuchen Sie es erneut. Wenn das Problem weiterhin besteht, versuchen Sie es mit einer anderen Kopie der Datei."
     },
     "code": "Fehlercode: {code}"
   },

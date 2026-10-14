@@ -568,11 +568,11 @@
   "openFailure": {
     "title": "Nie udało się otworzyć tego pliku",
     "reasons": {
-      "damaged": "Plik jest uszkodzony. Otwórz go w edytorze tekstu na komputerze, zapisz ponownie jako .docx i spróbuj jeszcze raz.",
-      "notDocx": "Ten plik nie jest dokumentem .docx. Może to być inny typ pliku z rozszerzeniem .docx.",
-      "tooLarge": "Ten plik jest większy lub bardziej złożony, niż edytor może otworzyć.",
-      "blocked": "Ten plik zawiera funkcje XML, które edytor blokuje ze względów bezpieczeństwa.",
-      "unknown": "Podczas otwierania tego pliku wystąpił błąd."
+      "damaged": "Nie udało się odczytać pliku. Może być uszkodzony albo mieć inny format. Otwórz go w edytorze tekstu na komputerze, zapisz jako .docx i spróbuj ponownie.",
+      "notDocx": "Ten plik nie jest dokumentem .docx. Wybierz plik .docx albo zapisz ten plik jako .docx w edytorze tekstu na komputerze i spróbuj ponownie.",
+      "tooLarge": "Ten plik jest zbyt duży lub zbyt złożony, aby go tu otworzyć. Spróbuj mniejszej kopii, na przykład z mniejszą liczbą stron lub obrazów.",
+      "blocked": "Ten plik zawiera treść, której edytor nie otwiera ze względów bezpieczeństwa. Zapisz go ponownie jako .docx w edytorze tekstu na komputerze i spróbuj ponownie.",
+      "unknown": "Podczas otwierania tego pliku wystąpił błąd. Spróbuj ponownie. Jeśli problem nie ustąpi, spróbuj innej kopii pliku."
     },
     "code": "Kod błędu: {code}"
   },

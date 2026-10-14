@@ -56,7 +56,11 @@ export interface DocumentOpenFailureState {
   clear(): void;
 }
 
-/** `changed` publishes the state; `reject` and `clear` run inside a mount that publishes itself. */
+/**
+ * `changed` publishes the state: it must bump AND emit, because a refusal outside a mount has
+ * no other emit to wake event-driven adapters. `reject` and `clear` run inside a mount that
+ * publishes itself.
+ */
 export function createDocumentOpenFailureState(changed: () => void): DocumentOpenFailureState {
   let parseError: string | null = null;
   let failure: DocumentOpenFailure | null = null;

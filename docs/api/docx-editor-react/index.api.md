@@ -3139,7 +3139,7 @@ export interface UseOpenFailureOptions {
 
 // @public
 export interface UseOpenFailureReturn {
-    dismiss(): void;
+    dismiss(failure?: DocumentOpenFailure): void;
     readonly failure: DocumentOpenFailure | null;
     readonly message: string | null;
 }

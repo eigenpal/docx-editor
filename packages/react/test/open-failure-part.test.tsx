@@ -66,7 +66,7 @@ describe('DocxEditor.OpenFailure', () => {
     expect(el).not.toBeNull();
     expect(el!.getAttribute('role')).toBe('alertdialog');
     expect(el!.textContent).toContain('This file did not open');
-    expect(el!.textContent).toContain('The file is damaged.');
+    expect(el!.textContent).toContain('The file could not be read.');
     expect(el!.textContent).toContain('Error code: open.zip-corrupt');
     expect(el!.textContent).not.toContain('@');
   });
@@ -210,7 +210,7 @@ describe('DocxEditor.OpenFailure', () => {
       </DocxEditorRoot>
     );
     const button = dialog()!.querySelector('button')!;
-    expect(button.textContent).toContain('The file is damaged.');
+    expect(button.textContent).toContain('The file could not be read.');
     act(() => fireEvent.click(button));
     expect(dialog()).toBeNull();
   });
@@ -254,7 +254,7 @@ describe('open-failure dialog details', () => {
     const el = dialog()!;
     const id = el.getAttribute('aria-describedby');
     expect(id).toBeTruthy();
-    expect(document.getElementById(id!)!.textContent).toContain('The file is damaged.');
+    expect(document.getElementById(id!)!.textContent).toContain('The file could not be read.');
     act(() => fireEvent.click(el));
     expect(dialog()).not.toBeNull();
   });
@@ -293,6 +293,62 @@ describe('open-failure dialog details', () => {
   });
 });
 
+describe('a stale dismiss', () => {
+  test('does not hide a newer refusal', async () => {
+    let editor: DocxEditorInstance | null = null;
+    let api: ReturnType<typeof useOpenFailure> | null = null;
+    function Probe() {
+      api = useOpenFailure();
+      return null;
+    }
+    render(
+      <DocxEditorRoot document={BROKEN}>
+        <CaptureEditor onEditor={(e) => (editor = e)} />
+        <Probe />
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const first = api!.failure!;
+    await act(async () => editor!.load(BROKEN));
+    const second = api!.failure!;
+    expect(second).not.toBe(first);
+    act(() => api!.dismiss(first));
+    expect(api!.failure).toBe(second);
+    act(() => api!.dismiss(second));
+    expect(api!.failure).toBeNull();
+  });
+});
+
+describe('a crashed open', () => {
+  test('shows the dialog instead of unmounting the editor', () => {
+    const throwingReview = {
+      id: 'review',
+      review: {
+        displayModes: ['all-markup', 'proposed', 'original'] as const,
+        collectReviewItems: () => {
+          throw new Error('review failed');
+        },
+        revisionItemsOfParagraph: () => [],
+      },
+    };
+    const errors: unknown[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      render(<DocxEditor document={blankDocumentBytes()} modules={[throwingReview as never]} />);
+    } finally {
+      console.error = original;
+    }
+    const el = dialog();
+    expect(el).not.toBeNull();
+    expect(el!.textContent).toContain('Something went wrong while opening this file.');
+    expect(el!.textContent).toContain('open.failed');
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
 describe('useOpenFailure', () => {
   test('gives a host the failure and the packaged message for its own UI', () => {
     function Toast() {
@@ -316,7 +372,7 @@ describe('useOpenFailure', () => {
       </DocxEditorRoot>
     );
     const alert = view.getByRole('alert');
-    expect(alert.textContent).toContain('The file is damaged. ');
+    expect(alert.textContent).toContain('The file could not be read. ');
     expect(alert.textContent).toContain('(open.zip-corrupt)');
     act(() => fireEvent.click(view.getByText('x')));
     expect(view.queryByRole('alert')).toBeNull();

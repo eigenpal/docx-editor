@@ -571,11 +571,11 @@
   "openFailure": {
     "title": "Bu dosya açılamadı",
     "reasons": {
-      "damaged": "Dosya bozuk. Bir masaüstü kelime işlemcide açın, .docx olarak yeniden kaydedin ve tekrar deneyin.",
-      "notDocx": "Bu dosya bir .docx belgesi değil. .docx adı taşıyan başka bir dosya türü olabilir.",
-      "tooLarge": "Bu dosya, düzenleyicinin açabileceğinden daha büyük veya daha karmaşık.",
-      "blocked": "Bu dosya, düzenleyicinin güvenlik nedeniyle engellediği XML özellikleri içeriyor.",
-      "unknown": "Bu dosya açılırken bir sorun oluştu."
+      "damaged": "Dosya okunamadı. Dosya bozuk olabilir veya başka bir dosya türü olabilir. Bir masaüstü kelime işlemcide açın, .docx olarak kaydedin ve tekrar deneyin.",
+      "notDocx": "Bu dosya bir .docx belgesi değil. Bir .docx dosyası seçin veya bu dosyayı bir masaüstü kelime işlemcide .docx olarak kaydedip tekrar deneyin.",
+      "tooLarge": "Bu dosya burada açılamayacak kadar büyük veya karmaşık. Daha küçük bir kopya deneyin; örneğin daha az sayfa veya görsel içeren bir kopya.",
+      "blocked": "Bu dosya, düzenleyicinin güvenlik nedeniyle açmadığı içerik barındırıyor. Bir masaüstü kelime işlemcide yeniden .docx olarak kaydedin ve tekrar deneyin.",
+      "unknown": "Bu dosya açılırken bir sorun oluştu. Tekrar deneyin. Sorun devam ederse dosyanın başka bir kopyasını deneyin."
     },
     "code": "Hata kodu: {code}"
   },

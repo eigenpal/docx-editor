@@ -568,11 +568,11 @@
   "openFailure": {
     "title": "Não foi possível abrir este arquivo",
     "reasons": {
-      "damaged": "O arquivo está danificado. Abra-o em um processador de texto para desktop, salve-o novamente como .docx e tente de novo.",
-      "notDocx": "Este arquivo não é um documento .docx. Pode ser outro tipo de arquivo com a extensão .docx.",
-      "tooLarge": "Este arquivo é maior ou mais complexo do que o editor consegue abrir.",
-      "blocked": "Este arquivo contém recursos XML que o editor bloqueia por segurança.",
-      "unknown": "Algo deu errado ao abrir este arquivo."
+      "damaged": "Não foi possível ler o arquivo. Ele pode estar danificado ou ser de outro tipo. Abra-o em um processador de texto para desktop, salve-o como .docx e tente de novo.",
+      "notDocx": "Este arquivo não é um documento .docx. Escolha um arquivo .docx ou salve este arquivo como .docx em um processador de texto para desktop e tente de novo.",
+      "tooLarge": "Este arquivo é grande ou complexo demais para abrir aqui. Tente uma cópia menor, por exemplo com menos páginas ou imagens.",
+      "blocked": "Este arquivo tem conteúdo que o editor não abre por motivos de segurança. Salve-o novamente como .docx em um processador de texto para desktop e tente de novo.",
+      "unknown": "Algo deu errado ao abrir este arquivo. Tente de novo. Se o problema continuar, tente outra cópia do arquivo."
     },
     "code": "Código de erro: {code}"
   },

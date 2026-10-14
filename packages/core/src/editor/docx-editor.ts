@@ -381,7 +381,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // Host chrome registered before attach, re-applied to every rebuilt surface (see mount).
   let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
   const openingIndicator = preparedOpen.openingIndicatorChrome(() => surface);
-  const openFailure = createDocumentOpenFailureState(() => bump());
+  const openFailure = createDocumentOpenFailureState(() => {
+    bump();
+    emitSelectionChange();
+  });
   let unsubscribeSession: Unsubscribe | null = null;
   // What the last emitted tick reported, so a publish that moved nothing observable stays
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.

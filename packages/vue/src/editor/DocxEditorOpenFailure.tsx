@@ -45,6 +45,14 @@ const MESSAGE_KEYS = {
   unknown: 'openFailure.reasons.unknown',
 } as const satisfies Record<DocumentOpenFailureReason, string>;
 
+/**
+ * Whether a `dismiss` argument names an older refusal. Anything that is not a failure, such as
+ * the click event of `onClick={dismiss}`, means "the one on screen".
+ */
+function isStaleFailure(shown: unknown, current: DocumentOpenFailure | null): boolean {
+  return typeof shown === 'object' && shown !== null && 'reason' in shown && shown !== current;
+}
+
 const selectOpenFailure = (snapshot: EditorSnapshot): DocumentOpenFailure | null =>
   snapshot.openFailure ?? null;
 
@@ -54,8 +62,12 @@ export interface UseOpenFailureReturn {
   readonly failure: ComputedRef<DocumentOpenFailure | null>;
   /** The packaged, translated message for {@link UseOpenFailureReturn.failure}. */
   readonly message: ComputedRef<string | null>;
-  /** Hide this refusal. A later refusal shows again, even for the same file. */
-  dismiss(): void;
+  /**
+   * Hide this refusal. A later refusal shows again, even for the same file. Pass the failure
+   * your UI showed, such as from a toast's close callback, so a late call cannot hide a newer
+   * refusal.
+   */
+  dismiss(failure?: DocumentOpenFailure): void;
 }
 
 /** Options for {@link useOpenFailure}. @public */
@@ -72,7 +84,7 @@ export interface UseOpenFailureOptions {
  * ```ts
  * const { failure, message, dismiss } = useOpenFailure();
  * watch(failure, (next) => {
- *   if (next) toast(message.value, { detail: next.code, onClose: dismiss });
+ *   if (next) toast(message.value, { detail: next.code, onClose: () => dismiss(next) });
  * });
  * ```
  *
@@ -94,8 +106,8 @@ export function useOpenFailure(options: UseOpenFailureOptions = {}): UseOpenFail
   return {
     failure,
     message,
-    dismiss: () => {
-      dismissed.value = current.value;
+    dismiss: (shown?: DocumentOpenFailure) => {
+      if (!isStaleFailure(shown, current.value)) dismissed.value = current.value;
     },
   };
 }
@@ -305,7 +317,7 @@ const DocxEditorOpenFailureImpl = defineComponent({
         failure,
         message,
         dismiss: () => {
-          state.dismiss();
+          state.dismiss(failure);
           emit('dismiss', failure);
         },
       };

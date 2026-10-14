@@ -48,7 +48,10 @@ import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
-import type { DocxEditorOpenFailureProps } from '../editor/DocxEditorOpenFailure';
+import type {
+  DocxEditorOpenFailureContext,
+  DocxEditorOpenFailureProps,
+} from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
@@ -172,7 +175,22 @@ const ScopedChrome = defineComponent({
 
 /** @public */
 export interface DocxEditorNamespace {
-  (props: DocxEditorProps): VNode;
+  /**
+   * The packaged editor. The second parameter types its slots for templates:
+   * `#openFailureActions` receives the refused open, the packaged message, and `dismiss`.
+   */
+  (
+    props: DocxEditorProps,
+    context?: {
+      slots: {
+        default?: () => VNode[];
+        titleBarLeft?: () => VNode[];
+        titleBarRight?: () => VNode[];
+        loadingIndicator?: () => VNode[];
+        openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
+      };
+    }
+  ): VNode;
   readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
   readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
