@@ -122,6 +122,6 @@ Here, `docxBytes` contains the input and `savePdf` is your storage function. Cho
 
 ## Resource boundaries
 
-The writer limits operations to `2000000`, diagnostics to `10000`, and uncompressed content to `67108864` bytes. Core also bounds DOCX parsing, fonts, images, and layout. `maxPages` and `maxOutputBytes` do not impose a process memory limit. They check completed layout and completed encoding, respectively.
+The writer limits diagnostics to `10000`. It limits paint operations to `2000000` or 6,000 for each laid-out page, whichever is greater, up to `40000000`. It limits uncompressed content to `67108864` bytes or 196,608 bytes for each page, whichever is greater, up to `536870912` bytes. Core also bounds DOCX parsing, fonts, images, and layout. `maxPages` and `maxOutputBytes` do not impose a process memory limit. They check completed layout and completed encoding, respectively.
 
 Cancellation checks occur between batches. Synchronous parsing, font work, and image work cannot stop during a call. For hard deadlines, terminate a worker after your deadline. For memory isolation, configure the worker's `resourceLimits.maxOldGenerationSizeMb`. Bound concurrent conversions; each active document retains layout and font data.

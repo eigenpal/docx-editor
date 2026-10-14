@@ -101,6 +101,7 @@ async function renderSession(
   );
   const layoutMs = phase() - openMs;
   if (layout.pages.length > maxPages) throw new PdfPageLimitError(maxPages, layout.pages.length);
+  work.allowPages(layout.pages.length);
   reportFontDiagnostics(session.fontResolution, work);
   const doc = await PDFDocument.create({ updateMetadata: false });
   doc.setProducer('docx-editor.dev');

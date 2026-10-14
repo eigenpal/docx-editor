@@ -11,6 +11,16 @@ import type { PDFContext, PDFPage, PDFRawStream } from 'pdf-lib';
 
 export const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 export const MAX_OPERATIONS = 2_000_000;
+/**
+ * Paint work grows with the page count, so a long document gets a budget per laid-out
+ * page on top of the fixed one. Dense text pages use about 3,300 operations and 90 KB of
+ * uncompressed content; the per-page budgets leave room for twice that. The ceilings
+ * keep the largest allowed export bounded.
+ */
+const OPERATIONS_PER_PAGE = 6_000;
+const CONTENT_BYTES_PER_PAGE = 192 * 1024;
+const MAX_SCALED_OPERATIONS = 40_000_000;
+const MAX_SCALED_CONTENT_BYTES = 8 * MAX_OUTPUT_BYTES;
 export function positiveLimit(value: number, maximum: number, name: string): number {
   if (!Number.isSafeInteger(value) || value <= 0 || value > maximum)
     throw new RangeError(`${name} must be an integer from 1 to ${maximum}`);
@@ -127,6 +137,8 @@ export class Work {
   private readonly seen = new Set<string>();
   private operations = 0;
   private contentBytes = 0;
+  private operationLimit = MAX_OPERATIONS;
+  private contentLimit = MAX_OUTPUT_BYTES;
   constructor(
     readonly signal: AbortSignal,
     readonly deadline = Infinity
@@ -141,13 +153,24 @@ export class Work {
             cause: this.signal.reason,
           });
   }
+  /** Size the paint budgets for a layout with `pages` pages. */
+  allowPages(pages: number): void {
+    this.operationLimit = Math.max(
+      MAX_OPERATIONS,
+      Math.min(MAX_SCALED_OPERATIONS, pages * OPERATIONS_PER_PAGE)
+    );
+    this.contentLimit = Math.max(
+      MAX_OUTPUT_BYTES,
+      Math.min(MAX_SCALED_CONTENT_BYTES, pages * CONTENT_BYTES_PER_PAGE)
+    );
+  }
   reserveContent(bytes: number): void {
     this.contentBytes += bytes;
-    if (this.contentBytes > MAX_OUTPUT_BYTES) throw new PdfWorkLimitError();
+    if (this.contentBytes > this.contentLimit) throw new PdfWorkLimitError();
   }
   tick(): void {
     this.check();
-    if (++this.operations > MAX_OPERATIONS) throw new PdfWorkLimitError();
+    if (++this.operations > this.operationLimit) throw new PdfWorkLimitError();
   }
   async yield(): Promise<void> {
     this.check();
