@@ -850,12 +850,30 @@ export function autofitColumnWidthsPt(
   // the geometry widening can bring.
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
+  const minimumsNow = autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
+  // Deleted content widens a column too: take the larger need of the two readings.
   const markup = view.markupStructure;
-  const measured =
-    markup && markup.columnWidthsPt.length === structure.columnWidthsPt.length ? markup : structure;
-  const measureView: AutofitView =
-    measured === structure ? view : { ...view, displayMode: 'all-markup' };
-  const minimumsNow = autofitColumnMinimumsPt(measured, context, measureView, ifWidened, content);
+  if (markup && markup.columnWidthsPt.length === structure.columnWidthsPt.length) {
+    const markupWidened: number[] = [];
+    const markupContent = emptyColumnContent();
+    const markupView: AutofitView = { ...view, displayMode: 'all-markup' };
+    const markupMinimums = autofitColumnMinimumsPt(
+      markup,
+      context,
+      markupView,
+      markupWidened,
+      markupContent
+    );
+    for (const [column, minimum] of markupMinimums.entries()) {
+      if (!markupContent.measured[column]) continue;
+      minimumsNow[column] = Math.max(minimumsNow[column]!, minimum);
+      ifWidened[column] = Math.max(ifWidened[column]!, markupWidened[column]!);
+      content.maximums[column] = Math.max(
+        content.maximums[column]!,
+        markupContent.maximums[column]!
+      );
+    }
+  }
   // Everything below works on cell widths; a spaced table's gaps come back at the end.
   const cellWidths = spacedCellWidths(structure);
   const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);

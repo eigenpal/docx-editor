@@ -3,4 +3,4 @@
 '@docx-editor.dev/docx-to-pdf': patch
 ---
 
-Justified lines now compress spaces in more cases, a paragraph's space after now fits above the footnote area on its page, and a table row that ends a page now leaves room for its bottom border. PDF export now completes long documents within the page limit and finds installed Garamond fonts.
+Justified lines compress spaces in more cases, paragraphs and table rows above a page end or footnote area keep room for their space after and bottom border, and automatic-width tables keep their outer borders inside the text column and size columns for tracked deleted content. PDF export completes long documents within the page limit and finds installed Garamond fonts.

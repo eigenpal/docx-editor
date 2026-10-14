@@ -157,7 +157,7 @@ test('widening reuses its measured cells when the side-rule decision changes', (
       bidiVisual: false,
       floating: false,
       cellSpacingPt: 0,
-      widthType: 'auto',
+      widthType: 'dxa',
       alignment: 'left',
       layoutFixed: false,
       indentPt: 0,
