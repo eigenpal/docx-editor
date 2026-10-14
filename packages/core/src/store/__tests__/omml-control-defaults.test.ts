@@ -190,3 +190,27 @@ test('replacement writes no control properties when the source has none or non-d
   const bold = `<m:f><m:fPr>${control('<w:b/>')}</m:fPr><m:num>${run('a')}</m:num><m:den>${run('b')}</m:den></m:f>`;
   expect(replace(bold, '{a}/{b}').xml).not.toContain('ctrlPr');
 });
+
+test('keeps the control mark when default controls of one equation differ', () => {
+  const nary = (properties: string) =>
+    `<m:nary><m:naryPr><m:chr m:val="∑"/><m:limLoc m:val="undOvr"/>${control(properties)}` +
+    `</m:naryPr><m:sub/><m:sup/><m:e>${run('c')}</m:e></m:nary>`;
+  const fraction = (properties: string) =>
+    `<m:f><m:fPr>${control(properties)}</m:fPr><m:num>${run('a')}</m:num>` +
+    `<m:den>${run('b')}</m:den></m:f>`;
+  for (const [first, second] of [
+    // One structure sized and one not: a single copy would drop or impose the size.
+    [`${FONT}<w:i/>`, `${FONT}<w:i/><w:sz w:val="40"/><w:szCs w:val="40"/>`],
+    [`${FONT}<w:i/><w:sz w:val="40"/>`, `${FONT}<w:i/>`],
+    ['<w:i/><w:lang w:val="ar-SA"/>', '<w:i/><w:lang w:val="he-IL"/>'],
+  ]) {
+    const equation = equationOf(read(fraction(first!) + nary(second!)));
+    expect(equationDefaultControlProperties(equation, 256, 24)).toEqual({ kind: 'other' });
+    expect(equationExpressionToLinearMath(projectOmmlEquation(equation)!.expression)).toBe('');
+  }
+  // The same properties in another order are the same control.
+  const same = equationOf(
+    read(fraction(`${FONT}<w:i/><w:sz w:val="24"/>`) + nary(`<w:sz w:val="24"/><w:i/>${FONT}`))
+  );
+  expect(equationDefaultControlProperties(same, 256, 24).kind).toBe('default');
+});

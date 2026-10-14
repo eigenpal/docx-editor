@@ -46,16 +46,27 @@ function wordAttributes(
   return true;
 }
 
-/** The half-point size of one default `m:ctrlPr`, or null when it has none. */
-type DefaultControl = { readonly size: string | null } | false;
+/**
+ * One default `m:ctrlPr`, reduced to an order-insensitive signature of its properties and
+ * values. Two controls with the same signature write the same formatting.
+ */
+type DefaultControl = { readonly signature: string } | false;
+
+function propertySignature(property: OoxmlElement): string {
+  const attributes = property.attributes
+    .map((attribute) => `${attribute.localName}=${attribute.value}`)
+    .sort();
+  return `${property.localName}(${attributes.join(',')})`;
+}
 
 function readDefaultControl(node: OoxmlElement): DefaultControl {
   if (node.attributes.length !== 0 || node.children.length > 1) return false;
   const properties = node.children[0];
-  if (!properties) return { size: null };
+  if (!properties) return { signature: '' };
   if (!wordElement(properties, 'rPr') || properties.attributes.length !== 0) return false;
   const seen = new Set<string>();
   const sizes: string[] = [];
+  const signature: string[] = [];
   for (const property of properties.children) {
     if (!wordElement(property) || property.children.length !== 0) return false;
     if (seen.has(property.localName)) return false;
@@ -88,9 +99,10 @@ function readDefaultControl(node: OoxmlElement): DefaultControl {
       default:
         return false;
     }
+    signature.push(propertySignature(property));
   }
   if (sizes.some((size) => size !== sizes[0])) return false;
-  return { size: sizes[0] ?? null };
+  return { signature: signature.sort().join(';') };
 }
 
 /**
@@ -105,9 +117,10 @@ function readDefaultControl(node: OoxmlElement): DefaultControl {
  *   - `w:sz` and `w:szCs`, one positive half-point value shared by both;
  *   - `w:lang` with bounded language tags.
  *
- * The equation-level check, {@link equationDefaultControlProperties}, also requires one size
- * across every `m:ctrlPr` of the equation. Supported equation runs carry no size of their
- * own, so that shared value is the size of the equation's runs.
+ * The equation-level check, {@link equationDefaultControlProperties}, also requires every
+ * `m:ctrlPr` of the equation to hold the same properties and values. Replacement writes one
+ * copy on every structure, so differing controls (one sized and one not, or two languages)
+ * would otherwise lose formatting.
  */
 export function equationControlPropertiesAreDefault(node: OoxmlElement): boolean {
   return readDefaultControl(node) !== false;
@@ -137,7 +150,7 @@ export function equationDefaultControlProperties(
 ): EquationControlDefaults {
   let visited = 0;
   let first: OoxmlGenericElementNode | null = null;
-  let size: string | null = null;
+  let signature: string | null = null;
   const stack: { node: OoxmlNode; depth: number }[] = [{ node: equation, depth: 1 }];
   while (stack.length > 0) {
     const { node, depth } = stack.pop()!;
@@ -147,10 +160,8 @@ export function equationDefaultControlProperties(
     if (node.namespaceUri === MATH && node.localName === 'ctrlPr') {
       const control = readDefaultControl(node);
       if (control === false || node.kind !== 'generic') return OTHER;
-      if (control.size !== null) {
-        if (size !== null && size !== control.size) return OTHER;
-        size = control.size;
-      }
+      if (signature !== null && signature !== control.signature) return OTHER;
+      signature = control.signature;
       first ??= node;
       continue;
     }
