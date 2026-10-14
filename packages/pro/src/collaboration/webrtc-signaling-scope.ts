@@ -12,16 +12,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * with no server at all, still sent its room id and announcements to a server another room
  * chose, and accepted peer offers from it.
  *
- * Each connection already records the providers that listed its URL (`providers`). This guard
- * scopes the traffic to them: subscriptions and publications for any other room are dropped
- * before they are sent, and publications for any other room are ignored when they arrive.
- * It patches the shared `SignalingConn` prototype once, so it also covers connections that
- * existed before the first room, and connections other providers on the page open.
+ * Each connection records the providers that listed its URL (`providers`). This guard scopes
+ * the traffic to them: subscriptions and publications for any other room are dropped before
+ * they are sent, and publications for any other room are ignored when they arrive. It
+ * patches the shared `y-webrtc` prototypes once, so it also covers connections that existed
+ * before the first room, and connections other providers on the page open.
+ *
+ * `y-webrtc` leaves a destroyed provider in `providers`, so a provider's room name alone does
+ * not prove the room is live: the guard records which room currently owns each name, and asks
+ * whether THAT room's provider listed the URL.
  *
  * @internal
  */
 
-import { SignalingConn } from 'y-webrtc';
+import { Room, SignalingConn, WebrtcProvider } from 'y-webrtc';
 
 /** The slice of a signaling message the guard reads. */
 interface SignalingMessage {
@@ -30,17 +34,32 @@ interface SignalingMessage {
   readonly topics?: unknown;
 }
 
-interface ScopedConnection {
-  readonly providers: ReadonlySet<{ readonly roomName: string }>;
+interface ScopedProvider {
+  readonly roomName: string;
+  readonly shouldConnect?: boolean;
 }
 
-type Send = (message: unknown) => void;
-type Emit = (name: string, args: unknown[]) => void;
+interface ScopedConnection {
+  readonly providers: ReadonlySet<ScopedProvider>;
+}
+
+interface ScopedRoom {
+  readonly name: string;
+  readonly provider: ScopedProvider;
+}
+
+type Method = (...args: unknown[]) => unknown;
 
 const INSTALLED = Symbol.for('docx-editor.webrtc-signaling-scope');
 
 /** Topics this connection subscribed to, so an unsubscribe still reaches the server. */
 const subscribedTopics = new WeakMap<object, Set<string>>();
+
+/**
+ * The room that currently owns each name. `y-webrtc` allows one room per name in a page, and
+ * a room registers here when it connects or disconnects, which it does as soon as it opens.
+ */
+const roomOwners = new Map<string, ScopedRoom>();
 
 const subscribedOf = (connection: object): Set<string> => {
   let topics = subscribedTopics.get(connection);
@@ -51,9 +70,25 @@ const subscribedOf = (connection: object): Set<string> => {
   return topics;
 };
 
-/** Whether a provider that listed this connection's URL owns `topic`. */
+/** Record `room` as the owner of its name. @internal */
+export function recordRoomOwner(room: ScopedRoom): void {
+  roomOwners.set(room.name, room);
+}
+
+/** Forget `room` as the owner of its name, unless a newer room took the name. @internal */
+export function forgetRoomOwner(room: ScopedRoom): void {
+  if (roomOwners.get(room.name) === room) roomOwners.delete(room.name);
+}
+
+/** Whether this connection may carry signaling for the room named `topic`. */
 export function connectionCarriesTopic(connection: ScopedConnection, topic: unknown): boolean {
   if (typeof topic !== 'string') return false;
+  const owner = roomOwners.get(topic);
+  if (owner) {
+    // Only a connected room signals; a disconnected one has left every connection.
+    return owner.provider.shouldConnect !== false && connection.providers.has(owner.provider);
+  }
+  // A room that opened before the guard was installed: trust the connection's providers.
   for (const provider of connection.providers) if (provider.roomName === topic) return true;
   return false;
 }
@@ -107,23 +142,83 @@ export function acceptsIncomingSignalingMessage(
   return type !== 'publish' || connectionCarriesTopic(connection, topic);
 }
 
+/** A closed socket loses every subscription on the server, so the record starts over. */
+export function forgetSubscriptions(connection: object): void {
+  subscribedTopics.delete(connection);
+}
+
+const patch = (prototype: object, name: string, wrap: (original: Method) => Method): void => {
+  const target = prototype as Record<string, Method>;
+  target[name] = wrap(target[name]!);
+};
+
 /** Scope every `y-webrtc` signaling connection on the page. Idempotent. */
 export function installSignalingScope(): void {
-  const prototype = SignalingConn.prototype as unknown as {
-    send: Send;
-    emit: Emit;
-    [INSTALLED]?: true;
-  };
-  if (prototype[INSTALLED]) return;
-  const send = prototype.send;
-  const emit = prototype.emit;
-  prototype.send = function scopedSend(this: ScopedConnection, message: unknown): void {
-    const scoped = scopeOutgoingSignalingMessage(this, message);
-    if (scoped !== null) send.call(this, scoped);
-  };
-  prototype.emit = function scopedEmit(this: ScopedConnection, name: string, args: unknown[]) {
-    if (name === 'message' && !acceptsIncomingSignalingMessage(this, args?.[0])) return;
-    emit.call(this, name, args);
-  };
-  prototype[INSTALLED] = true;
+  const marker = SignalingConn.prototype as unknown as { [INSTALLED]?: true };
+  if (marker[INSTALLED]) return;
+  marker[INSTALLED] = true;
+
+  patch(
+    SignalingConn.prototype,
+    'send',
+    (send) =>
+      function scopedSend(this: ScopedConnection, message: unknown) {
+        const scoped = scopeOutgoingSignalingMessage(this, message);
+        if (scoped !== null) send.call(this, scoped);
+      }
+  );
+  patch(
+    SignalingConn.prototype,
+    'emit',
+    (emit) =>
+      function scopedEmit(this: ScopedConnection, name: unknown, args: unknown) {
+        if (name === 'disconnect') forgetSubscriptions(this);
+        const message = Array.isArray(args) ? args[0] : undefined;
+        if (name === 'message' && !acceptsIncomingSignalingMessage(this, message)) return;
+        return emit.call(this, name, args);
+      }
+  );
+
+  patch(
+    Room.prototype,
+    'connect',
+    (connect) =>
+      function ownedConnect(this: ScopedRoom) {
+        recordRoomOwner(this);
+        return connect.call(this);
+      }
+  );
+  patch(
+    Room.prototype,
+    'disconnect',
+    (disconnect) =>
+      function ownedDisconnect(this: ScopedRoom) {
+        recordRoomOwner(this);
+        return disconnect.call(this);
+      }
+  );
+  patch(
+    Room.prototype,
+    'destroy',
+    (destroy) =>
+      function forgottenDestroy(this: ScopedRoom) {
+        const result = destroy.call(this);
+        forgetRoomOwner(this);
+        return result;
+      }
+  );
+
+  // `y-webrtc` deletes each released connection from the page registry by URL. A second
+  // `disconnect()` would delete the connection another provider opened since, under the same
+  // URL. Disconnecting a provider that is not connected does nothing.
+  patch(
+    WebrtcProvider.prototype,
+    'disconnect',
+    (disconnect) =>
+      function idempotentDisconnect(this: { shouldConnect: boolean; signalingConns: unknown[] }) {
+        if (!this.shouldConnect) return;
+        disconnect.call(this);
+        this.signalingConns = [];
+      }
+  );
 }

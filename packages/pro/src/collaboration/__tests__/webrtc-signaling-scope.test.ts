@@ -10,6 +10,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import * as Y from 'yjs';
+import { WebrtcProvider } from 'y-webrtc';
 import {
   createCollaborationRoomId,
   createWebrtcCollaboration,
@@ -17,6 +19,7 @@ import {
 } from '../webrtc.ts';
 import {
   acceptsIncomingSignalingMessage,
+  forgetSubscriptions,
   scopeOutgoingSignalingMessage,
 } from '../webrtc-signaling-scope.ts';
 
@@ -73,9 +76,12 @@ afterEach(() => {
 
 const settle = () => new Promise((done) => setTimeout(done, 0));
 
-async function openRoom(signaling: readonly string[]): Promise<WebrtcCollaborationHandle> {
+async function openRoom(
+  signaling: readonly string[],
+  roomId = createCollaborationRoomId()
+): Promise<WebrtcCollaborationHandle> {
   const handle = await createWebrtcCollaboration({
-    roomId: createCollaborationRoomId(),
+    roomId,
     identity: { actorId: `actor-${handles.length}`, name: 'Alex' },
     bootstrap: { kind: 'create', document: SAMPLE },
     signaling,
@@ -166,6 +172,63 @@ describe('signaling stays with the rooms that chose it', () => {
 });
 
 describe('signaling connection lifetime', () => {
+  test('a destroyed provider does not vouch for a new room with the same name', async () => {
+    const roomId = createCollaborationRoomId();
+    // Another provider on the page used the demo server for this room, then went away.
+    // `destroy()` leaves it registered on the shared connection under the room name.
+    const keeper = await openRoom(['wss://demo.example']);
+    const foreignDoc = new Y.Doc();
+    const foreign = new WebrtcProvider(roomId, foreignDoc, { signaling: ['wss://demo.example'] });
+    await settle();
+    const [socket] = openSockets('wss://demo.example');
+    socket!.open();
+    foreign.destroy();
+    foreignDoc.destroy();
+    await settle();
+    const sentBefore = socket!.sent.length;
+
+    await openRoom([], roomId);
+    socket!.close();
+    await settle();
+    const [reopened] = openSockets('wss://demo.example');
+    reopened!.open();
+    const later = [...socket!.sent.slice(sentBefore), ...reopened!.sent];
+    const named = later.flatMap((frame) => [frame.topic, ...(frame.topics ?? [])]);
+    expect(named).not.toContain(roomId);
+    expect(named).toContain(roomIdOf(keeper));
+    // Release the shared connection the destroyed provider still holds, for the next test.
+    foreign.disconnect();
+  });
+
+  test('a second disconnect leaves the next room’s connection alone', async () => {
+    const first = await openRoom(['wss://demo.example']);
+    first.provider.disconnect();
+    const second = await openRoom(['wss://demo.example']);
+    // Destroying the first room disconnects its provider again.
+    first.destroy();
+    const third = await openRoom(['wss://demo.example']);
+    const sockets = openSockets('wss://demo.example');
+    expect(sockets).toHaveLength(1);
+    sockets[0]!.open();
+    expect(topicsSeenBy('wss://demo.example')).toEqual(
+      new Set([roomIdOf(second), roomIdOf(third)])
+    );
+  });
+
+  test('a host can disconnect and reconnect a room', async () => {
+    const room = await openRoom(['wss://demo.example']);
+    room.provider.disconnect();
+    room.provider.disconnect();
+    room.provider.connect();
+    const sockets = openSockets('wss://demo.example');
+    expect(sockets).toHaveLength(1);
+    sockets[0]!.open();
+    const subscribed = sockets[0]!.sent
+      .filter((frame) => frame.type === 'subscribe')
+      .flatMap((frame) => frame.topics ?? []);
+    expect(subscribed).toEqual([roomIdOf(room)]);
+  });
+
   test('closing the last room on a server closes its signaling socket', async () => {
     const first = await openRoom(['wss://demo.example']);
     const second = await openRoom(['wss://demo.example']);
@@ -208,6 +271,15 @@ describe('signaling scope rules', () => {
     const ping = { type: 'ping' };
     expect(scopeOutgoingSignalingMessage(connection, ping)).toBe(ping);
     expect(acceptsIncomingSignalingMessage(connection, { type: 'pong' })).toBe(true);
+  });
+
+  test('a closed socket forgets its subscriptions', () => {
+    const fresh = { providers: new Set([{ roomName: 'mine' }]) };
+    scopeOutgoingSignalingMessage(fresh, { type: 'subscribe', topics: ['mine'] });
+    forgetSubscriptions(fresh);
+    expect(scopeOutgoingSignalingMessage(fresh, { type: 'unsubscribe', topics: ['mine'] })).toBe(
+      null
+    );
   });
 
   test('an unsubscribe names only topics the connection subscribed', () => {
