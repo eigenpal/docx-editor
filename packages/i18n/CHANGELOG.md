@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.30.0
+
+### Minor Changes
+
+- 5a463b5: Add Russian (ru) translations through the `ru` export and the `@docx-editor.dev/i18n/ru` subpath.
+
 ## 2.29.0
 
 ## 2.28.0
