@@ -39,7 +39,8 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
 
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
-    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} \u2007\u202f]*$/u.test(span.text)) ||
+    (!span.style.shaping &&
+      !/^[\p{Script=Latin}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f]*$/u.test(span.text)) ||
     span.lineEndWhitespace ||
     !SPACED_SPAN.test(span.text) ||
     span.equation
