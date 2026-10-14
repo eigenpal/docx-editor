@@ -113,8 +113,8 @@ import {
   pageSetupEqual,
   selectionsMatch,
   snapshotsEqual,
-  unloadableSourceReason,
 } from './docx-editor-support.ts';
+import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
 import { EditorHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
@@ -201,7 +201,7 @@ import {
   type PaginatedSurfaceOptions,
   type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
-import { surfaceScroller } from './surface-pages.ts';
+import { scrollToDocumentStart } from './surface-pages.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
   type CommandRefusal,
@@ -381,7 +381,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // Host chrome registered before attach, re-applied to every rebuilt surface (see mount).
   let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
   const openingIndicator = preparedOpen.openingIndicatorChrome(() => surface);
-  let parseError: string | null = null;
+  const openFailure = createDocumentOpenFailureState(() => {
+    bump();
+    emitSelectionChange();
+  });
   let unsubscribeSession: Unsubscribe | null = null;
   // What the last emitted tick reported, so a publish that moved nothing observable stays
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
@@ -529,7 +532,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   const events = createEditorEvents(snapshotNow);
   const { emitError, emitDocumentChange, emitSelectionChange } = events;
-  const diagnostics = createEditorDiagnostics({ modules, events, customNodes: reportDiagnostic });
+  const diagnostics = createEditorDiagnostics({
+    modules,
+    events,
+    customNodes: reportDiagnostic,
+    // A thrown open, at mount or in a later layout slice, is a refusal the reader sees.
+    onOpenCrash: openFailure.crash,
+  });
   const suggesting = () => editingMode === 'suggesting';
 
   const revisionMarkupState = createRevisionMarkupState(config.revisionMarkup, {
@@ -605,7 +614,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // not THESE bytes' state — `attach` re-derives any real error.
       pendingBytes = bytes;
       if (initialTextFormInput) pendingTextFormInputs.set(bytes, initialTextFormInput);
-      parseError = null;
+      openFailure.clear();
       diagnostics.openDeferred();
       bump();
       return;
@@ -696,7 +705,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       },
     } as PaginatedSurfaceOptions & { readonly onTrackedChange?: () => void });
     if (!result.ok) {
-      parseError = result.detail ? `${result.reason}: ${result.detail}` : result.reason;
+      openFailure.reject(result.reason, result.limit, result.detail);
       // Failure is observable state too: `snapshot().parseError` moved.
       bump();
       // The message names the reason only: `detail` can quote the file, and hosts log errors.
@@ -704,7 +713,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       diagnostics.openRejected(result.reason, result.limit, result.detail);
       return;
     }
-    parseError = null;
+    openFailure.clear();
     surface = result.surface;
     mountedSeq = loadSeq;
     // A refresh or recovery mounts different content: node ids no longer name the same text.
@@ -781,6 +790,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function loadBytes(bytes: Uint8Array, immediate = false): void {
     // Keep the live font resources intact until a deferred refresh actually mounts.
     openScheduler.cancel();
+    openFailure.clear();
     preparedFontSession = null;
     deferredRefreshBytes = null;
     if (refreshHost?.source && !immediate && container && openScheduler.shouldYield(bytes)) {
@@ -810,19 +820,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // guard will refuse to touch state, so the flag must reset here or a load that
     // starts no font work of its own reports `resolving: true` forever.
     fontsResolving = false;
-    // A NEW document opens at its first page. The scroller is the host's element and
-    // survives the remount, so the previous document's scroll offset would otherwise
-    // carry over — a reader ten pages into one file opened the next file ten pages in.
     // BEFORE the mount, so the initial paint materializes the pages actually in view.
     // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
     // function for the SAME document and must keep the reader's place.
-    if (container && !refreshHost?.source) {
-      const scroller = surfaceScroller(container);
-      if (scroller) {
-        scroller.scrollTop = 0;
-        scroller.scrollLeft = 0;
-      }
-    }
+    if (container && !refreshHost?.source) scrollToDocumentStart(container);
     // A big live open yields a frame first and drops the old document now: no stale chrome.
     if (!immediate && container && openScheduler.shouldYield(bytes)) {
       teardownSurface();
@@ -1086,9 +1087,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
         // still name a locally installed browser face (Helvetica is the common macOS case):
         // paint resolves that face through CSS, so falling back to the deterministic monospace
-        // grid here makes every later caret drift farther from the glyphs. Resolve the fallback
-        // through the same browser canvas + alias stack the unshaped surface uses. Headless
-        // environments still receive the fixed measurer from this resolver.
+        // grid here makes caret geometry drift. Use the same browser canvas and alias stack;
+        // headless environments still receive the fixed measurer from this resolver.
         const fallbackResolution = resolveDefaultSurfaceMeasurer(scaleOf(), {
           context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
           ...(embeddedFaces ? { fontAlias: embeddedFaces.alias } : {}),
@@ -1098,7 +1098,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           fonts,
           fallbackResolution,
           scaleOf(),
-          ++fontMeasurementEpoch
+          ++fontMeasurementEpoch,
+          (error) => !destroyed && seq === loadSeq && reportFontError(error)
         );
         shapedMeasurer = measurement.measurer;
         shapedProducer = measurement.producer;
@@ -1165,14 +1166,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A scheduled open counts as "bytes handed over" too, or a host gating its mount
       // point on this flag would unmount the container the scheduled mount needs.
       isLoading:
-        parseError === null &&
+        openFailure.parseError === null &&
         surface === null &&
         pendingBytes === null &&
         !openScheduler.isScheduled(),
       // A supplied document on its way to painted pages. OVERLAY state only — gate
       // chrome on it, never the mount point; `isLoading` remains the gate-safe flag.
       isOpening: openScheduler.isScheduled() && !refreshHost?.source,
-      parseError,
+      parseError: openFailure.parseError,
+      openFailure: openFailure.failure,
       // The LIVE mode, not only the construction-time one: hosts gate their chrome on this,
       // and it read `true` while every command was being refused with `locked`.
       editable:
@@ -1301,8 +1303,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const bytes = normalizeSource(config.document);
     if (bytes) loadBytes(bytes);
     else {
-      parseError = unloadableSourceReason(config.document);
-      emitError(editorError('unsupported', parseError));
+      emitError(editorError('unsupported', openFailure.refuseSource(config.document)));
       diagnostics.openRejected('unsupported');
     }
   }
@@ -1849,10 +1850,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     load(document) {
       const bytes = normalizeSource(document);
       if (!bytes) {
-        // A handle is identity, not content — there are no bytes to reopen, and an
-        // unrecognized string is a typo. The current document (if any) stays mounted
-        // rather than being torn down for nothing.
-        emitError(editorError('unsupported', unloadableSourceReason(document)));
+        // A handle is identity, not content, and an unrecognized string is a typo. A mounted
+        // document stays; with none, the refusal is what the reader sees.
+        const mounted = surface !== null || pendingBytes !== null || openScheduler.isScheduled();
+        emitError(editorError('unsupported', openFailure.refuseSource(document, mounted)));
         diagnostics.openRejected('unsupported');
         return;
       }

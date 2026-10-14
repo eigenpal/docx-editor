@@ -59,6 +59,9 @@ export function paintVectorShape(
     const stateName = `ShapeAlpha${state.objectNumber}`;
     page.node.setExtGState(PDFName.of(stateName), state);
     out.push(`q /${stateName} gs`);
+    const cap = component.strokeCap === 'round' ? 1 : component.strokeCap === 'square' ? 2 : 0;
+    const join = component.strokeJoin === 'round' ? 1 : component.strokeJoin === 'bevel' ? 2 : 0;
+    out.push(`${cap} J ${join} j`);
     const inset = component.strokeInset === true && component.strokeHex !== null;
     // An inset outline strokes at twice its width, clipped to the closed path, so the
     // authored width stays inside the shape.

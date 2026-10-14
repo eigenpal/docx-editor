@@ -535,6 +535,19 @@ function EditorChrome({
       {/* Word-style compatibility bar when document fonts render in substitutes. */}
       <DocxEditor.FontNotice />
 
+      {/* Explains a file that did not open, with an action to try another one. */}
+      <DocxEditor.OpenFailure
+        actions={() => (
+          <DocxEditor.OpenFailure.Action
+            variant="primary"
+            dismiss
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Open another file
+          </DocxEditor.OpenFailure.Action>
+        )}
+      />
+
       {/* File > Page setup: the library dialog, applied as one undo step. */}
       <DocxEditor.PageSetupDialog open={showPageSetup} onClose={() => setShowPageSetup(false)} />
     </div>

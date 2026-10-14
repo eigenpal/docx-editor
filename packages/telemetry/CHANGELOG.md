@@ -1,5 +1,13 @@
 # @docx-editor.dev/telemetry
 
+## 2.30.0
+
+### Patch Changes
+
+- 5a9bc6a: Log records from `toLogRecord` carry `occurrences` and `failures` counts, and `failureCount` totals failures including deduplication summaries. Events with numbers the editor cannot produce are dropped.
+- b0abf51: Editors report session starts and ends, active editing time, committed edits by origin, and each `save()` call, and telemetry records them as events and metrics for session counts, edit failure rates, and save success rates.
+- Updated dependencies: @docx-editor.dev/core@2.30.0, @docx-editor.dev/pro@2.30.0
+
 ## 2.29.0
 
 ### Minor Changes

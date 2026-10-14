@@ -51,7 +51,14 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
   useLayoutEffect(() => {
     const el = elementRef.current;
     if (!editor || !el) return undefined;
-    editor.attach(el);
+    try {
+      editor.attach(el);
+    } catch (error) {
+      // A crashed open is already a refusal on the snapshot, which `DocxEditor.OpenFailure`
+      // shows. Rethrowing here would unmount the editor, and the dialog with it.
+      if (editor.snapshot().openFailure?.code !== 'open.failed') throw error;
+      console.error('[docx-editor] The document failed to open.', error);
+    }
     return () => {
       // No-op when the Root already destroyed the instance (unmount ordering runs this
       // first, but a document-identity remount can interleave).

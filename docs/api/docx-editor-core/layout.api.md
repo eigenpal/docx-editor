@@ -4678,9 +4678,12 @@ export interface VectorShapeComponent {
     readonly fillHex: string | null;
     // (undocumented)
     readonly strokeAlpha: number;
+    readonly strokeCap?: 'butt' | 'round' | 'square';
     // (undocumented)
     readonly strokeHex: string | null;
     readonly strokeInset?: boolean;
+    // (undocumented)
+    readonly strokeJoin?: 'round' | 'bevel';
     // (undocumented)
     readonly strokeWidthEmu: number;
     readonly subpathsClosed?: readonly boolean[];

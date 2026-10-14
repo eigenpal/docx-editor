@@ -161,6 +161,8 @@ interface Opening {
 
 export interface EditorDiagnosticsOptions {
   readonly modules: EditorModuleRegistry;
+  /** Called once when an open throws, after its `open.failed` diagnostic. */
+  readonly onOpenCrash?: () => void;
   /** The instance's event bus: diagnostics go out on it, history diagnostics come in on it. */
   readonly events: {
     readonly emitDiagnostic: (event: EditorDiagnostic) => void;
@@ -397,6 +399,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         errorName: diagnosticErrorName(error),
         stage,
       });
+      options.onOpenCrash?.();
     },
     /** Run a later slice of a progressive open; an exception in it fails the open, then rethrows. */
     continueOpen<T>(run: () => T): T {

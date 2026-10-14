@@ -46,7 +46,15 @@ export const DocxEditorContent = defineComponent({
     const attach = () => {
       const editor = editorRef.value;
       const el = elementRef.value;
-      if (editor && el) editor.attach(el);
+      if (!editor || !el) return;
+      try {
+        editor.attach(el);
+      } catch (error) {
+        // A crashed open is already a refusal on the snapshot, which `DocxEditorOpenFailure`
+        // shows. Rethrowing here would break the editor tree, and the dialog with it.
+        if (editor.snapshot().openFailure?.code !== 'open.failed') throw error;
+        console.error('[docx-editor] The document failed to open.', error);
+      }
     };
     const detach = () => editorRef.value?.detach();
 

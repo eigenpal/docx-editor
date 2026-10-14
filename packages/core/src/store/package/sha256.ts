@@ -28,25 +28,31 @@ const rotateRight = (value: number, count: number): number =>
 
 /** Pure-JavaScript SHA-256, the reference every runtime agrees with. Exported for tests. */
 export const sha256FontBytesPure = (bytes: Uint8Array): string => {
-  const paddedLength = Math.ceil((bytes.byteLength + 9) / 64) * 64;
-  const padded = new Uint8Array(paddedLength);
-  padded.set(bytes);
-  padded[bytes.byteLength] = 0x80;
+  // Hash complete blocks from the caller's view; only the padding tail is copied.
+  const fullLength = Math.floor(bytes.byteLength / 64) * 64;
+  const remainingLength = bytes.byteLength - fullLength;
+  const tail = new Uint8Array(remainingLength < 56 ? 64 : 128);
+  for (let index = 0; index < remainingLength; index += 1) {
+    tail[index] = bytes[fullLength + index]!;
+  }
+  tail[remainingLength] = 0x80;
   const bitLength = BigInt(bytes.byteLength) * 8n;
   for (let index = 0; index < 8; index += 1) {
-    padded[paddedLength - 1 - index] = Number((bitLength >> BigInt(index * 8)) & 0xffn);
+    tail[tail.byteLength - 1 - index] = Number((bitLength >> BigInt(index * 8)) & 0xffn);
   }
 
   const hash = SHA256_INITIAL.slice();
   const words = new Uint32Array(64);
-  for (let offset = 0; offset < padded.length; offset += 64) {
+  for (let offset = 0; offset < fullLength + tail.byteLength; offset += 64) {
+    const block = offset < fullLength ? bytes : tail;
+    const blockOffset = offset < fullLength ? offset : offset - fullLength;
     for (let index = 0; index < 16; index += 1) {
-      const start = offset + index * 4;
+      const start = blockOffset + index * 4;
       words[index] =
-        ((padded[start]! << 24) |
-          (padded[start + 1]! << 16) |
-          (padded[start + 2]! << 8) |
-          padded[start + 3]!) >>>
+        ((block[start]! << 24) |
+          (block[start + 1]! << 16) |
+          (block[start + 2]! << 8) |
+          block[start + 3]!) >>>
         0;
     }
     for (let index = 16; index < 64; index += 1) {

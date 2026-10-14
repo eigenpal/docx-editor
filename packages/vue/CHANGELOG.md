@@ -1,5 +1,15 @@
 # @docx-editor.dev/vue
 
+## 2.30.0
+
+### Minor Changes
+
+- f09b44b: Add the `fontShaping` option, which sets the largest font file that text shaping accepts, separately from font loading limits.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.30.0, @docx-editor.dev/i18n@2.30.0
+
 ## 2.29.0
 
 ### Patch Changes

@@ -79,6 +79,9 @@ export interface VectorShapeComponent {
   readonly strokeHex: string | null;
   readonly strokeAlpha: number;
   readonly strokeWidthEmu: number;
+  /** Authored line ends and joins, inherited from the selected theme line when absent. */
+  readonly strokeCap?: 'butt' | 'round' | 'square';
+  readonly strokeJoin?: 'round' | 'bevel';
   /**
    * The outline sits inside the closed geometry (`a:ln algn="in"`): painters draw it at twice
    * its width clipped to the path, so the authored width stays inside the shape and adds no
@@ -591,6 +594,8 @@ function projectWspComponent(
     strokeHex: stroke?.hex ?? null,
     strokeAlpha: stroke?.alpha ?? 1,
     strokeWidthEmu,
+    ...(line?.cap ? { strokeCap: line.cap } : {}),
+    ...(line?.join ? { strokeJoin: line.join } : {}),
     // Only a closed outline with area can sit inside its geometry: a line, or a closed path
     // collapsed onto a line, stays centred, or the clip to its own path would remove it.
     ...(line?.alignment === 'in' && subpathsClosed.every(Boolean) && polygons.every(enclosesArea)

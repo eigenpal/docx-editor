@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Pure SHA-256 copied the complete caller view into a padded buffer.",
+  "after": "Pure SHA-256 reads complete blocks from the original view and copies only a bounded padding tail.",
+  "reason": "Digest bytes and shared canonical fingerprints are unchanged. This allocation change does not alter replication operations, model offsets, awareness, or selection mapping.",
+  "tests": [
+    "packages/core/src/store/__tests__/sha256.test.ts",
+    "packages/core/src/store/__tests__/sha256-memory.test.ts"
+  ],
+  "changeset": "sha256-constant-space",
+  "migration": null
+}

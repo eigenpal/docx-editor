@@ -34,6 +34,7 @@ import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
+import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
@@ -225,6 +226,12 @@ function DocxEditorRefBridge({ forwardedRef }: { forwardedRef: React.Ref<DocxEdi
   return null;
 }
 
+/** Joins class names, dropping empty ones; `undefined` when none remain. */
+function joinClassNames(...names: (string | undefined)[]): string | undefined {
+  const joined = names.filter(Boolean).join(' ');
+  return joined === '' ? undefined : joined;
+}
+
 /**
  * The frame itself. Separated from the exported component only so the `i18n` prop can
  * publish its catalogue ABOVE this body: `useTranslation()` below reads the context its
@@ -243,6 +250,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       onTitleChange,
       renderTitleBarLeft,
       renderTitleBarRight,
+      renderOpenFailureActions,
       loadingIndicator,
       colorMode = 'light',
       author,
@@ -269,9 +277,11 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       contextMenu = true,
       menu = true,
       navigation = true,
+      openFailure = true,
       rulers = true,
     } = props;
     if (!chrome && loadingIndicator !== undefined) warnLoadingIndicatorWithoutChrome();
+    warnOpenFailureActions(openFailure, renderOpenFailureActions !== undefined);
 
     // Chrome colour mode: 'system' subscribes to the OS setting. Only the chrome
     // root's `.dark` class moves — the
@@ -456,6 +466,19 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {/* Only the chrome branch renders a wrapper carrying `.docx-editor`.
           With `chrome={false}` there is none, so the parts must self-scope. */}
         <ScopedByAncestorContext.Provider value={chrome}>{tree}</ScopedByAncestorContext.Provider>
+        {/* A modal, so it shows with or without chrome: a refused open leaves blank pages. */}
+        {openFailure === false ? null : (
+          <DocxEditorOpenFailure
+            t={translate}
+            {...(typeof openFailure === 'object' ? openFailure : {})}
+            {...(renderOpenFailureActions ? { actions: renderOpenFailureActions } : {})}
+            // Outside the chrome wrapper, so the dialog carries the colour mode itself.
+            className={joinClassNames(
+              isDark ? 'dark' : undefined,
+              typeof openFailure === 'object' ? openFailure.className : undefined
+            )}
+          />
+        )}
       </DocxEditorRoot>
     );
   }
@@ -527,6 +550,11 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly PageNumber: typeof DocxEditorPageNumber;
   /** Word-style notice when document fonts render in substitute faces. */
   readonly FontNotice: typeof DocxEditorFontNotice;
+  /**
+   * The dialog that explains a file the editor refused to open. Mounted by default;
+   * `openFailure={false}` removes it.
+   */
+  readonly OpenFailure: typeof DocxEditorOpenFailure;
   /** Header/footer scope chrome while editing page furniture. */
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
@@ -581,6 +609,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
+  OpenFailure: DocxEditorOpenFailure,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   Equation: DocxEditorEquation,

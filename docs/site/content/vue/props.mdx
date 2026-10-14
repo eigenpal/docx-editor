@@ -85,6 +85,7 @@ These props control the packaged frame:
 | `chrome` | `boolean` | Toggles the packaged frame. |
 | `menu` | `boolean \| DocxEditorMenuProps` | Toggles or configures the menu bar. |
 | `navigation` | `boolean \| DocxEditorNavigationProps` | Toggles or configures the navigation pane. |
+| `openFailure` | `boolean \| DocxEditorOpenFailureProps` | Shows, hides, or configures the dialog for a file that does not open. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures). |
 | `rulers` | `boolean` | Toggles both packaged rulers. |
 | `hyperlinkPopup` | `boolean` | Toggles the hyperlink popover. |
 | `contextMenu` | `boolean \| DocxEditorContextMenuProps` | Toggles or configures the context menu. |
@@ -189,6 +190,8 @@ Use `title` and the two named slots to customize the title bar.
 ```
 
 The title becomes editable when you listen for `@title-change`.
+
+Use the `#openFailureActions` slot to add your own buttons to the dialog for a file that does not open. The slot receives `{ failure, message, dismiss }`. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures).
 
 Use the `#loadingIndicator` slot to replace the packaged loading spinner. It shows on the loading page and on the first page while a large document opens. For more information, see [Show your own loading indicator](/docs/2.x/guides/loading-and-saving#show-your-own-loading-indicator).
 

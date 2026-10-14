@@ -185,6 +185,19 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
       let step: PrepareStep | null = hooks.prepare ? () => hooks.prepare!(bytes) : null;
       let cancelled = false;
       let mounted = false;
+      // A throw ends the open: it is no longer scheduled, so `isOpening` clears beside the
+      // refusal the facade publishes, rather than a spinner running forever behind it.
+      const endOnThrow = <T>(work: () => T): T => {
+        try {
+          return work();
+        } catch (error) {
+          if (scheduled === entry) {
+            scheduled = null;
+            hooks.scheduled();
+          }
+          throw error;
+        }
+      };
       const run = () => {
         if (cancelled) return;
         if (step) {
@@ -219,10 +232,10 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
           return;
         }
         mounted = true;
-        hooks.mount(bytes);
+        endOnThrow(() => hooks.mount(bytes));
         const slice = () => {
           if (cancelled || scheduled !== entry) return;
-          if (hooks.continueOpen && !hooks.continueOpen(OPEN_SLICE_MS)) {
+          if (hooks.continueOpen && !endOnThrow(() => hooks.continueOpen!(OPEN_SLICE_MS))) {
             queueTask(slice);
             return;
           }
@@ -262,8 +275,14 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
       if (!entry) return;
       const alreadyMounted = entry.mounted();
       cancel();
-      if (!alreadyMounted) hooks.mount(entry.bytes);
-      if (hooks.continueOpen) while (!hooks.continueOpen(Number.POSITIVE_INFINITY));
+      try {
+        if (!alreadyMounted) hooks.mount(entry.bytes);
+        if (hooks.continueOpen) while (!hooks.continueOpen(Number.POSITIVE_INFINITY));
+      } catch (error) {
+        // `isOpening` already cleared above; publish it beside the refusal, then rethrow.
+        hooks.scheduled();
+        throw error;
+      }
       if (alreadyMounted) hooks.scheduled();
     },
 

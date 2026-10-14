@@ -90,6 +90,8 @@ export function vectorShapeFrame(
     if (component.strokeHex !== null) {
       path.setAttribute('stroke', `#${component.strokeHex}`);
       path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
+      if (component.strokeCap) path.setAttribute('stroke-linecap', component.strokeCap);
+      if (component.strokeJoin) path.setAttribute('stroke-linejoin', component.strokeJoin);
       if (component.strokeInset) {
         applyInsetStroke(document, svg, path, d, finite(component.strokeWidthEmu));
       }

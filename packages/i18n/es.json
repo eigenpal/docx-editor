@@ -797,6 +797,17 @@
   "loading": {
     "label": "Cargando"
   },
+  "openFailure": {
+    "title": "No se pudo abrir este archivo",
+    "reasons": {
+      "damaged": "No se pudo leer el archivo. Puede estar dañado o ser de otro tipo. Ábrelo en un procesador de textos de escritorio, guárdalo como .docx y vuelve a intentarlo.",
+      "notDocx": "Este archivo no es un documento .docx. Elige un archivo .docx, o guarda este archivo como .docx en un procesador de textos de escritorio y vuelve a intentarlo.",
+      "tooLarge": "Este archivo es demasiado grande o complejo para abrirlo aquí. Prueba con una copia más pequeña, por ejemplo con menos páginas o imágenes.",
+      "blocked": "Este archivo tiene contenido que el editor no abre por motivos de seguridad. Guárdalo de nuevo como .docx en un procesador de textos de escritorio y vuelve a intentarlo.",
+      "unknown": "Algo salió mal al abrir este archivo. Vuelve a intentarlo. Si el problema continúa, prueba con otra copia del archivo."
+    },
+    "code": "Código de error: {code}"
+  },
   "notes": {
     "delete": "Eliminar nota",
     "convertToEndnote": "Convertir en nota al final",

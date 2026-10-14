@@ -1,4 +1,4 @@
-// Outline width and alignment of a `wps:wsp`, inherited attribute by attribute.
+// Outline attributes of a `wps:wsp`, inherited attribute by attribute.
 import { findDirectChild, parseEmu } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue, WPS_NAMESPACE_URI } from './ooxml-drawing-rules.ts';
@@ -18,11 +18,21 @@ export function readLineProperties(
   ln: OoxmlElement | null,
   resolveStyleMatrixReference?: ShapeStyleMatrixResolver,
   resolvedThemeLine?: OoxmlElement
-): { readonly widthEmu: number; readonly alignment: string | undefined } {
+): {
+  readonly widthEmu: number;
+  readonly alignment: string | undefined;
+  readonly cap: 'butt' | 'round' | 'square' | undefined;
+  readonly join: 'round' | 'bevel' | undefined;
+} {
   const directWidth = ln ? parseEmu(schemaAttributeValue(ln.attributes, 'w')) : null;
   const directAlignment = ln ? schemaAttributeValue(ln.attributes, 'algn') : undefined;
+  const directCap = ln ? schemaAttributeValue(ln.attributes, 'cap') : undefined;
+  const directJoin = lineJoin(ln);
   const theme =
-    directWidth === null || directAlignment === undefined
+    directWidth === null ||
+    directAlignment === undefined ||
+    directCap === undefined ||
+    directJoin === undefined
       ? isThemeLine(resolvedThemeLine)
         ? resolvedThemeLine
         : themeLine(wsp, resolveStyleMatrixReference)
@@ -34,7 +44,33 @@ export function readLineProperties(
       DEFAULT_LINE_WIDTH_EMU,
     alignment:
       directAlignment ?? (theme ? schemaAttributeValue(theme.attributes, 'algn') : undefined),
+    cap: lineCap(directCap ?? (theme ? schemaAttributeValue(theme.attributes, 'cap') : undefined)),
+    join: supportedJoin(directJoin ?? lineJoin(theme)),
   };
+}
+
+function lineCap(value: string | undefined): 'butt' | 'round' | 'square' | undefined {
+  if (value === 'flat') return 'butt';
+  if (value === 'rnd') return 'round';
+  if (value === 'sq') return 'square';
+  return undefined;
+}
+
+function lineJoin(line: OoxmlElement | null): string | undefined {
+  if (!line) return undefined;
+  const joins = line.children.filter(
+    (node) =>
+      isElement(node) &&
+      node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
+      ['round', 'bevel', 'miter'].includes(node.localName)
+  );
+  // An explicit unsupported or ambiguous join must not inherit a different theme join.
+  if (joins.length > 1) return 'unsupported';
+  return joins.length === 1 && isElement(joins[0]!) ? joins[0]!.localName : undefined;
+}
+
+function supportedJoin(value: string | undefined): 'round' | 'bevel' | undefined {
+  return value === 'round' || value === 'bevel' ? value : undefined;
 }
 
 /**

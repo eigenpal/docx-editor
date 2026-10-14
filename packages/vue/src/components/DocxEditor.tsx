@@ -47,6 +47,11 @@ import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
+import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
+import type {
+  DocxEditorOpenFailureContext,
+  DocxEditorOpenFailureProps,
+} from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
@@ -170,7 +175,22 @@ const ScopedChrome = defineComponent({
 
 /** @public */
 export interface DocxEditorNamespace {
-  (props: DocxEditorProps): VNode;
+  /**
+   * The packaged editor. The second parameter types its slots for templates:
+   * `#openFailureActions` receives the refused open, the packaged message, and `dismiss`.
+   */
+  (
+    props: DocxEditorProps,
+    context?: {
+      slots: {
+        default?: () => VNode[];
+        titleBarLeft?: () => VNode[];
+        titleBarRight?: () => VNode[];
+        loadingIndicator?: () => VNode[];
+        openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
+      };
+    }
+  ): VNode;
   readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
   readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
@@ -198,6 +218,8 @@ export interface DocxEditorNamespace {
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
+  /** The dialog that explains a file the editor refused to open. Mounted by default. */
+  readonly OpenFailure: typeof DocxEditorOpenFailure;
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
   readonly NotesChrome: typeof DocxEditorNotesChrome;
   /** The default linear-math popover for a clicked Office Math equation. */
@@ -238,6 +260,10 @@ const docxEditorFrameProps = {
   },
   navigation: {
     type: [Boolean, Object] as PropType<boolean | DocxEditorNavigationProps>,
+    default: undefined,
+  },
+  openFailure: {
+    type: [Boolean, Object] as PropType<boolean | DocxEditorOpenFailureProps>,
     default: undefined,
   },
   rulers: { type: Boolean, default: undefined },
@@ -308,6 +334,7 @@ const DocxEditorFrame = defineComponent({
     const chrome = computed(() => props.chrome ?? true);
     const menu = computed(() => props.menu ?? true);
     const navigation = computed(() => props.navigation ?? true);
+    const openFailure = computed(() => props.openFailure ?? true);
     const rulers = computed(() => props.rulers ?? true);
     const contextMenu = computed(() => props.contextMenu ?? true);
     const hyperlinkPopup = computed(() => props.hyperlinkPopup ?? true);
@@ -379,6 +406,7 @@ const DocxEditorFrame = defineComponent({
 
     return () => {
       if (!chrome.value && slots.loadingIndicator) warnLoadingIndicatorWithoutChrome();
+      warnOpenFailureActions(openFailure.value, slots.openFailureActions !== undefined);
       const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;
@@ -506,6 +534,27 @@ const DocxEditorFrame = defineComponent({
           default: () => [
             h(RefBridge),
             h(ScopedChrome, { scoped: chrome.value }, { default: () => tree }),
+            // A modal, so it shows with or without chrome: a refused open leaves blank pages.
+            openFailure.value === false
+              ? null
+              : h(
+                  DocxEditorOpenFailure,
+                  {
+                    t,
+                    ...(typeof openFailure.value === 'object' ? openFailure.value : {}),
+                    // Outside the chrome wrapper, so the dialog carries the colour mode itself.
+                    className:
+                      [
+                        isDark.value ? 'dark' : undefined,
+                        typeof openFailure.value === 'object'
+                          ? openFailure.value.className
+                          : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined,
+                  },
+                  slots.openFailureActions ? { actions: slots.openFailureActions } : undefined
+                ),
           ],
         }
       );
@@ -602,6 +651,7 @@ const DocxEditorImpl = defineComponent({
               titleBarLeft: slots.titleBarLeft,
               titleBarRight: slots.titleBarRight,
               loadingIndicator: slots.loadingIndicator,
+              openFailureActions: slots.openFailureActions,
             }
           ),
       });
@@ -635,6 +685,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   ParagraphDialog: DocxEditorParagraphDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
+  OpenFailure: DocxEditorOpenFailure,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
   NotesChrome: DocxEditorNotesChrome,
   Equation: DocxEditorEquation,
