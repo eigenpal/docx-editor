@@ -1,9 +1,9 @@
 // An exact-height row taller than the page content.
 //
-// The reference layout keeps such a row at its exact height on a fresh page: it runs past
-// the bottom margin and the sheet edge clips it, and the next block starts on the next
-// page. The page model is bounded by the content box, so the row fills the rest of the
-// band instead, with its content clipped there. Pagination is the same.
+// The row moves to a fresh page and keeps the whole page to itself: the next block starts
+// on the next page, with or without `w:cantSplit`. It paints only down to the bottom
+// margin, so the row fills the rest of the band, and its border and content are clipped
+// there. It does not split and does not run past the margin.
 
 import type { SemanticTableRow } from './semantic-table.ts';
 import { TablePaginationError } from './semantic-table-layout.ts';
