@@ -56,29 +56,29 @@ for (const action of ['acceptReviewItem', 'rejectReviewItem'] as const) {
   test(`${action} resolves an entire inserted block containing split field wrappers`, async () => {
     const editor = mount(sample());
     const before = serializeOoxmlPart(editor.surface!.session.part());
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems({ pairReplacements: false });
     expect(items).toHaveLength(1);
     expect(revisionItemsOf(editor.surface!.session.part())[0]!.text).toBe('See 2.\nMore text.\n');
     expect(editor[action](items[0]!.key).ok).toBe(true);
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
     const resolved = serializeOoxmlPart(editor.surface!.session.part());
     expect(resolved).not.toMatch(/<w:ins(?:\s|\/|>)/);
     expect(resolved.includes('fldChar')).toBe(action === 'acceptReviewItem');
     expect(resolved).toContain('Unchanged');
     const reopened = mount(new Uint8Array(await editor.save()));
-    expect(reopened.getReviewItems()).toHaveLength(0);
+    expect(reopened.getReviewItems({ pairReplacements: false })).toHaveLength(0);
     expect(serializeOoxmlPart(reopened.surface!.session.part()).includes('fldChar')).toBe(
       action === 'acceptReviewItem'
     );
     editor.exec({ type: 'undo' });
     expect(serializeOoxmlPart(editor.surface!.session.part())).toBe(before);
-    expect(editor.getReviewItems()).toHaveLength(1);
+    expect(editor.getReviewItems({ pairReplacements: false })).toHaveLength(1);
   });
 }
 for (const options of [{ gap: 'Kept gap' }, { secondAuthor: 'Someone else' }, { mark: false }]) {
   test(`keeps unrelated edits separate: ${JSON.stringify(options)}`, () => {
     const editor = mount(sample(options));
-    expect(editor.getReviewItems().length).toBeGreaterThan(1);
+    expect(editor.getReviewItems({ pairReplacements: false }).length).toBeGreaterThan(1);
   });
 }
 
@@ -91,8 +91,8 @@ test('a replacement does not split an independent inserted block containing fiel
   expect(items.map((item) => item.revisionKind)).toEqual(['insert', 'delete', 'insert']);
   expect(items[0]!.text).toBe('See 2.\nMore text.\n');
   const card = editor
-    .getReviewItems()
+    .getReviewItems({ pairReplacements: false })
     .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
   expect(editor.acceptReviewItem(card.key).ok).toBe(true);
-  expect(editor.getReviewItems()).toHaveLength(2);
+  expect(editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
 });

@@ -80,6 +80,8 @@ function mount(body: string): DocxEditorInstance {
 }
 
 const PAIRED = { pairReplacements: true } as const;
+/** The halves as separate items, as the review pane reads them. */
+const HALVES = { pairReplacements: false } as const;
 
 function summary(items: readonly ReviewItemPlacement[]) {
   return items.map((item) =>
@@ -99,9 +101,11 @@ function pairOf(editor: DocxEditorInstance): ReviewRevisionPlacement {
 const bodyText = (editor: DocxEditorInstance) => editor.surface!.session.bodyText();
 
 describe('pairing replacements in the review queue', () => {
-  test('pairing is off by default and lists both halves', () => {
+  test('pairing is on by default, and pairReplacements: false lists both halves', () => {
     const editor = mount(REPLACED);
-    expect(summary(editor.getReviewItems())).toEqual([
+    expect(summary(editor.getReviewItems())).toEqual([['replace', 'new', 'old']]);
+    expect(editor.getReviewItems()[0]!.key).toBe(pairOf(editor).key);
+    expect(summary(editor.getReviewItems(HALVES))).toEqual([
       ['delete', 'old', null],
       ['insert', 'new', null],
     ]);
@@ -151,7 +155,7 @@ describe('pairing replacements in the review queue', () => {
     expect(bodyText(editor)).toBe('The new fee applies.');
     expect(editor.getReviewItems()).toHaveLength(0);
     expect(editor.exec({ type: 'undo' }).ok).toBe(true);
-    expect(summary(editor.getReviewItems())).toEqual([
+    expect(summary(editor.getReviewItems(HALVES))).toEqual([
       ['delete', 'old', null],
       ['insert', 'new', null],
     ]);
@@ -207,7 +211,7 @@ describe('pairing replacements in the review queue', () => {
 
   test('a pair key returns the painted bands of both halves', () => {
     const editor = mount(REPLACED);
-    const [deletion, insertion] = editor.getReviewItems();
+    const [deletion, insertion] = editor.getReviewItems(HALVES);
     const both = editor.getReviewItemRects(pairOf(editor).key);
     const halves =
       editor.getReviewItemRects(deletion!.key).length +
@@ -220,7 +224,7 @@ describe('pairing replacements in the review queue', () => {
     const pair = pairOf(editor);
     expect(editor.setActiveReviewItem(pair.key, { reveal: false }).ok).toBe(true);
     expect(pairOf(editor).isActive).toBe(true);
-    const [deletion, insertion] = editor.getReviewItems();
+    const [deletion, insertion] = editor.getReviewItems(HALVES);
     expect(deletion!.isActive).toBe(true);
     expect(editor.setActiveReviewItem(insertion!.key, { reveal: false }).ok).toBe(true);
     expect(pairOf(editor).isActive).toBe(true);
@@ -235,7 +239,7 @@ describe('pairing replacements in the review queue', () => {
     expect(reply?.kind === 'comment' ? reply.parentRevisionId : null).toBe(pair.id);
     expect(pair.replyIds).toEqual([reply!.id]);
     const insertion = editor
-      .getReviewItems()
+      .getReviewItems(HALVES)
       .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
     expect(insertion.replyIds).toEqual([reply!.id]);
   });
@@ -246,7 +250,11 @@ describe('pairing replacements in the review queue', () => {
       [['insert', 'new', null]]
     );
     expect(editor.getReviewItems({ ...PAIRED, excludeRevisionKinds: ['replace'] })).toEqual([]);
-    expect(summary(editor.getReviewItems({ excludeRevisionKinds: ['replace'] }))).toEqual([
+    // The default read pairs, so excluding replace drops the pair there too.
+    expect(editor.getReviewItems({ excludeRevisionKinds: ['replace'] })).toEqual([]);
+    expect(
+      summary(editor.getReviewItems({ ...HALVES, excludeRevisionKinds: ['replace'] }))
+    ).toEqual([
       ['delete', 'old', null],
       ['insert', 'new', null],
     ]);
@@ -267,7 +275,7 @@ describe('the activated key of a paired replacement', () => {
       .getReviewItems({ placement: false, pairReplacements: true })
       .find((item) => item.kind === 'revision' && item.revisionKind === 'replace')!;
     const deletion = editor
-      .getReviewItems({ placement: false })
+      .getReviewItems({ placement: false, ...HALVES })
       .find((item) => item.kind === 'revision' && item.revisionKind === 'delete')!;
     const revealed: string[] = [];
     editor.on('reviewItemReveal', ({ key }) => revealed.push(key));
@@ -275,8 +283,9 @@ describe('the activated key of a paired replacement', () => {
     // The reveal names the pair, and so does the getter under the same query.
     expect(revealed).toEqual([pair.key]);
     expect(editor.getActivatedReviewItemKey({ pairReplacements: true })).toBe(pair.key);
-    // Read without the pairing query, it names the half the caret is in.
-    expect(editor.getActivatedReviewItemKey()).toBe(deletion.key);
+    // The default read pairs too. With pairing off, it names the half the caret is in.
+    expect(editor.getActivatedReviewItemKey()).toBe(pair.key);
+    expect(editor.getActivatedReviewItemKey(HALVES)).toBe(deletion.key);
   });
 
   test('a host call with a pair key reports the pair key in both fields', () => {
@@ -294,7 +303,7 @@ describe('the pair key of a revealed replacement half', () => {
     const editor = mount(REPLACED);
     const pair = pairOf(editor);
     const halves = editor
-      .getReviewItems({ placement: false })
+      .getReviewItems({ placement: false, ...HALVES })
       .filter((item) => item.kind === 'revision')
       .map((item) => item.key);
     const events: ReviewItemRevealEvent[] = [];
@@ -310,7 +319,7 @@ describe('the pair key of a revealed replacement half', () => {
   test('a lone replacement is one stop in the pane: every step returns to it', () => {
     const editor = mount(REPLACED);
     const pair = pairOf(editor);
-    const [deletion] = editor.getReviewItems({ placement: false });
+    const [deletion] = editor.getReviewItems({ placement: false, ...HALVES });
     const events: ReviewItemRevealEvent[] = [];
     editor.on('reviewItemReveal', (event) => events.push(event));
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
@@ -326,7 +335,7 @@ describe('the pair key of a revealed replacement half', () => {
 
   test('a change that is not part of a replacement reports no pair key', () => {
     const editor = mount(paragraph(run('The fee '), ins(3, 'Ada', 'now '), run('applies.')));
-    const [insertion] = editor.getReviewItems({ placement: false });
+    const [insertion] = editor.getReviewItems({ placement: false, ...HALVES });
     const events: ReviewItemRevealEvent[] = [];
     editor.on('reviewItemReveal', (event) => events.push(event));
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
@@ -360,7 +369,9 @@ describe('replacement navigation and the active band', () => {
       return events.at(-1)!;
     };
     const halves = () =>
-      editor.getReviewItems({ placement: false }).filter((item) => item.kind === 'revision');
+      editor
+        .getReviewItems({ placement: false, ...HALVES })
+        .filter((item) => item.kind === 'revision');
     const cards = () => editor.getReviewItems(PAIRED).filter((item) => item.kind === 'revision');
     return { editor, step, halves, cards };
   }
@@ -420,7 +431,7 @@ describe('replacement navigation and the active band', () => {
       expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
     // The pane's two cards for the open replacement are both active, as both bands light.
     const activeCards = () =>
-      editor.getReviewItems({ placement: false }).map((item) => item.isActive);
+      editor.getReviewItems({ placement: false, ...HALVES }).map((item) => item.isActive);
     next();
     expect(litKinds(container)).toEqual(['delete', 'insert']);
     expect(activeCards()).toEqual([true, true, false, false, false]);
@@ -432,7 +443,7 @@ describe('replacement navigation and the active band', () => {
     expect(editor.setActiveReviewItem(first!.key).ok).toBe(true);
     expect(litKinds(container)).toEqual(['delete', 'insert']);
     // The pane lists each half as a card, so a half's own key opens only that half.
-    const [deletion, insertion] = editor.getReviewItems({ placement: false });
+    const [deletion, insertion] = editor.getReviewItems({ placement: false, ...HALVES });
     expect(editor.setActiveReviewItem(deletion!.key).ok).toBe(true);
     expect(litKinds(container)).toEqual(['delete']);
     expect(activeCards()).toEqual([true, false, false, false, false]);
@@ -441,13 +452,13 @@ describe('replacement navigation and the active band', () => {
     expect(activeCards()).toEqual([false, true, false, false, false]);
   });
 
-  test('a host loop over a paired read stops once on each replacement', () => {
+  test('a host loop over the default read stops once on each replacement', () => {
     const editor = mount(TWO_REPLACED);
     const container = document.body.lastElementChild!;
     // The loop from the guide: read once per step, then activate the next item by its key.
     const step = () => {
       const changes = editor
-        .getReviewItems({ placement: false, pairReplacements: true })
+        .getReviewItems({ placement: false })
         .filter((item) => item.kind === 'revision' && item.activatable);
       const current = changes.findIndex((item) => item.isActive);
       const next = changes[(current + 1) % changes.length]!;
@@ -466,7 +477,7 @@ describe('replacement navigation and the active band', () => {
     editor.on('reviewItemReveal', (event) => events.push(event));
     for (let step = 0; step < 3; step += 1)
       expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
-    const deletions = editor.getReviewItems({ placement: false });
+    const deletions = editor.getReviewItems({ placement: false, ...HALVES });
     expect(deletions.map((item) => (item.kind === 'revision' ? item.revisionKind : ''))).toEqual([
       'delete',
       'delete',

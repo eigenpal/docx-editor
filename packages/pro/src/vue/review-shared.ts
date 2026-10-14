@@ -46,6 +46,7 @@ export const MARKER_STEP = 30;
 
 export const NO_PLACEMENT_REVIEW_QUERY = Object.freeze({
   placement: false,
+  pairReplacements: false,
 }) satisfies ReviewItemQuery;
 /** The balloon's queue under `revisionsIn: 'balloons'`: a typed-over range is one decision. */
 export const PAIRED_REVIEW_QUERY = Object.freeze({

@@ -89,8 +89,8 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
   readonly revisionKind: ReviewRevisionKind;
   /**
    * The words a replacement decision removes when {@link revisionKind} is `'replace'`.
-   * The built-in reader lists separate deletion and insertion cards unless the query sets
-   * {@link ReviewItemQuery.pairReplacements}.
+   * The built-in reader lists separate deletion and insertion cards when the query sets
+   * {@link ReviewItemQuery.pairReplacements} to false.
    */
   readonly replacedText?: string;
   readonly item: ReviewRevisionItem;

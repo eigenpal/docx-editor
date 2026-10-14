@@ -1,6 +1,7 @@
 import type {
   DocumentEditingMode,
   ReviewItemPlacement,
+  ReviewItemQuery,
   SemanticPosition,
 } from '../contracts/editor.ts';
 import type { ExecResult } from '../contracts/types.ts';
@@ -10,7 +11,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 interface CommentResolutionDeps {
   readonly reviewEnabled: boolean;
   readonly editingMode: DocumentEditingMode;
-  readonly placements: () => readonly ReviewItemPlacement[];
+  readonly placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[];
   readonly surface: PaginatedSurface | null;
   readonly proReviewReason: string;
   readonly bump: () => void;
@@ -135,7 +136,8 @@ export function setReviewCommentResolved(
   if (deps.editingMode === 'viewing') {
     return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
   }
-  const placements = deps.placements();
+  // Comment keys do not depend on pairing; the unpaired read keeps each reply's own parent.
+  const placements = deps.placements({ pairReplacements: false });
   const item = commentForKey(placements, key);
   if (!('kind' in item)) return item;
   if (!deps.surface) {

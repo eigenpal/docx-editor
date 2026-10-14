@@ -361,7 +361,10 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const { groups, partOps } = plan!;
     if (!groups.length && !partOps.length)
       return { ok: true, changed: false, revisionAuthors: plan!.result };
-    const active = deps.placements().find((placement) => placement.isActive)?.key;
+    // Store keys, as `result.updated` reports them.
+    const active = deps
+      .placements({ placement: false, pairReplacements: false })
+      .find((placement) => placement.isActive)?.key;
     let applied: { committed: boolean; reason?: unknown } | undefined;
     surface.commitReviewOps(() => {
       applied = surface.session.applyTreeOpsAtomic(groups, { partOps });

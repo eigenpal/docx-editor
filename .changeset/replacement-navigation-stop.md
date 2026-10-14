@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Next Change and Previous Change stop once on each tracked replacement, and an open replacement highlights both its deleted and inserted text. The review pane keeps the open card beside its text.
+A tracked replacement is now one change: Next Change and Previous Change stop on it once and highlight both halves, the review pane keeps the open card beside its text, and `getReviewItems()` and `useReview()` list it as one `'replace'` item by default. To list its deletion and insertion as separate items, pass `pairReplacements: false`.

@@ -162,8 +162,12 @@ function ReviewRoot({
     return excluded.length > 0 ? excluded : undefined;
   }, [structural, formatting]);
 
+  // The pane lists each half of a replacement as its own card, so each stays reviewable.
   const railQuery = useMemo(
-    () => ({ excludeRevisionKinds: excludeRevisionKinds?.filter((kind) => kind !== 'format') }),
+    () => ({
+      excludeRevisionKinds: excludeRevisionKinds?.filter((kind) => kind !== 'format'),
+      pairReplacements: false,
+    }),
     [excludeRevisionKinds]
   );
 

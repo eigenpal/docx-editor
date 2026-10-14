@@ -193,7 +193,9 @@ const ReviewRoot = defineComponent({
       return excluded.length > 0 ? excluded : undefined;
     });
 
+    // The pane lists each half of a replacement as its own card, so each stays reviewable.
     const railQuery = computed(() => ({
+      pairReplacements: false,
       excludeRevisionKinds: excludeRevisionKinds.value?.filter((kind) => kind !== 'format'),
     }));
 

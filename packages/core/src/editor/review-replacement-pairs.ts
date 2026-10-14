@@ -1,5 +1,5 @@
-// Query-time narrowing of the review queue: revision-kind exclusion and opt-in replacement
-// pairing for `getReviewItems(query)`.
+// Query-time narrowing of the review queue: revision-kind exclusion and replacement pairing
+// for `getReviewItems(query)`. Pairing is the default; `pairReplacements: false` opts out.
 //
 // A pair is a READ-SIDE decision. The store keeps the deletion and the insertion as two
 // revisions; a pair item lists both halves' addresses and canonical sites, so resolving it
@@ -141,7 +141,7 @@ export function narrowReviewItems(
     item.kind !== 'revision' || !excluded.has(item.revisionKind);
   let next = excluded.size > 0 ? items.filter(keep) : items;
   let renamed: ReadonlyMap<string, string> = new Map();
-  if (query?.pairReplacements === true) {
+  if (pairsReplacementsUnder(query)) {
     const paired = pairReplacements(next);
     renamed = paired.renamed;
     next = excluded.size > 0 ? paired.items.filter(keep) : paired.items;
@@ -217,6 +217,11 @@ export function createPairedActivation(
   };
 }
 
+/** Whether `query` pairs replacements. It does unless it sets `pairReplacements: false`. */
+export function pairsReplacementsUnder(query: ReviewItemQuery | undefined): boolean {
+  return query?.pairReplacements !== false;
+}
+
 /** True for a key only a paired query produces. */
 export function isReplacementPairKey(key: string): boolean {
   return key.startsWith(PAIR_KEY_PREFIX);
@@ -231,9 +236,10 @@ export function findReviewPlacement(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
   key: string
 ): ReviewItemPlacement | undefined {
-  const query: ReviewItemQuery = isReplacementPairKey(key)
-    ? { placement: false, pairReplacements: true }
-    : { placement: false };
+  const query: ReviewItemQuery = {
+    placement: false,
+    pairReplacements: isReplacementPairKey(key),
+  };
   return placements(query).find((entry) => entry.key === key);
 }
 
@@ -246,15 +252,16 @@ export function resolutionKeysOf(item: ReviewItem): readonly string[] {
 }
 
 /**
- * The key `query` reads for the review item whose store key is `key`: under
- * `pairReplacements`, the pair a deletion or insertion belongs to; otherwise `key` itself.
+ * The key `query` reads for the review item whose store key is `key`: when the query pairs
+ * replacements, which it does unless it sets `pairReplacements: false`, the pair a deletion
+ * or insertion belongs to; otherwise `key` itself.
  */
 export function keyUnderQuery(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
   key: string | null,
   query: ReviewItemQuery | undefined
 ): string | null {
-  if (key === null || query?.pairReplacements !== true) return key;
+  if (key === null || !pairsReplacementsUnder(query)) return key;
   const pair = placements({ ...query, placement: false }).find(
     (entry) =>
       isReplacementPairKey(entry.key) && resolutionKeysOf(entry.item as ReviewItem).includes(key)

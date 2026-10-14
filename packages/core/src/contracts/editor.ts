@@ -665,16 +665,15 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * caret that merely lands in a change leaves this `null`. Open a balloon or card for the
    * activated item, and highlight the caret-active one.
    *
-   * Pass the query you read items with, so the key matches theirs: with
-   * `pairReplacements: true`, a paired replacement reports the pair's key; without it, the
-   * key of the half the caret is in. The value changes with the selection, so read it again
-   * on `selectionChange`.
+   * Pass the query you read items with, so the key matches theirs. By default a paired
+   * replacement reports the pair's key; with `pairReplacements: false`, the key of the half
+   * the caret is in. The value changes with the selection, so read it again on
+   * `selectionChange`.
    *
    * @example
    * ```ts
-   * const query = { pairReplacements: true };
    * editor.on('selectionChange', () => {
-   *   const activated = editor.getActivatedReviewItemKey(query);
+   *   const activated = editor.getActivatedReviewItemKey();
    *   if (activated !== null) showMyCard(activated);
    * });
    * ```

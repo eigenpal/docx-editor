@@ -34,7 +34,8 @@ export function ReviewWritesE2eBridge(): null {
     }
     window.__DOCX_REVIEW_E2E__ = {
       reviewItems() {
-        return editor.getReviewItems({ placement: false }).map((item) => ({
+        // Store decisions, one per half, as the collaboration specs count them.
+        return editor.getReviewItems({ placement: false, pairReplacements: false }).map((item) => ({
           id: item.id,
           kind: item.kind,
           text: item.text,
