@@ -395,6 +395,48 @@ describe('rows act through the engine', () => {
     expect(written).toEqual(['hello ']);
   });
 
+  test('Paste closes the panel before the clipboard read settles', async () => {
+    let resolveRead: (text: string) => void = () => {};
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { readText: () => new Promise<string>((resolve) => (resolveRead = resolve)) },
+      configurable: true,
+    });
+    const { view, editor } = mount();
+    select(editor(), 0, 0);
+    rightClick(view);
+
+    act(() => {
+      fireEvent.click(rowNamed(view, 'edit.paste'));
+    });
+    // The read waits on the permission prompt; the menu must not wait with it.
+    expect(panel(view)).toBeNull();
+
+    await act(async () => {
+      resolveRead('pasted ');
+    });
+    select(editor(), 0, 18);
+    expect(editor().query({ type: 'selectedText' })).toBe('pasted hello world');
+  });
+
+  test('a refused read disables Paste with the reason on the next open', async () => {
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { readText: () => Promise.reject(new Error('Read permission denied.')) },
+      configurable: true,
+    });
+    const { view } = mount();
+    rightClick(view);
+
+    await act(async () => {
+      fireEvent.click(rowNamed(view, 'edit.paste'));
+    });
+    expect(panel(view)).toBeNull();
+
+    rightClick(view);
+    const row = rowNamed(view, 'edit.paste');
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.getAttribute('title')).toBe('Read permission denied.');
+  });
+
   test('a disabled row does nothing when clicked', () => {
     const { view } = mount();
     rightClick(view);

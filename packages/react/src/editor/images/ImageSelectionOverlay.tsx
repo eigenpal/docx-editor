@@ -14,6 +14,7 @@ import {
   captureImageMutationPreconditions,
   computeMovedImagePosition,
   hostWindowOf,
+  historyShortcutOf,
   IMAGE_OVERLAY_NUDGE_PT,
   IMAGE_OVERLAY_NUDGE_SHIFT_PT,
   isElementNode,
@@ -344,6 +345,15 @@ export function ImageSelectionOverlay({
         return;
       }
       if (previewRef.current) return;
+      // Focus sits on the overlay, not the text surface, so history keys stop here unless
+      // the overlay forwards them. Undo usually reverts the resize or move just made.
+      const history = historyShortcutOf(event);
+      if (history) {
+        event.preventDefault();
+        event.stopPropagation();
+        editor.exec({ type: history });
+        return;
+      }
       const step = event.shiftKey ? IMAGE_OVERLAY_NUDGE_SHIFT_PT : IMAGE_OVERLAY_NUDGE_PT;
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();

@@ -16,6 +16,7 @@ import { selectionsEqual, spanSearchRoots } from './dom-selection.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import { collapsedAt } from './surface-selection-ops.ts';
 import { paintedTextIn } from './surface-composition-readback.ts';
+import { historyShortcutOf } from './history-shortcut.ts';
 
 const NAVIGATION: Record<string, NavigationCommand> = {
   ArrowLeft: 'left',
@@ -386,18 +387,13 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
-    // Ctrl+Y is Windows' redo; Ctrl/Cmd+Shift+Z is the mac one. Word accepts both.
-    if (accel && event.key.toLowerCase() === 'y') {
-      surface.redo();
-      event.preventDefault();
-      return;
-    }
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+    const history = historyShortcutOf(event);
+    if (history) {
       // Undo and redo publish a model change like any other commit, so the scheduler
       // repaints. What the scheduler cannot supply is WHERE the caret belongs: offsets in
       // the reverted tree do not correspond to offsets in the one that replaced it, so the
       // entry's own selection is restored.
-      if (event.shiftKey) surface.redo();
+      if (history === 'redo') surface.redo();
       else surface.undo();
       event.preventDefault();
     }

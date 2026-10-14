@@ -125,6 +125,61 @@ describe('DocxEditorContextMenu', () => {
       mounted.unmount();
     }
   });
+
+  test('Paste closes the panel before the clipboard read settles', async () => {
+    let resolveRead: (text: string) => void = () => {};
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { readText: () => new Promise<string>((resolve) => (resolveRead = resolve)) },
+      configurable: true,
+    });
+    const mounted = mountMenu();
+    try {
+      await flush();
+      const surface = mounted.editor().surface!;
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 0 },
+      });
+      await openMenu(mounted.container);
+      mounted.container.querySelector<HTMLElement>('[data-slot="edit.paste"]')!.click();
+      await flush();
+      // The read waits on the permission prompt; the menu must not wait with it.
+      expect(panel(mounted.container)).toBeNull();
+
+      resolveRead('pasted ');
+      await flush();
+      surface.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 18 },
+      });
+      expect(mounted.editor().query({ type: 'selectedText' })).toBe('pasted hello world');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('a refused read disables Paste with the reason on the next open', async () => {
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      value: { readText: () => Promise.reject(new Error('Read permission denied.')) },
+      configurable: true,
+    });
+    const mounted = mountMenu();
+    try {
+      await flush();
+      await openMenu(mounted.container);
+      mounted.container.querySelector<HTMLElement>('[data-slot="edit.paste"]')!.click();
+      await flush();
+      expect(panel(mounted.container)).toBeNull();
+
+      await openMenu(mounted.container);
+      const row = mounted.container.querySelector<HTMLElement>('[data-slot="edit.paste"]')!;
+      expect(row.getAttribute('aria-disabled')).toBe('true');
+      expect(row.getAttribute('title')).toBe('Read permission denied.');
+    } finally {
+      mounted.unmount();
+    }
+  });
 });
 
 test('Vue field context action opens and saves the shared options dialog', async () => {

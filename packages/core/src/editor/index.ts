@@ -291,6 +291,7 @@ export {
   type ImageResizeHandle,
   type SelectedDrawingOverlayTarget,
 } from './docx-editor-images.ts';
+export { historyShortcutOf, type HistoryShortcutKeys } from './history-shortcut.ts';
 export { surfaceExtent, type SurfaceExtent } from './surface-pages.ts';
 // The fit's vocabulary — only the part an adapter actually needs, so the published surface
 // stays something we can keep. The two canonical modes, because a zoom control has to render

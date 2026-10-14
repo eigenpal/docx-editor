@@ -132,6 +132,9 @@ export const ContextMenuPaste = defineComponent({
             ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
             : {})}
           onSelect={() => {
+            // Close first: the read can wait on a browser permission prompt, and a menu
+            // left open over it looks stuck. The read still starts inside this click.
+            close(true);
             void (async () => {
               try {
                 const { text, html } = await readClipboardPayload(
@@ -144,8 +147,6 @@ export const ContextMenuPaste = defineComponent({
                 reportClipboardRefusal(
                   error instanceof Error ? error.message : 'the clipboard is not readable'
                 );
-              } finally {
-                close(true);
               }
             })();
           }}
@@ -226,6 +227,9 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
             ? { title: clipboardRefusal ?? cmd.disabledReason.value ?? '' }
             : {})}
           onSelect={() => {
+            // Close first: the read can wait on a browser permission prompt, and a menu
+            // left open over it looks stuck. The read still starts inside this click.
+            close(true);
             void (async () => {
               try {
                 const text = await hostWindowOf(
@@ -236,8 +240,6 @@ export const ContextMenuPasteWithoutFormatting = defineComponent({
                 reportClipboardRefusal(
                   error instanceof Error ? error.message : 'the clipboard is not readable'
                 );
-              } finally {
-                close(true);
               }
             })();
           }}

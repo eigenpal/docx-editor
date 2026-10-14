@@ -1767,6 +1767,21 @@ export interface HistoryGroupBindingOptions {
 }
 
 // @public
+export interface HistoryShortcutKeys {
+    // (undocumented)
+    readonly ctrlKey: boolean;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly metaKey: boolean;
+    // (undocumented)
+    readonly shiftKey: boolean;
+}
+
+// @public
+export function historyShortcutOf(event: HistoryShortcutKeys): 'undo' | 'redo' | null;
+
+// @public
 export function hostDocumentOf(node: Node | null | undefined): Document;
 
 // @public

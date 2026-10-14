@@ -169,6 +169,9 @@ export function ContextMenuPaste({
         ? { title: clipboardRefusal ?? disabledReason ?? '' }
         : {})}
       onSelect={() => {
+        // Close first: the read can wait on a browser permission prompt, and a menu
+        // left open over it looks stuck. The read still starts inside this click.
+        close(true);
         void (async () => {
           try {
             const { text, html } = await readClipboardPayload(viewport);
@@ -180,8 +183,6 @@ export function ContextMenuPaste({
             reportClipboardRefusal(
               error instanceof Error ? error.message : 'the clipboard is not readable'
             );
-          } finally {
-            close(true);
           }
         })();
       }}
@@ -261,6 +262,9 @@ export function ContextMenuPasteWithoutFormatting({
         ? { title: clipboardRefusal ?? disabledReason ?? '' }
         : {})}
       onSelect={() => {
+        // Close first: the read can wait on a browser permission prompt, and a menu
+        // left open over it looks stuck. The read still starts inside this click.
+        close(true);
         void (async () => {
           try {
             const text = await hostWindowOf(viewport).navigator.clipboard.readText();
@@ -269,8 +273,6 @@ export function ContextMenuPasteWithoutFormatting({
             reportClipboardRefusal(
               error instanceof Error ? error.message : 'the clipboard is not readable'
             );
-          } finally {
-            close(true);
           }
         })();
       }}
