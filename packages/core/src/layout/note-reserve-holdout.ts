@@ -8,6 +8,7 @@ import { footnoteContinuationNotice } from './note-continuation-notice.ts';
 
 import { splitNoteHead, splitNoteKeepsParagraphReference } from './note-eviction-guard.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import { chargedSpaceAfterPt } from './note-area-fit.ts';
 import { fragmentOwnsPosition } from './line-segments.ts';
 import {
   bodyCursorBottomPt,
@@ -155,7 +156,8 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
 
   const refLineHeight = frontier.bottom - frontier.top;
 
-  const bodyBottom = bodyCursorBottomPt(bodyPage);
+  // The closing paragraph's charged space after belongs to the body end here.
+  const bodyBottom = bodyCursorBottomPt(bodyPage) + chargedSpaceAfterPt(bodyPage);
   const contentHeight = bodyPage.contentBox.height;
   // A slack that cannot seat even the pulled line needs no reserve to stay out — and
   // publishing one for every naturally full page would churn the reserve fingerprints

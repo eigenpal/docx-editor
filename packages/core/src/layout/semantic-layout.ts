@@ -192,6 +192,7 @@ import {
   layoutSemanticDocumentWithNotes,
   notesReserveContextKey,
 } from './note-pagination.ts';
+import { pageHoldsFootnoteReference } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
@@ -2503,8 +2504,12 @@ function* layoutBlocksPass(
       const isLastLine = lineIndex === lines.length - 1;
       // Spacing-after stays out of the fit budget (see the firstTail note above): it moves
       // where the NEXT paragraph starts, never whether this line fits, and it clips at the
-      // page boundary rather than carrying over.
-      const tail = isLastLine ? borderExtent : 0;
+      // page boundary rather than carrying over. Above a footnote area it must fit too.
+      const noteArea =
+        isLastLine &&
+        (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0) > 0 &&
+        pageHoldsFootnoteReference(pageFragments, pending, pendingLine);
+      const tail = isLastLine ? borderExtent + (noteArea ? spacing.after : 0) : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
         if (paragraphHasAnchors && paragraphAnchorOrigin === null && fragmentIndex === 0) {
