@@ -191,6 +191,8 @@ const { document, isLoading, error } = useDocxSource(() => props.url);
 </Framework>
 </FrameworkTabs>
 
+These examples handle a failed download. If the bytes arrive but the editor cannot open them, `<DocxEditor>` shows a dialog. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures).
+
 ### From a file input
 
 Read the selected file into bytes, then pass those bytes through `document`:
@@ -434,6 +436,7 @@ For integration steps and change presentation, see [Document refresh API](/docs/
 
 - [React props](/docs/2.x/react/props) and [Vue props](/docs/2.x/vue/props) for `document`, the save action, and the shared ref
 - [Document refresh API](/docs/2.x/guides/document-refresh) for complete files returned by a server
+- [Handle files that do not open](/docs/2.x/guides/open-failures) for the dialog that explains a refused file, and your own support actions
 - [Export Markdown and PDF](/docs/2.x/guides/export) for document conversion
 - [Editing API](/docs/2.x/editor-api) to read and write a document without mounting an editor
 - [React examples](/docs/2.x/react/examples) and [Vue examples](/docs/2.x/vue/examples) for more loading, saving, and editor state patterns

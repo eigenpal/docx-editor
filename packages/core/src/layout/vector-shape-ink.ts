@@ -143,11 +143,39 @@ function strokeReach(shape: VectorShapeProjection): DrawingInsets {
           include(x - normal.x * half, y - normal.y * half);
         }
       }
+      // Caps apply only to real open ends inside the extent. Clipped-away ends stay clipped.
+      if (
+        !closed &&
+        normals.length &&
+        (component.strokeCap === 'round' || component.strokeCap === 'square')
+      ) {
+        for (const [vertex, normal, direction] of [
+          [points[0]!, normals[0]!, -1],
+          [points[points.length - 1]!, normals[normals.length - 1]!, 1],
+        ] as const) {
+          if (!inside(vertex)) continue;
+          if (component.strokeCap === 'round') {
+            include(vertex.x - half, vertex.y - half);
+            include(vertex.x + half, vertex.y + half);
+          } else {
+            const x = vertex.x + direction * normal.y * half;
+            const y = vertex.y - direction * normal.x * half;
+            include(x + normal.x * half, y + normal.y * half);
+            include(x - normal.x * half, y - normal.y * half);
+          }
+        }
+      }
       // A miter join reaches past the segment edges along the bisector of its two normals.
       const joins = closed && points.length > 2 ? normals.length : normals.length - 1;
       for (let at = 0; at < joins; at += 1) {
         const vertex = points[(at + 1) % points.length]!;
         if (!inside(vertex)) continue;
+        if (component.strokeJoin === 'round') {
+          include(vertex.x - half, vertex.y - half);
+          include(vertex.x + half, vertex.y + half);
+          continue;
+        }
+        if (component.strokeJoin === 'bevel') continue;
         const first = normals[at]!;
         const second = normals[(at + 1) % normals.length]!;
         const denominator = 1 + first.x * second.x + first.y * second.y;

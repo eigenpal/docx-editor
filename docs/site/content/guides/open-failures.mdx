@@ -1,0 +1,298 @@
+---
+title: 'Handle files that do not open'
+description: 'Show a dialog, a toast, or your own message when the editor refuses a file, and add your own support actions.'
+category: 'Guides'
+---
+
+The editor refuses a file that it cannot open safely, such as a damaged archive or a file that is not a `.docx` document. A refused file leaves the pages blank. The open-failure dialog tells the reader what happened and shows a stable error code.
+
+`<DocxEditor>` shows the dialog by default. The dialog text is generic and names no contact address. You add your own support actions, such as a link to your help page.
+
+## How a refused open is reported
+
+The editor reports a refused open in three places:
+
+| Source | What it holds | Use it for |
+| --- | --- | --- |
+| `snapshot().openFailure` | A `DocumentOpenFailure` with a stable `code` and a `reason`, or `null`. | Showing the failure to a person. |
+| `snapshot().parseError` | The engine's own text, which can quote the file. | Logs that stay on your server. |
+| The `document.open` diagnostic | The same `code`, with size buckets and an engine cause. | Telemetry. For more information, see [Diagnostics](/docs/2.x/guides/diagnostics). |
+
+`openFailure` stays set until the next document starts to open. Each refusal is a new object, so a second refusal of the same file shows the dialog again.
+
+The `reason` groups the codes by what a person can do:
+
+| `reason` | Codes | Packaged message |
+| --- | --- | --- |
+| `damaged` | `open.zip-corrupt`, `open.zip-invalid-entry-name`, `open.xml-malformed`, `open.content-types-invalid`, `open.relationships-invalid` | The file could not be read. It may be damaged, or it may be another type of file. Open it in a desktop word processor, save it as .docx, and then try again. |
+| `not-docx` | `open.unsupported-source`, `open.missing-main-document` | This file is not a .docx document. Choose a .docx file, or save this file as .docx in a desktop word processor and then try again. |
+| `too-large` | `open.zip-entry-limit`, `open.zip-size-limit`, `open.zip-ratio-limit`, `open.xml-part-size-limit`, `open.xml-depth-limit`, `open.xml-element-limit`, `open.relationship-limit`, `open.part-limit` | This file is too large or too complex to open here. Try a smaller copy, for example one with fewer pages or images. |
+| `blocked` | `open.xml-dtd-forbidden` | This file contains content that the editor does not open, for security reasons. Save it again as .docx in a desktop word processor, and then try again. |
+| `unknown` | `open.invalid-limits`, `open.failed` | Something went wrong while opening this file. Try again. If the problem continues, try another copy of the file. |
+
+The packaged messages are translated into every bundled language. The keys are under `openFailure` in `@docx-editor.dev/i18n`. To change a string in every editor, override its key in the catalog that you pass to `i18n`. For more information, see [@docx-editor.dev/i18n](/docs/2.x/i18n). To change it for one editor, use the options in [Change the text](#change-the-text).
+
+## Add your own buttons
+
+Pass `renderOpenFailureActions` in React, or fill the `#openFailureActions` slot in Vue, to add buttons before **Close**. When you compose the editor from parts, pass the same function as `actions` to `DocxEditor.OpenFailure`. Build each button from `DocxEditor.OpenFailure.Action`, so it matches the dialog. Set `variant="primary"` for the main action. **Close** is filled when it is the only button, and outlined beside your own.
+
+With `asChild`, `Action` styles your own element instead, such as a link. With `dismiss`, it closes the dialog after your click handler runs. To keep the dialog open, call `event.preventDefault()` in the handler.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor
+      document={bytes}
+      renderOpenFailureActions={({ failure }) => (
+        <>
+          <DocxEditor.OpenFailure.Action asChild>
+            <a href={`/support?code=${failure.code}`}>Get help</a>
+          </DocxEditor.OpenFailure.Action>
+          <DocxEditor.OpenFailure.Action
+            variant="primary"
+            dismiss
+            onClick={() => reportOpenFailure(failure.code)}
+          >
+            Report the problem
+          </DocxEditor.OpenFailure.Action>
+        </>
+      )}
+    />
+  );
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, DocxEditorOpenFailureAction } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+</script>
+
+<template>
+  <DocxEditor :document="bytes">
+    <template #openFailureActions="{ failure }">
+      <DocxEditorOpenFailureAction as-child>
+        <a :href="`/support?code=${failure.code}`">Get help</a>
+      </DocxEditorOpenFailureAction>
+      <DocxEditorOpenFailureAction
+        variant="primary"
+        dismiss
+        @click="reportOpenFailure(failure.code)"
+      >
+        Report the problem
+      </DocxEditorOpenFailureAction>
+    </template>
+  </DocxEditor>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`reportOpenFailure` is your own function. Send the `code`, not the file. To ask for the file, tell the reader how to send it in your own words.
+
+## Change the text
+
+Each option is a property of the `openFailure` object on `<DocxEditor>`, and a prop of `DocxEditor.OpenFailure`.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `title` | `openFailure.title` | The dialog title. |
+| `message` | The message for the `reason` | Content, or a function that receives the `DocumentOpenFailure`. It renders in a `div`. In Vue, pass text or a function. |
+| `showCode` | `true` | Shows the error code under the message. |
+| `closeLabel` | `common.close` | The label of **Close**. |
+| `showClose` | `true` | Shows **Close**. Turn it off only when your actions close the dialog. Escape still closes it. |
+| `onDismiss` | None | Runs after the reader closes the dialog by any route. In Vue, listen for `dismiss`. |
+| `className`, `style` | None | Styles the dialog element. |
+| `t` | The editor's translator | Resolves the packaged strings. |
+
+The next example writes a message for each reason and hides the code:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import type { DocumentOpenFailure } from '@docx-editor.dev/react';
+
+const MESSAGES: Record<DocumentOpenFailure['reason'], string> = {
+  damaged: 'This file is damaged. Upload a new copy.',
+  'not-docx': 'Upload a .docx file.',
+  'too-large': 'This file is too large for the browser editor.',
+  blocked: 'This file uses features that we do not allow.',
+  unknown: 'We could not open this file.',
+};
+
+<DocxEditor
+  document={bytes}
+  openFailure={{
+    title: 'Upload failed',
+    message: (failure) => MESSAGES[failure.reason],
+    showCode: false,
+  }}
+/>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, type DocumentOpenFailure } from '@docx-editor.dev/vue';
+
+defineProps<{ bytes: Uint8Array }>();
+
+const MESSAGES: Record<DocumentOpenFailure['reason'], string> = {
+  damaged: 'This file is damaged. Upload a new copy.',
+  'not-docx': 'Upload a .docx file.',
+  'too-large': 'This file is too large for the browser editor.',
+  blocked: 'This file uses features that we do not allow.',
+  unknown: 'We could not open this file.',
+};
+
+const openFailure = {
+  title: 'Upload failed',
+  message: (failure: DocumentOpenFailure) => MESSAGES[failure.reason],
+  showCode: false,
+};
+</script>
+
+<template>
+  <DocxEditor :document="bytes" :open-failure="openFailure" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+## Replace the dialog content
+
+Pass `children` in React, or the `default` slot in Vue, to replace the header, body, and footer. The dialog keeps its frame, focus handling, and Escape. The content receives `failure`, the packaged `message`, and `dismiss`.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Root document={bytes}>
+  <DocxEditor.OpenFailure>
+    {({ failure, message, dismiss }) => (
+      <div className="upload-error">
+        <h2>{message}</h2>
+        <p>Reference: {failure.code}</p>
+        <DocxEditor.OpenFailure.Action variant="primary" dismiss onClick={openFilePicker}>
+          Choose another file
+        </DocxEditor.OpenFailure.Action>
+      </div>
+    )}
+  </DocxEditor.OpenFailure>
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+  </DocxEditor.Viewport>
+</DocxEditor.Root>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<template>
+  <DocxEditorRoot :document="bytes">
+    <DocxEditorOpenFailure v-slot="{ failure, message, dismiss }">
+      <div class="upload-error">
+        <h2>{{ message }}</h2>
+        <p>Reference: {{ failure.code }}</p>
+        <DocxEditorOpenFailureAction variant="primary" dismiss @click="openFilePicker">
+          Choose another file
+        </DocxEditorOpenFailureAction>
+      </div>
+    </DocxEditorOpenFailure>
+    <DocxEditorViewport>
+      <DocxEditorContent />
+    </DocxEditorViewport>
+  </DocxEditorRoot>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+`openFilePicker` is your own function, such as one that clicks a hidden file input. With `dismiss`, the action closes the dialog after it runs.
+
+If you compose the editor from parts, the dialog is not included. Add `DocxEditor.OpenFailure` inside `DocxEditor.Root`, as in the previous example.
+
+## Show the failure in your own UI
+
+To show a toast or a banner instead of a dialog, turn off the packaged dialog with `openFailure={false}`. If you keep both, each has its own dismiss state, and the reader must close both. Then read the failure with `useOpenFailure` inside `DocxEditor.Root`. It returns the `failure`, the packaged `message`, and `dismiss`.
+
+Children of `<DocxEditor>` render in the scroll area, after the pages. To place a banner in another position, compose the editor from parts and put the banner before `DocxEditor.Viewport`. A toast library that renders into its own container works in either form.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor, useOpenFailure } from '@docx-editor.dev/react';
+
+function OpenFailureBanner() {
+  const { failure, message, dismiss } = useOpenFailure();
+  if (!failure) return null;
+  return (
+    <div role="alert" className="banner">
+      {message} ({failure.code})
+      <button type="button" onClick={dismiss}>
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
+<DocxEditor document={bytes} openFailure={false}>
+  <OpenFailureBanner />
+</DocxEditor>;
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<!-- OpenFailureBanner.vue -->
+<script setup lang="ts">
+import { useOpenFailure } from '@docx-editor.dev/vue';
+
+const { failure, message, dismiss } = useOpenFailure();
+</script>
+
+<template>
+  <div v-if="failure" role="alert" class="banner">
+    {{ message }} ({{ failure.code }})
+    <button type="button" @click="dismiss">Dismiss</button>
+  </div>
+</template>
+```
+
+Mount the banner in the default slot of `<DocxEditor :document="bytes" :open-failure="false">`.
+
+</Framework>
+</FrameworkTabs>
+
+`dismiss` hides the current refusal. The next refusal shows again, even for the same file. When a toast closes later than it opened, pass the failure that it showed, as in `dismiss(failure)`. Then a late close cannot hide a newer refusal.
+
+The dialog is an alert, so a click on the backdrop does not close it. **Close**, your own actions, and Escape close it.
+
+## Style the dialog
+
+The dialog uses the shared dialog classes. For more information, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+
+| Selector                                                | Element                      |
+| ------------------------------------------------------- | ---------------------------- |
+| `[data-docx-dialog='openFailure']`                      | The dialog.                  |
+| `.docx-dialog__message`                                 | The message.                 |
+| `.docx-dialog__code`                                    | The error code line.         |
+| `.docx-dialog__button`, `.docx-dialog__button--primary` | **Close** and each `Action`. |

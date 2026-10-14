@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The shared drawing XML preserved line cap and join attributes, but their derived vector painting omitted them.",
+  "after": "SVG, ink clipping, and PDF painting consume the same authored cap and join without changing canonical XML or editing operations.",
+  "reason": "This is a derived paint change. Source drawing nodes, replication operations, model offsets, awareness, and remote selection mapping keep their existing shared contract.",
+  "tests": [
+    "packages/core/src/store/__tests__/drawing-line-cap-join.test.ts",
+    "packages/docx-to-pdf/tests/vector-line-cap-join.test.ts",
+    "packages/pro/src/collaboration/__tests__/vector-line-cap-join-editors.test.ts"
+  ],
+  "changeset": "vector-line-cap-join",
+  "migration": null
+}

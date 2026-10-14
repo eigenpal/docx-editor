@@ -568,6 +568,17 @@
   "loading": {
     "label": "Yükleniyor"
   },
+  "openFailure": {
+    "title": "Bu dosya açılamadı",
+    "reasons": {
+      "damaged": "Dosya okunamadı. Dosya bozuk olabilir veya başka bir dosya türü olabilir. Bir masaüstü kelime işlemcide açın, .docx olarak kaydedin ve tekrar deneyin.",
+      "notDocx": "Bu dosya bir .docx belgesi değil. Bir .docx dosyası seçin veya bu dosyayı bir masaüstü kelime işlemcide .docx olarak kaydedip tekrar deneyin.",
+      "tooLarge": "Bu dosya burada açılamayacak kadar büyük veya karmaşık. Daha küçük bir kopya deneyin; örneğin daha az sayfa veya görsel içeren bir kopya.",
+      "blocked": "Bu dosya, düzenleyicinin güvenlik nedeniyle açmadığı içerik barındırıyor. Bir masaüstü kelime işlemcide yeniden .docx olarak kaydedin ve tekrar deneyin.",
+      "unknown": "Bu dosya açılırken bir sorun oluştu. Tekrar deneyin. Sorun devam ederse dosyanın başka bir kopyasını deneyin."
+    },
+    "code": "Hata kodu: {code}"
+  },
   "imageOverlay": {
     "handle": {
       "e": "Sağ kenarı yeniden boyutlandır",

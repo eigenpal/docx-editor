@@ -84,6 +84,12 @@ A selectable family does not prove that its bytes are loaded. The font catalog i
 
 Embedded document fonts enter the font pipeline automatically when usable. Opening a document does not automatically fetch remote font declarations. A CSS `@font-face` rule changes browser rendering but does not supply the shaping pipeline with bytes. Missing font coverage can change line breaks and page layout. Use `onFontError` for initialization failures and the loader's failure list for individual URL failures.
 
+Font loading and text shaping use separate size limits. A loaded face can exceed the shaping limit. The editor then keeps fallback measurement for that face.
+
+`onFontError` reports that refusal as `overLimit`, the same code as a face that exceeds a loading limit. Its cause retains the original `HarfBuzzShapingError` with code `fontOverLimit`. The error also retains the face request.
+
+The editor reports each oversized face once per font resolution. Opening another document or resolving more fonts can report it again. Throwing from this callback does not interrupt fallback.
+
 Font errors belong to the active document load. Replacing the document or destroying the editor discards delayed errors from older loads. If `onFontError` replaces the document or destroys the editor, the editor does not forward that old error event. If an `error` event listener replaces the document or destroys the editor, later listeners do not receive that error. A throwing callback does not suppress the current error event.
 
 Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.

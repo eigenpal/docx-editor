@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A refused open left blank pages and reported only parseError text and the document.open diagnostic.",
+  "after": "The snapshot also reports openFailure, a stable code and reason, and the adapters show a dialog for it.",
+  "reason": "openFailure is local open state derived from the same refusal. It is not in shared operations, stored room data, or awareness. A refused open in one collaborating editor leaves the room and the other participant unchanged, and the editor rejoins by opening the room again.",
+  "tests": [
+    "packages/core/src/editor/__tests__/document-open-failure.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-open-failure.test.ts"
+  ],
+  "changeset": "open-failure-dialog",
+  "migration": null
+}

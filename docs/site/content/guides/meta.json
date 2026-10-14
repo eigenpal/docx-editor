@@ -2,6 +2,7 @@
   "title": "Guides",
   "pages": [
     "loading-and-saving",
+    "open-failures",
     "diagnostics",
     "document-refresh",
     "navigation",
