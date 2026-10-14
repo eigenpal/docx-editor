@@ -30,85 +30,122 @@ function toggle(node: OoxmlElement, namespace: string): boolean | null {
   return null;
 }
 
+type MutableRunFormat = { -readonly [K in keyof EquationRunFormat]: EquationRunFormat[K] };
+
+/** Read one `w:rPr` or `m:rPr` into `format`. False means an unsupported property. */
+function readRunProperties(child: OoxmlElement, word: boolean, format: MutableRunFormat): boolean {
+  if (child.attributes.length !== 0) return false;
+  const namespace = word ? WML_NAMESPACE_URI : MATH;
+  const properties = new Set<string>();
+  for (const property of child.children) {
+    if (
+      property.kind === 'textValue' ||
+      property.namespaceUri !== namespace ||
+      properties.has(property.localName)
+    )
+      return false;
+    properties.add(property.localName);
+    if (word && property.localName === 'rFonts') {
+      if (property.children.length !== 0) return false;
+      const slots = new Set<string>();
+      let family: string | undefined;
+      for (const attr of property.attributes) {
+        if (
+          attr.namespaceUri !== namespace ||
+          !['ascii', 'hAnsi', 'eastAsia', 'cs'].includes(attr.localName) ||
+          slots.has(attr.localName)
+        )
+          return false;
+        slots.add(attr.localName);
+        if (
+          attr.value.length === 0 ||
+          attr.value.trim() !== attr.value ||
+          (family !== undefined && family !== attr.value)
+        )
+          return false;
+        family = attr.value;
+      }
+      if (family !== undefined) format.fontFamily = family;
+    } else if (!word && property.localName === 'sty') {
+      if (property.children.length !== 0 || property.attributes.length > 1) return false;
+      const attribute = property.attributes[0];
+      if (attribute && (attribute.namespaceUri !== namespace || attribute.localName !== 'val'))
+        return false;
+      const value = attribute?.value ?? 'i';
+      if (value !== 'p' && value !== 'b' && value !== 'i' && value !== 'bi') return false;
+      format.mathStyle = value;
+    } else {
+      const key = word
+        ? property.localName === 'b'
+          ? 'bold'
+          : property.localName === 'i'
+            ? 'italic'
+            : undefined
+        : property.localName === 'lit'
+          ? 'literal'
+          : property.localName === 'nor'
+            ? 'normalText'
+            : undefined;
+      if (key === undefined) return false;
+      const value = toggle(property, namespace);
+      if (value === null) return false;
+      format[key] = value;
+    }
+  }
+  return true;
+}
+
 /** Null means unsupported source. An empty format preserves existing math defaults. */
 export function equationRunFormat(run: OoxmlElement): EquationRunFormat | null {
   if (run.attributes.length !== 0) return null;
-  const format: {
-    fontFamily?: string;
-    bold?: boolean;
-    italic?: boolean;
-    literal?: boolean;
-    normalText?: boolean;
-    mathStyle?: 'p' | 'b' | 'i' | 'bi';
-  } = {};
+  const format: MutableRunFormat = {};
   const seen = new Set<string>();
   for (const child of run.children) {
     if (child.kind === 'textValue') return null;
     if (element(child, MATH, 't')) continue;
     const word = element(child, WML_NAMESPACE_URI, 'rPr');
-    const math = element(child, MATH, 'rPr');
-    if ((!word && !math) || child.attributes.length !== 0) return null;
+    if (!word && !element(child, MATH, 'rPr')) return null;
     const namespace = word ? WML_NAMESPACE_URI : MATH;
     if (seen.has(namespace)) return null;
     seen.add(namespace);
-    const properties = new Set<string>();
-    for (const property of child.children) {
-      if (
-        property.kind === 'textValue' ||
-        property.namespaceUri !== namespace ||
-        properties.has(property.localName)
-      )
-        return null;
-      properties.add(property.localName);
-      if (word && property.localName === 'rFonts') {
-        if (property.children.length !== 0) return null;
-        const slots = new Set<string>();
-        let family: string | undefined;
-        for (const attr of property.attributes) {
-          if (
-            attr.namespaceUri !== namespace ||
-            !['ascii', 'hAnsi', 'eastAsia', 'cs'].includes(attr.localName) ||
-            slots.has(attr.localName)
-          )
-            return null;
-          slots.add(attr.localName);
-          if (
-            attr.value.length === 0 ||
-            attr.value.trim() !== attr.value ||
-            (family !== undefined && family !== attr.value)
-          )
-            return null;
-          family = attr.value;
-        }
-        if (family !== undefined) format.fontFamily = family;
-      } else if (math && property.localName === 'sty') {
-        if (property.children.length !== 0 || property.attributes.length > 1) return null;
-        const attribute = property.attributes[0];
-        if (attribute && (attribute.namespaceUri !== namespace || attribute.localName !== 'val'))
-          return null;
-        const value = attribute?.value ?? 'i';
-        if (value !== 'p' && value !== 'b' && value !== 'i' && value !== 'bi') return null;
-        format.mathStyle = value;
-      } else {
-        const key = word
-          ? property.localName === 'b'
-            ? 'bold'
-            : property.localName === 'i'
-              ? 'italic'
-              : undefined
-          : property.localName === 'lit'
-            ? 'literal'
-            : property.localName === 'nor'
-              ? 'normalText'
-              : undefined;
-        if (key === undefined) return null;
-        const value = toggle(property, namespace);
-        if (value === null) return null;
-        format[key] = value;
-      }
-    }
+    if (!readRunProperties(child, word, format)) return null;
   }
   return Object.freeze(format);
+}
+
+const TRACKED_CONTROL_ATTRIBUTES: ReadonlySet<string> = new Set(['id', 'author', 'date']);
+
+/**
+ * True when an `m:ctrlPr` holds only source the equation lane can preserve: nothing, one
+ * `w:rPr` within the math run allowlist, or one tracked `w:ins`/`w:del` around such a `w:rPr`.
+ * Any other content keeps the bounded fallback.
+ */
+export function equationControlPropertiesAreSupported(node: OoxmlElement): boolean {
+  if (node.attributes.length !== 0 || node.children.length > 1) return false;
+  const child = node.children[0];
+  if (!child) return true;
+  if (child.kind === 'textValue') return false;
+  if (element(child, WML_NAMESPACE_URI, 'rPr')) return readRunProperties(child, true, {});
+  if (!element(child, WML_NAMESPACE_URI, 'ins') && !element(child, WML_NAMESPACE_URI, 'del'))
+    return false;
+  const names = new Set<string>();
+  for (const attribute of child.attributes) {
+    if (
+      attribute.namespaceUri !== WML_NAMESPACE_URI ||
+      !TRACKED_CONTROL_ATTRIBUTES.has(attribute.localName) ||
+      names.has(attribute.localName)
+    )
+      return false;
+    names.add(attribute.localName);
+  }
+  if (child.children.length > 1) return false;
+  const properties = child.children[0];
+  return (
+    properties === undefined ||
+    (properties.kind !== 'textValue' &&
+      element(properties, WML_NAMESPACE_URI, 'rPr') &&
+      readRunProperties(properties, true, {}))
+  );
 }
 
 function isMathElement(node: OoxmlNode, localName?: string): node is OoxmlGenericElementNode {

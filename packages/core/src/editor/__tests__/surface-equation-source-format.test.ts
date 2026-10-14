@@ -11,6 +11,19 @@ const cases = [
   ['literal', run('<m:rPr><m:lit/></m:rPr>'), true],
   ['normal', run('<m:rPr><m:nor/></m:rPr>'), true],
   ['bar', `<m:bar><m:e>${run()}</m:e></m:bar>`, true],
+  [
+    'fraction control properties',
+    `<m:f><m:fPr><m:ctrlPr><w:rPr><w:i/></w:rPr></m:ctrlPr></m:fPr>` +
+      `<m:num>${run()}</m:num><m:den>${run()}</m:den></m:f>`,
+    true,
+  ],
+  [
+    'nested tracked control properties',
+    `<m:sSup><m:e><m:rad><m:radPr><m:degHide m:val="1"/><m:ctrlPr>` +
+      `<w:ins w:id="1" w:author="Public Author"><w:rPr><w:b/></w:rPr></w:ins>` +
+      `</m:ctrlPr></m:radPr><m:deg/><m:e>${run()}</m:e></m:rad></m:e><m:sup>${run()}</m:sup></m:sSup>`,
+    true,
+  ],
   ['unknown', '<m:unknown/>', false],
 ] as const;
 
