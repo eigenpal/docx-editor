@@ -1377,6 +1377,8 @@ export function layoutRowFragmentBounded(
     // and a head that outruns either bound hands back a remainder rather than losing a line.
     const spanHeightPt = detachedSpans?.get(cell.id);
     const isDetached = spanHeightPt !== undefined;
+    // A fixed-row span shorter than its head clips it at the span bottom.
+    const clipsSpan = isDetached && vMerge?.clippedSpanCellIds?.has(cell.id) === true;
     const cellMaxBottom = isDetached
       ? Math.min(detachedBottomPt, rowTop + spanHeightPt)
       : flowMaxBottom;
@@ -1413,15 +1415,16 @@ export function layoutRowFragmentBounded(
           : rowTop + Math.min(markFloor, exactHeightPt ?? Infinity) - insets.bottom,
         cell.hideEndMark,
         // Fixed cell boxes clip; their bottom is not a paragraph page break.
-        !vertical && (isDetached || exactHeightPt === undefined),
-        clipsExactCellRow(
-          vertical,
-          exactHeightPt,
-          isDetached,
-          cell.headsVerticalMerge === true,
-          rowTop,
-          maxBottom
-        )
+        !vertical && ((isDetached && !clipsSpan) || exactHeightPt === undefined),
+        clipsSpan ||
+          clipsExactCellRow(
+            vertical,
+            exactHeightPt,
+            isDetached,
+            cell.headsVerticalMerge === true,
+            rowTop,
+            maxBottom
+          )
       );
 
     if (!cell.vMergeContinue && !waits(cell)) {

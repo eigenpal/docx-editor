@@ -188,7 +188,7 @@ test('fixed column widths and spanning-cell placement remain unchanged by partia
     }
 });
 
-test('a merge head too tall for its span keeps whole lines while a plain cell still clips', () => {
+test('a merge head too tall for its exact span flows through every row and clips at the last', () => {
   const row = '<w:trPr><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>';
   const continued = cell(p('ghost'), '<w:tcPr><w:vMerge/></w:tcPr>');
   const part = load(
@@ -210,13 +210,41 @@ test('a merge head too tall for its span keeps whole lines while a plain cell st
         ? block.lines.map((line) => line.spans.map((s) => s.text).join(''))
         : []
     );
+  // Five 14pt lines in a 60pt span: four whole lines and the top of the fifth.
   const head = rows[0]!.cells[0]!;
-  expect(text(head.blocks)).toEqual([['H0']]);
-  for (const block of head.blocks)
+  expect(head.rowSpan).toBe(3);
+  expect(head.box.height).toBe(60);
+  expect(text(head.blocks)).toEqual([['H0'], ['H1'], ['H2'], ['H3'], ['H4']]);
+  const cut = head.blocks.at(-1)!;
+  if (cut.kind !== 'paragraph') throw new Error('Expected cell paragraph');
+  expect(cut.clipToBox).toBe(true);
+  expect(cut.box.y + cut.box.height).toBe(head.box.y + 60);
+  for (const block of head.blocks.slice(0, -1))
     if (block.kind === 'paragraph') expect(block.clipToBox).not.toBe(true);
   const side = rows[0]!.cells[1]!;
   expect(text(side.blocks)).toEqual([['S0'], ['S1']]);
   const clipped = side.blocks[1]!;
   if (clipped.kind !== 'paragraph') throw new Error('Expected cell paragraph');
   expect(clipped.clipToBox).toBe(true);
+});
+
+test('merge heads over the same exact rows detach together whether or not they fit', () => {
+  const row = '<w:trPr><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>';
+  const continued = cell(p('ghost'), '<w:tcPr><w:vMerge/></w:tcPr>');
+  const restart = '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>';
+  const part = load(
+    `<w:tbl>${noMargins}<w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>` +
+      `<w:tr>${row}${cell(p('A0', 280) + p('A1', 280), restart)}` +
+      `${cell(['B0', 'B1', 'B2', 'B3', 'B4'].map((t) => p(t, 280)).join(''), restart)}</w:tr>` +
+      `<w:tr>${row}${continued}${continued}</w:tr><w:tr>${row}${continued}${continued}</w:tr></w:tbl>`
+  );
+  const rows = table(layout(part)).rows;
+  expect(rows.map((r) => r.box.height)).toEqual([20, 20, 20]);
+  const [fits, tall] = rows[0]!.cells;
+  const clipped = (blocks: TableFragmentRecord['rows'][number]['cells'][number]['blocks']) =>
+    blocks.map((block) => block.kind === 'paragraph' && block.clipToBox === true);
+  expect(fits!.box.height).toBe(60);
+  expect(clipped(fits!.blocks)).toEqual([false, false]);
+  expect(tall!.box.height).toBe(60);
+  expect(clipped(tall!.blocks)).toEqual([false, false, false, false, true]);
 });

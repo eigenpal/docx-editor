@@ -67,7 +67,19 @@ export interface RepeatedHeaderPlacements {
 /** Distinct tops kept per header row; pages normally share one. */
 const MAX_ENTRIES_PER_ROW = 4;
 
-const OPTION_KEYS = new Set(['detachedSpanHeightPtByCellId', 'heightFloorPt', 'coveredFromAbove']);
+const OPTION_KEYS = new Set([
+  'detachedSpanHeightPtByCellId',
+  'heightFloorPt',
+  'coveredFromAbove',
+  'clippedSpanCellIds',
+]);
+
+function sameIds(a: ReadonlySet<string> | undefined, b: ReadonlySet<string> | undefined): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
+}
 
 function sameSpans(
   a: ReadonlyMap<string, number> | undefined,
@@ -98,7 +110,8 @@ export function sameOptions(
   return (
     Object.is(a.heightFloorPt, b.heightFloorPt) &&
     a.coveredFromAbove === b.coveredFromAbove &&
-    sameSpans(a.detachedSpanHeightPtByCellId, b.detachedSpanHeightPtByCellId)
+    sameSpans(a.detachedSpanHeightPtByCellId, b.detachedSpanHeightPtByCellId) &&
+    sameIds(a.clippedSpanCellIds, b.clippedSpanCellIds)
   );
 }
 

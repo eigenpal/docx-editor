@@ -117,6 +117,8 @@ interface Group {
   physicalHeights: number[];
   heights: number[];
   active: boolean;
+  /** Every row is `hRule="exact"` and the text is taller: the last fragment clips it. */
+  clipsTail?: true;
   fragmentStart?: { readonly index: number; readonly top: number };
   headRecord?: TableRowFragmentRecord;
 }
@@ -270,8 +272,11 @@ export function createVMergeFragmentCarry(
       if (needed > total + EPSILON) {
         let grow = group.last;
         while (grow >= group.first && rows[grow]!.height.rule === 'exact') grow--;
-        // Exact spans that cannot hold the whole head keep the authored clipping behavior.
-        if (grow < group.first) return false;
+        // No row can grow: the fixed rows carry what they hold and the last one clips.
+        if (grow < group.first) {
+          group.clipsTail = true;
+          continue;
+        }
         heights[grow - group.first]! += needed - total;
         total = needed;
       }
@@ -285,12 +290,17 @@ export function createVMergeFragmentCarry(
     head: Head,
     first: TableRowFragmentRecord,
     bottom: number,
-    x: number
+    x: number,
+    final: boolean
   ): TableCellFragmentRecord {
-    const sourceCell = { ...head.cell, vAlign: 'top' as const };
+    // The fragment that ends the span places the rest of the text as one exact row, so the
+    // line it cuts shows partly and the text below the span stays in the document.
+    const clips = final && group.clipsTail === true;
+    const { headsVerticalMerge: _head, ...plainCell } = head.cell;
+    const sourceCell = { ...(clips ? plainCell : head.cell), vAlign: 'top' as const };
     const row: SemanticTableRow = {
       ...group.source,
-      height: { rule: 'auto' },
+      height: clips ? { rule: 'exact', valuePt: bottom - first.box.y } : { rule: 'auto' },
       cantSplit: false,
       cells: [sourceCell],
     };
@@ -554,8 +564,9 @@ export function createVMergeFragmentCarry(
           group.headRecord = first;
         }
         const bottom = last.box.y + last.box.height;
+        const final = rowIndex.get(last.id) === group.last && !last.hasContinuation;
         const placed = new Map(
-          group.heads.map((head) => [head.cell.id, placeHead(group, head, first, bottom, x)])
+          group.heads.map((head) => [head.cell.id, placeHead(group, head, first, bottom, x, final)])
         );
         group.fragmentStart = undefined;
         const headRecord: TableRowFragmentRecord = {

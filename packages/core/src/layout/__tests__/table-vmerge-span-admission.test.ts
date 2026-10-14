@@ -177,7 +177,7 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
-  test('a span where nothing can grow keeps its authored height and clips, like Word', () => {
+  test('a span where nothing can grow keeps its authored height and clips at its bottom', () => {
     const layout = layoutTiny(
       loadPart(
         `<w:tbl>${GRID}` +
@@ -191,9 +191,12 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(table.rows.map((row) => row.box.height)).toEqual([20, 20]);
     const head = table.rows[0]!.cells[0]!;
     expect(head.box.height).toBe(40);
-    // The span cannot hold the head, so the head keeps sizing its own row and the exact
-    // height clips it there: one line, inside the 20pt row, the way Word draws it.
-    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 20 + 0.001);
+    // The span cannot hold the head, so the merged text runs through both rows and is
+    // clipped at the bottom of the second one.
+    expect(contentBottomOf(head)).toBeGreaterThan(head.box.y + 20);
+    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 40 + 0.001);
+    const cut = head.blocks.at(-1)!;
+    expect(cut.kind === 'paragraph' && cut.clipToBox).toBe(true);
     expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
