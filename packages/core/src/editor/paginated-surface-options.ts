@@ -69,9 +69,9 @@ export interface PaginatedSurfaceOptions {
   /** Opening mode; changeable at runtime with `setEditingMode`. */
   readonly editingMode?: SurfaceEditingMode;
   /**
-   * True while the review UI lists a replacement as one card. The active band then covers
-   * both halves of a replacement, as the card does. Read on each band paint. Set by the
-   * editor from `revisionsIn`; a host changes `revisionsIn` instead.
+   * True while the active band covers both halves of a replacement: when the review UI lists
+   * a replacement as one card, or while an activation of the whole replacement holds. Read
+   * on each band paint. Set by the editor; a host changes `revisionsIn` instead.
    *
    * @internal
    */

@@ -307,21 +307,21 @@ describe('the pair key of a revealed replacement half', () => {
     expect(events[0]).toMatchObject({ pairKey: pair.key, source: 'navigate' });
   });
 
-  test('Previous Change on the other half reports the same pair key', () => {
+  test('a lone replacement is one stop in the pane: every step returns to it', () => {
     const editor = mount(REPLACED);
     const pair = pairOf(editor);
+    const [deletion] = editor.getReviewItems({ placement: false });
     const events: ReviewItemRevealEvent[] = [];
     editor.on('reviewItemReveal', (event) => events.push(event));
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'previous' }).ok).toBe(true);
-    expect(events).toHaveLength(3);
-    const [first, second, back] = events;
-    // Next steps from one half to the other; Previous returns to the first half.
-    expect(second!.key).not.toBe(first!.key);
-    expect(back!.key).toBe(first!.key);
-    for (const event of events) expect(event.pairKey).toBe(pair.key);
-    expect(back!.source).toBe('navigate');
+    const landing: ReviewItemRevealEvent = {
+      key: deletion!.key,
+      pairKey: pair.key,
+      source: 'navigate',
+    };
+    expect(events).toEqual([landing, landing, landing]);
   });
 
   test('a change that is not part of a replacement reports no pair key', () => {
@@ -336,7 +336,7 @@ describe('the pair key of a revealed replacement half', () => {
   });
 });
 
-describe('Next and Previous Change under balloons', () => {
+describe('replacement navigation and the active band', () => {
   /** Two replacements and a lone insertion, in that order. */
   const TWO_REPLACED = paragraph(
     run('The '),
@@ -411,11 +411,48 @@ describe('Next and Previous Change under balloons', () => {
     expect(litKinds(container)).toEqual(['insert']);
   });
 
-  test('the pane lists the halves apart, so only the open half lights', () => {
+  test('the pane steps over a replacement once, and lights one half only for its own key', () => {
     const editor = mount(TWO_REPLACED);
     const container = document.body.lastElementChild!;
-    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    const next = () =>
+      expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    next();
+    expect(litKinds(container)).toEqual(['delete', 'insert']);
+    next();
+    const [first, second] = editor.getReviewItems(PAIRED);
+    expect(events.map((event) => event.pairKey)).toEqual([first!.key, second!.key]);
+    // The pair key a paired read lists opens the whole replacement.
+    expect(editor.setActiveReviewItem(first!.key).ok).toBe(true);
+    expect(litKinds(container)).toEqual(['delete', 'insert']);
+    // The pane lists each half as a card, so a half's own key opens only that half.
+    const [deletion, insertion] = editor.getReviewItems({ placement: false });
+    expect(editor.setActiveReviewItem(deletion!.key).ok).toBe(true);
     expect(litKinds(container)).toEqual(['delete']);
+    expect(editor.setActiveReviewItem(insertion!.key).ok).toBe(true);
+    expect(litKinds(container)).toEqual(['insert']);
+  });
+
+  test('a tracked-changes filter applies, and a hidden half leaves the other a lone stop', () => {
+    const editor = mount(TWO_REPLACED);
+    // Keep deletions only: each replacement is reduced to its struck half.
+    editor.setTrackedChangesFilter((item) => item.revisionKind === 'delete');
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    for (let step = 0; step < 3; step += 1)
+      expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    const deletions = editor.getReviewItems({ placement: false });
+    expect(deletions.map((item) => (item.kind === 'revision' ? item.revisionKind : ''))).toEqual([
+      'delete',
+      'delete',
+    ]);
+    // Two stops, then a wrap. No pair key: the filter left nothing to pair with.
+    expect(events).toEqual([
+      { key: deletions[0]!.key, source: 'navigate' },
+      { key: deletions[1]!.key, source: 'navigate' },
+      { key: deletions[0]!.key, source: 'navigate' },
+    ]);
   });
 
   test('a deletion and an insertion from different authors stay two stops', () => {

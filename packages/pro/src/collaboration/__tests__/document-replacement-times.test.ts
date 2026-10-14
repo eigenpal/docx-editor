@@ -272,11 +272,12 @@ test('a caret activates only its independent revision', async () => {
     expect(activeAt(1)).toEqual(['delete']);
     expect(activeAt(4)).toEqual(['insert']);
     expect(activeAt(7)).toEqual([]);
+    // Navigation treats the replacement as one stop, so it lands on its deletion each time.
     a.editor.setActiveReviewItem(card(a, 'delete').key);
     expect(a.editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
-    expect(card(a, 'insert').isActive).toBe(true);
+    expect([card(a, 'delete').isActive, card(a, 'insert').isActive]).toEqual([true, false]);
     expect(a.editor.exec({ type: 'navigateReviewChange', direction: 'previous' }).ok).toBe(true);
-    expect(card(a, 'delete').isActive).toBe(true);
+    expect([card(a, 'delete').isActive, card(a, 'insert').isActive]).toEqual([true, false]);
   } finally {
     a.close();
   }

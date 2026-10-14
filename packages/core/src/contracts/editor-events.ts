@@ -102,8 +102,8 @@ export interface ReviewItemRevealEvent {
   /**
    * The key of the review item to open, as `getReviewItems()` without `pairReplacements`
    * lists it, so for a replacement this is the key of its deletion or its insertion. Next
-   * Change and Previous Change stop once on a replacement under `revisionsIn: 'balloons'`,
-   * on its deletion, and on each half under `revisionsIn: 'pane'`. `setActiveReviewItem`
+   * Change and Previous Change stop once on a replacement and report its deletion's key,
+   * with the pair's key in {@link ReviewItemRevealEvent.pairKey}. `setActiveReviewItem`
    * reports the key it was given, so a call with a pair's key reports that key here and in
    * {@link ReviewItemRevealEvent.pairKey}.
    */

@@ -31,6 +31,7 @@ import {
   findReviewPlacement,
   keyUnderQuery,
   narrowReviewItems,
+  createPairedActivation,
   replacementPairHalves,
   reviewItemWithHalves,
   withRevealPairKey,
@@ -340,6 +341,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
   let reviewActivationFormattingKinds: readonly string[] | undefined;
   let allowExcludedFormatNavigation = false;
+  const pairedPin = createPairedActivation();
   const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
@@ -669,7 +671,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
-      pairsReplacements: reviewPane.pairsReplacements,
+      pairsReplacements: () =>
+        reviewPane.pairsReplacements() || pairedPin.holds(surface?.activatedReviewKey()),
       ...diagnostics.surfaceHooks(suggesting, () => surface),
       ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
@@ -1737,7 +1740,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroyed: () => destroyed,
     viewing: () => editingMode === 'viewing',
     placements: reviewPlacements,
-    pairsReplacements: reviewPane.pairsReplacements,
     visible: () =>
       filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
     scope: storyScopeOfReviewItem,
@@ -2341,7 +2343,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       // The surface knows only store items: a paired replacement opens as its deletion.
       const halves = replacementPairHalves(item);
-      const pinKey = halves ? reviewItemKey(halves.deletion) : key;
+      const pinKey = pairedPin.set(halves ? reviewItemKey(halves.deletion) : null) ?? key;
       const range = firstReviewRange(item);
       if (!range) {
         return {

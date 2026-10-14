@@ -15,7 +15,7 @@ For user preferences and programmatic styling, see [Customize revision markup](/
 
 ## Review changes
 
-Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. When tracked changes appear in balloons, a replacement is one stop, and the deleted and inserted text highlight together. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
+Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. A replacement is one stop, and its deleted and inserted text highlight together. A replacement is a deletion and the insertion from the same author that took its place. When a reviewer or tracked-changes filter hides one half, the other half is a stop of its own. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
 
 Tracked text replacements appear as separate deletion and addition cards. You can accept or reject either half independently, even when their author, ID, and editing time match. Unchanged text separates inline cards even when their source revision attributes match. The editor preserves all source revision dates when you save. Adjacent additions, deletions, and equal formatting changes can each form one card across different editing times.
 
@@ -390,7 +390,7 @@ Use `reviewItemReveal` to open your component after **Next Change**, **Previous 
 
 Caret movement, page clicks, dismissal, refused activation, and remote edits do not emit this event.
 
-The event's `key` is the item's key without `pairReplacements`. With `revisionsIn: 'balloons'`, **Next Change** and **Previous Change** stop once on each replacement, and the key names its deletion. With `revisionsIn: 'pane'`, they stop on the deletion and the insertion separately. When the item is a paired replacement or one half of one, the event also carries `pairKey`, the key that `getReviewItems({ pairReplacements: true })` gives the pair. If you list pairs, open `pairKey ?? key`.
+The event's `key` is the item's key without `pairReplacements`. **Next Change** and **Previous Change** stop once on each replacement, and the key names its deletion. When you call `setActiveReviewItem` with the pair's key, both halves highlight. When the item is a paired replacement or one half of one, the event also carries `pairKey`, the key that `getReviewItems({ pairReplacements: true })` gives the pair. If you list pairs, open `pairKey ?? key`.
 
 The following example opens a host tracked change balloon in React. In Vue, use `useEditorEvent` from `@docx-editor.dev/vue` with the same handler:
 

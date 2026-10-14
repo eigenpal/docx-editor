@@ -947,9 +947,13 @@ export interface EditorCommands
   /**
    * Navigate tracked changes, including hidden formatting balloons, and wrap at the end.
    *
-   * Each stop is one review card. Under `revisionsIn: 'balloons'` a replacement is one card
-   * and one stop: navigation lands on its deletion, and `reviewItemReveal` carries the pair's
-   * `pairKey`. Under `revisionsIn: 'pane'` the deletion and the insertion are two stops.
+   * A replacement is one stop in every review layout. A replacement is a deletion and the
+   * touching insertion from the same author that took its place. Navigation lands on the
+   * deletion, highlights both halves, and `reviewItemReveal` carries the pair's `pairKey`.
+   *
+   * Navigation steps through the changes {@link Editor.getReviewItems} returns, so a
+   * reviewer or `setTrackedChangesFilter` filter applies. When a filter hides one half of a
+   * replacement, the other half is a stop of its own.
    */
   navigateReviewChange: { direction: 'next' | 'previous' };
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */

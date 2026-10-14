@@ -193,6 +193,26 @@ function replacementPartnerKey(items: readonly ReviewItem[], key: string): strin
   return null;
 }
 
+/**
+ * Which activation opened a whole replacement. The surface pins the deletion either way, so
+ * this tells "open the pair" from "open the deletion": only the first lights both halves.
+ */
+export function createPairedActivation(): {
+  /**
+   * Record the pinned deletion key of a pair activation, or null for any other activation.
+   * Returns `pinKey`.
+   */
+  set(pinKey: string | null): string | null;
+  /** True while `activatedKey`, the surface's live pin, is a pair activation's pin. */
+  holds(activatedKey: string | null | undefined): boolean;
+} {
+  let pin: string | null = null;
+  return {
+    set: (pinKey) => (pin = pinKey),
+    holds: (activatedKey) => pin !== null && activatedKey === pin,
+  };
+}
+
 /** True for a key only a paired query produces. */
 export function isReplacementPairKey(key: string): boolean {
   return key.startsWith(PAIR_KEY_PREFIX);
