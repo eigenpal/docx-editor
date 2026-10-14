@@ -37,8 +37,11 @@ function expectClampedRow(page: ReturnType<typeof pages>[number], first: string)
   expect(placed.placesWhole).toBe(true);
   const blocks = placed.cells[0]!.blocks as ParagraphFragmentRecord[];
   expect(text(blocks[0]!)).toBe(first);
+  // The line the bottom margin cuts shows its visible part, clipped at the margin.
   const last = blocks.at(-1)!;
-  expect(last.box.y + last.box.height).toBeLessThanOrEqual(page.page.contentBox.height + 0.001);
+  expect(last.clipToBox).toBe(true);
+  expect(last.box.y + last.box.height).toBeCloseTo(page.page.contentBox.height, 3);
+  for (const block of blocks.slice(0, -1)) expect(block.clipToBox).not.toBe(true);
 }
 
 for (const [name, height, cantSplit] of [
