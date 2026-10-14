@@ -90,7 +90,7 @@ test('a last word split across styled runs, or followed by blank runs, still fit
   }
 });
 
-test('a hard break, trailing tab, or field result after or as the last word keeps the wrap', () => {
+test('a hard break, trailing tab, or page field after or as the last word keeps the wrap', () => {
   const ref = (result: string) =>
     `<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve">` +
     ` REF bm1 \\h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>` +
@@ -102,13 +102,16 @@ test('a hard break, trailing tab, or field result after or as the last word keep
     // The word keeps its own space, so only the break or tab after it can refuse it.
     '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:br/></w:r>',
     '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:tab/></w:r>',
-    runs(['aa bb ']) + ref('cc'),
     runs(['aa bb ']) + `<w:fldSimple w:instr="PAGE"><w:r><w:t>cc</w:t></w:r></w:fldSimple>`,
   ]) {
     const result = modern(paragraph(xml));
     expect(content(result)[0]).toBe('aa bb');
     expect(compressed(result)).toBe(false);
   }
+  // A cross-reference result keeps its width through pagination: it compresses like text.
+  const result = modern(paragraph(runs(['aa bb ']) + ref('cc')));
+  expect(content(result)[0]).toBe('aa bb cc');
+  expect(compressed(result)).toBe(true);
 });
 
 test('no-break spaces are neither slots nor word ends for the last word', () => {

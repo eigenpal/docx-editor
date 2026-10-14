@@ -267,7 +267,11 @@ export function unmergedPiecesOfParagraphForDisplay(
       carriedMemo = {
         ...captured,
         ...(carriedLink ? { linkOverride: carriedLink } : {}),
-        fieldAtom: { formField, ...(formControl ? { formControl } : {}) },
+        fieldAtom: {
+          formField,
+          ...(formControl ? { formControl } : {}),
+          ...(pending?.kind === null && !formField ? { fixedResult: true as const } : {}),
+        },
       };
       return carriedMemo;
     };

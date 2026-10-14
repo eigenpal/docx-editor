@@ -65,6 +65,11 @@ export interface PositionalTab {
  */
 export interface FieldAtomMarker {
   /**
+   * The field shows a result whose width pagination never changes (a cross-reference
+   * number, not a page number), so a justified line may treat it as an ordinary word.
+   */
+  readonly fixedResult?: true;
+  /**
    * A legacy form field: `w:fldChar/w:ffData` (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN).
    *
    * Word shades these on a different rule from ordinary fields — always, unless the document

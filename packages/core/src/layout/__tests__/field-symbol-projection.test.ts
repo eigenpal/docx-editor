@@ -90,7 +90,7 @@ describe('a complex SYMBOL field', () => {
     const glyph = pieces[1]!;
     expect(glyph).toMatchObject({ start: 1, end: 2, projected: true });
     expect(glyph.style.fontFamily).toBe('Wingdings');
-    expect(glyph.fieldAtom).toEqual({ formField: false });
+    expect(glyph.fieldAtom).toEqual({ formField: false, fixedResult: true });
     expect(pieces[2]).toMatchObject({ start: 2, end: 3 });
   });
 
