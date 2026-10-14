@@ -840,6 +840,8 @@
     "drawingLocked": "Gambar ini dikunci",
     "editorNotReady": "Editor belum siap",
     "imageSuggesting": "Perubahan gambar tidak tersedia dalam mode saran",
+    "equationSourceFormatting": "Pengeditan linear akan menghilangkan format persamaan ini",
+    "equationSuggesting": "Perubahan persamaan tidak tersedia dalam mode saran",
     "invalidValue": "Nilai ini tidak valid untuk perintah",
     "mergeUnsupported": "Penggabungan sel tidak didukung",
     "noContentControl": "Tidak ada kontrol konten yang dipilih",

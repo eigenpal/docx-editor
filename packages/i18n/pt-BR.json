@@ -840,6 +840,8 @@
     "drawingLocked": "Esta imagem está bloqueada",
     "editorNotReady": "O editor não está pronto",
     "imageSuggesting": "Alterações em imagens não estão disponíveis no modo de sugestão",
+    "equationSourceFormatting": "A edição linear perderia a formatação desta equação",
+    "equationSuggesting": "Alterações em equações não estão disponíveis no modo de sugestão",
     "invalidValue": "Este valor não é válido para o comando",
     "mergeUnsupported": "A mesclagem de células não é compatível",
     "noContentControl": "Nenhum controle de conteúdo selecionado",

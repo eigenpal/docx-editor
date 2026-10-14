@@ -840,6 +840,8 @@
     "drawingLocked": "Bu resim kilitli",
     "editorNotReady": "Düzenleyici hazır değil",
     "imageSuggesting": "Öneri modunda resim değişiklikleri kullanılamaz",
+    "equationSourceFormatting": "Doğrusal düzenleme bu denklemin biçimlendirmesini kaybeder",
+    "equationSuggesting": "Öneri modunda denklem değişiklikleri kullanılamaz",
     "invalidValue": "Bu değer komut için geçerli değil",
     "mergeUnsupported": "Hücre birleştirme desteklenmiyor",
     "noContentControl": "Seçili içerik denetimi yok",

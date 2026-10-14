@@ -840,6 +840,8 @@
     "drawingLocked": "תמונה זו נעולה",
     "editorNotReady": "העורך אינו מוכן",
     "imageSuggesting": "שינויים בתמונות אינם זמינים במצב הצעות",
+    "equationSourceFormatting": "עריכה לינארית תאבד את העיצוב של משוואה זו",
+    "equationSuggesting": "שינויים במשוואות אינם זמינים במצב הצעות",
     "invalidValue": "ערך זה אינו תקף לפקודה",
     "mergeUnsupported": "מיזוג תאים אינו נתמך",
     "noContentControl": "לא נבחר פקד תוכן",

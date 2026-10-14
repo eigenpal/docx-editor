@@ -840,6 +840,8 @@
     "drawingLocked": "此图片已锁定",
     "editorNotReady": "编辑器尚未就绪",
     "imageSuggesting": "建议模式下无法更改图片",
+    "equationSourceFormatting": "线性编辑会丢失此公式的格式",
+    "equationSuggesting": "建议模式下无法更改公式",
     "invalidValue": "此值不适用于该命令",
     "mergeUnsupported": "不支持合并单元格",
     "noContentControl": "未选择内容控件",

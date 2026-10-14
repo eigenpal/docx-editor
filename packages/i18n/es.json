@@ -23,6 +23,8 @@
     "mergeUnsupported": "No se admite combinar celdas",
     "splitUnsupported": "No se admite dividir celdas",
     "imageSuggesting": "Los cambios de imagen no están disponibles en modo de sugerencias",
+    "equationSourceFormatting": "La edición lineal perdería el formato de esta ecuación",
+    "equationSuggesting": "Los cambios de ecuación no están disponibles en modo de sugerencias",
     "invalidValue": "Este valor no es válido para el comando",
     "unavailable": "Este comando no está disponible",
     "bodyOnlySectionBreak": "Los saltos de sección van en el cuerpo del documento.",

@@ -840,6 +840,8 @@
     "drawingLocked": "Ten obraz jest zablokowany",
     "editorNotReady": "Edytor nie jest gotowy",
     "imageSuggesting": "Zmiany obrazów są niedostępne w trybie sugerowania",
+    "equationSourceFormatting": "Edycja liniowa usunęłaby formatowanie tego równania",
+    "equationSuggesting": "Zmiany równań są niedostępne w trybie sugerowania",
     "invalidValue": "Ta wartość jest nieprawidłowa dla tego polecenia",
     "mergeUnsupported": "Scalanie komórek nie jest obsługiwane",
     "noContentControl": "Nie zaznaczono kontrolki zawartości",

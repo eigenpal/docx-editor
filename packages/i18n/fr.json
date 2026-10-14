@@ -840,6 +840,8 @@
     "drawingLocked": "Cette image est verrouillée",
     "editorNotReady": "L’éditeur n’est pas prêt",
     "imageSuggesting": "La modification des images est indisponible en mode suggestion",
+    "equationSourceFormatting": "La modification linéaire ferait perdre la mise en forme de cette équation",
+    "equationSuggesting": "La modification des équations est indisponible en mode suggestion",
     "invalidValue": "Cette valeur n’est pas valide pour la commande",
     "mergeUnsupported": "La fusion de cellules n’est pas prise en charge",
     "noContentControl": "Aucun contrôle de contenu n’est sélectionné",

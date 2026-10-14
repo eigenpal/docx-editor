@@ -23,6 +23,8 @@
     "mergeUnsupported": "セルの結合はサポートされていません",
     "splitUnsupported": "セルの分割はサポートされていません",
     "imageSuggesting": "提案モードでは画像を変更できません",
+    "equationSourceFormatting": "線形形式で編集すると、この数式の書式が失われます",
+    "equationSuggesting": "提案モードでは数式を変更できません",
     "invalidValue": "このコマンドでは使用できない値です",
     "unavailable": "このコマンドは使用できません",
     "bodyOnlySectionBreak": "セクション区切りは文書の本文に挿入してください。",

@@ -33,6 +33,11 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
   'cell split is not supported yet': 'disabledReason.splitUnsupported',
   'image changes are not supported in suggesting mode': 'disabledReason.imageSuggesting',
+  // Keyed on the equation lane's `can` refusals, which the equation popover shows.
+  'compact linear editing cannot preserve this equation source formatting':
+    'disabledReason.equationSourceFormatting',
+  'equation replacement and removal are not supported in suggesting mode':
+    'disabledReason.equationSuggesting',
   // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
   'a picture is selected; place the caret in text to insert a picture':
     'disabledReason.pictureSelected',
