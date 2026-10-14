@@ -1,11 +1,12 @@
 {
   "impact": "no-impact",
   "fields": [],
-  "before": "createWebrtcCollaboration used the public demo signaling endpoints when signaling was omitted.",
-  "after": "createWebrtcCollaboration and the WebRTC hooks refuse a room without signaling before any connection opens. Explicit endpoints, including DEMO_SIGNALING_ENDPOINTS, connect as before.",
-  "reason": "Only room setup changes. A room that connects uses the same y-webrtc provider, signaling password, framing, and shared Yjs state as before, so peers keep the same meaning for shared data and updates.",
+  "before": "createWebrtcCollaboration used the public demo signaling endpoints when signaling was omitted. y-webrtc announced every room in the page through every signaling connection, and a destroyed room left its signaling socket open.",
+  "after": "createWebrtcCollaboration and the WebRTC hooks refuse a room without signaling before any connection opens. Each signaling connection carries only the rooms that listed its URL, and destroying the last room on a server closes its socket. Explicit endpoints, including DEMO_SIGNALING_ENDPOINTS, connect as before.",
+  "reason": "Only room setup and signaling routing change. Peers that list the same signaling server still meet on it, and a connected room uses the same y-webrtc provider, signaling password, framing, and shared Yjs state as before, so released participants keep the same meaning for shared data and updates.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/webrtc-signaling-required.test.ts",
+    "packages/pro/src/collaboration/__tests__/webrtc-signaling-scope.test.ts",
     "packages/pro/src/__tests__/use-webrtc-collaboration.test.tsx",
     "packages/pro/src/__tests__/use-webrtc-collaboration-vue.test.ts"
   ],

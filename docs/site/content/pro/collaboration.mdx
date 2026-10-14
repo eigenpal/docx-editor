@@ -559,7 +559,7 @@ const room: UseWebrtcCollaborationConnectOptions = {
 };
 ```
 
-An empty `signaling` list opens no signaling connection. Only editors in tabs of the same browser can then find each other.
+Each room uses only the signaling URLs that it lists. If a page opens rooms with different `signaling` lists, no room sends its room ID or announcements to another room's server. An empty `signaling` list opens no signaling connection. Only editors in tabs of the same browser can then find each other.
 
 ## Connect to a Hocuspocus server
 

@@ -23,6 +23,7 @@ import {
 import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
 import { createLinkHealth, linkHealthStatus, type LinkHealth } from './webrtc-link-health.ts';
 import { validateRoomId } from './room-id.ts';
+import { installSignalingScope } from './webrtc-signaling-scope.ts';
 import type { CollaborationBootstrap } from './types.ts';
 
 /**
@@ -191,6 +192,17 @@ const installChunkedTransport = (
 };
 
 /**
+ * Close a provider's signaling connections, then destroy it.
+ *
+ * `WebrtcProvider.destroy()` leaves the provider registered on its shared signaling
+ * connections, so the last room to close would keep its signaling socket open.
+ */
+const releaseProvider = (provider: WebrtcProvider): void => {
+  provider.disconnect();
+  provider.destroy();
+};
+
+/**
  * Create one owned `y-webrtc` room and provider-neutral collaboration session.
  *
  * Rejects with a `TypeError` when `signaling` is omitted. The room never falls back to
@@ -203,6 +215,8 @@ export async function createWebrtcCollaboration(
 ): Promise<WebrtcCollaborationHandle> {
   const roomId = validateRoomId(options.roomId);
   const signaling = requireSignaling(options.signaling);
+  // `y-webrtc` shares one connection per URL across the page; keep this room on its own.
+  installSignalingScope();
   const password = resolveWebrtcRoomPassword({ password: options.password });
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
@@ -246,7 +260,7 @@ export async function createWebrtcCollaboration(
     });
     if (!provider) provider = connectProvider();
   } catch (error) {
-    provider?.destroy();
+    if (provider) releaseProvider(provider);
     awareness.destroy();
     ydoc.destroy();
     throw error;
@@ -296,7 +310,7 @@ export async function createWebrtcCollaboration(
       unsynced.destroy();
       health.destroy();
       handle.destroy();
-      connectedProvider.destroy();
+      releaseProvider(connectedProvider);
       awareness.destroy();
       ydoc.destroy();
     },
