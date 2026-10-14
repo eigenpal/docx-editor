@@ -7,6 +7,7 @@ import { collaborationModule } from '@docx-editor.dev/pro';
 import {
   createCollaborationRoomId,
   createWebrtcCollaboration,
+  DEMO_SIGNALING_ENDPOINTS,
   type WebrtcCollaborationHandle,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { demoDocumentBytes } from './demo-document';
@@ -257,6 +258,8 @@ async function startRoom(roomId: string): Promise<void> {
       color: 'var(--doc-accent)',
     },
     bootstrap: { kind: 'create-or-join', document: demoDocumentBytes() },
+    // Demo only. Production rooms pass their own signaling URLs and TURN servers.
+    signaling: DEMO_SIGNALING_ENDPOINTS,
     ...(secret ? { password: secret } : {}),
   });
   try {

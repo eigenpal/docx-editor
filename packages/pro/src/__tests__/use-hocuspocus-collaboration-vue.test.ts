@@ -439,6 +439,7 @@ describe('useHocuspocusCollaboration (Vue)', () => {
               roomId: CONNECT.roomId,
               identity: CONNECT.identity,
               bootstrap: CONNECT.bootstrap,
+              signaling: ['wss://signaling.example'],
             },
             [WEBRTC_CREATE_ROOM_FOR_TESTS]: async () => {
               const room = fakeRoom('webrtc-room');

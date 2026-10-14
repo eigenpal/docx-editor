@@ -98,6 +98,7 @@ Pass review and custom-node modules through the hook’s `modules` option. Pass 
 ```tsx
 import { useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { DEMO_SIGNALING_ENDPOINTS } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
 type CollaborativeEditorProps = {
@@ -114,6 +115,8 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
       roomId,
       identity: { actorId, name },
       bootstrap: { kind: 'create-or-join', document: bytes },
+      // Demo only. Pass your own signaling URLs in production.
+      signaling: DEMO_SIGNALING_ENDPOINTS,
     },
   });
 
@@ -150,6 +153,7 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
 <script setup lang="ts">
 import { ref } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
+import { DEMO_SIGNALING_ENDPOINTS } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
 const props = defineProps<{
@@ -165,6 +169,8 @@ const { document, modules, session, error, leave } = useWebrtcCollaboration(() =
     roomId: props.roomId,
     identity: { actorId: props.actorId, name: props.name },
     bootstrap: { kind: 'create-or-join', document: props.bytes },
+    // Demo only. Pass your own signaling URLs in production.
+    signaling: DEMO_SIGNALING_ENDPOINTS,
   },
 }));
 
@@ -529,9 +535,31 @@ To pause editing while disconnected, set `offlineEditing: false` in the `room` o
 
 ## Use your own signaling
 
-`DEMO_SIGNALING_ENDPOINTS` is a public demo signaling service. Do not use it for production.
+A WebRTC room needs signaling URLs that introduce peers to each other. The `signaling` option has no default. If you omit it, `createWebrtcCollaboration` rejects with a `TypeError`, and `connect` resolves with a `transport` failure. In both cases, no network connection opens.
+
+`DEMO_SIGNALING_ENDPOINTS` is a shared, unauthenticated public signaling service. It receives every room ID. Without a `password`, it also receives the signaling messages in plaintext. Use it only for demos, and pass it explicitly.
 
 For production, pass your signaling URLs to `connect` or `room`. Also provide your own Traversal Using Relays around NAT (TURN) servers. Many networks block direct WebRTC connections without TURN.
+
+```ts
+import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';
+
+const room: UseWebrtcCollaborationConnectOptions = {
+  roomId,
+  identity: { actorId, name },
+  bootstrap: { kind: 'create-or-join', document: bytes },
+  signaling: ['wss://signaling.example.com'],
+  iceServers: [
+    {
+      urls: 'turn:turn.example.com:3478',
+      username: turnUser,
+      credential: turnCredential,
+    },
+  ],
+};
+```
+
+An empty `signaling` list opens no signaling connection. Only editors in tabs of the same browser can then find each other.
 
 ## Connect to a Hocuspocus server
 

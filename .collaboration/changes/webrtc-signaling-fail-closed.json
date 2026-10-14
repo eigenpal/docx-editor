@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "createWebrtcCollaboration used the public demo signaling endpoints when signaling was omitted.",
+  "after": "createWebrtcCollaboration and the WebRTC hooks refuse a room without signaling before any connection opens. Explicit endpoints, including DEMO_SIGNALING_ENDPOINTS, connect as before.",
+  "reason": "Only room setup changes. A room that connects uses the same y-webrtc provider, signaling password, framing, and shared Yjs state as before, so peers keep the same meaning for shared data and updates.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/webrtc-signaling-required.test.ts",
+    "packages/pro/src/__tests__/use-webrtc-collaboration.test.tsx",
+    "packages/pro/src/__tests__/use-webrtc-collaboration-vue.test.ts"
+  ],
+  "changeset": "webrtc-signaling-fail-closed",
+  "migration": null
+}

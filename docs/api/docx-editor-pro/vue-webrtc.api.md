@@ -49,7 +49,7 @@ export interface UseWebrtcCollaborationConnectOptions {
     readonly offlineEditing?: boolean;
     readonly password?: string;
     readonly roomId: string;
-    readonly signaling?: readonly string[];
+    readonly signaling: readonly string[];
 }
 
 // @public
