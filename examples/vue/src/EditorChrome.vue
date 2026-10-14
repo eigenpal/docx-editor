@@ -104,6 +104,15 @@
 
     <DocxEditorFontNotice />
 
+    <!-- Explains a file that did not open, with an action to try another one. -->
+    <DocxEditorOpenFailure>
+      <template #actions>
+        <DocxEditorOpenFailureAction variant="primary" dismiss @click="openFilePicker">
+          Open another file
+        </DocxEditorOpenFailureAction>
+      </template>
+    </DocxEditorOpenFailure>
+
     <DocxEditorPageSetupDialog :open="showPageSetup" @close="showPageSetup = false" />
   </div>
 </template>
@@ -115,6 +124,8 @@ import {
   DocxEditorMenu,
   DocxEditorToolbar,
   DocxEditorFontNotice,
+  DocxEditorOpenFailure,
+  DocxEditorOpenFailureAction,
   DocxEditorPageSetupDialog,
   useDocxEditor,
   useEditorCaret,

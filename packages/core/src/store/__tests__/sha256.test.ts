@@ -27,4 +27,32 @@ describe('sha256FontBytes', () => {
     expect(sha256FontBytes(view)).toBe(sha256FontBytesPure(view));
     expect(sha256FontBytes(view)).not.toBe(sha256FontBytes(buffer));
   });
+  test('large caller views require at most 128 bytes of padding storage', () => {
+    const storage = new Uint8Array(1024 * 1024 + 80);
+    for (let index = 0; index < storage.length; index++) storage[index] = (index * 7919) & 0xff;
+    const original = storage.slice();
+    const inputs = [0, 55, 56, 63].map((remainder) =>
+      storage.subarray(7, 7 + 1024 * 1024 + remainder)
+    );
+    const expected = inputs.map((bytes) => sha256FontBytes(bytes));
+    const allocations: number[] = [];
+    const Constructor = globalThis.Uint8Array;
+    const tracked = new Proxy(Constructor, {
+      construct(target, args, newTarget) {
+        const result = Reflect.construct(target, args, newTarget) as Uint8Array;
+        allocations.push(result.byteLength);
+        return result;
+      },
+    });
+    let digests: string[];
+    try {
+      globalThis.Uint8Array = tracked;
+      digests = inputs.map((bytes) => sha256FontBytesPure(bytes));
+    } finally {
+      globalThis.Uint8Array = Constructor;
+    }
+    expect(digests).toEqual(expected);
+    expect(allocations).toEqual([64, 64, 128, 128]);
+    expect(storage).toEqual(original);
+  });
 });

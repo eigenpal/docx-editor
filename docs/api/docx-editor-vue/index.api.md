@@ -43,6 +43,8 @@ import { DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentOpenFailure } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentOpenFailureReason } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentRefresh } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
@@ -157,6 +159,7 @@ import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
+import { SlotsType } from 'vue';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
@@ -2181,6 +2184,10 @@ export const DocumentName: vue.DefineComponent<vue.ExtractPropTypes<{
     value: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+export { DocumentOpenFailure }
+
+export { DocumentOpenFailureReason }
+
 // @public (undocumented)
 export const DocumentOutline: vue.DefineComponent<vue.ExtractPropTypes<{
     headings: {
@@ -3102,8 +3109,15 @@ export interface DocxEditorMenuProps {
 
 // @public (undocumented)
 export interface DocxEditorNamespace {
-    // (undocumented)
-    (props: DocxEditorProps): VNode;
+    (props: DocxEditorProps, context?: {
+        slots: {
+            default?: () => VNode[];
+            loadingIndicator?: () => VNode[];
+            openFailureActions?: (context: DocxEditorOpenFailureContext) => VNode[];
+            titleBarLeft?: () => VNode[];
+            titleBarRight?: () => VNode[];
+        };
+    }): VNode;
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
     // (undocumented)
@@ -3148,6 +3162,7 @@ export interface DocxEditorNamespace {
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     // (undocumented)
     readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
+    readonly OpenFailure: typeof DocxEditorOpenFailure;
     // (undocumented)
     readonly PageNumber: typeof DocxEditorPageNumber;
     // (undocumented)
@@ -3455,6 +3470,88 @@ export interface DocxEditorNotesContextMenuProps {
     x: number;
     // (undocumented)
     y: number;
+}
+
+// @public
+export const DocxEditorOpenFailure: DocxEditorOpenFailureComponent;
+
+// @public
+export const DocxEditorOpenFailureAction: vue.DefineComponent<vue.ExtractPropTypes<{
+    asChild: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    dismiss: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    variant: {
+        default: string;
+        type: PropType<'primary' | 'secondary'>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    asChild: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    dismiss: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    variant: {
+        default: string;
+        type: PropType<'primary' | 'secondary'>;
+    };
+}>> & Readonly<{}>, {
+    asChild: boolean;
+    dismiss: boolean;
+    variant: "primary" | "secondary";
+}, SlotsType<{
+    default?: () => VNode[];
+}>, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorOpenFailureActionProps {
+    asChild?: boolean;
+    children?: DocxEditorChildren;
+    dismiss?: boolean;
+    variant?: 'primary' | 'secondary';
+}
+
+// @public
+export interface DocxEditorOpenFailureComponent {
+    (props: DocxEditorOpenFailureProps, context?: {
+        slots: {
+            actions?: (context: DocxEditorOpenFailureContext) => VNode[];
+            default?: (context: DocxEditorOpenFailureContext) => VNode[];
+        };
+    }): VNode;
+    readonly Action: typeof DocxEditorOpenFailureAction;
+}
+
+// @public
+export interface DocxEditorOpenFailureContext {
+    dismiss(): void;
+    readonly failure: DocumentOpenFailure;
+    readonly message: string;
+}
+
+// @public
+export type DocxEditorOpenFailureMessage = string | DocxEditorChildren | ((failure: DocumentOpenFailure) => string | DocxEditorChildren);
+
+// @public
+export interface DocxEditorOpenFailureProps {
+    actions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+    children?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+    className?: string;
+    closeLabel?: string;
+    message?: DocxEditorOpenFailureMessage;
+    onDismiss?: (failure: DocumentOpenFailure) => void;
+    showClose?: boolean;
+    showCode?: boolean;
+    style?: CSSProperties;
+    t?: TFunction;
+    title?: string;
 }
 
 // @public
@@ -3812,6 +3909,7 @@ export interface DocxEditorProps {
     mode?: EditorMode;
     modules?: readonly EditorModule[];
     navigation?: boolean | DocxEditorNavigationProps;
+    openFailure?: boolean | DocxEditorOpenFailureProps;
     // (undocumented)
     popups?: DocxEditorPopups;
     reviewDisplayMode?: ReviewDisplayMode;
@@ -6998,6 +7096,23 @@ export function useNotePropertiesState(): ShallowRef<NotePropertiesState | null>
 export function useNoteScopeState(): ShallowRef<Extract<ViewScope, {
     kind: 'note';
 }> | null>;
+
+// @public
+export function useOpenFailure(options?: UseOpenFailureOptions): UseOpenFailureReturn;
+
+// @public
+export interface UseOpenFailureOptions {
+    t?: TFunction;
+}
+
+// @public
+export interface UseOpenFailureReturn {
+    dismiss(failure?: DocumentOpenFailure | Event | {
+        readonly nativeEvent: Event;
+    }): void;
+    readonly failure: ComputedRef<DocumentOpenFailure | null>;
+    readonly message: ComputedRef<string | null>;
+}
 
 // @public (undocumented)
 export function usePageSetup(): UsePageSetupReturn;

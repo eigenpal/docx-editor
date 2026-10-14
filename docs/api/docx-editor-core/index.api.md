@@ -1377,6 +1377,15 @@ export type DocumentOpenDiagnostic = DiagnosticBase & {
 export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
 
 // @public
+export interface DocumentOpenFailure {
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly reason: DocumentOpenFailureReason;
+}
+
+// @public
+export type DocumentOpenFailureReason = 'damaged' | 'not-docx' | 'too-large' | 'blocked' | 'unknown';
+
+// @public
 export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
 
 // @public
@@ -2233,6 +2242,7 @@ export interface EditorSnapshot {
     readonly isLoading: boolean;
     readonly isOpening?: boolean;
     readonly lastRejection?: string | null;
+    readonly openFailure?: DocumentOpenFailure | null;
     // (undocumented)
     readonly page: {
         readonly current: number;

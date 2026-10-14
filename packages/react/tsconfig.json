@@ -48,6 +48,6 @@
       "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"]
     }
   },
-  "include": ["src", "test/popup-component-types.tsx"],
+  "include": ["src", "test/popup-component-types.tsx", "test/open-failure-types.tsx"],
   "exclude": ["node_modules", "dist"]
 }

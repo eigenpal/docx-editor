@@ -13,6 +13,7 @@ import {
   useCallback,
   useSyncExternalStore,
   useRef,
+  useState,
 } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, RefObject } from 'react';
 import { Slot } from './toolbar/Slot';
@@ -218,6 +219,7 @@ export function DialogFrame({
   dismissOutside = true,
   sessionSignal,
   restoreFocus = true,
+  describedBy,
 }: {
   kind:
     | 'revisionMarkup'
@@ -228,7 +230,8 @@ export function DialogFrame({
     | 'invalidTextFormField'
     | 'imageInsertError'
     | 'export'
-    | 'print';
+    | 'print'
+    | 'openFailure';
   role?: 'dialog' | 'alertdialog';
   className?: string;
   style?: CSSProperties;
@@ -240,15 +243,20 @@ export function DialogFrame({
   dismissOutside?: boolean;
   sessionSignal?: AbortSignal;
   restoreFocus?: boolean;
+  /** The id of the element that describes the dialog, such as an alert's message. */
+  describedBy?: string;
 }) {
   const ownRef = useRef<HTMLDialogElement | null>(null);
   const ref = panelRef ?? ownRef;
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  // Rendered through `className`, not `classList.add`: React rewrites `class` whenever the
+  // host's `className` changes, such as on a colour-mode switch, and would drop it.
+  const [ownScope, setOwnScope] = useState(false);
   useLayoutEffect(() => {
     const panel = ref.current;
     if (!panel) return;
-    if (!panel.parentElement?.closest('.docx-editor')) panel.classList.add('docx-editor');
+    setOwnScope(!panel.parentElement?.closest('.docx-editor'));
     const opener = panel.ownerDocument.activeElement as HTMLElement | null;
     const closeNative = () => {
       if (panel.open) panel.close?.();
@@ -256,11 +264,13 @@ export function DialogFrame({
     sessionSignal?.addEventListener('abort', closeNative);
     if (typeof panel.showModal === 'function') panel.showModal();
     else panel.setAttribute('open', ''); // DOM test environments; browsers use native modality.
-    panel
-      .querySelector<HTMLElement>(
+    // A link takes focus only when the dialog has no control, such as an alert whose one
+    // action is a support link.
+    (
+      panel.querySelector<HTMLElement>(
         'input:not([disabled]),select:not([disabled]),button:not([disabled]),[tabindex="0"]'
-      )
-      ?.focus({ preventScroll: true });
+      ) ?? panel.querySelector<HTMLElement>('a[href]')
+    )?.focus({ preventScroll: true });
     return () => {
       sessionSignal?.removeEventListener('abort', closeNative);
       if (typeof panel.close === 'function' && panel.open) panel.close();
@@ -273,7 +283,8 @@ export function DialogFrame({
       role={role}
       aria-modal="true"
       aria-label={label}
-      className={`docx-dialog${className ? ` ${className}` : ''}`}
+      aria-describedby={describedBy}
+      className={`docx-dialog${ownScope ? ' docx-editor' : ''}${className ? ` ${className}` : ''}`}
       style={style}
       data-docx-dialog={kind}
       onCancel={(event) => {

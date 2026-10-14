@@ -226,6 +226,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorOpenFailure": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["inheritAttrs", "name", "props", "slots"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorOutline": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["name"],

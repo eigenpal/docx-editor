@@ -25,6 +25,14 @@ The editor SHALL extract and deobfuscate fonts a loaded document's package embed
 - **WHEN** a document embeds a font part exceeding the per-face byte cap
 - **THEN** that face is not admitted and the failure is reported as `overLimit`
 
+#### Scenario: An admitted face exceeds the shaping byte limit
+
+- **WHEN** an embedded face passes admission but exceeds the shaping byte limit
+- **THEN** measurement retains its existing fallback and reports an `EditorFontError` through `onFontError`
+- **AND** the error retains the admitted request and original `fontOverLimit` cause
+- **AND** each resolved face object reports once within its current measurement owner
+- **AND** a throwing diagnostic callback does not replace the refusal or interrupt fallback
+
 ### Requirement: Embedded style keys map to canonical face requests
 
 Embedded style slots SHALL map to `FontFaceRequest` as: regular → weight 400/normal, bold → 700/normal, italic → 400/italic, boldItalic → 700/italic. Each admitted embedded source SHALL carry a `sha256:` content hash computed from its deobfuscated bytes and `faceIndex` 0.
@@ -70,6 +78,7 @@ The editor SHALL continue on the fixed measurer, remain fully editable, and repo
 
 - **WHEN** a document's embedded font parts are all corrupt
 - **THEN** the document opens and edits normally on the fixed measurer and each failure is reported as a typed error
+
 
 ### Requirement: Font diagnostics belong to the originating document load
 

@@ -605,6 +605,17 @@
   "loading": {
     "label": "Chargement"
   },
+  "openFailure": {
+    "title": "Impossible d’ouvrir ce fichier",
+    "reasons": {
+      "damaged": "Impossible de lire le fichier. Il est peut-être endommagé ou d’un autre type. Ouvrez-le dans un traitement de texte de bureau, enregistrez-le au format .docx, puis réessayez.",
+      "notDocx": "Ce fichier n’est pas un document .docx. Choisissez un fichier .docx, ou enregistrez ce fichier au format .docx dans un traitement de texte de bureau, puis réessayez.",
+      "tooLarge": "Ce fichier est trop volumineux ou trop complexe pour être ouvert ici. Essayez une copie plus légère, par exemple avec moins de pages ou d’images.",
+      "blocked": "Ce fichier contient du contenu que l’éditeur n’ouvre pas, pour des raisons de sécurité. Enregistrez-le de nouveau au format .docx dans un traitement de texte de bureau, puis réessayez.",
+      "unknown": "Une erreur s’est produite à l’ouverture de ce fichier. Réessayez. Si le problème persiste, essayez une autre copie du fichier."
+    },
+    "code": "Code d’erreur : {code}"
+  },
   "revisions": {
     "paragraphMarkInserted": "Marque de paragraphe insérée",
     "runPropertiesChanged": "Mise en forme du texte modifiée",

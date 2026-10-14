@@ -658,6 +658,17 @@
   "loading": {
     "label": "Memuat"
   },
+  "openFailure": {
+    "title": "File ini tidak dapat dibuka",
+    "reasons": {
+      "damaged": "File tidak dapat dibaca. File mungkin rusak, atau merupakan jenis file lain. Buka di pengolah kata desktop, simpan sebagai .docx, lalu coba lagi.",
+      "notDocx": "File ini bukan dokumen .docx. Pilih file .docx, atau simpan file ini sebagai .docx di pengolah kata desktop, lalu coba lagi.",
+      "tooLarge": "File ini terlalu besar atau terlalu rumit untuk dibuka di sini. Coba salinan yang lebih kecil, misalnya dengan lebih sedikit halaman atau gambar.",
+      "blocked": "File ini berisi konten yang tidak dibuka editor demi keamanan. Simpan lagi sebagai .docx di pengolah kata desktop, lalu coba lagi.",
+      "unknown": "Terjadi kesalahan saat membuka file ini. Coba lagi. Jika masalah berlanjut, coba salinan lain dari file ini."
+    },
+    "code": "Kode kesalahan: {code}"
+  },
   "toc": {
     "refresh": "Perbarui seluruh tabel",
     "refreshPageNumbers": "Perbarui nomor halaman saja"

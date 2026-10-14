@@ -34,6 +34,8 @@ export type {
 import type { EditorReviewHits } from './editor-review-hits.ts';
 import type { ReviewItemQuery } from './editor-review-query.ts';
 export type { ReviewItemQuery } from './editor-review-query.ts';
+export type { DocumentOpenFailure, DocumentOpenFailureReason } from './editor-open-failure.ts';
+import type { DocumentOpenFailure } from './editor-open-failure.ts';
 import type { ReviewActivationOptions } from './review-activation.ts';
 export type { ReviewActivationOptions } from './review-activation.ts';
 import type { ReviewItemPlacement } from './editor-review-placement.ts';
@@ -1474,6 +1476,13 @@ export interface EditorSnapshot {
    */
   readonly isOpening?: boolean;
   readonly parseError: string | null;
+  /**
+   * Why the last supplied document did not open, or `null` while it opens or after it opened.
+   * Unlike {@link EditorSnapshot.parseError}, it holds a stable code and never quotes the
+   * file, so a host can show it to a person. `DocxEditor.OpenFailure` renders it. Optional
+   * and additive: absent means the implementation has not derived it, read as `null`.
+   */
+  readonly openFailure?: DocumentOpenFailure | null;
   /** Whether the loaded document is being edited: a patchable document opened in edit mode. A
    *  read-only document (tables/SDTs/unpreservable) or `mode: 'view'` reports false. */
   readonly editable: boolean;

@@ -27,6 +27,7 @@ import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 import type { DocxEditorNavigationProps } from './editor/navigation';
+import type { DocxEditorOpenFailureProps } from './editor/DocxEditorOpenFailure';
 
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
@@ -61,6 +62,14 @@ export interface DocxEditorProps {
    * to the browser.
    */
   navigation?: boolean | DocxEditorNavigationProps;
+  /**
+   * The dialog that explains a file the editor refused to open, on by default. A refused
+   * open leaves the pages blank, so without it the reader sees nothing. An object is
+   * `DocxEditorOpenFailureProps`, passed straight through. `false` removes the dialog, for a
+   * host that reports the failure itself through `useOpenFailure`. For your own buttons, use
+   * the `openFailureActions` slot.
+   */
+  openFailure?: boolean | DocxEditorOpenFailureProps;
   rulers?: boolean;
   document?: DocumentSource;
   /** Live host mode. */

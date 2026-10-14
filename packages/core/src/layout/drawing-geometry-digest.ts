@@ -42,6 +42,9 @@ export function vectorShapeLayoutToken(
       String(component.strokeWidthEmu),
       // An inset outline paints inside its geometry, at twice the width under a clip.
       component.strokeInset === true ? 'in' : '',
+      // Line ends and joins change the painted outline and its ink clip, not the points.
+      component.strokeCap ?? '',
+      component.strokeJoin ?? '',
       String(component.subpathsEmu.length)
     );
     const subpaths = component.subpathsEmu;

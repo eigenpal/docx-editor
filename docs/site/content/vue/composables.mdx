@@ -366,6 +366,10 @@ For options, see [Highlight text ranges](/docs/2.x/guides/navigation#highlight-t
 
 `useHighlightAt(name)` returns a ref with the highlight under the pointer, or `null`. For an example, see [Show details on hover](/docs/2.x/guides/navigation#show-details-on-hover).
 
+## `useOpenFailure`
+
+`useOpenFailure()` returns the refused open as `failure`, the packaged `message`, and `dismiss`. Use it for your own toast or banner. For more information, see [Handle files that do not open](/docs/2.x/guides/open-failures).
+
 ## `useNavigationPane`
 
 Returns the navigation pane state, width, active tab, and setters. `overlay` is `true` when the open pane covers the page on a narrow viewport.

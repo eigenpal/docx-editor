@@ -330,6 +330,28 @@ describe('vector shape layout token', () => {
     }
   });
 
+  // A cap or join changes the painted outline and its ink clip without moving any point,
+  // so a reused record would keep painting the old line ends.
+  test('line caps and joins separate otherwise equal shapes', () => {
+    const open = shape({ open: true, strokeHex: '000000', strokeWidthEmu: 12_700 });
+    const styled = (fields: {
+      strokeCap?: 'butt' | 'round' | 'square';
+      strokeJoin?: 'round' | 'bevel';
+    }) => ({
+      ...open,
+      components: [{ ...open.components[0]!, ...fields }],
+    });
+    const tokens = [
+      open,
+      styled({ strokeCap: 'butt' }),
+      styled({ strokeCap: 'round' }),
+      styled({ strokeCap: 'square' }),
+      styled({ strokeJoin: 'round' }),
+      styled({ strokeJoin: 'bevel' }),
+    ].map(vectorShapeLayoutToken);
+    expect(new Set(tokens).size).toBe(tokens.length);
+  });
+
   test('line-end triangles separate by count and by vertex', () => {
     const one = shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5)]] });
     const moved = shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5.5)]] });

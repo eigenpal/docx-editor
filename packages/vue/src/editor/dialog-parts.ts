@@ -238,6 +238,8 @@ export const NativeDialog = defineComponent({
     dismissOutside: { type: Boolean, default: true },
     restoreFocus: { type: Boolean, default: true },
     sessionSignal: Object as PropType<AbortSignal>,
+    /** The id of the element that describes the dialog, such as an alert's message. */
+    describedBy: String,
     content: Function as PropType<() => import('vue').VNodeChild>,
   },
   setup(p, { attrs, slots }) {
@@ -260,7 +262,11 @@ export const NativeDialog = defineComponent({
         (
           value.querySelector<HTMLElement>(
             'input:not([disabled]),select:not([disabled]),button:not([disabled])'
-          ) ?? value
+          ) ??
+          // A link takes focus only when the dialog has no control, such as an alert whose one
+          // action is a support link.
+          value.querySelector<HTMLElement>('a[href]') ??
+          value
         ).focus({ preventScroll: true });
       },
       { flush: 'post' }
@@ -290,6 +296,7 @@ export const NativeDialog = defineComponent({
           role: p.role ?? 'dialog',
           'aria-modal': true,
           'aria-label': p.label,
+          ...(p.describedBy ? { 'aria-describedby': p.describedBy } : {}),
           'data-docx-dialog': p.kind,
           class: ['docx-dialog', defaultScope.value ? 'docx-editor' : undefined, attrs.class],
           onCancel: (e: Event) => {

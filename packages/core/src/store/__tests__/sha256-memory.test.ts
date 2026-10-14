@@ -3,14 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 test('retained browser-path digests fit a bounded V8 heap', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'docx-sha256-memory-'));
   try {
     const outfile = join(directory, 'sha256.mjs');
     const build = await Bun.build({
-      entrypoints: [new URL('../package/sha256.ts', import.meta.url).pathname],
+      entrypoints: [fileURLToPath(new URL('../package/sha256.ts', import.meta.url))],
       target: 'node',
       format: 'esm',
     });

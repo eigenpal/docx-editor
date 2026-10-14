@@ -589,6 +589,17 @@
   "loading": {
     "label": "Ładowanie"
   },
+  "openFailure": {
+    "title": "Nie udało się otworzyć tego pliku",
+    "reasons": {
+      "damaged": "Nie udało się odczytać pliku. Może być uszkodzony albo mieć inny format. Otwórz go w edytorze tekstu na komputerze, zapisz jako .docx i spróbuj ponownie.",
+      "notDocx": "Ten plik nie jest dokumentem .docx. Wybierz plik .docx albo zapisz ten plik jako .docx w edytorze tekstu na komputerze i spróbuj ponownie.",
+      "tooLarge": "Ten plik jest zbyt duży lub zbyt złożony, aby go tu otworzyć. Spróbuj mniejszej kopii, na przykład z mniejszą liczbą stron lub obrazów.",
+      "blocked": "Ten plik zawiera treść, której edytor nie otwiera ze względów bezpieczeństwa. Zapisz go ponownie jako .docx w edytorze tekstu na komputerze i spróbuj ponownie.",
+      "unknown": "Podczas otwierania tego pliku wystąpił błąd. Spróbuj ponownie. Jeśli problem nie ustąpi, spróbuj innej kopii pliku."
+    },
+    "code": "Kod błędu: {code}"
+  },
   "viewer": {
     "pageIndicator": "{current} z {total}"
   },

@@ -296,6 +296,19 @@ export {
 } from './editor/DocxEditorFontNotice';
 
 export {
+  DocxEditorOpenFailure,
+  DocxEditorOpenFailureAction,
+  useOpenFailure,
+  type DocxEditorOpenFailureActionProps,
+  type DocxEditorOpenFailureComponent,
+  type DocxEditorOpenFailureContext,
+  type DocxEditorOpenFailureMessage,
+  type DocxEditorOpenFailureProps,
+  type UseOpenFailureOptions,
+  type UseOpenFailureReturn,
+} from './editor/DocxEditorOpenFailure';
+
+export {
   DocxEditorDocumentOutline,
   type DocxEditorDocumentOutlineProps,
 } from './editor/DocxEditorOutline';
@@ -442,6 +455,8 @@ export type {
   AnchorHighlightAnimation,
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
+  DocumentOpenFailure,
+  DocumentOpenFailureReason,
   HighlightHit,
   HighlightOptions,
   HighlightRange,

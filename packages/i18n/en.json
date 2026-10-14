@@ -831,6 +831,17 @@
   "loading": {
     "label": "Loading"
   },
+  "openFailure": {
+    "title": "This file did not open",
+    "reasons": {
+      "damaged": "The file could not be read. It may be damaged, or it may be another type of file. Open it in a desktop word processor, save it as .docx, and then try again.",
+      "notDocx": "This file is not a .docx document. Choose a .docx file, or save this file as .docx in a desktop word processor and then try again.",
+      "tooLarge": "This file is too large or too complex to open here. Try a smaller copy, for example one with fewer pages or images.",
+      "blocked": "This file contains content that the editor does not open, for security reasons. Save it again as .docx in a desktop word processor, and then try again.",
+      "unknown": "Something went wrong while opening this file. Try again. If the problem continues, try another copy of the file."
+    },
+    "code": "Error code: {code}"
+  },
   "notes": {
     "delete": "Delete note",
     "convertToEndnote": "Convert to endnote",

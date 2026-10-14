@@ -79,6 +79,18 @@ export {
   DocxEditorFontNotice,
   type DocxEditorFontNoticeProps,
 } from './editor/DocxEditorFontNotice';
+export {
+  DocxEditorOpenFailure,
+  DocxEditorOpenFailureAction,
+  useOpenFailure,
+  type DocxEditorOpenFailureActionProps,
+  type DocxEditorOpenFailureComponent,
+  type DocxEditorOpenFailureContext,
+  type DocxEditorOpenFailureMessage,
+  type DocxEditorOpenFailureProps,
+  type UseOpenFailureOptions,
+  type UseOpenFailureReturn,
+} from './editor/DocxEditorOpenFailure';
 // The review PANE lives in `@docx-editor.dev/pro/react` (the review capability is
 // module-gated). What this package exports are the integration points the pro pane —
 // or any external chrome — composes with: the rail registry the Viewport and rulers
@@ -438,6 +450,8 @@ export type {
   AnchorHighlightAnimation,
   AnchorHighlightOptions,
   ClearAnchorHighlightOptions,
+  DocumentOpenFailure,
+  DocumentOpenFailureReason,
   HighlightHit,
   HighlightOptions,
   HighlightRange,
