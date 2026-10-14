@@ -411,12 +411,28 @@ export function readTableStructure(
       )
   );
   if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
+  // Deleted and inserted content sizes the columns in every view.
+  const markupStructure =
+    displayMode === 'all-markup'
+      ? undefined
+      : readTableStructure(
+          table,
+          contentWidthPt,
+          depth,
+          styleCascade,
+          'all-markup',
+          authorFilter,
+          compatibilityMode,
+          undefined,
+          textBox
+        );
   // Most tables already hold their content: they come back as the shared base structure.
   const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
     styleCascade,
     displayMode,
     authorFilter,
     depth,
+    ...(markupStructure ? { markupStructure } : {}),
     readNested: narrowNestedReader(
       readTableStructure,
       styleCascade,

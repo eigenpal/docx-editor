@@ -122,6 +122,11 @@ export interface AutofitView {
    * the nesting limit, where layout paints nothing either. See {@link narrowNestedReader}.
    */
   readonly readNested: (table: OoxmlElement, depth: number) => SemanticTableStructure | null;
+  /**
+   * The same table read with every revision shown. Column widths size for deleted content
+   * too, whatever the view shows, so a view that hides revisions measures this structure.
+   */
+  readonly markupStructure?: SemanticTableStructure;
 }
 
 /** Below this a column is already as wide as its content needs. */
@@ -845,7 +850,12 @@ export function autofitColumnWidthsPt(
   // the geometry widening can bring.
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
-  const minimumsNow = autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
+  const markup = view.markupStructure;
+  const measured =
+    markup && markup.columnWidthsPt.length === structure.columnWidthsPt.length ? markup : structure;
+  const measureView: AutofitView =
+    measured === structure ? view : { ...view, displayMode: 'all-markup' };
+  const minimumsNow = autofitColumnMinimumsPt(measured, context, measureView, ifWidened, content);
   // Everything below works on cell widths; a spaced table's gaps come back at the end.
   const cellWidths = spacedCellWidths(structure);
   const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);
