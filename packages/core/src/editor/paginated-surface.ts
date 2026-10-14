@@ -3031,6 +3031,20 @@ export function mountPaginatedSurface(
     return true;
   }
 
+  /** Backspace / Delete at a chip takes it whole, or first selects a content-locked one. */
+  function deleteAtomicControl(direction: 'backward' | 'forward'): boolean {
+    const step = atomicControlDeletion(direction, (position) => hiddenMarks.shown(position));
+    if (step?.kind === 'select') setSelection(step.selection);
+    else if (step) {
+      const armed = armedAtCaret() ?? undefined;
+      const after = () => collapsedAt(step.collapseTo);
+      commit(() => applyOps(step.ops, selectionMark(), caretMark(step.collapseTo)), after, {
+        rearmPending: armed,
+      });
+    }
+    return step !== null;
+  }
+
   function caretMark(position: { paragraphId: string; offset: number }): {
     paragraphId: string;
     start: number;
@@ -4275,7 +4289,7 @@ export function mountPaginatedSurface(
     orderedRange,
     orderedStart,
     textOf,
-    inlineControlBeside,
+    atomicControlDeletion,
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
@@ -4487,6 +4501,7 @@ export function mountPaginatedSurface(
 
     deleteBackward() {
       if (textFormInteraction?.selectForDeletion('backward')) return;
+      if (deleteAtomicControl('backward')) return;
       const plan = deleteSelectionPlan();
       if (plan.ops.length > 0) {
         commit(
@@ -4551,23 +4566,6 @@ export function mountPaginatedSurface(
           () =>
             applyOps(joins, selectionMark(), caretMark({ paragraphId: previous, offset: joinAt })),
           () => collapsedAt({ paragraphId: previous, offset: joinAt }),
-          { rearmPending: armed }
-        );
-        return;
-      }
-      // Backspace at a chip's outer edge takes the WHOLE node — see `inlineControlBeside`.
-      // A wrapper-locked control refuses the op and the key does nothing, which is the
-      // lock doing its job rather than a bug.
-      const chip = inlineControlBeside(position, 'before');
-      if (chip) {
-        commit(
-          () =>
-            applyOps(
-              [{ op: 'removeContentControl', controlId: chip.controlId, keepContent: false }],
-              selectionMark(),
-              caretMark({ paragraphId: position.paragraphId, offset: chip.start })
-            ),
-          () => collapsedAt({ paragraphId: position.paragraphId, offset: chip.start }),
           { rearmPending: armed }
         );
         return;
@@ -4900,6 +4898,7 @@ export function mountPaginatedSurface(
 
     deleteForward() {
       if (textFormInteraction?.selectForDeletion('forward')) return;
+      if (deleteAtomicControl('forward')) return;
       if (surface.deleteSelection() || removeCaretParagraph('forward')) return;
       // Delete keeps the typing format like Backspace does — the caret does not move, so
       // the armed format re-anchors in place.
@@ -4907,21 +4906,6 @@ export function mountPaginatedSurface(
       const position = hiddenMarks.shown(selection.head);
       const text = textOf(position.paragraphId);
       if (position.offset < text.length) {
-        // Delete at a chip's leading edge takes the WHOLE node — the forward mirror of
-        // the Backspace rule above.
-        const chip = inlineControlBeside(position, 'after');
-        if (chip) {
-          commit(
-            () =>
-              applyOps(
-                [{ op: 'removeContentControl', controlId: chip.controlId, keepContent: false }],
-                selectionMark()
-              ),
-            () => collapsedAt(position),
-            { rearmPending: armed }
-          );
-          return;
-        }
         commit(
           () =>
             applyOps(

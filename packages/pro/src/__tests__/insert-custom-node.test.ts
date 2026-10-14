@@ -221,7 +221,7 @@ describe('insertCustomNode', () => {
     expect(texts).toEqual(['AAA', 'BBB']);
   });
 
-  test('Backspace after the chip deletes the WHOLE node', () => {
+  test('Backspace after the chip selects the WHOLE node, a second Backspace deletes it', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
     insertCustomNode(editor, citation, {
       attrs: { sourceId: 's1' },
@@ -235,6 +235,11 @@ describe('insertCustomNode', () => {
       head: { paragraphId: firstParagraphId(editor), offset: 12 },
     });
     editor.surface!.deleteBackward();
+    // The first press selects the node and deletes nothing.
+    expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toHaveLength(1);
+    expect(editor.surface!.state().selection.anchor.offset).toBe(12);
+    expect(editor.surface!.state().selection.head.offset).toBe(7);
+    editor.surface!.deleteBackward();
     expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toEqual([]);
     expect(editor.surface!.session.bodyText()).toBe('before after');
     // The caret lands where the node began.
@@ -244,7 +249,7 @@ describe('insertCustomNode', () => {
     expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toHaveLength(1);
   });
 
-  test('Delete before the chip removes the whole node too', () => {
+  test('Delete before the chip selects, then removes, the whole node too', () => {
     const editor = mount('<w:p><w:r><w:t>before after</w:t></w:r></w:p>');
     insertCustomNode(editor, citation, {
       attrs: { sourceId: 's1' },
@@ -255,6 +260,8 @@ describe('insertCustomNode', () => {
       anchor: { paragraphId: firstParagraphId(editor), offset: 7 },
       head: { paragraphId: firstParagraphId(editor), offset: 7 },
     });
+    editor.surface!.deleteForward();
+    expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toHaveLength(1);
     editor.surface!.deleteForward();
     expect(recognizeCustomNodes(editor.surface!.session.part(), [citation])).toEqual([]);
     expect(editor.surface!.session.bodyText()).toBe('before after');

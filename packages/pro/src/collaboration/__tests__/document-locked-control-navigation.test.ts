@@ -155,6 +155,8 @@ test('deletion by a peer while atomic navigation edits beside the control conver
   alice.surface!.navigate('right');
   alice.surface!.type('X');
   caret(bob, 10);
+  // The first Backspace selects the content-locked control; the second removes it.
+  bob.surface!.deleteBackward();
   bob.surface!.deleteBackward();
   expect(chipText(bob)).toBeNull();
   pair.alice.room.session.flushPendingJournals();

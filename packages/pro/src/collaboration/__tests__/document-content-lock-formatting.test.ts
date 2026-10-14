@@ -154,6 +154,8 @@ test('formatting a chip while the other peer deletes the chip converges, through
   select(alice, 5, 10);
   expect(alice.exec({ type: 'toggleMark', mark: 'bold' })).toEqual({ ok: true, changed: true });
   select(bob, 10, 10);
+  // The first Backspace selects the chip; the second deletes it.
+  bob.surface!.deleteBackward();
   bob.surface!.deleteBackward();
   expect(chipText(bob)).toBeNull();
   flush();

@@ -56,6 +56,11 @@ import {
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
+import {
+  atomicControlDeletion as planAtomicControlDeletion,
+  type AtomicControlDeletion,
+  type InlineControlBesideCaret,
+} from './surface-locked-control-delete.ts';
 
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 export interface SurfaceRangeEditDeps {
@@ -99,7 +104,12 @@ export interface SurfaceRangeEditOps {
   inlineControlBeside(
     position: { readonly paragraphId: string; readonly offset: number },
     side: 'before' | 'after'
-  ): { readonly controlId: string; readonly start: number; readonly end: number } | null;
+  ): InlineControlBesideCaret | null;
+  /** Backspace / Delete beside or over an atomic inline control; see `atomicControlDeletion`. */
+  atomicControlDeletion(
+    direction: 'backward' | 'forward',
+    shown: (position: SemanticPosition) => SemanticPosition
+  ): AtomicControlDeletion | null;
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
   deleteSelectionOps(): readonly TreeDocOp[];
@@ -148,7 +158,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
   function inlineControlBeside(
     position: { readonly paragraphId: string; readonly offset: number },
     side: 'before' | 'after'
-  ): { readonly controlId: string; readonly start: number; readonly end: number } | null {
+  ): InlineControlBesideCaret | null {
     const part = session.partFor(deps.storyScope()) ?? session.part();
     const paragraph = findNode(part, position.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return null;
@@ -164,12 +174,25 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const control = findContentControl(part, span.controlId);
     const summary = control ? contentControlPropertiesOf(control) : null;
     if (!summary) return null;
-    const atom =
-      summary.lock === 'contentLocked' ||
-      summary.lock === 'sdtContentLocked' ||
-      summary.type === 'checkbox' ||
-      summary.type === 'picture';
-    return atom ? span : null;
+    const contentLocked = summary.lock === 'contentLocked' || summary.lock === 'sdtContentLocked';
+    const atom = contentLocked || summary.type === 'checkbox' || summary.type === 'picture';
+    return atom ? { ...span, contentLocked } : null;
+  }
+
+  function atomicControlDeletion(
+    direction: 'backward' | 'forward',
+    shown: (position: SemanticPosition) => SemanticPosition
+  ): AtomicControlDeletion | null {
+    // Queued typing lands first, so the caret and the layout are the ones the reader sees.
+    deps.flushPendingInputAndLayout();
+    if (deps.cellSelection()) return null;
+    return planAtomicControlDeletion({
+      layout: deps.layout(),
+      selection: deps.selection(),
+      direction,
+      shown,
+      controlBeside: inlineControlBeside,
+    });
   }
 
   /**
@@ -551,6 +574,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     orderedStart,
     textOf,
     inlineControlBeside,
+    atomicControlDeletion,
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
