@@ -418,9 +418,14 @@ describe('replacement navigation and the active band', () => {
     editor.on('reviewItemReveal', (event) => events.push(event));
     const next = () =>
       expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    // The pane's two cards for the open replacement are both active, as both bands light.
+    const activeCards = () =>
+      editor.getReviewItems({ placement: false }).map((item) => item.isActive);
     next();
     expect(litKinds(container)).toEqual(['delete', 'insert']);
+    expect(activeCards()).toEqual([true, true, false, false, false]);
     next();
+    expect(activeCards()).toEqual([false, false, true, true, false]);
     const [first, second] = editor.getReviewItems(PAIRED);
     expect(events.map((event) => event.pairKey)).toEqual([first!.key, second!.key]);
     // The pair key a paired read lists opens the whole replacement.
@@ -430,8 +435,27 @@ describe('replacement navigation and the active band', () => {
     const [deletion, insertion] = editor.getReviewItems({ placement: false });
     expect(editor.setActiveReviewItem(deletion!.key).ok).toBe(true);
     expect(litKinds(container)).toEqual(['delete']);
+    expect(activeCards()).toEqual([true, false, false, false, false]);
     expect(editor.setActiveReviewItem(insertion!.key).ok).toBe(true);
     expect(litKinds(container)).toEqual(['insert']);
+    expect(activeCards()).toEqual([false, true, false, false, false]);
+  });
+
+  test('a host loop over a paired read stops once on each replacement', () => {
+    const editor = mount(TWO_REPLACED);
+    const container = document.body.lastElementChild!;
+    // The loop from the guide: read once per step, then activate the next item by its key.
+    const step = () => {
+      const changes = editor
+        .getReviewItems({ placement: false, pairReplacements: true })
+        .filter((item) => item.kind === 'revision' && item.activatable);
+      const current = changes.findIndex((item) => item.isActive);
+      const next = changes[(current + 1) % changes.length]!;
+      expect(editor.setActiveReviewItem(next.key, { announce: true }).ok).toBe(true);
+      return next.kind === 'revision' ? next.revisionKind : next.kind;
+    };
+    expect([step(), step(), step(), step()]).toEqual(['replace', 'replace', 'insert', 'replace']);
+    expect(litKinds(container)).toEqual(['delete', 'insert']);
   });
 
   test('a tracked-changes filter applies, and a hidden half leaves the other a lone stop', () => {

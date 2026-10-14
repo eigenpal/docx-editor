@@ -358,11 +358,42 @@ A deletion and an insertion pair when all of these are true:
 A pair acts as one item:
 
 - `acceptReviewItem(key)` and `rejectReviewItem(key)` resolve both halves in one transaction. One undo restores both.
-- `setActiveReviewItem(key)` opens the deletion. The pair reports `isActive` while the caret is in either half.
+- `setActiveReviewItem(key)` places the caret at the deletion and highlights both halves. The pair reports `isActive` while the caret is in either half.
 - `replyToReviewItem(key, text)` writes a comment over the inserted words. Replies to either half list under the pair.
 - `getReviewItemRects(key)` returns the bands of both halves.
 
 The pair's `key` stays the same while both halves are pending. Key-based methods accept it with any query. The query removes kinds in `excludeRevisionKinds` before it pairs, so an excluded deletion or insertion never pairs. Add `'replace'` to `excludeRevisionKinds` to remove the pairs. The packaged `DocxEditorReview` rail lists the halves separately.
+
+### Step through changes from your code
+
+A replacement is one change. Next and previous controls in your app stop on it once, in either of these ways.
+
+To use the editor's own order, run the `navigateReviewChange` command. It stops once on each replacement, highlights both halves, and wraps at the end. It steps through the same items as `getReviewItems()`, so a reviewer filter or a `setTrackedChangesFilter` predicate applies. When a filter hides one half of a replacement, the other half is a stop of its own.
+
+```ts
+// Show only the changes that Ada made, then move to the next one.
+editor.setTrackedChangesFilter((change) => change.author === 'Ada');
+
+const result = editor.exec({ type: 'navigateReviewChange', direction: 'next' });
+if (!result.ok) showMessage(result.reason); // For example, no changes are visible.
+```
+
+Each step fires `reviewItemReveal` with `source: 'navigate'`. Open your card for `pairKey ?? key`.
+
+To step through a list that your app builds, read it with `pairReplacements: true` and activate each item by its key. Without `pairReplacements`, a replacement is two items, so your controls stop on it twice.
+
+```ts
+// Read once per step, so a change that another reviewer resolved drops out.
+const changes = editor
+  .getReviewItems({ placement: false, pairReplacements: true })
+  .filter((item) => item.kind === 'revision' && item.activatable);
+
+const current = changes.findIndex((item) => item.isActive);
+const next = changes[(current + 1) % changes.length];
+if (next) editor.setActiveReviewItem(next.key, { announce: true });
+```
+
+`setActiveReviewItem` with a replacement's key highlights both halves and fires `reviewItemReveal` with that key.
 
 ### Find the item under a pointer
 

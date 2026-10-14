@@ -3865,7 +3865,8 @@ export function mountPaginatedSurface(
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
     // A replacement the review UI shows as one card lights both halves while either is open.
-    const activeKeys = litReviewKeys(visibleReviewItems, active, options.pairsReplacements?.());
+    const openKey = active && reviewItemKey(active);
+    const activeKeys = litReviewKeys(visibleReviewItems, openKey, options.pairsReplacements?.());
     const activeKey = [...activeKeys].join('\n');
     // The roster is part of what these bands DRAW, so it belongs in what decides they can be
     // left alone. A full `render` forces this layer anyway, which is how a live colour change

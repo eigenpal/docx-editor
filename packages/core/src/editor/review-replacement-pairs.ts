@@ -171,13 +171,12 @@ export function narrowReviewItems(
  */
 export function litReviewKeys(
   items: () => readonly ReviewItem[],
-  active: ReviewItem | null,
+  activeKey: string | null,
   pairs: boolean | undefined
 ): ReadonlySet<string> {
-  if (!active) return new Set();
-  const key = reviewItemKey(active);
-  const partner = pairs && active.kind === 'revision' ? replacementPartnerKey(items(), key) : null;
-  return new Set(partner === null ? [key] : [key, partner]);
+  if (activeKey === null) return new Set();
+  const partner = pairs ? replacementPartnerKey(items(), activeKey) : null;
+  return new Set(partner === null ? [activeKey] : [activeKey, partner]);
 }
 
 /** The key of the other half of the replacement `key` belongs to among `items`, or null. */

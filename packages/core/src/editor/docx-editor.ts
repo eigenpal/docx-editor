@@ -32,6 +32,7 @@ import {
   keyUnderQuery,
   narrowReviewItems,
   createPairedActivation,
+  litReviewKeys,
   replacementPairHalves,
   reviewItemWithHalves,
   withRevealPairKey,
@@ -1546,17 +1547,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
     if (!reviewEnabled) return [];
     // Kind exclusion and opt-in replacement pairing; see `review-replacement-pairs.ts`.
-    const items = narrowReviewItems(
-      filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
-      query
+    const visible = filterReviewItemsByAuthor(
+      surface?.session.reviewItems() ?? [],
+      reviewAuthorVisibility
     );
+    const items = narrowReviewItems(visible, query);
     const withPlacement = query?.placement !== false;
     let anchors: Map<string, ReviewParagraphAnchor> | null = null;
     if (withPlacement && items.length > 0) {
       const layout = surface?.publishedLayout() ?? null;
       if (layout) anchors = anchorIndexOf(layout);
     }
-    const activeReviewKey = activeReviewKeyNow();
+    const activeKeys = litReviewKeys(() => visible, activeReviewKeyNow(), pairedPin.lightsPair());
     // The queue ranks furniture stories after the whole body (tree order), but the rail
     // stacks cards top-down and never moves one UP past its anchor — a header card sorted
     // after page 40's cards would render at the rail's bottom, pages away from the header
@@ -1594,10 +1596,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         activatable: reviewItemWithHalves(item).every(reviewItemActivatable),
         anchorY: geometry?.y ?? null,
         pageIndex: geometry?.pageIndex ?? null,
-        // The surface names the half the caret is in; a pair is active when either half is.
-        isActive: reviewItemWithHalves(item).some(
-          (part) => reviewItemKey(part) === activeReviewKey
-        ),
+        // A pair is active when either half is; an open replacement makes both halves active.
+        isActive: reviewItemWithHalves(item).some((part) => activeKeys.has(reviewItemKey(part))),
       };
       if (item.kind === 'comment') {
         return {
