@@ -2441,6 +2441,8 @@ export interface PaginatedSurfaceOptions {
     readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
     // (undocumented)
     readonly onToggleParagraphMarks?: () => void;
+    // @internal
+    readonly pairsReplacements?: () => boolean;
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;

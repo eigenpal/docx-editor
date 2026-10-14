@@ -393,6 +393,31 @@ describe('Next and Previous Change under balloons', () => {
     expect(step('previous').pairKey).toBe(cards()[0]!.key);
   });
 
+  /** The kinds of the lit bands, in paint order, in the editor's own container. */
+  const litKinds = (container: Element) =>
+    [...container.querySelectorAll('.docx-revision-band--active')].map((band) =>
+      band.classList.contains('docx-revision-band--delete') ? 'delete' : 'insert'
+    );
+
+  test('an open replacement lights both halves, wherever the caret entered it', () => {
+    const { editor, step, halves } = balloons(TWO_REPLACED);
+    const container = document.body.lastElementChild!;
+    step('next');
+    expect(litKinds(container)).toEqual(['delete', 'insert']);
+    expect(editor.setActiveReviewItem(halves()[1]!.key).ok).toBe(true);
+    expect(litKinds(container)).toEqual(['delete', 'insert']);
+    // A lone insertion lights only itself.
+    expect(editor.setActiveReviewItem(halves()[4]!.key).ok).toBe(true);
+    expect(litKinds(container)).toEqual(['insert']);
+  });
+
+  test('the pane lists the halves apart, so only the open half lights', () => {
+    const editor = mount(TWO_REPLACED);
+    const container = document.body.lastElementChild!;
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(litKinds(container)).toEqual(['delete']);
+  });
+
   test('a deletion and an insertion from different authors stay two stops', () => {
     const { step } = balloons(
       paragraph(run('The '), del(1, 'Ada', 'old'), ins(2, 'Grace', 'new'), run(' fee.'))

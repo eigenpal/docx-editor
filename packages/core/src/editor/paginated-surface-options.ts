@@ -69,6 +69,14 @@ export interface PaginatedSurfaceOptions {
   /** Opening mode; changeable at runtime with `setEditingMode`. */
   readonly editingMode?: SurfaceEditingMode;
   /**
+   * True while the review UI lists a replacement as one card. The active band then covers
+   * both halves of a replacement, as the card does. Read on each band paint. Set by the
+   * editor from `revisionsIn`; a host changes `revisionsIn` instead.
+   *
+   * @internal
+   */
+  readonly pairsReplacements?: () => boolean;
+  /**
    * Identifies the measurer for cache invalidation.
    *
    * Fonts resolve asynchronously, so a host that swaps its measurer must change this or the

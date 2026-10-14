@@ -27,6 +27,8 @@ export interface ReviewPaneState {
   opensOnLoad(items: readonly ReviewItem[]): boolean;
   /** Whether a new tracked change opens a closed pane by itself. */
   opensOnTrackedChange(): boolean;
+  /** Whether a replacement is one card, so one navigation stop and one active band. */
+  pairsReplacements(): boolean;
 }
 
 /**
@@ -69,5 +71,7 @@ export function createReviewPaneState(
     opensOnLoad: (items) =>
       value.opening === 'auto' && items.some((item) => paneShows(value, item)),
     opensOnTrackedChange: () => value.opening === 'auto' && value.revisionsIn === 'pane',
+    // Balloons show a replacement as one card; the pane lists its halves as two.
+    pairsReplacements: () => value.revisionsIn === 'balloons',
   };
 }

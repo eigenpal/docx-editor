@@ -57,6 +57,7 @@ import { startOpeningSlices } from './surface-progressive-open.ts';
 import { createDeferredLayout } from './surface-deferred-layout.ts';
 import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
+import { litReviewKeys } from './review-replacement-pairs.ts';
 import { bodyBlockCountOf } from '../layout/body-block-limit.ts';
 import {
   createContentControlWidgetSessions,
@@ -3812,7 +3813,7 @@ export function mountPaginatedSurface(
   /** The class a band draws in, or null when this range should not be drawn at all. */
   function bandClassFor(
     key: string,
-    active: ReviewItem | null,
+    activeKeys: ReadonlySet<string>,
     byKey: ReadonlyMap<string, ReviewItem>
   ): string | null {
     // A revision's key is suffixed per range when one decision covers several sites, so the
@@ -3820,7 +3821,7 @@ export function mountPaginatedSurface(
     // cannot contain — `#` can, and an author called `A#b` never saw their band light up.
     const parts = key.split(RANGE_SUFFIX);
     const decision = parts[0]!;
-    const isActive = active !== null && decision === reviewItemKey(active);
+    const isActive = activeKeys.has(decision);
     if (key.startsWith('comment-')) {
       const item = byKey.get(decision);
       const resolved = item?.kind === 'comment' && item.resolved;
@@ -3858,12 +3859,14 @@ export function mountPaginatedSurface(
   }
 
   let commentHighlightLayout: SemanticLayout | null = null;
-  let commentHighlightActiveKey: string | null | undefined;
+  let commentHighlightActiveKey: string | undefined;
   let commentHighlightAuthors: ReadonlyMap<string, ReviewAuthorInfo> | null = null;
 
   function renderCommentHighlights(force = false): void {
     const active = activeReviewAtCaret();
-    const activeKey = active ? reviewItemKey(active) : null;
+    // A replacement the review UI shows as one card lights both halves while either is open.
+    const activeKeys = litReviewKeys(visibleReviewItems, active, options.pairsReplacements?.());
+    const activeKey = [...activeKeys].join('\n');
     // The roster is part of what these bands DRAW, so it belongs in what decides they can be
     // left alone. A full `render` forces this layer anyway, which is how a live colour change
     // reaches it today — but the unforced callers below (activation, exclusions) would happily
@@ -3883,7 +3886,7 @@ export function mountPaginatedSurface(
     for (const item of visibleReviewItems()) byKey.set(reviewItemKey(item), item);
     const bands: OverlayRect[] = [];
     for (const rect of commentRects()) {
-      const className = bandClassFor(rect.key, active, byKey);
+      const className = bandClassFor(rect.key, activeKeys, byKey);
       if (!className) continue;
       // WHOSE band, for CSS to key on. The rect's key is suffixed per range for a revision
       // covering several sites, so the author comes from the decision, as the class does.
@@ -3895,7 +3898,7 @@ export function mountPaginatedSurface(
       // test repeats the class's — the decision, not the site — so a multi-range decision
       // tints every range it covers, and a comment band never takes a revision field.
       const activeBackground =
-        item?.kind === 'revision' && active !== null && decision === reviewItemKey(active)
+        item?.kind === 'revision' && activeKeys.has(decision)
           ? reviewAuthor?.style?.activeBackground
           : undefined;
       bands.push({

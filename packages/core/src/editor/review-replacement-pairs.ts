@@ -164,6 +164,35 @@ export function narrowReviewItems(
   });
 }
 
+/**
+ * The keys the open item lights on the page: its own and, when `pairs` is set, the other half
+ * of its replacement. Uses the same pairing as `pairReplacements`, so the page lights what
+ * the paired card shows. `items` is read only for a revision, and only when pairing.
+ */
+export function litReviewKeys(
+  items: () => readonly ReviewItem[],
+  active: ReviewItem | null,
+  pairs: boolean | undefined
+): ReadonlySet<string> {
+  if (!active) return new Set();
+  const key = reviewItemKey(active);
+  const partner = pairs && active.kind === 'revision' ? replacementPartnerKey(items(), key) : null;
+  return new Set(partner === null ? [key] : [key, partner]);
+}
+
+/** The key of the other half of the replacement `key` belongs to among `items`, or null. */
+function replacementPartnerKey(items: readonly ReviewItem[], key: string): string | null {
+  for (const item of pairReplacements(items).items) {
+    const halves = halvesOf.get(item);
+    if (!halves) continue;
+    const deletion = reviewItemKey(halves.deletion);
+    const insertion = reviewItemKey(halves.insertion);
+    if (deletion === key) return insertion;
+    if (insertion === key) return deletion;
+  }
+  return null;
+}
+
 /** True for a key only a paired query produces. */
 export function isReplacementPairKey(key: string): boolean {
   return key.startsWith(PAIR_KEY_PREFIX);
