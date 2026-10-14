@@ -14,7 +14,7 @@ import {
   isSupportedExpressionNode,
   mathVal,
 } from './omml-structure-support.ts';
-import { cloneEquationControl, equationDefaultControlProperties } from './omml-control-defaults.ts';
+import { cloneEquationControl, equationDefaultFormatting } from './omml-control-defaults.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
 import type {
@@ -177,6 +177,8 @@ interface ProjectionState {
   readonly limits: ResolvedLimits;
   /** Every `m:ctrlPr` of the equation is default, so structures carry no control mark. */
   readonly defaultControls?: boolean;
+  /** Every run of the equation carries default `w:rPr`, so runs carry no format. */
+  readonly defaultRuns?: boolean;
   visitedNodes: number;
   text: string;
   truncated: boolean;
@@ -348,7 +350,8 @@ function projectNode(node: OoxmlNode, state: ProjectionState, depth: number): Eq
   }
   if (node.localName === 'r') {
     if (!isSupportedExpressionNode(node)) return fallbackOf(node, state, depth + 1);
-    const format = equationRunFormat(node)!;
+    // Default run properties draw like none, and replacement writes them back.
+    const format = state.defaultRuns ? {} : equationRunFormat(node)!;
     return frozenRow(
       namedChildren(node, 't').map((text) => {
         const projected = projectContainer(text, state, depth + 1);
@@ -407,11 +410,11 @@ export function projectOmmlEquation(
   }
   // The preflight proves the complete source is within each work limit. The structured pass
   // can revisit wrappers while it maps their roles, but it cannot discover more source nodes.
+  const defaults = equationDefaultFormatting(node, resolved.maxNodes, resolved.maxDepth);
   const state: ProjectionState = {
     limits: { ...resolved, maxNodes: Number.MAX_SAFE_INTEGER },
-    defaultControls:
-      equationDefaultControlProperties(node, resolved.maxNodes, resolved.maxDepth).kind ===
-      'default',
+    defaultControls: defaults.controls.kind === 'default',
+    defaultRuns: defaults.runs.kind === 'default',
     visitedNodes: 0,
     text: '',
     truncated: false,
@@ -669,10 +672,13 @@ export function equationExpressionToLinearMath(expression: EquationExpression): 
 
 type NextNodeId = () => string;
 
-/** What one emitted structure needs: fresh ids, and the control properties to write back. */
+/** What emitted nodes need: fresh ids, and the default properties to write back. */
 interface EmitContext {
   readonly nextId: NextNodeId;
+  /** The `m:ctrlPr` written on each emitted structure. */
   readonly control: OoxmlGenericElementNode | null;
+  /** The `w:rPr` written on each emitted run. */
+  readonly runProperties: OoxmlElement | null;
 }
 
 function mathAttribute(localName: string, value: string): OoxmlAttribute {
@@ -744,10 +750,13 @@ function structure(
   return mathElement(localName, properties ? [properties, ...children] : children, context.nextId);
 }
 
-function textRun(value: string, nextId: NextNodeId): OoxmlNode {
+/** One emitted run. Schema order puts `w:rPr` (after any `m:rPr`) before `m:t`. */
+function textRun(value: string, context: EmitContext): OoxmlNode {
+  const { nextId, runProperties } = context;
+  const properties = runProperties ? [cloneEquationControl(runProperties, nextId)] : [];
   return mathElement(
     'r',
-    [mathElement('t', [textValue(value, nextId)], nextId, textAttributes(value))],
+    [...properties, mathElement('t', [textValue(value, nextId)], nextId, textAttributes(value))],
     nextId
   );
 }
@@ -763,9 +772,9 @@ function expressionNodes(
     case 'row':
       return expression.items.flatMap((child) => expressionNodes(child, context));
     case 'text':
-      return [textRun(expression.value, nextId)];
+      return [textRun(expression.value, context)];
     case 'fallback':
-      return [textRun(expression.text, nextId)];
+      return [textRun(expression.text, context)];
     case 'bar': {
       const position = mathElement('pos', [], nextId, [
         mathAttribute('val', expression.position === 'top' ? 'top' : 'bot'),
@@ -862,7 +871,8 @@ export function linearMathToOmml(
 /**
  * Generate the OMML that replaces `replacing`, an existing `m:oMath`. When every `m:ctrlPr`
  * in it holds only default formatting, each emitted structure receives a copy of its first
- * `m:ctrlPr`. Otherwise the result matches {@link linearMathToOmml}.
+ * `m:ctrlPr`. When every run in it carries default `w:rPr`, each emitted run receives a copy
+ * of its first run's `w:rPr`. Otherwise the result matches {@link linearMathToOmml}.
  */
 export function linearMathReplacementOmml(
   input: string,
@@ -873,13 +883,17 @@ export function linearMathReplacementOmml(
   const parsed = parseLinearMath(input, limits);
   if (!parsed.ok) return parsed;
   const resolved = resolveLimits(limits);
-  const controls = replacing
-    ? equationDefaultControlProperties(replacing, resolved.maxNodes, resolved.maxDepth)
+  const defaults = replacing
+    ? equationDefaultFormatting(replacing, resolved.maxNodes, resolved.maxDepth)
     : null;
-  const control = controls?.kind === 'default' ? controls.control : null;
+  const context: EmitContext = {
+    nextId,
+    control: defaults?.controls.kind === 'default' ? defaults.controls.control : null,
+    runProperties: defaults?.runs.kind === 'default' ? defaults.runs.properties : null,
+  };
   return Object.freeze({
     ok: true,
     expression: parsed.expression,
-    equation: ommlEquationFromExpression(parsed.expression, { nextId, control }),
+    equation: ommlEquationFromExpression(parsed.expression, context),
   });
 }

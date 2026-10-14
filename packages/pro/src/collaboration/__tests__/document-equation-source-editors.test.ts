@@ -269,3 +269,76 @@ test('two editors converge when one replaces an equation with default control pr
     close();
   }
 });
+
+// Default run properties: the source app writes these on every run, often with a size.
+const DEFAULT_RUN =
+  '<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:i/>' +
+  '<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>';
+const defaultRuns =
+  `<m:f><m:fPr>${DEFAULT_CONTROL}</m:fPr><m:num><m:r>${DEFAULT_RUN}<m:t>a</m:t></m:r></m:num>` +
+  `<m:den><m:r>${DEFAULT_RUN}<m:t>b</m:t></m:r></m:den></m:f>`;
+
+test('two editors converge when one replaces an equation with default run properties', async () => {
+  const { left, right, equationXml, select, pause, resume, close } = await openPair(
+    'default run properties',
+    defaultRuns
+  );
+  try {
+    const original = equationXml(await left.save());
+    select(left, 4);
+    const equation = left.surface!.equations.equationAtCaret()!;
+    expect(equation.linear).toBe('{a}/{b}');
+    expect(left.surface!.equations.can(equation.id, 'replace')).toEqual({ ok: true });
+
+    // Replace on the left while the right types beside the equation, then exchange updates.
+    pause();
+    expect(left.surface!.equations.applyEquation(equation.id, '{x}/{√{y}}+z^2')).toBe(true);
+    select(right, 0);
+    expect(right.exec({ type: 'pasteWithoutFormatting', text: 'Bob ' }).ok).toBe(true);
+    resume();
+
+    const replaced = equationXml(await left.save());
+    expect(equationXml(await right.save())).toEqual(replaced);
+    // `equationXml` reopens each saved package, so every run keeps the default properties.
+    const runs = replaced[0]!.match(/<m:r>.*?<\/m:r>/g)!;
+    expect(runs.map((run) => /<m:t[ >]([^<]*)/.exec(run)![1])).toEqual(['x', 'y', '+', 'z', '2']);
+    // The source serializes with its own math prefix; the run properties are the same.
+    const savedRun = /<\w+:r>(<w:rPr>.*?<\/w:rPr>)/.exec(original[0]!)![1];
+    expect(savedRun).toContain('<w:sz w:val="24"/>');
+    for (const run of runs) expect(run.startsWith(`<m:r>${savedRun}<m:t`)).toBe(true);
+    expect(replaced[0]!.match(/<m:ctrlPr>/g)).toHaveLength(3);
+    expect(left.surface!.session.bodyText()).toBe('Bob Left￼Right');
+    expect(right.surface!.session.bodyText()).toBe('Bob Left￼Right');
+
+    // Undo restores the original source on both editors; redo reapplies the replacement.
+    expect(left.exec({ type: 'undo' }).ok).toBe(true);
+    expect(equationXml(await left.save())).toEqual(original);
+    expect(equationXml(await right.save())).toEqual(original);
+    expect(left.exec({ type: 'redo' }).ok).toBe(true);
+    expect(equationXml(await left.save())).toEqual(replaced);
+    expect(equationXml(await right.save())).toEqual(replaced);
+  } finally {
+    close();
+  }
+});
+
+test('two editors keep an equation read-only when its default run properties differ', async () => {
+  const sized = (size: string) =>
+    '<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/>' +
+    `<w:sz w:val="${size}"/></w:rPr>`;
+  const { left, right, equationXml, select, close } = await openPair(
+    'different run sizes',
+    `<m:r>${sized('24')}<m:t>a</m:t></m:r><m:r>${sized('28')}<m:t>b</m:t></m:r>`
+  );
+  try {
+    const original = equationXml(await left.save());
+    select(left, 4);
+    const equation = left.surface!.equations.equationAtCaret()!;
+    expect(left.surface!.equations.can(equation.id, 'replace').ok).toBe(false);
+    expect(left.surface!.equations.applyEquation(equation.id, 'R')).toBe(false);
+    expect(equationXml(await left.save())).toEqual(original);
+    expect(equationXml(await right.save())).toEqual(original);
+  } finally {
+    close();
+  }
+});

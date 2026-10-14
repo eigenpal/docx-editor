@@ -7,6 +7,8 @@ const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 const run = (properties = '') => `<m:r>${properties}<m:t>Q</m:t></m:r>`;
 const DEFAULT_FONT = '<w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/>';
 const DEFAULT = `${DEFAULT_FONT}<w:i/>`;
+const FULL_RUN =
+  `${DEFAULT_FONT}<w:i/><w:sz w:val="24"/><w:szCs w:val="24"/>` + '<w:lang w:val="en-US"/>';
 const fraction = (properties: string | null) =>
   `<m:f><m:fPr><m:ctrlPr>${properties === null ? '' : `<w:rPr>${properties}</w:rPr>`}` +
   `</m:ctrlPr></m:fPr><m:num>${run()}</m:num><m:den>${run()}</m:den></m:f>`;
@@ -49,6 +51,36 @@ const cases = [
     `<m:sSup><m:e><m:rad><m:radPr><m:degHide m:val="1"/><m:ctrlPr>` +
       `<w:ins w:id="1" w:author="Public Author"><w:rPr><w:b/></w:rPr></w:ins>` +
       `</m:ctrlPr></m:radPr><m:deg/><m:e>${run()}</m:e></m:rad></m:e><m:sup>${run()}</m:sup></m:sSup>`,
+    true,
+  ],
+  ['default run properties', run(`<w:rPr>${DEFAULT}</w:rPr>`), false],
+  [
+    'full default run properties with default controls',
+    `<m:f><m:fPr><m:ctrlPr><w:rPr>${DEFAULT}</w:rPr></m:ctrlPr></m:fPr>` +
+      `<m:num>${run(`<w:rPr>${FULL_RUN}</w:rPr>`)}</m:num>` +
+      `<m:den>${run(`<w:rPr>${FULL_RUN}</w:rPr>`)}</m:den></m:f>`,
+    false,
+  ],
+  ['a bare run beside default run properties', run() + run(`<w:rPr>${DEFAULT}</w:rPr>`), true],
+  [
+    'italic on only some runs',
+    run(`<w:rPr>${DEFAULT}</w:rPr>`) + run(`<w:rPr>${DEFAULT_FONT}</w:rPr>`),
+    true,
+  ],
+  [
+    'run properties with different sizes',
+    run(`<w:rPr>${DEFAULT_FONT}<w:sz w:val="24"/></w:rPr>`) +
+      run(`<w:rPr>${DEFAULT_FONT}<w:sz w:val="28"/></w:rPr>`),
+    true,
+  ],
+  [
+    'run properties with different languages',
+    run('<w:rPr><w:lang w:val="en-US"/></w:rPr>') + run('<w:rPr><w:lang w:val="pl-PL"/></w:rPr>'),
+    true,
+  ],
+  [
+    'default run properties with a math style',
+    run(`<m:rPr><m:sty m:val="p"/></m:rPr><w:rPr>${DEFAULT}</w:rPr>`),
     true,
   ],
   ['unknown', '<m:unknown/>', false],
