@@ -335,3 +335,14 @@ test('a word with a currency sign lends its space', () => {
   // The fit needs all four spaces' shrink, including the one after `$a`.
   expect(justifiedLines('$a aa aa aa bb cc', 112)[0]).toBe('$a aa aa aa bb');
 });
+
+test('every space after the last word hangs on the shorter line', () => {
+  // A run that opens with a space after a word that already has one, as around hidden
+  // deleted text: both spaces hang on the shorter line, so ten words stretch nine gaps.
+  const words = Array(10).fill('aa').join(' ');
+  const result = layoutSemanticDocument(seamSource([`${words} `, ' bb cc'], -1, 254), 1, {
+    measurer,
+    compatibilityMode: 15,
+  });
+  expect(content(result)[0]).toBe(`${words}  bb`);
+});

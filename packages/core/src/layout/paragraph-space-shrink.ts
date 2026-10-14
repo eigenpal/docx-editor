@@ -105,7 +105,12 @@ export function fitsWithSpaceShrink(
   // The alternative line stops before the overflowing word, so only the spans ahead
   // of it carry its stretch, and the space in front of it is the one that hangs.
   const before = spans.slice(first, Math.max(first, Math.min(wordStart, spans.length)));
-  const terminalSpace = before.length ? capacity(before[before.length - 1]!, measurer) * 4 : 0;
+  // Every space after the last word hangs there: a run of spaces as well as the word's own.
+  let terminalSpace = 0;
+  for (let index = before.length - 1; index >= 0; index -= 1) {
+    terminalSpace += capacity(before[index]!, measurer) * 4;
+    if (!/^ +$/.test(before[index]!.text)) break;
+  }
   const existingSpaces =
     before.reduce((sum, span) => sum + capacity(span, measurer) * 4, 0) - terminalSpace;
   if (existingSpaces <= 0) return false;
