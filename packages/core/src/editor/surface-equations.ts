@@ -92,7 +92,12 @@ export function equationPlainText(
   return here.map((equation) => equation.linear || equation.fallbackText).join(' ');
 }
 
+function hasControlProperties(expression: EquationExpression): boolean {
+  return 'controlProperties' in expression && expression.controlProperties === true;
+}
+
 function expressionNeedsSourcePreservation(expression: EquationExpression): boolean {
+  if (hasControlProperties(expression)) return true;
   switch (expression.kind) {
     case 'bar':
       return true;
@@ -132,6 +137,7 @@ function expressionNeedsSourcePreservation(expression: EquationExpression): bool
 }
 
 function expressionIsSupported(expression: EquationExpression): boolean {
+  if (hasControlProperties(expression)) return false;
   switch (expression.kind) {
     case 'fallback':
     case 'bar':

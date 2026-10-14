@@ -79,3 +79,21 @@ test.each(['top', 'bottom'] as const)(
     else expect(geometry.bar.y).toBeGreaterThan(geometry.body.box.height);
   }
 );
+
+test('draws operator glyphs of structures with control properties in the default math face', () => {
+  const nary = (controlProperties?: true): EquationExpression => ({
+    kind: 'nary',
+    operator: '∑',
+    body: {
+      kind: 'radical',
+      radicand: { kind: 'text', value: 'x' },
+      ...(controlProperties ? { controlProperties } : {}),
+    },
+    ...(controlProperties ? { controlProperties } : {}),
+  });
+  const layout = (expression: EquationExpression) =>
+    layoutEquation(projection(expression), createFixedMeasurer(6, 14), resolveRunStyle([]));
+  const controlled = layout(nary(true));
+  expect(controlled.geometry.kind).toBe('nary');
+  expect(controlled.geometry).toEqual(layout(nary()).geometry);
+});

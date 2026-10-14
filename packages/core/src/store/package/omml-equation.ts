@@ -8,9 +8,12 @@ import {
   equationRunFormat,
   equationMathChild as namedChild,
   equationMathChildren as namedChildren,
-  equationRunIsSupported as isSupportedRun,
-  equationTextIsSupported,
 } from './omml-run-format.ts';
+import {
+  equationStructureHasControlProperties,
+  isSupportedExpressionNode,
+  mathVal,
+} from './omml-structure-support.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
 import type {
@@ -38,6 +41,17 @@ export interface OmmlLimits {
   readonly maxTextLength?: number;
 }
 
+/**
+ * Marks a structure whose property element carries `m:ctrlPr` operator run formatting.
+ *
+ * The source keeps those properties verbatim. Layout draws the operator glyphs with the
+ * default math formatting, and compact linear syntax cannot express them.
+ */
+export interface EquationControlSource {
+  /** The structure carries supported `m:ctrlPr` properties, so compact replacement refuses it. */
+  readonly controlProperties?: true;
+}
+
 export type EquationExpression =
   | { readonly kind: 'row'; readonly items: readonly EquationExpression[] }
   | {
@@ -52,30 +66,34 @@ export type EquationExpression =
         readonly mathStyle?: 'p' | 'b' | 'i' | 'bi';
       };
     }
-  | { readonly kind: 'bar'; readonly body: EquationExpression; readonly position: 'top' | 'bottom' }
-  | {
+  | ({
+      readonly kind: 'bar';
+      readonly body: EquationExpression;
+      readonly position: 'top' | 'bottom';
+    } & EquationControlSource)
+  | ({
       readonly kind: 'fraction';
       readonly numerator: EquationExpression;
       readonly denominator: EquationExpression;
-    }
-  | {
+    } & EquationControlSource)
+  | ({
       readonly kind: 'radical';
       readonly radicand: EquationExpression;
       readonly degree?: EquationExpression;
-    }
-  | {
+    } & EquationControlSource)
+  | ({
       readonly kind: 'script';
       readonly base: EquationExpression;
       readonly subscript?: EquationExpression;
       readonly superscript?: EquationExpression;
-    }
-  | {
+    } & EquationControlSource)
+  | ({
       readonly kind: 'nary';
       readonly operator: string;
       readonly body: EquationExpression;
       readonly lowerLimit?: EquationExpression;
       readonly upperLimit?: EquationExpression;
-    }
+    } & EquationControlSource)
   | { readonly kind: 'fallback'; readonly text: string };
 
 export interface OmmlEquationProjection {
@@ -198,161 +216,6 @@ function collectFallbackText(node: OoxmlNode, state: ProjectionState, depth: num
   }
 }
 
-function hasOnlyMathChildren(
-  node: OoxmlGenericElementNode,
-  counts: Readonly<Record<string, { readonly min: number; readonly max: number }>>
-): boolean {
-  if (node.attributes.length > 0) return false;
-  const seen = new Map<string, number>();
-  for (const child of childrenOf(node)) {
-    if (!isMathElement(child) || !Object.hasOwn(counts, child.localName)) return false;
-    seen.set(child.localName, (seen.get(child.localName) ?? 0) + 1);
-  }
-  return Object.entries(counts).every(([name, range]) => {
-    const count = seen.get(name) ?? 0;
-    return count >= range.min && count <= range.max;
-  });
-}
-
-function isEmptyProperty(node: OoxmlGenericElementNode): boolean {
-  return node.attributes.length === 0 && childrenOf(node).length === 0;
-}
-
-function mathVal(node: OoxmlGenericElementNode): string | undefined {
-  return node.attributes.find(
-    (attribute) =>
-      attribute.namespaceUri === OFFICE_MATH_NAMESPACE_URI && attribute.localName === 'val'
-  )?.value;
-}
-
-function hasOnlyMathVal(node: OoxmlGenericElementNode, accepted?: ReadonlySet<string>): boolean {
-  if (childrenOf(node).length > 0 || node.attributes.length !== 1) return false;
-  const value = mathVal(node);
-  return value !== undefined && (accepted === undefined || accepted.has(value));
-}
-
-function isSupportedExpressionNode(node: OoxmlNode): boolean {
-  if (node.kind === 'textValue') return true;
-  if (!isMathElement(node)) return false;
-  if (node.localName === 'r') return isSupportedRun(node);
-  if (node.localName === 't') return equationTextIsSupported(node);
-  if (node.localName === 'bar') {
-    if (!hasOnlyMathChildren(node, { barPr: { min: 0, max: 1 }, e: { min: 1, max: 1 } }))
-      return false;
-    const property = namedChild(node, 'barPr');
-    if (
-      property &&
-      !isEmptyProperty(property) &&
-      !(
-        hasOnlyMathChildren(property, { pos: { min: 1, max: 1 } }) &&
-        hasOnlyMathVal(namedChildren(property, 'pos')[0]!, new Set(['top', 'bot']))
-      )
-    )
-      return false;
-    return childrenOf(namedChildren(node, 'e')[0]!).every(isSupportedExpressionNode);
-  }
-  if (node.localName === 'f') {
-    if (
-      !hasOnlyMathChildren(node, {
-        fPr: { min: 0, max: 1 },
-        num: { min: 1, max: 1 },
-        den: { min: 1, max: 1 },
-      })
-    ) {
-      return false;
-    }
-    const property = namedChild(node, 'fPr');
-    const propertySupported =
-      !property ||
-      isEmptyProperty(property) ||
-      (hasOnlyMathChildren(property, { type: { min: 1, max: 1 } }) &&
-        hasOnlyMathVal(namedChildren(property, 'type')[0]!, new Set(['bar'])));
-    return (
-      propertySupported &&
-      childrenOf(namedChildren(node, 'num')[0]!).every(isSupportedExpressionNode) &&
-      childrenOf(namedChildren(node, 'den')[0]!).every(isSupportedExpressionNode)
-    );
-  }
-  if (node.localName === 'rad') {
-    if (
-      !hasOnlyMathChildren(node, {
-        radPr: { min: 0, max: 1 },
-        deg: { min: 1, max: 1 },
-        e: { min: 1, max: 1 },
-      })
-    ) {
-      return false;
-    }
-    const degree = namedChildren(node, 'deg')[0]!;
-    const property = namedChild(node, 'radPr');
-    const propertySupported =
-      !property ||
-      isEmptyProperty(property) ||
-      (childrenOf(degree).length === 0 &&
-        hasOnlyMathChildren(property, { degHide: { min: 1, max: 1 } }) &&
-        hasOnlyMathVal(namedChildren(property, 'degHide')[0]!, new Set(['1', 'true', 'on'])));
-    return (
-      propertySupported &&
-      childrenOf(degree).every(isSupportedExpressionNode) &&
-      childrenOf(namedChildren(node, 'e')[0]!).every(isSupportedExpressionNode)
-    );
-  }
-  if (node.localName === 'sSup' || node.localName === 'sSub' || node.localName === 'sSubSup') {
-    const propertyName = `${node.localName}Pr`;
-    const expected = {
-      [propertyName]: { min: 0, max: 1 },
-      e: { min: 1, max: 1 },
-      sub: { min: node.localName === 'sSup' ? 0 : 1, max: node.localName === 'sSup' ? 0 : 1 },
-      sup: { min: node.localName === 'sSub' ? 0 : 1, max: node.localName === 'sSub' ? 0 : 1 },
-    };
-    if (!hasOnlyMathChildren(node, expected)) return false;
-    const property = namedChild(node, propertyName);
-    return (
-      (!property || isEmptyProperty(property)) &&
-      ['e', 'sub', 'sup'].every((name) =>
-        namedChildren(node, name).every((container) =>
-          childrenOf(container).every(isSupportedExpressionNode)
-        )
-      )
-    );
-  }
-  if (node.localName === 'nary') {
-    if (
-      !hasOnlyMathChildren(node, {
-        naryPr: { min: 0, max: 1 },
-        sub: { min: 0, max: 1 },
-        sup: { min: 0, max: 1 },
-        e: { min: 1, max: 1 },
-      })
-    ) {
-      return false;
-    }
-    const property = namedChild(node, 'naryPr');
-    if (property) {
-      if (
-        !hasOnlyMathChildren(property, {
-          chr: { min: 0, max: 1 },
-          limLoc: { min: 0, max: 1 },
-        })
-      ) {
-        return false;
-      }
-      const character = namedChild(property, 'chr');
-      const limitLocation = namedChild(property, 'limLoc');
-      if (character && !hasOnlyMathVal(character)) return false;
-      if (limitLocation && !hasOnlyMathVal(limitLocation, new Set(['undOvr']))) {
-        return false;
-      }
-    }
-    return ['e', 'sub', 'sup'].every((name) =>
-      namedChildren(node, name).every((container) =>
-        childrenOf(container).every(isSupportedExpressionNode)
-      )
-    );
-  }
-  return false;
-}
-
 function projectContainer(
   node: OoxmlGenericElementNode,
   state: ProjectionState,
@@ -365,6 +228,12 @@ function projectContainer(
     expressions.push(projectNode(child, state, depth + 1));
   }
   return frozenRow(expressions);
+}
+
+function controlSource(node: OoxmlGenericElementNode, propertyName: string): EquationControlSource {
+  return equationStructureHasControlProperties(node, propertyName)
+    ? { controlProperties: true }
+    : {};
 }
 
 function projectStructured(
@@ -380,6 +249,7 @@ function projectStructured(
       kind: 'bar',
       body: projectContainer(namedChildren(node, 'e')[0]!, state, depth + 1),
       position: position && mathVal(position) === 'top' ? 'top' : 'bottom',
+      ...controlSource(node, 'barPr'),
     });
   }
   if (node.localName === 'f') {
@@ -390,6 +260,7 @@ function projectStructured(
       kind: 'fraction',
       numerator: projectContainer(numerator, state, depth + 1),
       denominator: projectContainer(denominator, state, depth + 1),
+      ...controlSource(node, 'fPr'),
     });
   }
   if (node.localName === 'rad') {
@@ -404,6 +275,7 @@ function projectStructured(
       kind: 'radical',
       radicand: projectContainer(radicand, state, depth + 1),
       ...(projectedDegree === undefined ? {} : { degree: projectedDegree }),
+      ...controlSource(node, 'radPr'),
     });
   }
   if (node.localName === 'sSup' || node.localName === 'sSub' || node.localName === 'sSubSup') {
@@ -422,6 +294,7 @@ function projectStructured(
       base: projectContainer(base, state, depth + 1),
       ...(subscript ? { subscript: projectContainer(subscript, state, depth + 1) } : {}),
       ...(superscript ? { superscript: projectContainer(superscript, state, depth + 1) } : {}),
+      ...controlSource(node, `${node.localName}Pr`),
     });
   }
   if (node.localName === 'nary') {
@@ -446,6 +319,7 @@ function projectStructured(
       ...(upper && childrenOf(upper).length > 0
         ? { upperLimit: projectContainer(upper, state, depth + 1) }
         : {}),
+      ...controlSource(node, 'naryPr'),
     });
   }
   return null;

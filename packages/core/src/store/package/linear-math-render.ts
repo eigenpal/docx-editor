@@ -1,6 +1,8 @@
 import type { EquationExpression, LinearMathParseResult } from './omml-equation.ts';
 
 function reversible(value: EquationExpression): boolean {
+  // Compact syntax has no spelling for `m:ctrlPr` operator formatting.
+  if ('controlProperties' in value && value.controlProperties) return false;
   switch (value.kind) {
     case 'fallback':
     case 'bar':

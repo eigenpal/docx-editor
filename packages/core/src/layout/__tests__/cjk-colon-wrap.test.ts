@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { readOoxmlPart } from '../../store/index.ts';
-import { compressCjkPieces, cjkColonNaturalWidths } from '../cjk-spacing.ts';
+import { compressCjkPieces, cjkSeamNaturalWidths } from '../cjk-spacing.ts';
 import { DEFAULT_CJK_TYPOGRAPHY } from '../cjk-typography.ts';
 import { cjkParagraphBreaks } from '../cjk-paragraph-breaks.ts';
 import { anchorLineStartsByModelOffset } from '../anchor-line-probe.ts';
@@ -158,7 +158,7 @@ test('colon fit widths retain authored tracking, size, and scale', () => {
       },
     ];
     const compressed = compressCjkPieces(pieces, policy, measurer);
-    const widths = cjkColonNaturalWidths(compressed, pieces, measurer);
+    const widths = cjkSeamNaturalWidths(compressed, pieces, measurer);
     const colon = compressed.find((piece) => piece.text === '：')!;
     expect(widths.get(colon)).toBe(9 + characterSpacingPt);
     expect(measurer.measure(colon.text, colon.style)).toBe(4.5 + characterSpacingPt);
@@ -178,7 +178,7 @@ test('anchor prediction uses the colon fit width before its shared bearing reduc
   const pieces = compressCjkPieces(originals, policy, measurer);
   const anchors = anchorLineStartsByModelOffset({
     pieces,
-    colonNaturalWidths: cjkColonNaturalWidths(pieces, originals, measurer),
+    seamNaturalWidths: cjkSeamNaturalWidths(pieces, originals, measurer),
     cjkBreaks: cjkParagraphBreaks(pieces, policy),
     typography: { ...policy, overflowPunctuation: false },
     measurer,

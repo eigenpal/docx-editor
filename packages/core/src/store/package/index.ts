@@ -181,6 +181,7 @@ export {
   linearMathToOmml,
   parseLinearMath,
   projectOmmlEquation,
+  type EquationControlSource,
   type EquationExpression,
   type LinearMathOmmlResult,
   type LinearMathParseResult,

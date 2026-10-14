@@ -1326,6 +1326,11 @@ export function ensureListDefinition(pkg: OoxmlPackage, kind: ListKind): Ensured
 // @public
 export function ensureNumberingLevel(pkg: OoxmlPackage, numId: string, level: number, kind: ListKind): OoxmlPackage | null;
 
+// @public
+export interface EquationControlSource {
+    readonly controlProperties?: true;
+}
+
 // @public (undocumented)
 export type EquationExpression = {
     readonly items: readonly EquationExpression[];
@@ -1341,30 +1346,30 @@ export type EquationExpression = {
     };
     readonly kind: 'text';
     readonly value: string;
-} | {
+} | ({
     readonly body: EquationExpression;
     readonly kind: 'bar';
     readonly position: 'top' | 'bottom';
-} | {
+} & EquationControlSource) | ({
     readonly denominator: EquationExpression;
     readonly kind: 'fraction';
     readonly numerator: EquationExpression;
-} | {
+} & EquationControlSource) | ({
     readonly degree?: EquationExpression;
     readonly kind: 'radical';
     readonly radicand: EquationExpression;
-} | {
+} & EquationControlSource) | ({
     readonly base: EquationExpression;
     readonly kind: 'script';
     readonly subscript?: EquationExpression;
     readonly superscript?: EquationExpression;
-} | {
+} & EquationControlSource) | ({
     readonly body: EquationExpression;
     readonly kind: 'nary';
     readonly lowerLimit?: EquationExpression;
     readonly operator: string;
     readonly upperLimit?: EquationExpression;
-} | {
+} & EquationControlSource) | {
     readonly kind: 'fallback';
     readonly text: string;
 };

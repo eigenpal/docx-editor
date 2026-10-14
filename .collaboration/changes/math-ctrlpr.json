@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Supported equation structures with control properties (m:ctrlPr) used a text fallback.",
+  "after": "Bars, fractions, radicals, scripts, and n-ary operators with supported control properties project as math. Compact replacement refuses these sources. Prose editing and equation removal remain available.",
+  "reason": "Canonical OMML elements and tree operations remain unchanged. Released clients preserve these nodes. The change affects local projection and replacement capability, not the room format.",
+  "tests": [
+    "packages/core/src/store/__tests__/omml-control-properties.test.ts",
+    "packages/core/src/layout/__tests__/equation-run-format-layout.test.ts",
+    "packages/core/src/editor/__tests__/surface-equation-source-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-source-editors.test.ts"
+  ],
+  "changeset": "math-ctrlpr",
+  "migration": null
+}

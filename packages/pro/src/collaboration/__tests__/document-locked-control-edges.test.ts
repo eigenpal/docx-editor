@@ -110,8 +110,9 @@ test('typing before a chip while the other peer deletes the chip keeps the typed
   pair.pause();
   caret(alice, 0);
   alice.surface!.type('A');
-  // Bob removes the chip whole: Backspace after it deletes the node as one unit.
+  // Bob removes the chip whole: Backspace after it selects the node, a second one deletes it.
   caret(bob, 5);
+  bob.surface!.deleteBackward();
   bob.surface!.deleteBackward();
   expect(chipText(bob)).toBeNull();
   flush();

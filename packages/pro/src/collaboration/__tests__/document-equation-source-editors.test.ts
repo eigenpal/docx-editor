@@ -7,7 +7,13 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { readOoxmlPackage, serializeOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
+import {
+  findNode,
+  projectOmmlEquation,
+  readOoxmlPackage,
+  serializeOoxmlPart,
+  type OoxmlNode,
+} from '@docx-editor.dev/core/store';
 import { createDocumentCollaboration } from '../document-session.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { zipDocument, walk } from './document-peer-support.ts';
@@ -30,6 +36,11 @@ const formatted =
   '<m:sup><m:r><m:rPr><m:lit/></m:rPr><m:t>al</m:t></m:r></m:sup></m:sSubSup>';
 const barred =
   '<m:bar><m:barPr><m:pos m:val="top"/></m:barPr>' + '<m:e><m:r><m:t>N</m:t></m:r></m:e></m:bar>';
+const controlled =
+  '<m:nary><m:naryPr><m:chr m:val="∑"/><m:ctrlPr><w:rPr><w:i/></w:rPr></m:ctrlPr></m:naryPr>' +
+  '<m:sub/><m:sup/><m:e><m:f><m:fPr><m:ctrlPr><w:ins w:id="9" w:author="Public Author">' +
+  '<w:rPr><w:i/></w:rPr></w:ins></m:ctrlPr></m:fPr><m:num><m:r><m:t>a</m:t></m:r></m:num>' +
+  '<m:den><m:r><m:t>b</m:t></m:r></m:den></m:f></m:e></m:nary>';
 const mathStyles =
   '<m:r><m:t>Q</m:t></m:r>' +
   '<m:r><m:rPr><m:sty m:val="bi"/></m:rPr><m:t>N</m:t></m:r>' +
@@ -39,6 +50,7 @@ for (const [name, source] of [
   ['formatted script', formatted],
   ['bar', barred],
   ['math styles', mathStyles],
+  ['control properties', controlled],
 ] as const) {
   test(`two editors preserve ${name} through edits, undo, removal, and save`, async () => {
     const { createDocxEditor } = await import('@docx-editor.dev/core/editor');
@@ -135,6 +147,15 @@ for (const [name, source] of [
       };
       select(left, 4);
       const equation = left.surface!.equations.equationAtCaret()!;
+      if (name === 'control properties') {
+        // The equation lays out as math, not as the text fallback, in both editors.
+        for (const editor of [left, right]) {
+          const part = editor.surface!.session.partFor({ kind: 'body' })!;
+          const source = findNode(part, equation.id);
+          expect(source && projectOmmlEquation(source)?.expression.kind).toBe('nary');
+        }
+        expect(original[0]!.match(/:ctrlPr>/g)).toHaveLength(4);
+      }
       expect(left.surface!.equations.applyEquation(equation.id, 'R')).toBe(false);
       expect(equationXml(await left.save())).toEqual(original);
       expect(equationXml(await right.save())).toEqual(original);

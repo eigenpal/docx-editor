@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Backspace after, or Delete before, an inline content-locked control removed the control in one press, and a selection covering it was refused.",
+  "after": "The first press selects the control without a write. The second press removes it with the existing removeContentControl and deleteText operations, or the wrapper lock refuses it.",
+  "reason": "Only local key handling changes. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/locked-control-delete.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-locked-control-delete.test.ts"
+  ],
+  "changeset": "locked-control-delete",
+  "migration": null
+}

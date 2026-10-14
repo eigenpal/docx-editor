@@ -228,13 +228,25 @@ describe('CJK follow-up: document and paragraph policy', () => {
     expect(resolveCjkTypography(overridden.props, before.typography).kinsoku).toBe(true);
   });
   test('punctuation overflow follows the paragraph switch and allows only one character', () => {
-    expect(textLines(['天地。人'], 12, '<w:overflowPunct/>')).toEqual(['天地。', '人']);
-    expect(textLines(['天地。人'], 12, '<w:overflowPunct w:val="0"/>')).toEqual([
+    // Punctuation hangs only on justified lines.
+    const jc = '<w:jc w:val="both"/>';
+    expect(textLines(['天地。人'], 12, `<w:overflowPunct/>${jc}`)).toEqual(['天地。', '人']);
+    expect(textLines(['天地。人'], 12, `<w:overflowPunct w:val="0"/>${jc}`)).toEqual([
       '天',
       '地。',
       '人',
     ]);
-    expect(textLines(['天地。。人'], 12, '<w:overflowPunct/>')).toEqual(['天', '地。。', '人']);
+    expect(textLines(['天地。。人'], 12, `<w:overflowPunct/>${jc}`)).toEqual([
+      '天',
+      '地。。',
+      '人',
+    ]);
+    for (const align of ['left', 'center', 'right'])
+      expect(textLines(['天地。人'], 12, `<w:overflowPunct/><w:jc w:val="${align}"/>`)).toEqual([
+        '天',
+        '地。',
+        '人',
+      ]);
   });
   test('authored punctuation thresholds act independently of characterSpacingControl', () => {
     const ordinary = layout(['天地。。'], 21);
@@ -272,10 +284,9 @@ describe('CJK follow-up: document and paragraph policy', () => {
   });
   test('contextual compression preserves the explicit hanging punctuation switch', () => {
     const settings = '<w:characterSpacingControl w:val="compressPunctuation"/>';
-    expect(textLines(['天地。人'], 12, '<w:overflowPunct/>', '', settings)).toEqual([
-      '天地。',
-      '人',
-    ]);
+    // Punctuation hangs only on justified lines.
+    const hang = '<w:overflowPunct/><w:jc w:val="both"/>';
+    expect(textLines(['天地。人'], 12, hang, '', settings)).toEqual(['天地。', '人']);
     expect(textLines(['天地。人'], 12, '<w:overflowPunct w:val="0"/>', '', settings)).toEqual([
       '天',
       '地。',
