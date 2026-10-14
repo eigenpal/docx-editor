@@ -146,6 +146,23 @@ test('single SFNT copy stays exact and rejects an absent collection index', () =
   assert.throws(() => materializeCollectionFace(regular, 1), /requires a collection/);
 });
 
+test('a subarray with a nonzero byte offset selects the same face without sharing its buffer', () => {
+  const backing = new Uint8Array(ttc.length + 37).fill(0x9a);
+  backing.set(ttc, 13);
+  const subarray = backing.subarray(13, 13 + ttc.length),
+    before = hash(backing);
+  assert.notEqual(subarray.byteOffset, 0);
+  for (const faceIndex of [0, 1]) {
+    const projected = materializeCollectionFace(subarray, faceIndex);
+    assert.deepEqual(projected, materializeCollectionFace(ttc, faceIndex));
+    assert.equal(hash(backing), before);
+    assert.notEqual(projected.buffer, backing.buffer);
+    assert.equal(sfntChecksum(projected), 0xb1b0afba);
+    projected.fill(0);
+    assert.equal(hash(backing), before);
+  }
+});
+
 test('absent faces, bad directories and table ranges fail closed', () => {
   assert.throws(() => materializeCollectionFace(ttc, 2), /absent/);
   assert.throws(() => materializeCollectionFace(ttc, 0.5), /index/);
