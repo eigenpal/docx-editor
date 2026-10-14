@@ -87,6 +87,39 @@ async function change(element: Element, value: string): Promise<void> {
   });
 }
 
+/** A kind radio. Its option group shares the accessible name, so pick the input. */
+function kind(view: ReturnType<typeof render>, name: string): HTMLInputElement {
+  return view
+    .getAllByLabelText(name)
+    .find((node): node is HTMLInputElement => node instanceof HTMLInputElement)!;
+}
+
+const preview = (view: ReturnType<typeof render>) =>
+  view.container.querySelector<HTMLElement>(
+    '[data-docx-dialog="watermark"] [data-docx-part="preview"]'
+  )!;
+
+async function seededDialog(watermark: Parameters<DocxEditorInstance['exec']>[0] | null) {
+  const { view, editor } = mount(null);
+  await settle();
+  if (watermark) {
+    await act(async () => {
+      editor().exec(watermark);
+    });
+  }
+  let closed = 0;
+  view.rerender(
+    <DocxEditorRoot document={SOURCE}>
+      <DocxEditorWatermarkDialog open onClose={() => (closed += 1)} />
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  await settle();
+  return { view, editor, closed: () => closed };
+}
+
 afterEach(() => {
   cleanup();
 });
@@ -106,10 +139,10 @@ describe('DocxEditor.WatermarkDialog', () => {
     expect(dialog.getAttribute('data-docx-dialog')).toBe('watermark');
 
     // No watermark yet: the first choice is selected and the text controls are disabled.
-    expect((view.getByLabelText('No watermark') as HTMLInputElement).checked).toBe(true);
+    expect((kind(view, 'No watermark') as HTMLInputElement).checked).toBe(true);
     expect((view.getByLabelText('Text') as HTMLInputElement).disabled).toBe(true);
 
-    await click(view.getByLabelText('Text watermark'));
+    await click(kind(view, 'Text watermark'));
     expect((view.getByLabelText('Text') as HTMLInputElement).disabled).toBe(false);
     await change(view.getByLabelText('Text'), 'CONFIDENTIAL');
     await change(view.getByLabelText('Size'), '72');
@@ -156,13 +189,13 @@ describe('DocxEditor.WatermarkDialog', () => {
       </DocxEditorRoot>
     );
     await settle();
-    expect((view.getByLabelText('Text watermark') as HTMLInputElement).checked).toBe(true);
+    expect((kind(view, 'Text watermark') as HTMLInputElement).checked).toBe(true);
     expect((view.getByLabelText('Text') as HTMLInputElement).value).toBe('SAMPLE');
     expect((view.getByLabelText('Italic') as HTMLInputElement).checked).toBe(true);
     expect((view.getByLabelText('Size') as HTMLSelectElement).value).toBe('54');
     expect((view.getByLabelText('Horizontal') as HTMLInputElement).checked).toBe(true);
 
-    await click(view.getByLabelText('No watermark'));
+    await click(kind(view, 'No watermark'));
     await click(view.getByText('Apply'));
     expect(closed).toBe(true);
     expect(editor().getWatermark()).toBeNull();
@@ -175,7 +208,7 @@ describe('DocxEditor.WatermarkDialog', () => {
     );
     await settle();
     const before = editor().getDocumentHandle().revision;
-    await click(view.getByLabelText('Text watermark'));
+    await click(kind(view, 'Text watermark'));
     await change(view.getByLabelText('Text'), 'URGENT');
     await click(view.getByText('Cancel'));
     expect(closed).toBe(true);
@@ -186,7 +219,7 @@ describe('DocxEditor.WatermarkDialog', () => {
   test('a chosen picture applies as a picture watermark with washout and scale', async () => {
     const { view, editor } = mount(<DocxEditorWatermarkDialog open onClose={() => {}} />);
     await settle();
-    await click(view.getByLabelText('Picture watermark'));
+    await click(kind(view, 'Picture watermark'));
     // Apply waits for a picture.
     expect((view.getByText('Apply') as HTMLButtonElement).disabled).toBe(true);
     const input = view.container.querySelector<HTMLInputElement>(
@@ -206,14 +239,133 @@ describe('DocxEditor.WatermarkDialog', () => {
     expect(full?.imageData?.length).toBeGreaterThan(0);
   });
 
-  test('custom presets fill the text choices', async () => {
+  test('custom presets fill the preset select, and typed text shows Custom', async () => {
     const { view } = mount(
       <DocxEditorWatermarkDialog open onClose={() => {}} presets={['INTERNAL', 'PUBLIC']} />
     );
     await settle();
-    const options = [
-      ...view.container.querySelectorAll<HTMLOptionElement>('[data-docx-dialog] datalist option'),
-    ].map((option) => option.value);
-    expect(options).toEqual(['INTERNAL', 'PUBLIC']);
+    const select = view.getByLabelText('Preset') as HTMLSelectElement;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      'Custom',
+      'INTERNAL',
+      'PUBLIC',
+    ]);
+    expect(select.disabled).toBe(true);
+    await click(kind(view, 'Text watermark'));
+    // The default text is not one of these presets.
+    expect(select.value).toBe('');
+    await change(select, 'PUBLIC');
+    expect((view.getByLabelText('Text') as HTMLInputElement).value).toBe('PUBLIC');
+    expect(select.value).toBe('PUBLIC');
+    await change(view.getByLabelText('Text'), 'PUBLIC v2');
+    expect(select.value).toBe('');
+    expect(select.selectedOptions[0]!.textContent).toBe('Custom');
+  });
+
+  test('the preview draws the draft and follows every field', async () => {
+    const { view } = mount(<DocxEditorWatermarkDialog open onClose={() => {}} />);
+    await settle();
+    const part = preview(view);
+    expect(part.getAttribute('aria-hidden')).toBe('true');
+    expect(part.querySelector('[data-docx-watermark-preview]')).toBeNull();
+
+    await click(kind(view, 'Text watermark'));
+    let text = part.querySelector('[data-docx-watermark-preview="text"]')!;
+    expect(text.textContent).toBe('DRAFT');
+    expect(text.getAttribute('fill')).toBe('#C0C0C0');
+    expect(text.getAttribute('fill-opacity')).toBe('0.5');
+    expect(text.getAttribute('transform')).toContain('rotate(-45');
+    expect(text.getAttribute('lengthAdjust')).toBe('spacingAndGlyphs');
+
+    await change(view.getByLabelText('Text'), 'SECRET');
+    await change(view.getByLabelText('Color'), '#ff0000');
+    await change(view.getAllByLabelText('Transparency')[0]!, '25');
+    await click(view.getByLabelText('Bold'));
+    await click(view.getByLabelText('Horizontal'));
+    text = part.querySelector('[data-docx-watermark-preview="text"]')!;
+    expect(text.textContent).toBe('SECRET');
+    expect(text.getAttribute('fill')).toBe('#FF0000');
+    expect(text.getAttribute('fill-opacity')).toBe('0.75');
+    expect(text.getAttribute('font-weight')).toBe('bold');
+    expect(text.getAttribute('transform')).toBeNull();
+
+    // Short text keeps its natural width; a stretch to the full line would distort it.
+    await change(view.getByLabelText('Text'), 'xd');
+    text = part.querySelector('[data-docx-watermark-preview="text"]')!;
+    expect(text.textContent).toBe('xd');
+    expect(text.getAttribute('textLength')).toBeNull();
+    expect(text.getAttribute('lengthAdjust')).toBeNull();
+
+    await click(kind(view, 'No watermark'));
+    expect(part.querySelector('[data-docx-watermark-preview]')).toBeNull();
+  });
+
+  test('Select picture is enabled for any kind, and a chosen file switches to Picture', async () => {
+    const { view } = mount(<DocxEditorWatermarkDialog open onClose={() => {}} />);
+    await settle();
+    await click(kind(view, 'Text watermark'));
+    const select = view.getByText('Select picture…') as HTMLButtonElement;
+    expect(select.disabled).toBe(false);
+    expect((view.getByLabelText('Scale') as HTMLSelectElement).disabled).toBe(true);
+    expect((view.getByLabelText('Washout') as HTMLInputElement).disabled).toBe(true);
+
+    const input = view.container.querySelector<HTMLInputElement>(
+      '[data-docx-dialog="watermark"] input[type="file"]'
+    )!;
+    const file = new File([PNG_1X1], 'logo.png', { type: 'image/png' });
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(kind(view, 'Picture watermark').checked).toBe(true);
+    expect((view.getByLabelText('Scale') as HTMLSelectElement).disabled).toBe(false);
+    const picture = preview(view).querySelector<SVGImageElement>(
+      '[data-docx-watermark-preview="picture"]'
+    )!;
+    expect(picture.getAttribute('href')).toMatch(/^blob:/);
+    expect(picture.style.filter).toContain('brightness');
+    await click(view.getByLabelText('Washout'));
+    expect(
+      preview(view).querySelector<SVGImageElement>('[data-docx-watermark-preview="picture"]')!.style
+        .filter
+    ).toBe('');
+
+    // The button alone switches the kind too.
+    await click(kind(view, 'Text watermark'));
+    await click(select);
+    expect(kind(view, 'Picture watermark').checked).toBe(true);
+  });
+
+  test('initial focus lands on the checked kind', async () => {
+    const { view } = await seededDialog({
+      type: 'setWatermark',
+      watermark: { text: 'SAMPLE' },
+    });
+    expect(document.activeElement).toBe(kind(view, 'Text watermark'));
+  });
+
+  test('an unchanged Apply closes without writing', async () => {
+    const { view, editor, closed } = await seededDialog({
+      type: 'setWatermark',
+      watermark: { text: 'SAMPLE', italic: true },
+    });
+    const before = editor().getDocumentHandle().revision;
+    await click(view.getByText('Apply'));
+    expect(closed()).toBe(1);
+    expect(editor().getDocumentHandle().revision).toBe(before);
+    // One undo removes the watermark: the Apply added no empty step on top of it.
+    await act(async () => {
+      editor().exec({ type: 'undo' });
+    });
+    expect(editor().getWatermark()).toBeNull();
+  });
+
+  test('No watermark on a document without one applies as no change', async () => {
+    const { view, editor, closed } = await seededDialog(null);
+    const before = editor().getDocumentHandle().revision;
+    await click(view.getByText('Apply'));
+    expect(closed()).toBe(1);
+    expect(editor().getDocumentHandle().revision).toBe(before);
+    expect(editor().snapshot().canUndo ?? false).toBe(false);
   });
 });

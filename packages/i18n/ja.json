@@ -294,6 +294,7 @@
     },
     "watermark": {
       "title": "透かし",
+      "kind": "透かしの種類",
       "noWatermark": "透かしなし",
       "picture": "図の透かし",
       "selectPicture": "図の選択…",
@@ -305,6 +306,8 @@
       "washout": "ウォッシュアウト",
       "text": "テキストの透かし",
       "textLabel": "テキスト",
+      "preset": "プリセット",
+      "custom": "カスタム",
       "font": "フォント",
       "size": "サイズ",
       "bold": "太字",

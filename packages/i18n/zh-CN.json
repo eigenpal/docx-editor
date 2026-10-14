@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "水印",
+      "kind": "水印类型",
       "noWatermark": "无水印",
       "picture": "图片水印",
       "selectPicture": "选择图片…",
@@ -271,6 +272,8 @@
       "washout": "冲蚀",
       "text": "文字水印",
       "textLabel": "文字",
+      "preset": "预设",
+      "custom": "自定义",
       "font": "字体",
       "size": "字号",
       "bold": "加粗",

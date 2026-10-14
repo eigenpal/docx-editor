@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "Filigrane",
+      "kind": "Type de filigrane",
       "noWatermark": "Aucun filigrane",
       "picture": "Filigrane image",
       "selectPicture": "Sélectionner une image…",
@@ -271,6 +272,8 @@
       "washout": "Estompé",
       "text": "Filigrane texte",
       "textLabel": "Texte",
+      "preset": "Prédéfini",
+      "custom": "Personnalisé",
       "font": "Police",
       "size": "Taille",
       "bold": "Gras",

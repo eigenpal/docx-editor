@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "Znak wodny",
+      "kind": "Typ znaku wodnego",
       "noWatermark": "Brak znaku wodnego",
       "picture": "Obraz jako znak wodny",
       "selectPicture": "Wybierz obraz…",
@@ -271,6 +272,8 @@
       "washout": "Rozjaśnij",
       "text": "Tekst jako znak wodny",
       "textLabel": "Tekst",
+      "preset": "Gotowy tekst",
+      "custom": "Niestandardowy",
       "font": "Czcionka",
       "size": "Rozmiar",
       "bold": "Pogrubienie",

@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "Wasserzeichen",
+      "kind": "Wasserzeichentyp",
       "noWatermark": "Kein Wasserzeichen",
       "picture": "Bildwasserzeichen",
       "selectPicture": "Bild auswählen…",
@@ -271,6 +272,8 @@
       "washout": "Auswaschen",
       "text": "Textwasserzeichen",
       "textLabel": "Text",
+      "preset": "Vorlage",
+      "custom": "Benutzerdefiniert",
       "font": "Schriftart",
       "size": "Größe",
       "bold": "Fett",

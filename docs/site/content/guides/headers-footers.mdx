@@ -75,25 +75,76 @@ Odd-page and even-page section breaks can add a blank page to reach the required
 
 A watermark is text or a picture that paints behind the text of every page. The document stores it as a shape in each header part. The editor paints text watermarks as glyph outlines fitted to the shape, diagonal or horizontal, with their color and transparency. Picture watermarks paint behind the text, washed out when the document asks for it. PDF export paints both the same way.
 
-To add, change, or remove a watermark, open **Insert** > **Watermark**. The dialog reads the current watermark, so you can change one option and keep the rest.
+To add, change, or remove a watermark, open **Insert** > **Watermark**. The dialog reads the current watermark and shows a live preview, so you can change one option and keep the rest.
 
-To set a watermark from code, run the `setWatermark` command. This example adds a diagonal text watermark at half transparency:
+### Set a watermark from code
+
+Run the `setWatermark` command. This example adds a diagonal text watermark at half transparency:
 
 ```ts
-editor.exec({
+const result = editor.exec({
   type: 'setWatermark',
   watermark: { text: 'CONFIDENTIAL', layout: 'diagonal', transparency: 0.5 },
 });
+if (!result.ok) console.warn(result.reason);
 ```
 
-To use a picture, pass its bytes in `imageData` instead of `text`. Pass `watermark: null` to remove the watermark. Each call is one undo step.
+Each call is one undo step. A refused call writes nothing and returns `ok: false` with a `reason` that names the option, for example `color must be RRGGBB`.
 
-`editor.getWatermark()` returns the watermark that the document shows, or `null` when it has none.
+The `Watermark` value takes these options. Omitted options use the defaults:
 
-The command has these limits:
+| Option | Applies to | Default | Values |
+| --- | --- | --- | --- |
+| `text` | Text | none | One line, up to 256 characters. |
+| `imageData` | Picture | none | PNG, JPEG, GIF, BMP, or WebP bytes. |
+| `fontFamily` | Text | `Calibri` | A font family name. |
+| `fontSizePt` | Text | Auto (`null`) | 1 to 1000 points. Auto fills the page. |
+| `bold`, `italic` | Text | `false` | Boolean. |
+| `color` | Text | `C0C0C0` | `RRGGBB`. |
+| `transparency` | Text | `0.5` | 0 (opaque) to 1. |
+| `layout` | Text | `diagonal` | `diagonal` or `horizontal`. |
+| `scale` | Picture | Auto (`null`) | 0.01 to 10 times the natural size. Auto fits the page. |
+| `washout` | Picture | `true` | Boolean. |
+
+Set either `text` or `imageData`, never both. This example adds a picture watermark from a file the user chose:
+
+```ts
+async function setPictureWatermark(file: File) {
+  const imageData = new Uint8Array(await file.arrayBuffer());
+  return editor.exec({ type: 'setWatermark', watermark: { imageData, washout: true } });
+}
+```
+
+Pass `watermark: null` to remove the watermark.
+
+### Read the watermark
+
+`editor.getWatermark()` returns the watermark that the document shows, or `null` when it has none. For a picture watermark, `editor.query({ type: 'watermark' })` also returns the picture bytes, so you can write the same picture back with other options.
+
+In React and Vue, `useWatermark()` returns the current watermark and an `apply` function. For examples, see [React hooks](/docs/2.x/react/hooks#usewatermark) and [Vue composables](/docs/2.x/vue/composables#usewatermark).
+
+### Customize the dialog
+
+The Watermark dialog uses the same parts as the other editor dialogs. This example replaces the text presets:
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+
+<DocxEditor
+  popups={{
+    watermark: (props) => (
+      <DocxEditor.WatermarkDialog {...props} presets={['INTERNAL', 'CONFIDENTIAL', 'DRAFT']} />
+    ),
+  }}
+/>;
+```
+
+To build your own layout, pass `preset={false}` and compose the parts. For more information, see [Customize dialogs](/docs/2.x/guides/customize-dialogs).
+
+### Limits
 
 - One watermark applies to the whole document. The command writes it into every header that a section shows and creates a default header when a section has none.
-- The command refuses options it cannot write, such as text with a line break or bytes that are not a PNG, JPEG, GIF, BMP, or WebP picture.
+- A document protected for filling in forms refuses the command with `locked`.
 - Curved or styled text art other than plain text stays opaque. The editor preserves its markup when you save.
 
 ## Next steps

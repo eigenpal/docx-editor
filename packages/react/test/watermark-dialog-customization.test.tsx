@@ -111,6 +111,40 @@ test('a full composition renders only the named fields, in order', async () => {
   expect(editor().getWatermark()).toMatchObject({ kind: 'text', text: 'DRAFT' });
 });
 
+test('a full composition places the preview part, which follows the draft', async () => {
+  const { view } = mount(
+    <Mark open onClose={() => {}} preset={false}>
+      <Mark.Body>
+        <Mark.Field name="textWatermark" />
+        <Mark.Preview className="host-preview" />
+      </Mark.Body>
+    </Mark>
+  );
+  const dialog = view.getByRole('dialog');
+  const preview = dialog.querySelector<HTMLElement>('[data-docx-part="preview"]')!;
+  expect(preview.classList.contains('host-preview')).toBe(true);
+  expect(preview.classList.contains('docx-dialog__preview')).toBe(true);
+  expect(preview.getAttribute('aria-hidden')).toBe('true');
+  expect(preview.querySelector('[data-docx-watermark-preview]')).toBeNull();
+  await act(async () => {
+    fireEvent.click(view.getByLabelText('Text watermark'));
+  });
+  expect(
+    dialog.querySelector('[data-docx-part="preview"] [data-docx-watermark-preview="text"]')
+      ?.textContent
+  ).toBe('DRAFT');
+});
+
+test('a hidden preview leaves the default arrangement without it', () => {
+  const { view } = mount(
+    <Mark open onClose={() => {}}>
+      <Mark.Preview hidden />
+    </Mark>
+  );
+  expect(view.getByRole('dialog').querySelector('[data-docx-part="preview"]')).toBeNull();
+  expect(view.getByText('Apply')).toBeTruthy();
+});
+
 test('hidden parts go away and the other defaults stay', () => {
   const { view } = mount(
     <Mark open onClose={() => {}}>

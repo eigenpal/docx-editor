@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "Marca d’água",
+      "kind": "Tipo de marca d’água",
       "noWatermark": "Sem marca d’água",
       "picture": "Marca d’água de imagem",
       "selectPicture": "Selecionar imagem…",
@@ -271,6 +272,8 @@
       "washout": "Desbotar",
       "text": "Marca d’água de texto",
       "textLabel": "Texto",
+      "preset": "Predefinição",
+      "custom": "Personalizado",
       "font": "Fonte",
       "size": "Tamanho",
       "bold": "Negrito",

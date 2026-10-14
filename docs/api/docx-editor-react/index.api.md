@@ -1706,6 +1706,7 @@ export const DocxEditorWatermarkDialog: typeof WatermarkDialogRoot & {
     Header: (props: DialogPartProps & {
         name?: WatermarkDialogFieldName | undefined;
     }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Preview: (props: DialogPartProps) => ReactNode;
     Title: (props: DialogPartProps & {
         name?: WatermarkDialogFieldName | undefined;
     }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
@@ -3372,7 +3373,7 @@ export interface VerticalRulerProps {
 export { Watermark }
 
 // @public
-export type WatermarkDialogFieldName = 'noWatermark' | 'pictureWatermark' | 'picture' | 'scale' | 'washout' | 'textWatermark' | 'text' | 'fontFamily' | 'fontSizePt' | 'bold' | 'italic' | 'transparency' | 'color' | 'layout';
+export type WatermarkDialogFieldName = 'noWatermark' | 'pictureWatermark' | 'picture' | 'scale' | 'washout' | 'textWatermark' | 'preset' | 'text' | 'fontFamily' | 'fontSizePt' | 'bold' | 'italic' | 'transparency' | 'color' | 'layout';
 
 // @public
 export interface WatermarkDialogFields {

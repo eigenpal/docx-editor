@@ -4678,10 +4678,19 @@ export const DocxEditorWatermarkDialog: {
     className: string;
     preset: boolean;
     presets: readonly string[];
-}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    Apply: vue.DefineComponent<DialogPartProps>;
+    Body: vue.DefineComponent<DialogPartProps>;
+    Cancel: vue.DefineComponent<DialogPartProps>;
+    Error: vue.DefineComponent<DialogPartProps>;
     Field: vue.DefineComponent<DialogPartProps & {
         name: WatermarkDialogFieldName;
     }>;
+    Footer: vue.DefineComponent<DialogPartProps>;
+    Header: vue.DefineComponent<DialogPartProps>;
+    Preview: vue.DefineComponent<DialogPartProps>;
+    Reset: vue.DefineComponent<DialogPartProps>;
+    Title: vue.DefineComponent<DialogPartProps>;
 };
 
 // @public
@@ -7396,7 +7405,7 @@ export interface VerticalRulerProps {
 export { Watermark }
 
 // @public
-export type WatermarkDialogFieldName = 'noWatermark' | 'pictureWatermark' | 'picture' | 'scale' | 'washout' | 'textWatermark' | 'text' | 'fontFamily' | 'fontSizePt' | 'bold' | 'italic' | 'transparency' | 'color' | 'layout';
+export type WatermarkDialogFieldName = 'noWatermark' | 'pictureWatermark' | 'picture' | 'scale' | 'washout' | 'textWatermark' | 'preset' | 'text' | 'fontFamily' | 'fontSizePt' | 'bold' | 'italic' | 'transparency' | 'color' | 'layout';
 
 // @public
 export interface WatermarkDialogFields {

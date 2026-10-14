@@ -518,7 +518,10 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;
 
-  /** The watermark the document shows, for the watermark dialog; null when it shows none. */
+  /**
+   * The watermark the document shows, read from the first section's headers; null when it
+   * shows none. For a picture watermark's bytes, use `query({ type: 'watermark' })`.
+   */
   getWatermark(): WatermarkState | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
@@ -1241,7 +1244,11 @@ export interface EditorCommands
     expectedPackageRevision?: number;
   };
 
-  /** Replace the document watermark in every header the document shows; null removes it. */
+  /**
+   * Replace the document watermark in every header the document shows; null removes it. One
+   * undo step. Refuses with `invalidArgs` for an invalid option and `locked` in a protected
+   * document; a refusal writes nothing. See {@link Watermark} for the options and defaults.
+   */
   setWatermark: { watermark: Watermark | null };
   /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
   insertToc: Record<never, never>;

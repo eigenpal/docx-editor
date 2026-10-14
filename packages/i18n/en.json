@@ -294,6 +294,7 @@
     },
     "watermark": {
       "title": "Watermark",
+      "kind": "Watermark type",
       "noWatermark": "No watermark",
       "picture": "Picture watermark",
       "selectPicture": "Select picture…",
@@ -305,6 +306,8 @@
       "washout": "Washout",
       "text": "Text watermark",
       "textLabel": "Text",
+      "preset": "Preset",
+      "custom": "Custom",
       "font": "Font",
       "size": "Size",
       "bold": "Bold",

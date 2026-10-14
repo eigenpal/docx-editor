@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "Tanda air",
+      "kind": "Jenis tanda air",
       "noWatermark": "Tanpa tanda air",
       "picture": "Tanda air gambar",
       "selectPicture": "Pilih gambar…",
@@ -271,6 +272,8 @@
       "washout": "Pudarkan",
       "text": "Tanda air teks",
       "textLabel": "Teks",
+      "preset": "Prasetel",
+      "custom": "Kustom",
       "font": "Font",
       "size": "Ukuran",
       "bold": "Tebal",

@@ -260,6 +260,7 @@
     },
     "watermark": {
       "title": "Filigran",
+      "kind": "Filigran türü",
       "noWatermark": "Filigran yok",
       "picture": "Resim filigranı",
       "selectPicture": "Resim seç…",
@@ -271,6 +272,8 @@
       "washout": "Soluklaştır",
       "text": "Metin filigranı",
       "textLabel": "Metin",
+      "preset": "Hazır metin",
+      "custom": "Özel",
       "font": "Yazı tipi",
       "size": "Boyut",
       "bold": "Kalın",

@@ -630,6 +630,21 @@ export type ThemeColorScheme = Readonly<Record<string, string>>;
  * Set `text` for a text watermark or `imageData` for a picture watermark, never both. Omitted
  * options take the defaults in each field's description. The watermark goes into every header
  * the document shows; a section with no header gets one.
+ *
+ * Text options apply only with `text`; `scale` and `washout` apply only with `imageData`.
+ * `setWatermark` refuses a mixed or out-of-range value with `invalidArgs` and a reason naming
+ * the field, and writes nothing.
+ *
+ * @example
+ * ```ts
+ * // A red, horizontal text watermark at 72pt.
+ * editor.exec({
+ *   type: 'setWatermark',
+ *   watermark: { text: 'CONFIDENTIAL', color: 'C00000', fontSizePt: 72, layout: 'horizontal' },
+ * });
+ * // A washed-out picture watermark at its natural size.
+ * editor.exec({ type: 'setWatermark', watermark: { imageData: pngBytes, scale: 1 } });
+ * ```
  */
 export interface Watermark {
   /** The text of a text watermark, up to 256 characters on one line. */
