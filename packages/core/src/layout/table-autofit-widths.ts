@@ -672,7 +672,10 @@ export function autofitColumnMinimumsPt(
       });
       const { least, most } = measured;
       if (least < 0) continue;
-      const around = measured.wideLeft + measured.wideRight;
+      // Widening an automatic-width table keeps its shared grid lines (`autoOuterRulePt`).
+      const around = structure.autoOuterRulePt
+        ? measured.left + measured.right
+        : measured.wideLeft + measured.wideRight;
       if (cell.gridSpan !== 1) {
         // A spanning cell also covers the gaps between the columns it spans.
         const covered = (cell.gridSpan - 1) * gapPt;
@@ -736,13 +739,20 @@ export function widenAutofitColumns(
   widths: readonly number[],
   minimums: readonly number[],
   targetPt: number,
-  availablePt: number
+  availablePt: number,
+  /** Also bring a table wider than `targetPt` down to it when no column widens. */
+  shrinkToTarget = false
 ): readonly number[] {
   let deficit = 0;
+  let total = 0;
   for (const [index, width] of widths.entries()) {
     deficit += Math.max(0, minimums[index]! - width);
+    total += width;
   }
-  if (deficit <= WIDTH_EPSILON_PT) return widths;
+  if (deficit <= WIDTH_EPSILON_PT && !(shrinkToTarget && total > targetPt + WIDTH_EPSILON_PT))
+    return widths;
+  // Nothing widens: every column gives way in proportion to its width.
+  if (deficit <= WIDTH_EPSILON_PT) return widths.map((width) => (width * targetPt) / total);
   const grown = widths.map((width, index) => Math.max(width, minimums[index]!));
   const need = grown.reduce((sum, width) => sum + width, 0) - targetPt;
   if (need <= WIDTH_EPSILON_PT) return grown;
@@ -853,6 +863,9 @@ export function autofitColumnWidthsPt(
     content.spans.map((span) => ({ ...span, minimum: span.current ?? span.minimum }))
   );
   const sizedByContent = content.sizedByContent.some(Boolean);
+  // An automatic-width table keeps its outer side rules inside the text column.
+  const roomWidthPt = contentWidthPt - (structure.autoOuterRulePt ?? 0);
+  const availableFor = (room: number): number => Math.max(0, room - leadingIndentPt(structure));
   const widens = current.some(
     (minimum, column) => minimum > cellWidths[column]! + WIDTH_EPSILON_PT
   );
@@ -863,11 +876,18 @@ export function autofitColumnWidthsPt(
         structure,
         content,
         widens && !structure.legacyContentAlignment ? ifWidened : minimumsNow,
-        contentWidthPt,
+        roomWidthPt,
         view.depth ?? 0
       );
   if (spread || (!widens && !sizedByContent)) {
-    const widths = spread ? sameOrComputed(structure, spread) : structure.columnWidthsPt;
+    const widths = spread
+      ? sameOrComputed(structure, spread)
+      : structure.autoOuterRulePt
+        ? sameOrComputed(
+            structure,
+            widenAutofitColumns(cellWidths, minimumsNow, availableFor(roomWidthPt), Infinity, true)
+          )
+        : structure.columnWidthsPt;
     byStructure.set(structure, { contentWidthPt, widths });
     return widths;
   }
@@ -876,9 +896,7 @@ export function autofitColumnWidthsPt(
   // content-aligned table owns the room its own width already spans.
   const totalPt = structure.columnWidthsPt.reduce((sum, width) => sum + width, 0);
   const legacy = structure.legacyContentAlignment === true;
-  const availablePt = legacy
-    ? Math.max(totalPt, contentWidthPt)
-    : Math.max(0, contentWidthPt - leadingIndentPt(structure));
+  const availablePt = legacy ? Math.max(totalPt, contentWidthPt) : availableFor(roomWidthPt);
   const targetPt =
     autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt) - gaps;
   const roomPt = Math.max(0, availablePt - gaps);
