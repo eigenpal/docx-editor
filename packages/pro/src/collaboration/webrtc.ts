@@ -43,19 +43,40 @@ export const DEMO_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/w
  *
  * A default would send room ids and signaling traffic to a host the integrator never chose,
  * so a missing option fails before any connection opens. An empty list is explicit: it opens
- * no signaling connection, and only tabs of the same browser find each other.
+ * no signaling connection, and only tabs of the same browser find each other. Each entry
+ * must be a `ws://` or `wss://` URL, so a typo fails here and not inside the socket.
  *
  * @internal
  */
 export function requireSignaling(signaling: readonly string[] | undefined): readonly string[] {
-  if (Array.isArray(signaling)) return signaling;
-  throw new TypeError(
-    'createWebrtcCollaboration requires `signaling`, an array of signaling server URLs. ' +
-      'Pass your own URLs in production. For demos, pass `signaling: DEMO_SIGNALING_ENDPOINTS` ' +
-      "from '@docx-editor.dev/pro/collaboration/webrtc'. To connect only tabs of the same " +
-      'browser, pass `signaling: []`.'
-  );
+  if (!Array.isArray(signaling)) {
+    throw new TypeError(
+      'WebRTC collaboration requires `signaling`, an array of signaling server URLs. ' +
+        'Pass your own URLs in production. For demos, pass ' +
+        "`signaling: DEMO_SIGNALING_ENDPOINTS` from '@docx-editor.dev/pro/collaboration/webrtc'. " +
+        'To connect only tabs of the same browser, pass `signaling: []`.'
+    );
+  }
+  signaling.forEach((url: unknown, index) => {
+    // The index, not the value: a signaling URL can carry an access token.
+    if (!isSignalingUrl(url)) {
+      throw new TypeError(
+        `WebRTC collaboration needs signaling[${index}] to be a ws:// or wss:// URL.`
+      );
+    }
+  });
+  return signaling;
 }
+
+const isSignalingUrl = (url: unknown): boolean => {
+  if (typeof url !== 'string') return false;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'ws:' || protocol === 'wss:';
+  } catch {
+    return false;
+  }
+};
 
 /** Options for the owned WebRTC collaboration convenience wrapper. @public */
 export interface CreateWebrtcCollaborationOptions {
@@ -194,24 +215,14 @@ const installChunkedTransport = (
 };
 
 /**
- * Close a provider's signaling connections, then destroy it.
- *
- * `WebrtcProvider.destroy()` leaves the provider registered on its shared signaling
- * connections, so the last room to close would keep its signaling socket open.
- */
-const releaseProvider = (provider: WebrtcProvider): void => {
-  provider.disconnect();
-  provider.destroy();
-};
-
-/**
  * Create one owned `y-webrtc` room and provider-neutral collaboration session.
  *
  * The room reaches only the signaling servers in `signaling`. It never falls back to public
- * endpoints.
+ * endpoints. The first room applies the same scoping to every `y-webrtc` provider in the
+ * page, including providers the host creates directly.
  *
- * @throws `TypeError` (as a rejection) when `roomId` is invalid or `signaling` is not an
- * array. No connection opens.
+ * @throws `TypeError` (as a rejection) when `roomId` is invalid, or `signaling` is not an
+ * array of `ws://` or `wss://` URLs. No connection opens.
  * @public
  */
 export async function createWebrtcCollaboration(
@@ -219,7 +230,8 @@ export async function createWebrtcCollaboration(
 ): Promise<WebrtcCollaborationHandle> {
   const roomId = validateRoomId(options.roomId);
   const signaling = requireSignaling(options.signaling);
-  // `y-webrtc` shares one connection per URL across the page; keep this room on its own.
+  // `y-webrtc` shares one connection per URL across the page; keep this room on its own. The
+  // scope also makes `provider.destroy()` close the provider's signaling connections.
   installSignalingScope();
   const password = resolveWebrtcRoomPassword({ password: options.password });
   const ydoc = new Y.Doc();
@@ -264,7 +276,7 @@ export async function createWebrtcCollaboration(
     });
     if (!provider) provider = connectProvider();
   } catch (error) {
-    if (provider) releaseProvider(provider);
+    provider?.destroy();
     awareness.destroy();
     ydoc.destroy();
     throw error;
@@ -314,7 +326,7 @@ export async function createWebrtcCollaboration(
       unsynced.destroy();
       health.destroy();
       handle.destroy();
-      releaseProvider(connectedProvider);
+      connectedProvider.destroy();
       awareness.destroy();
       ydoc.destroy();
     },

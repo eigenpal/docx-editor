@@ -74,6 +74,29 @@ describe('WebRTC signaling has no default', () => {
     expect(requireSignaling([])).toEqual([]);
   });
 
+  test('an entry that is not a WebSocket URL is refused by position', () => {
+    const token = 'wss://signaling.example/?token=secret';
+    for (const entry of ['signaling.example', 'https://signaling.example', '', 42]) {
+      let failure: unknown;
+      try {
+        requireSignaling([token, entry] as unknown as string[]);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(TypeError);
+      expect((failure as Error).message).toContain('signaling[1]');
+      // The message never repeats a URL, which can carry an access token.
+      expect((failure as Error).message).not.toContain('secret');
+    }
+    expect(requireSignaling(['ws://localhost:4444', token])).toHaveLength(2);
+  });
+
+  test('a bad entry rejects before any connection opens', async () => {
+    const options = { ...withoutSignaling(), signaling: ['signaling.example'] };
+    await expect(createWebrtcCollaboration(options)).rejects.toBeInstanceOf(TypeError);
+    expect(socketUrls).toEqual([]);
+  });
+
   test('a value that is not a list is refused', () => {
     expect(() => requireSignaling('wss://signaling.example' as unknown as string[])).toThrow(
       TypeError
