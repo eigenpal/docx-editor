@@ -18,9 +18,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * patches the shared `y-webrtc` prototypes once, so it also covers connections that existed
  * before the first room, and connections other providers on the page open.
  *
- * `y-webrtc` leaves a destroyed provider in `providers`, so a provider's room name alone does
- * not prove the room is live: the guard records which room currently owns each name, and asks
- * whether THAT room's provider listed the URL.
+ * A provider's room name alone does not prove the room is live: `y-webrtc` leaves a destroyed
+ * provider in `providers`, and a publication encrypted before a room closed reaches `send`
+ * after it. So the guard records which room currently owns each name and asks whether THAT
+ * room's provider listed the URL, retires the name when the room is destroyed, and makes a
+ * provider release its connections when it is destroyed.
  *
  * @internal
  */
@@ -61,6 +63,12 @@ const subscribedTopics = new WeakMap<object, Set<string>>();
  */
 const roomOwners = new Map<string, ScopedRoom>();
 
+/**
+ * Names whose room the guard saw destroyed and no room has taken since. Nothing may signal
+ * for them: a publication encrypted before the room closed still arrives at `send` after it.
+ */
+const retiredRooms = new Set<string>();
+
 const subscribedOf = (connection: object): Set<string> => {
   let topics = subscribedTopics.get(connection);
   if (!topics) {
@@ -73,11 +81,14 @@ const subscribedOf = (connection: object): Set<string> => {
 /** Record `room` as the owner of its name. @internal */
 export function recordRoomOwner(room: ScopedRoom): void {
   roomOwners.set(room.name, room);
+  retiredRooms.delete(room.name);
 }
 
-/** Forget `room` as the owner of its name, unless a newer room took the name. @internal */
+/** Retire `room`'s name, unless a newer room took it. @internal */
 export function forgetRoomOwner(room: ScopedRoom): void {
-  if (roomOwners.get(room.name) === room) roomOwners.delete(room.name);
+  if (roomOwners.get(room.name) !== room) return;
+  roomOwners.delete(room.name);
+  retiredRooms.add(room.name);
 }
 
 /** Whether this connection may carry signaling for the room named `topic`. */
@@ -88,6 +99,7 @@ export function connectionCarriesTopic(connection: ScopedConnection, topic: unkn
     // Only a connected room signals; a disconnected one has left every connection.
     return owner.provider.shouldConnect !== false && connection.providers.has(owner.provider);
   }
+  if (retiredRooms.has(topic)) return false;
   // A room that opened before the guard was installed: trust the connection's providers.
   for (const provider of connection.providers) if (provider.roomName === topic) return true;
   return false;
@@ -210,15 +222,35 @@ export function installSignalingScope(): void {
 
   // `y-webrtc` deletes each released connection from the page registry by URL. A second
   // `disconnect()` would delete the connection another provider opened since, under the same
-  // URL. Disconnecting a provider that is not connected does nothing.
+  // URL. Disconnecting a provider that is not connected does nothing. A `status` listener may
+  // reconnect inside the call, so only the connections that still list the provider stay.
   patch(
     WebrtcProvider.prototype,
     'disconnect',
     (disconnect) =>
-      function idempotentDisconnect(this: { shouldConnect: boolean; signalingConns: unknown[] }) {
+      function idempotentDisconnect(this: ReleasableProvider) {
         if (!this.shouldConnect) return;
         disconnect.call(this);
-        this.signalingConns = [];
+        this.signalingConns = [
+          ...new Set(this.signalingConns.filter((connection) => connection.providers.has(this))),
+        ];
       }
   );
+  // `destroy()` leaves the provider registered on its signaling connections, which keeps the
+  // last socket open and lets the dead provider vouch for its room name. Release them first.
+  patch(
+    WebrtcProvider.prototype,
+    'destroy',
+    (destroy) =>
+      function releasingDestroy(this: ReleasableProvider) {
+        if (this.shouldConnect) this.disconnect();
+        return destroy.call(this);
+      }
+  );
+}
+
+interface ReleasableProvider {
+  shouldConnect: boolean;
+  signalingConns: { readonly providers: ReadonlySet<unknown> }[];
+  disconnect(): void;
 }

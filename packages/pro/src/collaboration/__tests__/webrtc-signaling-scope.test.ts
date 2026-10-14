@@ -19,7 +19,10 @@ import {
 } from '../webrtc.ts';
 import {
   acceptsIncomingSignalingMessage,
+  connectionCarriesTopic,
+  forgetRoomOwner,
   forgetSubscriptions,
+  recordRoomOwner,
   scopeOutgoingSignalingMessage,
 } from '../webrtc-signaling-scope.ts';
 
@@ -175,7 +178,6 @@ describe('signaling connection lifetime', () => {
   test('a destroyed provider does not vouch for a new room with the same name', async () => {
     const roomId = createCollaborationRoomId();
     // Another provider on the page used the demo server for this room, then went away.
-    // `destroy()` leaves it registered on the shared connection under the room name.
     const keeper = await openRoom(['wss://demo.example']);
     const foreignDoc = new Y.Doc();
     const foreign = new WebrtcProvider(roomId, foreignDoc, { signaling: ['wss://demo.example'] });
@@ -196,8 +198,6 @@ describe('signaling connection lifetime', () => {
     const named = later.flatMap((frame) => [frame.topic, ...(frame.topics ?? [])]);
     expect(named).not.toContain(roomId);
     expect(named).toContain(roomIdOf(keeper));
-    // Release the shared connection the destroyed provider still holds, for the next test.
-    foreign.disconnect();
   });
 
   test('a second disconnect leaves the next room’s connection alone', async () => {
@@ -213,6 +213,38 @@ describe('signaling connection lifetime', () => {
     expect(topicsSeenBy('wss://demo.example')).toEqual(
       new Set([roomIdOf(second), roomIdOf(third)])
     );
+  });
+
+  test('destroying a provider releases its signaling connection', async () => {
+    const doc = new Y.Doc();
+    const provider = new WebrtcProvider(createCollaborationRoomId(), doc, {
+      signaling: ['wss://foreign.example'],
+    });
+    await settle();
+    const [socket] = openSockets('wss://foreign.example');
+    socket!.open();
+    provider.destroy();
+    doc.destroy();
+    expect(socket!.closed).toBe(true);
+  });
+
+  test('a status listener can reconnect during a disconnect', async () => {
+    const room = await openRoom(['wss://demo.example']);
+    let reconnected = false;
+    const onStatus = ({ connected }: { connected: boolean }): void => {
+      if (connected || reconnected) return;
+      reconnected = true;
+      room.provider.connect();
+    };
+    room.provider.on('status', onStatus);
+    room.provider.disconnect();
+    room.provider.off('status', onStatus);
+    expect(reconnected).toBe(true);
+    const [socket] = openSockets('wss://demo.example');
+    expect(socket).toBeDefined();
+    // The reconnected provider still holds its connection, so a later disconnect closes it.
+    room.provider.disconnect();
+    expect(socket!.closed).toBe(true);
   });
 
   test('a host can disconnect and reconnect a room', async () => {
@@ -271,6 +303,26 @@ describe('signaling scope rules', () => {
     const ping = { type: 'ping' };
     expect(scopeOutgoingSignalingMessage(connection, ping)).toBe(ping);
     expect(acceptsIncomingSignalingMessage(connection, { type: 'pong' })).toBe(true);
+  });
+
+  test('a destroyed room retires its name for every stale provider', () => {
+    const stale = { roomName: 'retired-room', shouldConnect: true };
+    const connection = { providers: new Set([stale]) };
+    // Before the guard sees the name, the connection's providers are trusted.
+    expect(connectionCarriesTopic(connection, 'retired-room')).toBe(true);
+    const live = { name: 'retired-room', provider: { roomName: 'retired-room' } };
+    recordRoomOwner(live);
+    expect(connectionCarriesTopic(connection, 'retired-room')).toBe(false);
+    // A publication encrypted before the room closed arrives after it.
+    forgetRoomOwner(live);
+    expect(
+      scopeOutgoingSignalingMessage(connection, { type: 'publish', topic: 'retired-room' })
+    ).toBeNull();
+    // A room that takes the name again decides for itself.
+    const next = { name: 'retired-room', provider: stale };
+    recordRoomOwner(next);
+    expect(connectionCarriesTopic(connection, 'retired-room')).toBe(true);
+    forgetRoomOwner(next);
   });
 
   test('a closed socket forgets its subscriptions', () => {
