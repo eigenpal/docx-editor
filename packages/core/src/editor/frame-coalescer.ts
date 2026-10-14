@@ -4,18 +4,27 @@
 // whether one event asked for it or twenty. Falls back to a microtask where the view has no
 // animation frames (a detached document, a headless test).
 
-/** `run`, coalesced to the next animation frame of `document`'s view. */
-export function frameCoalescer(document: Document, run: () => void): () => void {
-  let scheduled = false;
+/**
+ * `run`, coalesced to the next animation frame of the window `node` lives in.
+ *
+ * The window is resolved per request, not once: the node can move to another window, and a
+ * frame requested from a hidden opener never fires.
+ */
+export function frameCoalescer(node: Node, run: () => void): () => void {
+  /** The window the pending frame was requested from; `undefined` when none is pending. */
+  let pending: Window | null | undefined = undefined;
   const fire = (): void => {
-    scheduled = false;
+    if (pending === undefined) return;
+    pending = undefined;
     run();
   };
   return () => {
-    if (scheduled) return;
-    scheduled = true;
-    const raf = document.defaultView?.requestAnimationFrame;
-    if (raf) raf(fire);
+    const view = node.ownerDocument?.defaultView ?? null;
+    // A frame pending in ANOTHER window may never come (that window is hidden or closed), so a
+    // request after a move asks the current one; whichever fires first runs once.
+    if (pending !== undefined && pending === view) return;
+    pending = view;
+    if (view && typeof view.requestAnimationFrame === 'function') view.requestAnimationFrame(fire);
     else queueMicrotask(fire);
   };
 }

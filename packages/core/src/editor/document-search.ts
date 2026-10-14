@@ -10,6 +10,7 @@
 
 import type { Editor, TextMatch } from '../contracts/editor.ts';
 import { searchResultTruncated } from './document-search-result.ts';
+import { hostElementOfEditor, hostTimers } from './host-realm.ts';
 
 /** Milliseconds of quiet before a typed query runs. @public */
 export const SEARCH_DEBOUNCE_MS = 150;
@@ -160,7 +161,9 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
   let searched = '';
   // The highlight request `find({ highlight })` holds, until `clear()` or the next `find()`.
   const findRequest = {};
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // The editor's own window: an opener's timers are throttled while it is hidden.
+  const timers = hostTimers(() => hostElementOfEditor(editor));
+  let timer: number | undefined;
   const listeners = new Set<() => void>();
   const requests = new Map<object, DocumentSearchHighlight>();
   let painted = false;
@@ -215,7 +218,7 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
   }
 
   function cancelDebounce(): void {
-    clearTimeout(timer);
+    timers.clearTimeout(timer);
     timer = undefined;
   }
 
@@ -228,10 +231,10 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
   // Results follow the document under the same query, after typing pauses: a rescan on every
   // keystroke would cost a document walk per character. Highlights stay on their text in
   // between, because the engine maps them through each edit. A load refreshes at once.
-  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  let refreshTimer: number | undefined;
   let refreshFirstAt = 0;
   const refreshNow = () => {
-    clearTimeout(refreshTimer);
+    timers.clearTimeout(refreshTimer);
     refreshTimer = undefined;
     refreshFirstAt = 0;
     if (searched.length > 0) commit({ matches: derive() });
@@ -244,9 +247,9 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
     if (change.source) return refreshNow();
     const now = Date.now();
     if (refreshFirstAt === 0) refreshFirstAt = now;
-    clearTimeout(refreshTimer);
+    timers.clearTimeout(refreshTimer);
     const wait = Math.min(SEARCH_DEBOUNCE_MS, SEARCH_REFRESH_MAX_WAIT_MS - (now - refreshFirstAt));
-    refreshTimer = setTimeout(refreshNow, Math.max(0, wait));
+    refreshTimer = timers.setTimeout(refreshNow, Math.max(0, wait));
   });
   // The editing mode narrows which stories search can reach.
   let editingMode = editor.snapshot().editingMode;
@@ -291,7 +294,7 @@ export function createDocumentSearch(editor: Editor): DocumentSearch {
       if (query === state.query) return;
       cancelDebounce();
       // Typing back to the searched query needs no new search.
-      if (query !== searched) timer = setTimeout(run, SEARCH_DEBOUNCE_MS);
+      if (query !== searched) timer = timers.setTimeout(run, SEARCH_DEBOUNCE_MS);
       commit({ query, isPending: query !== searched });
     },
     setMatchCase(value) {

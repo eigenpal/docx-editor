@@ -37,6 +37,8 @@ export function setDeferredLayoutForTest(page: number | null, budgetMs = 40): ()
 
 export interface DeferredLayoutHost {
   now(): number;
+  /** The window the pages paint in: its frames, not the script's, decide "after paint". */
+  view?(): Window;
   /** The first page index the commit may leave to the background, or undefined for none. */
   pageAfterView(): number | undefined;
   /** The layout on screen now. */
@@ -76,7 +78,7 @@ export interface DeferredLayout {
   cancel(): void;
 }
 
-function queueTask(run: () => void): void {
+function queueTask(run: () => void, view?: Window): void {
   if (typeof MessageChannel === 'function') {
     const channel = new MessageChannel();
     channel.port1.onmessage = () => {
@@ -86,16 +88,21 @@ function queueTask(run: () => void): void {
     channel.port2.postMessage(null);
     return;
   }
-  setTimeout(run, 0);
+  (view ?? globalThis).setTimeout(run, 0);
 }
 
-/** Run after the next frame paints, so the edit shows before any background work. */
-function afterPaint(run: () => void): void {
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(() => queueTask(run));
+/**
+ * Run after the next frame paints, so the edit shows before any background work.
+ *
+ * The frame is the pages' window's: a frame requested from a hidden opener never comes.
+ */
+function afterPaint(run: () => void, view?: Window): void {
+  const frames = view ?? globalThis;
+  if (typeof frames.requestAnimationFrame === 'function') {
+    frames.requestAnimationFrame(() => queueTask(run, view));
     return;
   }
-  queueTask(run);
+  queueTask(run, view);
 }
 
 export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
@@ -139,7 +146,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
       if (host.now() >= deadline) break;
     }
     pass.spent += host.now() - began;
-    queueTask(drive);
+    queueTask(drive, host.view?.());
   };
 
   return {
@@ -174,7 +181,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
         // ends. Each keeps the index it is painted at.
         const pages = [...progress.pages, ...previous.pages.slice(progress.pages.length)];
         setPaused({ steps, revision, restore, spent: owed + host.now() - began, timed });
-        afterPaint(drive);
+        afterPaint(drive, host.view?.());
         return progress.finalize(pages);
       }
     },

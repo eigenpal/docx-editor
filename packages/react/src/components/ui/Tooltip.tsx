@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 interface TooltipProps {
   content: React.ReactNode;
@@ -11,10 +12,12 @@ export function Tooltip({ content, children, side = 'bottom', delayMs = 400 }: T
   const [isOpen, setIsOpen] = React.useState(false);
   const [position, setPosition] = React.useState({ x: 0, y: 0 });
   const triggerRef = React.useRef<HTMLElement>(null);
-  const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The handle and the window that issued it: a trigger in a pop-out window owns its timer.
+  const timeoutRef = React.useRef<{ win: Window; handle: number } | null>(null);
 
   const handleMouseEnter = React.useCallback(() => {
-    timeoutRef.current = setTimeout(() => {
+    const win = hostWindowOf(triggerRef.current);
+    const handle = win.setTimeout(() => {
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
         const x = rect.left + rect.width / 2;
@@ -23,11 +26,12 @@ export function Tooltip({ content, children, side = 'bottom', delayMs = 400 }: T
       }
       setIsOpen(true);
     }, delayMs);
+    timeoutRef.current = { win, handle };
   }, [delayMs, side]);
 
   const handleMouseLeave = React.useCallback(() => {
     if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
+      timeoutRef.current.win.clearTimeout(timeoutRef.current.handle);
       timeoutRef.current = null;
     }
     setIsOpen(false);
@@ -36,7 +40,7 @@ export function Tooltip({ content, children, side = 'bottom', delayMs = 400 }: T
   React.useEffect(() => {
     return () => {
       if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+        timeoutRef.current.win.clearTimeout(timeoutRef.current.handle);
       }
     };
   }, []);

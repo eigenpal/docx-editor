@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   computed,
   defineComponent,
+  getCurrentInstance,
   h,
   onBeforeUnmount,
   shallowRef,
@@ -13,6 +14,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import { hostTimers } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '@docx-editor.dev/vue';
 import type { CollaborationSession } from '../collaboration/types.ts';
 import {
@@ -85,9 +87,17 @@ export const CollaborationStatusNotice = defineComponent({
     // session stayed usable, which is how a refused, undone edit shows. A new session counts
     // from zero, so its count starts a new baseline.
     const refusedRecently = shallowRef(false);
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Timers run on the notice's own window, which a pop-out window can own; each handle is
+    // cleared on the window that issued it.
+    const instance = getCurrentInstance();
+    // The notice's own window, resolved per call: `$el` does not exist yet during setup, and
+    // pending work moves home if a pop-out closes.
+    const timers = hostTimers(() => instance?.proxy?.$el as Node | null);
+    let timer: number | undefined;
+    const clear = (handle: number | undefined) => timers.clearTimeout(handle);
     const hide = (): void => {
-      clearTimeout(timer);
+      clear(timer);
+      timer = undefined;
       refusedRecently.value = false;
     };
     watch(
@@ -102,19 +112,20 @@ export const CollaborationStatusNotice = defineComponent({
         if (status !== 'ready' && status !== 'disconnected') return;
         hide();
         refusedRecently.value = true;
-        timer = setTimeout(hide, EDIT_REFUSED_NOTICE_MS);
+        timer = timers.setTimeout(hide, EDIT_REFUSED_NOTICE_MS);
       }
     );
     // Edits have waited for the room longer than `STALLED_AFTER_MS`.
     const stalled = shallowRef(false);
-    let stallTimer: ReturnType<typeof setTimeout> | undefined;
+    let stallTimer: number | undefined;
     watch(
       state.waiting,
       (waiting) => {
-        clearTimeout(stallTimer);
+        clear(stallTimer);
+        stallTimer = undefined;
         stalled.value = false;
         if (waiting) {
-          stallTimer = setTimeout(() => {
+          stallTimer = timers.setTimeout(() => {
             stalled.value = true;
           }, STALLED_AFTER_MS);
         }
@@ -122,8 +133,8 @@ export const CollaborationStatusNotice = defineComponent({
       { immediate: true }
     );
     onBeforeUnmount(() => {
-      clearTimeout(timer);
-      clearTimeout(stallTimer);
+      clear(timer);
+      clear(stallTimer);
     });
     return () => {
       const session = active.value;

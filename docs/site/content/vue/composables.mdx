@@ -153,6 +153,28 @@ useEditorEvent('change', (change) => {
 });
 ```
 
+## `useEditorHostDocument`
+
+Use `useEditorHostDocument` in custom chrome that adds document listeners, reads focus, or injects a `<style>` element. It returns a read-only ref to the document that the editor's pages are mounted in. If you render the editor in a pop-out window or an iframe, that is the other window's document, not the global `document`. The ref changes when the editor moves, so watchers that depend on it bind again:
+
+```ts
+import { watch } from 'vue';
+import { useEditorHostDocument } from '@docx-editor.dev/vue';
+
+const hostDocument = useEditorHostDocument();
+watch(
+  hostDocument,
+  (doc, _previous, onCleanup) => {
+    if (!doc) return;
+    doc.addEventListener('keydown', onShortcut);
+    onCleanup(() => doc.removeEventListener('keydown', onShortcut));
+  },
+  { immediate: true }
+);
+```
+
+The ref is `null` during server rendering. For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
+
 ## `useEditorCaret`
 
 Returns the caret as `{ paragraphId, offset }`. Write APIs accept this shape as their `at` value.
@@ -221,6 +243,28 @@ function toggleOrientation() {
 ```
 
 `apply()` returns `true` when the editor applies the update. Sizes and margins use twips. Set `scope` to `'section'` or `'document'`.
+
+## `useWatermark`
+
+Read and change the document watermark. `apply()` sends one `setWatermark` command, so one call creates one undo step. Pass `null` to remove the watermark:
+
+```vue
+<script setup lang="ts">
+import { computed } from 'vue';
+import { useWatermark } from '@docx-editor.dev/vue';
+
+const mark = useWatermark();
+const isDraft = computed(() => mark.watermark.value?.text === 'DRAFT');
+</script>
+
+<template>
+  <button :disabled="!mark.isEnabled.value" @click="mark.apply(isDraft ? null : { text: 'DRAFT' })">
+    {{ isDraft ? 'Remove draft mark' : 'Mark as draft' }}
+  </button>
+</template>
+```
+
+`read()` returns the current watermark as a `setWatermark` value. For a picture watermark it includes the picture bytes.
 
 ## `useParagraphFormat`
 
@@ -508,7 +552,7 @@ Install `@docx-editor.dev/pro` and import these APIs from `@docx-editor.dev/pro/
 - `useReviewOf(editorRef, query?)` binds the same state to an explicit editor ref.
 - `useReviewItem()` returns the item for the active review card context.
 - `useReviewAuthor(author)` returns the resolved author style, inside or outside the review rail.
-- `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap.
+- `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap. An item with `isActive: true` stays at its own anchor.
 
 The package also exports `DocxEditorReview`. Mount it inside `DocxEditor.Viewport`, beside `DocxEditor.Content`.
 
@@ -522,6 +566,7 @@ Call the composable in a child component of the matching dialog. Each returns `v
 | `useParagraphDialog()` | `UseParagraphDialogReturn['values']['value']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
+| `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
 
 Vue exposes state as refs. Use `.value` in JavaScript; templates unwrap these refs.
 

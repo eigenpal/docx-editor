@@ -401,6 +401,7 @@ export type SurfaceLifecycleOp = Extract<
   | { op: 'unlinkFromPrevious' }
   | { op: 'setSectionFurnitureOptions' }
   | { op: 'setDocumentProtection' }
+  | { op: 'setWatermark' }
 >;
 
 function resolveFurnitureByRId(

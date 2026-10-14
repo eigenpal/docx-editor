@@ -59,6 +59,12 @@ import {
   ReviewSummary,
   ReviewTime,
 } from './review-card-parts.tsx';
+import {
+  hostWindowOf,
+  isDomNode,
+  isElementNode,
+  isHTMLElementNode,
+} from '@docx-editor.dev/core/editor';
 
 export interface ReviewListProps {
   stack?: boolean;
@@ -390,13 +396,13 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
     // balloon existed. A press anywhere that is not a qualifying change closes the card.
     const onDown = (event: Event): void => {
       const target = event.target;
-      if (!(target instanceof Element)) return;
+      if (!isElementNode(target)) return;
       // Pressing the balloon itself (accept, reject, the reply line) is not a dismissal.
       if (host.contains(target)) return;
       // A press keeps the focus where the reader put it.
       focusPendingRef.current = false;
       const element = target.closest('[data-revision-id]');
-      if (element instanceof HTMLElement && scroller.contains(element)) {
+      if (isHTMLElementNode(element) && scroller.contains(element)) {
         const structuralSite = element.classList.contains('docx-table-row--revision');
         if (
           element.dataset.revisionKind === 'format' ||
@@ -413,7 +419,7 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
     // Typing never happens under a change balloon. The reply line's own input is exempt.
     const onInput = (event: Event): void => {
       if (revisionsInRef.current !== 'balloons' || !openRef.current) return;
-      if (event.target instanceof Node && host.contains(event.target)) return;
+      if (isDomNode(event.target) && host.contains(event.target)) return;
       close();
     };
     // Bubble phase, and only when no other control already handled the key.
@@ -422,7 +428,7 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
       if (revisionsInRef.current !== 'balloons' || !openRef.current) return;
-      if (!(event.target instanceof Node) || !scroller.contains(event.target)) return;
+      if (!isDomNode(event.target) || !scroller.contains(event.target)) return;
       // Focus inside the balloon would land on `<body>` once it unmounts.
       const hadFocus = host.contains(host.ownerDocument.activeElement);
       close();
@@ -480,7 +486,8 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
     navigationAnchorKeyRef.current = active.key;
     setAnchor(null);
     let cancelled = false;
-    const frame = requestAnimationFrame(() => {
+    const view = hostWindowOf(scroller);
+    const frame = view.requestAnimationFrame(() => {
       if (cancelled) return;
       const element = findPaintedRevisionElement(scroller, active);
       if (!element) {
@@ -497,7 +504,7 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
     });
     return () => {
       cancelled = true;
-      cancelAnimationFrame(frame);
+      view.cancelAnimationFrame(frame);
     };
   }, [displayMode, navigationActiveKey, navigationNeedsBalloon, revisionsIn, revealCount]);
 
@@ -519,17 +526,19 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
       setAnchor((current) =>
         current ? remeasureBalloonAnchor(current, scroller, rail, servedRef.current) : current
       );
-    let frame = requestAnimationFrame(remeasure);
+    // The scroller's own window: a hidden opener stops its frames.
+    const view = hostWindowOf(scroller);
+    let frame = view.requestAnimationFrame(remeasure);
     const observer =
-      typeof ResizeObserver === 'undefined'
+      typeof view.ResizeObserver === 'undefined'
         ? null
-        : new ResizeObserver(() => {
-            cancelAnimationFrame(frame);
-            frame = requestAnimationFrame(remeasure);
+        : new view.ResizeObserver(() => {
+            view.cancelAnimationFrame(frame);
+            frame = view.requestAnimationFrame(remeasure);
           });
     observer?.observe(scroller);
     return () => {
-      cancelAnimationFrame(frame);
+      view.cancelAnimationFrame(frame);
       observer?.disconnect();
     };
   }, [balloonOpen, zoom, layoutTick]);

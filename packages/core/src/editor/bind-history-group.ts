@@ -1,4 +1,5 @@
 import type { Editor, EditorExecOptions, HistoryGroup } from '../contracts/editor.ts';
+import { hostTimers } from './host-realm.ts';
 
 /** Native event policy for one continuous control gesture. @public */
 export interface HistoryGroupBindingOptions {
@@ -28,11 +29,12 @@ export function bindHistoryGroup(
   let group: HistoryGroup | undefined;
   let disposed = false;
   let pointer: number | undefined;
-  let terminalTimer: ReturnType<typeof setTimeout> | undefined;
+  const timers = hostTimers(() => element);
+  let terminalTimer: number | undefined;
   const keys = new Set<string>();
   const removers: (() => void)[] = [];
   const end = () => {
-    clearTimeout(terminalTimer);
+    timers.clearTimeout(terminalTimer);
     terminalTimer = undefined;
     group?.end();
     group = undefined;
@@ -52,10 +54,10 @@ export function bindHistoryGroup(
     const ending = group;
     pointer = undefined;
     keys.clear();
-    clearTimeout(terminalTimer);
+    timers.clearTimeout(terminalTimer);
     // Native event dispatch can run a microtask checkpoint between listeners. A task
     // deferral keeps React's delegated terminal handler in this same gesture too.
-    terminalTimer = setTimeout(() => {
+    terminalTimer = timers.setTimeout(() => {
       if (group === ending) end();
     }, 0);
   };

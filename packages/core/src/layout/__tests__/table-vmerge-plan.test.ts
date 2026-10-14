@@ -256,9 +256,9 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect(plan.rowOptions(1)!.heightFloorPt).toBe(58);
   });
 
-  test('merges over fixed rows leave an oversized head clipped', () => {
-    // Every row is exact, so whether a head fits is a question about that head alone: the
-    // short one detaches, and the tall one stays in its row to be clipped there.
+  test('merges over fixed rows detach together and clip the head the rows cannot hold', () => {
+    // Every row is exact, so the rows keep their heights whichever heads detach. Both heads
+    // flow through the span; only the tall one is clipped, at the span bottom.
     const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
       ({ ...row(id, cells), height: { rule: 'exact', valuePt: 20 } }) as SemanticTableRow;
     const rows = [
@@ -269,7 +269,11 @@ describe('the vMerge plan hands out heights, never positions', () => {
       probed.height.rule === 'exact' ? 20 : probeFrom({ fits: 30, tooTall: 200 })(probed, detached);
     const plan = planVMergeRowHeights(rows, probe)!;
     for (const span of plan.spansAt(0)) plan.accept(span);
-    expect([...(plan.rowOptions(0)!.detachedSpanHeightPtByCellId ?? []).keys()]).toEqual(['fits']);
+    expect([...(plan.rowOptions(0)!.detachedSpanHeightPtByCellId ?? [])]).toEqual([
+      ['fits', 40],
+      ['tooTall', 40],
+    ]);
+    expect([...(plan.rowOptions(0)!.clippedSpanCellIds ?? [])]).toEqual(['tooTall']);
   });
 
   test('every fitting head shares the same fixed-row span', () => {
@@ -291,7 +295,7 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect(plan.rowOptions(1)!.heightFloorPt).toBe(20);
   });
 
-  test('a span no row of which can grow is declined rather than handed a short box', () => {
+  test('a span no row of which can grow keeps its rows and clips its head at the span bottom', () => {
     const exact = (id: string, cells: readonly SemanticTableCell[]): SemanticTableRow =>
       ({ ...row(id, cells), height: { rule: 'exact', valuePt: 20 } }) as SemanticTableRow;
     const rows = [
@@ -300,7 +304,12 @@ describe('the vMerge plan hands out heights, never positions', () => {
     ];
     const plan = planVMergeRowHeights(rows, probeFrom({ head: 200, side0: 10, side1: 10 }))!;
     for (const span of plan.spansAt(0)) plan.accept(span);
-    expect(plan.rowOptions(0)).toBeUndefined();
+    const options = plan.rowOptions(0)!;
+    expect([...(options.detachedSpanHeightPtByCellId ?? [])]).toEqual([['head', 20]]);
+    expect([...(options.clippedSpanCellIds ?? [])]).toEqual(['head']);
+    expect(options.heightFloorPt).toBe(10);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(10);
+    expect(plan.rowOptions(1)!.clippedSpanCellIds).toBeUndefined();
   });
 });
 

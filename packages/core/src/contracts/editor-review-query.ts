@@ -5,7 +5,7 @@ import type { ReviewRevisionKind } from './editor.ts';
  *
  * Filtering revision kinds is how a host hides structural cards it has no UI for,
  * `placement: false` skips the layout pass entirely when only metadata is wanted, and
- * `pairReplacements` lists a typed-over selection as one decision.
+ * `pairReplacements: false` lists a typed-over selection as its two halves.
  */
 export interface ReviewItemQuery {
   /**
@@ -18,8 +18,12 @@ export interface ReviewItemQuery {
   /** When false, skip layout geometry; metadata is unchanged and anchors are null. Default true. */
   readonly placement?: boolean;
   /**
-   * When true, list a deletion and the insertion that directly follows it as one
-   * `'replace'` item. Default false.
+   * Whether to list a deletion and the insertion that directly follows it as one
+   * `'replace'` item. Default true. Set it to false to list the deletion and the insertion as
+   * separate items, for example to accept or reject each half on its own.
+   *
+   * A host that steps through the list with `setActiveReviewItem` stops once on
+   * each replacement with the default, as Next Change does.
    *
    * Two revisions pair when they are next to each other among the queue's revisions, the
    * deletion comes first, both have the same author, nesting level and `readOnly` value, and

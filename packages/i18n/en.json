@@ -23,6 +23,8 @@
     "mergeUnsupported": "Cell merge is not supported",
     "splitUnsupported": "Cell split is not supported",
     "imageSuggesting": "Image changes are unavailable in suggesting mode",
+    "equationSourceFormatting": "Linear editing would lose this equation's formatting",
+    "equationSuggesting": "Equation changes are unavailable in suggesting mode",
     "pictureSelected": "A picture is selected. Place the cursor in text to insert a picture.",
     "invalidValue": "This value is not valid for the command",
     "unavailable": "This command is unavailable",
@@ -291,6 +293,33 @@
         "b5": "B5 (6.93\" × 9.84\")",
         "executive": "Executive (7.25\" × 10.5\")"
       }
+    },
+    "watermark": {
+      "title": "Watermark",
+      "kind": "Watermark type",
+      "noWatermark": "No watermark",
+      "picture": "Picture watermark",
+      "selectPicture": "Select picture…",
+      "noPictureSelected": "(No picture selected)",
+      "currentPicture": "(Current picture)",
+      "pictureFailed": "The picture could not be read.",
+      "scale": "Scale",
+      "auto": "Auto",
+      "washout": "Washout",
+      "text": "Text watermark",
+      "textLabel": "Text",
+      "preset": "Preset",
+      "custom": "Custom",
+      "font": "Font",
+      "size": "Size",
+      "bold": "Bold",
+      "italic": "Italic",
+      "transparency": "Transparency",
+      "color": "Color",
+      "layout": "Layout",
+      "horizontal": "Horizontal",
+      "diagonal": "Diagonal",
+      "refused": "The watermark could not be applied."
     },
     "footnoteProperties": {
       "title": "Footnote & Endnote Properties",
@@ -618,6 +647,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Cannot insert the picture",
       "emptyFile": "The selected file is empty.",
       "invalidSignature": "The file is not a supported PNG, JPEG, or GIF image.",
       "unsupportedFormat": "This image format is not supported for insertion.",

@@ -3,7 +3,7 @@ import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnos
 import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createRevisionMarkupState } from './revision-markup-state.ts';
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
-import { queryEditorDocument } from './docx-editor-query.ts';
+import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
 import { refreshWriteBlocked } from './refresh-write-guard.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
@@ -20,6 +20,8 @@ import {
 } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
+import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
+import { attachTargetRefusal, registerEditorHost } from './host-realm.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
@@ -29,6 +31,8 @@ import {
   findReviewPlacement,
   keyUnderQuery,
   narrowReviewItems,
+  createPairedActivation,
+  litReviewKeys,
   replacementPairHalves,
   reviewItemWithHalves,
   withRevealPairKey,
@@ -76,7 +80,6 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import type {
   CanResult,
   DocumentHandle,
-  DocumentChange,
   EditorScope,
   EditorSnapshot,
   ExecResult,
@@ -93,7 +96,7 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { createAnchorIndex } from './docx-editor-anchors.ts';
-import { snapshotTextFormInput, type PendingTextFormInput } from './surface-text-form-fields.ts';
+import type { PendingTextFormInput } from './surface-text-form-fields.ts';
 import { saveEditorDocument } from './docx-editor-save.ts';
 import {
   enterStoryPosition,
@@ -116,7 +119,7 @@ import {
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
-import { EditorHistoryGroups } from './editor-history-groups.ts';
+import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
@@ -192,6 +195,7 @@ import {
 } from './font-availability.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
+  fontFaceEnvironmentOf,
   registerEmbeddedFontFaces,
   type EmbeddedFontFaceRegistration,
 } from './embedded-font-faces.ts';
@@ -244,7 +248,8 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
  *
  * Construction is separate from mounting. Pass a `container` and the document mounts
  * immediately; omit it and nothing touches the DOM until `attach(el)` — the provider-first
- * shape. `detach()` remounts from the saved bytes, which resets undo and the caret.
+ * shape. `detach()` parks the live document and a later `attach(el)` moves it in, with undo,
+ * selection and collaboration intact, even into another window (a pop-out or an iframe).
  *
  * `snapshot()` is version-cached: the same reference until state actually moves, with
  * reference-stable sub-objects, so it is safe as a `useSyncExternalStore` source.
@@ -320,6 +325,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       emitSelectionChange();
     },
+    node: () => container,
   });
   /**
    * How edits are written. `mode: 'view'` opens in viewing; everything else starts editing
@@ -336,6 +342,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
   let reviewActivationFormattingKinds: readonly string[] | undefined;
   let allowExcludedFormatNavigation = false;
+  const pairedPin = createPairedActivation(reviewPane.pairsReplacements, () => surface);
   const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
@@ -530,7 +537,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     stateVersion += 1;
   }
 
-  const events = createEditorEvents(snapshotNow);
+  const events = createEditorEvents(snapshotNow, () => container?.ownerDocument ?? null);
   const { emitError, emitDocumentChange, emitSelectionChange } = events;
   const diagnostics = createEditorDiagnostics({
     modules,
@@ -555,6 +562,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       events.emitRevisionMarkupChange(value);
     },
   });
+
+  /** The pages now live in `document`: per-document fonts, the fit observer, and a report. */
+  function followHost(document: Document): void {
+    revisionMarkupState.destroyDialog(); // its pickers listen to the window it opened in
+    embeddedFaces?.showIn(document);
+    zoomLane.detach();
+    zoomLane.attach();
+    bump();
+    emitSelectionChange();
+  }
 
   function teardownSurface(): void {
     revisionMarkupState.destroyDialog();
@@ -611,7 +628,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
       // whatever measurer has resolved by then. A previous document's parse failure is
-      // not THESE bytes' state — `attach` re-derives any real error.
+      // not THESE bytes' state — `attach` re-derives any real error. A parked surface goes.
+      teardownSurface();
       pendingBytes = bytes;
       if (initialTextFormInput) pendingTextFormInputs.set(bytes, initialTextFormInput);
       openFailure.clear();
@@ -654,6 +672,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
+      pairsReplacements: pairedPin.lightsPair,
       ...diagnostics.surfaceHooks(suggesting, () => surface),
       ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
@@ -669,6 +688,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       onHyperlinkPopover: (activation) => hyperlinkChrome.current().onPopover?.(activation),
       ...popupChrome.surfaceOptions,
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
+      onHostMoved: followHost,
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
         if (reviewPaneOpen || !reviewPane.opensOnTrackedChange()) return;
@@ -715,6 +735,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     openFailure.clear();
     surface = result.surface;
+    embeddedFaces?.showIn(container.ownerDocument);
     mountedSeq = loadSeq;
     // A refresh or recovery mounts different content: node ids no longer name the same text.
     highlights.attach(surface, refreshHost?.source !== undefined);
@@ -747,23 +768,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       });
     }
     // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
-    unsubscribeSession = result.surface.session.subscribe((change) => {
-      const documentChange: DocumentChange = {
-        // The PACKAGE revision, never `change.toRevision`: a header/footer or notes change
-        // carries THAT part's counter, which starts at zero, so reporting it sent this
-        // number backwards and then repeated values it had already emitted.
-        revision: result.surface.session.packageRevision(),
-        created: change.created,
-        deleted: change.deleted,
-        dirty: change.dirty,
-      };
-      // A commit can move a fit's numerator: `setPageSetup` directly, and undo by both of its
-      // routes (the keymap's `surface.undo()` and `exec`), neither of which passes a command
-      // hook. Guarded on the authored page width, so a keystroke pays one comparison.
-      zoomLane.refitIfPageResized();
-      // Bump BEFORE dispatch, so a handler reading `snapshot()` sees the new state.
-      bump();
-      emitDocumentChange(documentChange);
+    unsubscribeSession = subscribeDocumentChanges(result.surface, {
+      refitIfPageResized: () => zoomLane.refitIfPageResized(),
+      bump,
+      emit: emitDocumentChange,
     });
     refreshHost?.contentMounted(bytes);
     // The page's size is only knowable now — it comes from this document's section properties
@@ -1060,7 +1068,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         .filter((source): source is NonNullable<typeof source> => source !== null);
       const registration = await registerEmbeddedFontFaces(
         admitted,
-        undefined,
+        fontFaceEnvironmentOf(container?.ownerDocument),
         fonts.substitutions ?? []
       );
       if (destroyed || seq !== loadSeq) {
@@ -1078,6 +1086,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       };
       try {
         embeddedFaces = registration;
+        if (container) registration.showIn(container.ownerDocument); // it may have moved meanwhile
         coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
         documentSubstitutedFamilies = admittedDocumentSubstitutions(
           fonts,
@@ -1537,18 +1546,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
     if (!reviewEnabled) return [];
-    // Kind exclusion and opt-in replacement pairing; see `review-replacement-pairs.ts`.
-    const items = narrowReviewItems(
-      filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
-      query
-    );
+    // Kind exclusion and default replacement pairing; see `review-replacement-pairs.ts`.
+    const visible = reviewAuthorVisibility.filterItems(surface?.session.reviewItems() ?? []);
+    const items = narrowReviewItems(visible, query);
     const withPlacement = query?.placement !== false;
     let anchors: Map<string, ReviewParagraphAnchor> | null = null;
     if (withPlacement && items.length > 0) {
       const layout = surface?.publishedLayout() ?? null;
       if (layout) anchors = anchorIndexOf(layout);
     }
-    const activeReviewKey = activeReviewKeyNow();
+    const activeKeys = litReviewKeys(() => visible, activeReviewKeyNow(), pairedPin.lightsPair());
     // The queue ranks furniture stories after the whole body (tree order), but the rail
     // stacks cards top-down and never moves one UP past its anchor — a header card sorted
     // after page 40's cards would render at the rail's bottom, pages away from the header
@@ -1586,10 +1593,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         activatable: reviewItemWithHalves(item).every(reviewItemActivatable),
         anchorY: geometry?.y ?? null,
         pageIndex: geometry?.pageIndex ?? null,
-        // The surface names the half the caret is in; a pair is active when either half is.
-        isActive: reviewItemWithHalves(item).some(
-          (part) => reviewItemKey(part) === activeReviewKey
-        ),
+        // A pair is active when either half is; an open replacement makes both halves active.
+        isActive: reviewItemWithHalves(item).some((part) => activeKeys.has(reviewItemKey(part))),
       };
       if (item.kind === 'comment') {
         return {
@@ -1753,8 +1758,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const { resolveReviewItem } = reviewCommands;
 
-  const historyGroups = new EditorHistoryGroups(
-    () => surface,
+  const historyGroups = createMountHistoryGroups(
+    () => ({ mounted: !!surface && !!container, generation: mountGeneration }),
     events.emitHistoryDiagnostic,
     () => JSON.stringify(surface?.state().selection)
   );
@@ -1783,7 +1788,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
 
-    attach(el) {
+    attach(el, options) {
+      const refusal = attachTargetRefusal(el);
+      if (refusal) return emitError(editorError('invalidTarget', refusal));
       if (container !== el) refreshHost?.invalidate();
       if (destroyed) {
         // Terminal by design: React StrictMode double-invokes effects, and a component
@@ -1793,29 +1800,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         );
         return;
       }
-      if (surface && container === el) return;
-      if (surface) {
-        // Moving containers: carry the live content, not the original bytes.
-        surface.flushPendingInput();
-        pendingBytes = surface.session.save();
-        const input = container ? snapshotTextFormInput(container) : undefined;
-        if (input) pendingTextFormInputs.set(pendingBytes, input);
-        teardownSurface();
-      }
-      // A scheduled open was aimed at the PREVIOUS container — and being the newer
-      // document, it outranks any bytes saved off the old surface.
+      if (surface && container === el) return surface.moveTo(el, options); // re-binds if moved
+      // A scheduled open is the newer document, so it outranks the surface on screen.
       const reclaimed = openScheduler.cancel();
-      if (reclaimed) pendingBytes = reclaimed;
-      // BEFORE the container moves, unconditionally. The observer is on a scroller found
-      // through the OLD container, and only the successful-mount path below re-targets it: a
-      // load that failed to parse leaves no surface and no pending bytes, so attaching to a
-      // new element took the `else bump()` branch and left the observer watching an element
-      // this editor no longer uses — and holding it alive if the host dropped it.
+      if (reclaimed) {
+        teardownSurface();
+        pendingBytes = reclaimed;
+      }
+      // BEFORE the container moves: the observer watches a scroller found through the OLD one.
       zoomLane.detach();
       container = el;
-      // A probe answers for one document's font set; the new container may live in a
-      // different one (an iframe host), so it re-creates on the next derivation.
-      localFontProbe = null;
+      localFontProbe = null; // a probe answers for one document's font set
+      if (surface) {
+        surface.moveTo(el, options);
+        mountGeneration += 1;
+        followHost(el.ownerDocument);
+        return;
+      }
       const bytes = pendingBytes;
       pendingBytes = null;
       // A mount bumps the tick and emits change/selectionChange itself. A big document
@@ -1828,23 +1829,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     detach() {
       refreshHost?.invalidate();
       if (destroyed) return;
-      // Before the container goes: the observer is on an element found THROUGH it, and one
-      // left running would keep re-fitting a document that is no longer mounted.
+      // Before the container goes: the observer watches an element found THROUGH it.
       zoomLane.detach();
-      // Reclaimed before the surface save, applied after: the scheduled document is
-      // the newer one, so it wins the pending slot.
+      // A scheduled open (newer) replaces the surface; otherwise it PARKS for the next attach.
       const reclaimed = openScheduler.cancel();
-      if (surface) {
-        surface.flushPendingInput();
-        pendingBytes = surface.session.save();
-        const input = container ? snapshotTextFormInput(container) : undefined;
-        if (input) pendingTextFormInputs.set(pendingBytes, input);
+      if (reclaimed) {
         teardownSurface();
+        pendingBytes = reclaimed;
+      } else if (surface) {
+        // Its settings draft belongs to chrome in the element being left.
+        revisionMarkupState.destroyDialog();
+        surface.park();
+        mountGeneration += 1;
       }
-      if (reclaimed) pendingBytes = reclaimed;
       container = null;
       localFontProbe = null;
       bump();
+      emitSelectionChange();
     },
 
     load(document) {
@@ -1865,7 +1866,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     save() {
       // A save inside the open's yield window sees the just-loaded document: mount now.
       openScheduler.flush();
-      return saveEditorDocument(surface, container, () => surface);
+      return saveEditorDocument(surface, surface?.hostElement() ?? container, () => surface);
     },
 
     getDocumentHandle(): DocumentHandle {
@@ -2156,7 +2157,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getPageSetup: () => pageSetupOf(surface),
 
-    getWatermark: () => null,
+    getWatermark: () => watermarkOf(surface),
     getTrackedChanges: () =>
       (surface?.session.reviewItems() ?? [])
         .filter((item) => item.kind === 'revision')
@@ -2338,7 +2339,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       // The surface knows only store items: a paired replacement opens as its deletion.
       const halves = replacementPairHalves(item);
-      const pinKey = halves ? reviewItemKey(halves.deletion) : key;
+      const pinKey = pairedPin.set(halves ? reviewItemKey(halves.deletion) : null) ?? key;
       const range = firstReviewRange(item);
       if (!range) {
         return {
@@ -2608,7 +2609,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       void options?.sync;
       surface?.layout();
     },
-    retainSelection: () => surface?.retainSelection() ?? null,
+    retainSelection: () => (container ? (surface?.retainSelection() ?? null) : null),
     releaseSelection: (pin) => surface?.releaseSelection(pin),
     focus(scope?: EditorScope) {
       // Same yield-window rule as `exec`: focusing the just-loaded document mounts it.
@@ -2668,5 +2669,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   diagnostics.attach(editor, suggesting);
   // Host calls read and write saved field results in this editor's mode.
-  return fieldScope.methods(editor);
+  const instance = fieldScope.methods(editor);
+  registerEditorHost(instance, () => container);
+  return instance;
 }

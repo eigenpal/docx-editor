@@ -6,6 +6,7 @@
 // one the host declined is dropped there, so it cannot fire on some unrelated later open.
 
 import { nextTick, onMounted, onUnmounted, shallowRef, watch, type ShallowRef } from 'vue';
+import { isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { scopeDispose } from '../scope-dispose';
 import type { NavigationIntents } from './navigation-context';
@@ -116,7 +117,7 @@ export function useNavigationFocus(
     if (!ownsShortcutTarget(event.target, rootRef.value, viewport.value)) return;
     event.preventDefault();
     const active = rootRef.value?.ownerDocument.activeElement;
-    if (active instanceof HTMLElement && !rootRef.value?.contains(active)) opener = active;
+    if (isHTMLElementNode(active) && !rootRef.value?.contains(active)) opener = active;
     restoreRequest = false;
     // Already open on Find: nothing re-renders, so focus the query now.
     if (pane.open.value && pane.tab.value === 'find') {

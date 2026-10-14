@@ -292,6 +292,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     wrap: 'layout-only',
     layoutFallback: 'layout-only',
     sourceOrder: 'represented',
+    textArt: 'explicitly-omitted',
     textboxStory: 'explicitly-omitted',
     groupTextboxStories: 'explicitly-omitted',
   } satisfies Record<keyof AnchoredDrawingRecord, MarkdownFieldPolicy>,

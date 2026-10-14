@@ -48,6 +48,7 @@ const PAIRS = [
       'editor/navigation/navigation-keys.ts',
       'editor/navigation/navigation-widest-page.ts',
       'editor/paragraph-dialog-fields.ts',
+      'editor/watermark-dialog-model.ts',
       'editor/scroller-geometry.ts',
       'editor/toolbar/toolbar-warnings.ts',
       'editor/zoom-levels.ts',
@@ -73,7 +74,7 @@ const PAIRS = [
     skipPrefixes: [],
     // Vue-internal decomposition with no React twin. Every entry must still
     // exist and stay React-twin-less, or the list is stale and the check fails.
-    vueOnlyAllowed: ['stable-id.ts', 'useEditorRenderRevision.ts'],
+    vueOnlyAllowed: ['next-task.ts', 'stable-id.ts', 'useEditorRenderRevision.ts'],
     byteIdentical: ['review-balloon-anchor.ts', 'review-labels.ts'],
   },
 ];

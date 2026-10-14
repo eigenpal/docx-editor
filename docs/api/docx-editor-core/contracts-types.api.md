@@ -489,10 +489,42 @@ export type Unsubscribe = () => void;
 
 // @public
 export interface Watermark {
-    // (undocumented)
+    readonly bold?: boolean;
+    readonly color?: string;
+    readonly fontFamily?: string;
+    readonly fontSizePt?: number | null;
     readonly imageData?: Uint8Array;
+    readonly italic?: boolean;
+    readonly layout?: WatermarkLayout;
+    readonly scale?: number | null;
+    readonly text?: string;
+    readonly transparency?: number;
+    readonly washout?: boolean;
+}
+
+// @public
+export type WatermarkLayout = 'diagonal' | 'horizontal';
+
+// @public
+export interface WatermarkState {
+    // (undocumented)
+    readonly bold?: boolean;
+    readonly color?: string;
+    // (undocumented)
+    readonly fontFamily?: string;
+    readonly fontSizePt?: number | null;
+    // (undocumented)
+    readonly italic?: boolean;
+    // (undocumented)
+    readonly kind: 'text' | 'image';
+    // (undocumented)
+    readonly layout?: WatermarkLayout;
     // (undocumented)
     readonly text?: string;
+    // (undocumented)
+    readonly transparency?: number;
+    // (undocumented)
+    readonly washout?: boolean;
 }
 
 ```

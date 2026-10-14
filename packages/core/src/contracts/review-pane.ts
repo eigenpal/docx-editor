@@ -50,7 +50,8 @@ export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
  * - `'balloons'`: the pane lists comments only, except comments that reply to a tracked
  *   change: the change's balloon shows those. A tracked change opens in a balloon at its
  *   text when the reader clicks it, or when Next Change, Previous Change, or
- *   `setActiveReviewItem(key, { announce: true })` reaches it.
+ *   `setActiveReviewItem(key, { announce: true })` reaches it. A replacement is one balloon.
+ *   In both settings, Next Change and Previous Change stop on a replacement once.
  *
  * @public
  */

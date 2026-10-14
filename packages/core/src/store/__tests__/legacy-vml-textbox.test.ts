@@ -319,17 +319,18 @@ describe('VML text box refusals', () => {
       )
     );
     expect(art.textboxStory).toBeNull();
-    expect(art.legacyGraphic?.fragments[0]).toContain('Draft');
+    // A floating text path projects its text for layout to fit, not a preview graphic.
+    expect(art.legacyGraphic).toBeUndefined();
+    expect(art.textArt).toMatchObject({ text: 'Draft', fontFamily: 'serif', fillHex: 'C0C0C0' });
     expect(art.wrap).toBe('behind');
-    // A translucent watermark fill is still outside the subset.
-    expect(
-      projectDrawingsInPart(
-        parse(
-          '<w:pict><v:shape type="#_x0000_t136" style="position:absolute;width:300pt;height:60pt" fillcolor="silver" stroked="f">' +
-            '<v:fill opacity=".5"/><v:textpath style="font-family:serif;font-size:1pt" string="Draft"/></v:shape></w:pict>'
-        )
+    // A translucent watermark fill is part of the text art subset.
+    const translucent = only(
+      parse(
+        '<w:pict><v:shape type="#_x0000_t136" style="position:absolute;width:300pt;height:60pt" fillcolor="silver" stroked="f">' +
+          '<v:fill opacity=".5"/><v:textpath style="font-family:serif;font-size:1pt" string="Draft"/></v:shape></w:pict>'
       )
-    ).toEqual([]);
+    );
+    expect(translucent.textArt?.fillAlpha).toBe(0.5);
   });
 });
 

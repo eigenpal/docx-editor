@@ -15,6 +15,7 @@ import type { CSSProperties } from 'react';
 import type { RulerPageSetup } from './HorizontalRuler';
 import { twipsToPixels, pixelsToTwips, formatPx } from '../../lib/units';
 import { useTranslation } from '../../i18n';
+import { hostDocumentOf } from '@docx-editor.dev/core/editor';
 
 // ============================================================================
 // TYPES
@@ -164,11 +165,12 @@ export function VerticalRuler({
   // Add/remove document event listeners
   useEffect(() => {
     if (dragging) {
-      document.addEventListener('mousemove', handleDrag);
-      document.addEventListener('mouseup', handleDragEnd);
+      const doc = hostDocumentOf(rulerRef.current);
+      doc.addEventListener('mousemove', handleDrag);
+      doc.addEventListener('mouseup', handleDragEnd);
       return () => {
-        document.removeEventListener('mousemove', handleDrag);
-        document.removeEventListener('mouseup', handleDragEnd);
+        doc.removeEventListener('mousemove', handleDrag);
+        doc.removeEventListener('mouseup', handleDragEnd);
       };
     }
   }, [dragging, handleDrag, handleDragEnd]);

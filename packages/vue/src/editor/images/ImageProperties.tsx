@@ -13,6 +13,8 @@ import {
   IMAGE_WRAP_TARGETS,
   positionInputFromPropertiesCommand,
   validateDrawingPositionInput,
+  isHTMLElementNode,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import { useTranslation } from '../../i18n';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -29,7 +31,9 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
     root.querySelectorAll<HTMLElement>(
       'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
     )
-  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
+  ).filter(
+    (element) => element.offsetParent !== null || element === hostDocumentOf(root).activeElement
+  );
 }
 
 /**
@@ -41,8 +45,7 @@ function dialogFocusables(root: HTMLElement): HTMLElement[] {
  * exists, which is a later tick than the one that sets `open`. The React twin matches.
  */
 function scopeOverlay(node: unknown): void {
-  if (node instanceof HTMLElement && !node.closest('.docx-editor'))
-    node.classList.add('docx-editor');
+  if (isHTMLElementNode(node) && !node.closest('.docx-editor')) node.classList.add('docx-editor');
 }
 
 function guardDialogMousedown(event: MouseEvent): void {
@@ -298,7 +301,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
         let onKeyDown: ((event: KeyboardEvent) => void) | null = null;
         onCleanup(() => {
           disposed = true;
-          if (onKeyDown) document.removeEventListener('keydown', onKeyDown);
+          if (onKeyDown) hostDocumentOf(dialog).removeEventListener('keydown', onKeyDown);
         });
         await nextTick();
         if (disposed || !props.open || dialogRef.value !== dialog) return;
@@ -319,7 +322,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
           if (event.key !== 'Tab') return;
           const items = dialogFocusables(dialog);
           if (items.length === 0) return;
-          const active = document.activeElement;
+          const active = hostDocumentOf(dialog).activeElement;
           const currentIndex = items.findIndex((element) => element === active);
           if (currentIndex === -1) return;
           event.preventDefault();
@@ -328,7 +331,7 @@ export const DocxEditorImagePropertiesDialog = defineComponent({
             : (currentIndex + 1) % items.length;
           items[nextIndex]?.focus();
         };
-        document.addEventListener('keydown', onKeyDown);
+        hostDocumentOf(dialog).addEventListener('keydown', onKeyDown);
       },
       { flush: 'post' }
     );

@@ -21,6 +21,8 @@ import {
 } from './legacy-vml-shapes.ts';
 import type { VectorShapeProjection } from './drawing-shape-projection.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
+import { legacyImageEffects } from './legacy-vml-image-effects.ts';
+import { legacyTextArt } from './legacy-vml-text-art.ts';
 import {
   attribute as a,
   boundedVml,
@@ -78,6 +80,8 @@ const commonStyles = new Set([
   'mso-wrap-distance-top',
   'mso-wrap-distance-right',
   'mso-wrap-distance-bottom',
+  // Read only for floating text art; `readProjection` refuses it on every other shape.
+  'rotation',
 ]);
 
 const relativeSizeFrames = [
@@ -136,6 +140,7 @@ function supportedStyle(node: OoxmlElement, root: boolean): ReadonlyMap<string, 
   if (
     !root &&
     (styles.has('z-index') ||
+      styles.has('rotation') ||
       styles.has('margin-left') ||
       styles.has('margin-top') ||
       Array.from(styles.keys()).some((k) => k.startsWith('mso-')))
@@ -186,12 +191,28 @@ function groupLayers(
     if (child.localName === 'group') {
       if (!groupLayers(child, next, out, depth + 1, canvas)) return false;
     } else {
+      // Colour adjustments paint only on a single picture, never inside a composite.
+      if (hasImageEffects(child)) return false;
       const fragment = legacyShapeFragment(child, next, canvas);
       if (fragment === null || out.length >= 128) return false;
       out.push(fragment);
     }
   }
   return true;
+}
+
+/** Whether a shape's `v:imagedata` carries colour adjustments. */
+function hasImageEffects(shape: OoxmlElement): boolean {
+  const image = children(shape).find((n) => named(n, VML, 'imagedata'));
+  if (!image) return false;
+  const effects = legacyImageEffects(image);
+  return (
+    effects === null ||
+    effects.grayscale ||
+    effects.brightness !== 0 ||
+    effects.contrast !== 0 ||
+    effects.bilevel !== undefined
+  );
 }
 
 /** The outline stroke centred in the border band, which the picture sits inside. */
@@ -320,6 +341,10 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   const style = supportedStyle(root, true);
   if (!style) return null;
   const floating = style.get('position') === 'absolute';
+  // A floating text path projects its text for layout to fit; every other shape keeps the
+  // preview subset, which has no rotation.
+  const textArt = !readOnly && floating ? legacyTextArt(root) : null;
+  if (style.has('rotation') && !textArt) return null;
   // A line spans its `from` and `to` points.
   const line =
     root.localName === 'line'
@@ -354,7 +379,7 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
   if (textbox && !textboxStory) return null;
   if (!textboxStory && root.localName === 'group') {
     if (!groupLayers(root, box, fragments, 0) || !fragments.length) return null;
-  } else if (!textboxStory) {
+  } else if (!textboxStory && !textArt) {
     const fragment = legacyShapeFragment(
       root,
       { x: inset, y: inset, width, height },
@@ -450,6 +475,10 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
     fragments[0]?.nativeCrop
       ? fragments[0]
       : undefined;
+  // Colour adjustments are picture effects; a preview, outline or composite cannot carry them.
+  const imageNode = children(root).find((n) => named(n, VML, 'imagedata'));
+  const effects = imageNode ? legacyImageEffects(imageNode) : null;
+  if (hasImageEffects(root) && (!photo || border)) return null;
   const outerCx = Math.round((vector ? width : outerWidth) * 12700),
     outerCy = Math.round((vector ? height : outerHeight) * 12700);
   return Object.freeze({
@@ -554,7 +583,8 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
         : null,
     textboxStory,
     // The graphic covers the whole drawing, outline reach included.
-    ...(!photo && !textboxStory && !vectorShape
+    ...(textArt ? { textArt } : {}),
+    ...(!photo && !textboxStory && !vectorShape && !textArt
       ? {
           legacyGraphic: Object.freeze({
             width: outerWidth,
@@ -564,7 +594,8 @@ function readProjection(node: OoxmlElement, preview?: OoxmlElement): DrawingProj
         }
       : {}),
     locks: Object.freeze({ select: true, move: true, resize: true, changeAspect: true }),
-    effects: Object.freeze({ grayscale: false, brightness: 0, contrast: 0 }),
+    effects:
+      photo && effects ? effects : Object.freeze({ grayscale: false, brightness: 0, contrast: 0 }),
     compatibilityBranchNodeId: null,
     diagnostics: Object.freeze([]),
   });

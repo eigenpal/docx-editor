@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
+import { stackReviewPositions } from '../review/rail-stack.ts';
 import type {
   Editor,
   ReviewActivationOptions,
@@ -17,6 +18,7 @@ import type {
 } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor, type MaybeRefOrGetter } from '@docx-editor.dev/vue';
 import { useEditorRenderRevision, type EditorRenderRevision } from './useEditorRenderRevision.ts';
+import { nextTask } from './next-task.ts';
 
 function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T | undefined {
   if (source === undefined) return undefined;
@@ -160,25 +162,26 @@ function useReviewOfInternal(
         let key = reviewRevisionKey(editor);
         ownedRevision!.value = key;
         let disposed = false;
-        let scheduled: ReturnType<typeof setTimeout> | null = null;
+        // A message task, not a timer: see `next-task.ts`.
+        let scheduled = false;
         const notify = () => {
           if (!disposed) readActivatedKey(editor);
-          if (disposed || scheduled !== null) return;
-          scheduled = setTimeout(() => {
-            scheduled = null;
+          if (disposed || scheduled) return;
+          scheduled = true;
+          nextTask(() => {
+            scheduled = false;
             if (disposed) return;
             const next = reviewRevisionKey(editor);
             if (next === key) return;
             key = next;
             ownedRevision!.value = next;
-          }, 0);
+          });
         };
         const offDocument = editor.on('change', notify);
         const offSelection = editor.on('selectionChange', notify);
         const offError = editor.on('error', notify);
         onCleanup(() => {
           disposed = true;
-          if (scheduled !== null) clearTimeout(scheduled);
           offDocument();
           offSelection();
           offError();
@@ -345,18 +348,6 @@ export function useStackedReviewPositions(
     const gap = opts.gap ?? 8;
     const scale = opts.scale ?? 1;
     const defaultHeight = opts.defaultHeight ?? 0;
-    const positions = new Map<string, number>();
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const entry of entries) {
-      const top =
-        entry.anchorY === null
-          ? Number.isFinite(cursor)
-            ? cursor
-            : 0
-          : Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      cursor = top + ((heightMap.get(entry.key) ?? defaultHeight) + gap) / scale;
-    }
-    return positions;
+    return stackReviewPositions(entries, heightMap, { gap, scale, defaultHeight });
   });
 }

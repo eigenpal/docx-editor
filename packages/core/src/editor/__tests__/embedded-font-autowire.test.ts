@@ -299,15 +299,14 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     expect(slotsBeforeRemount.get('Grace')).toBe(3);
     const surfaceBeforeResolve = editor.surface;
 
-    // Detach/attach and font resolution both rebuild through `mountBytes` for the SAME load.
-    // This path is deterministic even when the font promise settles before the test can
-    // observe its own remount under a loaded parallel run.
+    // Detach/attach MOVES the same surface for the same load, so the author slots, like the
+    // rest of the editing state, are the ones it already had.
     editor.detach();
     editor.attach(container);
     await mounted(editor);
     await fontsSettled(editor);
 
-    expect(editor.surface).not.toBe(surfaceBeforeResolve);
+    expect(editor.surface).toBe(surfaceBeforeResolve);
     expect(
       new Map(editor.getReviewAuthors().map((author) => [author.author, author.slot]))
     ).toEqual(slotsBeforeRemount);

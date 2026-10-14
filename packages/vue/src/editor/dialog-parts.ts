@@ -1,4 +1,5 @@
 import { useDocxEditor } from './context';
+import { isHTMLElementNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { useEditorState } from './useEditorState';
 import {
   cloneVNode,
@@ -81,6 +82,8 @@ export function createDialogComposition<
     DefineComponent<DialogPartProps>
   > & { Field: DefineComponent<DialogPartProps & { name: Name }> };
   useContext: () => UseDialogReturn<T>;
+  /** A dialog-specific part, matched to the default node with this `data-docx-part`. */
+  part: (partName: string) => DefineComponent<DialogPartProps>;
   provideContext: (
     context: UseDialogReturn<T>
   ) => (defaults: VNode, children: VNode[], preset: boolean) => VNode | VNode[];
@@ -223,6 +226,7 @@ export function createDialogComposition<
       DefineComponent<DialogPartProps>
     > & { Field: DefineComponent<DialogPartProps & { name: Name }> },
     useContext,
+    part: (partName: string) => part(partName) as unknown as DefineComponent<DialogPartProps>,
     provideContext,
   };
 }
@@ -251,7 +255,8 @@ export const NativeDialog = defineComponent({
       ([value, signal], _old, onCleanup) => {
         if (!value) return;
         defaultScope.value = !value.parentElement?.closest('.docx-editor');
-        opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const active = hostDocumentOf(value).activeElement;
+        opener = isHTMLElementNode(active) ? active : null;
         const abort = () => {
           if (value.open) value.close?.();
         };

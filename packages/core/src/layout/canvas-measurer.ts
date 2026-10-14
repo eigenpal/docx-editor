@@ -155,6 +155,8 @@ export interface CanvasTextMetrics {
   readonly width: number;
   readonly actualBoundingBoxLeft?: number;
   readonly actualBoundingBoxRight?: number;
+  readonly actualBoundingBoxAscent?: number;
+  readonly actualBoundingBoxDescent?: number;
   readonly fontBoundingBoxAscent?: number;
   readonly fontBoundingBoxDescent?: number;
 }
@@ -171,6 +173,7 @@ export interface CanvasTextContext {
   fontKerning?: 'auto' | 'normal' | 'none';
   textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
   direction?: 'ltr' | 'rtl' | 'inherit';
+  textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
   measureText(text: string): CanvasTextMetrics;
 }
 
@@ -340,6 +343,33 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
         return undefined;
       const factor = style.horizontalScalePercent / (100 * scale);
       return { left: -left * factor, right: right * factor };
+    },
+    textOutline(text, style) {
+      if (!text || style.shaping?.direction === 'rtl') return undefined;
+      ctx.font = fontOf(style);
+      if ('fontKerning' in ctx) ctx.fontKerning = isRunKerningEnabled(style) ? 'normal' : 'none';
+      const alignment = ctx.textAlign;
+      const baseline = ctx.textBaseline;
+      let metrics: CanvasTextMetrics;
+      try {
+        if (alignment !== undefined) ctx.textAlign = 'left';
+        if (baseline !== undefined) ctx.textBaseline = 'alphabetic';
+        metrics = ctx.measureText(text);
+      } finally {
+        if (alignment !== undefined) ctx.textAlign = alignment;
+        if (baseline !== undefined) ctx.textBaseline = baseline;
+      }
+      const edges = [
+        -(metrics.actualBoundingBoxLeft ?? NaN),
+        -(metrics.actualBoundingBoxAscent ?? NaN),
+        metrics.actualBoundingBoxRight ?? NaN,
+        metrics.actualBoundingBoxDescent ?? NaN,
+      ].map((value) => value / scale);
+      if (edges.some((value) => !Number.isFinite(value))) return undefined;
+      const [left, top, right, bottom] = edges as [number, number, number, number];
+      if (!(right > left) || !(bottom > top)) return undefined;
+      // Canvas knows the ink box but not the outlines; paint draws the text itself.
+      return { path: null, ink: { left, top, right, bottom } };
     },
     lineMetrics(style) {
       const size = style.fontSizePt * glyphSizeFactorOf(style);

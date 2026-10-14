@@ -65,6 +65,13 @@ describe('punctuation pairs compress only within a line', () => {
     expect(ends(lines)).toEqual(widths);
   });
 
+  test('a pair that a colon retry moves off the line end still compresses', () => {
+    const lines = lay(H(13) + '：「'.repeat(4) + H(17) + '）（国');
+    const last = lines.at(-1)!;
+    expect(last.text).toBe('国）（国');
+    expect(last.chars.map((c) => c.x)).toEqual([0, 24, 36, 60]);
+  });
+
   test('right alignment places a line-final closing bracket at its full advance', () => {
     const [first] = lay(H(18) + '」「」「国国国', '<w:jc w:val="right"/>');
     expect(first!.text).toBe(H(18) + '」');

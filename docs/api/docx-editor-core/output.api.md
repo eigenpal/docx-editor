@@ -35,6 +35,17 @@ export const DEFAULT_FIELD_SHADING: FieldShadingMode;
 export type FieldShadingMode = 'never' | 'when-selected' | 'always';
 
 // @public
+export interface LumTransfer {
+    // (undocumented)
+    readonly intercept: number;
+    // (undocumented)
+    readonly slope: number;
+}
+
+// @public
+export function lumTransfer(brightPercent: number, contrastPercent: number): LumTransfer | null;
+
+// @public
 export interface OverlayRect {
     readonly activeBackground?: string;
     readonly className?: string;

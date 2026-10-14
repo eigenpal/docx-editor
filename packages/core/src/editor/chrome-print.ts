@@ -90,7 +90,7 @@ export interface ChromePrintJob {
 export async function runChromePrint(
   editor: Pick<Editor, 'save'> & Partial<Pick<Editor, 'snapshot'>>,
   handlers: ChromeExportHandlers = {},
-  container: Document | Element = document
+  container: Document | Element = globalThis.document
 ): Promise<ChromePrintJob> {
   const { bytes, mimeType } = await runChromeExport(editor, 'pdf', handlers);
   return createPrintJob(bytes, mimeType, container);

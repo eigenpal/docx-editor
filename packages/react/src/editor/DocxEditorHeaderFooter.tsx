@@ -16,6 +16,7 @@ import { guardToolbarMousedown } from './toolbar/ToolbarButton';
 import { inchesToTwips, twipsToInches } from './header-footer-units';
 import { useHeaderFooterState } from './useHeaderFooterState';
 import { useScopedChromeAnchor } from './useScopedChromeAnchor';
+import { hostDocumentOf } from '@docx-editor.dev/core/editor';
 
 /** Props for `DocxEditor.HeaderFooterChrome`. @public */
 export interface DocxEditorHeaderFooterChromeProps {
@@ -77,8 +78,9 @@ function OptionsMenu(props: {
       if (menuRef.current?.contains(event.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
+    const doc = hostDocumentOf(menuRef.current);
+    doc.addEventListener('mousedown', onDocMouseDown);
+    return () => doc.removeEventListener('mousedown', onDocMouseDown);
   }, [open]);
 
   const titlePageCmd = useMemo(

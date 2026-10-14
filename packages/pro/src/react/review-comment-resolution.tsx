@@ -26,6 +26,7 @@ import {
 import type { ReviewActionProps } from './review-types.ts';
 import type { ReviewItemView, UseReviewReturn } from './useReview.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
+import { hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 
 interface ResolutionPartDeps {
   readonly useReview: () => UseReviewReturn;
@@ -109,13 +110,14 @@ export function ResolvedCommentCard({
   useEffect(() => {
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const details = detailsRef.current;
-      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+      if (details?.open && isDomNode(event.target) && !details.contains(event.target)) {
         disclosure.close();
         onDeactivate();
       }
     };
-    document.addEventListener('pointerdown', closeOnOutsidePointer, true);
-    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer, true);
+    const doc = hostDocumentOf(detailsRef.current);
+    doc.addEventListener('pointerdown', closeOnOutsidePointer, true);
+    return () => doc.removeEventListener('pointerdown', closeOnOutsidePointer, true);
   }, [disclosure, onDeactivate]);
 
   return (

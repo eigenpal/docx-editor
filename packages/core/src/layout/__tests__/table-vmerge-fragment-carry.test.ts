@@ -354,17 +354,25 @@ describe('merged text across protected physical rows', () => {
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 
-  test('exact spans keep their authored clipping when the head cannot fit', () => {
+  test('exact spans too short for the head carry it and clip at the last row', () => {
+    // 50 lines (600pt) in a 555pt span of fixed rows: the text continues on the next page
+    // and is clipped at the bottom of the span. Page 2 holds 166.5pt: 13 lines and the
+    // top of the line the span bottom cuts.
     const part = fixture({ exact: true, rowTwips: 370, count: 50, fixed: true });
     const before = serializeOoxmlPart(part);
     const layout = layoutSemanticDocument(part, 0, { geometry, measurer });
-    expect(merged(layout).length).toBeLessThan(50);
-    expect(
-      tables(layout)
-        .flat()
-        .flatMap((table) => table.rows)
-        .some((row) => row.isContinuation && row.box.height === 0)
-    ).toBe(false);
+    expect(rowsByPage(layout)).toEqual([21, 9]);
+    const content = merged(layout);
+    expect(content.filter(({ page }) => page === 1)).toHaveLength(32);
+    expect(content.filter(({ page, block }) => page === 1 && block.clipToBox)).toHaveLength(0);
+    const tail = content.filter(({ page }) => page === 2);
+    const first = tail[0]!.block.lines[0]!.spans.map((span) => span.text).join('');
+    expect(first.startsWith('MERGED-LINE-33 ')).toBe(true);
+    expect(tail).toHaveLength(14);
+    const spanBottom = tables(layout)[1]!.at(-1)!.rows.at(-1)!;
+    const last = tail.at(-1)!.block;
+    expect(last.clipToBox).toBe(true);
+    expect(last.box.y + last.box.height).toBeCloseTo(spanBottom.box.y + spanBottom.box.height, 3);
     expect(serializeOoxmlPart(part)).toBe(before);
   });
 

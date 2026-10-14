@@ -95,7 +95,7 @@ test('an author change converges, undoes, redoes, reconnects, and reopens', asyn
 
   // The peer can decide the reattributed change.
   const insertion = bob
-    .getReviewItems()
+    .getReviewItems({ pairReplacements: false })
     .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
   expect(bob.acceptReviewItem(insertion.key).ok).toBe(true);
   converge();
@@ -115,7 +115,7 @@ test('an author change racing a decision and typing on the same change converges
   const { pair, alice, bob, converge } = await peers();
   const insertion = () =>
     bob
-      .getReviewItems()
+      .getReviewItems({ pairReplacements: false })
       .find((item) => item.kind === 'revision' && item.revisionKind === 'insert')!;
   pair.pause();
   expect(alice.exec({ type: 'setReviewChangesAuthor', author: 'Ada', scope: 'document' }).ok).toBe(

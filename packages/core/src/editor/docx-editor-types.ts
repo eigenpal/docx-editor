@@ -225,6 +225,26 @@ export interface EquationChromeHandlers {
 }
 
 /**
+ * How {@link DocxEditorInstance.attach} moves an open document.
+ *
+ * @example
+ * ```ts
+ * // Bring the editor home from a pop-out and keep typing there.
+ * editor.attach(mainSlot, { focus: true });
+ * ```
+ *
+ * @public
+ */
+export interface AttachOptions {
+  /**
+   * Focus the pages after the move, so the caret shows and typing continues. Default: focus
+   * returns only when the pages had it before the move or the `detach()`. A first mount from
+   * bytes does not take focus.
+   */
+  readonly focus?: boolean;
+}
+
+/**
  * The concrete facade type: the full `Editor` contract plus the instance-only surface.
  *
  * `surface`, `stateVersion`, `attach` and `detach` live HERE rather than on `Editor`:
@@ -470,20 +490,42 @@ export interface DocxEditorInstance extends Editor {
    */
   setReviewPaneOptions(options: ReviewPaneOptions): ExecResult;
   /**
-   * Mount into `el`. If the instance holds pending document bytes (created without a
-   * container, or previously detached), they mount now — under the shaped measurer when
-   * fonts have resolved in the meantime. Attaching while already mounted elsewhere moves
-   * the live content via `session.save()`.
+   * Mount into `el`, which may belong to another document: a pop-out window opened with
+   * `window.open`, or a same-origin iframe.
    *
-   * HONEST COSTS: a mount from bytes is a fresh session — the undo stack and the caret do
-   * not survive re-attach (the same cost as the async font remount). After `destroy()`
-   * this is a no-op that emits a typed `error` event: a destroyed instance never remounts.
+   * A document that is already open MOVES into `el`, from another element or from a
+   * previous `detach()`: the undo history, the selection, other editing state (such as an
+   * armed format painter) and any collaboration session stay as they are. The reading
+   * position is kept, and keyboard focus returns when the pages had it before (see
+   * {@link AttachOptions.focus}). Focus, selection, pointer, scroll and resize listeners,
+   * timers and registered font faces follow `el`'s window. Pending document bytes (an
+   * instance created without a container, or a `load` while detached) mount now instead, as
+   * a fresh session.
+   *
+   * The host copies the editor stylesheet and any web fonts it loads into `el`'s document.
+   * Move the editor back, or `destroy()` it, before that window closes. An element whose
+   * window has closed (or that has no window) is refused with an `invalidTarget` error and
+   * the editor stays where it is. After `destroy()` this is a no-op that emits a typed
+   * `error` event: a destroyed instance never remounts.
+   *
+   * @example
+   * ```ts
+   * // Pop the editor out into its own window and bring it back later.
+   * const popup = window.open('', 'editor', 'width=900,height=1000')!;
+   * copyStyles(document, popup.document); // host-owned: the editor CSS and fonts
+   * const slot = popup.document.createElement('div');
+   * popup.document.body.append(slot);
+   * editor.attach(slot);
+   * popup.addEventListener('pagehide', () => editor.attach(mainSlot), { once: true });
+   * ```
    */
-  attach(el: HTMLElement): void;
+  attach(el: HTMLElement, options?: AttachOptions): void;
   /**
-   * Tear down the painted surface, stashing the CURRENT document bytes
-   * (`session.save()`) so a later `attach` restores the content — but not the undo stack
-   * or the caret. No-op when already detached or destroyed.
+   * Take the editor out of its element and keep it, with its undo history, selection and
+   * collaboration session, for a later `attach`. While detached the instance still saves,
+   * runs commands and receives remote edits; it paints when attached again. A `load` while
+   * detached replaces the kept document. `destroy()` releases everything. No-op when already
+   * detached or destroyed.
    */
   detach(): void;
 }

@@ -11,6 +11,8 @@
 // Fixed groups and the More trigger never receive that separator allowance: More sits
 // after flex content with margin-inline-start: auto, not after a rule.
 
+import { hostWindowOf, isElementNode } from './host-realm.ts';
+
 /**
  * Leading separator slot cost for one collapsible group (px).
  *
@@ -199,8 +201,8 @@ function rowItems(
   for (const node of container.childNodes) {
     // Loose text is an anonymous flex item whose width this file cannot read.
     if (node.nodeType === 3 && (node.textContent ?? '').trim().length > 0) return false;
-    if (!(node instanceof Element)) continue;
-    const style = getComputedStyle(node);
+    if (!isElementNode(node)) continue;
+    const style = hostWindowOf(node).getComputedStyle(node);
     if (style.display === 'contents') {
       if (!rowItems(node, bar, out)) return false;
       continue;
@@ -302,7 +304,7 @@ function readRoom(
   const specified = specifiedStyle(bar);
   const width = keywordOf(specified, 'width');
   if (width === null || !CONTENT_WIDTHS.has(width)) return null;
-  const parentStyle = getComputedStyle(parent);
+  const parentStyle = hostWindowOf(parent).getComputedStyle(parent);
   const flexItem = isFlexRow(parentStyle);
   // A flex column lays its items out one per line, like a block container.
   const column =

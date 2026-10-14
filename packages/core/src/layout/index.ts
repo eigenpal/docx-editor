@@ -201,6 +201,7 @@ export {
   type TableFragmentRecord,
   type TableRowFragmentRecord,
   type TextMeasurer,
+  type TextOutline,
 } from './semantic-records.ts';
 export type {
   SemanticArtifactRootStoryKind,
@@ -239,6 +240,7 @@ export type {
   InlineDrawingRecord,
 } from './drawing-layout.ts';
 export type { TextboxStoryLayout } from './textbox-story-layout.ts';
+export type { DrawingTextArtRecord, TextArtFit } from './drawing-text-art.ts';
 export type { GroupTextboxStoryRecord } from './group-textbox-layout.ts';
 export type { TextboxStoryFallbackReason } from './textbox-story-layout.ts';
 export type {

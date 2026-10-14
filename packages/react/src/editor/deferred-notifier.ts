@@ -10,13 +10,50 @@
  * engine can chain waves past that limit even though every update is a legitimate
  * keystroke: `isInputPending` reads false the moment the backlog is already dispatched
  * into tasks, so the pending-input check alone cannot break the chain. The streak resets
- * whenever a zero-delay timer gets to run — timers running IS the yield React needs.
+ * whenever a yielded task gets to run — a task running IS the yield React needs.
  */
 const MAX_MICROTASK_WAVES_BEFORE_YIELD = 16;
 
 let waveStreak = 0;
 let waveOpen = false;
 let streakResetArmed = false;
+
+/**
+ * Run `task` in a later event-loop task, through a message rather than a timer.
+ *
+ * Module-level code cannot know which window the editor is in, and the script's own timers
+ * belong to the opener when the editor renders into a pop-out window: a hidden or minimized
+ * opener throttles them to one run a second or slower. Message tasks are not throttled, so
+ * a pop-out editor's chrome keeps up with typing.
+ */
+let pendingTasks: (() => void)[] = [];
+let taskChannel: MessageChannel | null = null;
+function yieldTask(task: () => void): void {
+  if (typeof MessageChannel !== 'function') {
+    // Same throttling caveat; only engines without channels take this path.
+    globalThis.setTimeout(task, 0);
+    return;
+  }
+  if (!taskChannel) {
+    taskChannel = new MessageChannel();
+    taskChannel.port1.onmessage = () => {
+      const tasks = pendingTasks;
+      pendingTasks = [];
+      for (const run of tasks) {
+        // One failing subscriber must not strand the others' notifications.
+        try {
+          run();
+        } catch (error) {
+          queueMicrotask(() => {
+            throw error;
+          });
+        }
+      }
+    };
+  }
+  pendingTasks.push(task);
+  if (pendingTasks.length === 1) taskChannel.port2.postMessage(null);
+}
 
 /** Decide the scheduling lane for one coalesced notification. @internal */
 export function notificationYieldsToTask(): boolean {
@@ -45,10 +82,10 @@ export function notificationYieldsToTask(): boolean {
     });
     if (!streakResetArmed) {
       streakResetArmed = true;
-      setTimeout(() => {
+      yieldTask(() => {
         streakResetArmed = false;
         waveStreak = 0;
-      }, 0);
+      });
     }
   }
   return waveStreak > MAX_MICROTASK_WAVES_BEFORE_YIELD;
@@ -63,7 +100,7 @@ export function deferredTick(notify: () => void): () => void {
       scheduled = false;
       notify();
     };
-    if (notificationYieldsToTask()) setTimeout(flush, 0);
+    if (notificationYieldsToTask()) yieldTask(flush);
     else queueMicrotask(flush);
   };
 }

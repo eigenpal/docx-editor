@@ -7656,6 +7656,89 @@ a.docx-hyperlink:focus-visible {
 .docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) {
   max-width: 520px;
 }
+.docx-editor .docx-dialog:where([data-docx-dialog='watermark']),
+.docx-editor.docx-dialog:where([data-docx-dialog='watermark']) {
+  max-width: 520px;
+}
+/* Watermark: each choice's controls sit indented under its radio. */
+.docx-editor .docx-dialog__section--indented {
+  padding-inline-start: 24px;
+}
+/* Watermark: the page preview beside the choices; it wraps above them in a narrow dialog. */
+.docx-editor .docx-dialog__watermark-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 20px;
+}
+.docx-editor .docx-dialog__fieldset {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 12px);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.docx-editor .docx-dialog__preview {
+  position: relative;
+  flex: 0 0 auto;
+  width: 120px;
+  margin-inline: auto;
+  overflow: hidden;
+  border: 1px solid var(--doc-border);
+  box-shadow: var(--doc-card-shadow);
+}
+.docx-editor .docx-dialog__preview-page {
+  /* The section's page proportion comes from the SVG view box. */
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.docx-editor .docx-dialog__preview-sheet {
+  fill: var(--doc-page-bg-rendered, var(--doc-surface));
+}
+.docx-editor .docx-dialog__preview-line {
+  /* Stands for text on the sheet, so it follows the page colour in both themes. */
+  fill: color-mix(in srgb, var(--doc-text) 22%, var(--doc-page-bg-rendered));
+}
+.docx-editor .docx-dialog__checkbox-row :where(input[type='radio']) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--doc-primary);
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__checkbox-row:where(:has(input:disabled)) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+.docx-editor .docx-dialog__range {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--doc-primary);
+}
+.docx-editor .docx-dialog__input--narrow {
+  flex: 0 0 64px;
+  width: 64px;
+}
+.docx-editor .docx-dialog__color {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 32px;
+  padding: 2px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+}
+.docx-editor .docx-dialog__color:where(:disabled) {
+  background: var(--doc-bg-subtle);
+  border-color: var(--doc-border);
+  cursor: default;
+  opacity: 0.5;
+}
 
 /* The image properties dialog is a plain element under its own overlay. */
 .docx-editor .docx-dialog-overlay,

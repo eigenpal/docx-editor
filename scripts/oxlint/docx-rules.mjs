@@ -54,6 +54,18 @@ const VARARGS_NEW_MSG =
   'document and throws on attacker-sized input. Pass the array itself ' +
   '(new Set(items), not new Set(...items)).';
 
+// A node or event from another window (a pop-out, an iframe) is an instance of THAT window's
+// constructors, so `instanceof HTMLElement` or `instanceof KeyboardEvent` is false for it and
+// the editor silently ignores it (#1312).
+const DOM_CONSTRUCTOR =
+  '/^(Node|Element|Text|Document|DocumentFragment|ShadowRoot|Window|Range|Selection|' +
+  'EventTarget|DataTransfer|File|FileList|Blob|HTML\\w*Element|SVG\\w*Element|\\w*Event)$/';
+const CROSS_REALM_INSTANCEOF_MSG =
+  '`instanceof` a DOM constructor is false for a node or event from another window, and the ' +
+  'editor can be mounted in a pop-out or an iframe. Use the guards in ' +
+  'core/editor/host-realm.ts (isElementNode, isHTMLElementNode, isKeyboardEvent, ...) or test ' +
+  'nodeType / localName.';
+
 // Layout branches on the Word compatibility mode only through named rules
 // (packages/core/src/layout/compatibility/compatibility-rules.ts), so one registry says which
 // behavior depends on which mode. A raw comparison such as `compatibilityMode >= 15` or
@@ -188,6 +200,20 @@ export default {
     ]),
 
     'vue-function-slots': vueFunctionSlots,
+
+    'no-cross-realm-instanceof': selectorRule([
+      {
+        selector: `BinaryExpression[operator='instanceof'] > Identifier.right[name=${DOM_CONSTRUCTOR}]`,
+        message: CROSS_REALM_INSTANCEOF_MSG,
+      },
+      {
+        // `x instanceof view.Element` is the same trap: the node may belong to yet another window.
+        selector:
+          "BinaryExpression[operator='instanceof'] > MemberExpression.right" +
+          `[property.name=${DOM_CONSTRUCTOR}]`,
+        message: CROSS_REALM_INSTANCEOF_MSG,
+      },
+    ]),
 
     'no-raw-compatibility-mode': selectorRule(
       RAW_COMPATIBILITY_MODE_SELECTORS.map((selector) => ({

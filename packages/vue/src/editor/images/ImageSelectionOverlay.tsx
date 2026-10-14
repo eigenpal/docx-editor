@@ -21,6 +21,9 @@ import {
   type ImageOverlayScrollPort,
   type ImageResizeHandle,
   type SelectedDrawingOverlayTarget,
+  isElementNode,
+  hostWindowOf,
+  isHTMLElementNode,
 } from '@docx-editor.dev/core/editor';
 import {
   computeImageResizeResult,
@@ -145,7 +148,7 @@ export const ImageSelectionOverlay = defineComponent({
       ([container], _, onCleanup) => {
         if (!container) return;
         const onPointerDown = (event: PointerEvent): void => {
-          const element = event.target instanceof Element ? event.target : null;
+          const element = isElementNode(event.target) ? event.target : null;
           if (element?.closest('.docx-drawing-textbox-content')) {
             focusRequestedForDrawingRef.value = null;
             return;
@@ -192,8 +195,9 @@ export const ImageSelectionOverlay = defineComponent({
       [() => props.portalRef.value, () => props.containerRef.value],
       ([portal, container], _, onCleanup) => {
         refreshOrigin();
-        if ((!portal && !container) || typeof ResizeObserver !== 'function') return;
-        const observer = new ResizeObserver(refreshOrigin);
+        const win = hostWindowOf(portal ?? container);
+        if ((!portal && !container) || typeof win.ResizeObserver !== 'function') return;
+        const observer = new win.ResizeObserver(refreshOrigin);
         if (portal) observer.observe(portal);
         // The origin is a function of BOTH boxes: the surface's own width moves the
         // centring margin at a constant portal box (a page-size change), so observe both.
@@ -522,13 +526,15 @@ export const ImageSelectionOverlay = defineComponent({
             );
           } else clearPreview();
         };
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', finish);
-        window.addEventListener('pointercancel', finish);
+        // The drag runs in the window the editor paints in, which a pop-out window can own.
+        const win = hostWindowOf(props.containerRef.value);
+        win.addEventListener('pointermove', onPointerMove);
+        win.addEventListener('pointerup', finish);
+        win.addEventListener('pointercancel', finish);
         onCleanup(() => {
-          window.removeEventListener('pointermove', onPointerMove);
-          window.removeEventListener('pointerup', finish);
-          window.removeEventListener('pointercancel', finish);
+          win.removeEventListener('pointermove', onPointerMove);
+          win.removeEventListener('pointerup', finish);
+          win.removeEventListener('pointercancel', finish);
         });
       },
       { flush: 'post' }
@@ -578,7 +584,8 @@ export const ImageSelectionOverlay = defineComponent({
         <Teleport to={portal}>
           <div
             ref={(el: unknown) => {
-              overlayRef.value = el instanceof HTMLDivElement ? el : null;
+              overlayRef.value =
+                isHTMLElementNode(el) && el.localName === 'div' ? (el as HTMLDivElement) : null;
             }}
             class="docx-image-selection-overlay"
             data-drawing-node-id={current.id}

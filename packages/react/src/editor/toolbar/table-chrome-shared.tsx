@@ -2,7 +2,11 @@ import type { ReactNode } from 'react';
 // Shared a11y and keyboard helpers for contextual table toolbar compounds.
 
 import { useEffect, useId, type RefObject } from 'react';
-import { editorInstanceScope } from '@docx-editor.dev/core/editor';
+import {
+  editorInstanceScope,
+  hostDocumentOf,
+  isHTMLElementNode,
+} from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { focusBy, focusEdge } from '../menu/menu-keyboard';
@@ -96,12 +100,12 @@ export function useTableMenuKeyboard(
       }
       if (event.key === 'ArrowDown') {
         event.preventDefault();
-        focusBy(list, document.activeElement, 1);
+        focusBy(list, hostDocumentOf(panel).activeElement, 1);
         return;
       }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
-        focusBy(list, document.activeElement, -1);
+        focusBy(list, hostDocumentOf(panel).activeElement, -1);
         return;
       }
       if (event.key === 'Home') {
@@ -115,8 +119,8 @@ export function useTableMenuKeyboard(
         return;
       }
       if (event.key === 'Enter' || event.key === ' ') {
-        const focused = document.activeElement;
-        if (focused instanceof HTMLElement && list.includes(focused)) {
+        const focused = hostDocumentOf(event.target as Node | null).activeElement;
+        if (isHTMLElementNode(focused) && list.includes(focused)) {
           event.preventDefault();
           focused.click();
         }
@@ -158,9 +162,9 @@ export function useTableDialogKeyboard(
         return;
       }
       if (event.key === 'Enter' || event.key === ' ') {
-        const focused = document.activeElement;
+        const focused = hostDocumentOf(event.target as Node | null).activeElement;
         const list = activators();
-        if (focused instanceof HTMLElement && list.includes(focused)) {
+        if (isHTMLElementNode(focused) && list.includes(focused)) {
           event.preventDefault();
           focused.click();
         }

@@ -8,6 +8,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { legacyDropdownFieldsOf } from '../store/store/legacy-dropdown-fields.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import { hostWindowOf, isElementNode } from './host-realm.ts';
 
 interface Host {
   readonly pagesLayer: HTMLElement;
@@ -27,7 +28,7 @@ export function createLegacyDropdownInteraction(host: Host): {
 } {
   const selector = 'select[data-docx-form-dropdown]';
   const controlOf = (target: EventTarget | null) =>
-    target instanceof Element ? target.closest<HTMLSelectElement>(selector) : null;
+    isElementNode(target) ? target.closest<HTMLSelectElement>(selector) : null;
   const locate = (control: HTMLSelectElement) => {
     const span = control.closest<HTMLElement>('[data-start][data-paragraph-id]');
     const paragraphId = span?.dataset.paragraphId;
@@ -98,11 +99,11 @@ export function createLegacyDropdownInteraction(host: Host): {
     );
     replacement?.focus({ preventScroll: true });
   };
-  const observer = new MutationObserver((records) => {
+  const observer = new (hostWindowOf(host.pagesLayer).MutationObserver)((records) => {
     // Only newly painted subtrees need wiring. Typing elsewhere must not scan every page.
     for (const record of records) {
       for (const node of record.addedNodes) {
-        if (!(node instanceof Element)) continue;
+        if (!isElementNode(node)) continue;
         const controls = node.matches(selector)
           ? [node as HTMLSelectElement]
           : node.querySelectorAll<HTMLSelectElement>(selector);

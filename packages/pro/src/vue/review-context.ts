@@ -22,6 +22,7 @@ import {
   type VNode,
   type MaybeRefOrGetter,
 } from 'vue';
+import { isElementNode, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 import type { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import type { CommentMarkerStyle, RevisionDisplay } from '@docx-editor.dev/core/editor';
@@ -195,7 +196,7 @@ export const ReviewItemScope = defineComponent({
     let measuredNode: HTMLElement | null = null;
     let measuredKey: string | null = null;
     const bindMeasuredNode = (node: Element | null): void => {
-      const nextNode = node instanceof HTMLElement ? node : null;
+      const nextNode = isHTMLElementNode(node) ? node : null;
       const nextKey = nextNode && props.measureKey ? props.measureKey : null;
       if (measuredNode === nextNode && measuredKey === nextKey) return;
       if (measuredKey) rail.value.measure(null, measuredKey);
@@ -211,10 +212,10 @@ export const ReviewItemScope = defineComponent({
         'div',
         {
           onVnodeMounted: (vnode) => {
-            bindMeasuredNode(vnode.el instanceof Element ? vnode.el : null);
+            bindMeasuredNode(isElementNode(vnode.el) ? vnode.el : null);
           },
           onVnodeUpdated: (vnode) => {
-            bindMeasuredNode(vnode.el instanceof Element ? vnode.el : null);
+            bindMeasuredNode(isElementNode(vnode.el) ? vnode.el : null);
           },
           onVnodeBeforeUnmount: () => {
             bindMeasuredNode(null);

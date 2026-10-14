@@ -1,4 +1,5 @@
 import { defineComponent, ref, watch, type CSSProperties, type PropType, type VNode } from 'vue';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useStableDocxId } from '../lib/stable-id';
 import { useTranslation } from '../i18n';
@@ -346,14 +347,15 @@ const ContentControlRoot = defineComponent({
         };
         const onMouseDown = (event: MouseEvent): void => {
           const panel = panelRef.value;
-          if (panel && event.target instanceof Node && panel.contains(event.target)) return;
+          if (panel && isDomNode(event.target) && panel.contains(event.target)) return;
           chrome.closeInspector();
         };
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('mousedown', onMouseDown, true);
+        const doc = hostDocumentOf(panelRef.value);
+        doc.addEventListener('keydown', onKeyDown);
+        doc.addEventListener('mousedown', onMouseDown, true);
         onCleanup(() => {
-          document.removeEventListener('keydown', onKeyDown);
-          document.removeEventListener('mousedown', onMouseDown, true);
+          doc.removeEventListener('keydown', onKeyDown);
+          doc.removeEventListener('mousedown', onMouseDown, true);
         });
       }
     );

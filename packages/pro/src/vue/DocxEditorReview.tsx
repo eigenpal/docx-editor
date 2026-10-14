@@ -32,6 +32,10 @@ import {
   reviewPaneListsItem,
   type DocxEditorInstance,
   type ReviewAuthorInfo,
+  isDomNode,
+  isHTMLElementNode,
+  hostDocumentOf,
+  hostWindowOf,
 } from '@docx-editor.dev/core/editor';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import {
@@ -83,6 +87,7 @@ import {
   type ReviewRailValue,
 } from './review-context.ts';
 import type { ReviewActions } from './review-types.ts';
+import { stackRailCards } from '../review/rail-stack.ts';
 import { useReviewSlotSizing } from './use-review-slot-sizing.ts';
 import { resolveReviewAuthorInfo } from './review-author-styles.ts';
 import {
@@ -188,7 +193,9 @@ const ReviewRoot = defineComponent({
       return excluded.length > 0 ? excluded : undefined;
     });
 
+    // The pane lists each half of a replacement as its own card, so each stays reviewable.
     const railQuery = computed(() => ({
+      pairReplacements: false,
       excludeRevisionKinds: excludeRevisionKinds.value?.filter((kind) => kind !== 'format'),
     }));
 
@@ -344,10 +351,12 @@ const ReviewRoot = defineComponent({
         if (!editor || !rail || documentAbsent.value || props.hidden) return;
         const parent = rail.offsetParent as HTMLElement | null;
         const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
+        // The rail's own window: a pop-out window measures, observes and animates there.
+        const win = hostWindowOf(rail);
         const sync = (): void => {
           if (parent) {
             const reserved = Number.parseFloat(
-              getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
+              win.getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
             );
             measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
           } else {
@@ -386,11 +395,13 @@ const ReviewRoot = defineComponent({
           }
         };
         sync();
-        const observer = new ResizeObserver(sync);
+        const observer = new win.ResizeObserver(sync);
         if (parent) observer.observe(parent);
         if (surface) observer.observe(surface);
         const mutationObserver =
-          parent && typeof MutationObserver !== 'undefined' ? new MutationObserver(sync) : null;
+          parent && typeof win.MutationObserver !== 'undefined'
+            ? new win.MutationObserver(sync)
+            : null;
         mutationObserver?.observe(parent!, { attributes: true, attributeFilter: ['style'] });
         if (!compact.value || !parent) {
           metricsCleanup = () => {
@@ -402,14 +413,14 @@ const ReviewRoot = defineComponent({
         let frameId = 0;
         const onScroll = () => {
           if (frameId !== 0) return;
-          frameId = requestAnimationFrame(() => {
+          frameId = win.requestAnimationFrame(() => {
             frameId = 0;
             sync();
           });
         };
         parent.addEventListener('scroll', onScroll, { passive: true });
         metricsCleanup = () => {
-          if (frameId !== 0) cancelAnimationFrame(frameId);
+          if (frameId !== 0) win.cancelAnimationFrame(frameId);
           parent.removeEventListener('scroll', onScroll);
           mutationObserver?.disconnect();
           observer.disconnect();
@@ -430,15 +441,16 @@ const ReviewRoot = defineComponent({
         if (!editor || !rail || documentAbsent.value || props.hidden) return;
         const onMouseDown = (event: MouseEvent): void => {
           const target = event.target;
-          if (!(target instanceof Node) || rail.contains(target)) return;
+          if (!isDomNode(target) || rail.contains(target)) return;
           const container = rail.offsetParent as HTMLElement | null;
           if (!container || !container.contains(target)) return;
           const surface = container.querySelector('.docx-paginated-surface');
           if (surface?.contains(target)) return;
           editor.setActiveReviewItem(null);
         };
-        document.addEventListener('mousedown', onMouseDown, true);
-        dismissCleanup = () => document.removeEventListener('mousedown', onMouseDown, true);
+        const doc = hostDocumentOf(rail);
+        doc.addEventListener('mousedown', onMouseDown, true);
+        dismissCleanup = () => doc.removeEventListener('mousedown', onMouseDown, true);
       },
       { flush: 'post' }
     );
@@ -474,6 +486,7 @@ const ReviewRoot = defineComponent({
         const rail = railRef.value;
         const scroller = rail?.offsetParent as HTMLElement | null;
         if (!scroller || documentAbsent.value || props.hidden) return;
+        const win = hostWindowOf(scroller);
         let frame = 0;
         const sync = (): void => {
           frame = 0;
@@ -487,18 +500,18 @@ const ReviewRoot = defineComponent({
         };
         let settle = 0;
         const onScroll = (): void => {
-          if (frame === 0) frame = requestAnimationFrame(sync);
+          if (frame === 0) frame = win.requestAnimationFrame(sync);
           rail?.setAttribute('data-scrolling', '');
-          window.clearTimeout(settle);
-          settle = window.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
+          win.clearTimeout(settle);
+          settle = win.setTimeout(() => rail?.removeAttribute('data-scrolling'), 150);
         };
         sync();
         scroller.addEventListener('scroll', onScroll, { passive: true });
-        const observer = new ResizeObserver(onScroll);
+        const observer = new win.ResizeObserver(onScroll);
         observer.observe(scroller);
         scrollCleanup = () => {
-          if (frame !== 0) cancelAnimationFrame(frame);
-          window.clearTimeout(settle);
+          if (frame !== 0) win.cancelAnimationFrame(frame);
+          win.clearTimeout(settle);
           scroller.removeEventListener('scroll', onScroll);
           observer.disconnect();
         };
@@ -602,29 +615,25 @@ const ReviewRoot = defineComponent({
       return merged;
     });
 
+    // The open card stays beside its text; see `stackRailCards`.
     const stackedLayout = computed(() => {
-      const scale = metrics.value.scale;
-      const positions = new Map<string, number>();
-      const collapsed = new Set<string>();
-      let cursor = Number.NEGATIVE_INFINITY;
-      for (const entry of stackInput.value) {
-        const top =
-          entry.anchorY === null
-            ? Number.isFinite(cursor)
-              ? cursor
-              : 0
-            : Math.max(entry.anchorY, cursor);
-        positions.set(entry.key, top);
-        const displacedPx = entry.anchorY === null ? 0 : (top - entry.anchorY) * scale;
-        const isActive = 'isActive' in entry && entry.isActive;
-        const collapse =
-          displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
-        if (collapse) collapsed.add(entry.key);
-        const height = collapse
-          ? COLLAPSED_CARD_HEIGHT
-          : (estimatedHeights.value.get(entry.key) ?? DEFAULT_CARD_HEIGHT);
-        cursor = top + (height + props.gap) / scale;
-      }
+      const { positions, collapsed } = stackRailCards(
+        stackInput.value.map((entry) => ({
+          key: entry.key,
+          anchorY: entry.anchorY,
+          isActive: 'isActive' in entry && entry.isActive,
+        })),
+        {
+          gap: props.gap,
+          scale: metrics.value.scale,
+          collapseAfterPx: COLLAPSE_DISPLACEMENT_PX,
+          heightOf: (key, folded) =>
+            folded
+              ? COLLAPSED_CARD_HEIGHT
+              : (estimatedHeights.value.get(key) ?? DEFAULT_CARD_HEIGHT),
+          collapsible: (entry) => entry.key !== COMPOSE_KEY,
+        }
+      );
       return { stacked: positions, collapsedKeys: collapsed };
     });
 
@@ -701,7 +710,7 @@ const ReviewRoot = defineComponent({
       void composeTop.value;
 
       const captureRailElement = (vnode: VNode) => {
-        railRef.value = vnode.el instanceof HTMLElement ? vnode.el : null;
+        railRef.value = isHTMLElementNode(vnode.el) ? vnode.el : null;
       };
       const shared = {
         onVnodeMounted: captureRailElement,

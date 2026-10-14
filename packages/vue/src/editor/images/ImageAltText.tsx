@@ -1,4 +1,5 @@
 import { renderPopup } from '../popup-renderer';
+import { isDomNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
 import { usePopupConfig } from '../popup-config';
 import { defineComponent, ref, watch, type VNode, type PropType } from 'vue';
@@ -49,8 +50,9 @@ export const ImageAltText = defineComponent({
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
         if (
-          event.target instanceof Node &&
-          (root?.contains(event.target) || document.getElementById(panelId)?.contains(event.target))
+          isDomNode(event.target) &&
+          (root?.contains(event.target) ||
+            hostDocumentOf(root).getElementById(panelId)?.contains(event.target))
         )
           return;
         open.value = false;
@@ -61,11 +63,12 @@ export const ImageAltText = defineComponent({
         open.value = false;
         triggerRef.value?.focus();
       };
-      document.addEventListener('mousedown', onMouseDown, true);
-      document.addEventListener('keydown', onKeyDown);
+      const doc = hostDocumentOf(rootRef.value);
+      doc.addEventListener('mousedown', onMouseDown, true);
+      doc.addEventListener('keydown', onKeyDown);
       onCleanup(() => {
-        document.removeEventListener('mousedown', onMouseDown, true);
-        document.removeEventListener('keydown', onKeyDown);
+        doc.removeEventListener('mousedown', onMouseDown, true);
+        doc.removeEventListener('keydown', onKeyDown);
       });
     });
 

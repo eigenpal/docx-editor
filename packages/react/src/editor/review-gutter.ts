@@ -42,7 +42,11 @@
 
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { REVIEW_MARKERS_GUTTER_PX, reviewPaneEntitledZoom } from '@docx-editor.dev/core/editor';
+import {
+  hostWindowOf,
+  REVIEW_MARKERS_GUTTER_PX,
+  reviewPaneEntitledZoom,
+} from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
 import { ReviewRailContext } from './context';
 import { useEditorState } from './useEditorState';
@@ -224,8 +228,9 @@ export function useViewportClientWidth(): number | null {
     }
     const sync = () => setWidth(viewport.clientWidth);
     sync();
-    if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(sync);
+    const Observer = hostWindowOf(viewport).ResizeObserver;
+    if (typeof Observer === 'undefined') return undefined;
+    const observer = new Observer(sync);
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [viewport]);
@@ -290,8 +295,9 @@ export function useReviewGutter(): ReviewGutter {
   useEffect(() => {
     const sync = () => setGutter(compute(viewport ? viewport.clientWidth : null));
     sync();
-    if (!viewport || typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(sync);
+    const Observer = viewport ? hostWindowOf(viewport).ResizeObserver : undefined;
+    if (!viewport || typeof Observer === 'undefined') return undefined;
+    const observer = new Observer(sync);
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [viewport, compute]);

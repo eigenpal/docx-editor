@@ -2,7 +2,12 @@ import { usePickerKeyboard } from './usePickerKeyboard';
 import { computed, defineComponent, ref, watch, type PropType, type VNode } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import {
+  commandForSlotValue,
+  type ChromeSlotId,
+  isDomNode,
+  hostDocumentOf,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -399,11 +404,12 @@ function createColorSplit(config: ColorSplitConfig): ToolbarColorSplitComponent 
         if (!isOpen) return;
         const onMouseDown = (event: MouseEvent) => {
           const root = rootRef.value;
-          if (root && event.target instanceof Node && root.contains(event.target)) return;
+          if (root && isDomNode(event.target) && root.contains(event.target)) return;
           open.value = false;
         };
-        document.addEventListener('mousedown', onMouseDown);
-        onCleanup(() => document.removeEventListener('mousedown', onMouseDown));
+        const doc = hostDocumentOf(rootRef.value);
+        doc.addEventListener('mousedown', onMouseDown);
+        onCleanup(() => doc.removeEventListener('mousedown', onMouseDown));
       });
 
       const apply = (value: string) => {

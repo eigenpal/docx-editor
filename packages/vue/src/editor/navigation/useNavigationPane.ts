@@ -9,7 +9,7 @@ import {
 } from 'vue';
 import { scopeDispose } from '../scope-dispose';
 import type { EditorSnapshot, PageSetup } from '@docx-editor.dev/core/contracts/editor';
-import { ZOOM_MAX, ZOOM_MIN } from '@docx-editor.dev/core/editor';
+import { ZOOM_MAX, ZOOM_MIN, hostWindowOf } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../../lib/units';
 import { inject } from 'vue';
 import { ReviewRailContext, useDocxEditor } from '../context';
@@ -158,15 +158,16 @@ export function useNavigationPane(
         }
         const measure = () => {
           viewportWidth.value = el.clientWidth;
-          const style = getComputedStyle(el);
+          const style = hostWindowOf(el).getComputedStyle(el);
           const padding = Number.parseFloat(style.paddingInlineEnd);
           inlineEndReservation.value = Number.isFinite(padding) ? padding : 0;
           const strip = Number.parseFloat(style.getPropertyValue('--docx-review-gutter-start'));
           inlineStartReservation.value = Number.isFinite(strip) ? strip : 0;
         };
         measure();
-        if (typeof ResizeObserver === 'undefined') return;
-        const observer = new ResizeObserver(measure);
+        const win = hostWindowOf(el);
+        if (typeof win.ResizeObserver === 'undefined') return;
+        const observer = new win.ResizeObserver(measure);
         observer.observe(el);
         onCleanup(() => observer.disconnect());
       },

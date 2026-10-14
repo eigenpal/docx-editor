@@ -19,6 +19,7 @@ import {
   isFitMode,
   reviewPaneEntitledZoom,
 } from './zoom-fit.ts';
+import { hostTimers, hostWindowOf } from './host-realm.ts';
 
 /** What the controller needs from the editor it serves. */
 export interface ZoomControllerHost {
@@ -137,14 +138,15 @@ function availableWidth(container: HTMLElement, reviewPaneScrolls = false): numb
 export function createZoomController(host: ZoomControllerHost): ZoomController {
   let observer: ResizeObserver | null = null;
   let observed: HTMLElement | null = null;
+  // Cancelled on the window that issued it: the scroller can move to another one in between.
+  const frames = hostTimers(() => observed);
   let frame: number | null = null;
   /** The authored page width the last fit was computed against; see `refitIfPageResized`. */
   let fittedPageWidthTwips: number | null = null;
 
   function cancelFrame(): void {
     if (frame === null) return;
-    const view = observed?.ownerDocument.defaultView;
-    view?.cancelAnimationFrame(frame);
+    frames.cancelAnimationFrame(frame);
     frame = null;
   }
 
@@ -179,15 +181,15 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
   }
 
   function schedule(): void {
-    const view = observed?.ownerDocument.defaultView;
     // No rAF (headless, a detached document) means measure now. Losing the coalescing is a
     // performance cost; losing the fit is a correctness one.
-    if (!view?.requestAnimationFrame) {
+    if (!observed || typeof hostWindowOf(observed).requestAnimationFrame !== 'function') {
       refit();
       return;
     }
+    frames.migrate();
     if (frame !== null) return;
-    frame = view.requestAnimationFrame(() => {
+    frame = frames.requestAnimationFrame(() => {
       frame = null;
       refit();
     });
@@ -209,8 +211,10 @@ export function createZoomController(host: ZoomControllerHost): ZoomController {
       observed = scroller;
       // Absent in a headless host. The editor still fits on attach, load and mode change; it
       // just does not track a resize nobody can perform.
-      if (typeof ResizeObserver !== 'undefined') {
-        observer = new ResizeObserver(schedule);
+      // The scroller's own window: an observer from another one never reports its boxes.
+      const view = hostWindowOf(scroller);
+      if (typeof view.ResizeObserver === 'function') {
+        observer = new view.ResizeObserver(schedule);
         observer.observe(scroller);
       }
       refit();

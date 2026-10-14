@@ -840,6 +840,11 @@ export type TreeDocOp =
       readonly enforce: boolean;
     }
   | {
+      /** Replace the watermark in every header a section shows; null removes it. Package-level. */
+      readonly op: 'setWatermark';
+      readonly watermark: import('../package/watermark-package.ts').PackageWatermarkWrite | null;
+    }
+  | {
       /**
        * Insert a footnote or endnote: body reference + notes-part body (+ create the
        * notes part/rel/content-type when missing). Package-level; one ModelChange.

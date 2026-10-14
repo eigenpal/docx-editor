@@ -29,6 +29,7 @@ import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 import { applyVectorInkReach, vectorShapeFrame } from './semantic-paint-vector-shape.ts';
 import { paintGroupTextboxStories } from './semantic-paint-group-text.ts';
+import { paintTextArt } from './semantic-paint-text-art.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   revisionPresentationOf,
@@ -730,6 +731,15 @@ function paintDrawingRecordElement(
 
   if (drawing.textboxStory !== undefined && ctx.paintStoryFragment !== undefined) {
     return paintTextboxStory(document, drawing, drawing.textboxStory, ctx, origin);
+  }
+  if (drawing.kind === 'anchoredDrawing' && drawing.textArt) {
+    return paintTextArt(
+      document,
+      { ...drawing, textArt: drawing.textArt },
+      ctx.scale,
+      !!ctx.unbound,
+      origin
+    );
   }
 
   // A group made only of text box members paints its text in its own layer. Its frame here is

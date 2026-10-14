@@ -5,6 +5,7 @@ import type { DocxEditorContentControlWidgetProps } from './DocxEditorContentCon
 import type { DocxEditorInvalidTextFormFieldDialogProps } from './DocxEditorInvalidTextFormFieldDialog';
 import type { DocxEditorImagePropertiesDialogProps } from './images/ImageProperties';
 import type { DocxEditorImageAltTextPopupProps } from './images/ImageAltText';
+import type { DocxEditorImageInsertErrorDialogProps } from './images/ImageInsertErrorDialog';
 import type { DocxEditorNotePropertiesDialogProps } from './DocxEditorNotes';
 import type {
   DocxEditorNotePreviewProps,
@@ -12,10 +13,11 @@ import type {
 } from './note-popup-parts';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
-import { createContext, useContext } from 'react';
+import { PopupConfigContext, usePopupConfig } from './popup-config-context';
 import { renderPopup, type DocxEditorPopup } from './popup-renderer';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
+import type { DocxEditorWatermarkDialogProps } from './DocxEditorWatermark';
 import type { DocxEditorTextFormFieldDialogProps } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorHyperLink, type HyperLinkProps } from './DocxEditorHyperLink';
 import { DocxEditorContentControl, type ContentControlProps } from './DocxEditorContentControl';
@@ -42,6 +44,8 @@ export interface DocxEditorPopups {
    */
   contentControlPicture?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
   invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
+  /** Why a chosen or pasted picture could not be inserted. False shows nothing. */
+  imageInsertError?: DocxEditorPopup<DocxEditorImageInsertErrorDialogProps>;
   imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
   imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
   noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
@@ -49,6 +53,8 @@ export interface DocxEditorPopups {
   notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
   pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
   paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+  /** The Watermark dialog the Insert menu opens. Pass `presets` here to change its text choices. */
+  watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
   revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
   textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
   hyperlink?: DocxEditorPopup<HyperLinkProps>;
@@ -57,9 +63,8 @@ export interface DocxEditorPopups {
   contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
 }
 
-const Context = createContext<DocxEditorPopups | undefined>(undefined);
-export const PopupConfigProvider = Context.Provider;
-export const usePopupConfig = () => useContext(Context);
+export const PopupConfigProvider = PopupConfigContext.Provider;
+export { usePopupConfig };
 
 /** Mounts only configured nonmodal surfaces; composed editors retain explicit ownership otherwise. */
 export function ConfiguredPopups() {

@@ -50,6 +50,8 @@ export type { EditorReviewHits, ReviewItemHit } from './editor-review-hits.ts';
 export type {
   DocumentChange,
   EditorEvents,
+  EditorHostChange,
+  EditorHostDocument,
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
 } from './editor-events.ts';
@@ -99,6 +101,7 @@ import type {
   ExecResult,
   Unsubscribe,
   Watermark,
+  WatermarkState,
 } from './types';
 import type {
   EditorHeaderFooterCommands,
@@ -517,8 +520,11 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;
 
-  /** The document watermark, for the watermark dialog. */
-  getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
+  /**
+   * The watermark the document shows, read from the first section's headers; null when it
+   * shows none. For a picture watermark's bytes, use `query({ type: 'watermark' })`.
+   */
+  getWatermark(): WatermarkState | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
   getHeaderFooterState(): HeaderFooterState | null;
@@ -663,16 +669,15 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * caret that merely lands in a change leaves this `null`. Open a balloon or card for the
    * activated item, and highlight the caret-active one.
    *
-   * Pass the query you read items with, so the key matches theirs: with
-   * `pairReplacements: true`, a paired replacement reports the pair's key; without it, the
-   * key of the half the caret is in. The value changes with the selection, so read it again
-   * on `selectionChange`.
+   * Pass the query you read items with, so the key matches theirs. By default a paired
+   * replacement reports the pair's key; with `pairReplacements: false`, the key of the half
+   * the caret is in. The value changes with the selection, so read it again on
+   * `selectionChange`.
    *
    * @example
    * ```ts
-   * const query = { pairReplacements: true };
    * editor.on('selectionChange', () => {
-   *   const activated = editor.getActivatedReviewItemKey(query);
+   *   const activated = editor.getActivatedReviewItemKey();
    *   if (activated !== null) showMyCard(activated);
    * });
    * ```
@@ -942,7 +947,17 @@ export interface EditorCommands
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
   toggleDocumentProtection: Record<never, never>;
-  /** Navigate tracked changes, including hidden formatting balloons, and wrap at the end. */
+  /**
+   * Navigate tracked changes, including hidden formatting balloons, and wrap at the end.
+   *
+   * A replacement is one stop in every review layout. A replacement is a deletion and the
+   * touching insertion from the same author that took its place. Navigation lands on the
+   * deletion, highlights both halves, and `reviewItemReveal` carries the pair's `pairKey`.
+   *
+   * Navigation steps through the changes {@link Editor.getReviewItems} returns, so a
+   * reviewer or `setTrackedChangesFilter` filter applies. When a filter hides one half of a
+   * replacement, the other half is a stop of its own.
+   */
   navigateReviewChange: { direction: 'next' | 'previous' };
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
   resolveAllReviewChanges: ResolveReviewChangesOptions;
@@ -1240,6 +1255,11 @@ export interface EditorCommands
     expectedPackageRevision?: number;
   };
 
+  /**
+   * Replace the document watermark in every header the document shows; null removes it. One
+   * undo step. Refuses with `invalidArgs` for an invalid option and `locked` in a protected
+   * document; a refusal writes nothing. See {@link Watermark} for the options and defaults.
+   */
   setWatermark: { watermark: Watermark | null };
   /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
   insertToc: Record<never, never>;

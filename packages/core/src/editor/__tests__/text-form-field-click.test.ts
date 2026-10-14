@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlParagraphNode } from '../../store/index.ts';
 import type { SemanticSelection } from '../../layout/index.ts';
 import { createTextFormFieldInteraction } from '../surface-text-form-fields.ts';
+import { createSurfaceHostListeners } from '../surface-host-listeners.ts';
 
 function setup(protectedForm = false) {
   const result = readOoxmlPart(
@@ -29,6 +30,7 @@ function setup(protectedForm = false) {
   const interaction = createTextFormFieldInteraction({
     pagesLayer: pages,
     container,
+    listeners: createSurfaceHostListeners(() => pages),
     part: () => result.part,
     protected: () => protectedForm,
     selection: () => selection,

@@ -10,6 +10,7 @@ import type { ReactNode } from 'react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { CSSProperties } from 'react';
 import { MaterialSymbol } from './MaterialSymbol';
+import { hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 
 export interface MenuItem {
   icon?: string;
@@ -156,13 +157,15 @@ export function MenuDropdown({ label, items, disabled, showChevron = false }: Me
       closeMenu();
     }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    window.addEventListener('scroll', handleScroll, true);
+    const doc = hostDocumentOf(triggerRef.current);
+    const win = hostWindowOf(triggerRef.current);
+    doc.addEventListener('mousedown', handleClickOutside);
+    doc.addEventListener('keydown', handleEscape);
+    win.addEventListener('scroll', handleScroll, true);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-      window.removeEventListener('scroll', handleScroll, true);
+      doc.removeEventListener('mousedown', handleClickOutside);
+      doc.removeEventListener('keydown', handleEscape);
+      win.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen, closeMenu]);
 

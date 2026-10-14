@@ -171,6 +171,8 @@ import { ToolbarValueMap } from '@docx-editor.dev/core/editor';
 import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
+import { Watermark } from '@docx-editor.dev/core/contracts/editor';
+import { WatermarkState } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
@@ -457,6 +459,9 @@ export { createDocumentRefresh }
 export { createFontSource }
 
 export { DEFAULT_FONT }
+
+// @public
+export const DEFAULT_WATERMARK_PRESETS: readonly string[];
 
 export { defineFontResolver }
 
@@ -807,6 +812,20 @@ export interface DocxEditorImageAltTextPopupProps {
 }
 
 // @public
+export function DocxEditorImageInsertErrorDialog(input: DocxEditorImageInsertErrorDialogProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorImageInsertErrorDialogProps {
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    message: string;
+    onClose(): void;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
 export function DocxEditorImagePropertiesDialog(input: DocxEditorImagePropertiesDialogProps): react.JSX.Element | null;
 
 // @public
@@ -905,6 +924,7 @@ export interface DocxEditorMenuNamespace {
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
     readonly TableGrid: typeof MenuTableGrid;
+    readonly Watermark: typeof MenuWatermark;
 }
 
 // @public
@@ -979,6 +999,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
+    readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
+    readonly Window: typeof DocxEditorWindow;
 }
 
 // @public
@@ -1240,6 +1262,7 @@ export interface DocxEditorPopups {
     hyperlink?: DocxEditorPopup<HyperLinkProps>;
     // (undocumented)
     imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
+    imageInsertError?: DocxEditorPopup<DocxEditorImageInsertErrorDialogProps>;
     // (undocumented)
     imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
     // (undocumented)
@@ -1259,6 +1282,7 @@ export interface DocxEditorPopups {
     revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+    watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
 }
 
 // @public
@@ -1658,6 +1682,57 @@ export interface DocxEditorViewportProps {
     className?: string;
     // (undocumented)
     style?: CSSProperties;
+}
+
+// @public
+export const DocxEditorWatermarkDialog: typeof WatermarkDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: WatermarkDialogFieldName;
+    }) => ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Preview: (props: DialogPartProps) => ReactNode;
+    Title: (props: DialogPartProps & {
+        name?: WatermarkDialogFieldName | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorWatermarkDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+    presets?: readonly string[];
+}
+
+// @public
+export function DocxEditorWindow(input: DocxEditorWindowProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorWindowProps {
+    children?: DocxEditorChildren;
+    features?: string;
+    name?: string;
+    onClose?: () => void;
+    open: boolean;
+    styles?: boolean | ((from: Document, to: Document) => () => void);
+    title?: string;
+    url?: string;
 }
 
 // @public
@@ -3014,6 +3089,12 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
 export function useEditorEvent<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): void;
 
 // @public
+export function useEditorHostDocument(): UseEditorHostDocumentReturn;
+
+// @public
+export type UseEditorHostDocumentReturn = Document | null;
+
+// @public
 export function useEditorSnapshot(editor: Editor | null): number;
 
 // @public
@@ -3250,6 +3331,24 @@ export function useTranslation(): {
 };
 
 // @public
+export function useWatermark(): UseWatermarkReturn;
+
+// @public
+export function useWatermarkDialog(): UseWatermarkDialogReturn;
+
+// @public
+export interface UseWatermarkDialogReturn extends UseDialogReturn<WatermarkDialogFields> {
+}
+
+// @public
+export interface UseWatermarkReturn {
+    readonly apply: (watermark: Watermark | null) => ExecResult;
+    readonly isEnabled: boolean;
+    readonly read: () => Watermark | null;
+    readonly watermark: WatermarkState | null;
+}
+
+// @public
 export function useZoom(): UseZoomResult;
 
 // @public
@@ -3292,6 +3391,45 @@ export interface VerticalRulerProps {
     unit?: 'inch' | 'cm';
     zoom?: number;
 }
+
+export { Watermark }
+
+// @public
+export type WatermarkDialogFieldName = 'noWatermark' | 'pictureWatermark' | 'picture' | 'scale' | 'washout' | 'textWatermark' | 'preset' | 'text' | 'fontFamily' | 'fontSizePt' | 'bold' | 'italic' | 'transparency' | 'color' | 'layout';
+
+// @public
+export interface WatermarkDialogFields {
+    // (undocumented)
+    bold: boolean;
+    // (undocumented)
+    color: string;
+    // (undocumented)
+    fontFamily: string;
+    fontSizePt: number | null;
+    imageData: Uint8Array | null;
+    imageName: string | null;
+    // (undocumented)
+    italic: boolean;
+    // (undocumented)
+    kind: WatermarkDialogKind;
+    // (undocumented)
+    layout: WatermarkDialogLayout;
+    scale: number | null;
+    // (undocumented)
+    text: string;
+    // (undocumented)
+    transparency: number;
+    // (undocumented)
+    washout: boolean;
+}
+
+// @public
+export type WatermarkDialogKind = 'none' | 'picture' | 'text';
+
+// @public
+export type WatermarkDialogLayout = NonNullable<WatermarkState['layout']>;
+
+export { WatermarkState }
 
 export { WORD_DEFAULT_FONT }
 

@@ -1,4 +1,5 @@
 import type { DocxEditorChildren } from '../docx-editor-children';
+import { isHTMLElementNode, hostDocumentOf } from '@docx-editor.dev/core/editor';
 import { renderPopup } from './popup-renderer';
 import { useEditorState } from './useEditorState';
 import {
@@ -21,12 +22,14 @@ import type {
 import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
+import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
 function createHost(config: () => DocxEditorPopups | undefined) {
   const target = shallowRef<HTMLElement | null>(null);
-  const active = shallowRef<'pageSetup' | 'paragraph' | null>(null);
+  const active = shallowRef<DialogKind | null>(null);
   const session = shallowRef<TextFormFieldDialogSession | null>(null);
   const revisionSession = shallowRef<RevisionMarkupDialogSession | null>(null);
   let opener: HTMLElement | null = null;
@@ -43,11 +46,13 @@ function createHost(config: () => DocxEditorPopups | undefined) {
         returnFocusTo.focus({ preventScroll: true });
     });
   };
-  const open = (kind: 'pageSetup' | 'paragraph', focus?: HTMLElement | null) => {
+  const open = (kind: DialogKind, focus?: HTMLElement | null) => {
     close();
     if (config()?.[kind] === false) return;
-    opener =
-      focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    // The focused element of the document the editor's dialogs mount in, which is a pop-out
+    // window's document when the editor moved there.
+    const focused = hostDocumentOf(target.value).activeElement;
+    opener = focus ?? (isHTMLElementNode(focused) ? focused : null);
     active.value = kind;
   };
   return {
@@ -166,6 +171,11 @@ export const DialogHost = defineComponent({
               ? p.popups?.paragraph
                 ? renderPopup(p.popups.paragraph, { open: true, onClose: host.close })
                 : h(DocxEditorParagraphDialog, { open: true, onClose: host.close })
+              : null,
+            host.active.value === 'watermark' && p.popups?.watermark !== false
+              ? p.popups?.watermark
+                ? renderPopup(p.popups.watermark, { open: true, onClose: host.close })
+                : h(DocxEditorWatermarkDialog, { open: true, onClose: host.close })
               : null,
             host.revisionSession.value && p.popups?.revisionMarkup !== false
               ? p.popups?.revisionMarkup

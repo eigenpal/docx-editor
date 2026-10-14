@@ -12,6 +12,7 @@ import {
   type OoxmlParagraphNode,
 } from '@docx-editor.dev/core/store';
 import { createTextFormFieldInteraction } from '../surface-text-form-fields.ts';
+import { createSurfaceHostListeners } from '../surface-host-listeners.ts';
 
 function setup(
   protectedForm = false,
@@ -62,6 +63,7 @@ function setup(
     locale: () => locale,
     container,
     pagesLayer,
+    listeners: createSurfaceHostListeners(() => pagesLayer),
     part: () => part,
     protected: () => protectedForm,
     selection: () => selection,

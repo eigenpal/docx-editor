@@ -26,6 +26,7 @@ import {
 
 import type { FontResourceSnapshot, ResolvedFont } from './font-resource.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { shapedRunOutline } from './text-outline.ts';
 import { shapedClusterInkBounds } from './glyph-ink-bounds.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { glyphSizeFactorOf, type ResolvedRunStyle } from './run-style.ts';
@@ -371,6 +372,23 @@ export function createShapedMeasurer(
         );
       } catch {
         return undefined;
+      }
+    },
+    textOutline(text, style) {
+      const font = resolveFontCached(style);
+      if (!font) return fallback.textOutline?.(text, style);
+      try {
+        const run = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
+        return (
+          shapedRunOutline(
+            run,
+            // Base size, like the run's positions; text art never sets a script size.
+            layoutRunHalfPointsOf(style) / 2,
+            baseEnvironment.fixedPointScale
+          ) ?? fallback.textOutline?.(text, style)
+        );
+      } catch {
+        return fallback.textOutline?.(text, style);
       }
     },
     caretAdvances(text, style) {

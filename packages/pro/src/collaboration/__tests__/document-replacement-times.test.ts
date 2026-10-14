@@ -79,7 +79,7 @@ async function converged(a: Peer, b: Peer) {
   // Compare the shared source attributes, ranges, and decision contents.
   const decisions = (peer: Peer) =>
     peer.editor
-      .getReviewItems()
+      .getReviewItems({ pairReplacements: false })
       .map(({ isActive: _isActive, key: _key, id: _id, item: source, ...item }) => {
         const { id: _sourceId, ...revision } = source;
         return { ...item, item: revision };
@@ -88,7 +88,7 @@ async function converged(a: Peer, b: Peer) {
 }
 function card(peer: Peer, kind: 'insert' | 'delete') {
   const item = peer.editor
-    .getReviewItems()
+    .getReviewItems({ pairReplacements: false })
     .find((item) => item.kind === 'revision' && item.revisionKind === kind);
   if (!item) throw new Error(`missing ${kind} card`);
   return item;
@@ -116,7 +116,7 @@ for (const [label, source] of [
         const b = await peer('Bob', a);
         let joined: Peer | undefined;
         try {
-          expect(a.editor.getReviewItems()).toHaveLength(2);
+          expect(a.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
           expect(a.editor[action](card(a, kind).key).ok).toBe(true);
           sync(a, b);
           await converged(a, b);
@@ -127,14 +127,14 @@ for (const [label, source] of [
           expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
           sync(a, b);
           await converged(a, b);
-          expect(b.editor.getReviewItems()).toHaveLength(2);
+          expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
           expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
           sync(a, b);
           await converged(a, b);
-          expect(b.editor.getReviewItems()).toHaveLength(1);
+          expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(1);
           joined = await peer('Rejoined', b);
           await converged(a, joined);
-          expect(joined.editor.getReviewItems()).toHaveLength(1);
+          expect(joined.editor.getReviewItems({ pairReplacements: false })).toHaveLength(1);
         } finally {
           joined?.close();
           b.close();
@@ -171,11 +171,11 @@ for (const action of ['accept', 'reject'] as const) {
         expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(2);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
         expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(1);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(1);
       } finally {
         b.close();
         a.close();
@@ -192,7 +192,7 @@ test('concurrent decisions on independent halves converge', async () => {
     expect(b.editor.rejectReviewItem(card(b, 'insert').key).ok).toBe(true);
     sync(a, b);
     await converged(a, b);
-    expect(b.editor.getReviewItems()).toHaveLength(0);
+    expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
     expect(b.editor.surface!.session.bodyText()).toBe(' tail');
   } finally {
     b.close();
@@ -218,7 +218,7 @@ test('resolving a deletion while a participant edits the adjacent insertion keep
     expect(b.editor.surface!.session.bodyText()).not.toContain('old');
     expect(
       b.editor
-        .getReviewItems()
+        .getReviewItems({ pairReplacements: false })
         .some((item) => item.kind === 'revision' && item.revisionKind === 'delete')
     ).toBe(false);
   } finally {
@@ -245,7 +245,7 @@ test('deleting a revision while another participant edits its text converges', a
     // whole, still inside the insertion it was typed in.
     expect(
       b.editor
-        .getReviewItems()
+        .getReviewItems({ pairReplacements: false })
         .some((item) => item.kind === 'revision' && item.revisionKind === 'insert')
     ).toBe(true);
     expect(a.editor.surface!.session.bodyText()).toBe('oldchanged tail');
@@ -265,18 +265,20 @@ test('a caret activates only its independent revision', async () => {
       const position = { paragraphId: fragment.paragraphId, offset };
       a.editor.surface!.setSelection({ anchor: position, head: position });
       return a.editor
-        .getReviewItems()
+        .getReviewItems({ pairReplacements: false })
         .filter((item) => item.isActive)
         .map((item) => (item.kind === 'revision' ? item.revisionKind : item.kind));
     };
     expect(activeAt(1)).toEqual(['delete']);
     expect(activeAt(4)).toEqual(['insert']);
     expect(activeAt(7)).toEqual([]);
+    // Navigation treats the replacement as one stop and opens it whole: both cards are active.
     a.editor.setActiveReviewItem(card(a, 'delete').key);
+    expect([card(a, 'delete').isActive, card(a, 'insert').isActive]).toEqual([true, false]);
     expect(a.editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
-    expect(card(a, 'insert').isActive).toBe(true);
+    expect([card(a, 'delete').isActive, card(a, 'insert').isActive]).toEqual([true, true]);
     expect(a.editor.exec({ type: 'navigateReviewChange', direction: 'previous' }).ok).toBe(true);
-    expect(card(a, 'delete').isActive).toBe(true);
+    expect([card(a, 'delete').isActive, card(a, 'insert').isActive]).toEqual([true, true]);
   } finally {
     a.close();
   }
@@ -295,7 +297,9 @@ test('one tracked replacement edit synchronizes two independent decisions and on
     a.editor.surface!.type(' end');
     sync(a, b);
     await converged(a, b);
-    const own = b.editor.getReviewItems().filter((item) => item.author === 'Alice');
+    const own = b.editor
+      .getReviewItems({ pairReplacements: false })
+      .filter((item) => item.author === 'Alice');
     expect(own.map((item) => (item.kind === 'revision' ? item.revisionKind : item.kind))).toEqual([
       'delete',
       'insert',
@@ -304,11 +308,56 @@ test('one tracked replacement edit synchronizes two independent decisions and on
     expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
     sync(a, b);
     await converged(a, b);
-    expect(b.editor.getReviewItems()).toHaveLength(2);
+    expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
     expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
     sync(a, b);
     await converged(a, b);
-    expect(b.editor.getReviewItems()).toHaveLength(4);
+    expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(4);
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
+test('a remote replacement is one navigation stop under balloons', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    expect(b.editor.setReviewPaneOptions({ revisionsIn: 'balloons' }).ok).toBe(true);
+    a.editor.setEditingMode('suggesting');
+    const paragraphId = a.editor.surface!.session.paragraphIds()[0]!;
+    a.editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 6 },
+      head: { paragraphId, offset: 11 },
+    });
+    a.editor.surface!.type(' end');
+    sync(a, b);
+    await converged(a, b);
+    const pairs = () =>
+      b.editor
+        .getReviewItems({ pairReplacements: true })
+        .filter((item) => item.kind === 'revision');
+    expect(pairs().map((item) => [item.revisionKind, item.author])).toEqual([
+      ['replace', 'Reviewer'],
+      ['replace', 'Alice'],
+    ]);
+    const landed: (string | undefined)[] = [];
+    b.editor.on('reviewItemReveal', (event) => landed.push(event.pairKey));
+    const next = () =>
+      expect(b.editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    next();
+    next();
+    next();
+    // The first stop follows the reader's caret. Each later stop is the other replacement.
+    expect(new Set(landed.slice(0, 2))).toEqual(new Set(pairs().map((item) => item.key)));
+    expect(landed[2]).toBe(landed[0]);
+    // The remote author withdraws the replacement while the reader navigates.
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    next();
+    expect(landed.at(-1)).toBe(pairs()[0]!.key);
+    expect(pairs()).toHaveLength(1);
   } finally {
     b.close();
     a.close();
@@ -327,7 +376,7 @@ for (const kind of ['ins', 'del'] as const) {
       const a = await peer('Alice', undefined, source);
       const b = await peer('Bob', a);
       try {
-        expect(a.editor.getReviewItems()).toHaveLength(2);
+        expect(a.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
         await a.runtime.run(async (context) => {
           const revisions = context.document.revisions;
           revisions.load('items');
@@ -342,11 +391,11 @@ for (const kind of ['ins', 'del'] as const) {
         expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(2);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
         expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(1);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(1);
       } finally {
         b.close();
         a.close();
@@ -380,17 +429,17 @@ for (const [label, source] of [
         expect(a.editor[action](pairCard(a).key).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(0);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
         expect(b.editor.surface!.session.bodyText()).toBe(text);
         expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(2);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
         expect(pairCard(b).replacedText).toBe('old');
         expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
         sync(a, b);
         await converged(a, b);
-        expect(b.editor.getReviewItems()).toHaveLength(0);
+        expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
         joined = await peer('Rejoined', b);
         await converged(a, joined);
         expect(joined.editor.surface!.session.bodyText()).toBe(text);
@@ -411,7 +460,7 @@ test('accepting a pair while a participant rejects its insertion converges', asy
     expect(b.editor.rejectReviewItem(card(b, 'insert').key).ok).toBe(true);
     sync(a, b);
     await converged(a, b);
-    expect(b.editor.getReviewItems()).toHaveLength(0);
+    expect(b.editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
   } finally {
     b.close();
     a.close();
@@ -434,7 +483,7 @@ test('rejecting a pair while a participant edits its inserted words converges', 
     await converged(a, b);
     expect(
       b.editor
-        .getReviewItems()
+        .getReviewItems({ pairReplacements: false })
         .some((item) => item.kind === 'revision' && item.revisionKind === 'delete')
     ).toBe(false);
   } finally {

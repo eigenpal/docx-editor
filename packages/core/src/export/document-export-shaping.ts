@@ -1,5 +1,6 @@
 // Document-aware font resolution shared by every headless exporter.
 
+import { textPathFontFamily } from '../store/package/legacy-vml-text-art.ts';
 import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
 import {
   documentFontSubstitutionPlan,
@@ -860,6 +861,8 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
         // applies, so both ask for exactly the faces a sink could paint with.
         add(symbolFontFamily(wmlAttributeValue(node, 'font')));
       }
+      // Text art (a text watermark) paints its string as outlines of the face it names.
+      if (node.localName === 'textpath') add(textPathFontFamily(node));
       if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldSimple') {
         const instruction = attributeValue(node, 'instr');
         add(parseSymbolInstruction(instruction ?? '')?.font ?? null);

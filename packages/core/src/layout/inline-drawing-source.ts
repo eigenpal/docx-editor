@@ -369,6 +369,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
         ])
       : '',
     legacyGraphic: projection.legacyGraphic ? JSON.stringify(projection.legacyGraphic) : '',
+    textArt: JSON.stringify(projection.textArt) ?? '',
     vectorShape: vector ? vectorShapeLayoutToken(vector) : '',
     wrapGeometry: wrap
       ? framedTokenJoin([

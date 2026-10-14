@@ -28,6 +28,7 @@ export {
 } from './editor/DocxEditorRoot';
 export { DocxEditorViewport, type DocxEditorViewportProps } from './editor/DocxEditorViewport';
 export { DocxEditorContent, type DocxEditorContentProps } from './editor/DocxEditorContent';
+export { DocxEditorWindow, type DocxEditorWindowProps } from './editor/DocxEditorWindow';
 export { DocxEditorEquation } from './editor/DocxEditorEquation';
 export {
   DocxEditorLoading,
@@ -61,6 +62,20 @@ export {
   DocxEditorParagraphDialog,
   type DocxEditorParagraphDialogProps,
 } from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorWatermarkDialog,
+  useWatermarkDialog,
+  type DocxEditorWatermarkDialogProps,
+  type UseWatermarkDialogReturn,
+  type WatermarkDialogFieldName,
+} from './editor/DocxEditorWatermark';
+export {
+  DEFAULT_WATERMARK_PRESETS,
+  type WatermarkDialogFields,
+  type WatermarkDialogKind,
+  type WatermarkDialogLayout,
+} from './editor/watermark-dialog-model';
+export { useWatermark, type UseWatermarkReturn } from './editor/useWatermark';
 export {
   DocxEditorFontNotice,
   type DocxEditorFontNoticeProps,
@@ -278,6 +293,10 @@ export {
   type ToolbarContextValue,
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
+export {
+  useEditorHostDocument,
+  type UseEditorHostDocumentReturn,
+} from './editor/useEditorHostDocument';
 export { HIGHLIGHT_REFRESH_MS, useHighlights, type HighlightSource } from './editor/useHighlights';
 export { useHighlightAt } from './editor/useHighlightAt';
 export { usePageSetup, type PageSetupUpdate, type UsePageSetupReturn } from './editor/usePageSetup';
@@ -451,6 +470,8 @@ export type {
   EditorScope,
   PageSetup,
   ScrollToAnchorOptions,
+  Watermark,
+  WatermarkState,
 } from '@docx-editor.dev/core/contracts/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 
@@ -536,6 +557,10 @@ export {
   DocxEditorInvalidTextFormFieldDialog,
   type DocxEditorInvalidTextFormFieldDialogProps,
 } from './editor/DocxEditorInvalidTextFormFieldDialog';
+export {
+  DocxEditorImageInsertErrorDialog,
+  type DocxEditorImageInsertErrorDialogProps,
+} from './editor/images/ImageInsertErrorDialog';
 
 export { useHistoryGroup, type UseHistoryGroupReturn } from './editor/useHistoryGroup';
 

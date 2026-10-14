@@ -328,7 +328,7 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
       if (current) publish(current);
       followAutoRoom(config.autoKeyOf());
     });
-  } else if (typeof window !== 'undefined') {
+  } else if (typeof globalThis.window !== 'undefined') {
     followAutoRoom(config.autoKeyOf());
   }
   // The scope of a component or of an `effectScope` a store runs in: both release the room.

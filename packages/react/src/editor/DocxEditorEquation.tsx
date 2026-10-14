@@ -7,6 +7,7 @@ import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import { useEditorState } from './useEditorState.ts';
+import { isDomNode } from '@docx-editor.dev/core/editor';
 
 interface EquationPopupState {
   readonly activation: EquationActivation;
@@ -111,7 +112,7 @@ export function DocxEditorEquation() {
       close(true);
     };
     const onPointerDown = (event: PointerEvent): void => {
-      if (event.target instanceof view.Node && panel.contains(event.target)) return;
+      if (isDomNode(event.target) && panel.contains(event.target)) return;
       close();
     };
     ownerDocument.addEventListener('keydown', onKeyDown);

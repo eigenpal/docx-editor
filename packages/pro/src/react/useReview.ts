@@ -29,6 +29,7 @@ import type {
 } from '@docx-editor.dev/core/contracts/editor';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
+import { stackReviewPositions } from '../review/rail-stack.ts';
 
 export type { ReviewAdoptOptions };
 
@@ -42,6 +43,38 @@ export type { ReviewAdoptOptions };
  * must yield ({@link notificationYieldsToTask}) — moves the refresh to a task so queued
  * events share it and React's maximum-update-depth guard never sees an unbroken chain.
  */
+let pendingFlushes: (() => void)[] = [];
+let flushChannel: MessageChannel | null = null;
+/**
+ * Run `task` in a later task through a message, not a timer: the script's timers belong to
+ * the opener when the editor renders into a pop-out window, and a hidden opener throttles
+ * them to one run a second.
+ */
+function yieldTask(task: () => void): void {
+  if (typeof MessageChannel !== 'function') {
+    globalThis.setTimeout(task, 0);
+    return;
+  }
+  if (!flushChannel) {
+    flushChannel = new MessageChannel();
+    flushChannel.port1.onmessage = () => {
+      const tasks = pendingFlushes;
+      pendingFlushes = [];
+      for (const run of tasks) {
+        try {
+          run();
+        } catch (error) {
+          queueMicrotask(() => {
+            throw error;
+          });
+        }
+      }
+    };
+  }
+  pendingFlushes.push(task);
+  if (pendingFlushes.length === 1) flushChannel.port2.postMessage(null);
+}
+
 function deferredReviewNotifier(onStoreChange: () => void): () => void {
   let scheduled = false;
   return () => {
@@ -51,10 +84,10 @@ function deferredReviewNotifier(onStoreChange: () => void): () => void {
       return;
     }
     scheduled = true;
-    setTimeout(() => {
+    yieldTask(() => {
       scheduled = false;
       onStoreChange();
-    }, 0);
+    });
   };
 }
 
@@ -452,7 +485,11 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
  *
  * Takes anything with a key and an anchor, not only cards: a compose box competes for the
  * same column and has to be stacked WITH them or it lands on top of the card whose text was
- * just re-selected. Entries must arrive in document order — the run is a single sweep.
+ * just re-selected. Entries must arrive in document order.
+ *
+ * An entry with `isActive: true`, as a review placement has while its card is open, stays at
+ * its own anchor. The entries before it move up to make room, so Next Change never leaves the
+ * open card below the visible rail. Pass placements through as they are to keep this.
  *
  * UNITS. Anchors are in layout POINTS, because that is what the engine publishes; measured
  * heights are in CSS PIXELS, because that is what the DOM reports. Pass `scale` so the two
@@ -471,25 +508,10 @@ export function useStackedReviewPositions(
   // an estimate so cards it has not measured yet (or has virtualized out of the DOM) still
   // hold a card's worth of room instead of painting over each other.
   const defaultHeight = options.defaultHeight ?? 0;
-  return useMemo(() => {
-    const positions = new Map<string, number>();
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const entry of items) {
-      // An entry with no geometry YET — its page has not produced a placement — is placed
-      // after the card before it rather than dropped. Dropped, it got no `top` at all and
-      // fell back into normal flow at the top of the container, underneath the absolutely
-      // positioned cards. The packaged rail has always done this; the exported hook is the
-      // same math, so it does it too.
-      const top =
-        entry.anchorY === null
-          ? Number.isFinite(cursor)
-            ? cursor
-            : 0
-          : Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      // Pixels to points before they meet an anchor.
-      cursor = top + ((heights.get(entry.key) ?? defaultHeight) + gap) / scale;
-    }
-    return positions;
-  }, [items, heights, gap, scale, defaultHeight]);
+  // The packaged rail's math, so an entry with no geometry yet keeps its place after the card
+  // before it, and an open entry (`isActive: true`) stays at its anchor.
+  return useMemo(
+    () => stackReviewPositions(items, heights, { gap, scale, defaultHeight }),
+    [items, heights, gap, scale, defaultHeight]
+  );
 }

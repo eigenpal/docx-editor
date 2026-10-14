@@ -1,4 +1,10 @@
 import { renderPopup } from './popup-renderer';
+import {
+  hostDocumentOf,
+  hostWindowOf,
+  isHTMLElementNode,
+  type HostWindow,
+} from '@docx-editor.dev/core/editor';
 import { usePopupConfig } from './popup-config';
 import {
   DocxEditorNotePreview,
@@ -44,9 +50,10 @@ type NotePreview = {
   readonly y: number;
 };
 
-function isTouchPrimary(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(pointer: coarse)').matches;
+function isTouchPrimary(node: Node): boolean {
+  const view = hostWindowOf(node);
+  if (typeof view.matchMedia !== 'function') return false;
+  return view.matchMedia('(pointer: coarse)').matches;
 }
 
 function useCommandGate(command: EditorCommand) {
@@ -77,8 +84,9 @@ const NoteStoryOptions = defineComponent({
         if (menuRef.value?.contains(event.target as Node)) return;
         open.value = false;
       };
-      document.addEventListener('mousedown', onDocumentMouseDown);
-      onCleanup(() => document.removeEventListener('mousedown', onDocumentMouseDown));
+      const doc = hostDocumentOf(menuRef.value);
+      doc.addEventListener('mousedown', onDocumentMouseDown);
+      onCleanup(() => doc.removeEventListener('mousedown', onDocumentMouseDown));
     });
 
     return () => (
@@ -415,7 +423,8 @@ export const DocxEditorNotesChrome = defineComponent({
         if (renderer === false) preview.value = null;
       }
     );
-    const hideTimer = ref<ReturnType<typeof setTimeout> | null>(null);
+    /** The pending preview and the window that issued it, so a moved editor still cancels it. */
+    const hideTimer = ref<{ readonly win: HostWindow; readonly id: number } | null>(null);
     const chromeRootRef = ref<HTMLDivElement | null>(null);
 
     const eventRootForEditor = (): HTMLElement | null =>
@@ -438,7 +447,7 @@ export const DocxEditorNotesChrome = defineComponent({
     const anchor = useScopedChromeAnchor(findActiveNoteArea, 'story-label');
 
     const clearPreview = () => {
-      if (hideTimer.value) clearTimeout(hideTimer.value);
+      if (hideTimer.value) hideTimer.value.win.clearTimeout(hideTimer.value.id);
       hideTimer.value = null;
       preview.value = null;
     };
@@ -484,8 +493,8 @@ export const DocxEditorNotesChrome = defineComponent({
         };
 
         const onPointerOver = (event: Event) => {
-          if (isTouchPrimary()) return;
           const target = event.target as HTMLElement | null;
+          if (!target || isTouchPrimary(target)) return;
           const refEl = target?.closest<HTMLElement>('[data-docx-note-ref]');
           if (!refEl?.dataset.docxNoteScope) {
             clearPreview();
@@ -496,10 +505,14 @@ export const DocxEditorNotesChrome = defineComponent({
           const text =
             engineText ?? refEl.getAttribute('aria-description') ?? t('notes.previewFallback');
           const rect = refEl.getBoundingClientRect();
-          if (hideTimer.value) clearTimeout(hideTimer.value);
-          hideTimer.value = setTimeout(() => {
-            preview.value = { scopeId, text, x: rect.left, y: rect.bottom + 4 };
-          }, 400);
+          if (hideTimer.value) hideTimer.value.win.clearTimeout(hideTimer.value.id);
+          const win = hostWindowOf(refEl);
+          hideTimer.value = {
+            win,
+            id: win.setTimeout(() => {
+              preview.value = { scopeId, text, x: rect.left, y: rect.bottom + 4 };
+            }, 400),
+          };
         };
 
         root.addEventListener('click', onClick);
@@ -613,7 +626,10 @@ export const DocxEditorNotesChrome = defineComponent({
         'div',
         {
           ref: (element: unknown) => {
-            chromeRootRef.value = element instanceof HTMLDivElement ? element : null;
+            chromeRootRef.value =
+              isHTMLElementNode(element) && element.localName === 'div'
+                ? (element as HTMLDivElement)
+                : null;
           },
           class: props.className,
           'data-docx-notes-chrome': '',

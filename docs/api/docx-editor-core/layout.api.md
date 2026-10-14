@@ -40,6 +40,7 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     // (undocumented)
     readonly relativeHeight: number;
     readonly sourceOrder?: number;
+    readonly textArt?: DrawingTextArtRecord;
     // (undocumented)
     readonly verticalFrame: DrawingVerticalReferenceFrame;
     // (undocumented)
@@ -213,10 +214,16 @@ export interface CanvasTextContext {
     measureText(text: string): CanvasTextMetrics;
     // (undocumented)
     textAlign?: 'left' | 'right' | 'center' | 'start' | 'end';
+    // (undocumented)
+    textBaseline?: 'top' | 'hanging' | 'middle' | 'alphabetic' | 'ideographic' | 'bottom';
 }
 
 // @public
 export interface CanvasTextMetrics {
+    // (undocumented)
+    readonly actualBoundingBoxAscent?: number;
+    // (undocumented)
+    readonly actualBoundingBoxDescent?: number;
     // (undocumented)
     readonly actualBoundingBoxLeft?: number;
     // (undocumented)
@@ -874,6 +881,30 @@ export interface DrawingPoint {
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public (undocumented)
+export interface DrawingTextArtRecord {
+    // (undocumented)
+    readonly bold: boolean;
+    // (undocumented)
+    readonly fillAlpha: number;
+    readonly fillHex: string | null;
+    readonly fit: TextArtFit | null;
+    // (undocumented)
+    readonly fontFamily: string;
+    readonly fontSizePt: number;
+    // (undocumented)
+    readonly italic: boolean;
+    readonly path: string | null;
+    readonly rotationDegrees: number;
+    // (undocumented)
+    readonly strokeAlpha: number;
+    readonly strokeHex: string | null;
+    // (undocumented)
+    readonly strokeWidthPt: number;
+    // (undocumented)
+    readonly text: string;
 }
 
 // @public (undocumented)
@@ -4593,6 +4624,18 @@ export interface TabStop {
 export function tabStopsFingerprint(tabs: ResolvedTabStops): string;
 
 // @public
+export interface TextArtFit {
+    // (undocumented)
+    readonly offsetX: number;
+    // (undocumented)
+    readonly offsetY: number;
+    // (undocumented)
+    readonly scaleX: number;
+    // (undocumented)
+    readonly scaleY: number;
+}
+
+// @public
 export type TextboxOwnerRecord = InlineDrawingRecord | AnchoredDrawingRecord;
 
 // @public
@@ -4635,6 +4678,20 @@ export interface TextMeasurer {
     };
     measure(text: string, style: ResolvedRunStyle): number;
     strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
+}
+
+// @public
+export interface TextOutline {
+    // (undocumented)
+    readonly ink: {
+        readonly bottom: number;
+        readonly left: number;
+        readonly right: number;
+        readonly top: number;
+    };
+    // (undocumented)
+    readonly path: string | null;
 }
 
 // @public

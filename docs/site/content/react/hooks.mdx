@@ -169,6 +169,29 @@ useEditorEvent('selectionChange', () => setPanelOpen(false));
 useEditorEvent('change', (change) => void autosave(change.revision));
 ```
 
+## `useEditorHostDocument`
+
+Use `useEditorHostDocument` in custom chrome that adds document listeners, reads focus, or injects a `<style>` element. It returns the document that the editor's pages are mounted in. If you render the editor in a pop-out window or an iframe, that is the other window's document, not the global `document`. The value changes when the editor moves, so effects that depend on it bind again:
+
+```tsx
+import { useEffect } from 'react';
+import { useEditorHostDocument } from '@docx-editor.dev/react';
+
+type Props = { onShortcut: (event: KeyboardEvent) => void };
+
+function ShortcutListener({ onShortcut }: Props) {
+  const hostDocument = useEditorHostDocument();
+  useEffect(() => {
+    if (!hostDocument) return undefined;
+    hostDocument.addEventListener('keydown', onShortcut);
+    return () => hostDocument.removeEventListener('keydown', onShortcut);
+  }, [hostDocument, onShortcut]);
+  return null;
+}
+```
+
+The hook returns `null` during server rendering. For more information, see [Pop-out windows and iframes](/docs/2.x/guides/pop-out-windows).
+
 ## `useFontFamily`
 
 `useFontFamily` provides font-picker state. It returns the current value, options, setter, and enabled state:
@@ -218,6 +241,27 @@ function OrientationToggle() {
   );
 }
 ```
+
+## `useWatermark`
+
+Use `useWatermark` to read and change the document watermark. `apply` sends one `setWatermark` command, so one call creates one undo step. Pass `null` to remove the watermark:
+
+```tsx
+import { useWatermark } from '@docx-editor.dev/react';
+
+function DraftToggle() {
+  const { watermark, apply, isEnabled } = useWatermark();
+  const isDraft = watermark?.text === 'DRAFT';
+
+  return (
+    <button disabled={!isEnabled} onClick={() => apply(isDraft ? null : { text: 'DRAFT' })}>
+      {isDraft ? 'Remove draft mark' : 'Mark as draft'}
+    </button>
+  );
+}
+```
+
+`read()` returns the current watermark as a `setWatermark` value. For a picture watermark it includes the picture bytes.
 
 ## `useParagraphFormat`
 
@@ -501,6 +545,7 @@ Call the hook in a child component of the matching dialog. Each returns `values`
 | `useParagraphDialog()` | `UseParagraphDialogReturn['values']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
+| `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
 
 Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
 

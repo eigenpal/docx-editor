@@ -69,6 +69,14 @@ export interface PaginatedSurfaceOptions {
   /** Opening mode; changeable at runtime with `setEditingMode`. */
   readonly editingMode?: SurfaceEditingMode;
   /**
+   * True while the active band covers both halves of a replacement: when the review UI lists
+   * a replacement as one card, or while an activation of the whole replacement holds. Read
+   * on each band paint. Set by the editor; a host changes `revisionsIn` instead.
+   *
+   * @internal
+   */
+  readonly pairsReplacements?: () => boolean;
+  /**
    * Identifies the measurer for cache invalidation.
    *
    * Fonts resolve asynchronously, so a host that swaps its measurer must change this or the
@@ -151,6 +159,12 @@ export interface PaginatedSurfaceOptions {
    * maps it to a public code before it reports anything.
    */
   readonly onRejection?: (reason: string) => void;
+  /**
+   * The pages turned up in another document without a `moveTo`: a host moved the mount
+   * element itself (a Vue `Teleport` retargeted, or a plain `appendChild`). The surface has
+   * already re-bound its own listeners; the owner re-registers what is per document.
+   */
+  readonly onHostMoved?: (document: Document) => void;
   /**
    * Told the milliseconds of each layout pass and each paint. For `'input'`, told the browser
    * timestamp of each key press or pointer press on the pages, so a listener can time it to

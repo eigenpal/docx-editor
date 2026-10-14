@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Next Change and Previous Change stopped on the deletion and the insertion of a replacement separately.",
+  "after": "Next Change and Previous Change stop once on each replacement, the active band covers both halves, and getReviewItems() lists a replacement as one item by default.",
+  "reason": "Navigation and the active band are local view state. It changes no shared nodes, operations, journals, or collaboration versions.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-replacement-times.test.ts",
+    "packages/pro/src/__tests__/review-replacement-pairs.test.ts"
+  ],
+  "changeset": "replacement-navigation-stop",
+  "migration": null
+}

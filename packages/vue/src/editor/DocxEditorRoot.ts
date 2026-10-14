@@ -185,21 +185,22 @@ export const DocxEditorRoot = defineComponent({
         default: () =>
           h(ContentControlProvider, null, {
             default: () =>
-              h(ImageInsertProvider, null, {
-                default: () =>
-                  h(
-                    PopupConfigProvider,
-                    { popups: props.popups },
-                    {
+              // Outside the picture insert, which shows its refusal through the registry.
+              h(
+                PopupConfigProvider,
+                { popups: props.popups },
+                {
+                  default: () =>
+                    h(ImageInsertProvider, null, {
                       default: () =>
                         h(
                           DialogHost,
                           { popups: props.popups },
                           { default: () => slots.default?.() }
                         ),
-                    }
-                  ),
-              }),
+                    }),
+                }
+              ),
           }),
       });
   },

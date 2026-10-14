@@ -1,4 +1,8 @@
-import { editorInstanceScope } from '@docx-editor.dev/core/editor';
+import {
+  editorInstanceScope,
+  isHTMLElementNode,
+  hostDocumentOf,
+} from '@docx-editor.dev/core/editor';
 import { h, toValue, watch, type MaybeRefOrGetter, type Ref, type VNode } from 'vue';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
@@ -93,12 +97,12 @@ export function useTableMenuKeyboard(
         }
         if (event.key === 'ArrowDown') {
           event.preventDefault();
-          focusBy(list, document.activeElement, 1);
+          focusBy(list, hostDocumentOf(event.target as Node | null).activeElement, 1);
           return;
         }
         if (event.key === 'ArrowUp') {
           event.preventDefault();
-          focusBy(list, document.activeElement, -1);
+          focusBy(list, hostDocumentOf(event.target as Node | null).activeElement, -1);
           return;
         }
         if (event.key === 'Home') {
@@ -112,8 +116,8 @@ export function useTableMenuKeyboard(
           return;
         }
         if (event.key === 'Enter' || event.key === ' ') {
-          const focused = document.activeElement;
-          if (focused instanceof HTMLElement && list.includes(focused)) {
+          const focused = hostDocumentOf(event.target as Node | null).activeElement;
+          if (isHTMLElementNode(focused) && list.includes(focused)) {
             event.preventDefault();
             focused.click();
           }
@@ -159,9 +163,9 @@ export function useTableDialogKeyboard(
           return;
         }
         if (event.key === 'Enter' || event.key === ' ') {
-          const focused = document.activeElement;
+          const focused = hostDocumentOf(event.target as Node | null).activeElement;
           const list = activators();
-          if (focused instanceof HTMLElement && list.includes(focused)) {
+          if (isHTMLElementNode(focused) && list.includes(focused)) {
             event.preventDefault();
             focused.click();
           }

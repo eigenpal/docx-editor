@@ -66,12 +66,17 @@ afterEach(() => {
   for (const container of mountedContainers.splice(0)) container.remove();
 });
 
-function mount(body: string, navigation: LockedControlNavigation | null): Mounted {
+function mount(
+  body: string,
+  navigation: LockedControlNavigation | null,
+  extra: { editingMode?: 'suggest'; author?: string } = {}
+): Mounted {
   const container = document.createElement('div');
   document.body.append(container);
   mountedContainers.push(container);
   const result = mountPaginatedSurface(container, docx(body), {
     scale: 1,
+    ...extra,
     ...(navigation ? { lockedControlNavigation: navigation } : {}),
   });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
@@ -209,3 +214,38 @@ for (const mode of MODES) {
     });
   });
 }
+
+describe('suggesting', () => {
+  const suggesting = { editingMode: 'suggest' as const, author: 'Reviewer' };
+
+  test('a selection that covers a contentLocked control is refused, not removed untracked', () => {
+    const m = mount(line('contentLocked'), null, suggesting);
+    caretAt(m, 1, 8);
+    m.surface.deleteBackward();
+    expect(rejection(m)).not.toBeNull();
+    expect(bodyText(m)).toBe('aaTokenzz');
+    expect(controls(m)).toBe(1);
+  });
+
+  test('the second Backspace beside a contentLocked control is refused', () => {
+    const m = mount(line('contentLocked'), null, suggesting);
+    caretAt(m, 7);
+    m.surface.deleteBackward();
+    m.surface.deleteBackward();
+    expect(rejection(m)).not.toBeNull();
+    expect(controls(m)).toBe(1);
+  });
+});
+
+test('Ctrl+Backspace and deleteSelection remove a selected contentLocked control too', () => {
+  const m = mount(line('contentLocked'), null);
+  caretAt(m, 7);
+  m.surface.deleteBackward();
+  m.surface.deleteWordBackward();
+  expect(rejection(m)).toBeNull();
+  expect(bodyText(m)).toBe('aazz');
+  const n = mount(line('contentLocked'), null);
+  caretAt(n, 1, 8);
+  expect(n.surface.deleteSelection()).toBe(true);
+  expect(bodyText(n)).toBe('az');
+});

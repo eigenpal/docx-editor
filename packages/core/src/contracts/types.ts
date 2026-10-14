@@ -624,10 +624,74 @@ export interface Theme {
 /** Theme colour slots (`accent1`, `dk1`, `lt2`, …) to hex. */
 export type ThemeColorScheme = Readonly<Record<string, string>>;
 
-/** A watermark, which OOXML expresses as either text or an image — never both meaningfully. */
+/**
+ * A document watermark: text or a picture drawn behind the text of every page.
+ *
+ * Set `text` for a text watermark or `imageData` for a picture watermark, never both. Omitted
+ * options take the defaults in each field's description. The watermark goes into every header
+ * the document shows; a section with no header gets one.
+ *
+ * Text options apply only with `text`; `scale` and `washout` apply only with `imageData`.
+ * `setWatermark` refuses a mixed or out-of-range value with `invalidArgs` and a reason naming
+ * the field, and writes nothing.
+ *
+ * @example
+ * ```ts
+ * // A red, horizontal text watermark at 72pt.
+ * editor.exec({
+ *   type: 'setWatermark',
+ *   watermark: { text: 'CONFIDENTIAL', color: 'C00000', fontSizePt: 72, layout: 'horizontal' },
+ * });
+ * // A washed-out picture watermark at its natural size.
+ * editor.exec({ type: 'setWatermark', watermark: { imageData: pngBytes, scale: 1 } });
+ * ```
+ */
 export interface Watermark {
+  /** The text of a text watermark, up to 256 characters on one line. */
   readonly text?: string;
+  /** The PNG, JPEG, GIF, BMP or WebP bytes of a picture watermark. */
   readonly imageData?: Uint8Array;
+  /** Text: the font family. Defaults to `Calibri`. */
+  readonly fontFamily?: string;
+  /** Text: the size in points, from 1 to 1000. Omitted or null is Auto, which fills the page. */
+  readonly fontSizePt?: number | null;
+  /** Text: bold. Defaults to false. */
+  readonly bold?: boolean;
+  /** Text: italic. Defaults to false. */
+  readonly italic?: boolean;
+  /** Text: the colour as `RRGGBB`. Defaults to `C0C0C0` (silver). */
+  readonly color?: string;
+  /** Text: transparency from 0 (opaque) to 1. Defaults to 0.5. */
+  readonly transparency?: number;
+  /** Text: the orientation. Defaults to `diagonal`. */
+  readonly layout?: WatermarkLayout;
+  /** Picture: a factor of the picture's natural size. Omitted or null is Auto, which fits the page. */
+  readonly scale?: number | null;
+  /** Picture: lighten the picture so text over it stays readable. Defaults to true. */
+  readonly washout?: boolean;
+}
+
+/** How a text watermark crosses the page. */
+export type WatermarkLayout = 'diagonal' | 'horizontal';
+
+/**
+ * The watermark a document shows, as `Editor.getWatermark()` reads it.
+ *
+ * The text fields are present for a text watermark, `washout` for a picture watermark.
+ */
+export interface WatermarkState {
+  readonly kind: 'text' | 'image';
+  readonly text?: string;
+  readonly fontFamily?: string;
+  /** Null for Auto size. */
+  readonly fontSizePt?: number | null;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  /** `RRGGBB`. */
+  readonly color?: string;
+  readonly transparency?: number;
+  readonly layout?: WatermarkLayout;
+  readonly washout?: boolean;
 }
 
 /** A size in EMUs, the unit DrawingML stores extents in. 914400 EMU = 1 inch. */

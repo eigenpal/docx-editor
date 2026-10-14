@@ -10,7 +10,11 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { TEXT_FORM_FORMATS, type TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
+import {
+  TEXT_FORM_FORMATS,
+  type TextFormFieldDialogSession,
+  isHTMLElementNode,
+} from '@docx-editor.dev/core/editor';
 import type { TextFormFieldOptions, TextFormFieldType } from '@docx-editor.dev/core/store';
 import { useFormControlTranslate } from './form-control-translate';
 import {
@@ -240,8 +244,10 @@ const Impl = defineComponent({
             if (
               e.key === 'Enter' &&
               !e.isComposing &&
-              !(e.target instanceof HTMLButtonElement) &&
-              !(e.target instanceof HTMLSelectElement)
+              !(
+                isHTMLElementNode(e.target) &&
+                (e.target.localName === 'button' || e.target.localName === 'select')
+              )
             ) {
               e.preventDefault();
               apply();

@@ -36,6 +36,7 @@ import { prefersColorSchemeDark, resolveIsDark, subscribeSystemDark } from '../l
 import { DocxEditorRoot } from '../editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../editor/DocxEditorViewport';
 import { DocxEditorContent } from '../editor/DocxEditorContent';
+import { DocxEditorWindow } from '../editor/DocxEditorWindow';
 import { DocxEditorLoading, warnLoadingIndicatorWithoutChrome } from '../editor/DocxEditorLoading';
 import { DocxEditorToolbar } from '../editor/toolbar';
 import { DocxEditorMenu } from '../editor/menu';
@@ -45,6 +46,7 @@ import { DocxEditorNavigation, Navigation } from '../editor/navigation';
 import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
+import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
@@ -202,6 +204,8 @@ export interface DocxEditorNamespace {
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
+  /** The editor panel in a pop-out window while `open`; see the pop-out guide. */
+  readonly Window: typeof DocxEditorWindow;
   readonly Toolbar: typeof DocxEditorToolbar;
   readonly Menu: typeof DocxEditorMenu;
   readonly Loading: typeof DocxEditorLoading;
@@ -216,6 +220,8 @@ export interface DocxEditorNamespace {
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
+  /** Watermark dialog — none, picture or text — applied as one undo step. */
+  readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
   /** The dialog that explains a file the editor refused to open. Mounted by default. */
@@ -672,6 +678,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,
+  Window: DocxEditorWindow,
   Toolbar: DocxEditorToolbar,
   Menu: DocxEditorMenu,
   Loading: DocxEditorLoading,
@@ -683,6 +690,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
+  WatermarkDialog: DocxEditorWatermarkDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   OpenFailure: DocxEditorOpenFailure,

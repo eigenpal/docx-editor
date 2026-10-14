@@ -1,4 +1,5 @@
 import { flattenChildren } from '../../lib/flattenChildren';
+import { isElementNode } from '@docx-editor.dev/core/editor';
 import {
   cloneVNode,
   defineComponent,
@@ -97,8 +98,11 @@ export const Slot = defineComponent({
         {
           ...merged,
           ref: (value: Element | ComponentPublicInstance | null) => {
-            renderedElement =
-              value instanceof Element ? value : value?.$el instanceof Element ? value.$el : null;
+            renderedElement = isElementNode(value)
+              ? value
+              : isElementNode(value?.$el)
+                ? value.$el
+                : null;
           },
         },
         true

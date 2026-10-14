@@ -18,6 +18,7 @@ import { useEditorToolbar } from './EditorToolbarContext';
 import type { FormattingAction } from './Toolbar';
 import { useTranslation } from '../i18n';
 import { openReportIssue } from './reportIssue';
+import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
 // ============================================================================
 // BreakSubmenu — vertical list of break choices shown inside the Insert menu's
@@ -208,10 +209,10 @@ export function MenuBar() {
     (rows: number, columns: number) => {
       if (!disabled && onInsertTable) {
         onInsertTable(rows, columns);
-        requestAnimationFrame(() => onRefocusEditor?.());
+        hostWindowOf(ctx.editorRef?.current).requestAnimationFrame(() => onRefocusEditor?.());
       }
     },
-    [disabled, onInsertTable, onRefocusEditor]
+    [disabled, onInsertTable, onRefocusEditor, ctx.editorRef]
   );
 
   const hasPrintOrPageSetup = !!onPrint || !!onPageSetup;

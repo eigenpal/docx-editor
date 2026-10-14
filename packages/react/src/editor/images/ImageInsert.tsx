@@ -4,8 +4,12 @@ import type { ReactNode } from 'react';
 //
 // Toolbar and menu both trigger the same picker; Content attaches paste/drop to the same path.
 
-import { createContext, useCallback, useContext, useMemo, useRef } from 'react';
-import { executeImageCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import {
+  editorHostDocument,
+  executeImageCommand,
+  toolbarCommandState,
+} from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import type { TranslationKey } from '../../i18n';
@@ -15,6 +19,9 @@ import { normalizeImageBytes } from './normalizeImageFile';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
+import { usePopupConfig } from '../popup-config-context';
+import { renderPopup } from '../popup-renderer';
+import { DocxEditorImageInsertErrorDialog } from './ImageInsertErrorDialog';
 
 const ACCEPT = 'image/png,image/jpeg,image/gif';
 
@@ -52,6 +59,11 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
   const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(false);
+  const popups = usePopupConfig();
+  // A refusal shows in an editor dialog. A browser alert would stop every script on the page.
+  const [refusal, setRefusal] = useState<string | null>(null);
+  /** A picker made in a pop-out window's document, until it reports a choice or a cancel. */
+  const strayPickerRef = useRef<HTMLInputElement | null>(null);
 
   const selectInsertState = useCallback(
     () => toolbarCommandState(editor, 'image.insert'),
@@ -69,7 +81,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       if (!editor || busyRef.current) return;
       const normalized = normalizeImageBytes(bytes);
       if (!normalized.ok) {
-        window.alert(t(normalized.reasonKey as TranslationKey));
+        setRefusal(t(normalized.reasonKey as TranslationKey));
         return;
       }
       const command = {
@@ -84,7 +96,7 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
       try {
         const result = await executeImageCommand(editor, command);
         if (!result.ok) {
-          window.alert(
+          setRefusal(
             localizeDisabledReason(readableReason(result.reason) ?? null, t) ??
               t('imageInsert.errors.refused')
           );
@@ -130,8 +142,33 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
 
   const openFilePicker = useCallback(() => {
     if (!isEnabled) return;
-    inputRef.current?.click();
-  }, [isEnabled]);
+    const input = inputRef.current;
+    const hostDocument = editor ? editorHostDocument(editor) : null;
+    if (!hostDocument || !input || input.ownerDocument === hostDocument) {
+      input?.click();
+      return;
+    }
+    // The editor is in another window (a pop-out): a file picker opens only from an input in
+    // the window the user clicked in, so this one is made there and removed once it answers.
+    strayPickerRef.current?.remove();
+    const picker = hostDocument.createElement('input');
+    picker.type = 'file';
+    picker.accept = ACCEPT;
+    picker.hidden = true;
+    picker.tabIndex = -1;
+    picker.setAttribute('aria-hidden', 'true');
+    const done = () => {
+      picker.remove();
+      if (strayPickerRef.current === picker) strayPickerRef.current = null;
+    };
+    picker.addEventListener('change', () => void insertFromFileList(picker.files).finally(done), {
+      once: true,
+    });
+    picker.addEventListener('cancel', done, { once: true });
+    hostDocument.body.append(picker);
+    strayPickerRef.current = picker;
+    picker.click();
+  }, [editor, isEnabled, insertFromFileList]);
 
   const onInputChange = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -175,6 +212,15 @@ export function ImageInsertProvider({ children }: ImageInsertProviderProps) {
         onMouseDown={(event) => event.stopPropagation()}
       />
       {children}
+      {refusal !== null &&
+        (popups?.imageInsertError !== undefined ? (
+          renderPopup(popups.imageInsertError, {
+            message: refusal,
+            onClose: () => setRefusal(null),
+          })
+        ) : (
+          <DocxEditorImageInsertErrorDialog message={refusal} onClose={() => setRefusal(null)} />
+        ))}
     </ImageInsertContext.Provider>
   );
 }

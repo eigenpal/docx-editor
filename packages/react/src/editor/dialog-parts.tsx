@@ -202,7 +202,21 @@ export function createDialogParts<Name extends string, State>() {
       </Context.Provider>
     );
   }
-  return { Header, Title, Body, Footer, Apply, Cancel, Reset, Error, Field, Composition, useState };
+  return {
+    Header,
+    Title,
+    Body,
+    Footer,
+    Apply,
+    Cancel,
+    Reset,
+    Error,
+    Field,
+    Composition,
+    useState,
+    /** A dialog-specific part, matched to the default element with this `data-docx-part`. */
+    part: (name: string) => makePart(name) as (props: DialogPartProps) => ReactNode,
+  };
 }
 
 /** Native modal lifecycle shared by packaged dialog renderers. */
@@ -225,8 +239,10 @@ export function DialogFrame({
     | 'revisionMarkup'
     | 'pageSetup'
     | 'paragraph'
+    | 'watermark'
     | 'textFormField'
     | 'invalidTextFormField'
+    | 'imageInsertError'
     | 'export'
     | 'print'
     | 'openFailure';

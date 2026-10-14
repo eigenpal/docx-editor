@@ -14,7 +14,9 @@ const QUERY = '(prefers-color-scheme: dark)';
 
 /** Whether `matchMedia` is usable in the current environment (false under SSR). */
 function canMatchMedia(): boolean {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function';
+  return (
+    typeof globalThis.window !== 'undefined' && typeof globalThis.window.matchMedia === 'function'
+  );
 }
 
 /**
@@ -24,7 +26,7 @@ function canMatchMedia(): boolean {
  * @public
  */
 export function prefersColorSchemeDark(): boolean {
-  return canMatchMedia() ? window.matchMedia(QUERY).matches : false;
+  return canMatchMedia() ? globalThis.window.matchMedia(QUERY).matches : false;
 }
 
 /**
@@ -46,7 +48,7 @@ export function resolveIsDark(colorMode: ColorMode, systemDark: boolean): boolea
  */
 export function subscribeSystemDark(onChange: (dark: boolean) => void): () => void {
   if (!canMatchMedia()) return () => {};
-  const media = window.matchMedia(QUERY);
+  const media = globalThis.window.matchMedia(QUERY);
   onChange(media.matches);
   const listener = (e: MediaQueryListEvent) => onChange(e.matches);
   media.addEventListener('change', listener);

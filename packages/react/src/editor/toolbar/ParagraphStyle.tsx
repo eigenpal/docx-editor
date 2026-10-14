@@ -23,7 +23,7 @@ import {
   useState,
 } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue } from '@docx-editor.dev/core/editor';
+import { commandForSlotValue, hostDocumentOf, isDomNode } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
@@ -274,11 +274,12 @@ export function ParagraphStyleRoot({ hidden, asChild, className, children }: Par
     if (!open) return undefined;
     const onMouseDown = (event: globalThis.MouseEvent) => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (root && isDomNode(event.target) && root.contains(event.target)) return;
       setOpen(false);
     };
-    document.addEventListener('mousedown', onMouseDown);
-    return () => document.removeEventListener('mousedown', onMouseDown);
+    const doc = hostDocumentOf(rootRef.current);
+    doc.addEventListener('mousedown', onMouseDown);
+    return () => doc.removeEventListener('mousedown', onMouseDown);
   }, [open]);
 
   const context = useMemo<ParagraphStyleContextValue>(

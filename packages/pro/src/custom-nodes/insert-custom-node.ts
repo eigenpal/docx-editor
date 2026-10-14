@@ -156,7 +156,8 @@ export interface CustomNodeInput<
   /**
    * The `w:lock` written on the control. Defaults to `contentLocked` — the text is locked so the
    * label cannot drift out of sync with the attrs by inline typing, while the node itself stays
-   * DELETABLE as one unit, in the editor and in Word alike. `false` writes no lock;
+   * DELETABLE as one unit: the first Backspace or Delete beside it selects it, a second removes it.
+   * `false` writes no lock;
    * `sdtContentLocked` also forbids deleting the node.
    *
    * A node carrying a payload is uneditable whatever this says: the engine refuses content edits

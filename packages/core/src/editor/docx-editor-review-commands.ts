@@ -40,6 +40,7 @@ import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-
 import {
   findReviewPlacement,
   isReplacementPairKey,
+  replacementPairHalves,
   resolutionKeysOf,
 } from './review-replacement-pairs.ts';
 
@@ -114,9 +115,12 @@ const REVIEW_DISPLAY_MODES: readonly ReviewDisplayMode[] = [
 
 /** Review commands share navigation, mutation gates, and atomic story resolution. */
 export function createReviewCommands(deps: ReviewCommandDependencies) {
+  // A replacement is one change, so it is one stop in every review layout: a deletion and the
+  // touching insertion from the same author that took its place. Navigation reads the same
+  // filtered queue as the cards, so a filter that hides one half leaves the other a lone stop.
   const navigable = () =>
     deps
-      .placements()
+      .placements({ pairReplacements: true })
       .filter(
         (item): item is ReviewRevisionPlacement =>
           item.kind === 'revision' && (item.activatable || item.revisionKind === 'format')
@@ -357,7 +361,10 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const { groups, partOps } = plan!;
     if (!groups.length && !partOps.length)
       return { ok: true, changed: false, revisionAuthors: plan!.result };
-    const active = deps.placements().find((placement) => placement.isActive)?.key;
+    // Store keys, as `result.updated` reports them.
+    const active = deps
+      .placements({ placement: false, pairReplacements: false })
+      .find((placement) => placement.isActive)?.key;
     let applied: { committed: boolean; reason?: unknown } | undefined;
     surface.commitReviewOps(() => {
       applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
@@ -519,13 +526,17 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           ? nextFromCaret(items, surface, step)
           : (active + step + items.length) % items.length;
       const target = items[index]!;
+      // A pair opens through its deletion and lights both halves. The reveal names the
+      // deletion's store key and adds the pair's key, as for any other activation of a half.
+      const halves = replacementPairHalves(target.item);
+      const key = halves ? reviewItemKey(halves.deletion) : target.key;
       const result = deps.activate(
         target.key,
         !target.activatable && target.revisionKind === 'format'
       );
       // Every landing reveals, the active item included: a lone change navigates to itself,
       // and its closed card must open again.
-      if (result.ok) deps.reveal({ key: target.key, source: 'navigate' });
+      if (result.ok) deps.reveal({ key, source: 'navigate' });
       return result;
     }
     if (command.type !== 'resolveAllReviewChanges') return null;

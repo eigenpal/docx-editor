@@ -83,10 +83,12 @@ describe('shared Review menu commands', () => {
           '<w:tblGridChange w:id="1"><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid></w:tblGridChange>' +
           '</w:tblGrid><w:tr><w:trPr><w:trHeight w:val="400"/><w:trPrChange w:id="2" w:author="Ada"><w:trPr/></w:trPrChange></w:trPr><w:tc><w:p/></w:tc></w:tr></w:tbl>'
       );
-      const item = editor.getReviewItems().find((item) => item.kind === 'revision');
+      const item = editor
+        .getReviewItems({ pairReplacements: false })
+        .find((item) => item.kind === 'revision');
       expect(item).toBeDefined();
       expect(editor[action](item!.key).ok).toBe(true);
-      expect(editor.getReviewItems()).toHaveLength(0);
+      expect(editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
       editor.destroy();
     });
 
@@ -95,13 +97,13 @@ describe('shared Review menu commands', () => {
         '<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="1" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>Base</w:t></w:r><w:del w:id="1" w:author="Ada"><w:r><w:delText>Old</w:delText></w:r></w:del><w:ins w:id="2" w:author="Ada"><w:r><w:t>New</w:t></w:r></w:ins></w:p>'
       );
       const halves = editor
-        .getReviewItems()
+        .getReviewItems({ pairReplacements: false })
         .filter(
           (item) => item.kind === 'revision' && ['delete', 'insert'].includes(item.revisionKind)
         );
       expect(halves).toHaveLength(2);
       for (const half of halves) expect(editor[action](half.key).ok).toBe(true);
-      const remaining = editor.getReviewItems();
+      const remaining = editor.getReviewItems({ pairReplacements: false });
       expect(remaining).toHaveLength(1);
       expect(remaining[0]!.kind === 'revision' && remaining[0]!.revisionKind).toBe('format');
       expect(editor.surface!.session.bodyText()).toBe(
@@ -120,11 +122,11 @@ describe('shared Review menu commands', () => {
           '</w:sdtContent></w:sdt>'
       );
       const paragraphBreak = editor
-        .getReviewItems()
+        .getReviewItems({ pairReplacements: false })
         .find((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
       expect(paragraphBreak).toBeDefined();
       expect(editor[action](paragraphBreak!.key).ok).toBe(true);
-      const remaining = editor.getReviewItems();
+      const remaining = editor.getReviewItems({ pairReplacements: false });
       expect(remaining).toHaveLength(1);
       expect(remaining[0]!.kind === 'revision' && remaining[0]!.revisionKind).toBe('insert');
       expect(editor.surface!.session.bodyText()).toBe(
@@ -139,27 +141,31 @@ describe('shared Review menu commands', () => {
       `<w:p><w:pPr><w:rPr><w:ins w:id="${id}" w:author="Ada" w:date="${date}"/></w:rPr></w:pPr></w:p>`;
     const editor = mountEditor(mark(1, '2026-09-08T10:00:00Z') + mark(2, '2026-09-09T10:00:00Z'));
     const paragraphBreaks = editor
-      .getReviewItems()
+      .getReviewItems({ pairReplacements: false })
       .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(paragraphBreaks).toHaveLength(2);
     editor.destroy();
   });
   test('navigation starts from the caret when no change is active', () => {
     const editor = mountEditor(ins(1) + '<w:p><w:r><w:t>Unchanged</w:t></w:r></w:p>' + ins(2));
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems({ pairReplacements: false });
     const paragraphId = editor.surface!.session.paragraphIds()[1]!;
     editor.surface!.setSelection({
       anchor: { paragraphId, offset: 4 },
       head: { paragraphId, offset: 4 },
     });
     editor.exec({ type: 'navigateReviewChange', direction: 'next' });
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(items[1]!.key);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(items[1]!.key);
     editor.surface!.setSelection({
       anchor: { paragraphId, offset: 4 },
       head: { paragraphId, offset: 4 },
     });
     editor.exec({ type: 'navigateReviewChange', direction: 'previous' });
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(items[0]!.key);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(items[0]!.key);
     editor.destroy();
   });
 
@@ -171,16 +177,16 @@ describe('shared Review menu commands', () => {
     );
     const before = await editor.save();
     const deletion = editor
-      .getReviewItems()
+      .getReviewItems({ pairReplacements: false })
       .find((item) => item.kind === 'revision' && item.revisionKind === 'delete');
     expect(deletion).toBeDefined();
     expect(editor.acceptReviewItem(deletion!.key).ok).toBe(true);
-    expect(editor.getReviewItems()).toHaveLength(0);
+    expect(editor.getReviewItems({ pairReplacements: false })).toHaveLength(0);
     expect(editor.getTrackedChanges()).toHaveLength(0);
     expect(editor.surface!.session.bodyText()).toBe('A  B');
     expect(serializeOoxmlPart(editor.surface!.session.storyParts()[0]!)).not.toContain('<w:ins');
     editor.exec({ type: 'undo' });
-    expect(editor.getReviewItems()).toHaveLength(2);
+    expect(editor.getReviewItems({ pairReplacements: false })).toHaveLength(2);
     expect(await editor.save()).toEqual(before);
     editor.destroy();
   });
@@ -188,7 +194,10 @@ describe('shared Review menu commands', () => {
   test('bulk resolution keeps review comments', () => {
     const editor = mountEditor(ins(1));
     expect(
-      editor.replyToReviewItem(editor.getReviewItems()[0]!.key, 'Keep this discussion').ok
+      editor.replyToReviewItem(
+        editor.getReviewItems({ pairReplacements: false })[0]!.key,
+        'Keep this discussion'
+      ).ok
     ).toBe(true);
     expect(editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(true);
     const items = editor.surface!.session.reviewItems();
@@ -247,18 +256,26 @@ describe('shared Review menu commands', () => {
   }
   test('navigation wraps visible revisions and honors activation exclusions', () => {
     const editor = mountEditor(ins(1) + ins(2, 'Grace') + ins(3));
-    const keys = editor.getReviewItems().map((item) => item.key);
+    const keys = editor.getReviewItems({ pairReplacements: false }).map((item) => item.key);
     editor.setActiveReviewItem(keys[0]!);
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[1]);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(keys[1]);
     editor.setReviewAuthorVisible('Grace', false);
     editor.setActiveReviewItem(keys[0]!);
     editor.exec({ type: 'navigateReviewChange', direction: 'next' });
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[2]);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(keys[2]);
     editor.exec({ type: 'navigateReviewChange', direction: 'next' });
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[0]);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(keys[0]);
     editor.exec({ type: 'navigateReviewChange', direction: 'previous' });
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[2]);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(keys[2]);
     editor.setReviewActivationExclusions(['insert']);
     expect(editor.can({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(false);
     editor.destroy();
@@ -270,24 +287,28 @@ describe('shared Review menu commands', () => {
         ins(2)
     );
     const format = editor
-      .getReviewItems()
+      .getReviewItems({ pairReplacements: false })
       .find((item) => item.kind === 'revision' && item.revisionKind === 'format');
     expect(format).toBeDefined();
     editor.setReviewActivationExclusions(['format', 'structural']);
     expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(format!.key);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(format!.key);
     editor.destroy();
   });
 
   test('accepting a card preserves the caret; Next Change continues review', () => {
     const editor = mountEditor(ins(1) + ins(2));
-    const items = editor.getReviewItems();
+    const items = editor.getReviewItems({ pairReplacements: false });
     editor.setActiveReviewItem(items[0]!.key);
     const before = editor.surface!.state().selection;
     expect(editor.acceptReviewItem(items[0]!.key).ok).toBe(true);
     expect(editor.surface!.state().selection).toEqual(before);
     editor.exec({ type: 'navigateReviewChange', direction: 'next' });
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(items[1]!.key);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(items[1]!.key);
     editor.destroy();
   });
 
@@ -330,7 +351,7 @@ describe('shared Review menu commands', () => {
   test('navigation and display work in viewing mode; bulk changes do not', async () => {
     const editor = mountEditor(ins(1));
     const before = await editor.save();
-    const key = editor.getReviewItems()[0]!.key;
+    const key = editor.getReviewItems({ pairReplacements: false })[0]!.key;
     editor.setEditingMode('viewing');
     expect(editor.acceptReviewItem(key).ok).toBe(false);
     expect(editor.rejectReviewItem(key).ok).toBe(false);
@@ -359,7 +380,10 @@ for (const action of ['accept', 'reject'] as const) {
     test(`${action} honors ${filter} filters, preserves comments, and redoes one decision`, async () => {
       const editor = mountEditor(ins(1) + ins(2, 'Grace') + ins(3));
       try {
-        editor.replyToReviewItem(editor.getReviewItems()[1]!.key, 'Keep discussion');
+        editor.replyToReviewItem(
+          editor.getReviewItems({ pairReplacements: false })[1]!.key,
+          'Keep discussion'
+        );
         const before = await editor.save();
         if (filter !== 'predicate') editor.setReviewAuthorVisible('Grace', false);
         if (filter !== 'author')
@@ -419,7 +443,7 @@ for (const action of ['accept', 'reject'] as const) {
   test(`${action} handles all-hidden, empty, unknown and duplicate keys without extra history`, () => {
     const editor = mountEditor(ins(1) + ins(2, 'Grace'));
     try {
-      const keys = editor.getReviewItems().map((item) => item.key);
+      const keys = editor.getReviewItems({ pairReplacements: false }).map((item) => item.key);
       editor.setTrackedChangesFilter(() => false);
       expect(editor.exec({ type: 'resolveAllReviewChanges', action }).ok).toBe(false);
       expect(editor.exec({ type: 'resolveAllReviewChanges', action, keys: [] }).ok).toBe(false);
@@ -488,7 +512,7 @@ describe('reviewItemReveal', () => {
 
   test('Next and Previous Change announce every landing', () => {
     const editor = mountEditor(ins(1) + ins(2));
-    const keys = editor.getReviewItems().map((item) => item.key);
+    const keys = editor.getReviewItems({ pairReplacements: false }).map((item) => item.key);
     editor.setActiveReviewItem(keys[0]!, { announce: false });
     const events = record(editor);
     editor.exec({ type: 'navigateReviewChange', direction: 'next' });
@@ -504,7 +528,7 @@ describe('reviewItemReveal', () => {
 
   test('a lone change navigates to itself and announces again', () => {
     const editor = mountEditor(ins(1));
-    const [only] = editor.getReviewItems();
+    const [only] = editor.getReviewItems({ pairReplacements: false });
     const events = record(editor);
     editor.exec({ type: 'navigateReviewChange', direction: 'next' });
     editor.setActiveReviewItem(null);
@@ -528,7 +552,9 @@ describe('reviewItemReveal', () => {
         head: { paragraphId, offset: 1 },
       });
     }
-    expect(editor.getReviewItems().some((item) => item.isActive)).toBe(true);
+    expect(editor.getReviewItems({ pairReplacements: false }).some((item) => item.isActive)).toBe(
+      true
+    );
     editor.setActiveReviewItem(null);
     expect(editor.setActiveReviewItem('missing').ok).toBe(false);
     editor.setReviewActivationExclusions(['insert']);
@@ -539,7 +565,7 @@ describe('reviewItemReveal', () => {
 
   test('setActiveReviewItem announces as the host only with announce: true', () => {
     const editor = mountEditor(ins(1) + ins(2));
-    const keys = editor.getReviewItems().map((item) => item.key);
+    const keys = editor.getReviewItems({ pairReplacements: false }).map((item) => item.key);
     const events = record(editor);
     // The default stays silent, so a host call opens no balloon and no closed pane.
     expect(editor.setActiveReviewItem(keys[0]!).ok).toBe(true);
@@ -547,7 +573,9 @@ describe('reviewItemReveal', () => {
     expect(events).toEqual([]);
     expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
     expect(editor.setActiveReviewItem(keys[1]!, { announce: true }).ok).toBe(true);
-    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[1]);
+    expect(
+      editor.getReviewItems({ pairReplacements: false }).find((item) => item.isActive)?.key
+    ).toBe(keys[1]);
     expect(editor.getActivatedReviewItemKey()).toBe(keys[1]);
     expect(events).toEqual([
       { key: keys[1]!, source: 'host' },
@@ -558,7 +586,7 @@ describe('reviewItemReveal', () => {
 
   test('re-keying the active change under a new author announces nothing', () => {
     const editor = mountEditor(ins(1) + ins(2));
-    const [first] = editor.getReviewItems();
+    const [first] = editor.getReviewItems({ pairReplacements: false });
     editor.setActiveReviewItem(first!.key);
     const events = record(editor);
     const result = editor.exec({

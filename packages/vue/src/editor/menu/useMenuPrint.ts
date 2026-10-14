@@ -5,6 +5,7 @@ import {
   runChromePrint,
   type ChromeExportHandlers,
   type ChromePrintJob,
+  hostDocumentOf,
 } from '@docx-editor.dev/core/editor';
 import type { Editor } from '@docx-editor.dev/core';
 import { useTranslation } from '../../i18n';
@@ -84,7 +85,11 @@ export function useMenuPrint(
     error.value = '';
     url.value = '';
     try {
-      const prepared = await runChromePrint(editor.value, exporters(), container ?? document);
+      const prepared = await runChromePrint(
+        editor.value,
+        exporters(),
+        container ?? hostDocumentOf(null)
+      );
       if (current !== token) {
         prepared.dispose();
         return;

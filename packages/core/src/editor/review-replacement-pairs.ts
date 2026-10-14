@@ -1,5 +1,5 @@
-// Query-time narrowing of the review queue: revision-kind exclusion and opt-in replacement
-// pairing for `getReviewItems(query)`.
+// Query-time narrowing of the review queue: revision-kind exclusion and replacement pairing
+// for `getReviewItems(query)`. Pairing is the default; `pairReplacements: false` opts out.
 //
 // A pair is a READ-SIDE decision. The store keeps the deletion and the insertion as two
 // revisions; a pair item lists both halves' addresses and canonical sites, so resolving it
@@ -141,7 +141,7 @@ export function narrowReviewItems(
     item.kind !== 'revision' || !excluded.has(item.revisionKind);
   let next = excluded.size > 0 ? items.filter(keep) : items;
   let renamed: ReadonlyMap<string, string> = new Map();
-  if (query?.pairReplacements === true) {
+  if (pairsReplacementsUnder(query)) {
     const paired = pairReplacements(next);
     renamed = paired.renamed;
     next = excluded.size > 0 ? paired.items.filter(keep) : paired.items;
@@ -164,6 +164,64 @@ export function narrowReviewItems(
   });
 }
 
+/**
+ * The keys the open item lights on the page: its own and, when `pairs` is set, the other half
+ * of its replacement. Uses the same pairing as `pairReplacements`, so the page lights what
+ * the paired card shows. `items` is read only for a revision, and only when pairing.
+ */
+export function litReviewKeys(
+  items: () => readonly ReviewItem[],
+  activeKey: string | null,
+  pairs: boolean | undefined
+): ReadonlySet<string> {
+  if (activeKey === null) return new Set();
+  const partner = pairs ? replacementPartnerKey(items(), activeKey) : null;
+  return new Set(partner === null ? [activeKey] : [activeKey, partner]);
+}
+
+/** The key of the other half of the replacement `key` belongs to among `items`, or null. */
+function replacementPartnerKey(items: readonly ReviewItem[], key: string): string | null {
+  for (const item of pairReplacements(items).items) {
+    const halves = halvesOf.get(item);
+    if (!halves) continue;
+    const deletion = reviewItemKey(halves.deletion);
+    const insertion = reviewItemKey(halves.insertion);
+    if (deletion === key) return insertion;
+    if (insertion === key) return deletion;
+  }
+  return null;
+}
+
+/**
+ * Which activation opened a whole replacement. The surface pins the deletion either way, so
+ * this tells "open the pair" from "open the deletion": only the first lights both halves.
+ */
+export function createPairedActivation(
+  /** True when the review UI shows every replacement as one card. */
+  paneLightsPairs: () => boolean,
+  surface: () => { activatedReviewKey(): string | null } | null
+): {
+  /**
+   * Record the pinned deletion key of a pair activation, or null for any other activation.
+   * Returns `pinKey`.
+   */
+  set(pinKey: string | null): string | null;
+  /** Whether the active band covers both halves of a replacement right now. */
+  lightsPair(): boolean;
+} {
+  let pin: string | null = null;
+  return {
+    set: (pinKey) => (pin = pinKey),
+    lightsPair: () =>
+      paneLightsPairs() || (pin !== null && surface()?.activatedReviewKey() === pin),
+  };
+}
+
+/** Whether `query` pairs replacements. It does unless it sets `pairReplacements: false`. */
+export function pairsReplacementsUnder(query: ReviewItemQuery | undefined): boolean {
+  return query?.pairReplacements !== false;
+}
+
 /** True for a key only a paired query produces. */
 export function isReplacementPairKey(key: string): boolean {
   return key.startsWith(PAIR_KEY_PREFIX);
@@ -178,9 +236,10 @@ export function findReviewPlacement(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
   key: string
 ): ReviewItemPlacement | undefined {
-  const query: ReviewItemQuery = isReplacementPairKey(key)
-    ? { placement: false, pairReplacements: true }
-    : { placement: false };
+  const query: ReviewItemQuery = {
+    placement: false,
+    pairReplacements: isReplacementPairKey(key),
+  };
   return placements(query).find((entry) => entry.key === key);
 }
 
@@ -193,15 +252,16 @@ export function resolutionKeysOf(item: ReviewItem): readonly string[] {
 }
 
 /**
- * The key `query` reads for the review item whose store key is `key`: under
- * `pairReplacements`, the pair a deletion or insertion belongs to; otherwise `key` itself.
+ * The key `query` reads for the review item whose store key is `key`: when the query pairs
+ * replacements, which it does unless it sets `pairReplacements: false`, the pair a deletion
+ * or insertion belongs to; otherwise `key` itself.
  */
 export function keyUnderQuery(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],
   key: string | null,
   query: ReviewItemQuery | undefined
 ): string | null {
-  if (key === null || query?.pairReplacements !== true) return key;
+  if (key === null || !pairsReplacementsUnder(query)) return key;
   const pair = placements({ ...query, placement: false }).find(
     (entry) =>
       isReplacementPairKey(entry.key) && resolutionKeysOf(entry.item as ReviewItem).includes(key)
@@ -211,8 +271,8 @@ export function keyUnderQuery(
 
 /**
  * A reveal event with `pairKey` set when its item is a paired replacement or one half of
- * one. Navigation reads the unpaired queue, so a host that lists pairs needs the pair's key
- * to find the item. One paired read per reveal; reveals are single user actions.
+ * one. The event names a store key, so a host that lists pairs needs the pair's key to find
+ * the item. One paired read per reveal; reveals are single user actions.
  */
 export function withRevealPairKey(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],

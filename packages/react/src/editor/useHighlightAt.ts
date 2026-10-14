@@ -6,6 +6,8 @@
 import { useEffect, useState } from 'react';
 import type { HighlightHit, HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxEditor } from './context';
+import { useNavigationViewportElement } from './navigation/navigation-layout';
+import { hostDocumentOf, hostWindowOf, isElementNode } from '@docx-editor.dev/core/editor';
 
 function sameHit(a: HighlightHit | null, b: HighlightHit | null): boolean {
   if (a === b) return true;
@@ -37,6 +39,7 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
   name?: string
 ): HighlightHit<R> | null {
   const editor = useDocxEditor();
+  const viewport = useNavigationViewportElement();
   const [hit, setHit] = useState<HighlightHit<R> | null>(null);
 
   useEffect(() => {
@@ -44,7 +47,10 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
       setHit(null);
       return undefined;
     }
-    const doc = globalThis.document;
+    // The editor's own document and window: a pop-out window or an iframe is not the
+    // script's, and a hidden opener stops its animation frames.
+    const doc = hostDocumentOf(viewport);
+    const view = hostWindowOf(viewport);
     let frame = 0;
     let point: { readonly x: number; readonly y: number } | null = null;
     const read = () => {
@@ -57,12 +63,12 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
       setHit((previous) => (sameHit(previous, found) ? previous : found));
     };
     const schedule = () => {
-      if (frame === 0) frame = requestAnimationFrame(read);
+      if (frame === 0) frame = view.requestAnimationFrame(read);
     };
     const onMove = (event: PointerEvent) => {
       // Only a pointer on a page: a menu, dialog, or tooltip over the text hides the mark.
       const target = event.target;
-      const onPage = target instanceof Element && target.closest('[data-page-index]') !== null;
+      const onPage = isElementNode(target) && target.closest('[data-page-index]') !== null;
       point = onPage ? { x: event.clientX, y: event.clientY } : null;
       schedule();
     };
@@ -80,9 +86,9 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
       doc.removeEventListener('pointerout', onLeave);
       doc.removeEventListener('scroll', schedule, { capture: true });
       off();
-      if (frame !== 0) cancelAnimationFrame(frame);
+      if (frame !== 0) view.cancelAnimationFrame(frame);
     };
-  }, [editor, name]);
+  }, [editor, name, viewport]);
 
   return hit;
 }

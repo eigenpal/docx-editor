@@ -254,7 +254,7 @@ Bottom-to-top cell text does not make its row taller. The text wraps at the fina
 
 A table row starts below other content only when the remaining space holds its minimum height. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If a fresh page cannot hold that minimum below repeated headers, the row splits where it stands. Rows of positioned tables keep their existing placement.
 
-A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its content is clipped at the bottom margin. The next block starts on the next page. The reference layout keeps the full row height past the bottom margin, so the bottom edge of the row differs.
+A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its border and content stop at the bottom margin. The row does not paint past the margin, with or without `w:cantSplit`. The next block starts on the next page.
 
 Keep-with-next table groups include closed vertical merges. Their merged content contributes its height once across the covered rows. Table decisions measure at most 256 kept rows and the next row. Longer groups use that measured prefix as a lower bound. Paragraph keep lookahead remains unchanged.
 
@@ -264,7 +264,7 @@ Merges that enter or leave the measured group retain ordinary row placement. Act
 
 Fixed-height horizontal cells display the part of a line that starts inside their content box. A taller line does not enlarge the row. Text below the box stays in the document and does not continue on another page.
 
-Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the first row of the merge clips it.
+Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the text flows through every row of the span and is clipped at the bottom of the last row. A line that starts inside the span shows its visible part. If a text-only span of three or more rows crosses a page, the part above the break shows whole lines, and the text continues in the rows on the next page. Some merges are still clipped at their first row: a merge that contains or partly overlaps another merge, a second, shorter merge that starts in the same row, and a two-row span that crosses a page.
 
 ### Fields and paragraph spacing
 

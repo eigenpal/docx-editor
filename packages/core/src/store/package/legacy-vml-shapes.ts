@@ -1,6 +1,7 @@
 import type { SourceCrop } from './drawing-projection.ts';
 import { RELATIONSHIPS_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 import { legacyChromaKeyFilter } from './legacy-vml-chromakey.ts';
+import { LEGACY_IMAGE_EFFECT_ATTRIBUTES, legacyImageEffects } from './legacy-vml-image-effects.ts';
 import type { VectorShapeProjection } from './drawing-shape-projection.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import {
@@ -503,11 +504,13 @@ export function legacyShapeFragment(
             (attr.namespaceUri === RELATIONSHIPS_NAMESPACE_URI && attr.localName === 'id') ||
             (attr.localName === 'title' && attr.namespaceUri === OFFICE) ||
             (!attr.namespaceUri &&
-              ['cropleft', 'croptop', 'cropright', 'cropbottom', 'chromakey'].includes(
+              (['cropleft', 'croptop', 'cropright', 'cropbottom', 'chromakey'].includes(
                 attr.localName
-              ))
+              ) ||
+                LEGACY_IMAGE_EFFECT_ATTRIBUTES.has(attr.localName)))
           )
-      )
+      ) ||
+      legacyImageEffects(image) === null
     )
       return null;
     const key = a(image, 'chromakey');

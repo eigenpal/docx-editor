@@ -18,10 +18,11 @@ import type { ReactNode } from 'react';
 import { isValidElement, useContext, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
-  chromeSlotIsToggle,
   CHROME_MENUS,
   chromeProbeForSlot,
+  chromeSlotIsToggle,
   commandForSlot,
+  hostDocumentOf,
   type ChromeMenuEntry,
   type ChromeMenuId,
   type ChromeMenuItemEntry,
@@ -43,6 +44,7 @@ import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
 import { MenuTableGrid } from './menu-flyouts';
+import { MenuWatermark } from './menu-watermark';
 
 export { MenuTableGrid, type MenuTableGridProps } from './menu-flyouts';
 
@@ -596,7 +598,10 @@ export function MenuSubmenu({
         // The APG's submenu keys, and the reason the panel is reachable at all without a
         // pointer: Right opens and steps in, Left and Escape close and come back to the
         // parent row. Escape is stopped so it closes THIS panel rather than the whole bar.
-        if (event.key === 'ArrowRight' && document.activeElement === parentRef.current) {
+        if (
+          event.key === 'ArrowRight' &&
+          hostDocumentOf(parentRef.current).activeElement === parentRef.current
+        ) {
           event.preventDefault();
           setOpen(true);
           queueMicrotask(() => {
@@ -663,11 +668,11 @@ export function MenuSubmenu({
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               event.stopPropagation();
-              focusBy(items, document.activeElement, 1);
+              focusBy(items, hostDocumentOf(panel).activeElement, 1);
             } else if (event.key === 'ArrowUp') {
               event.preventDefault();
               event.stopPropagation();
-              focusBy(items, document.activeElement, -1);
+              focusBy(items, hostDocumentOf(panel).activeElement, -1);
             }
           }}
         >
@@ -751,6 +756,7 @@ export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; childre
   if (entry.slot === 'file.print') return <MenuPrint />;
   if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
   if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
+  if (entry.slot === 'insert.watermark') return <MenuWatermark />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (
@@ -1009,7 +1015,7 @@ export function Menu({
             const panel = panelRef.current;
             if (!panel) return;
             const items = panelItems(panel);
-            const focused = document.activeElement;
+            const focused = hostDocumentOf(panel).activeElement;
             if (event.key === 'ArrowDown') {
               event.preventDefault();
               focusBy(items, focused, 1);

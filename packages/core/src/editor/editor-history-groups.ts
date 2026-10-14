@@ -165,3 +165,25 @@ function createHandle(record: GroupRecord, manager: WeakRef<EditorHistoryGroups>
     },
   }) as HistoryGroup;
 }
+
+/**
+ * History groups owned per MOUNT: a handle closes on detach and on document replacement, and
+ * never reopens when the same surface is attached again.
+ */
+export function createMountHistoryGroups(
+  mount: () => { readonly mounted: boolean; readonly generation: number },
+  diagnose: (diagnostic: HistoryDiagnostic) => void,
+  target: () => string
+): EditorHistoryGroups {
+  let owner = { generation: -1, token: {} };
+  return new EditorHistoryGroups(
+    () => {
+      const { mounted, generation } = mount();
+      if (!mounted) return null;
+      if (owner.generation !== generation) owner = { generation, token: {} };
+      return owner.token;
+    },
+    diagnose,
+    target
+  );
+}

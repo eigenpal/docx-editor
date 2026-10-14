@@ -717,6 +717,7 @@ describe('chrome contracts', () => {
       'insert.footnote',
       'insert.endnote',
       'insert.toc',
+      'insert.watermark',
     ]);
     expect(row(view, 'insert.toc').className).toContain('my-toc');
     // The host's own row appends.

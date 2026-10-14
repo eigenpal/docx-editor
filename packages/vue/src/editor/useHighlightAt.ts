@@ -1,8 +1,9 @@
 import { shallowRef, toValue, watch, type ShallowRef } from 'vue';
+import { isElementNode, hostDocumentOf, hostWindowOf } from '@docx-editor.dev/core/editor';
 import type { HighlightHit, HighlightRange } from '@docx-editor.dev/core/contracts/editor';
 import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 import { scopeDispose } from './scope-dispose';
-import { useDocxEditor } from './context';
+import { useDocxEditor, useEditorContentElement } from './context';
 
 function sameHit(a: HighlightHit | null, b: HighlightHit | null): boolean {
   if (a === b) return true;
@@ -34,17 +35,24 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
   name?: MaybeRefOrGetter<string>
 ): Readonly<ShallowRef<HighlightHit<R> | null>> {
   const editorRef = useDocxEditor();
+  const contentElement = useEditorContentElement();
   const hit = shallowRef<HighlightHit<R> | null>(null);
 
   scopeDispose(
     watch(
-      [() => editorRef.value, () => (name === undefined ? undefined : toValue(name))],
-      ([editor, setName], _previous, onCleanup) => {
+      [
+        () => editorRef.value,
+        () => (name === undefined ? undefined : toValue(name)),
+        () => contentElement.value,
+      ],
+      ([editor, setName, content], _previous, onCleanup) => {
         if (!editor) {
           hit.value = null;
           return;
         }
-        const doc = globalThis.document;
+        // The document the pages paint in, which a pop-out window or an iframe can own.
+        const doc = hostDocumentOf(content);
+        const win = hostWindowOf(content);
         let frame = 0;
         let point: { readonly x: number; readonly y: number } | null = null;
         const read = () => {
@@ -57,12 +65,12 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
           if (!sameHit(hit.value, found)) hit.value = found;
         };
         const schedule = () => {
-          if (frame === 0) frame = requestAnimationFrame(read);
+          if (frame === 0) frame = win.requestAnimationFrame(read);
         };
         const onMove = (event: PointerEvent) => {
           // Only a pointer on a page: a menu, dialog, or tooltip over the text hides the mark.
           const target = event.target;
-          const onPage = target instanceof Element && target.closest('[data-page-index]') !== null;
+          const onPage = isElementNode(target) && target.closest('[data-page-index]') !== null;
           point = onPage ? { x: event.clientX, y: event.clientY } : null;
           schedule();
         };
@@ -80,7 +88,7 @@ export function useHighlightAt<R extends HighlightRange = HighlightRange>(
           doc.removeEventListener('pointerout', onLeave);
           doc.removeEventListener('scroll', schedule, { capture: true });
           off();
-          if (frame !== 0) cancelAnimationFrame(frame);
+          if (frame !== 0) win.cancelAnimationFrame(frame);
         });
       },
       { immediate: true }

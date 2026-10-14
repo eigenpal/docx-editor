@@ -12,6 +12,7 @@ export const VUE_COMPOSABLES = [
   'useEditorCaret',
   'useEditorCommand',
   'useEditorEvent',
+  'useEditorHostDocument',
   'useEditorSnapshot',
   'useEditorState',
   'useEditorValueCommand',
@@ -45,5 +46,7 @@ export const VUE_COMPOSABLES = [
   'useToolbarLabel',
   'useToolbarLabelFor',
   'useTranslation',
+  'useWatermark',
+  'useWatermarkDialog',
   'useZoom',
 ] as const;

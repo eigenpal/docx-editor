@@ -38,7 +38,6 @@
     "editor/revision-markup-fields",
     "hooks/useFixedDropdown",
     "index",
-    "lib/watermark",
     "managers/ErrorManager",
     "managers/Subscribable",
     "managers/types"
@@ -350,6 +349,18 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorWatermark": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["children", "name", "preset", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorWindow": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["close", "default", "emits", "props", "type"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/content-control-widget/parts": {
       "propsAddedInReact": ["key"],
       "propsAddedInVue": ["class", "class", "class"],
@@ -367,6 +378,12 @@
       "propsAddedInVue": ["name"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
+    },
+    "editor/images/ImageInsertErrorDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "onClose", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": ["close"]
     },
     "editor/images/ImageSelectionOverlay": {
       "propsAddedInReact": [],
@@ -567,7 +584,7 @@
       "vueOnly": []
     },
     "sidebarKinds": {
-      "reactOnly": ["auto", "picture", "text", "theme"],
+      "reactOnly": ["auto", "theme"],
       "vueOnly": []
     },
     "pluginHooks": {

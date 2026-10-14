@@ -19,6 +19,12 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
+import {
+  isDomNode,
+  isElementNode,
+  isHTMLElementNode,
+  hostWindowOf,
+} from '@docx-editor.dev/core/editor';
 import { Slot, useDocxEditor, useEditorEvent, useEditorState } from '@docx-editor.dev/vue';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
@@ -435,12 +441,12 @@ export const ReviewBalloon = markPart(
 
         const onDown = (event: Event): void => {
           const target = event.target;
-          if (!(target instanceof Element)) return;
+          if (!isElementNode(target)) return;
           if (host.contains(target)) return;
           // A press keeps the focus where the reader put it.
           focusPending = false;
           const element = target.closest('[data-revision-id]');
-          if (element instanceof HTMLElement && scroller.contains(element)) {
+          if (isHTMLElementNode(element) && scroller.contains(element)) {
             const structuralSite = element.classList.contains('docx-table-row--revision');
             if (
               element.dataset.revisionKind === 'format' ||
@@ -458,7 +464,7 @@ export const ReviewBalloon = markPart(
         // Typing never happens under a change balloon. The reply line's own input is exempt.
         const onInput = (event: Event): void => {
           if (rail.value.revisionsIn !== 'balloons' || !openRef.value) return;
-          if (event.target instanceof Node && host.contains(event.target)) return;
+          if (isDomNode(event.target) && host.contains(event.target)) return;
           close();
         };
         // Bubble phase, and only when no other control already handled the key.
@@ -467,7 +473,7 @@ export const ReviewBalloon = markPart(
         const onKey = (event: KeyboardEvent): void => {
           if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
           if (rail.value.revisionsIn !== 'balloons' || !openRef.value) return;
-          if (!(event.target instanceof Node) || !scroller.contains(event.target)) return;
+          if (!isDomNode(event.target) || !scroller.contains(event.target)) return;
           // Focus inside the balloon would land on `<body>` once it unmounts.
           const hadFocus = host.contains(host.ownerDocument.activeElement);
           close();
@@ -537,7 +543,8 @@ export const ReviewBalloon = markPart(
           navigationAnchorKey.value = active.key;
           anchor.value = null;
           let cancelled = false;
-          const frame = requestAnimationFrame(() => {
+          const win = hostWindowOf(scroller);
+          const frame = win.requestAnimationFrame(() => {
             if (cancelled) return;
             const element = findPaintedRevisionElement(scroller, active);
             if (!element) {
@@ -554,7 +561,7 @@ export const ReviewBalloon = markPart(
           });
           onCleanup(() => {
             cancelled = true;
-            cancelAnimationFrame(frame);
+            win.cancelAnimationFrame(frame);
           });
         },
         { flush: 'post' }
@@ -584,17 +591,19 @@ export const ReviewBalloon = markPart(
             anchor.value = next;
             instance?.proxy?.$forceUpdate();
           };
-          let frame = requestAnimationFrame(remeasure);
+          // The scroller's own window: a pop-out window measures and animates there.
+          const win = hostWindowOf(scroller);
+          let frame = win.requestAnimationFrame(remeasure);
           const observer =
-            typeof ResizeObserver === 'undefined'
+            typeof win.ResizeObserver === 'undefined'
               ? null
-              : new ResizeObserver(() => {
-                  cancelAnimationFrame(frame);
-                  frame = requestAnimationFrame(remeasure);
+              : new win.ResizeObserver(() => {
+                  win.cancelAnimationFrame(frame);
+                  frame = win.requestAnimationFrame(remeasure);
                 });
           observer?.observe(scroller);
           onCleanup(() => {
-            cancelAnimationFrame(frame);
+            win.cancelAnimationFrame(frame);
             observer?.disconnect();
           });
         },

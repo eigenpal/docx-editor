@@ -93,7 +93,6 @@ const JUMP_MARGIN_PX = 24;
 
 export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation {
   const { pagesLayer } = deps;
-  const view = pagesLayer.ownerDocument.defaultView;
 
   /** The scroll container this surface sits in, looked up live (chrome can mount later). */
   function scroller(): HTMLElement | null {
@@ -104,6 +103,8 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     if (!href || href.length === 0 || href.startsWith('#')) return false;
     const projection = sanitizeHref(href);
     if (!projection.ok || !projection.href) return false;
+    // The pages' window now: the surface can have moved since it was created.
+    const view = pagesLayer.ownerDocument.defaultView;
     if (!view) return false;
     // `noopener` is what stops the opened page reaching back through `window.opener` into
     // the editor; `noreferrer` keeps the document's own URL out of the request.

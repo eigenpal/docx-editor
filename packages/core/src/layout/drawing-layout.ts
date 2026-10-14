@@ -4,6 +4,7 @@ import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
+import { layoutTextArt, rotatedBounds, type DrawingTextArtRecord } from './drawing-text-art.ts';
 import { clipBoxToRegion } from './drawing-clip-box.ts';
 export { clipBoxHorizontally, clipBoxToRegion } from './drawing-clip-box.ts';
 
@@ -95,7 +96,8 @@ function drawingPaintFields(projection: DrawingProjection): {
     effects: projection.effects,
     crop: picture?.crop ?? projection.groupPicture?.crop ?? EMPTY_CROP,
     transform: picture?.transform ?? EMPTY_TRANSFORM,
-    placeholderGraphicKind: picture || projection.legacyGraphic ? null : placeholderGraphicKind,
+    placeholderGraphicKind:
+      picture || projection.legacyGraphic || projection.textArt ? null : placeholderGraphicKind,
     vectorShape: projection.vectorShape,
     ...(projection.groupPicture
       ? {
@@ -584,6 +586,8 @@ export interface AnchoredDrawingRecord extends Omit<
   readonly layoutFallback?: AnchoredDrawingLayoutFallback;
   /** Canonical document traversal index within the owner story part. */
   readonly sourceOrder?: number;
+  /** Floating VML text art fitted to the box; paint draws it instead of a resource. */
+  readonly textArt?: DrawingTextArtRecord;
 }
 
 /** Every parity read goes through here so the host learns the layout depends on it. */
@@ -1002,10 +1006,14 @@ export function buildAnchoredDrawingRecord(options: {
   readonly sourceOrder?: number;
   readonly textboxStory?: import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly revisions?: readonly RevisionAttribution[];
+  readonly measurer?: import('./semantic-records.ts').TextMeasurer;
 }): AnchoredDrawingRecord {
   const projection = options.input.projection;
   const anchorMeta = projection.anchor;
   const measure = measureInlineDrawing(projection);
+  const textArt = projection.textArt
+    ? layoutTextArt(projection.textArt, measure.width, measure.height, options.measurer)
+    : null;
   const geometry = drawingGeometryFromProjection({
     projection,
     anchorX: options.resolved.x,
@@ -1013,9 +1021,11 @@ export function buildAnchoredDrawingRecord(options: {
     extentWidth: measure.width,
     extentHeight: measure.height,
   });
-  const paintBounds = options.clipRegion
-    ? clipBoxToRegion(geometry.paintBounds, options.clipRegion)
+  // Turned text reaches past its box; the painted area holds the whole turn.
+  const turned = textArt
+    ? rotatedBounds(geometry.paintBounds, textArt.rotationDegrees)
     : geometry.paintBounds;
+  const paintBounds = options.clipRegion ? clipBoxToRegion(turned, options.clipRegion) : turned;
   const hitBounds =
     paintBounds.width > 0 && paintBounds.height > 0
       ? paintBounds
@@ -1050,6 +1060,7 @@ export function buildAnchoredDrawingRecord(options: {
     resource: options.input.resource,
     accessibility: drawingAccessibility(projection),
     ...drawingPaintFields(projection),
+    ...(textArt ? { textArt } : {}),
   });
 }
 
@@ -1296,6 +1307,7 @@ export function publishAnchoredDrawingsForParagraph(
       layoutInCell,
       clipRegion,
       revisions,
+      measurer: options.measurer,
       ...(options.sourceOrderOf
         ? { sourceOrder: options.sourceOrderOf(projection.drawingNodeId) }
         : {}),

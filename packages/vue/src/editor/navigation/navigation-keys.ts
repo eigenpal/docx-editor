@@ -3,7 +3,14 @@
 // Both adapters carry an identical copy of this file. It is plain DOM, so the two panes
 // answer every key and focus question the same way.
 
-import { chordLetter, editorInstanceScope } from '@docx-editor.dev/core/editor';
+import {
+  chordLetter,
+  editorInstanceScope,
+  hostWindowOf,
+  isDomNode,
+  isElementNode,
+  isHTMLElementNode,
+} from '@docx-editor.dev/core/editor';
 import { isApplePlatform } from '@docx-editor.dev/i18n';
 import type { NavigationTab } from './useNavigationPane';
 
@@ -67,11 +74,11 @@ export function ownsShortcutTarget(
   pane: Element | null,
   viewport: Element | null
 ): boolean {
-  if (!target || typeof Node === 'undefined' || !(target instanceof Node)) return false;
+  if (!isDomNode(target)) return false;
   if (pane?.contains(target)) return true;
   if (!viewport) return false;
   if (viewport.contains(target)) return true;
-  const element = target instanceof Element ? target : target.parentElement;
+  const element = isElementNode(target) ? target : target.parentElement;
   if (!element) return false;
   const scope = editorInstanceScope(viewport);
   if (scope && scope !== viewport && scope.contains(element)) return true;
@@ -99,9 +106,7 @@ export function paneEntryTarget(pane: Element | null, tab: NavigationTab): HTMLE
 /** Focus `element`, and select an input's text so typing replaces the previous query. */
 export function focusPaneEntry(element: HTMLElement): void {
   element.focus();
-  if (typeof HTMLInputElement !== 'undefined' && element instanceof HTMLInputElement) {
-    element.select();
-  }
+  if (element.localName === 'input') (element as HTMLInputElement).select();
 }
 
 /**
@@ -117,7 +122,7 @@ function focusIntoPane(pane: Element): void {
     focusPaneEntry(target);
     return;
   }
-  if (pane instanceof HTMLElement) {
+  if (isHTMLElementNode(pane)) {
     if (!pane.hasAttribute('tabindex')) pane.setAttribute('tabindex', '-1');
     pane.focus();
   }
@@ -166,7 +171,7 @@ export function inertBehindPane(pane: Element, viewport: Element): () => void {
 export function coverPage(pane: Element, viewport: HTMLElement, close: () => void): () => void {
   const release = inertBehindPane(pane, viewport);
   const onPointerDown = (event: Event) => {
-    if (event.target instanceof Node && pane.contains(event.target)) return;
+    if (isDomNode(event.target) && pane.contains(event.target)) return;
     close();
   };
   viewport.addEventListener('pointerdown', onPointerDown);
@@ -191,14 +196,15 @@ function px(value: string): number {
  */
 export function publishViewportSize(pane: HTMLElement, viewport: HTMLElement): () => void {
   const measure = () => {
-    const style = getComputedStyle(viewport);
+    const style = hostWindowOf(viewport).getComputedStyle(viewport);
     const block = viewport.clientHeight - px(style.paddingTop) - px(style.paddingBottom);
     pane.style.setProperty('--docx-nav-block-size', `${Math.max(0, Math.round(block))}px`);
     pane.style.setProperty('--docx-nav-inline-size', `${Math.round(viewport.clientWidth)}px`);
   };
   measure();
-  if (typeof ResizeObserver === 'undefined') return () => {};
-  const observer = new ResizeObserver(measure);
+  const Observer = hostWindowOf(viewport).ResizeObserver;
+  if (typeof Observer === 'undefined') return () => {};
+  const observer = new Observer(measure);
   observer.observe(viewport);
   return () => observer.disconnect();
 }

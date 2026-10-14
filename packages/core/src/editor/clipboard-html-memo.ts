@@ -17,7 +17,8 @@ export function createGestureMemo<T>(): (html: string, key: string, compute: () 
     const value = compute();
     const entry = { html, key, value };
     memo = entry;
-    setTimeout(() => {
+    // Any window's task will do: this only releases memory.
+    globalThis.setTimeout(() => {
       if (memo === entry) memo = null;
     }, 0);
     return value;

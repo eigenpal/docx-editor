@@ -44,7 +44,7 @@ import {
 } from 'react';
 import type { ReactNode } from 'react';
 import type { ReviewRevisionKind, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { reviewPaneListsItem } from '@docx-editor.dev/core/editor';
+import { hostDocumentOf, isDomNode, reviewPaneListsItem } from '@docx-editor.dev/core/editor';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import {
   REVIEW_PANE_GUTTER,
@@ -71,6 +71,7 @@ import { ResolvedDisclosureProvider } from './review-comment-resolution.tsx';
 import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 import type { ReviewProps } from './review-types.ts';
+import { stackRailCards } from '../review/rail-stack.ts';
 import { ReviewContext, ReviewItemContext, type ReviewRailValue } from './review-context.ts';
 import {
   COLLAPSED_CARD_HEIGHT,
@@ -161,8 +162,12 @@ function ReviewRoot({
     return excluded.length > 0 ? excluded : undefined;
   }, [structural, formatting]);
 
+  // The pane lists each half of a replacement as its own card, so each stays reviewable.
   const railQuery = useMemo(
-    () => ({ excludeRevisionKinds: excludeRevisionKinds?.filter((kind) => kind !== 'format') }),
+    () => ({
+      excludeRevisionKinds: excludeRevisionKinds?.filter((kind) => kind !== 'format'),
+      pairReplacements: false,
+    }),
     [excludeRevisionKinds]
   );
 
@@ -312,7 +317,7 @@ function ReviewRoot({
     if (!editor || !rail) return undefined;
     const onMouseDown = (event: MouseEvent): void => {
       const target = event.target;
-      if (!(target instanceof Node) || rail.contains(target)) return;
+      if (!isDomNode(target) || rail.contains(target)) return;
       const container = rail.offsetParent as HTMLElement | null;
       if (!container || !container.contains(target)) return;
       const surface = container.querySelector('.docx-paginated-surface');
@@ -321,8 +326,9 @@ function ReviewRoot({
     };
     // Capture: the surface calls `preventDefault` on its own pointer handling, and a
     // bubbling listener never sees a click that lands on the pages layer.
-    document.addEventListener('mousedown', onMouseDown, true);
-    return () => document.removeEventListener('mousedown', onMouseDown, true);
+    const doc = hostDocumentOf(rail);
+    doc.addEventListener('mousedown', onMouseDown, true);
+    return () => doc.removeEventListener('mousedown', onMouseDown, true);
     // `documentAbsent` and `hidden` for the same reason as the metrics effect: no rail element
     // exists while either holds.
   }, [editor, documentAbsent, hidden]);
@@ -416,34 +422,23 @@ function ReviewRoot({
     return merged;
   }, [heights, roots]);
 
+  // The open card stays beside its text; see `stackRailCards`.
   const { stacked, collapsedKeys } = useMemo(() => {
-    const scale = metrics.scale;
-    const positions = new Map<string, number>();
-    const collapsed = new Set<string>();
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const entry of stackInput) {
-      // Geometry can be unavailable for an otherwise valid review item (for example while
-      // its distant page has not produced a placement). Leaving that slot without `top`
-      // puts it back into normal flow at the start of this relative container, underneath
-      // the absolutely positioned cards. Keep it in the same column after the preceding
-      // card instead; when geometry arrives a later pass can move it to its true anchor.
-      const top =
-        entry.anchorY === null
-          ? Number.isFinite(cursor)
-            ? cursor
-            : 0
-          : Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      const displacedPx = entry.anchorY === null ? 0 : (top - entry.anchorY) * scale;
-      const isActive = 'isActive' in entry && entry.isActive;
-      const collapse =
-        displacedPx > COLLAPSE_DISPLACEMENT_PX && !isActive && entry.key !== COMPOSE_KEY;
-      if (collapse) collapsed.add(entry.key);
-      const height = collapse
-        ? COLLAPSED_CARD_HEIGHT
-        : (estimatedHeights.get(entry.key) ?? DEFAULT_CARD_HEIGHT);
-      cursor = top + (height + gap) / scale;
-    }
+    const { positions, collapsed } = stackRailCards(
+      stackInput.map((entry) => ({
+        key: entry.key,
+        anchorY: entry.anchorY,
+        isActive: 'isActive' in entry && entry.isActive,
+      })),
+      {
+        gap,
+        scale: metrics.scale,
+        collapseAfterPx: COLLAPSE_DISPLACEMENT_PX,
+        heightOf: (key, folded) =>
+          folded ? COLLAPSED_CARD_HEIGHT : (estimatedHeights.get(key) ?? DEFAULT_CARD_HEIGHT),
+        collapsible: (entry) => entry.key !== COMPOSE_KEY,
+      }
+    );
     return { stacked: positions, collapsedKeys: collapsed };
   }, [stackInput, estimatedHeights, gap, metrics.scale]);
   // Compact takes the RAW anchor: the stacking run pushes the box below the estimated

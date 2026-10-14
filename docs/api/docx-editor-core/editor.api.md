@@ -49,6 +49,11 @@ export function applyThemeTint(hex: string, keep: number): string;
 export function arrangeToolbarGroups(builtIn: readonly string[], hosts: readonly ToolbarHostGroupPlacement[]): readonly string[];
 
 // @public
+export interface AttachOptions {
+    readonly focus?: boolean;
+}
+
+// @public
 export const AUTO_ZOOM_MODE: ZoomMode;
 
 // @internal
@@ -790,6 +795,13 @@ export const CHROME_GROUPS: readonly [{
         readonly state: {
             readonly kind: 'command';
         };
+    }, {
+        readonly id: 'watermark';
+        readonly labelKey: 'toolbar.watermark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
     }];
     readonly id: 'insert';
     readonly labelKey: 'toolbar.insert';
@@ -995,7 +1007,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -1154,6 +1166,9 @@ export interface ContentLockPolicy {
 export function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): boolean | null;
 
 // @public
+export function copyEditorStyles(from: Document, to: Document): () => void;
+
+// @public
 export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost;
 
 // @public
@@ -1231,6 +1246,9 @@ export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
 
 // @public
 export const DEFAULT_TABLE_CHROME_DRAFT: TableChromeDraft;
+
+// @public
+export const DEFAULT_WATERMARK_FONT = "Calibri";
 
 // @public
 export function defaultChromeGroups(): readonly ChromeGroup[];
@@ -1360,7 +1378,7 @@ export interface DocxEditorConfig {
 
 // @public
 export interface DocxEditorInstance extends Editor {
-    attach(el: HTMLElement): void;
+    attach(el: HTMLElement, options?: AttachOptions): void;
     collaborationSession(): EditorCollaborationSession | null;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
@@ -1437,6 +1455,15 @@ export interface EditorCommandExecute {
 // @internal
 export function editorCommandKey(command: EditorCommand): string;
 
+// @public
+export function editorHostDocument(editor: Editor): Document;
+
+// @public
+export function editorHostElement(editor: Editor): Element | null;
+
+// @public
+export function editorHostWindow(editor: Editor): HostWindow;
+
 // @internal
 export function editorInstanceScope(from: Element | null): Element | null;
 
@@ -1464,6 +1491,14 @@ export interface EditorModuleRegistry {
     // (undocumented)
     readonly review: ReviewModuleContribution | null;
     readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
+}
+
+// @public
+export interface EditorWindow {
+    close(): void;
+    readonly element: HTMLElement;
+    onClose(listener: () => void): () => void;
+    readonly window: Window;
 }
 
 // @public
@@ -1742,6 +1777,31 @@ export interface HistoryGroupBindingOptions {
 }
 
 // @public
+export function hostDocumentOf(node: Node | null | undefined): Document;
+
+// @public
+export interface HostTimers {
+    // (undocumented)
+    cancelAnimationFrame(handle: number | null | undefined): void;
+    // (undocumented)
+    clearTimeout(handle: number | null | undefined): void;
+    migrate(): void;
+    // (undocumented)
+    requestAnimationFrame(run: (time: number) => void): number;
+    // (undocumented)
+    setTimeout(run: () => void, delay?: number): number;
+}
+
+// @public
+export function hostTimers(node: () => Node | null | undefined): HostTimers;
+
+// @public
+export type HostWindow = Window & typeof globalThis;
+
+// @public
+export function hostWindowOf(node: Node | null | undefined): HostWindow;
+
+// @public
 export interface HyperlinkActivation {
     // (undocumented)
     readonly link: SurfaceHyperlink;
@@ -1932,16 +1992,40 @@ export interface InvalidTextFormFieldSession {
 export function isChromePrintShortcut(event: KeyboardEvent): boolean;
 
 // @public
+export function isDomNode(value: unknown): value is Node;
+
+// @public
+export function isElementNode(value: unknown): value is Element;
+
+// @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
 // @public
+export function isHTMLElementNode(value: unknown): value is HTMLElement;
+
+// @public
+export function isInputEvent(event: Event): event is InputEvent;
+
+// @public
+export function isKeyboardEvent(event: Event): event is KeyboardEvent;
+
+// @public
+export function isMouseEvent(event: Event): event is MouseEvent;
+
+// @public
 export function isoDateOf(date: Date): string;
+
+// @public
+export function isPointerEvent(event: Event): event is PointerEvent;
 
 // @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
 
 // @public
 export function isTableChromeSlot(slot: ChromeSlotId): slot is TableChromeSlotId;
+
+// @public
+export function isTextNode(value: unknown): value is Text;
 
 // @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
@@ -2013,6 +2097,18 @@ export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 export function observeContentControlPopup(panel: HTMLElement, anchor: HTMLElement): () => void;
 
 // @public
+export function openEditorWindow(options?: OpenEditorWindowOptions): Promise<EditorWindow | null>;
+
+// @public
+export interface OpenEditorWindowOptions {
+    readonly features?: string;
+    readonly name?: string;
+    readonly styles?: boolean | ((from: Document, to: Document) => () => void);
+    readonly title?: string;
+    readonly url?: string;
+}
+
+// @public
 export interface OpeningIndicatorHost {
     publish(element: HTMLElement | null): void;
 }
@@ -2074,10 +2170,11 @@ export interface PaginatedSurface {
         readonly footerDistanceTwips?: number;
         readonly headerDistanceTwips?: number;
         readonly kind?: 'header' | 'footer';
-        readonly op: 'createHeaderFooter' | 'deleteHeaderFooter' | 'linkToPrevious' | 'unlinkFromPrevious' | 'setSectionFurnitureOptions' | 'setDocumentProtection';
+        readonly op: 'createHeaderFooter' | 'deleteHeaderFooter' | 'linkToPrevious' | 'unlinkFromPrevious' | 'setSectionFurnitureOptions' | 'setDocumentProtection' | 'setWatermark';
         readonly sectionIndex?: number;
         readonly titlePage?: boolean;
         readonly variant?: 'default' | 'first' | 'even';
+        readonly watermark?: PackageWatermarkWrite | null;
     }): {
         readonly ok: true;
     } | {
@@ -2167,6 +2264,7 @@ export interface PaginatedSurface {
         readonly variant?: 'default' | 'first' | 'even';
     } | null;
     hiddenRevisionAuthors(): ReadonlySet<string>;
+    hostElement(): HTMLElement;
     readonly hyperlinks: HyperlinkOps;
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
@@ -2194,12 +2292,17 @@ export interface PaginatedSurface {
             readonly total: number;
         };
     };
+    moveTo(container: HTMLElement, options?: {
+        readonly focus?: boolean;
+    }): void;
     // (undocumented)
     navigate(command: NavigationCommand, extend?: boolean): void;
     readonly navigation: SurfaceNavigation;
     notePreviewText(scopeId: string): string | null;
     notePropertiesState(): NotePropertiesStateSnapshot | null;
     overlayCoordinates(): SurfaceOverlayCoordinates;
+    park(): void;
+    parked(): boolean;
     pasteRich(text: string, html: string | null): boolean;
     proposeTextChange(kind: 'insertion' | 'deletion' | 'replacement', text: string, author?: string): boolean;
     publishedLayout(): SemanticLayout;
@@ -2308,6 +2411,7 @@ export interface PaginatedSurface {
     state(): PaginatedSurfaceState;
     // (undocumented)
     storyScope(): StoryScope;
+    textMeasurer?(): TextMeasurer;
     toggleList(kind: 'bullet' | 'ordered'): boolean;
     toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
     // (undocumented)
@@ -2337,6 +2441,7 @@ export interface PaginatedSurfaceOptions {
     readonly onEdit?: (typing: boolean) => void;
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
+    readonly onHostMoved?: (document: Document) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRejection?: (reason: string) => void;
     // (undocumented)
@@ -2348,6 +2453,8 @@ export interface PaginatedSurfaceOptions {
     readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
     // (undocumented)
     readonly onToggleParagraphMarks?: () => void;
+    // @internal
+    readonly pairsReplacements?: () => boolean;
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;
@@ -3588,6 +3695,7 @@ export interface TextMeasurer {
     };
     measure(text: string, style: ResolvedRunStyle): number;
     strikeoutMetrics?(style: ResolvedRunStyle): StrikeoutStrokePt | undefined;
+    textOutline?(text: string, style: ResolvedRunStyle): TextOutline | undefined;
 }
 
 // @public (undocumented)
@@ -3854,6 +3962,17 @@ export function watchHighlights(editor: Editor, name: string, source: HighlightS
 // @public
 export interface WatchHighlightsOptions extends HighlightOptions {
     readonly onResult?: (result: HighlightResult) => void;
+}
+
+// @public
+export function watermarkShapeBox(watermark: Watermark, area: WatermarkSize, measurer?: TextMeasurer): WatermarkSize | null;
+
+// @public
+export interface WatermarkSize {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
 }
 
 // @public

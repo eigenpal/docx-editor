@@ -25,7 +25,9 @@ import {
 import type { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
+import { useNavigationViewportElement } from './navigation/navigation-layout';
 import type { Editor, EditorSnapshot, SelectionPin } from '@docx-editor.dev/core/contracts/editor';
+import { hostDocumentOf, hostWindowOf, isElementNode } from '@docx-editor.dev/core/editor';
 
 /** Where the popover sits, in viewport coordinates. */
 export interface HyperlinkPopupAnchor {
@@ -128,27 +130,29 @@ const selectTick = (snapshot: EditorSnapshot) => snapshot;
  * can report a zero-size rect at the start of a line; the fallback is the containing
  * element's box, and a total miss leaves the panel unanchored rather than mis-anchored.
  */
-function caretViewportAnchor(): HyperlinkPopupAnchor | null {
+function caretViewportAnchor(owner: Node | null): HyperlinkPopupAnchor | null {
   const usable = (rect: DOMRect | undefined): rect is DOMRect =>
     !!rect && (rect.width > 0 || rect.height > 0);
 
   // FIRST the engine's OWN painted caret. It is the authoritative insertion point — the
   // surface paints it from layout and suppresses the native one — so it has a real rect at
   // an empty paragraph, at a line end, and everywhere the browser's range does not.
-  if (typeof document !== 'undefined') {
-    const painted = document.querySelector('[data-docx-caret]');
+  // The editor's own document: a pop-out window or an iframe is not the script's.
+  const doc = hostDocumentOf(owner);
+  if (doc) {
+    const painted = doc.querySelector('[data-docx-caret]');
     const rect = painted?.getBoundingClientRect();
     if (usable(rect)) return { left: rect.left, top: rect.bottom };
   }
 
   // Then the browser's range, which the surface mirrors the model selection into.
-  const selection = typeof window === 'undefined' ? null : window.getSelection();
+  const selection = doc ? doc.getSelection() : null;
   if (selection && selection.rangeCount > 0) {
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
     if (usable(rect)) return { left: rect.left, top: rect.bottom };
     const node = range.startContainer;
-    const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+    const element = isElementNode(node) ? node : node.parentElement;
     const fallback = element?.getBoundingClientRect();
     if (usable(fallback)) return { left: fallback.left, top: fallback.bottom };
   }
@@ -193,6 +197,9 @@ export function useHyperlinkPopup(): UseHyperlinkPopupResult {
  */
 export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResult {
   const editor = useDocxEditor();
+  const viewport = useNavigationViewportElement();
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
   const [state, setState] = useState<HyperlinkPopupState>(CLOSED);
   const selectionPinRef = useRef<{ editor: Editor; pin: SelectionPin } | null>(null);
   // The engine's gestures fire from listeners registered ONCE; reading the live state
@@ -246,7 +253,7 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
    * dialog on it), editing mode otherwise.
    */
   const openAtCaret = useCallback(() => {
-    const anchor = caretViewportAnchor();
+    const anchor = caretViewportAnchor(viewportRef.current);
     releaseSelectionPin();
     const link =
       editor?.surface?.hyperlinks.linkAtCaret() ??
@@ -354,7 +361,8 @@ export function useHyperlinkPopupInstance(active = true): UseHyperlinkPopupResul
     const href = stateRef.current.link?.href;
     if (!href) return false;
     try {
-      await navigator.clipboard.writeText(href);
+      // The editor's window: an unfocused opener's clipboard refuses the write.
+      await hostWindowOf(viewportRef.current).navigator.clipboard.writeText(href);
     } catch {
       // A denied clipboard permission is not an error worth throwing at a user who clicked
       // a copy button; the confirmation simply does not appear.

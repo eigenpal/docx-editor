@@ -35,9 +35,9 @@ export interface ReportIssueEnv {
  * A caller that wants the full URL passes it explicitly through `env.pageUrl`.
  */
 function currentPage(): string {
-  if (typeof window === 'undefined') return '';
+  if (typeof globalThis.window === 'undefined') return '';
   try {
-    const url = new URL(window.location.href);
+    const url = new URL(globalThis.window.location.href);
     return `${url.origin}${url.pathname}`;
   } catch {
     return '';
@@ -45,11 +45,13 @@ function currentPage(): string {
 }
 
 export function buildReportIssueUrl(env: ReportIssueEnv = {}): string {
-  const ua = env.userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown');
+  const ua =
+    env.userAgent ??
+    (typeof globalThis.navigator !== 'undefined' ? globalThis.navigator.userAgent : 'unknown');
   const vp =
     env.viewport ??
-    (typeof window !== 'undefined'
-      ? { width: window.innerWidth, height: window.innerHeight }
+    (typeof globalThis.window !== 'undefined'
+      ? { width: globalThis.window.innerWidth, height: globalThis.window.innerHeight }
       : { width: 0, height: 0 });
   const pageUrl = env.pageUrl ?? currentPage();
 
@@ -80,6 +82,6 @@ export function buildReportIssueUrl(env: ReportIssueEnv = {}): string {
 }
 
 export function openReportIssue(env?: ReportIssueEnv): void {
-  if (typeof window === 'undefined') return;
-  window.open(buildReportIssueUrl(env), '_blank', 'noopener,noreferrer');
+  if (typeof globalThis.window === 'undefined') return;
+  globalThis.window.open(buildReportIssueUrl(env), '_blank', 'noopener,noreferrer');
 }
