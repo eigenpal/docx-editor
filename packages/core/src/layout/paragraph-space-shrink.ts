@@ -101,8 +101,10 @@ export function fitsWithSpaceShrink(
     before.reduce((sum, span) => sum + capacity(span, measurer) * 4, 0) - terminalSpace;
   if (existingSpaces <= 0) return false;
   const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
-  const compression = spaceWidth / (spaceWidth - needed);
-  return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
+  // Shrinking a space costs twice as much as stretching one: the word joins the line
+  // when each space would lose at most half of what the shorter line would add to it.
+  const shrink = needed / spaceWidth;
+  return 2 * shrink <= expansion - 1 + 1e-9;
 }
 
 /**
