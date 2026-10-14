@@ -20,9 +20,9 @@ import {
 import {
   acceptsIncomingSignalingMessage,
   connectionCarriesTopic,
-  forgetRoomOwner,
   forgetSubscriptions,
-  recordRoomOwner,
+  markRoomConnected,
+  markRoomDisconnected,
   scopeOutgoingSignalingMessage,
 } from '../webrtc-signaling-scope.ts';
 
@@ -247,6 +247,25 @@ describe('signaling connection lifetime', () => {
     expect(socket!.closed).toBe(true);
   });
 
+  test('a reconnecting status listener cannot keep a destroyed provider connected', async () => {
+    const doc = new Y.Doc();
+    const provider = new WebrtcProvider(createCollaborationRoomId(), doc, {
+      signaling: ['wss://foreign.example'],
+    });
+    await settle();
+    provider.on('status', ({ connected }: { connected: boolean }) => {
+      if (!connected) provider.connect();
+    });
+    const [socket] = openSockets('wss://foreign.example');
+    socket!.open();
+    provider.destroy();
+    doc.destroy();
+    await settle();
+    expect(provider.shouldConnect).toBe(false);
+    expect(socket!.closed).toBe(true);
+    expect(openSockets('wss://foreign.example')).toEqual([]);
+  });
+
   test('a host can disconnect and reconnect a room', async () => {
     const room = await openRoom(['wss://demo.example']);
     room.provider.disconnect();
@@ -275,8 +294,15 @@ describe('signaling connection lifetime', () => {
   });
 });
 
+/** A provider whose room is connected, as `y-webrtc` leaves it. */
+const connectedProvider = (roomName: string) => ({
+  roomName,
+  shouldConnect: true,
+  room: { bcconnected: true },
+});
+
 describe('signaling scope rules', () => {
-  const connection = { providers: new Set([{ roomName: 'mine' }]) };
+  const connection = { providers: new Set([connectedProvider('mine')]) };
 
   test('subscriptions keep only the connection’s rooms', () => {
     expect(
@@ -305,28 +331,28 @@ describe('signaling scope rules', () => {
     expect(acceptsIncomingSignalingMessage(connection, { type: 'pong' })).toBe(true);
   });
 
-  test('a destroyed room retires its name for every stale provider', () => {
-    const stale = { roomName: 'retired-room', shouldConnect: true };
-    const connection = { providers: new Set([stale]) };
-    // Before the guard sees the name, the connection's providers are trusted.
-    expect(connectionCarriesTopic(connection, 'retired-room')).toBe(true);
-    const live = { name: 'retired-room', provider: { roomName: 'retired-room' } };
-    recordRoomOwner(live);
-    expect(connectionCarriesTopic(connection, 'retired-room')).toBe(false);
+  test('only a connected room may signal', () => {
+    const provider = connectedProvider('closing-room');
+    const shared = { providers: new Set([provider]) };
+    // A room that connected before the guard was installed reports its own state.
+    expect(connectionCarriesTopic(shared, 'closing-room')).toBe(true);
+    markRoomConnected(provider.room);
+    expect(connectionCarriesTopic(shared, 'closing-room')).toBe(true);
     // A publication encrypted before the room closed arrives after it.
-    forgetRoomOwner(live);
+    markRoomDisconnected(provider.room);
     expect(
-      scopeOutgoingSignalingMessage(connection, { type: 'publish', topic: 'retired-room' })
+      scopeOutgoingSignalingMessage(shared, { type: 'publish', topic: 'closing-room' })
     ).toBeNull();
-    // A room that takes the name again decides for itself.
-    const next = { name: 'retired-room', provider: stale };
-    recordRoomOwner(next);
-    expect(connectionCarriesTopic(connection, 'retired-room')).toBe(true);
-    forgetRoomOwner(next);
+    // A provider that was told to disconnect does not signal either.
+    const stopped = { ...connectedProvider('stopped-room'), shouldConnect: false };
+    expect(connectionCarriesTopic({ providers: new Set([stopped]) }, 'stopped-room')).toBe(false);
+    // A provider whose room has not opened yet has nothing to announce.
+    const opening = { roomName: 'opening-room', shouldConnect: true, room: null };
+    expect(connectionCarriesTopic({ providers: new Set([opening]) }, 'opening-room')).toBe(false);
   });
 
   test('a closed socket forgets its subscriptions', () => {
-    const fresh = { providers: new Set([{ roomName: 'mine' }]) };
+    const fresh = { providers: new Set([connectedProvider('mine')]) };
     scopeOutgoingSignalingMessage(fresh, { type: 'subscribe', topics: ['mine'] });
     forgetSubscriptions(fresh);
     expect(scopeOutgoingSignalingMessage(fresh, { type: 'unsubscribe', topics: ['mine'] })).toBe(
@@ -335,7 +361,7 @@ describe('signaling scope rules', () => {
   });
 
   test('an unsubscribe names only topics the connection subscribed', () => {
-    const fresh = { providers: new Set([{ roomName: 'mine' }]) };
+    const fresh = { providers: new Set([connectedProvider('mine')]) };
     expect(scopeOutgoingSignalingMessage(fresh, { type: 'unsubscribe', topics: ['mine'] })).toBe(
       null
     );

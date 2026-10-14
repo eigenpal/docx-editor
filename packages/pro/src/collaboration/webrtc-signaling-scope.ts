@@ -18,11 +18,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * patches the shared `y-webrtc` prototypes once, so it also covers connections that existed
  * before the first room, and connections other providers on the page open.
  *
- * A provider's room name alone does not prove the room is live: `y-webrtc` leaves a destroyed
+ * A listed provider alone does not prove its room may signal: `y-webrtc` leaves a destroyed
  * provider in `providers`, and a publication encrypted before a room closed reaches `send`
- * after it. So the guard records which room currently owns each name and asks whether THAT
- * room's provider listed the URL, retires the name when the room is destroyed, and makes a
- * provider release its connections when it is destroyed.
+ * after it. So a connection carries a room only while that room is connected, and a provider
+ * releases its connections when it is destroyed.
  *
  * @internal
  */
@@ -36,18 +35,18 @@ interface SignalingMessage {
   readonly topics?: unknown;
 }
 
+interface ScopedRoom {
+  readonly bcconnected?: boolean;
+}
+
 interface ScopedProvider {
   readonly roomName: string;
   readonly shouldConnect?: boolean;
+  readonly room?: ScopedRoom | null;
 }
 
 interface ScopedConnection {
   readonly providers: ReadonlySet<ScopedProvider>;
-}
-
-interface ScopedRoom {
-  readonly name: string;
-  readonly provider: ScopedProvider;
 }
 
 type Method = (...args: unknown[]) => unknown;
@@ -57,17 +56,14 @@ const INSTALLED = Symbol.for('docx-editor.webrtc-signaling-scope');
 /** Topics this connection subscribed to, so an unsubscribe still reaches the server. */
 const subscribedTopics = new WeakMap<object, Set<string>>();
 
-/**
- * The room that currently owns each name. `y-webrtc` allows one room per name in a page, and
- * a room registers here when it connects or disconnects, which it does as soon as it opens.
- */
-const roomOwners = new Map<string, ScopedRoom>();
+/** Rooms between a `connect()` and the next `disconnect()` the guard saw. */
+const connectedRooms = new WeakSet<object>();
 
-/**
- * Names whose room the guard saw destroyed and no room has taken since. Nothing may signal
- * for them: a publication encrypted before the room closed still arrives at `send` after it.
- */
-const retiredRooms = new Set<string>();
+/** Rooms the guard saw connect or disconnect. Their state is known, not inferred. */
+const observedRooms = new WeakSet<object>();
+
+/** Providers inside `destroy()`. A `status` listener may not reconnect them. */
+const destroyingProviders = new WeakSet<object>();
 
 const subscribedOf = (connection: object): Set<string> => {
   let topics = subscribedTopics.get(connection);
@@ -78,30 +74,40 @@ const subscribedOf = (connection: object): Set<string> => {
   return topics;
 };
 
-/** Record `room` as the owner of its name. @internal */
-export function recordRoomOwner(room: ScopedRoom): void {
-  roomOwners.set(room.name, room);
-  retiredRooms.delete(room.name);
+/** Record that `room` connected. @internal */
+export function markRoomConnected(room: object): void {
+  observedRooms.add(room);
+  connectedRooms.add(room);
 }
 
-/** Retire `room`'s name, unless a newer room took it. @internal */
-export function forgetRoomOwner(room: ScopedRoom): void {
-  if (roomOwners.get(room.name) !== room) return;
-  roomOwners.delete(room.name);
-  retiredRooms.add(room.name);
+/** Record that `room` disconnected. @internal */
+export function markRoomDisconnected(room: object): void {
+  observedRooms.add(room);
+  connectedRooms.delete(room);
 }
+
+/**
+ * Whether `room` may signal. A room that connected before the guard was installed has no
+ * record; its own broadcast channel flag says whether it is connected.
+ */
+const roomIsConnected = (room: ScopedRoom | null | undefined): boolean => {
+  if (!room) return false;
+  if (observedRooms.has(room)) return connectedRooms.has(room);
+  return room.bcconnected === true;
+};
 
 /** Whether this connection may carry signaling for the room named `topic`. */
 export function connectionCarriesTopic(connection: ScopedConnection, topic: unknown): boolean {
   if (typeof topic !== 'string') return false;
-  const owner = roomOwners.get(topic);
-  if (owner) {
-    // Only a connected room signals; a disconnected one has left every connection.
-    return owner.provider.shouldConnect !== false && connection.providers.has(owner.provider);
+  for (const provider of connection.providers) {
+    if (
+      provider.roomName === topic &&
+      provider.shouldConnect !== false &&
+      roomIsConnected(provider.room)
+    ) {
+      return true;
+    }
   }
-  if (retiredRooms.has(topic)) return false;
-  // A room that opened before the guard was installed: trust the connection's providers.
-  for (const provider of connection.providers) if (provider.roomName === topic) return true;
   return false;
 }
 
@@ -191,12 +197,14 @@ export function installSignalingScope(): void {
       }
   );
 
+  // `connect()` announces the room before it sets its own connected flag, so the record
+  // starts first.
   patch(
     Room.prototype,
     'connect',
     (connect) =>
-      function ownedConnect(this: ScopedRoom) {
-        recordRoomOwner(this);
+      function recordedConnect(this: object) {
+        markRoomConnected(this);
         return connect.call(this);
       }
   );
@@ -204,19 +212,9 @@ export function installSignalingScope(): void {
     Room.prototype,
     'disconnect',
     (disconnect) =>
-      function ownedDisconnect(this: ScopedRoom) {
-        recordRoomOwner(this);
+      function recordedDisconnect(this: object) {
+        markRoomDisconnected(this);
         return disconnect.call(this);
-      }
-  );
-  patch(
-    Room.prototype,
-    'destroy',
-    (destroy) =>
-      function forgottenDestroy(this: ScopedRoom) {
-        const result = destroy.call(this);
-        forgetRoomOwner(this);
-        return result;
       }
   );
 
@@ -243,8 +241,18 @@ export function installSignalingScope(): void {
     'destroy',
     (destroy) =>
       function releasingDestroy(this: ReleasableProvider) {
+        destroyingProviders.add(this);
         if (this.shouldConnect) this.disconnect();
         return destroy.call(this);
+      }
+  );
+  patch(
+    WebrtcProvider.prototype,
+    'connect',
+    (connect) =>
+      function connectUnlessDestroyed(this: ReleasableProvider) {
+        if (destroyingProviders.has(this)) return;
+        return connect.call(this);
       }
   );
 }
