@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { describe, expect, test } from 'bun:test';
-import { stackRailCards, type RailStackEntry } from '../review/rail-stack.ts';
+import { stackRailCards, stackReviewPositions, type RailStackEntry } from '../review/rail-stack.ts';
 
 /** Cards 100px tall, folded 20px, 10px apart, one point per pixel. */
 const options = (collapseAfterPx = 1000) => ({
@@ -97,6 +97,20 @@ describe('stackRailCards', () => {
         { key: 'c', anchorY: null },
       ])
     ).toEqual([90, 200, 310]);
+  });
+
+  test('the public hooks keep an open placement at its anchor', () => {
+    const placements = [
+      { key: 'a', anchorY: 0, isActive: false },
+      { key: 'b', anchorY: 0, isActive: true },
+    ];
+    const heights = new Map([['a', 50]]);
+    const positions = stackReviewPositions(placements, heights, {
+      gap: 10,
+      scale: 1,
+      defaultHeight: 100,
+    });
+    expect([positions.get('a'), positions.get('b')]).toEqual([-60, 0]);
   });
 
   test('an open card without geometry pins nothing', () => {

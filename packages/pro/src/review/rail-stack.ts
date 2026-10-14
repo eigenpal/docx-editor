@@ -94,3 +94,29 @@ export function stackRailCards(
   }
   return { positions, collapsed };
 }
+
+/**
+ * The public `useStackedReviewPositions` hooks: the same stacking without folding. An entry
+ * that carries `isActive: true`, as every review placement does while its card is open, stays
+ * at its anchor, so a host rail gets the same behavior as the packaged one.
+ */
+export function stackReviewPositions(
+  entries: readonly { readonly key: string; readonly anchorY: number | null }[],
+  heights: ReadonlyMap<string, number>,
+  options: { readonly gap: number; readonly scale: number; readonly defaultHeight: number }
+): ReadonlyMap<string, number> {
+  return stackRailCards(
+    entries.map((entry) => ({
+      key: entry.key,
+      anchorY: entry.anchorY,
+      isActive: 'isActive' in entry && entry.isActive === true,
+    })),
+    {
+      gap: options.gap,
+      scale: options.scale,
+      collapseAfterPx: Number.POSITIVE_INFINITY,
+      heightOf: (key) => heights.get(key) ?? options.defaultHeight,
+      collapsible: () => false,
+    }
+  ).positions;
+}

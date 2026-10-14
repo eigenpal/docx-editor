@@ -687,7 +687,7 @@ If evaluation throws, the editor preserves the last complete projection and surf
 
 Filtering changes layout, painted markup, review cards, and bulk actions over the visible review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document, or change saved OOXML. Saving while a filter is active writes the same canonical revision markup as saving with no filter. To change the document, call the normal accept or reject actions explicitly.
 
-If `preset={false}`, use `useStackedReviewPositions(items, heights, { gap, scale })`. Pass `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use document points.
+If `preset={false}`, use `useStackedReviewPositions(items, heights, { gap, scale })`. Pass `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use document points. Pass the review items as they are: an item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
 
 ## Accept or reject in bulk
 

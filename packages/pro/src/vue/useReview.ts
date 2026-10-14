@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
+import { stackReviewPositions } from '../review/rail-stack.ts';
 import type {
   Editor,
   ReviewActivationOptions,
@@ -347,18 +348,6 @@ export function useStackedReviewPositions(
     const gap = opts.gap ?? 8;
     const scale = opts.scale ?? 1;
     const defaultHeight = opts.defaultHeight ?? 0;
-    const positions = new Map<string, number>();
-    let cursor = Number.NEGATIVE_INFINITY;
-    for (const entry of entries) {
-      const top =
-        entry.anchorY === null
-          ? Number.isFinite(cursor)
-            ? cursor
-            : 0
-          : Math.max(entry.anchorY, cursor);
-      positions.set(entry.key, top);
-      cursor = top + ((heightMap.get(entry.key) ?? defaultHeight) + gap) / scale;
-    }
-    return positions;
+    return stackReviewPositions(entries, heightMap, { gap, scale, defaultHeight });
   });
 }
