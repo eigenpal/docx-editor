@@ -264,7 +264,7 @@ Merges that enter or leave the measured group retain ordinary row placement. Act
 
 Fixed-height horizontal cells display the part of a line that starts inside their content box. A taller line does not enlarge the row. Text below the box stays in the document and does not continue on another page.
 
-Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the text flows through every row of the span and is clipped at the bottom of the last row. A line that starts inside the span shows its visible part. If a text-only span of three or more rows crosses a page, the part above the break shows whole lines, and the text continues in the rows on the next page.
+Vertical cell merges that cover the same rows share those rows without adding their heights twice. In fixed-height rows, a merged cell whose content fits the complete span displays all of it. If the content does not fit, the text flows through every row of the span and is clipped at the bottom of the last row. A line that starts inside the span shows its visible part. If a text-only span of three or more rows crosses a page, the part above the break shows whole lines, and the text continues in the rows on the next page. Some merges are still clipped at their first row: a merge that contains or partly overlaps another merge, a second, shorter merge that starts in the same row, and a two-row span that crosses a page.
 
 ### Fields and paragraph spacing
 
