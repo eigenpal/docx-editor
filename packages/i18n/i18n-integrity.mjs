@@ -92,7 +92,7 @@ export function extractMessageInfo(message) {
   for (const match of message.matchAll(PLURAL_BLOCK_RE)) {
     outside.push(message.slice(cursor, match.index));
     plurals.push({ name: match[1], branches: parseBranches(match[2]) });
-    if (match[2].replace(BRANCH_RE, "").trim()) malformedPlural = true;
+    if (match[2].replace(BRANCH_RE, '').trim()) malformedPlural = true;
     cursor = match.index + match[0].length;
   }
   outside.push(message.slice(cursor));
@@ -212,8 +212,6 @@ function checkLeaf(key, enText, locText, code, violations) {
         });
       }
     }
-
-
   }
 
   if (locInfo.malformedBraces) {
