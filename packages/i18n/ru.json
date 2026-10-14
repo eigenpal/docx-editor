@@ -229,7 +229,7 @@
     "imagePosition": {
       "relativeOptions": {
         "page": "Страница",
-        "column": "Столбец",
+        "column": "Колонка",
         "margin": "Поле",
         "character": "Символ",
         "paragraph": "Абзац",
@@ -340,9 +340,9 @@
       "tabMixed": "В выбранных абзацах разные позиции табуляции.",
       "tabNone": "Нет",
       "tabPosition": "Положение",
-      "tabPositionLabel": "{position} дюйм",
+      "tabPositionLabel": "{position} дюйм.",
       "tabRemove": "Очистить",
-      "tabRemoveAt": "Очистить позицию табуляции на {position} дюйм",
+      "tabRemoveAt": "Очистить позицию табуляции на {position} дюйм.",
       "tabStops": "Позиции табуляции",
       "title": "Абзац",
       "unitInches": "дюйм",
@@ -351,7 +351,7 @@
     }
   },
   "comments": {
-    "resolve": "Решить",
+    "resolve": "Разрешить",
     "reopen": "Открыть повторно",
     "unknown": "Неизвестный",
     "addComment": "Добавить примечание...",
@@ -360,7 +360,7 @@
   "revisions": {
     "paragraphMarkInserted": "Вставлен знак абзаца",
     "paragraphMarkDeleted": "Удалён знак абзаца",
-    "runPropertiesChanged": "Форматирование",
+    "runPropertiesChanged": "Отформатировано",
     "formattingDetails": {
       "alignment": "Выравнивание",
       "auto": "Автоматически",
@@ -808,7 +808,7 @@
       "resultsAriaLabel": "Результаты поиска",
       "searching": "Поиск…",
       "total": "{total, plural, one {# совпадение} few {# совпадения} many {# совпадений} other {# совпадения}}",
-      "totalTruncated": "{total, plural, one {#+ совпадение} few {#+ совпадения} many {#+ совпадений} other {#+ совпадения}}",
+      "totalTruncated": "{total, plural, one {#+ совпадений} few {#+ совпадений} many {#+ совпадений} other {#+ совпадения}}",
       "wholeWord": "Только слово целиком"
     },
     "headings": {
@@ -869,8 +869,8 @@
     "replyTargetResolved": "Изменение решено, поэтому ответ не отправлен.",
     "resolved": "Решено",
     "showPane": "Показать примечания",
-    "showResolvedComment": "Показать решённое примечание",
-    "simpleMarkup": "Простые исправления",
+    "showResolvedComment": "Показать разрешённое примечание",
+    "simpleMarkup": "Простая разметка",
     "structural": "Изменена структура документа",
     "trackedChange": "Исправление"
   },
@@ -884,19 +884,19 @@
     "cells": "Цвет ячеек",
     "changedLines": "Изменённые строки",
     "changedLinesColor": "Цвет изменённых строк",
-    "deletedCells": "Удалены ячейки",
+    "deletedCells": "Удалённые ячейки",
     "deletions": "Удаления",
     "deletionsBackground": "Фон удалений",
     "deletionsColor": "Цвет удалений",
     "formatting": "Форматирование",
     "formattingBackground": "Фон форматирования",
     "formattingColor": "Цвет форматирования",
-    "insertedCells": "Вставлены ячейки",
+    "insertedCells": "Вставленные ячейки",
     "insertions": "Вставки",
     "insertionsBackground": "Фон вставок",
     "insertionsColor": "Цвет вставок",
     "markup": "Разметка",
-    "mergedCells": "Объединены ячейки",
+    "mergedCells": "Объединённые ячейки",
     "movedFrom": "Перемещено из",
     "movedFromBackground": "Фон перемещения из",
     "movedFromColor": "Цвет перемещения из",
@@ -907,7 +907,7 @@
     "ok": "ОК",
     "preview": "Предварительный просмотр положения полосы исправлений",
     "reset": "Сбросить к значениям по умолчанию",
-    "splitCells": "Разделены ячейки",
+    "splitCells": "Разделённые ячейки",
     "tableCells": "Выделение ячеек таблицы",
     "title": "Параметры исправлений",
     "trackFormatting": "Отслеживать форматирование",
@@ -963,7 +963,7 @@
     "edit": "Изменить поле…",
     "editing": "Курсор внутри текстового поля.",
     "enabled": "Разрешить заполнение",
-    "firstCapital": "Первая заглавная",
+    "firstCapital": "Первая прописная",
     "format": "Формат",
     "invalidDate": "Требуется допустимая дата. Поле будет очищено.",
     "invalidNumber": "Требуется допустимое число. Поле будет очищено.",
@@ -978,10 +978,10 @@
     "regular": "Обычный текст",
     "selected": "Выбрано всё поле. Ввод заменяет поле, когда форма не защищена.",
     "title": "Параметры текстового поля",
-    "titleCase": "Начинать с прописных",
+    "titleCase": "Первые прописные",
     "type": "Тип",
     "unavailable": "Это поле нельзя изменить.",
-    "uppercase": "Заглавные буквы"
+    "uppercase": "Прописные буквы"
   },
   "formattingMarks": {
     "columnBreak": "Разрыв колонки",
