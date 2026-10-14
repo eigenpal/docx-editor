@@ -191,6 +191,41 @@ export function equationDefaultRunSizePt(properties: OoxmlElement): number | und
   return value && HALF_POINTS.test(value) ? Number(value) / 2 : undefined;
 }
 
+/**
+ * The font size, in points, that every `m:r` of one equation shares through default run
+ * properties, or undefined. Control properties do not take part: a formatted `m:ctrlPr`
+ * changes operator glyphs, not the size of the runs. The scan honors the same limits as
+ * {@link equationDefaultFormatting}.
+ */
+export function equationSharedRunSizePt(
+  equation: OoxmlNode,
+  maxNodes: number,
+  maxDepth: number
+): number | undefined {
+  let size: number | undefined;
+  let visited = 0;
+  const stack: { node: OoxmlNode; depth: number }[] = [{ node: equation, depth: 1 }];
+  while (stack.length > 0) {
+    const { node, depth } = stack.pop()!;
+    visited += 1;
+    if (visited > maxNodes || depth > maxDepth) return undefined;
+    if (node.kind === 'textValue') continue;
+    if (node.namespaceUri === MATH && node.localName === 'r') {
+      const read = readDefaultRun(node);
+      if (read === false || read.kind === 'bare') return undefined;
+      const runSize = equationDefaultRunSizePt(read.properties);
+      if (runSize === undefined || (size !== undefined && size !== runSize)) return undefined;
+      size = runSize;
+      continue;
+    }
+    if (visited + stack.length + node.children.length > maxNodes) return undefined;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index]!, depth: depth + 1 });
+    }
+  }
+  return size;
+}
+
 /** How compact replacement treats the control properties of one equation. */
 export type EquationControlDefaults =
   /** No structure carries `m:ctrlPr`. Replacement writes none. */

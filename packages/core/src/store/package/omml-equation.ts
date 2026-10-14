@@ -17,7 +17,7 @@ import {
 import {
   cloneEquationControl,
   equationDefaultFormatting,
-  equationDefaultRunSizePt,
+  equationSharedRunSizePt,
 } from './omml-control-defaults.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
@@ -429,10 +429,7 @@ export function projectOmmlEquation(
     truncated: false,
   };
   const expression = projectNode(node, state, 1);
-  const fontSizePt =
-    defaults.runs.kind === 'default'
-      ? equationDefaultRunSizePt(defaults.runs.properties)
-      : undefined;
+  const fontSizePt = equationSharedRunSizePt(node, resolved.maxNodes, resolved.maxDepth);
   if (state.truncated) {
     const structuredFallback = state.text + '…';
     return publish(

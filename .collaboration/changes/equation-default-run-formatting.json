@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "Compact replacement refused every equation whose runs carried run properties (w:rPr), and runs with a size or language kept the text fallback.",
-  "after": "When every run in an equation holds the same default run properties and no m:rPr, compact replacement is available and writes a copy of the first run's w:rPr on each run it creates. Runs with differing default properties project as math and stay read-only.",
+  "after": "When every run in an equation holds the same default run properties and no m:rPr, compact replacement is available and writes a copy of the first run's w:rPr on each run it creates. Runs with differing default properties project as math and stay read-only. An equation whose runs share one w:sz lays out at that size; clients before this change draw it at the surrounding text size, which changes rendering only.",
   "reason": "The setMathEquation operation shape is unchanged. Peers receive the replaced equation as ordinary canonical OMML nodes, which released clients already preserve. The change affects local projection and replacement output, not the room format.",
   "tests": [
     "packages/core/src/store/__tests__/omml-run-defaults.test.ts",
