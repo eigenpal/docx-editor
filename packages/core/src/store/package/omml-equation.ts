@@ -48,6 +48,7 @@ export interface OmmlLimits {
  * default math formatting, and compact linear syntax cannot express them.
  */
 export interface EquationControlSource {
+  /** The structure carries supported `m:ctrlPr` properties, so compact replacement refuses it. */
   readonly controlProperties?: true;
 }
 
