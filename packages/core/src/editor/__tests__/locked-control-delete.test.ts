@@ -192,6 +192,15 @@ for (const mode of MODES) {
       expect(controls(m)).toBe(0);
     });
 
+    test('a selection that covers an sdtContentLocked control is refused', () => {
+      const m = mount(line('sdtContentLocked'), mode);
+      caretAt(m, 1, 8);
+      m.surface.deleteBackward();
+      expect(rejection(m)).not.toBeNull();
+      expect(bodyText(m)).toBe('aaTokenzz');
+      expect(controls(m)).toBe(1);
+    });
+
     test('Backspace away from the control deletes a character as before', () => {
       const m = mount(line('contentLocked'), mode);
       caretAt(m, 9);
