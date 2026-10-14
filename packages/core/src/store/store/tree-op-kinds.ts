@@ -65,6 +65,7 @@ export const TREE_DOC_OP_KINDS = [
   'unlinkFromPrevious',
   'setSectionFurnitureOptions',
   'setDocumentProtection',
+  'setWatermark',
   'insertNote',
   'deleteNote',
   'convertNote',

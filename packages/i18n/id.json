@@ -258,6 +258,30 @@
       "applyToDocument": "Seluruh dokumen",
       "applyToSection": "Bagian ini"
     },
+    "watermark": {
+      "title": "Tanda air",
+      "noWatermark": "Tanpa tanda air",
+      "picture": "Tanda air gambar",
+      "selectPicture": "Pilih gambar…",
+      "noPictureSelected": "(Tidak ada gambar yang dipilih)",
+      "currentPicture": "(Gambar saat ini)",
+      "pictureFailed": "Gambar tidak dapat dibaca.",
+      "scale": "Skala",
+      "auto": "Otomatis",
+      "washout": "Pudarkan",
+      "text": "Tanda air teks",
+      "textLabel": "Teks",
+      "font": "Font",
+      "size": "Ukuran",
+      "bold": "Tebal",
+      "italic": "Miring",
+      "transparency": "Transparansi",
+      "color": "Warna",
+      "layout": "Tata letak",
+      "horizontal": "Horizontal",
+      "diagonal": "Diagonal",
+      "refused": "Tanda air tidak dapat diterapkan."
+    },
     "footnoteProperties": {
       "title": "Catatan Kaki dan Catatan Akhir",
       "footnotes": "Catatan Kaki",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Gambar tidak dapat disisipkan",
       "emptyFile": "File yang dipilih kosong.",
       "invalidSignature": "File tersebut bukan gambar PNG, JPEG, atau GIF yang didukung.",
       "oversize": "Gambar melebihi ukuran maksimum yang diizinkan.",

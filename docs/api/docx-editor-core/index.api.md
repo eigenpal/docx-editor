@@ -718,6 +718,13 @@ export const CHROME_GROUPS: readonly [{
         readonly state: {
             readonly kind: 'command';
         };
+    }, {
+        readonly id: 'watermark';
+        readonly labelKey: 'toolbar.watermark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
     }];
     readonly id: 'insert';
     readonly labelKey: 'toolbar.insert';
@@ -828,7 +835,7 @@ export interface ChromePrintOptions {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.watermark';
 
 // @public
 export interface ClearAnchorHighlightOptions {
@@ -1626,10 +1633,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
         readonly kind: string;
         readonly story?: 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
     }[];
-    getWatermark(): {
-        readonly kind: 'text' | 'image';
-        readonly text?: string;
-    } | null;
+    getWatermark(): WatermarkState | null;
     // (undocumented)
     getZoom(): number;
     getZoomMode(): ZoomMode;
@@ -1893,7 +1897,6 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         width?: number | null;
         widthType?: string | null;
     };
-    // (undocumented)
     setWatermark: {
         watermark: Watermark | null;
     };
@@ -3703,10 +3706,42 @@ export type ViewScope = Exclude<EditorScope, {
 
 // @public
 export interface Watermark {
-    // (undocumented)
+    readonly bold?: boolean;
+    readonly color?: string;
+    readonly fontFamily?: string;
+    readonly fontSizePt?: number | null;
     readonly imageData?: Uint8Array;
+    readonly italic?: boolean;
+    readonly layout?: WatermarkLayout;
+    readonly scale?: number | null;
+    readonly text?: string;
+    readonly transparency?: number;
+    readonly washout?: boolean;
+}
+
+// @public
+export type WatermarkLayout = 'diagonal' | 'horizontal';
+
+// @public
+export interface WatermarkState {
+    // (undocumented)
+    readonly bold?: boolean;
+    readonly color?: string;
+    // (undocumented)
+    readonly fontFamily?: string;
+    readonly fontSizePt?: number | null;
+    // (undocumented)
+    readonly italic?: boolean;
+    // (undocumented)
+    readonly kind: 'text' | 'image';
+    // (undocumented)
+    readonly layout?: WatermarkLayout;
     // (undocumented)
     readonly text?: string;
+    // (undocumented)
+    readonly transparency?: number;
+    // (undocumented)
+    readonly washout?: boolean;
 }
 
 // @public @deprecated (undocumented)

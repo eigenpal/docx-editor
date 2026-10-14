@@ -292,6 +292,30 @@
         "executive": "Ejecutivo (7.25\" × 10.5\")"
       }
     },
+    "watermark": {
+      "title": "Marca de agua",
+      "noWatermark": "Sin marca de agua",
+      "picture": "Marca de agua de imagen",
+      "selectPicture": "Seleccionar imagen…",
+      "noPictureSelected": "(Ninguna imagen seleccionada)",
+      "currentPicture": "(Imagen actual)",
+      "pictureFailed": "No se pudo leer la imagen.",
+      "scale": "Escala",
+      "auto": "Automática",
+      "washout": "Decolorar",
+      "text": "Marca de agua de texto",
+      "textLabel": "Texto",
+      "font": "Fuente",
+      "size": "Tamaño",
+      "bold": "Negrita",
+      "italic": "Cursiva",
+      "transparency": "Transparencia",
+      "color": "Color",
+      "layout": "Distribución",
+      "horizontal": "Horizontal",
+      "diagonal": "Diagonal",
+      "refused": "No se pudo aplicar la marca de agua."
+    },
     "footnoteProperties": {
       "title": "Propiedades de notas al pie y notas al final",
       "footnotes": "Notas al pie",
@@ -618,6 +642,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "No se puede insertar la imagen",
       "emptyFile": "El archivo seleccionado está vacío.",
       "invalidSignature": "El archivo no es una imagen PNG, JPEG o GIF compatible.",
       "unsupportedFormat": "No se admite insertar este formato de imagen.",

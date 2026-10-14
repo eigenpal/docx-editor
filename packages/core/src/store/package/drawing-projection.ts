@@ -237,6 +237,8 @@ export interface DrawingProjection {
   readonly groupTextboxes?: readonly GroupTextboxProjection[];
   /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
   readonly legacyGraphic?: LegacyGraphicProjection;
+  /** Floating VML text art (a text watermark), fitted to the box by layout. */
+  readonly textArt?: import('./legacy-vml-text-art.ts').LegacyTextArtProjection;
   readonly locks: DrawingLocks;
   readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;

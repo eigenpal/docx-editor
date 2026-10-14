@@ -7,14 +7,14 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 84,
+    "treeDocOpKinds": 85,
     "singlePartApply": 71,
-    "headerFooterLifecycle": 6,
+    "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 75,
+    "chromeSlots": 76,
     "chromeCommandWired": 43,
-    "chromeProbe": 6,
+    "chromeProbe": 7,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 13,
     "insertableContentControlTypes": 5,
@@ -127,7 +127,8 @@
       "linkToPrevious",
       "unlinkFromPrevious",
       "setSectionFurnitureOptions",
-      "setDocumentProtection"
+      "setDocumentProtection",
+      "setWatermark"
     ],
     "noteLifecycle": [
       "insertNote",
@@ -196,6 +197,7 @@
     "unlinkFromPrevious",
     "setSectionFurnitureOptions",
     "setDocumentProtection",
+    "setWatermark",
     "insertNote",
     "deleteNote",
     "convertNote",
@@ -887,6 +889,22 @@
       "openSpec": ["typed-ooxml-paragraph-editor"]
     },
     {
+      "kind": "setWatermark",
+      "commitPath": "applyLifecycleOp",
+      "storyScopes": [],
+      "storyParity": "n/a",
+      "commandExposure": ["setWatermark"],
+      "packageIntents": [
+        "withPart",
+        "withNewPart",
+        "withContentTypeOverride",
+        "withRelationship",
+        "withEmbeddedImage",
+        "withoutUnreferencedImagePart"
+      ],
+      "openSpec": ["typed-vml-watermarks"]
+    },
+    {
       "kind": "insertNote",
       "commitPath": "applyLifecycleOp",
       "storyScopes": ["body"],
@@ -1320,7 +1338,8 @@
       "insert.pageBreak",
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
-      "insert.toc"
+      "insert.toc",
+      "insert.watermark"
     ],
     "commandWired": [
       "history.undo",
@@ -1373,7 +1392,8 @@
       "image.properties",
       "table.insert",
       "paragraph.dialog",
-      "file.pageSetup"
+      "file.pageSetup",
+      "insert.watermark"
     ],
     "unwiredCommandShaped": [
       "zoom.level",

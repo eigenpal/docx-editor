@@ -292,6 +292,30 @@
         "executive": "Executive (7.25\" × 10.5\")"
       }
     },
+    "watermark": {
+      "title": "Watermark",
+      "noWatermark": "No watermark",
+      "picture": "Picture watermark",
+      "selectPicture": "Select picture…",
+      "noPictureSelected": "(No picture selected)",
+      "currentPicture": "(Current picture)",
+      "pictureFailed": "The picture could not be read.",
+      "scale": "Scale",
+      "auto": "Auto",
+      "washout": "Washout",
+      "text": "Text watermark",
+      "textLabel": "Text",
+      "font": "Font",
+      "size": "Size",
+      "bold": "Bold",
+      "italic": "Italic",
+      "transparency": "Transparency",
+      "color": "Color",
+      "layout": "Layout",
+      "horizontal": "Horizontal",
+      "diagonal": "Diagonal",
+      "refused": "The watermark could not be applied."
+    },
     "footnoteProperties": {
       "title": "Footnote & Endnote Properties",
       "footnotes": "Footnotes",
@@ -618,6 +642,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Cannot insert the picture",
       "emptyFile": "The selected file is empty.",
       "invalidSignature": "The file is not a supported PNG, JPEG, or GIF image.",
       "unsupportedFormat": "This image format is not supported for insertion.",

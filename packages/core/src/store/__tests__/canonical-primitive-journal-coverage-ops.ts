@@ -572,6 +572,24 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       op: 'setDocumentProtection',
       enforce: true,
     })),
+    // A text watermark in a document with no header: a new header part, its relationship and
+    // content type, and the watermark run, replayed as one package edit.
+    lifecycle('setWatermark', plainDoc(), () => ({
+      op: 'setWatermark',
+      watermark: {
+        kind: 'text',
+        text: 'DRAFT',
+        fontFamily: 'Calibri',
+        fontSizePt: null,
+        bold: false,
+        italic: false,
+        colorHex: 'C0C0C0',
+        opacity: 0.5,
+        diagonal: true,
+        widthPt: 400,
+        heightPt: 200,
+      },
+    })),
     lifecycle('insertNote', plainDoc(), (store) => ({
       op: 'insertNote',
       noteKind: 'footnote',

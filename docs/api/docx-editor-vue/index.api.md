@@ -174,6 +174,8 @@ import { VNodeChild } from 'vue';
 import { VNodeProps } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
+import { Watermark } from '@docx-editor.dev/core/contracts/editor';
+import { WatermarkState } from '@docx-editor.dev/core/contracts/editor';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 
@@ -2104,6 +2106,9 @@ export { createFontSource }
 
 export { DEFAULT_FONT }
 
+// @public
+export const DEFAULT_WATERMARK_PRESETS: readonly string[];
+
 export { defineFontResolver }
 
 // @public
@@ -2843,6 +2848,44 @@ export interface DocxEditorImageAltTextPopupProps {
 }
 
 // @public
+export const DocxEditorImageInsertErrorDialog: vue.DefineComponent<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    message: {
+        required: true;
+        type: StringConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    style: PropType<CSSProperties>;
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: StringConstructor;
+    message: {
+        required: true;
+        type: StringConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    style: PropType<CSSProperties>;
+}>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorImageInsertErrorDialogProps {
+    children?: DocxEditorChildren;
+    // (undocumented)
+    className?: string;
+    message: string;
+    onClose(): void;
+    // (undocumented)
+    style?: CSSProperties;
+}
+
+// @public
 export const DocxEditorImagePropertiesDialog: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
         default: undefined;
@@ -3024,6 +3067,7 @@ export interface DocxEditorMenuNamespace {
     readonly Submenu: typeof MenuSubmenu;
     // (undocumented)
     readonly TableGrid: typeof MenuTableGrid;
+    readonly Watermark: typeof MenuWatermark;
 }
 
 // @public (undocumented)
@@ -3121,6 +3165,7 @@ export interface DocxEditorNamespace {
     readonly VerticalRuler: typeof DocxEditorVerticalRuler;
     // (undocumented)
     readonly Viewport: typeof DocxEditorViewport;
+    readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
 }
 
 // @public (undocumented)
@@ -3649,6 +3694,7 @@ export interface DocxEditorPopups {
     hyperlink?: DocxEditorPopup<HyperLinkProps>;
     // (undocumented)
     imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
+    imageInsertError?: DocxEditorPopup<DocxEditorImageInsertErrorDialogProps>;
     // (undocumented)
     imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
     // (undocumented)
@@ -3667,6 +3713,7 @@ export interface DocxEditorPopups {
     revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+    watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
 }
 
 // @public
@@ -4403,6 +4450,113 @@ export interface DocxEditorViewportProps {
     style?: CSSProperties;
 }
 
+// @public
+export const DocxEditorWatermarkDialog: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        onClose: {
+            required: true;
+            type: PropType<() => void>;
+        };
+        open: {
+            required: true;
+            type: BooleanConstructor;
+        };
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        presets: {
+            default: undefined;
+            type: PropType<readonly string[]>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        preset: boolean;
+        presets: readonly string[];
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        onClose: {
+            required: true;
+            type: PropType<() => void>;
+        };
+        open: {
+            required: true;
+            type: BooleanConstructor;
+        };
+        preset: {
+            default: boolean;
+            type: BooleanConstructor;
+        };
+        presets: {
+            default: undefined;
+            type: PropType<readonly string[]>;
+        };
+        style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        preset: boolean;
+        presets: readonly string[];
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    onClose: {
+        required: true;
+        type: PropType<() => void>;
+    };
+    open: {
+        required: true;
+        type: BooleanConstructor;
+    };
+    preset: {
+        default: boolean;
+        type: BooleanConstructor;
+    };
+    presets: {
+        default: undefined;
+        type: PropType<readonly string[]>;
+    };
+    style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    preset: boolean;
+    presets: readonly string[];
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & Record<"Apply" | "Body" | "Cancel" | "Error" | "Footer" | "Header" | "Reset" | "Title", vue.DefineComponent<DialogPartProps>> & {
+    Field: vue.DefineComponent<DialogPartProps & {
+        name: WatermarkDialogFieldName;
+    }>;
+};
+
+// @public
+export interface DocxEditorWatermarkDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+    presets?: readonly string[];
+}
+
 // @public (undocumented)
 export type DocxFontOrigin = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>);
 
@@ -4822,9 +4976,7 @@ export const ImageAltText: vue.DefineComponent<vue.ExtractPropTypes<{
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
-export const ImageInsertProvider: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
-    [key: string]: any;
-}>[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+export const ImageInsertProvider: vue.DefineComponent<{}, () => (DocxEditorChildren | null)[], {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
 export const ImageInsertTrigger: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -6927,6 +7079,24 @@ export function useTranslation(): {
     t: TFunction;
 };
 
+// @public
+export function useWatermark(): UseWatermarkReturn;
+
+// @public
+export function useWatermarkDialog(): UseWatermarkDialogReturn;
+
+// @public
+export interface UseWatermarkDialogReturn extends UseDialogReturn<WatermarkDialogFields> {
+}
+
+// @public
+export interface UseWatermarkReturn {
+    readonly apply: (watermark: Watermark | null) => ExecResult;
+    readonly isEnabled: ComputedRef<boolean>;
+    readonly read: () => Watermark | null;
+    readonly watermark: Readonly<ShallowRef<WatermarkState | null>>;
+}
+
 // @public (undocumented)
 export function useZoom(): UseZoomResult;
 
@@ -7071,6 +7241,45 @@ export interface VerticalRulerProps {
     // (undocumented)
     zoom?: number;
 }
+
+export { Watermark }
+
+// @public
+export type WatermarkDialogFieldName = 'noWatermark' | 'pictureWatermark' | 'picture' | 'scale' | 'washout' | 'textWatermark' | 'text' | 'fontFamily' | 'fontSizePt' | 'bold' | 'italic' | 'transparency' | 'color' | 'layout';
+
+// @public
+export interface WatermarkDialogFields {
+    // (undocumented)
+    bold: boolean;
+    // (undocumented)
+    color: string;
+    // (undocumented)
+    fontFamily: string;
+    fontSizePt: number | null;
+    imageData: Uint8Array | null;
+    imageName: string | null;
+    // (undocumented)
+    italic: boolean;
+    // (undocumented)
+    kind: WatermarkDialogKind;
+    // (undocumented)
+    layout: WatermarkDialogLayout;
+    scale: number | null;
+    // (undocumented)
+    text: string;
+    // (undocumented)
+    transparency: number;
+    // (undocumented)
+    washout: boolean;
+}
+
+// @public
+export type WatermarkDialogKind = 'none' | 'picture' | 'text';
+
+// @public
+export type WatermarkDialogLayout = NonNullable<WatermarkState['layout']>;
+
+export { WatermarkState }
 
 export { WORD_DEFAULT_FONT }
 

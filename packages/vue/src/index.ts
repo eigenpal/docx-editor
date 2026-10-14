@@ -334,6 +334,20 @@ export {
   DocxEditorParagraphDialog,
   type DocxEditorParagraphDialogProps,
 } from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorWatermarkDialog,
+  useWatermarkDialog,
+  type DocxEditorWatermarkDialogProps,
+  type UseWatermarkDialogReturn,
+  type WatermarkDialogFieldName,
+} from './editor/DocxEditorWatermark';
+export {
+  DEFAULT_WATERMARK_PRESETS,
+  type WatermarkDialogFields,
+  type WatermarkDialogKind,
+  type WatermarkDialogLayout,
+} from './editor/watermark-dialog-model';
+export { useWatermark, type UseWatermarkReturn } from './editor/useWatermark';
 
 export {
   PaginatedDocxEditor,
@@ -441,6 +455,8 @@ export type {
   EditorScope,
   PageSetup,
   ScrollToAnchorOptions,
+  Watermark,
+  WatermarkState,
 } from '@docx-editor.dev/core/contracts/editor';
 export type {
   ReviewAuthorInfo,
@@ -506,6 +522,10 @@ export {
   DocxEditorInvalidTextFormFieldDialog,
   type DocxEditorInvalidTextFormFieldDialogProps,
 } from './editor/DocxEditorInvalidTextFormFieldDialog';
+export {
+  DocxEditorImageInsertErrorDialog,
+  type DocxEditorImageInsertErrorDialogProps,
+} from './editor/images/ImageInsertErrorDialog';
 
 export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
 

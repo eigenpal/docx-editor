@@ -258,6 +258,30 @@
       "applyToDocument": "Documento inteiro",
       "applyToSection": "Esta seção"
     },
+    "watermark": {
+      "title": "Marca d’água",
+      "noWatermark": "Sem marca d’água",
+      "picture": "Marca d’água de imagem",
+      "selectPicture": "Selecionar imagem…",
+      "noPictureSelected": "(Nenhuma imagem selecionada)",
+      "currentPicture": "(Imagem atual)",
+      "pictureFailed": "Não foi possível ler a imagem.",
+      "scale": "Escala",
+      "auto": "Automática",
+      "washout": "Desbotar",
+      "text": "Marca d’água de texto",
+      "textLabel": "Texto",
+      "font": "Fonte",
+      "size": "Tamanho",
+      "bold": "Negrito",
+      "italic": "Itálico",
+      "transparency": "Transparência",
+      "color": "Cor",
+      "layout": "Layout",
+      "horizontal": "Horizontal",
+      "diagonal": "Diagonal",
+      "refused": "Não foi possível aplicar a marca d’água."
+    },
     "footnoteProperties": {
       "title": "Propriedades de notas de rodapé e fim",
       "footnotes": "Notas de rodapé",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Não é possível inserir a imagem",
       "emptyFile": "O arquivo selecionado está vazio.",
       "invalidSignature": "O arquivo não é uma imagem PNG, JPEG ou GIF compatível.",
       "oversize": "A imagem excede o tamanho máximo permitido.",

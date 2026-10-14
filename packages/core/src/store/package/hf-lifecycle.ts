@@ -34,6 +34,7 @@ import {
   type HeaderFooterKind,
   type HeaderFooterVariant,
 } from './hf-references.ts';
+import { applyPackageWatermark, type PackageWatermarkWrite } from './watermark-package.ts';
 import {
   applyDocumentProtection,
   sectionElement,
@@ -112,6 +113,14 @@ export type HeaderFooterLifecycleOp =
        */
       readonly op: 'setDocumentProtection';
       readonly enforce: boolean;
+    }
+  | {
+      /**
+       * Replace the document watermark in every header a section shows; null removes it.
+       * It may create a section's default header, so it rides this lane's package undo unit.
+       */
+      readonly op: 'setWatermark';
+      readonly watermark: PackageWatermarkWrite | null;
     };
 
 /** Why a header/footer lifecycle op was refused. */
@@ -139,6 +148,7 @@ const LIFECYCLE_OPS = new Set([
   'unlinkFromPrevious',
   'setSectionFurnitureOptions',
   'setDocumentProtection',
+  'setWatermark',
 ]);
 
 /** Whether an op is a header/footer lifecycle op rather than a story-level one. */
@@ -207,6 +217,16 @@ export function applyHeaderFooterLifecycleOp(
       return applyFurnitureOptions(pkg, op);
     case 'setDocumentProtection':
       return applyDocumentProtection(pkg, op);
+    case 'setWatermark':
+      return applyPackageWatermark(pkg, op.watermark, (next, sectionIndex, variant) => {
+        const created = applyCreate(next, {
+          op: 'createHeaderFooter',
+          sectionIndex,
+          kind: 'header',
+          variant,
+        });
+        return created.ok ? created.package : null;
+      });
   }
 }
 

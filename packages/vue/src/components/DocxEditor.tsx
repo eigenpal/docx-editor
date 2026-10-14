@@ -43,6 +43,7 @@ import { DocxEditorNavigation, Navigation } from '../editor/navigation';
 import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
+import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
@@ -194,6 +195,8 @@ export interface DocxEditorNamespace {
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
+  /** Watermark dialog — none, picture or text — applied as one undo step. */
+  readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
   readonly HeaderFooterChrome: typeof DocxEditorHeaderFooterChrome;
@@ -615,6 +618,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
+  WatermarkDialog: DocxEditorWatermarkDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,

@@ -258,6 +258,30 @@
       "applyToDocument": "כל המסמך",
       "applyToSection": "מקטע זה"
     },
+    "watermark": {
+      "title": "סימן מים",
+      "noWatermark": "ללא סימן מים",
+      "picture": "סימן מים של תמונה",
+      "selectPicture": "בחר תמונה…",
+      "noPictureSelected": "(לא נבחרה תמונה)",
+      "currentPicture": "(התמונה הנוכחית)",
+      "pictureFailed": "לא ניתן לקרוא את התמונה.",
+      "scale": "קנה מידה",
+      "auto": "אוטומטי",
+      "washout": "דהייה",
+      "text": "סימן מים של טקסט",
+      "textLabel": "טקסט",
+      "font": "גופן",
+      "size": "גודל",
+      "bold": "מודגש",
+      "italic": "נטוי",
+      "transparency": "שקיפות",
+      "color": "צבע",
+      "layout": "פריסה",
+      "horizontal": "אופקי",
+      "diagonal": "אלכסוני",
+      "refused": "לא ניתן להחיל את סימן המים."
+    },
     "footnoteProperties": {
       "title": "מאפייני הערות שוליים והערות סיום",
       "footnotes": "הערות שוליים",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "לא ניתן להוסיף את התמונה",
       "emptyFile": "הקובץ שנבחר ריק.",
       "invalidSignature": "הקובץ אינו תמונת PNG, JPEG או GIF נתמכת.",
       "oversize": "התמונה חורגת מהגודל המרבי המותר.",

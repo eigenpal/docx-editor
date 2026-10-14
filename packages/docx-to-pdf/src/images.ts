@@ -3,7 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-import { PDFDocument, PDFName, PDFString, type PDFImage, type PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFStream, PDFString, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { FontBackedExportCapabilities } from '@docx-editor.dev/core/export';
 import type {
   LayoutBox,
@@ -12,6 +12,8 @@ import type {
 } from '@docx-editor.dev/core/layout';
 import { color, number as n, pageHeight, pdfLiteralUri, rect, Commands, Work } from './context.ts';
 import { paintVectorShape } from './vector-shapes.ts';
+import { paintTextArt } from './text-art.ts';
+import { lumTransfer, type LumTransfer } from '@docx-editor.dev/core/output';
 
 /**
  * The raster formats this writer embeds directly.
@@ -170,6 +172,8 @@ export class ImageWriter {
     if (d.groupPicture) return this.paintGroupPicture(visit, page, report);
     if (d.vectorShape) return paintVectorShape(this.doc, page, visit, this.work);
     if (d.textboxStory) return report('Textbox story not routed through paintTextbox');
+    if (d.kind === 'anchoredDrawing' && d.textArt)
+      return paintTextArt(this.doc, page, visit, this.work);
     if (d.placeholderGraphicKind) return report(`Unsupported drawing: ${d.placeholderGraphicKind}`);
     return this.paintPicture(visit, page, report);
   }
@@ -214,6 +218,55 @@ export class ImageWriter {
     return [picture, vector].filter((commands) => commands !== '').join('\n');
   }
 
+  /**
+   * One image object per resource and brightness/contrast transfer.
+   *
+   * The transfer is linear per channel, so it is the image's `Decode` array: sample 0 maps to
+   * the intercept and sample 1 to slope + intercept, and the colour space clamps the result to
+   * [0, 1] — the same clamped line the screen applies as a CSS filter. Only `DeviceRGB` and
+   * `DeviceGray` samples are sRGB-like channels; a CMYK image keeps its samples and reports.
+   */
+  private async embedPicture(
+    resourceKey: string,
+    mime: string,
+    bytes: Uint8Array,
+    transfer: LumTransfer | null
+  ): Promise<{ image: PDFImage; lum: boolean }> {
+    const plain = async () => {
+      let image = this.images.get(resourceKey);
+      if (!image) {
+        image =
+          mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
+        this.images.set(resourceKey, image);
+      }
+      return image;
+    };
+    if (!transfer) return { image: await plain(), lum: false };
+    const key = `${resourceKey}\0lum:${transfer.slope}:${transfer.intercept}`;
+    const cached = this.images.get(key);
+    if (cached) return { image: cached, lum: true };
+    const image =
+      mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
+    await image.embed();
+    const stream = this.doc.context.lookup(image.ref);
+    const dict = stream instanceof PDFStream ? stream.dict : null;
+    const space = dict?.get(PDFName.of('ColorSpace'));
+    const components =
+      space === PDFName.of('DeviceRGB') ? 3 : space === PDFName.of('DeviceGray') ? 1 : 0;
+    if (!dict || !components || dict.get(PDFName.of('Decode'))) {
+      this.doc.context.delete(image.ref);
+      return { image: await plain(), lum: false };
+    }
+    const low = transfer.intercept,
+      high = transfer.slope + transfer.intercept;
+    dict.set(
+      PDFName.of('Decode'),
+      this.doc.context.obj(Array.from({ length: components }, () => [low, high]).flat())
+    );
+    this.images.set(key, image);
+    return { image, lum: true };
+  }
+
   private async paintPicture(
     visit: SemanticDrawingVisit,
     page: PDFPage,
@@ -226,23 +279,15 @@ export class ImageWriter {
     // An inline drawing has no authored alternative, so an unembeddable format is a real
     // refusal here — unlike a picture bullet, whose level authors `w:lvlText` beside it.
     if (!EMBEDDABLE_MIMES.has(mime)) return report(`Unsupported PDF image format: ${mime}`);
-    if (
-      d.effects.grayscale ||
-      d.effects.brightness ||
-      d.effects.contrast ||
-      d.effects.bilevel !== undefined
-    )
+    const transfer = lumTransfer(d.effects.brightness, d.effects.contrast);
+    const embedded = await this.embedPicture(d.resource.resourceKey, mime, bytes, transfer);
+    if (d.effects.grayscale || d.effects.bilevel !== undefined || (transfer && !embedded.lum))
       this.work.report(
         'image-effects',
         'Image color adjustments are not encoded',
         visit.page.index
       );
-    let image = this.images.get(d.resource.resourceKey);
-    if (!image) {
-      image =
-        mime === 'image/png' ? await this.doc.embedPng(bytes) : await this.doc.embedJpg(bytes);
-      this.images.set(d.resource.resourceKey, image);
-    }
+    const image = embedded.image;
     let opacityCommand = '';
     if (d.effects.opacity !== undefined && d.effects.opacity !== 1) {
       const opacity = d.effects.opacity;

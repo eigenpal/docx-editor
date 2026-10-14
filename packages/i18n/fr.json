@@ -258,6 +258,30 @@
       "applyToDocument": "À tout le document",
       "applyToSection": "À cette section"
     },
+    "watermark": {
+      "title": "Filigrane",
+      "noWatermark": "Aucun filigrane",
+      "picture": "Filigrane image",
+      "selectPicture": "Sélectionner une image…",
+      "noPictureSelected": "(Aucune image sélectionnée)",
+      "currentPicture": "(Image actuelle)",
+      "pictureFailed": "Impossible de lire l’image.",
+      "scale": "Échelle",
+      "auto": "Automatique",
+      "washout": "Estompé",
+      "text": "Filigrane texte",
+      "textLabel": "Texte",
+      "font": "Police",
+      "size": "Taille",
+      "bold": "Gras",
+      "italic": "Italique",
+      "transparency": "Transparence",
+      "color": "Couleur",
+      "layout": "Disposition",
+      "horizontal": "Horizontale",
+      "diagonal": "Diagonale",
+      "refused": "Impossible d’appliquer le filigrane."
+    },
     "footnoteProperties": {
       "title": "Propriétés des notes de bas de page et de fin",
       "footnotes": "Notes de bas de page",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Impossible d'insérer l'image",
       "emptyFile": "Le fichier sélectionné est vide.",
       "invalidSignature": "Le fichier n'est pas une image PNG, JPEG ou GIF prise en charge.",
       "oversize": "L'image dépasse la taille maximale autorisée.",

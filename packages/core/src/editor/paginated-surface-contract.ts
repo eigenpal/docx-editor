@@ -125,6 +125,8 @@ export interface PaginatedSurface {
     }
   ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
   layout(): SemanticLayout;
+  /** The measurer layout uses; sizes engine-authored shapes such as a watermark. */
+  textMeasurer?(): import('../layout/semantic-records.ts').TextMeasurer;
   state(): PaginatedSurfaceState;
   /** One-based page at the caret, or at the centre of the mounted viewport. */
   currentPage(mode?: 'viewport' | 'caret'): number;
@@ -857,8 +859,13 @@ export interface PaginatedSurface {
       | 'linkToPrevious'
       | 'unlinkFromPrevious'
       | 'setSectionFurnitureOptions'
-      | 'setDocumentProtection';
+      | 'setDocumentProtection'
+      | 'setWatermark';
     readonly sectionIndex?: number;
+    /** `setWatermark` only: the new watermark, or null to remove it. */
+    readonly watermark?:
+      | import('../store/package/watermark-package.ts').PackageWatermarkWrite
+      | null;
     /** `setDocumentProtection` only: enforce filling-in-forms protection, or lift it. */
     readonly enforce?: boolean;
     readonly kind?: 'header' | 'footer';

@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Text watermarks and washed-out picture watermarks in headers did not paint, and the PDF export reported them as unsupported. The editor could not read, add, change or remove a watermark. A picture inserted while collaborating reached the other participants without its content type when the package had no default for its extension.",
+  "after": "The setWatermark command removes every watermark shape from the headers and writes the new text or picture shape into every header a section shows, creating a default header when a section has none. It commits as one package-level operation and one undo step. A picture inserted while collaborating also records its content-type override, so other participants keep the picture typed.",
+  "reason": "A watermark write is ordinary header-part content, header parts, relationships, media bytes and content-type overrides. Each change uses an existing journal effect that released participants already apply, and the change adds no shared field, operation kind or protocol message. Rendering reads existing VML that participants already store unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-watermark.test.ts",
+    "packages/core/src/editor/__tests__/docx-editor-watermark.test.ts"
+  ],
+  "changeset": "document-watermarks",
+  "migration": null
+}

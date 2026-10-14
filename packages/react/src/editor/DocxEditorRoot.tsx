@@ -496,11 +496,12 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
                 open/closed state and only one of them registers with the engine's gestures. */}
               <HyperlinkPopupProvider>
                 <ContentControlProvider>
-                  <ImageInsertProvider>
-                    <PopupConfigProvider value={props.popups}>
+                  {/* Outside the picture insert, which shows its refusal through the registry. */}
+                  <PopupConfigProvider value={props.popups}>
+                    <ImageInsertProvider>
                       <DialogProvider popups={props.popups}>{children}</DialogProvider>
-                    </PopupConfigProvider>
-                  </ImageInsertProvider>
+                    </ImageInsertProvider>
+                  </PopupConfigProvider>
                 </ContentControlProvider>
               </HyperlinkPopupProvider>
             </RevisionStyleRegistryContext.Provider>

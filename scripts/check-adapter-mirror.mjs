@@ -48,6 +48,7 @@ const PAIRS = [
       'editor/navigation/navigation-keys.ts',
       'editor/navigation/navigation-widest-page.ts',
       'editor/paragraph-dialog-fields.ts',
+      'editor/watermark-dialog-model.ts',
       'editor/scroller-geometry.ts',
       'editor/toolbar/toolbar-warnings.ts',
       'editor/zoom-levels.ts',

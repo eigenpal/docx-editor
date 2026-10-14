@@ -5,6 +5,7 @@ import type {
   ContentControlFilter,
   RunFormatting,
 } from '../contracts/editor.ts';
+import { watermarkOf, watermarkQueryOf } from './docx-editor-watermark.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import {
   selectionRangeOf,
@@ -63,8 +64,12 @@ export function queryEditorDocument<K extends keyof EditorQueries>(
       ) as unknown as EditorQueryResults[K];
     case 'tableContext':
       return tableContextOf(surface) as EditorQueryResults[K];
+    case 'watermark':
+      return watermarkQueryOf(surface) as EditorQueryResults[K];
     default:
-      // watermark, splitCellConfig and pageContent are nullable and underived.
+      // splitCellConfig and pageContent are nullable and underived.
       return null as EditorQueryResults[K];
   }
 }
+
+export { watermarkOf };

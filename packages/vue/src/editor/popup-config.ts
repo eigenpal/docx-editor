@@ -6,6 +6,7 @@ import type { DocxEditorContentControlWidgetProps } from './DocxEditorContentCon
 import type { DocxEditorInvalidTextFormFieldDialogProps } from './DocxEditorInvalidTextFormFieldDialog';
 import type { DocxEditorImagePropertiesDialogProps } from './images/ImageProperties';
 import type { DocxEditorImageAltTextPopupProps } from './images/ImageAltText';
+import type { DocxEditorImageInsertErrorDialogProps } from './images/ImageInsertErrorDialog';
 import type {
   DocxEditorNotePropertiesDialogProps,
   DocxEditorNotesContextMenuProps,
@@ -23,6 +24,7 @@ import {
 } from 'vue';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
+import type { DocxEditorWatermarkDialogProps } from './DocxEditorWatermark';
 import type { DocxEditorTextFormFieldDialogProps } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorHyperLink, type HyperLinkProps } from './DocxEditorHyperLink';
 import { DocxEditorContentControl, type ContentControlProps } from './DocxEditorContentControl';
@@ -52,6 +54,8 @@ export interface DocxEditorPopups {
    */
   contentControlPicture?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
   invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
+  /** Why a chosen or pasted picture could not be inserted. False shows nothing. */
+  imageInsertError?: DocxEditorPopup<DocxEditorImageInsertErrorDialogProps>;
   imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
   imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
   noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
@@ -59,6 +63,8 @@ export interface DocxEditorPopups {
   notePreview?: DocxEditorPopup<DocxEditorNotePreviewProps>;
   pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
   paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+  /** The Watermark dialog the Insert menu opens. Pass `presets` here to change its text choices. */
+  watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
   textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
   hyperlink?: DocxEditorPopup<HyperLinkProps>;
   contentControl?: DocxEditorPopup<ContentControlProps>;

@@ -761,19 +761,19 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have scoped header and footer editing: enter and exit the story, create and remove it, link and unlink to the previous section, and set the title-page and even/odd options. They also insert PAGE, NUMPAGES, and SECTIONPAGES. `editHeaderFooter` takes `variant`, `evenPage`, and `firstPage` on the shared Editor contract. Per-section first, even, and default variants paint like Word. Editing inside a header or footer matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup all act on the story you are in. Tracked changes work in a header or footer: you can suggest an edit there, and the review list shows it with the accept and reject verbs. Selection and comment highlight bands paint in the body only. Watermark authoring is not supported.',
+      'Both adapters have scoped header and footer editing: enter and exit the story, create and remove it, link and unlink to the previous section, and set the title-page and even/odd options. They also insert PAGE, NUMPAGES, and SECTIONPAGES. `editHeaderFooter` takes `variant`, `evenPage`, and `firstPage` on the shared Editor contract. Per-section first, even, and default variants paint like Word. Editing inside a header or footer matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup all act on the story you are in. Tracked changes work in a header or footer: you can suggest an edit there, and the review list shows it with the accept and reject verbs. Selection and comment highlight bands paint in the body only. Watermarks have their own dialog and command.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {
     id: 'layout.watermarks',
     name: 'Watermarks (text & image)',
     category: 'layout',
-    editing: 'none',
-    rendering: 'partial',
-    roundTrip: 'preserved',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'The supported unrotated standalone VML subset can paint in header parts. Rotated or curved watermark templates remain opaque, and watermark authoring is unavailable. Authored markup and package relationships are preserved through save.',
+      'Text watermarks paint as glyph outlines fitted to their shape, diagonal or horizontal, with their color and transparency, in the editor and in PDF export. Picture watermarks paint behind the text with washout. The Insert menu opens a Watermark dialog, and `setWatermark` writes the same watermark into every header the document shows, creating a header where a section has none. One watermark applies to the whole document; a different watermark per section is not available. Curved or styled text art other than plain text stays opaque.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {

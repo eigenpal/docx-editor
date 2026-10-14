@@ -4353,6 +4353,7 @@ export function mountPaginatedSurface(
       applyJournaledOps(ops, before, after, scope ?? storyScope()),
     storyScope,
     imageDecodePort: () => decodePort,
+    textMeasurer: () => measurer,
     // Flushes first: a commit made straight on the session — undo, or another editor
     // sharing the store — must not leave a caller reading geometry for a revision the model
     // has left behind. Nothing pending makes this a plain read.

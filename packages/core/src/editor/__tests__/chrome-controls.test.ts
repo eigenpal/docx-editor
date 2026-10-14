@@ -138,6 +138,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'insert.sectionBreakNextPage',
   'insert.sectionBreakContinuous',
   'insert.toc',
+  'insert.watermark',
 ];
 
 const allSlots = (): ChromeSlotId[] =>
@@ -321,7 +322,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(75);
+    expect(chromeControlCount()).toBe(76);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {
@@ -470,5 +471,16 @@ describe('legacy chrome descriptor', () => {
       type: 'setPageSetup',
       orientation: 'portrait',
     });
+  });
+
+  test('the watermark row is probe-driven and sits in the Insert menu', () => {
+    expect(commandForSlot('insert.watermark')).toBeNull();
+    expect(chromeProbeForSlot('insert.watermark')).toEqual({
+      type: 'setWatermark',
+      watermark: { text: 'DRAFT' },
+    });
+    const insert = CHROME_MENUS.find((m) => m.id === 'insert');
+    const rows = insert!.entries.flatMap((e) => (e.kind === 'item' ? [e.slot] : []));
+    expect(rows).toContain('insert.watermark');
   });
 });

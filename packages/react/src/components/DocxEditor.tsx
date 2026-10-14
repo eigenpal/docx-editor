@@ -31,6 +31,7 @@ import { DocxEditorHorizontalRuler, DocxEditorVerticalRuler } from '../editor/Do
 import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
+import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
@@ -514,6 +515,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly PrintDialog: typeof DocxEditorPrintDialog;
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
+  /** Watermark dialog — none, picture or text — applied as one undo step. */
+  readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
@@ -571,6 +574,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   ExportDialog: DocxEditorExportDialog,
   PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
+  WatermarkDialog: DocxEditorWatermarkDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
   TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,

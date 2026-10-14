@@ -223,8 +223,10 @@ export function DialogFrame({
     | 'revisionMarkup'
     | 'pageSetup'
     | 'paragraph'
+    | 'watermark'
     | 'textFormField'
     | 'invalidTextFormField'
+    | 'imageInsertError'
     | 'export'
     | 'print';
   role?: 'dialog' | 'alertdialog';

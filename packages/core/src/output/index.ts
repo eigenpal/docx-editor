@@ -42,3 +42,11 @@ export {
   type PageChangeBars,
   type ChangeBarsMode,
 } from './semantic-paint-change-bars.ts';
+
+/**
+ * Picture brightness/contrast as one clamped linear transfer per channel. Exporters encode the
+ * same line the screen paints.
+ *
+ * @internal
+ */
+export { lumTransfer, type LumTransfer } from './drawing-lum-filter.ts';

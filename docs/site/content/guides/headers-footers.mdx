@@ -73,9 +73,28 @@ Odd-page and even-page section breaks can add a blank page to reach the required
 
 ## Watermarks
 
-Word stores watermarks in header parts. The editor renders the supported unrotated [legacy VML subset](/docs/2.x/guides/images#legacy-vml-previews) there. Rotated or curved watermark templates remain opaque.
+A watermark is text or a picture that paints behind the text of every page. The document stores it as a shape in each header part. The editor paints text watermarks as glyph outlines fitted to the shape, diagonal or horizontal, with their color and transparency. Picture watermarks paint behind the text, washed out when the document asks for it. PDF export paints both the same way.
 
-Watermark insertion, editing, and headless authoring are not supported. The editor preserves the original VML or DrawingML markup and image payloads when you save.
+To add, change, or remove a watermark, open **Insert** > **Watermark**. The dialog reads the current watermark, so you can change one option and keep the rest.
+
+To set a watermark from code, run the `setWatermark` command. This example adds a diagonal text watermark at half transparency:
+
+```ts
+editor.exec({
+  type: 'setWatermark',
+  watermark: { text: 'CONFIDENTIAL', layout: 'diagonal', transparency: 0.5 },
+});
+```
+
+To use a picture, pass its bytes in `imageData` instead of `text`. Pass `watermark: null` to remove the watermark. Each call is one undo step.
+
+`editor.getWatermark()` returns the watermark that the document shows, or `null` when it has none.
+
+The command has these limits:
+
+- One watermark applies to the whole document. The command writes it into every header that a section shows and creates a default header when a section has none.
+- The command refuses options it cannot write, such as text with a line break or bytes that are not a PNG, JPEG, GIF, BMP, or WebP picture.
+- Curved or styled text art other than plain text stays opaque. The editor preserves its markup when you save.
 
 ## Next steps
 

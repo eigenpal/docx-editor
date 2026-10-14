@@ -219,6 +219,27 @@ function OrientationToggle() {
 }
 ```
 
+## `useWatermark`
+
+Use `useWatermark` to read and change the document watermark. `apply` sends one `setWatermark` command, so one call creates one undo step. Pass `null` to remove the watermark:
+
+```tsx
+import { useWatermark } from '@docx-editor.dev/react';
+
+function DraftToggle() {
+  const { watermark, apply, isEnabled } = useWatermark();
+  const isDraft = watermark?.text === 'DRAFT';
+
+  return (
+    <button disabled={!isEnabled} onClick={() => apply(isDraft ? null : { text: 'DRAFT' })}>
+      {isDraft ? 'Remove draft mark' : 'Mark as draft'}
+    </button>
+  );
+}
+```
+
+`read()` returns the current watermark as a `setWatermark` value. For a picture watermark it includes the picture bytes.
+
 ## `useParagraphFormat`
 
 Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step:
@@ -500,6 +521,7 @@ Call the hook in a child component of the matching dialog. Each returns `values`
 | `useParagraphDialog()` | `UseParagraphDialogReturn['values']` | `alignment`, `indentLeft`, `indentRight`, `special`, `specialBy`, `spaceBefore`, `spaceAfter`, `lineRule`, `lineValue`, `contextualSpacing`, `keepNext`, `keepLines`, `widowControl`, `pageBreakBefore`, `tabStops`, `clearedAllTabStops` |
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
+| `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
 
 Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
 

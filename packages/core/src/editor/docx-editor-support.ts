@@ -5,6 +5,7 @@
 // source normalization, and the value-equality rules the cached snapshot uses to keep
 // sub-object references stable across re-derivations.
 
+import { watermarkRefusal } from './docx-editor-watermark.ts';
 import type {
   DocumentSource,
   EditorCommand,
@@ -888,6 +889,12 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return { supported: true, mutating: true };
     case 'setImageProperties':
       return { supported: true, mutating: true };
+    case 'setWatermark': {
+      const refusal = watermarkRefusal(command.watermark);
+      return refusal
+        ? { supported: false, code: 'invalidArgs', reason: refusal }
+        : { supported: true, mutating: true };
+    }
     default:
       return { supported: false, reason: unknownCommandReason(command.type) };
   }

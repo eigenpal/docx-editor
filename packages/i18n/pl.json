@@ -258,6 +258,30 @@
       "applyToDocument": "Cały dokument",
       "applyToSection": "Ta sekcja"
     },
+    "watermark": {
+      "title": "Znak wodny",
+      "noWatermark": "Brak znaku wodnego",
+      "picture": "Obraz jako znak wodny",
+      "selectPicture": "Wybierz obraz…",
+      "noPictureSelected": "(Nie wybrano obrazu)",
+      "currentPicture": "(Bieżący obraz)",
+      "pictureFailed": "Nie można odczytać obrazu.",
+      "scale": "Skala",
+      "auto": "Automatycznie",
+      "washout": "Rozjaśnij",
+      "text": "Tekst jako znak wodny",
+      "textLabel": "Tekst",
+      "font": "Czcionka",
+      "size": "Rozmiar",
+      "bold": "Pogrubienie",
+      "italic": "Kursywa",
+      "transparency": "Przezroczystość",
+      "color": "Kolor",
+      "layout": "Układ",
+      "horizontal": "Poziomy",
+      "diagonal": "Ukośny",
+      "refused": "Nie można zastosować znaku wodnego."
+    },
     "footnoteProperties": {
       "title": "Właściwości przypisów dolnych i końcowych",
       "footnotes": "Przypisy dolne",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Nie można wstawić obrazu",
       "emptyFile": "Wybrany plik jest pusty.",
       "invalidSignature": "Plik nie jest obsługiwanym obrazem PNG, JPEG ani GIF.",
       "oversize": "Obraz przekracza maksymalny dozwolony rozmiar.",

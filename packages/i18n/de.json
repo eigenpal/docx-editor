@@ -258,6 +258,30 @@
       "applyToDocument": "Gesamtes Dokument",
       "applyToSection": "Aktuellen Abschnitt"
     },
+    "watermark": {
+      "title": "Wasserzeichen",
+      "noWatermark": "Kein Wasserzeichen",
+      "picture": "Bildwasserzeichen",
+      "selectPicture": "Bild auswählen…",
+      "noPictureSelected": "(Kein Bild ausgewählt)",
+      "currentPicture": "(Aktuelles Bild)",
+      "pictureFailed": "Das Bild konnte nicht gelesen werden.",
+      "scale": "Skalierung",
+      "auto": "Automatisch",
+      "washout": "Auswaschen",
+      "text": "Textwasserzeichen",
+      "textLabel": "Text",
+      "font": "Schriftart",
+      "size": "Größe",
+      "bold": "Fett",
+      "italic": "Kursiv",
+      "transparency": "Transparenz",
+      "color": "Farbe",
+      "layout": "Layout",
+      "horizontal": "Horizontal",
+      "diagonal": "Diagonal",
+      "refused": "Das Wasserzeichen konnte nicht angewendet werden."
+    },
     "footnoteProperties": {
       "title": "Fuß- und Endnoteneinstellungen",
       "footnotes": "Fußnoten",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Das Bild kann nicht eingefügt werden",
       "emptyFile": "Die ausgewählte Datei ist leer.",
       "invalidSignature": "Die Datei ist kein unterstütztes PNG-, JPEG- oder GIF-Bild.",
       "oversize": "Das Bild überschreitet die maximal zulässige Größe.",

@@ -548,11 +548,11 @@ const TREE_OP_REACH: {
     kind: 'nodes',
     targets: [{ nodeId: op.storyRootId, structural: true }],
   }),
-  // Page setup, section furniture and note numbering are properties OF the document. They change
-  // no content, so no control's lock speaks to them; forms protection still does.
+  // Document properties: page, furniture, watermark and notes. No control lock; forms still lock.
   setSectionProperties: () => ({ kind: 'documentProperties' }),
   setSectionFurnitureOptions: () => ({ kind: 'documentProperties' }),
   setDocumentProtection: () => ({ kind: 'documentProperties' }),
+  setWatermark: () => ({ kind: 'documentProperties' }),
   setNoteProperties: () => ({ kind: 'documentProperties' }),
   // A note's own id is not a body address, and removing or converting one rewrites the run that
   // referenced it — wherever that run happens to be.

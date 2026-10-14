@@ -258,6 +258,30 @@
       "applyToDocument": "Tüm belge",
       "applyToSection": "Bu bölüm"
     },
+    "watermark": {
+      "title": "Filigran",
+      "noWatermark": "Filigran yok",
+      "picture": "Resim filigranı",
+      "selectPicture": "Resim seç…",
+      "noPictureSelected": "(Resim seçilmedi)",
+      "currentPicture": "(Geçerli resim)",
+      "pictureFailed": "Resim okunamadı.",
+      "scale": "Ölçek",
+      "auto": "Otomatik",
+      "washout": "Soluklaştır",
+      "text": "Metin filigranı",
+      "textLabel": "Metin",
+      "font": "Yazı tipi",
+      "size": "Boyut",
+      "bold": "Kalın",
+      "italic": "İtalik",
+      "transparency": "Saydamlık",
+      "color": "Renk",
+      "layout": "Düzen",
+      "horizontal": "Yatay",
+      "diagonal": "Çapraz",
+      "refused": "Filigran uygulanamadı."
+    },
     "footnoteProperties": {
       "title": "Dipnot ve son not özellikleri",
       "footnotes": "Dipnotlar",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "Resim eklenemiyor",
       "emptyFile": "Seçilen dosya boş.",
       "invalidSignature": "Dosya desteklenen bir PNG, JPEG veya GIF görüntüsü değil.",
       "oversize": "Görüntü izin verilen en büyük boyutu aşıyor.",

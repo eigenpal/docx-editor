@@ -385,6 +385,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     op.op === 'unlinkFromPrevious' ||
     op.op === 'setSectionFurnitureOptions' ||
     op.op === 'setDocumentProtection' ||
+    op.op === 'setWatermark' ||
     op.op === 'insertNote' ||
     op.op === 'deleteNote' ||
     op.op === 'convertNote' ||

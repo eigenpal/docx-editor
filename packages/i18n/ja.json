@@ -292,6 +292,30 @@
         "executive": "Executive (7.25\" × 10.5\")"
       }
     },
+    "watermark": {
+      "title": "透かし",
+      "noWatermark": "透かしなし",
+      "picture": "図の透かし",
+      "selectPicture": "図の選択…",
+      "noPictureSelected": "(図が選択されていません)",
+      "currentPicture": "(現在の図)",
+      "pictureFailed": "図を読み込めませんでした。",
+      "scale": "倍率",
+      "auto": "自動",
+      "washout": "ウォッシュアウト",
+      "text": "テキストの透かし",
+      "textLabel": "テキスト",
+      "font": "フォント",
+      "size": "サイズ",
+      "bold": "太字",
+      "italic": "斜体",
+      "transparency": "透明度",
+      "color": "色",
+      "layout": "レイアウト",
+      "horizontal": "水平",
+      "diagonal": "対角線",
+      "refused": "透かしを適用できませんでした。"
+    },
     "footnoteProperties": {
       "title": "脚注と文末脚注",
       "footnotes": "脚注",
@@ -618,6 +642,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "画像を挿入できません",
       "emptyFile": "選択したファイルは空です。",
       "invalidSignature": "このファイルは対応する PNG、JPEG、GIF 画像ではありません。",
       "unsupportedFormat": "この形式の画像は挿入できません。",

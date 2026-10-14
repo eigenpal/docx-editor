@@ -10,12 +10,14 @@ import type { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
+import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark';
 interface DialogHost {
   readonly container: HTMLElement | null;
   readonly ownsPageSetup: boolean;
-  open(kind: 'pageSetup' | 'paragraph', returnFocusTo?: HTMLElement | null): void;
+  open(kind: DialogKind, returnFocusTo?: HTMLElement | null): void;
   setContainer(container: HTMLElement | null): void;
 }
 const Context = createContext<DialogHost | null>(null);
@@ -30,7 +32,7 @@ export function DialogProvider({
   const editor = useDocxEditor();
   const generation = useEditorMountGeneration();
   const [container, setContainer] = useState<HTMLElement | null>(null);
-  const [active, setActive] = useState<'pageSetup' | 'paragraph' | null>(null);
+  const [active, setActive] = useState<DialogKind | null>(null);
   const [session, setSession] = useState<TextFormFieldDialogSession | null>(null);
   const [markupSession, setMarkupSession] = useState<RevisionMarkupDialogSession | null>(null);
   const markupSessionRef = useRef(markupSession);
@@ -134,6 +136,12 @@ export function DialogProvider({
         renderPopup(popups.paragraph, props)
       ) : (
         <DocxEditorParagraphDialog {...props} />
+      )
+    ) : active === 'watermark' && popups?.watermark !== false ? (
+      popups?.watermark ? (
+        renderPopup(popups.watermark, props)
+      ) : (
+        <DocxEditorWatermarkDialog {...props} />
       )
     ) : markupSession && popups?.revisionMarkup !== false ? (
       popups?.revisionMarkup ? (

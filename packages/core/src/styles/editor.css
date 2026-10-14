@@ -7656,6 +7656,44 @@ a.docx-hyperlink:focus-visible {
 .docx-editor.docx-dialog:where([data-docx-dialog='textFormField']) {
   max-width: 520px;
 }
+.docx-editor .docx-dialog:where([data-docx-dialog='watermark']),
+.docx-editor.docx-dialog:where([data-docx-dialog='watermark']) {
+  max-width: 520px;
+}
+/* Watermark: each choice's controls sit indented under its radio. */
+.docx-editor .docx-dialog__section--indented {
+  padding-inline-start: 24px;
+}
+.docx-editor .docx-dialog__checkbox-row :where(input[type='radio']) {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--doc-primary);
+  cursor: pointer;
+}
+.docx-editor .docx-dialog__checkbox-row:where(:has(input:disabled)) {
+  color: var(--doc-text-subtle);
+  cursor: default;
+}
+.docx-editor .docx-dialog__range {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--doc-primary);
+}
+.docx-editor .docx-dialog__input--narrow {
+  flex: 0 0 64px;
+  width: 64px;
+}
+.docx-editor .docx-dialog__color {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 32px;
+  padding: 2px;
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border-input);
+  border-radius: var(--doc-dialog-control-radius, 4px);
+}
 
 /* The image properties dialog is a plain element under its own overlay. */
 .docx-editor .docx-dialog-overlay,

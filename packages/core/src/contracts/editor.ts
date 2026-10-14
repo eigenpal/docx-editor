@@ -97,6 +97,7 @@ import type {
   ExecResult,
   Unsubscribe,
   Watermark,
+  WatermarkState,
 } from './types';
 import type {
   EditorHeaderFooterCommands,
@@ -515,8 +516,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
   /** Section page setup — size, orientation and margins — for the page-setup dialog. */
   getPageSetup(): PageSetup | null;
 
-  /** The document watermark, for the watermark dialog. */
-  getWatermark(): { readonly kind: 'text' | 'image'; readonly text?: string } | null;
+  /** The watermark the document shows, for the watermark dialog; null when it shows none. */
+  getWatermark(): WatermarkState | null;
 
   /** Header/footer editing state: which region is being edited, if any. */
   getHeaderFooterState(): HeaderFooterState | null;
@@ -1238,6 +1239,7 @@ export interface EditorCommands
     expectedPackageRevision?: number;
   };
 
+  /** Replace the document watermark in every header the document shows; null removes it. */
   setWatermark: { watermark: Watermark | null };
   /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
   insertToc: Record<never, never>;

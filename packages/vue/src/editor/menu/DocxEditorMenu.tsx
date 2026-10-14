@@ -32,6 +32,8 @@ import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
+import { DocxEditorWatermarkDialog } from '../DocxEditorWatermark';
+import { MenuWatermark } from './menu-watermark';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { MORE_PATHS } from '../toolbar/ToolbarOverflow';
@@ -214,6 +216,7 @@ const DocxEditorMenuRoot = defineComponent({
     const activeMenu = ref<MenuId | null>(null);
     const pageSetupOpen = ref(false);
     const paragraphDialogOpen = ref(false);
+    const watermarkDialogOpen = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
     const fileInputRef = ref<HTMLInputElement | null>(null);
 
@@ -277,6 +280,15 @@ const DocxEditorMenuRoot = defineComponent({
           rootRef.value?.querySelector<HTMLElement>('[data-menu="format"] .docx-menubar__trigger')
         );
       else paragraphDialogOpen.value = true;
+    };
+
+    const packagedWatermarkDialog = () => {
+      if (dialogs)
+        dialogs.open(
+          'watermark',
+          rootRef.value?.querySelector<HTMLElement>('[data-menu="insert"] .docx-menubar__trigger')
+        );
+      else watermarkDialogOpen.value = true;
     };
 
     const resolvedOpen = computed(() =>
@@ -365,6 +377,7 @@ const DocxEditorMenuRoot = defineComponent({
       printShortcut: !!props.exporters?.pdf,
       onPageSetup: resolvedPageSetup.value,
       onParagraphDialog: editorRef.value ? packagedParagraphDialog : undefined,
+      onWatermarkDialog: editorRef.value ? packagedWatermarkDialog : undefined,
       onReportIssue: props.onReportIssue,
       reportIssue: props.reportIssue,
       opening: opening.value,
@@ -599,6 +612,12 @@ const DocxEditorMenuRoot = defineComponent({
               paragraphDialogOpen.value = false;
             }}
           />
+          <DocxEditorWatermarkDialog
+            open={watermarkDialogOpen.value}
+            onClose={() => {
+              watermarkDialogOpen.value = false;
+            }}
+          />
         </>
       );
     };
@@ -628,6 +647,8 @@ export interface DocxEditorMenuNamespace {
   readonly Print: typeof MenuPrint;
   readonly PageSetup: typeof MenuPageSetup;
   readonly ImageInsert: typeof MenuImageInsert;
+  /** Insert › Watermark, so a host can hide it or place it elsewhere by name. */
+  readonly Watermark: typeof MenuWatermark;
   readonly Reviewers: typeof MenuReviewers;
   readonly ReportIssue: typeof MenuReportIssue;
 }
@@ -654,6 +675,7 @@ export const DocxEditorMenu = Object.assign(DocxEditorMenuRoot, {
   Print: MenuPrint,
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
+  Watermark: MenuWatermark,
   Reviewers: MenuReviewers,
   ReportIssue: MenuReportIssue,
 }) as unknown as DocxEditorMenuNamespace;

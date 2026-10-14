@@ -92,6 +92,7 @@ export function commandProtectionRefusal(
       break;
     case 'setPageSetup':
     case 'setHeaderFooterOptions':
+    case 'setWatermark':
     case 'convertAllNotes':
     case 'insertToc':
     case 'refreshToc':

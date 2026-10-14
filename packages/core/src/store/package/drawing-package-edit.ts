@@ -42,6 +42,7 @@ import {
   recordDeleteBinary,
   recordDeleteRelationship,
   recordPutBinary,
+  recordPutContentTypeOverride,
   runWithoutJournalCapture,
 } from './canonical-primitive-capture.ts';
 
@@ -411,6 +412,9 @@ export function withBinaryPart(
       size: copied.byteLength,
       mediaType: contentType,
     });
+    // The override was written with capture off, beside the bytes. A peer builds its content
+    // types from recorded overrides only, so without this record it held the bytes untyped.
+    recordPutContentTypeOverride(normalized.partName, contentType);
   }
   return next;
 }

@@ -258,6 +258,30 @@
       "applyToDocument": "संपूर्ण दस्तावेज़",
       "applyToSection": "यह अनुभाग"
     },
+    "watermark": {
+      "title": "वॉटरमार्क",
+      "noWatermark": "कोई वॉटरमार्क नहीं",
+      "picture": "चित्र वॉटरमार्क",
+      "selectPicture": "चित्र चुनें…",
+      "noPictureSelected": "(कोई चित्र नहीं चुना गया)",
+      "currentPicture": "(वर्तमान चित्र)",
+      "pictureFailed": "चित्र पढ़ा नहीं जा सका।",
+      "scale": "स्केल",
+      "auto": "स्वचालित",
+      "washout": "वॉशआउट",
+      "text": "टेक्स्ट वॉटरमार्क",
+      "textLabel": "टेक्स्ट",
+      "font": "फ़ॉन्ट",
+      "size": "आकार",
+      "bold": "बोल्ड",
+      "italic": "इटैलिक",
+      "transparency": "पारदर्शिता",
+      "color": "रंग",
+      "layout": "लेआउट",
+      "horizontal": "क्षैतिज",
+      "diagonal": "विकर्ण",
+      "refused": "वॉटरमार्क लागू नहीं किया जा सका।"
+    },
     "footnoteProperties": {
       "title": "पाद-टिप्पणी और अंत-टिप्पणी की विशेषताएँ",
       "footnotes": "पाद-टिप्पणियाँ",
@@ -791,6 +815,7 @@
   },
   "imageInsert": {
     "errors": {
+      "title": "चित्र नहीं डाला जा सकता",
       "emptyFile": "चयनित फ़ाइल खाली है.",
       "invalidSignature": "फ़ाइल समर्थित PNG, JPEG या GIF छवि नहीं है.",
       "oversize": "छवि अधिकतम अनुमत आकार से अधिक है.",

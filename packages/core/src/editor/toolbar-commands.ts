@@ -164,6 +164,9 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // question, which values is the dialog's. One field so `classifyCommand`'s "requires at
   // least one field" gate passes; never executed.
   'paragraph.dialog': { type: 'setParagraphFormat', alignment: 'left' },
+  // The Watermark dialog: whether the document's headers can carry a watermark is the
+  // engine's question, which text or picture is the dialog's. Never executed.
+  'insert.watermark': { type: 'setWatermark', watermark: { text: 'DRAFT' } },
 };
 
 /**

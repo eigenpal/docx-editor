@@ -1047,40 +1047,7 @@ export interface SectionBreakMarkRecord {
 
 export { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './page-geometry.ts';
 
-/**
- * Text measurement, injected.
- *
- * A real implementation shapes with the resolved font; the tests supply a deterministic one.
- * Layout never reads the DOM, so this is the only way width and height enter it.
- */
-export interface TextMeasurer {
-  /** Advance width of `text` in the resolved style. */
-  measure(text: string, style: ResolvedRunStyle): number;
-  /**
-   * Optional whole-span logical caret advances, indexed by UTF-16 offset. Values
-   * are nondecreasing, start at zero, and end at the measured advance. Ligature
-   * interiors may share an edge. Undefined selects a bounded approximate fallback.
-   */
-  caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
-  /**
-   * Optional conservative ink bounds for one grapheme, in points from its origin.
-   * Includes size and horizontal scale, but not trailing character spacing.
-   * Undefined keeps layout on the advance-only path.
-   */
-  inkBounds?(text: string, style: ResolvedRunStyle): { left: number; right: number } | undefined;
-  /** Whether line metrics use an admitted face instead of approximate fallback metrics. */
-  hasResolvedFont?(style: ResolvedRunStyle): boolean;
-  /**
-   * Optional `OS/2` strikeout stroke for the resolved face, at the drawn size. Word paints
-   * `w:separator` as a strikeout, so the note rule reads its thickness and offset here rather
-   * than assuming one face's numbers. Undefined keeps the caller's own default.
-   */
-  strikeoutMetrics?(
-    style: ResolvedRunStyle
-  ): import('./sfnt-strikeout-metrics.ts').StrikeoutStrokePt | undefined;
-  /** Line metrics for the actual text faces; omitted text measures the primary face. */
-  lineMetrics(style: ResolvedRunStyle, text?: string): { height: number; baseline: number };
-}
+export type { TextMeasurer, TextOutline } from './text-measurer.ts';
 
 export {
   anchoredDrawingsOf,

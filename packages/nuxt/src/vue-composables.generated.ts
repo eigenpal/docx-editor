@@ -44,5 +44,7 @@ export const VUE_COMPOSABLES = [
   'useToolbarLabel',
   'useToolbarLabelFor',
   'useTranslation',
+  'useWatermark',
+  'useWatermarkDialog',
   'useZoom',
 ] as const;

@@ -38,6 +38,7 @@ import { useMenuPanelPlacement } from './menu-panel-placement';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
+import { MenuWatermark } from './menu-watermark';
 //
 // A row is PRESENTATION over a chrome slot: the icon, the label and the enabled state all
 // come from the registry entry the row names, exactly like a toolbar button, so the same
@@ -653,6 +654,7 @@ export const MenuEntry = defineComponent({
       if (entry.slot === 'file.print') return <MenuPrint />;
       if (entry.slot === 'file.pageSetup') return <MenuPageSetup />;
       if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
+      if (entry.slot === 'insert.watermark') return <MenuWatermark />;
       if (entry.slot === 'image.insert') return <MenuImageInsert />;
       if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
       return (

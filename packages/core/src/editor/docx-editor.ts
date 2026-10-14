@@ -3,7 +3,7 @@ import { createEditorDiagnostics, reportEditorFontError } from './editor-diagnos
 import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createRevisionMarkupState } from './revision-markup-state.ts';
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
-import { queryEditorDocument } from './docx-editor-query.ts';
+import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
 import { refreshWriteBlocked } from './refresh-write-guard.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
@@ -2159,7 +2159,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     getPageSetup: () => pageSetupOf(surface),
 
-    getWatermark: () => null,
+    getWatermark: () => watermarkOf(surface),
     getTrackedChanges: () =>
       (surface?.session.reviewItems() ?? [])
         .filter((item) => item.kind === 'revision')
