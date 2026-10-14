@@ -141,6 +141,17 @@ import { DocxEditor } from '@docx-editor.dev/react';
 
 To build your own layout, pass `preset={false}` and compose the parts. For more information, see [Customize dialogs](/docs/2.x/guides/customize-dialogs).
 
+The `DocxEditor.WatermarkDialog.Preview` part draws the page of the section that contains the caret. It uses the same shape size that `setWatermark` writes. To draw your own preview, call `watermarkShapeBox` from `@docx-editor.dev/core/editor`. It returns the shape width and height in points for a text area size:
+
+```ts
+import { watermarkShapeBox } from '@docx-editor.dev/core/editor';
+
+// A Letter page with one-inch margins has a 468 by 648 point text area.
+const box = watermarkShapeBox({ text: 'DRAFT' }, { width: 468, height: 648 });
+```
+
+The shape is centered on the text area. A diagonal text shape turns 45 degrees counterclockwise about its center.
+
 ### Limits
 
 - One watermark applies to the whole document. The command writes it into every header that a section shows and creates a default header when a section has none.

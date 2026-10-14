@@ -4,7 +4,8 @@
 // watermark, and `watermarkFromFields` turns it back into the ONE `setWatermark` value the
 // dialog sends, so both adapters agree on every default and every conversion.
 
-import type { Watermark, WatermarkState } from '@docx-editor.dev/core/contracts/editor';
+import type { PageSetup, Watermark, WatermarkState } from '@docx-editor.dev/core/contracts/editor';
+import { watermarkShapeBox } from '@docx-editor.dev/core/editor';
 
 /** How a text watermark crosses the page. @public */
 export type WatermarkDialogLayout = NonNullable<WatermarkState['layout']>;
@@ -219,82 +220,236 @@ export function watermarkFieldsEqual(a: WatermarkDialogFields, b: WatermarkDialo
 export const watermarkPresetValue = (text: string, presets: readonly string[]): string =>
   presets.includes(text) ? text : '';
 
-/** The preview page in SVG user units: a portrait page in the 8.5 by 11 ratio. */
-export const WATERMARK_PREVIEW_PAGE = { width: 85, height: 110 } as const;
+/** A rectangle in points on the preview page. */
+export interface WatermarkPreviewRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
 
-/** Placeholder body lines on the preview page, as `[y, width]` in SVG user units. */
-export const WATERMARK_PREVIEW_LINES: readonly (readonly [number, number])[] = [
-  [12, 40],
-  [20, 65],
-  [26, 65],
-  [32, 58],
-  [40, 65],
-  [46, 65],
-  [52, 40],
-  [60, 65],
-  [66, 62],
-  [72, 65],
-  [78, 30],
-  [86, 65],
-  [92, 50],
-];
+/** The preview page in points: the section's page and its text area (page less margins). */
+export interface WatermarkPreviewPage {
+  readonly width: number;
+  readonly height: number;
+  readonly area: WatermarkPreviewRect;
+}
+
+/** US Letter with one-inch margins, for an editor that reports no page setup. */
+const FALLBACK_PAGE_SETUP: PageSetup = {
+  pageWidthTwips: 12240,
+  pageHeightTwips: 15840,
+  orientation: 'portrait',
+  marginsTwips: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+};
+
+/**
+ * The preview page for the caret's section, the same section `setWatermark` sizes the
+ * shape against. The text area is at least one inch on each side, as in the command.
+ */
+export function watermarkPreviewPage(setup: PageSetup | null | undefined): WatermarkPreviewPage {
+  const page = setup && setup.pageWidthTwips > 0 && setup.pageHeightTwips > 0 ? setup : null;
+  const { pageWidthTwips, pageHeightTwips, marginsTwips } = page ?? FALLBACK_PAGE_SETUP;
+  const width = pageWidthTwips / 20;
+  const height = pageHeightTwips / 20;
+  const areaWidth = Math.max(72, (pageWidthTwips - marginsTwips.left - marginsTwips.right) / 20);
+  const areaHeight = Math.max(72, (pageHeightTwips - marginsTwips.top - marginsTwips.bottom) / 20);
+  return {
+    width,
+    height,
+    area: {
+      x: marginsTwips.left / 20,
+      y: marginsTwips.top / 20,
+      width: areaWidth,
+      height: areaHeight,
+    },
+  };
+}
+
+/** Height of one placeholder body line on the preview page, in points. */
+export const WATERMARK_PREVIEW_LINE_HEIGHT = 12;
+
+/** Relative widths of the placeholder lines; `0` leaves a paragraph gap. */
+const PREVIEW_LINE_PATTERN = [0.55, 1, 1, 0.9, 0, 1, 1, 0.6, 0, 1, 0.95, 1, 0.45];
+
+/** Placeholder body lines that fill the text area, as rectangles in points. */
+export function watermarkPreviewLines(page: WatermarkPreviewPage): readonly WatermarkPreviewRect[] {
+  const { area } = page;
+  const pitch = 36;
+  const lines: WatermarkPreviewRect[] = [];
+  for (let i = 0, y = area.y; y + WATERMARK_PREVIEW_LINE_HEIGHT <= area.y + area.height; i++) {
+    const share = PREVIEW_LINE_PATTERN[i % PREVIEW_LINE_PATTERN.length]!;
+    if (share > 0)
+      lines.push({
+        x: area.x,
+        y,
+        width: area.width * share,
+        height: WATERMARK_PREVIEW_LINE_HEIGHT,
+      });
+    y += pitch;
+  }
+  return lines;
+}
 
 /**
  * CSS filter for a washed-out picture: brightness +70% and contrast -70% as one linear
  * transfer per channel, `out = 0.3 * in + 0.805`, which keeps white at white. CSS
  * `contrast(c) brightness(b)` is `b * (c * in + (1 - c) / 2)`, so `b = 0.3 + 2 * 0.805`
- * and `c = 0.3 / b`.
+ * and `c = 0.3 / b`. The page paints a washed-out picture with the same filter.
  */
 export const WATERMARK_WASHOUT_FILTER = 'contrast(0.157068) brightness(1.91)';
 
-/** What the preview draws for a text draft, in SVG user units of the preview page. */
+/** The text the preview draws, in points on the preview page. */
 export interface WatermarkPreviewText {
   readonly text: string;
+  /** A CSS font family list. */
   readonly fontFamily: string;
-  readonly fontSize: number;
-  /**
-   * The width the text is stretched or squeezed to, or null when short text reaches the
-   * size cap and keeps its natural width. Stretching it would distort its glyphs.
-   */
-  readonly length: number | null;
   readonly fontWeight: 'bold' | 'normal';
   readonly fontStyle: 'italic' | 'normal';
   /** `#RRGGBB`. */
   readonly fill: string;
   readonly opacity: number;
-  /** Degrees; negative turns counterclockwise. */
+  /** The unrotated shape box, centered on the text area, as `setWatermark` writes it. */
+  readonly box: WatermarkPreviewRect;
+  /** Degrees about the box center; negative turns counterclockwise. */
   readonly rotation: number;
 }
 
-/**
- * The preview geometry for a text draft, or null when the draft is not a text watermark
- * or its text is blank. The text fits the page width, or the page diagonal when diagonal.
- */
-/** The largest preview font size, so short text keeps the shape of a page watermark. */
-const PREVIEW_MAX_FONT_SIZE = 36;
+/** Glyph ink bounds of the text drawn at `WATERMARK_PREVIEW_FONT_SIZE`, baseline at 0. */
+export interface WatermarkPreviewInk {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
 
-export function watermarkPreviewText(fields: WatermarkDialogFields): WatermarkPreviewText | null {
+/** The size the preview draws its text at before the fit scales the ink into the box. */
+export const WATERMARK_PREVIEW_FONT_SIZE = 100;
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+const center = (page: WatermarkPreviewPage) => ({
+  cx: page.area.x + page.area.width / 2,
+  cy: page.area.y + page.area.height / 2,
+});
+
+/**
+ * The preview of a text draft, or null when the draft is not a text watermark or its text
+ * is blank. The shape box comes from `watermarkShapeBox`, the rule `setWatermark` writes
+ * with, so Auto and fixed sizes, both layouts, and the page's text area all match the page.
+ */
+export function watermarkPreviewText(
+  fields: WatermarkDialogFields,
+  page: WatermarkPreviewPage = watermarkPreviewPage(null)
+): WatermarkPreviewText | null {
   if (fields.kind !== 'text') return null;
   const text = fields.text.trim();
   if (text === '') return null;
-  const { width } = WATERMARK_PREVIEW_PAGE;
-  const diagonal = fields.layout === 'diagonal';
-  // A 45 degree line through the page center meets the side edges first.
-  const length = diagonal ? width * Math.SQRT2 * 0.85 : width * 0.78;
-  // About 0.6 em per character, so the stretch to `length` stays close to the real shape.
-  const fitted = length / (Math.min(text.length, 256) * 0.6);
-  const fontSize = Math.min(PREVIEW_MAX_FONT_SIZE, Math.max(3, fitted));
+  const box = watermarkShapeBox(
+    {
+      text,
+      fontFamily: fields.fontFamily,
+      fontSizePt: fields.fontSizePt,
+      bold: fields.bold,
+      italic: fields.italic,
+      layout: fields.layout,
+    },
+    page.area
+  );
+  if (!box) return null;
+  const { cx, cy } = center(page);
   return {
     text,
     // A family the browser lacks falls back to sans-serif, the shape of the default fonts,
     // not to the browser's serif default. Quotes and backslashes cannot end the name.
     fontFamily: `"${fields.fontFamily.replace(/["\\]/g, '')}", sans-serif`,
-    fontSize: Math.round(fontSize * 100) / 100,
-    length: fitted > PREVIEW_MAX_FONT_SIZE ? null : Math.round(length * 100) / 100,
     fontWeight: fields.bold ? 'bold' : 'normal',
     fontStyle: fields.italic ? 'italic' : 'normal',
     fill: `#${HEX.test(fields.color) ? fields.color.toUpperCase() : 'C0C0C0'}`,
-    opacity: Math.round((1 - Math.min(1, Math.max(0, fields.transparency))) * 100) / 100,
-    rotation: diagonal ? -45 : 0,
+    opacity: round2(1 - Math.min(1, Math.max(0, fields.transparency))),
+    box: {
+      x: round2(cx - box.width / 2),
+      y: round2(cy - box.height / 2),
+      width: round2(box.width),
+      height: round2(box.height),
+    },
+    rotation: fields.layout === 'diagonal' ? -45 : 0,
+  };
+}
+
+let inkContext: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * The glyph ink of the preview text, measured on a canvas. Without a canvas the ink is an
+ * estimate: 0.55 em per character across and 0.7 em above the baseline.
+ */
+export function watermarkPreviewInk(text: WatermarkPreviewText): WatermarkPreviewInk {
+  const size = WATERMARK_PREVIEW_FONT_SIZE;
+  if (inkContext === undefined) {
+    try {
+      inkContext =
+        typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+    } catch {
+      inkContext = null;
+    }
+  }
+  if (inkContext) {
+    inkContext.font = `${text.fontStyle} ${text.fontWeight} ${size}px ${text.fontFamily}`;
+    const metrics = inkContext.measureText(text.text);
+    const left = -(metrics.actualBoundingBoxLeft ?? 0);
+    const right = metrics.actualBoundingBoxRight ?? metrics.width;
+    const top = -(metrics.actualBoundingBoxAscent ?? 0);
+    const bottom = metrics.actualBoundingBoxDescent ?? 0;
+    if (right > left && bottom > top) return { left, right, top, bottom };
+  }
+  return {
+    left: 0,
+    right: 0.55 * size * Array.from(text.text).length,
+    top: -0.7 * size,
+    bottom: 0,
+  };
+}
+
+/**
+ * The SVG transform that draws the text, set at `WATERMARK_PREVIEW_FONT_SIZE` with its
+ * baseline origin at 0, the way the page does: the glyph ink stretched to fill the shape
+ * box inside the text inset (7.2 points left and right, 3.6 top and bottom), then the box
+ * turned about its center.
+ */
+export function watermarkPreviewTextTransform(
+  text: WatermarkPreviewText,
+  ink: WatermarkPreviewInk
+): string {
+  const { x, y, width, height } = text.box;
+  // A box too small for the inset keeps its whole area for the ink.
+  const insetX = width > 4 * 7.2 ? 7.2 : 0;
+  const insetY = height > 4 * 3.6 ? 3.6 : 0;
+  const scaleX = (width - 2 * insetX) / (ink.right - ink.left);
+  const scaleY = (height - 2 * insetY) / (ink.bottom - ink.top);
+  const offsetX = x + insetX - ink.left * scaleX;
+  const offsetY = y + insetY - ink.top * scaleY;
+  const n = (value: number) => String(Math.round(value * 10000) / 10000);
+  const fit = `matrix(${n(scaleX)} 0 0 ${n(scaleY)} ${n(offsetX)} ${n(offsetY)})`;
+  if (!text.rotation) return fit;
+  return `rotate(${text.rotation} ${n(x + width / 2)} ${n(y + height / 2)}) ${fit}`;
+}
+
+/**
+ * Where the preview draws a picture draft, or null when the draft is not a picture
+ * watermark or its bytes are not a readable picture. Auto fits the text area and a scale
+ * multiplies the natural size, through the same rule as `setWatermark`.
+ */
+export function watermarkPreviewPicture(
+  fields: WatermarkDialogFields,
+  page: WatermarkPreviewPage = watermarkPreviewPage(null)
+): WatermarkPreviewRect | null {
+  if (fields.kind !== 'picture' || !fields.imageData) return null;
+  const box = watermarkShapeBox({ imageData: fields.imageData, scale: fields.scale }, page.area);
+  if (!box) return null;
+  const { cx, cy } = center(page);
+  return {
+    x: round2(cx - box.width / 2),
+    y: round2(cy - box.height / 2),
+    width: round2(box.width),
+    height: round2(box.height),
   };
 }

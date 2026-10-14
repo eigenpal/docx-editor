@@ -79,12 +79,28 @@ export interface PackagePictureWatermark {
 
 export type PackageWatermark = PackageTextWatermark | PackagePictureWatermark;
 
+/** One section's shape size, in points. */
+export interface PackageWatermarkSize {
+  readonly widthPt: number;
+  readonly heightPt: number;
+}
+
+/**
+ * A write may size the shape per section, indexed like the body's sections: a header part
+ * takes the size of the first section that shows it, so a landscape section's watermark
+ * fits its own text area. A missing or unusable entry falls back to `widthPt`/`heightPt`.
+ */
+interface PackageWatermarkSectionSizes {
+  readonly sectionSizes?: readonly (PackageWatermarkSize | null)[];
+}
+
 /** A picture watermark write carries the image bytes. */
 export type PackageWatermarkWrite =
-  | PackageTextWatermark
-  | (PackagePictureWatermark & {
-      readonly image: { readonly bytes: Uint8Array; readonly mime: SupportedImageMime };
-    });
+  | (PackageTextWatermark & PackageWatermarkSectionSizes)
+  | (PackagePictureWatermark &
+      PackageWatermarkSectionSizes & {
+        readonly image: { readonly bytes: Uint8Array; readonly mime: SupportedImageMime };
+      });
 
 /** The watermark read from a header, with where its picture lives. */
 export type PackageWatermarkReading =
@@ -179,20 +195,38 @@ function readShape(
 }
 
 /** Header parts in the order a reader meets them: first section first, default variant first. */
-function shownHeaderParts(pkg: OoxmlPackage): OoxmlPart[] {
-  const parts: OoxmlPart[] = [];
+/** Every header part a section shows, once, with the first section that shows it. */
+function shownHeaderSlots(pkg: OoxmlPackage): Array<{ part: OoxmlPart; sectionIndex: number }> {
+  const slots: Array<{ part: OoxmlPart; sectionIndex: number }> = [];
   const seen = new Set<string>();
-  for (const section of resolveHeaderFooterResolutionBySection(pkg)) {
+  resolveHeaderFooterResolutionBySection(pkg).forEach((section, sectionIndex) => {
     for (const variant of ['default', 'first', 'even'] as const) {
       if (!headerFooterVariantCanPaint(section, variant)) continue;
       const slot = section.headers.get(variant);
       if (!slot || seen.has(slot.partName)) continue;
       seen.add(slot.partName);
       const part = pkg.parts.get(slot.partName);
-      if (part) parts.push(part);
+      if (part) slots.push({ part, sectionIndex });
     }
-  }
-  return parts;
+  });
+  return slots;
+}
+
+function shownHeaderParts(pkg: OoxmlPackage): OoxmlPart[] {
+  return shownHeaderSlots(pkg).map((slot) => slot.part);
+}
+
+const usableSide = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0;
+
+/** The write sized for one section, or unchanged when it carries no size for it. */
+function sizedForSection(
+  watermark: PackageWatermarkWrite,
+  sectionIndex: number
+): PackageWatermarkWrite {
+  const size = watermark.sectionSizes?.[sectionIndex];
+  if (!size || !usableSide(size.widthPt) || !usableSide(size.heightPt)) return watermark;
+  return { ...watermark, widthPt: size.widthPt, heightPt: size.heightPt };
 }
 
 /** The watermark the document shows, or null when no header carries one. */
@@ -370,7 +404,8 @@ export function applyPackageWatermark(
   }
   if (watermark) {
     let ordinal = 0;
-    for (const part of shownHeaderParts(next)) {
+    for (const { part, sectionIndex } of shownHeaderSlots(next)) {
+      const sized = sizedForSection(watermark, sectionIndex);
       let relationshipId: string | null = null;
       if (watermark.kind === 'picture') {
         const embedded = withEmbeddedImage(next, part.name, watermark.image);
@@ -381,7 +416,7 @@ export function applyPackageWatermark(
       const current: OoxmlPart | undefined = next.parts.get(part.name);
       if (!current) return fail('header-part');
       const nextId = createNodeIdAllocator(current);
-      const run = watermarkRun(current, watermark, ordinal++, relationshipId, nextId);
+      const run = watermarkRun(current, sized, ordinal++, relationshipId, nextId);
       if (!run) return fail('watermark-markup');
       const paragraph = firstParagraph(current);
       let edited;

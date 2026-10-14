@@ -7,33 +7,25 @@
 import type { ExecResult, Watermark, WatermarkState } from '../contracts/types';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { SurfaceLifecycleOp } from './surface-hf-editing.ts';
-import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
-import type { TextMeasurer } from '../layout/semantic-records.ts';
 import { validateEmbeddedImageBytes } from '../store/package/drawing-package-edit.ts';
-import {
-  sniffImageMime,
-  validateRasterHeader,
-  type SupportedImageMime,
-} from '../store/package/image-resources.ts';
+import { sniffImageMime, type SupportedImageMime } from '../store/package/image-resources.ts';
 import { MAX_TEXT_ART_LENGTH } from '../store/package/legacy-vml-text-art.ts';
 import {
   readPackageWatermark,
+  type PackageWatermarkSize,
   type PackageWatermarkWrite,
 } from '../store/package/watermark-package.ts';
+import { enumerateDocumentSections, type SectionProperties } from '../layout/section-properties.ts';
+import type { TextMeasurer } from '../layout/text-measurer.ts';
+import {
+  DEFAULT_WATERMARK_FONT,
+  WATERMARK_PICTURE_MIMES,
+  watermarkShapeBox,
+  type WatermarkSize,
+} from './watermark-geometry.ts';
 
-const DEFAULT_FONT = 'Calibri';
 const DEFAULT_COLOR = 'C0C0C0';
 const DEFAULT_TRANSPARENCY = 0.5;
-/** Largest shape side written; a page is far smaller. */
-const MAX_SIDE_PT = 4000;
-const PICTURE_MIMES: ReadonlySet<string> = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/bmp',
-  'image/webp',
-]);
-
 const FONT_FAMILY = /^[^"';{}<>\\\u0000-\u001f]{1,64}$/u;
 
 /** The watermark the document shows, for the dialog. */
@@ -114,7 +106,8 @@ export function watermarkRefusal(watermark: unknown): string | null {
   }
   if (!(w.imageData instanceof Uint8Array)) return 'imageData must be a Uint8Array';
   const mime = sniffImageMime(w.imageData);
-  if (!PICTURE_MIMES.has(mime)) return 'imageData is not a PNG, JPEG, GIF, BMP or WebP picture';
+  if (!WATERMARK_PICTURE_MIMES.has(mime))
+    return 'imageData is not a PNG, JPEG, GIF, BMP or WebP picture';
   if (!validateEmbeddedImageBytes(w.imageData, mime as SupportedImageMime))
     return 'imageData is not a readable picture';
   if (w.scale !== undefined && w.scale !== null && !isFiniteIn(w.scale, 0.01, 10))
@@ -133,65 +126,31 @@ export function watermarkRefusal(watermark: unknown): string | null {
   return null;
 }
 
-const clampSide = (value: number) => Math.max(1, Math.min(MAX_SIDE_PT, value));
-
-/** The text area of the caret's section, in points. */
-function textArea(mounted: PaginatedSurface): { width: number; height: number } {
-  const section = mounted.sectionPropertiesAt(mounted.state().selection.head.paragraphId);
+/** A section's text area in points: the page less its margins and gutter, as layout uses. */
+function sectionTextArea(section: SectionProperties): WatermarkSize {
+  const { pageSize, margins } = section;
   const width =
-    (section.pageSize.widthTwips - section.margins.leftTwips - section.margins.rightTwips) / 20;
-  const height =
-    (section.pageSize.heightTwips - section.margins.topTwips - section.margins.bottomTwips) / 20;
+    (pageSize.widthTwips - margins.leftTwips - margins.rightTwips - margins.gutterTwips) / 20;
+  const height = (pageSize.heightTwips - margins.topTwips - margins.bottomTwips) / 20;
   return { width: Math.max(72, width), height: Math.max(72, height) };
 }
 
 /**
- * The watermark shape box. A fixed size is the text's advance by its line height. Auto fits
- * that proportion to the text area: across it, or with the box's half-diagonal sum equal to
- * the area width for a diagonal watermark.
+ * The shape size for every body section, by canonical section index, so each header fits the
+ * page of the section that shows it: a landscape section gets a landscape fit.
  */
-function textBox(
-  text: string,
-  options: {
-    fontFamily: string;
-    bold: boolean;
-    italic: boolean;
-    size: number | null;
-    diagonal: boolean;
-  },
-  area: { width: number; height: number },
+function sectionSizes(
+  mounted: PaginatedSurface,
+  watermark: Watermark,
   measurer: TextMeasurer | undefined
-): { width: number; height: number } {
-  const style = {
-    ...DEFAULT_RUN_STYLE,
-    fontFamily: options.fontFamily,
-    bold: options.bold,
-    italic: options.italic,
-    fontSizePt: options.size ?? 100,
-  };
-  let advance = measurer?.measure(text, style) ?? NaN;
-  let line = measurer?.lineMetrics(style).height ?? NaN;
-  if (!(advance > 0)) advance = 0.55 * style.fontSizePt * Array.from(text).length;
-  if (!(line > 0)) line = 1.22 * style.fontSizePt;
-  if (options.size !== null) return { width: clampSide(advance), height: clampSide(line) };
-  const ratio = line / advance;
-  const width = options.diagonal ? (area.width * Math.SQRT2) / (1 + ratio) : area.width;
-  return { width: clampSide(width), height: clampSide(width * ratio) };
-}
-
-function pictureBox(
-  bytes: Uint8Array,
-  mime: SupportedImageMime,
-  scale: number | null,
-  area: { width: number; height: number }
-): { width: number; height: number } | null {
-  const header = validateRasterHeader(bytes, mime);
-  if (!header) return null;
-  const width = (header.pixelWidth * 72) / (header.dpiX && header.dpiX > 0 ? header.dpiX : 96);
-  const height = (header.pixelHeight * 72) / (header.dpiY && header.dpiY > 0 ? header.dpiY : 96);
-  if (!(width > 0) || !(height > 0)) return null;
-  const factor = scale ?? Math.min(area.width / width, area.height / height);
-  return { width: clampSide(width * factor), height: clampSide(height * factor) };
+): readonly (PackageWatermarkSize | null)[] | undefined {
+  const pkg = mounted.session.currentPackage();
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  if (!main) return undefined;
+  return enumerateDocumentSections(main).map((section) => {
+    const box = watermarkShapeBox(watermark, sectionTextArea(section.properties), measurer);
+    return box ? { widthPt: box.width, heightPt: box.height } : null;
+  });
 }
 
 /** The package write for validated options. */
@@ -199,31 +158,31 @@ export function watermarkWrite(
   mounted: PaginatedSurface,
   watermark: Watermark
 ): PackageWatermarkWrite | null {
-  const area = textArea(mounted);
+  const area = sectionTextArea(
+    mounted.sectionPropertiesAt(mounted.state().selection.head.paragraphId)
+  );
+  const measurer = mounted.textMeasurer?.();
   if (watermark.imageData) {
     const mime = sniffImageMime(watermark.imageData) as SupportedImageMime;
-    const box = pictureBox(watermark.imageData, mime, watermark.scale ?? null, area);
+    const box = watermarkShapeBox(watermark, area);
     if (!box) return null;
     return {
       kind: 'picture',
       washout: watermark.washout ?? true,
       widthPt: box.width,
       heightPt: box.height,
+      sectionSizes: sectionSizes(mounted, watermark, measurer),
       image: { bytes: watermark.imageData, mime },
     };
   }
   const text = watermark.text ?? '';
-  const fontFamily = watermark.fontFamily?.trim() || DEFAULT_FONT;
+  const fontFamily = watermark.fontFamily?.trim() || DEFAULT_WATERMARK_FONT;
   const bold = watermark.bold ?? false,
     italic = watermark.italic ?? false;
   const diagonal = (watermark.layout ?? 'diagonal') === 'diagonal';
   const size = watermark.fontSizePt ?? null;
-  const box = textBox(
-    text,
-    { fontFamily, bold, italic, size, diagonal },
-    area,
-    mounted.textMeasurer?.()
-  );
+  // Validated text is never blank, so the shared rule always returns a box.
+  const box = watermarkShapeBox(watermark, area, measurer)!;
   return {
     kind: 'text',
     text,
@@ -236,6 +195,7 @@ export function watermarkWrite(
     diagonal,
     widthPt: box.width,
     heightPt: box.height,
+    sectionSizes: sectionSizes(mounted, watermark, measurer),
   };
 }
 

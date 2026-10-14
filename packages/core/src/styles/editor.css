@@ -7686,15 +7686,15 @@ a.docx-hyperlink:focus-visible {
   flex: 0 0 auto;
   width: 120px;
   margin-inline: auto;
-  aspect-ratio: 85 / 110;
   overflow: hidden;
   border: 1px solid var(--doc-border);
   box-shadow: var(--doc-card-shadow);
 }
 .docx-editor .docx-dialog__preview-page {
+  /* The section's page proportion comes from the SVG view box. */
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
 }
 .docx-editor .docx-dialog__preview-sheet {
   fill: var(--doc-page-bg-rendered, var(--doc-surface));

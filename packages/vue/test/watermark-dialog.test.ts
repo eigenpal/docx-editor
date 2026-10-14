@@ -193,6 +193,14 @@ describe('DocxEditor.WatermarkDialog (Vue)', () => {
     expect(button('Apply').disabled).toBe(true);
     await choosePicture();
     expect(dialog()!.textContent).toContain('logo.png');
+    // Auto fits the picture to the text area; a scale multiplies its natural size.
+    expect(
+      preview().querySelector('[data-docx-watermark-preview="picture"]')!.getAttribute('width')
+    ).toBe('468');
+    await type(control('Scale'), '2');
+    expect(
+      preview().querySelector('[data-docx-watermark-preview="picture"]')!.getAttribute('width')
+    ).toBe('1.5');
     await choose(control('Washout') as HTMLInputElement);
     button('Apply').click();
     await flush();
@@ -256,12 +264,15 @@ describe('DocxEditor.WatermarkDialog (Vue)', () => {
     expect(text.getAttribute('font-weight')).toBe('bold');
     expect(text.getAttribute('transform')).toBeNull();
 
-    // Short text keeps its natural width; a stretch to the full line would distort it.
+    // The preview uses the page's box rule: Auto fills the 6.5 inch text area of a Letter
+    // page, and a fixed size draws the glyphs at that size.
     await type(control('Text'), 'xd');
     text = preview().querySelector('[data-docx-watermark-preview="text"]')!;
     expect(text.textContent).toBe('xd');
-    expect(text.getAttribute('textLength')).toBeNull();
-    expect(text.getAttribute('lengthAdjust')).toBeNull();
+    expect(text.getAttribute('textLength')).toBe('468');
+    await type(control('Size'), '72');
+    text = preview().querySelector('[data-docx-watermark-preview="text"]')!;
+    expect(text.getAttribute('font-size')).toBe('72');
 
     await choose(control('No watermark') as HTMLInputElement);
     expect(preview().querySelector('[data-docx-watermark-preview]')).toBeNull();

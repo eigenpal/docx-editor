@@ -557,3 +557,10 @@ export type {
   RevisionMarkupTextStyle,
 } from '../contracts/revision-markup.ts';
 export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from '../contracts/modules.ts';
+
+/** The watermark shape box that `setWatermark` writes, for previews. */
+export {
+  DEFAULT_WATERMARK_FONT,
+  watermarkShapeBox,
+  type WatermarkSize,
+} from './watermark-geometry.ts';

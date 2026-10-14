@@ -5,7 +5,7 @@
 // Apply, so the whole dialog is a single undo step. An Apply that changes nothing writes
 // nothing. The host owns visibility (`open`/`onClose`); the engine owns everything else.
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import {
   createDialogParts,
@@ -18,13 +18,12 @@ import { useTranslation } from '../i18n';
 import { useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { selectDocumentAbsent } from './document-presence';
+import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { useWatermark } from './useWatermark';
 import {
   DEFAULT_WATERMARK_FIELDS,
   DEFAULT_WATERMARK_PRESETS,
   WATERMARK_IMAGE_ACCEPT,
-  WATERMARK_PREVIEW_LINES,
-  WATERMARK_PREVIEW_PAGE,
   WATERMARK_SCALES,
   WATERMARK_SIZES,
   WATERMARK_WASHOUT_FILTER,
@@ -37,7 +36,13 @@ import {
   watermarkFieldsEqual,
   watermarkFromFields,
   watermarkPresetValue,
+  watermarkPreviewLines,
+  watermarkPreviewPage,
+  watermarkPreviewPicture,
+  watermarkPreviewInk,
   watermarkPreviewText,
+  watermarkPreviewTextTransform,
+  WATERMARK_PREVIEW_FONT_SIZE,
   type WatermarkDialogFields,
 } from './watermark-dialog-model';
 
@@ -50,6 +55,8 @@ export interface DocxEditorWatermarkDialogProps extends DialogCustomizationProps
   /** The text choices offered for a text watermark. Defaults to `DEFAULT_WATERMARK_PRESETS`. */
   presets?: readonly string[];
 }
+
+const selectPageSetup = (snapshot: EditorSnapshot) => snapshot.pageSetup ?? null;
 
 /** Named controls a host can replace with `DocxEditor.WatermarkDialog.Field`. @public */
 export type WatermarkDialogFieldName =
@@ -110,9 +117,11 @@ function WatermarkPreview({
   [attribute: string]: unknown;
 }): ReactElement {
   const { values } = useWatermarkDialog();
+  const pageSetup = useEditorState(selectPageSetup);
+  const page = useMemo(() => watermarkPreviewPage(pageSetup), [pageSetup]);
   const pictureUrl = usePictureUrl(values.kind === 'picture' ? values.imageData : null);
-  const text = watermarkPreviewText(values);
-  const { width, height } = WATERMARK_PREVIEW_PAGE;
+  const text = watermarkPreviewText(values, page);
+  const picture = pictureUrl ? watermarkPreviewPicture(values, page) : null;
   return (
     <div
       {...rest}
@@ -123,54 +132,54 @@ function WatermarkPreview({
     >
       <svg
         className="docx-dialog__preview-page"
-        viewBox={`0 0 ${width} ${height}`}
+        viewBox={`0 0 ${page.width} ${page.height}`}
         focusable="false"
       >
-        <rect className="docx-dialog__preview-sheet" x={0} y={0} width={width} height={height} />
+        <rect
+          className="docx-dialog__preview-sheet"
+          x={0}
+          y={0}
+          width={page.width}
+          height={page.height}
+        />
         {/* The watermark paints behind the text lines, as it does on the page. */}
         {text ? (
           <text
             data-docx-watermark-preview="text"
-            x={width / 2}
-            y={height / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            textLength={text.length ?? undefined}
-            lengthAdjust={text.length === null ? undefined : 'spacingAndGlyphs'}
+            x={0}
+            y={0}
             fontFamily={text.fontFamily}
-            fontSize={text.fontSize}
+            fontSize={WATERMARK_PREVIEW_FONT_SIZE}
             fontWeight={text.fontWeight}
             fontStyle={text.fontStyle}
             fill={text.fill}
             fillOpacity={text.opacity}
-            transform={
-              text.rotation ? `rotate(${text.rotation} ${width / 2} ${height / 2})` : undefined
-            }
+            transform={watermarkPreviewTextTransform(text, watermarkPreviewInk(text))}
           >
             {text.text}
           </text>
         ) : null}
-        {pictureUrl ? (
+        {pictureUrl && picture ? (
           <image
             data-docx-watermark-preview="picture"
             className="docx-dialog__preview-picture"
             href={pictureUrl}
-            x={width * 0.15}
-            y={height * 0.15}
-            width={width * 0.7}
-            height={height * 0.7}
-            preserveAspectRatio="xMidYMid meet"
+            x={picture.x}
+            y={picture.y}
+            width={picture.width}
+            height={picture.height}
+            preserveAspectRatio="none"
             style={values.washout ? { filter: WATERMARK_WASHOUT_FILTER } : undefined}
           />
         ) : null}
-        {WATERMARK_PREVIEW_LINES.map(([y, lineWidth]) => (
+        {watermarkPreviewLines(page).map((line) => (
           <rect
-            key={y}
+            key={line.y}
             className="docx-dialog__preview-line"
-            x={10}
-            y={y}
-            width={lineWidth}
-            height={2}
+            x={line.x}
+            y={line.y}
+            width={line.width}
+            height={line.height}
           />
         ))}
       </svg>
