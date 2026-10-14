@@ -50,6 +50,11 @@ export function lineLocalBearingRetry(
   lines: LineSpans,
   advances: LineLocalAdvances
 ): LineLocalAdvances | null {
+  // Natural colon advances move line breaks, so read line-final characters on the retried
+  // lines. Kept bearings found now could land mid-line there and break a same-line pair.
+  if (!advances.preserveColonAdvances && colonLostOpeningBearing(lines)) {
+    return { ...advances, preserveColonAdvances: true };
+  }
   const keep = new Set(advances.keepRightBearings);
   for (const line of lines.slice(0, -1)) {
     const span = line.spans.at(-1);
@@ -57,12 +62,8 @@ export function lineLocalBearingRetry(
     const last = segmentGraphemes(span.text).at(-1)!;
     if (CLOSING.test(last.text)) keep.add(span.range.end - last.text.length);
   }
-  const colon = !advances.preserveColonAdvances && colonLostOpeningBearing(lines);
-  if (!colon && keep.size === (advances.keepRightBearings?.size ?? 0)) return null;
-  return {
-    preserveColonAdvances: advances.preserveColonAdvances || colon,
-    keepRightBearings: keep,
-  };
+  if (keep.size === (advances.keepRightBearings?.size ?? 0)) return null;
+  return { ...advances, keepRightBearings: keep };
 }
 
 /**
