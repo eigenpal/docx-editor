@@ -1546,11 +1546,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    */
   function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
     if (!reviewEnabled) return [];
-    // Kind exclusion and opt-in replacement pairing; see `review-replacement-pairs.ts`.
-    const visible = filterReviewItemsByAuthor(
-      surface?.session.reviewItems() ?? [],
-      reviewAuthorVisibility
-    );
+    // Kind exclusion and default replacement pairing; see `review-replacement-pairs.ts`.
+    const visible = reviewAuthorVisibility.filterItems(surface?.session.reviewItems() ?? []);
     const items = narrowReviewItems(visible, query);
     const withPlacement = query?.placement !== false;
     let anchors: Map<string, ReviewParagraphAnchor> | null = null;
