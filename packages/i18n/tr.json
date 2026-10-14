@@ -568,6 +568,17 @@
   "loading": {
     "label": "Yükleniyor"
   },
+  "openFailure": {
+    "title": "Bu dosya açılamadı",
+    "reasons": {
+      "damaged": "Dosya bozuk. Bir masaüstü kelime işlemcide açın, .docx olarak yeniden kaydedin ve tekrar deneyin.",
+      "notDocx": "Bu dosya bir .docx belgesi değil. .docx adı taşıyan başka bir dosya türü olabilir.",
+      "tooLarge": "Bu dosya, düzenleyicinin açabileceğinden daha büyük veya daha karmaşık.",
+      "blocked": "Bu dosya, düzenleyicinin güvenlik nedeniyle engellediği XML özellikleri içeriyor.",
+      "unknown": "Bu dosya açılırken bir sorun oluştu."
+    },
+    "code": "Hata kodu: {code}"
+  },
   "imageOverlay": {
     "handle": {
       "e": "Sağ kenarı yeniden boyutlandır",

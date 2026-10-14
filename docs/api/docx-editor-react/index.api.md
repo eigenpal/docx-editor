@@ -6,6 +6,7 @@
 
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { ButtonHTMLAttributes } from 'react';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
@@ -40,6 +41,8 @@ import { DEFAULT_FONT } from '@docx-editor.dev/core/editor';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentOpenFailure } from '@docx-editor.dev/core/contracts/editor';
+import { DocumentOpenFailureReason } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentRefresh } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshError } from '@docx-editor.dev/core/editor';
 import { DocumentRefreshState } from '@docx-editor.dev/core/editor';
@@ -495,6 +498,10 @@ export interface DialogPartProps {
 
 // @public @deprecated (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
+
+export { DocumentOpenFailure }
+
+export { DocumentOpenFailureReason }
 
 // @public (undocumented)
 export const DocumentOutline: react__default.MemoExoticComponent<(input: DocumentOutlineProps) => react__default.JSX.Element>;
@@ -954,6 +961,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly NotesChrome: typeof DocxEditorNotesChrome;
     // (undocumented)
     readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
+    readonly OpenFailure: typeof DocxEditorOpenFailure;
     readonly PageNumber: typeof DocxEditorPageNumber;
     readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
     // (undocumented)
@@ -1087,6 +1095,52 @@ export interface DocxEditorNotesContextMenuProps {
     x: number;
     // (undocumented)
     y: number;
+}
+
+// @public
+export const DocxEditorOpenFailure: DocxEditorOpenFailureComponent;
+
+// @public
+export function DocxEditorOpenFailureAction(input: DocxEditorOpenFailureActionProps): react.JSX.Element;
+
+// @public
+export interface DocxEditorOpenFailureActionProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
+    asChild?: boolean;
+    // (undocumented)
+    children?: DocxEditorChildren;
+    dismiss?: boolean;
+    variant?: 'primary' | 'secondary';
+}
+
+// @public
+export interface DocxEditorOpenFailureComponent {
+    (props: DocxEditorOpenFailureProps): ReactNode;
+    readonly Action: typeof DocxEditorOpenFailureAction;
+}
+
+// @public
+export interface DocxEditorOpenFailureContext {
+    dismiss(): void;
+    readonly failure: DocumentOpenFailure;
+    readonly message: string;
+}
+
+// @public
+export type DocxEditorOpenFailureMessage = string | DocxEditorChildren | ((failure: DocumentOpenFailure) => string | DocxEditorChildren);
+
+// @public
+export interface DocxEditorOpenFailureProps {
+    actions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+    children?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
+    className?: string;
+    closeLabel?: string;
+    message?: DocxEditorOpenFailureMessage;
+    onDismiss?: (failure: DocumentOpenFailure) => void;
+    showClose?: boolean;
+    showCode?: boolean;
+    style?: CSSProperties;
+    t?: TFunction;
+    title?: string;
 }
 
 // @public
@@ -1253,7 +1307,9 @@ export interface DocxEditorProps {
     onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
     onSave?: () => void;
     onTitleChange?: (title: string) => void;
+    openFailure?: boolean | DocxEditorOpenFailureProps;
     popups?: DocxEditorPopups;
+    readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
     readonly renderTitleBarLeft?: () => DocxEditorChildren;
     // (undocumented)
     readonly renderTitleBarRight?: () => DocxEditorChildren;
@@ -3072,6 +3128,21 @@ export function useNotePropertiesState(): NotePropertiesState | null;
 export function useNoteScopeState(): Extract<ViewScope, {
     kind: 'note';
 }> | null;
+
+// @public
+export function useOpenFailure(options?: UseOpenFailureOptions): UseOpenFailureReturn;
+
+// @public
+export interface UseOpenFailureOptions {
+    t?: TFunction;
+}
+
+// @public
+export interface UseOpenFailureReturn {
+    dismiss(): void;
+    readonly failure: DocumentOpenFailure | null;
+    readonly message: string | null;
+}
 
 // @public
 export function usePageSetup(): UsePageSetupReturn;

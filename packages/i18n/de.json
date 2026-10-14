@@ -565,6 +565,17 @@
   "loading": {
     "label": "Wird geladen"
   },
+  "openFailure": {
+    "title": "Diese Datei konnte nicht geöffnet werden",
+    "reasons": {
+      "damaged": "Die Datei ist beschädigt. Öffnen Sie sie in einer Desktop-Textverarbeitung, speichern Sie sie erneut als .docx und versuchen Sie es noch einmal.",
+      "notDocx": "Diese Datei ist kein .docx-Dokument. Möglicherweise ist es ein anderer Dateityp mit der Endung .docx.",
+      "tooLarge": "Diese Datei ist größer oder komplexer, als der Editor öffnen kann.",
+      "blocked": "Diese Datei enthält XML-Funktionen, die der Editor aus Sicherheitsgründen blockiert.",
+      "unknown": "Beim Öffnen dieser Datei ist ein Fehler aufgetreten."
+    },
+    "code": "Fehlercode: {code}"
+  },
   "viewer": {
     "pageIndicator": "{current} von {total}"
   },

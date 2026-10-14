@@ -7706,6 +7706,17 @@ a.docx-hyperlink:focus-visible {
   padding-inline: var(--doc-dialog-padding, 24px);
   overflow-y: auto;
 }
+/* The open-failure dialog: its message and the error code a person can quote. */
+.docx-editor .docx-dialog__message {
+  margin: 0;
+}
+.docx-editor .docx-dialog__code {
+  margin: 0;
+  color: var(--doc-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
 .docx-editor .docx-dialog__columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -7912,6 +7923,10 @@ a.docx-hyperlink:focus-visible {
   transition:
     background-color 0.12s ease,
     border-color 0.12s ease;
+}
+/* A link styled as a dialog button, such as an open-failure support action. */
+.docx-editor a.docx-dialog__button {
+  text-decoration: none;
 }
 .docx-editor .docx-dialog__button:where(:hover) {
   background: var(--doc-bg-hover);

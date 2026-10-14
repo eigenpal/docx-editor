@@ -806,6 +806,17 @@
   "loading": {
     "label": "Loading"
   },
+  "openFailure": {
+    "title": "This file did not open",
+    "reasons": {
+      "damaged": "The file is damaged. Open it in a desktop word processor, save it again as .docx, and then try again.",
+      "notDocx": "This file is not a .docx document. It may be another file type with a .docx name.",
+      "tooLarge": "This file is larger or more complex than the editor can open.",
+      "blocked": "This file contains XML features that the editor blocks for security.",
+      "unknown": "Something went wrong while opening this file."
+    },
+    "code": "Error code: {code}"
+  },
   "notes": {
     "delete": "Delete note",
     "convertToEndnote": "Convert to endnote",

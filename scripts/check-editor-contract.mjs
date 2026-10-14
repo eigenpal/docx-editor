@@ -38,6 +38,8 @@ const REACT_FRAMEWORK_EQUIVALENTS = new Set([
   'renderTitleBarRight',
   // The loading indicator; Vue uses a named slot with the same name.
   'loadingIndicator',
+  // Open-failure dialog buttons; Vue uses the `openFailureActions` named slot.
+  'renderOpenFailureActions',
 ]);
 
 function extractInterfaceBody(source, name) {

@@ -32,6 +32,10 @@ import type { Translations } from '@docx-editor.dev/i18n';
 import type { DocxEditorMenuProps } from './editor/menu';
 import type { DocxEditorContextMenuProps } from './editor/contextmenu';
 import type { DocxEditorNavigationProps } from './editor/navigation';
+import type {
+  DocxEditorOpenFailureContext,
+  DocxEditorOpenFailureProps,
+} from './editor/DocxEditorOpenFailure';
 export { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 export type {
   EditorFontErrorCode,
@@ -78,6 +82,23 @@ export interface DocxEditorProps {
    */
   readonly renderTitleBarLeft?: () => DocxEditorChildren;
   readonly renderTitleBarRight?: () => DocxEditorChildren;
+  /**
+   * Your own buttons in the dialog for a file that does not open, before **Close**. Build
+   * them from `DocxEditor.OpenFailure.Action`. It is the same as `openFailure.actions`; pass
+   * only one. With `openFailure={false}` there is no dialog, so it renders nothing.
+   *
+   * ```tsx
+   * <DocxEditor
+   *   document={bytes}
+   *   renderOpenFailureActions={({ failure }) => (
+   *     <DocxEditor.OpenFailure.Action asChild>
+   *       <a href={`/support?code=${failure.code}`}>Get help</a>
+   *     </DocxEditor.OpenFailure.Action>
+   *   )}
+   * />
+   * ```
+   */
+  readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
   /**
    * Your own loading indicator, in place of the packaged spinner. It shows centered on a
    * blank page before the document arrives, then on the document's first page while a large
@@ -207,6 +228,15 @@ export interface DocxEditorProps {
    * `navigation={{ findShortcut: false }}` leaves the shortcut to the browser.
    */
   navigation?: boolean | DocxEditorNavigationProps;
+  /**
+   * The dialog that explains a file the editor refused to open, on by default. A refused
+   * open leaves the pages blank, so without it the reader sees nothing.
+   *
+   * An object is `DocxEditorOpenFailureProps`, passed straight through: change the title or
+   * message, hide the error code, or add your own support action with `actions`. `false`
+   * removes the dialog, for a host that reports the failure itself through `useOpenFailure`.
+   */
+  openFailure?: boolean | DocxEditorOpenFailureProps;
   /**
    * Horizontal and vertical rulers, on by default with the packaged chrome.
    *

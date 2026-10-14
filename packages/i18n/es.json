@@ -797,6 +797,17 @@
   "loading": {
     "label": "Cargando"
   },
+  "openFailure": {
+    "title": "No se pudo abrir este archivo",
+    "reasons": {
+      "damaged": "El archivo está dañado. Ábrelo en un procesador de textos de escritorio, guárdalo de nuevo como .docx y vuelve a intentarlo.",
+      "notDocx": "Este archivo no es un documento .docx. Puede ser otro tipo de archivo con la extensión .docx.",
+      "tooLarge": "Este archivo es más grande o más complejo de lo que el editor puede abrir.",
+      "blocked": "Este archivo contiene funciones XML que el editor bloquea por seguridad.",
+      "unknown": "Algo salió mal al abrir este archivo."
+    },
+    "code": "Código de error: {code}"
+  },
   "notes": {
     "delete": "Eliminar nota",
     "convertToEndnote": "Convertir en nota al final",

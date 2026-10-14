@@ -581,6 +581,17 @@
   "loading": {
     "label": "Chargement"
   },
+  "openFailure": {
+    "title": "Impossible d’ouvrir ce fichier",
+    "reasons": {
+      "damaged": "Le fichier est endommagé. Ouvrez-le dans un traitement de texte de bureau, enregistrez-le à nouveau au format .docx, puis réessayez.",
+      "notDocx": "Ce fichier n’est pas un document .docx. Il s’agit peut-être d’un autre type de fichier portant l’extension .docx.",
+      "tooLarge": "Ce fichier est plus volumineux ou plus complexe que ce que l’éditeur peut ouvrir.",
+      "blocked": "Ce fichier contient des fonctions XML que l’éditeur bloque par sécurité.",
+      "unknown": "Une erreur s’est produite à l’ouverture de ce fichier."
+    },
+    "code": "Code d’erreur : {code}"
+  },
   "revisions": {
     "paragraphMarkInserted": "Marque de paragraphe insérée",
     "runPropertiesChanged": "Mise en forme du texte modifiée",

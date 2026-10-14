@@ -634,6 +634,17 @@
   "loading": {
     "label": "Memuat"
   },
+  "openFailure": {
+    "title": "File ini tidak dapat dibuka",
+    "reasons": {
+      "damaged": "File rusak. Buka di pengolah kata desktop, simpan lagi sebagai .docx, lalu coba lagi.",
+      "notDocx": "File ini bukan dokumen .docx. Mungkin ini jenis file lain dengan nama .docx.",
+      "tooLarge": "File ini lebih besar atau lebih rumit daripada yang dapat dibuka editor.",
+      "blocked": "File ini berisi fitur XML yang diblokir editor demi keamanan.",
+      "unknown": "Terjadi kesalahan saat membuka file ini."
+    },
+    "code": "Kode kesalahan: {code}"
+  },
   "toc": {
     "refresh": "Perbarui seluruh tabel",
     "refreshPageNumbers": "Perbarui nomor halaman saja"

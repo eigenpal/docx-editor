@@ -214,6 +214,7 @@ const SNAPSHOT_FIELDS = {
   isLoading: 'compared',
   isOpening: 'compared',
   parseError: 'compared',
+  openFailure: 'compared',
   editable: 'compared',
   zoom: 'compared',
   zoomMode: 'compared',

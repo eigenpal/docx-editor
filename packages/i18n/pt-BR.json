@@ -565,6 +565,17 @@
   "loading": {
     "label": "Carregando"
   },
+  "openFailure": {
+    "title": "Não foi possível abrir este arquivo",
+    "reasons": {
+      "damaged": "O arquivo está danificado. Abra-o em um processador de texto para desktop, salve-o novamente como .docx e tente de novo.",
+      "notDocx": "Este arquivo não é um documento .docx. Pode ser outro tipo de arquivo com a extensão .docx.",
+      "tooLarge": "Este arquivo é maior ou mais complexo do que o editor consegue abrir.",
+      "blocked": "Este arquivo contém recursos XML que o editor bloqueia por segurança.",
+      "unknown": "Algo deu errado ao abrir este arquivo."
+    },
+    "code": "Código de erro: {code}"
+  },
   "viewer": {
     "pageIndicator": "{current} de {total}"
   },

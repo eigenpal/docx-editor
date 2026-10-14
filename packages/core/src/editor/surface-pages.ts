@@ -37,6 +37,18 @@ export function surfaceScroller(container: HTMLElement): HTMLElement | null {
   return container.closest('.docx-editor__scroll-container') as HTMLElement | null;
 }
 
+/**
+ * Scroll the host's scroller back to the document start. A NEW document opens at its first
+ * page: the scroller survives the remount, so the previous document's offset would otherwise
+ * carry over, and a reader ten pages into one file opened the next file ten pages in.
+ */
+export function scrollToDocumentStart(container: HTMLElement): void {
+  const scroller = surfaceScroller(container);
+  if (!scroller) return;
+  scroller.scrollTop = 0;
+  scroller.scrollLeft = 0;
+}
+
 function viewportInLayout(
   container: HTMLElement,
   scroller: HTMLElement,
