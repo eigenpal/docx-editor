@@ -52,7 +52,6 @@ for (const rows of [3, 4]) {
       const fresh = lay(part);
       expect({ label, t: text(inc) }).toEqual({ label, t: text(fresh) });
       expect(JSON.stringify(inc.pages)).toBe(JSON.stringify(fresh.pages));
-      if (process.env.DBG) console.log(label, JSON.stringify(text(inc)));
       return inc;
     };
     const pre = () => body(part).children.find((n: any) => n.kind === 'paragraph')!.id;
@@ -115,7 +114,6 @@ test('incremental relayout of a clipped exact span in repeated header rows match
   const check = (label: string) => {
     const inc = lay(part, 15, { session, cache });
     const fresh = lay(part);
-    if (process.env.DBG) console.log(label, JSON.stringify(text(inc)).slice(0, 400));
     expect(JSON.stringify(inc.pages)).toBe(JSON.stringify(fresh.pages));
   };
   const firstHeadPara = () => {
