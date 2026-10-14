@@ -29,6 +29,21 @@ export function prepareTerminalBorderPlan(
   return measured && !measured.overflows ? measured.plan : undefined;
 }
 
+/** A row's placement: its table, the row, the table's left edge, its top, the page bottom. */
+export type TerminalRowAt = readonly [
+  SemanticTableStructure,
+  SemanticTableRow,
+  number,
+  number,
+  number,
+  TableFlowDeps,
+];
+
+/** {@link prepareTerminalBorderPlan} for a placement held as one value. */
+export function terminalBorderPlanAt(at: TerminalRowAt): TerminalBorderPlan | undefined {
+  return prepareTerminalBorderPlan(at[0], at[1], at[2], at[3], at[4], at[5]);
+}
+
 /** Room below a fitting row in which its closing border is checked: compound rules included. */
 const CLOSING_EDGE_BAND_PT = 18;
 
@@ -39,15 +54,11 @@ const CLOSING_EDGE_BAND_PT = 18;
  * (`nextFits`), so it does not end the page.
  */
 export function closingEdgeOverflowHeight(
-  structure: SemanticTableStructure,
-  row: SemanticTableRow,
-  left: number,
-  top: number,
-  bottom: number,
-  deps: TableFlowDeps,
+  at: TerminalRowAt,
   naturalHeight: number,
   nextFits: (room: number) => boolean
 ): number | undefined {
+  const [structure, row, left, top, bottom, deps] = at;
   const room = bottom - top - naturalHeight;
   if (room < -0.001 || room > CLOSING_EDGE_BAND_PT) return undefined;
   const measured = measureTerminalRow(structure, row, left, top, bottom, deps);
