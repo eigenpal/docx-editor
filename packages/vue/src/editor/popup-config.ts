@@ -2,6 +2,7 @@ import type { DocxEditorRevisionMarkupDialogProps } from './DocxEditorRevisionMa
 import type { DocxEditorExportDialogProps } from './DocxEditorExportDialog';
 import type { DocxEditorPrintDialogProps } from './DocxEditorPrintDialog';
 import { renderPopup, type DocxEditorPopup } from './popup-renderer';
+import { popupConfigKey, usePopupConfig } from './popup-config-context';
 import type { DocxEditorContentControlWidgetProps } from './DocxEditorContentControlWidget';
 import type { DocxEditorInvalidTextFormFieldDialogProps } from './DocxEditorInvalidTextFormFieldDialog';
 import type { DocxEditorImagePropertiesDialogProps } from './images/ImageProperties';
@@ -12,16 +13,7 @@ import type {
   DocxEditorNotesContextMenuProps,
   DocxEditorNotePreviewProps,
 } from './DocxEditorNotes';
-import {
-  computed,
-  defineComponent,
-  h,
-  inject,
-  provide,
-  type ComputedRef,
-  type InjectionKey,
-  type PropType,
-} from 'vue';
+import { computed, defineComponent, h, inject, provide, type PropType } from 'vue';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
 import type { DocxEditorWatermarkDialogProps } from './DocxEditorWatermark';
@@ -71,13 +63,8 @@ export interface DocxEditorPopups {
   equation?: DocxEditorPopup<Record<string, never>>;
   contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
 }
-const key: InjectionKey<ComputedRef<DocxEditorPopups | undefined>> = Symbol('docx.popups');
-export function usePopupConfig(): ComputedRef<DocxEditorPopups | undefined> {
-  return inject(
-    key,
-    computed(() => undefined)
-  );
-}
+const key = popupConfigKey;
+export { usePopupConfig };
 export const PopupConfigProvider = defineComponent({
   name: 'DocxPopupConfigProvider',
   props: { popups: Object as PropType<DocxEditorPopups> },

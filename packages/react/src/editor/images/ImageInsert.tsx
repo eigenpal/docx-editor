@@ -15,7 +15,7 @@ import { normalizeImageBytes } from './normalizeImageFile';
 import { useToolbarLabel } from '../toolbar/toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { Slot } from '../toolbar/Slot';
-import { usePopupConfig } from '../popup-config';
+import { usePopupConfig } from '../popup-config-context';
 import { renderPopup } from '../popup-renderer';
 import { DocxEditorImageInsertErrorDialog } from './ImageInsertErrorDialog';
 

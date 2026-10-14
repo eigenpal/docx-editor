@@ -13,7 +13,7 @@ import type {
 } from './note-popup-parts';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
-import { createContext, useContext } from 'react';
+import { PopupConfigContext, usePopupConfig } from './popup-config-context';
 import { renderPopup, type DocxEditorPopup } from './popup-renderer';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
@@ -63,9 +63,8 @@ export interface DocxEditorPopups {
   contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
 }
 
-const Context = createContext<DocxEditorPopups | undefined>(undefined);
-export const PopupConfigProvider = Context.Provider;
-export const usePopupConfig = () => useContext(Context);
+export const PopupConfigProvider = PopupConfigContext.Provider;
+export { usePopupConfig };
 
 /** Mounts only configured nonmodal surfaces; composed editors retain explicit ownership otherwise. */
 export function ConfiguredPopups() {
