@@ -23,6 +23,8 @@ export interface FixtureOptions {
   italic?: boolean;
   underlineElsewhere?: boolean;
   language?: string;
+  /** Paragraph properties; the default is left aligned without hanging punctuation. */
+  paragraphProperties?: string;
   /** One `word/fontTable.xml` entry: the face and its `w:charset` value. */
   fontTableEntry?: { name: string; charset: string };
 }
@@ -62,7 +64,7 @@ export function loadFixture(options: FixtureOptions = {}) {
       : run(text.slice(0, options.split)) + run(text.slice(options.split), true);
   entries['word/document.xml'] = strToU8(
     `<w:document xmlns:w="${W}"><w:body><w:p>` +
-      '<w:pPr><w:jc w:val="left"/><w:overflowPunct w:val="0"/></w:pPr>' +
+      `<w:pPr>${options.paragraphProperties ?? '<w:jc w:val="left"/><w:overflowPunct w:val="0"/>'}</w:pPr>` +
       runs +
       (options.underlineElsewhere ? '<w:r><w:rPr><w:u/></w:rPr><w:t>字</w:t></w:r>' : '') +
       '</w:p></w:body></w:document>'

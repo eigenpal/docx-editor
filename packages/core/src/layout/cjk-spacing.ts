@@ -19,9 +19,7 @@ const CLOSING = /^[、。〉》」』】〕〗〙〛），．］｝]$/u;
 const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
 
 /** A colon cannot borrow an opening bearing across a line or exclusion passage. */
-export function colonLostOpeningBearing(
-  lines: readonly { readonly spans: readonly StyleSpanRecord[] }[]
-): boolean {
+export function colonLostOpeningBearing(lines: LineSpans): boolean {
   return lines.some((line) =>
     line.spans.some(
       (span, index) =>
@@ -32,8 +30,46 @@ export function colonLostOpeningBearing(
   );
 }
 
-/** Natural widths used to decide whether a centred colon needs the next line. */
-export function cjkColonNaturalWidths(
+type LineSpans = readonly { readonly spans: readonly StyleSpanRecord[] }[];
+
+/** Natural advances a paragraph keeps after a shared bearing was lost to a line break. */
+export interface LineLocalAdvances {
+  /** Every centred colon keeps its natural advance. */
+  readonly preserveColonAdvances: boolean;
+  /** Source offsets of closing punctuation whose right bearing stays. */
+  readonly keepRightBearings?: ReadonlySet<number>;
+}
+const SHARED_BEARINGS: LineLocalAdvances = Object.freeze({ preserveColonAdvances: false });
+
+/**
+ * A shared punctuation bearing holds only when both characters share a line. Returns the
+ * advances for a retry when a colon or a line-final closing character lost its neighbour
+ * to the next line, or `null` when the lines stand.
+ */
+export function lineLocalBearingRetry(
+  lines: LineSpans,
+  advances: LineLocalAdvances
+): LineLocalAdvances | null {
+  const keep = new Set(advances.keepRightBearings);
+  for (const line of lines.slice(0, -1)) {
+    const span = line.spans.at(-1);
+    if (span?.glyphOffsetPt !== 0 || span.text.endsWith('：')) continue;
+    const last = segmentGraphemes(span.text).at(-1)!;
+    if (CLOSING.test(last.text)) keep.add(span.range.end - last.text.length);
+  }
+  const colon = !advances.preserveColonAdvances && colonLostOpeningBearing(lines);
+  if (!colon && keep.size === (advances.keepRightBearings?.size ?? 0)) return null;
+  return {
+    preserveColonAdvances: advances.preserveColonAdvances || colon,
+    keepRightBearings: keep,
+  };
+}
+
+/**
+ * Natural widths of right-trimmed punctuation. A line fits such a character at its natural
+ * advance: the shared bearing applies only when its neighbour lands on the same line.
+ */
+export function cjkSeamNaturalWidths(
   pieces: readonly FieldAwarePiece[],
   originals: readonly FieldAwarePiece[],
   measurer: TextMeasurer
@@ -41,7 +77,7 @@ export function cjkColonNaturalWidths(
   const widths = new Map<FieldAwarePiece, number>();
   let originalIndex = 0;
   for (const piece of pieces) {
-    if (piece.glyphOffsetPt !== 0 || piece.text !== '：') continue;
+    if (piece.glyphOffsetPt !== 0) continue;
     while (originalIndex + 1 < originals.length && originals[originalIndex]!.end <= piece.start)
       originalIndex++;
     const original = originals[originalIndex]!;
@@ -85,7 +121,7 @@ function compressionSlices(
   includeKana: boolean,
   includePunctuation: boolean,
   measurer: TextMeasurer,
-  preserveColonAdvances: boolean
+  { preserveColonAdvances, keepRightBearings }: LineLocalAdvances
 ): ReadonlyMap<FieldAwarePiece, readonly CompressionSlice[]> {
   const starts: number[] = [];
   let length = 0;
@@ -141,6 +177,7 @@ function compressionSlices(
       pairEnabled(clusters[clusterIndex - 1]!.utf16From, cluster.utf16From);
     const trimRight =
       next !== undefined &&
+      !keepRightBearings?.has(base.start + cluster.utf16From - starts[pieceIndex]!) &&
       pairEnabled(cluster.utf16From, clusters[clusterIndex + 1]!.utf16From) &&
       ((CLOSING.test(cluster.text) &&
         (OPENING.test(next) || CLOSING.test(next) || next === '：')) ||
@@ -237,7 +274,7 @@ export function compressCjkPieces(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography,
   measurer: TextMeasurer,
-  preserveColonAdvances = false,
+  advances: LineLocalAdvances = SHARED_BEARINGS,
   available?: number
 ): readonly FieldAwarePiece[] {
   const compression = policy.settings?.compression;
@@ -258,7 +295,7 @@ export function compressCjkPieces(
   if (!punctuation && !kana) return pieces;
   const result: FieldAwarePiece[] = [];
   const derived = new WeakMap<ResolvedRunStyle, Map<number, ResolvedRunStyle>>();
-  const slices = compressionSlices(pieces, kana, punctuation, measurer, preserveColonAdvances);
+  const slices = compressionSlices(pieces, kana, punctuation, measurer, advances);
   for (const piece of pieces) {
     const compressedSlices = slices.get(piece);
     if (!compressedSlices) {

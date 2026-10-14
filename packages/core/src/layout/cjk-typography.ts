@@ -27,6 +27,7 @@ export interface CjkTypographySettings {
 export interface CjkParagraphTypography {
   readonly settings?: CjkTypographySettings;
   readonly kinsoku: boolean;
+  /** Punctuation may hang past the margin: `w:overflowPunct` on a justified paragraph. */
   readonly overflowPunctuation: boolean;
   readonly characterWrap: boolean;
 }
@@ -38,6 +39,15 @@ export const DEFAULT_CJK_TYPOGRAPHY: CjkParagraphTypography = Object.freeze({
 });
 
 const on = (value: string | undefined): boolean => !['0', 'false', 'off'].includes(value ?? '');
+// The `w:jc` values that justify a line (see `paragraphAlignment`).
+const JUSTIFIED = new Set([
+  'both',
+  'distribute',
+  'lowKashida',
+  'mediumKashida',
+  'highKashida',
+  'thaiDistribute',
+]);
 export function cjkTypographyFromSettings(root: OoxmlElement | null): CjkTypographySettings {
   let strict = false;
   let punctuationKerning = true;
@@ -88,12 +98,21 @@ export function resolveCjkTypography(
   settings?: CjkTypographySettings
 ): CjkParagraphTypography {
   let { kinsoku, overflowPunctuation, characterWrap } = DEFAULT_CJK_TYPOGRAPHY;
+  let justified = false;
   for (const prop of props) {
     if (prop.localName === 'kinsoku') kinsoku = on(prop.attributes?.val);
     if (prop.localName === 'overflowPunct') overflowPunctuation = on(prop.attributes?.val);
     if (prop.localName === 'wordWrap') characterWrap = !on(prop.attributes?.val);
+    if (prop.localName === 'jc') justified = JUSTIFIED.has(prop.attributes?.val ?? '');
   }
-  return { settings, kinsoku, overflowPunctuation, characterWrap };
+  // Punctuation hangs past the margin only on justified lines. Left, centred, and
+  // right-aligned lines move the punctuation to the next line instead.
+  return {
+    settings,
+    kinsoku,
+    overflowPunctuation: overflowPunctuation && justified,
+    characterWrap,
+  };
 }
 
 export function eastAsianLanguage(props: readonly OoxmlProperty[]): string | undefined {

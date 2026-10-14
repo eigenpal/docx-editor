@@ -29,7 +29,7 @@ import { clipWordEnd, isCollapsibleLineEndWhitespace } from './line-end-whitespa
 /** Model offset of the first character of the line each anchor start falls on. */
 export function anchorLineStartsByModelOffset(input: {
   readonly cjkBreaks?: CjkParagraphBreaks | null;
-  readonly colonNaturalWidths?: ReadonlyMap<FieldAwarePiece, number>;
+  readonly seamNaturalWidths?: ReadonlyMap<FieldAwarePiece, number>;
   readonly typography?: CjkParagraphTypography;
   readonly pieces: readonly FieldAwarePiece[];
   readonly measurer: TextMeasurer;
@@ -120,7 +120,7 @@ export function anchorLineStartsByModelOffset(input: {
       const hangs =
         input.typography?.overflowPunctuation &&
         canHangCjkPunctuation(candidate, piece, probeLineAvail() - probeWidth, width, measurer);
-      const fitWidth = input.colonNaturalWidths?.get(piece) ?? width;
+      const fitWidth = input.seamNaturalWidths?.get(piece) ?? width;
       if (!hangs && probeWidth > 0 && probeWidth + fitWidth > probeLineAvail()) {
         if (probeDecision === 'forbidden' && probeWordStartWidth <= 0) {
           // Placement pushes the group out past the measure rather than opening a line

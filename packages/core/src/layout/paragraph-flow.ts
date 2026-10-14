@@ -55,8 +55,9 @@ import {
 import {
   compressCjkPieces,
   canHangCjkPunctuation,
-  colonLostOpeningBearing,
-  cjkColonNaturalWidths,
+  lineLocalBearingRetry,
+  cjkSeamNaturalWidths,
+  type LineLocalAdvances,
 } from './cjk-spacing.ts';
 import { resolveCjkTypography } from './cjk-typography.ts';
 import {
@@ -173,7 +174,7 @@ export function breakParagraph(
   pageContext?: FieldPageContext,
   cascadeRuns?: RunPropertyCascader,
   flow?: ParagraphFlowOptions,
-  preserveColonAdvances = false
+  advances: LineLocalAdvances = { preserveColonAdvances: false }
 ): readonly PendingLine[] {
   const cached = cacheKey !== null && cache ? cache.get(cacheKey) : undefined;
   if (cached) return cached;
@@ -257,9 +258,9 @@ export function breakParagraph(
     ];
   });
   const typography = flow?.typography ?? resolveCjkTypography(paragraphProperties());
-  const keepColon = preserveColonAdvances;
-  const pieces = compressCjkPieces(visiblePieces, typography, measurer, keepColon, available);
-  const colonNaturalWidths = cjkColonNaturalWidths(pieces, visiblePieces, measurer);
+  const { preserveColonAdvances } = advances;
+  const pieces = compressCjkPieces(visiblePieces, typography, measurer, advances, available);
+  const seamNaturalWidths = cjkSeamNaturalWidths(pieces, visiblePieces, measurer);
   const opticalParagraph =
     typography.settings?.compression !== undefined &&
     typography.settings.compression !== 'doNotCompress' &&
@@ -389,7 +390,7 @@ export function breakParagraph(
   ];
 
   const anchorLineStartByOffset = anchorLineStartsByModelOffset({
-    colonNaturalWidths,
+    seamNaturalWidths,
     typography,
     cjkBreaks,
     pieces,
@@ -1438,9 +1439,8 @@ export function breakParagraph(
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));
       }
-      // Word tests a centred colon's natural advance before applying the shared
-      // bearing on its destination line. Keep the compressed advance for paint.
-      const fitWidth = opticalFit ? width : (colonNaturalWidths.get(piece) ?? width);
+      // A bearing shared across a line break is lost, so fit at the natural advance.
+      const fitWidth = opticalFit ? width : (seamNaturalWidths.get(piece) ?? width);
       const overflows =
         !hangs &&
         // A space after a word that borrowed inter-word space hangs on its line.
@@ -1666,9 +1666,9 @@ export function breakParagraph(
   // Retain the final line for the caret and paragraph mark; wraps do not inherit mark metrics.
   if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
     closeLine();
-  // A centred colon can use the next opening bracket's bearing only on the same line.
-  // Retry once with natural colon advances instead of forcing a new unbreakable group.
-  if (!preserveColonAdvances && colonLostOpeningBearing(lines))
+  // A shared punctuation bearing holds only on one line: retry with natural advances.
+  const retry = lineLocalBearingRetry(lines, advances);
+  if (retry)
     return breakParagraph(
       paragraph,
       paragraphId,
@@ -1682,7 +1682,7 @@ export function breakParagraph(
       pageContext,
       cascadeRuns,
       flow,
-      true
+      retry
     );
   claimTrailingChangeSites(lines);
   if (cacheKey !== null && cache)
