@@ -2,7 +2,9 @@
 import { fragmentCursorBottomPt } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, LineRecord, PageRecord } from './semantic-records.ts';
 
-function citesFootnote(line: LineRecord): boolean {
+type SpannedLine = Pick<LineRecord, 'spans'>;
+
+function citesFootnote(line: SpannedLine): boolean {
   return line.spans.some(
     (span) => span.noteNav?.direction === 'to-note' && span.noteNav.scopeId.startsWith('footnote:')
   );
@@ -19,8 +21,8 @@ function citesFootnote(line: LineRecord): boolean {
  */
 export function pageHoldsFootnoteReference(
   fragments: readonly BlockFragmentRecord[],
-  pending: readonly LineRecord[],
-  line: LineRecord
+  pending: readonly SpannedLine[],
+  line: SpannedLine
 ): boolean {
   if (citesFootnote(line) || pending.some(citesFootnote)) return true;
   return fragments.some(
