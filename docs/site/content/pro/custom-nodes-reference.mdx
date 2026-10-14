@@ -92,7 +92,7 @@ Each is one transaction and one undo step, payload included.
 
 `updateCustomNode` keeps the payload you do not mention. Pass `data: null` to remove one.
 
-`contentLocked` prevents inline text editing while leaving the node deletable as a unit, in the editor and in Word. A node carrying a payload is uneditable regardless of `lock`: the engine refuses content edits inside a bound control, and so does Word.
+`contentLocked` prevents inline text editing while leaving the node deletable as a unit. The first Backspace or Delete next to the node selects it, and a second press removes it. In suggesting mode, the editor refuses to remove it. A node carrying a payload is uneditable regardless of `lock`: the engine refuses content edits inside a bound control, and so does Word.
 
 ### Returns
 

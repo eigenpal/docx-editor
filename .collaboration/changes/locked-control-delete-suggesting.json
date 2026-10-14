@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "In suggesting mode, removing a content-locked control was untracked, and Ctrl+Backspace or selection delete refused a selected control.",
+  "after": "Suggesting mode refuses removeContentControl without keepContent, and every deleting lane removes a selected content-locked control the same way.",
+  "reason": "Only local command handling changes. Shared nodes, text offsets, operations, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/locked-control-delete.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-locked-control-delete.test.ts"
+  ],
+  "changeset": "locked-control-delete-suggesting",
+  "migration": null
+}

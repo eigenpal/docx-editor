@@ -2885,6 +2885,12 @@ export function mountPaginatedSurface(
     if (editingMode === 'suggest' && ops.some((op) => op.op === 'deleteNote')) {
       return 'suggesting cannot delete a note outright; strike its reference to propose the deletion';
     }
+    // Removing a control with its content has no tracked form either; refuse it the same way.
+    const removesControl = (op: TreeDocOp) =>
+      op.op === 'removeContentControl' && op.keepContent === false;
+    if (editingMode === 'suggest' && ops.some(removesControl)) {
+      return 'suggesting cannot remove a content control outright';
+    }
     return null;
   }
 
@@ -5446,6 +5452,9 @@ export function mountPaginatedSurface(
     armForcePlainPaste,
 
     deleteSelection() {
+      // A range that covers a content-locked control removes it, for every deleting lane.
+      const ranged = !selectionsEqual(selection, collapsedAt(selection.head));
+      if (ranged && deleteAtomicControl('backward')) return true;
       const plan = deleteSelectionPlan();
       if (plan.ops.length === 0) return false;
       commit(
