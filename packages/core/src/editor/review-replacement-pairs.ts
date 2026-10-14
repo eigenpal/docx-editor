@@ -197,19 +197,24 @@ function replacementPartnerKey(items: readonly ReviewItem[], key: string): strin
  * Which activation opened a whole replacement. The surface pins the deletion either way, so
  * this tells "open the pair" from "open the deletion": only the first lights both halves.
  */
-export function createPairedActivation(): {
+export function createPairedActivation(
+  /** True when the review UI shows every replacement as one card. */
+  paneLightsPairs: () => boolean,
+  surface: () => { activatedReviewKey(): string | null } | null
+): {
   /**
    * Record the pinned deletion key of a pair activation, or null for any other activation.
    * Returns `pinKey`.
    */
   set(pinKey: string | null): string | null;
-  /** True while `activatedKey`, the surface's live pin, is a pair activation's pin. */
-  holds(activatedKey: string | null | undefined): boolean;
+  /** Whether the active band covers both halves of a replacement right now. */
+  lightsPair(): boolean;
 } {
   let pin: string | null = null;
   return {
     set: (pinKey) => (pin = pinKey),
-    holds: (activatedKey) => pin !== null && activatedKey === pin,
+    lightsPair: () =>
+      paneLightsPairs() || (pin !== null && surface()?.activatedReviewKey() === pin),
   };
 }
 

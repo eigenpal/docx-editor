@@ -341,7 +341,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
   let reviewActivationFormattingKinds: readonly string[] | undefined;
   let allowExcludedFormatNavigation = false;
-  const pairedPin = createPairedActivation();
+  const pairedPin = createPairedActivation(reviewPane.pairsReplacements, () => surface);
   const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
@@ -671,8 +671,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       revisionMarkup: revisionMarkupState.current(),
       ...preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
-      pairsReplacements: () =>
-        reviewPane.pairsReplacements() || pairedPin.holds(surface?.activatedReviewKey()),
+      pairsReplacements: pairedPin.lightsPair,
       ...diagnostics.surfaceHooks(suggesting, () => surface),
       ...preparedOpen.takePreparedOpen(bytes),
       ...(shapedMeasurer
