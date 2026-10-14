@@ -173,7 +173,10 @@ export type DocxEditorOpenFailureMessage =
 
 /** Props for `DocxEditor.OpenFailure`. @public */
 export interface DocxEditorOpenFailureProps {
-  /** The dialog title. Defaults to the translated `openFailure.title`. */
+  /**
+   * The dialog title. Defaults to the translated `openFailure.title`. It also names the dialog
+   * for screen readers, including when your own content replaces the packaged one.
+   */
   title?: string;
   /** Your own message in place of the packaged one, as content or per failure. */
   message?: DocxEditorOpenFailureMessage;

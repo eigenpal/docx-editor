@@ -1849,7 +1849,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!bytes) {
         // A handle is identity, not content, and an unrecognized string is a typo. A mounted
         // document stays; with none, the refusal is what the reader sees.
-        const mounted = surface !== null || pendingBytes !== null;
+        const mounted = surface !== null || pendingBytes !== null || openScheduler.isScheduled();
         emitError(editorError('unsupported', openFailure.refuseSource(document, mounted)));
         diagnostics.openRejected('unsupported');
         return;

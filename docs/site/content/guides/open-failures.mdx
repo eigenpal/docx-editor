@@ -18,7 +18,7 @@ The editor reports a refused open in three places:
 | `snapshot().parseError` | The engine's own text, which can quote the file. | Logs that stay on your server. |
 | The `document.open` diagnostic | The same `code`, with size buckets and an engine cause. | Telemetry. For more information, see [Diagnostics](/docs/2.x/guides/diagnostics). |
 
-`openFailure` stays set until the next document opens. Each refusal is a new object, so a second refusal of the same file shows the dialog again.
+`openFailure` stays set until the next document starts to open. Each refusal is a new object, so a second refusal of the same file shows the dialog again.
 
 The `reason` groups the codes by what a person can do:
 

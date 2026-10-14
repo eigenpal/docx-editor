@@ -47,7 +47,7 @@ import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
-import { DocxEditorOpenFailure } from '../editor/DocxEditorOpenFailure';
+import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
 import type { DocxEditorOpenFailureProps } from '../editor/DocxEditorOpenFailure';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
@@ -388,6 +388,7 @@ const DocxEditorFrame = defineComponent({
 
     return () => {
       if (!chrome.value && slots.loadingIndicator) warnLoadingIndicatorWithoutChrome();
+      warnOpenFailureActions(openFailure.value, slots.openFailureActions !== undefined);
       const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;

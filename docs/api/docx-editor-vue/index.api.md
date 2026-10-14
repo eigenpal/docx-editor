@@ -3468,7 +3468,12 @@ export interface DocxEditorOpenFailureActionProps {
 
 // @public
 export interface DocxEditorOpenFailureComponent {
-    (props: DocxEditorOpenFailureProps): VNode;
+    (props: DocxEditorOpenFailureProps, context?: {
+        slots: {
+            actions?: (context: DocxEditorOpenFailureContext) => VNode[];
+            default?: (context: DocxEditorOpenFailureContext) => VNode[];
+        };
+    }): VNode;
     readonly Action: typeof DocxEditorOpenFailureAction;
 }
 

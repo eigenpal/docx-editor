@@ -32,6 +32,7 @@ import type {
 import type { TFunction } from '@docx-editor.dev/i18n';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useTranslation } from '../i18n';
+import { isDevelopment } from '../lib/is-development';
 import { NativeDialog } from './dialog-parts';
 import { Slot } from './toolbar/Slot';
 import { useEditorState } from './useEditorState';
@@ -186,7 +187,10 @@ export type DocxEditorOpenFailureMessage =
 
 /** Props for `DocxEditor.OpenFailure`. @public */
 export interface DocxEditorOpenFailureProps {
-  /** The dialog title. Defaults to the translated `openFailure.title`. */
+  /**
+   * The dialog title. Defaults to the translated `openFailure.title`. It also names the dialog
+   * for screen readers, including when your own content replaces the packaged one.
+   */
   title?: string;
   /** Your own message in place of the packaged one, as content or per failure. */
   message?: DocxEditorOpenFailureMessage;
@@ -211,6 +215,33 @@ export interface DocxEditorOpenFailureProps {
   style?: CSSProperties;
   /** Translator override; defaults to the ambient locale context. */
   t?: TFunction;
+}
+
+const warnedActions = new Set<'both' | 'disabled'>();
+
+/**
+ * Warn once, in development, when the `openFailureActions` slot cannot do what it says: it
+ * replaces `openFailure.actions`, and `:open-failure="false"` renders no dialog for it.
+ */
+export function warnOpenFailureActions(
+  openFailure: boolean | DocxEditorOpenFailureProps,
+  hasSlot: boolean
+): void {
+  if (!hasSlot || !isDevelopment()) return;
+  const kind =
+    openFailure === false
+      ? 'disabled'
+      : typeof openFailure === 'object' && openFailure.actions
+        ? 'both'
+        : null;
+  if (kind === null || warnedActions.has(kind)) return;
+  warnedActions.add(kind);
+  console.warn(
+    kind === 'both'
+      ? '[docx-editor] The #openFailureActions slot replaces openFailure.actions. Pass only one.'
+      : '[docx-editor] The #openFailureActions slot is ignored with :open-failure="false", ' +
+          'which renders no dialog.'
+  );
 }
 
 /** Whether slot output holds anything: comments from a false `v-if` and empty fragments do not. */
@@ -365,8 +396,19 @@ const DocxEditorOpenFailureImpl = defineComponent({
  * @public
  */
 export interface DocxEditorOpenFailureComponent {
-  /** Renders the dialog while a refused open is waiting, and nothing otherwise. */
-  (props: DocxEditorOpenFailureProps): VNode;
+  /**
+   * Renders the dialog while a refused open is waiting, and nothing otherwise. The second
+   * parameter types the `default` and `actions` slots for templates.
+   */
+  (
+    props: DocxEditorOpenFailureProps,
+    context?: {
+      slots: {
+        default?: (context: DocxEditorOpenFailureContext) => VNode[];
+        actions?: (context: DocxEditorOpenFailureContext) => VNode[];
+      };
+    }
+  ): VNode;
   /** A button styled for the dialog, for the `actions` and `default` slots. */
   readonly Action: typeof DocxEditorOpenFailureAction;
 }
