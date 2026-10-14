@@ -37,6 +37,7 @@ export {
 export {
   callbackExporter,
   consoleExporter,
+  failureCount,
   isFailure,
   memoryExporter,
   type ConsoleExporterOptions,

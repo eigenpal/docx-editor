@@ -329,7 +329,11 @@ export interface PerformanceDiagnostic extends DiagnosticBase {
    * presses were timed and more than one in 20 took over 200 ms.
    */
   readonly code?: PerformanceDiagnosticCode;
-  /** Milliseconds from the window's first timing to the summary. */
+  /**
+   * Milliseconds from the window's first timing to the summary, one minute or less. Idle time
+   * inside the window counts, so this is not active editing time. Use the `count` of
+   * `interaction` to measure activity.
+   */
   readonly windowMs: number;
   /** Pages in the document at the last paint. */
   readonly pagesBucket?: CountBucket;

@@ -10,7 +10,9 @@ export type TelemetryEvent = EditorDiagnostic & TelemetryEventContext;
 // @public
 export type TelemetryLogRecord = Record<string, unknown> & {
     readonly dt: number;
+    readonly failures: number;
     readonly message: string;
+    readonly occurrences: number;
 };
 
 // @public

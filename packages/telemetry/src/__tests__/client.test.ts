@@ -307,6 +307,28 @@ describe('createTelemetry behavior', () => {
     ]);
   });
 
+  test('a summary of a ready status does not repeat the join time', async () => {
+    const memory = memoryExporter();
+    const telemetry = createTelemetry({ exporters: [memory] });
+    const ready = {
+      ...base,
+      kind: 'collab.status',
+      status: 'ready',
+      previous: 'initializing',
+      recovering: false,
+      connectMs: 800,
+    } as EditorDiagnostic;
+    telemetry.record(ready);
+    telemetry.record(ready);
+    await telemetry.flush();
+    const [first, summary] = memory.events as ((typeof memory.events)[number] & {
+      connectMs?: number;
+    })[];
+    expect(first!.connectMs).toBe(800);
+    expect(summary!.repeated).toBe(1);
+    expect(summary).not.toHaveProperty('connectMs');
+  });
+
   test('a headless open prints no page count', () => {
     const lines: string[] = [];
     const telemetry = createTelemetry({
@@ -344,6 +366,22 @@ describe('createTelemetry behavior', () => {
         repeated: 3,
       } as never)
     ).toBe(false);
+  });
+
+  test('failureCount totals failures with summaries included, unlike isFailure', async () => {
+    const { failureCount, isFailure } = await import('../index.ts');
+    const memory = memoryExporter();
+    const telemetry = createTelemetry({ exporters: [memory] });
+    for (let i = 0; i < 5; i += 1)
+      telemetry.record(refusal('edit.tracked-drawing-delete-unsupported'));
+    for (let i = 0; i < 3; i += 1) telemetry.record(refusal('edit.read-only'));
+    await telemetry.flush();
+    // Two first events and two summaries.
+    expect(memory.events.map((event) => event.repeated)).toEqual([undefined, undefined, 4, 2]);
+    const sum = (count: (event: (typeof memory.events)[number]) => number) =>
+      memory.events.reduce((total, event) => total + count(event), 0);
+    expect(sum(failureCount)).toBe(5);
+    expect(sum((event) => (isFailure(event) ? 1 : 0))).toBe(1);
   });
 
   test('a dropped event is counted by reason, so a version mismatch is visible', () => {

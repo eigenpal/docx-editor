@@ -24,7 +24,7 @@ A closing page has a total delivery budget of about 64 KiB. Delivery is best eff
 
 ## filter
 
-`filter` decides which events reach your exporters. Metrics still count every event. Filter by event kind to include summaries of repeated refusals. These summaries carry `repeated`. `isFailure` returns `false` for them.
+`filter` decides which events reach your exporters. Metrics still count every event. Filter by event kind to include summaries of repeated refusals. These summaries carry `repeated`. `isFailure` returns `false` for them. To count failures with summaries included, sum `failureCount(event)`.
 
 ## browserPrivacySignals
 
@@ -37,7 +37,7 @@ A closing page has a total delivery budget of about 64 KiB. Delivery is best eff
 1. Ignores any method other than `POST`.
 2. Refuses an origin outside `allowedOrigins`, when you set it.
 3. Reads at most `maxBodyBytes` (64 KiB, counted in bytes) and refuses an array longer than `maxEvents` (50). If you raise `maxEvents`, the browser's `batchSize` still stops at 50.
-4. Checks every event with the same closed lists that the browser used. It drops events with unknown kinds or codes, or missing required fields. It removes fields outside their allowed lists.
+4. Checks every event with the same lists and ranges that the browser used. It drops an event with an unknown kind or code, a code of another kind, or missing required fields. It also drops an event with a value outside its list or range, such as a negative duration or a fractional count. It removes unknown fields, and numbers or timing summaries that the event's kind does not carry. A timing summary must have whole counts, and its bands must add up to its `count`. Its median must be no larger than its 95th percentile, and that no larger than its maximum. A performance summary must have at least one timing summary.
 5. Drops the `resource` and `attributes` that the browser set, except the keys you list in `attributeKeys`. Add your fixed fields, such as a service name, on the server instead.
 6. Calls `forward` with the events that pass.
 

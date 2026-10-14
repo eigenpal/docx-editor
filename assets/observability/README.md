@@ -62,11 +62,11 @@ export const telemetry = createTelemetry({
 
 ## Editor experience
 
-The summary shows input delay and editing reliability. Detailed charts compare input delay over time and across document sizes, app versions, and editor versions. Other panels show layout and paint times, document opens, refused files, refused and skipped tracked changes, and refused edits. Each refusal code links to its hint.
+The summary shows input delay and editing reliability. Detailed charts compare input delay over time and across document sizes, app versions, and editor versions. Other panels show layout and paint times, layout time by document size, document opens, refused files, refused and skipped tracked changes, and refused edits. Each refusal code links to its hint.
 
 ![Editor experience panels showing refused and skipped tracked changes and refused edits by reason and source.](../../docs/site/content/telemetry/images/editor-tracked-changes.png)
 
-Input delay percentiles are estimates from the timing bands. A percentile of 1 second indicates a value in the band above 1 second. In that case, read **Presses over 1 s**.
+Input delay percentiles are estimates from the timing bands. A percentile of 1 second indicates a value in the band above 1 second. In that case, read **Presses by delay band**. Percentiles and shares appear only after 20 presses or layout passes, or 5 opens, in the window.
 
 ## Collaboration
 

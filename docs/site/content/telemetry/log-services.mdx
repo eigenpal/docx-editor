@@ -49,7 +49,7 @@ For options, filters, and delivery when a page closes, see [HTTP exporter and ro
 
 `telemetryRoute` returns a Fetch-style `POST` handler for Next.js route handlers, Hono, Bun, Deno, and Cloudflare Workers. It validates each event against the same predefined values as the browser and drops browser-defined fields. It calls `forward` with valid events and returns `204` for every request.
 
-`toLogRecord(event)` adds the `dt` and `message` fields that log services read. For validation details, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
+`toLogRecord(event)` adds the `dt` and `message` fields that log services read. It also adds the `occurrences` and `failures` count fields. For validation details, see [HTTP exporter and route reference](/docs/2.x/telemetry/http-reference).
 
 ### Better Stack
 
@@ -74,6 +74,26 @@ export const POST = telemetryRoute({
   onError: (error) => console.error('[telemetry]', error),
 });
 ```
+
+## Count events
+
+The browser sends the first event of a repeated refusal at once. If the same event repeats within 10 seconds, it sends one summary at the end of that period. The summary copies the first event and adds `repeated`, which holds only the extra copies. Counting records therefore gives the wrong number.
+
+Sum the fields that `toLogRecord` adds instead:
+
+- `occurrences` is `1` for an event and `repeated` for a summary. Sum it to count events of any kind.
+- `failures` is the number of failures that the record adds. It is `0` for expected refusals and other events that are not failures. Sum it to count faults.
+
+For example, in a SQL-based log service:
+
+```sql
+SELECT code, sum(occurrences) AS events, sum(failures) AS faults
+FROM logs
+WHERE kind = 'edit.rejected'
+GROUP BY code
+```
+
+Sampled areas send only a share of their events, so sums count the sampled events. Metrics count every event before sampling. For exact rates, use [metrics](/docs/2.x/telemetry/metrics).
 
 ## Privacy
 

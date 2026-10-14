@@ -383,6 +383,136 @@ describe('ingest', () => {
     expect(record).not.toHaveProperty('docs');
   });
 
+  test('a log record carries the counts to sum, so a summary counts its repeats', () => {
+    const [first, summary] = validateTelemetryEvents([sent, { ...sent, repeated: 4 }]);
+    // `edit.picture-selected` is a failure: not one of the expected refusals.
+    expect(toLogRecord(first!)).toMatchObject({ occurrences: 1, failures: 1 });
+    expect(toLogRecord(summary!)).toMatchObject({ occurrences: 4, failures: 4, repeated: 4 });
+    const [expected] = validateTelemetryEvents([{ ...sent, code: 'edit.read-only', repeated: 2 }]);
+    expect(toLogRecord(expected!)).toMatchObject({ occurrences: 2, failures: 0 });
+  });
+
+  const openedSent = { ...opened, engineVersion: 'development' };
+
+  test('a summary count must be a whole number of extra copies on a deduplicated kind', () => {
+    const kept = (event: object) => validateTelemetryEvents([event]).length === 1;
+    expect(kept({ ...sent, repeated: 1 })).toBe(true);
+    expect(kept({ ...sent, repeated: 1_000_000 })).toBe(true);
+    for (const repeated of [0, -5, 2.5, 1_000_001, 1e12, Number.NaN, Infinity, '4'])
+      expect(kept({ ...sent, repeated })).toBe(false);
+    // Opens, skipped tracked changes, participants, and performance summaries are never
+    // deduplicated, so a `repeated` on them is removed and counts nothing.
+    const participants = { ...base, engineVersion: 'development', kind: 'collab.participants' };
+    for (const event of [openedSent, { ...participants, count: 2 }]) {
+      const [checked] = validateTelemetryEvents([{ ...event, repeated: 3 }]);
+      expect(checked).not.toHaveProperty('repeated');
+      expect(toLogRecord(checked!).occurrences).toBe(1);
+    }
+  });
+
+  test('numbers stay in range, whole where the engine counts, and on their own kind', () => {
+    const kept = (event: object) => validateTelemetryEvents([event]).length === 1;
+    /** The event is kept, without the field it does not carry. */
+    const removed = (event: object, field: string) => {
+      const events = validateTelemetryEvents([event]);
+      return events.length === 1 && !(field in events[0]!);
+    };
+    const skipped = {
+      ...base,
+      engineVersion: 'development',
+      kind: 'review.skipped',
+      code: 'review.stale-revision',
+      count: 2,
+    };
+    expect(kept(skipped)).toBe(true);
+    expect(kept(openedSent)).toBe(true);
+    for (const count of [-1, 1.5, 1_000_001]) expect(kept({ ...skipped, count })).toBe(false);
+    expect(kept({ ...openedSent, durationMs: -1 })).toBe(false);
+    for (const time of [-1, 9e15]) expect(kept({ ...sent, time })).toBe(false);
+    for (const schemaVersion of [0, 1.5]) expect(kept({ ...sent, schemaVersion })).toBe(false);
+    // A rejected open reports no open time; only a `ready` after a wait reports a join time.
+    expect(
+      kept({ ...sent, kind: 'document.open', outcome: 'rejected', code: 'open.xml-malformed' })
+    ).toBe(true);
+    expect(
+      removed(
+        {
+          ...sent,
+          kind: 'document.open',
+          outcome: 'rejected',
+          code: 'open.xml-malformed',
+          durationMs: 2_000_000_000,
+        },
+        'durationMs'
+      )
+    ).toBe(true);
+    const status = {
+      ...base,
+      engineVersion: 'development',
+      kind: 'collab.status',
+      previous: 'initializing',
+      recovering: false,
+    };
+    expect(kept({ ...status, status: 'ready', connectMs: 800 })).toBe(true);
+    expect(removed({ ...status, status: 'disconnected', connectMs: 800 }, 'connectMs')).toBe(true);
+    // A summary of `ready` does not repeat the join time of the first one.
+    expect(removed({ ...status, status: 'ready', connectMs: 800, repeated: 1 }, 'connectMs')).toBe(
+      true
+    );
+    // A code belongs to its own kind's family.
+    expect(kept({ ...sent, kind: 'font.failed', code: 'edit.picture-selected' })).toBe(false);
+    expect(kept({ ...status, status: 'error', code: 'edit.read-only' })).toBe(false);
+    // A join after a month offline keeps its event, without the span.
+    expect(
+      removed({ ...status, status: 'ready', connectMs: 31 * 24 * 3600 * 1000 }, 'connectMs')
+    ).toBe(true);
+    // The range still applies where the field belongs.
+    expect(kept({ ...status, status: 'ready', connectMs: -1 })).toBe(false);
+    // A field no event carries is removed, not trusted.
+    const [stripped] = validateTelemetryEvents([{ ...sent, participants: 999_999 }]);
+    expect(stripped).not.toHaveProperty('participants');
+    // A field of another kind of event is removed, so a newer engine's field keeps its event.
+    expect(removed({ ...sent, durationMs: 120 }, 'durationMs')).toBe(true);
+    expect(removed({ ...sent, count: 2 }, 'count')).toBe(true);
+    expect(removed({ ...openedSent, windowMs: 60_000 }, 'windowMs')).toBe(true);
+  });
+
+  test('a timing summary must add up: whole counts, bands that sum to count, ordered times', () => {
+    const timing = {
+      count: 8,
+      p50Ms: 20,
+      p95Ms: 240,
+      maxMs: 1800,
+      bands: [3, 2, 1, 0, 0, 1, 0, 1],
+    };
+    const performance = {
+      ...base,
+      engineVersion: 'development',
+      kind: 'performance',
+      windowMs: 60_000,
+      interaction: timing,
+    };
+    const kept = (interaction: object) =>
+      validateTelemetryEvents([{ ...performance, interaction }]).length === 1;
+    expect(kept(timing)).toBe(true);
+    expect(kept({ ...timing, count: 9 })).toBe(false);
+    expect(kept({ ...timing, count: 0, bands: [0, 0, 0, 0, 0, 0, 0, 0] })).toBe(false);
+    expect(kept({ ...timing, bands: [3, 2, 1, 0, 0, 1, 0.5, 0.5] })).toBe(false);
+    expect(kept({ ...timing, bands: [3, 2, 1, 0, 0, 1, -1, 2] })).toBe(false);
+    expect(kept({ ...timing, p50Ms: 300 })).toBe(false);
+    expect(kept({ ...timing, p95Ms: 2000 })).toBe(false);
+    expect(kept({ ...timing, maxMs: 31 * 24 * 60 * 60 * 1000 })).toBe(false);
+    expect(kept([1, 2, 3, 4, 5, 6, 7, 8])).toBe(false);
+    // The engine sends a summary only after it timed something.
+    const { interaction: _interaction, ...untimed } = performance;
+    expect(validateTelemetryEvents([untimed])).toEqual([]);
+    expect(validateTelemetryEvents([{ ...untimed, paint: timing }])).toHaveLength(1);
+    // A timing summary on another kind of event is removed.
+    const [refused] = validateTelemetryEvents([{ ...sent, interaction: timing }]);
+    expect(refused).toBeDefined();
+    expect(refused).not.toHaveProperty('interaction');
+  });
+
   test('the route forwards checked events, limits bytes, and always answers 204', async () => {
     const forwarded: unknown[] = [];
     const errors: unknown[] = [];
