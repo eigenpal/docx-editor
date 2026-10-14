@@ -33,7 +33,7 @@ import {
   MAX_INLINE_CONTAINER_DEPTH,
   W14_NAMESPACE_URI,
 } from '../package/ooxml-shared.ts';
-import { linearMathToOmml } from '../package/omml-equation.ts';
+import { linearMathReplacementOmml } from '../package/omml-equation.ts';
 import { equationsOfAtom, isOmmlDisplay } from '../package/omml-display.ts';
 import {
   WML_NAMESPACE_URI,
@@ -341,7 +341,8 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
           : equation.id;
       return fromEdit(removeNode(part, target, options), effect);
     }
-    const generated = linearMathToOmml(op.linear, createNodeIdAllocator(part));
+    // Default control properties of the replaced equation carry over to each new structure.
+    const generated = linearMathReplacementOmml(op.linear, createNodeIdAllocator(part), equation);
     if (!generated.ok) return { ok: false, reason: 'invalid-property-value' };
     // Retain the equation identity. An open popover and an undo record both address the
     // complete math atom, while every internal OMML node receives a fresh part-scoped id.

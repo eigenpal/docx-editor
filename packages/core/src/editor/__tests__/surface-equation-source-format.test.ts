@@ -5,16 +5,43 @@ import { createEquationOps, type EquationOpsDeps } from '../surface-equations.ts
 const WORD = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 const run = (properties = '') => `<m:r>${properties}<m:t>Q</m:t></m:r>`;
+const DEFAULT_FONT = '<w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/>';
+const DEFAULT = `${DEFAULT_FONT}<w:i/>`;
+const fraction = (properties: string | null) =>
+  `<m:f><m:fPr><m:ctrlPr>${properties === null ? '' : `<w:rPr>${properties}</w:rPr>`}` +
+  `</m:ctrlPr></m:fPr><m:num>${run()}</m:num><m:den>${run()}</m:den></m:f>`;
 const cases = [
   ['plain', run(), false],
   ['font', run('<w:rPr><w:rFonts w:ascii="Public Math" w:hAnsi="Public Math"/></w:rPr>'), true],
   ['literal', run('<m:rPr><m:lit/></m:rPr>'), true],
   ['normal', run('<m:rPr><m:nor/></m:rPr>'), true],
   ['bar', `<m:bar><m:e>${run()}</m:e></m:bar>`, true],
+  ['bold fraction control properties', fraction('<w:b/>'), true],
+  ['default fraction control properties', fraction(DEFAULT), false],
   [
-    'fraction control properties',
-    `<m:f><m:fPr><m:ctrlPr><w:rPr><w:i/></w:rPr></m:ctrlPr></m:fPr>` +
-      `<m:num>${run()}</m:num><m:den>${run()}</m:den></m:f>`,
+    'full default control properties',
+    fraction(
+      DEFAULT_FONT +
+        '<w:i w:val="1"/><w:iCs/><w:sz w:val="24"/><w:szCs w:val="24"/>' +
+        '<w:lang w:val="en-US" w:eastAsia="ja-JP" w:bidi="ar-SA"/>'
+    ),
+    false,
+  ],
+  ['empty control properties', fraction(null), false],
+  [
+    'tracked default control properties',
+    `<m:f><m:fPr><m:ctrlPr><w:ins w:id="1" w:author="Public Author"><w:rPr>${DEFAULT}</w:rPr>` +
+      `</w:ins></m:ctrlPr></m:fPr><m:num>${run()}</m:num><m:den>${run()}</m:den></m:f>`,
+    true,
+  ],
+  ['other control font', fraction('<w:rFonts w:ascii="Public Math"/><w:i/>'), true],
+  ['italic off', fraction('<w:i w:val="0"/>'), true],
+  // Unequal sizes are outside both allowlists, so the equation keeps the text fallback.
+  ['fallback for unequal control sizes', fraction('<w:sz w:val="24"/><w:szCs w:val="28"/>'), false],
+  ['default beside bold control properties', fraction(DEFAULT) + fraction('<w:b/>'), true],
+  [
+    'sizes that differ between structures',
+    fraction('<w:sz w:val="24"/>') + fraction('<w:sz w:val="28"/>'),
     true,
   ],
   [

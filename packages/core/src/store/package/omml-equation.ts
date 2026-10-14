@@ -14,6 +14,7 @@ import {
   isSupportedExpressionNode,
   mathVal,
 } from './omml-structure-support.ts';
+import { cloneEquationControl, equationDefaultControlProperties } from './omml-control-defaults.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
 import type {
@@ -42,13 +43,16 @@ export interface OmmlLimits {
 }
 
 /**
- * Marks a structure whose property element carries `m:ctrlPr` operator run formatting.
+ * Marks a structure whose property element carries `m:ctrlPr` operator run formatting that
+ * compact replacement cannot reproduce.
  *
  * The source keeps those properties verbatim. Layout draws the operator glyphs with the
- * default math formatting, and compact linear syntax cannot express them.
+ * default math formatting. When every `m:ctrlPr` of the equation holds only default
+ * formatting, no structure carries this mark: compact replacement writes the same control
+ * properties back on each structure it emits.
  */
 export interface EquationControlSource {
-  /** The structure carries supported `m:ctrlPr` properties, so compact replacement refuses it. */
+  /** The structure carries non-default `m:ctrlPr` properties, so compact replacement refuses it. */
   readonly controlProperties?: true;
 }
 
@@ -171,6 +175,8 @@ function childrenOf(node: OoxmlElement): readonly OoxmlNode[] {
 
 interface ProjectionState {
   readonly limits: ResolvedLimits;
+  /** Every `m:ctrlPr` of the equation is default, so structures carry no control mark. */
+  readonly defaultControls?: boolean;
   visitedNodes: number;
   text: string;
   truncated: boolean;
@@ -230,8 +236,12 @@ function projectContainer(
   return frozenRow(expressions);
 }
 
-function controlSource(node: OoxmlGenericElementNode, propertyName: string): EquationControlSource {
-  return equationStructureHasControlProperties(node, propertyName)
+function controlSource(
+  node: OoxmlGenericElementNode,
+  propertyName: string,
+  state: ProjectionState
+): EquationControlSource {
+  return !state.defaultControls && equationStructureHasControlProperties(node, propertyName)
     ? { controlProperties: true }
     : {};
 }
@@ -249,7 +259,7 @@ function projectStructured(
       kind: 'bar',
       body: projectContainer(namedChildren(node, 'e')[0]!, state, depth + 1),
       position: position && mathVal(position) === 'top' ? 'top' : 'bottom',
-      ...controlSource(node, 'barPr'),
+      ...controlSource(node, 'barPr', state),
     });
   }
   if (node.localName === 'f') {
@@ -260,7 +270,7 @@ function projectStructured(
       kind: 'fraction',
       numerator: projectContainer(numerator, state, depth + 1),
       denominator: projectContainer(denominator, state, depth + 1),
-      ...controlSource(node, 'fPr'),
+      ...controlSource(node, 'fPr', state),
     });
   }
   if (node.localName === 'rad') {
@@ -275,7 +285,7 @@ function projectStructured(
       kind: 'radical',
       radicand: projectContainer(radicand, state, depth + 1),
       ...(projectedDegree === undefined ? {} : { degree: projectedDegree }),
-      ...controlSource(node, 'radPr'),
+      ...controlSource(node, 'radPr', state),
     });
   }
   if (node.localName === 'sSup' || node.localName === 'sSub' || node.localName === 'sSubSup') {
@@ -294,7 +304,7 @@ function projectStructured(
       base: projectContainer(base, state, depth + 1),
       ...(subscript ? { subscript: projectContainer(subscript, state, depth + 1) } : {}),
       ...(superscript ? { superscript: projectContainer(superscript, state, depth + 1) } : {}),
-      ...controlSource(node, `${node.localName}Pr`),
+      ...controlSource(node, `${node.localName}Pr`, state),
     });
   }
   if (node.localName === 'nary') {
@@ -319,7 +329,7 @@ function projectStructured(
       ...(upper && childrenOf(upper).length > 0
         ? { upperLimit: projectContainer(upper, state, depth + 1) }
         : {}),
-      ...controlSource(node, 'naryPr'),
+      ...controlSource(node, 'naryPr', state),
     });
   }
   return null;
@@ -399,6 +409,9 @@ export function projectOmmlEquation(
   // can revisit wrappers while it maps their roles, but it cannot discover more source nodes.
   const state: ProjectionState = {
     limits: { ...resolved, maxNodes: Number.MAX_SAFE_INTEGER },
+    defaultControls:
+      equationDefaultControlProperties(node, resolved.maxNodes, resolved.maxDepth).kind ===
+      'default',
     visitedNodes: 0,
     text: '',
     truncated: false,
@@ -656,6 +669,12 @@ export function equationExpressionToLinearMath(expression: EquationExpression): 
 
 type NextNodeId = () => string;
 
+/** What one emitted structure needs: fresh ids, and the control properties to write back. */
+interface EmitContext {
+  readonly nextId: NextNodeId;
+  readonly control: OoxmlGenericElementNode | null;
+}
+
 function mathAttribute(localName: string, value: string): OoxmlAttribute {
   return Object.freeze({
     kind: 'genericExtension',
@@ -702,140 +721,116 @@ function mathElement(
   });
 }
 
-function expressionNodes(expression: EquationExpression, nextId: NextNodeId): readonly OoxmlNode[] {
+/**
+ * The property element of one emitted structure. `m:ctrlPr` is the last child in schema
+ * order. Null when the structure needs no properties at all.
+ */
+function structureProperties(
+  localName: string,
+  properties: readonly OoxmlNode[],
+  context: EmitContext
+): OoxmlGenericElementNode | null {
+  const control = context.control ? [cloneEquationControl(context.control, context.nextId)] : [];
+  if (properties.length === 0 && control.length === 0) return null;
+  return mathElement(localName, [...properties, ...control], context.nextId);
+}
+
+function structure(
+  localName: string,
+  properties: OoxmlGenericElementNode | null,
+  children: readonly OoxmlNode[],
+  context: EmitContext
+): OoxmlGenericElementNode {
+  return mathElement(localName, properties ? [properties, ...children] : children, context.nextId);
+}
+
+function textRun(value: string, nextId: NextNodeId): OoxmlNode {
+  return mathElement(
+    'r',
+    [mathElement('t', [textValue(value, nextId)], nextId, textAttributes(value))],
+    nextId
+  );
+}
+
+function expressionNodes(
+  expression: EquationExpression,
+  context: EmitContext
+): readonly OoxmlNode[] {
+  const { nextId } = context;
+  const container = (localName: string, value: EquationExpression | undefined): OoxmlNode =>
+    mathElement(localName, value ? expressionNodes(value, context) : [], nextId);
   switch (expression.kind) {
     case 'row':
-      return expression.items.flatMap((child) => expressionNodes(child, nextId));
+      return expression.items.flatMap((child) => expressionNodes(child, context));
     case 'text':
-      return [
-        mathElement(
-          'r',
-          [
-            mathElement(
-              't',
-              [textValue(expression.value, nextId)],
-              nextId,
-              textAttributes(expression.value)
-            ),
-          ],
-          nextId
-        ),
-      ];
+      return [textRun(expression.value, nextId)];
     case 'fallback':
+      return [textRun(expression.text, nextId)];
+    case 'bar': {
+      const position = mathElement('pos', [], nextId, [
+        mathAttribute('val', expression.position === 'top' ? 'top' : 'bot'),
+      ]);
       return [
-        mathElement(
-          'r',
-          [
-            mathElement(
-              't',
-              [textValue(expression.text, nextId)],
-              nextId,
-              textAttributes(expression.text)
-            ),
-          ],
-          nextId
-        ),
-      ];
-    case 'bar':
-      return [
-        mathElement(
+        structure(
           'bar',
-          [
-            mathElement(
-              'barPr',
-              [
-                mathElement('pos', [], nextId, [
-                  mathAttribute('val', expression.position === 'top' ? 'top' : 'bot'),
-                ]),
-              ],
-              nextId
-            ),
-            mathElement('e', expressionNodes(expression.body, nextId), nextId),
-          ],
-          nextId
+          structureProperties('barPr', [position], context),
+          [container('e', expression.body)],
+          context
         ),
       ];
+    }
     case 'fraction':
       return [
-        mathElement(
+        structure(
           'f',
-          [
-            mathElement('num', expressionNodes(expression.numerator, nextId), nextId),
-            mathElement('den', expressionNodes(expression.denominator, nextId), nextId),
-          ],
-          nextId
+          structureProperties('fPr', [], context),
+          [container('num', expression.numerator), container('den', expression.denominator)],
+          context
         ),
       ];
     case 'radical':
       return [
-        mathElement(
+        structure(
           'rad',
-          [
-            mathElement(
-              'deg',
-              expression.degree ? expressionNodes(expression.degree, nextId) : [],
-              nextId
-            ),
-            mathElement('e', expressionNodes(expression.radicand, nextId), nextId),
-          ],
-          nextId
+          structureProperties('radPr', [], context),
+          [container('deg', expression.degree), container('e', expression.radicand)],
+          context
         ),
       ];
     case 'script': {
-      if (expression.subscript && expression.superscript) {
-        return [
-          mathElement(
-            'sSubSup',
-            [
-              mathElement('e', expressionNodes(expression.base, nextId), nextId),
-              mathElement('sub', expressionNodes(expression.subscript, nextId), nextId),
-              mathElement('sup', expressionNodes(expression.superscript, nextId), nextId),
-            ],
-            nextId
-          ),
-        ];
-      }
+      const both = expression.subscript !== undefined && expression.superscript !== undefined;
       const superscript = expression.superscript !== undefined;
-      const script = superscript ? expression.superscript! : expression.subscript!;
+      const localName = both ? 'sSubSup' : superscript ? 'sSup' : 'sSub';
+      const properties = structureProperties(`${localName}Pr`, [], context);
+      const base = container('e', expression.base);
+      const scripts = both
+        ? [container('sub', expression.subscript), container('sup', expression.superscript)]
+        : [
+            container(
+              superscript ? 'sup' : 'sub',
+              superscript ? expression.superscript : expression.subscript
+            ),
+          ];
+      return [structure(localName, properties, [base, ...scripts], context)];
+    }
+    case 'nary': {
+      const properties = [
+        mathElement('chr', [], nextId, [mathAttribute('val', expression.operator)]),
+        mathElement('limLoc', [], nextId, [mathAttribute('val', 'undOvr')]),
+      ];
       return [
-        mathElement(
-          superscript ? 'sSup' : 'sSub',
+        structure(
+          'nary',
+          structureProperties('naryPr', properties, context),
           [
-            mathElement('e', expressionNodes(expression.base, nextId), nextId),
-            mathElement(superscript ? 'sup' : 'sub', expressionNodes(script, nextId), nextId),
+            container('sub', expression.lowerLimit),
+            container('sup', expression.upperLimit),
+            container('e', expression.body),
           ],
-          nextId
+          context
         ),
       ];
     }
-    case 'nary':
-      return [
-        mathElement(
-          'nary',
-          [
-            mathElement(
-              'naryPr',
-              [
-                mathElement('chr', [], nextId, [mathAttribute('val', expression.operator)]),
-                mathElement('limLoc', [], nextId, [mathAttribute('val', 'undOvr')]),
-              ],
-              nextId
-            ),
-            mathElement(
-              'sub',
-              expression.lowerLimit ? expressionNodes(expression.lowerLimit, nextId) : [],
-              nextId
-            ),
-            mathElement(
-              'sup',
-              expression.upperLimit ? expressionNodes(expression.upperLimit, nextId) : [],
-              nextId
-            ),
-            mathElement('e', expressionNodes(expression.body, nextId), nextId),
-          ],
-          nextId
-        ),
-      ];
   }
 }
 
@@ -844,9 +839,9 @@ function expressionNodes(expression: EquationExpression, nextId: NextNodeId): re
  */
 function ommlEquationFromExpression(
   expression: EquationExpression,
-  nextId: NextNodeId
+  context: EmitContext
 ): OoxmlGenericElementNode {
-  const equation = mathElement('oMath', expressionNodes(expression, nextId), nextId);
+  const equation = mathElement('oMath', expressionNodes(expression, context), context.nextId);
   return Object.freeze({
     ...equation,
     namespaceBindings: Object.freeze([
@@ -861,11 +856,30 @@ export function linearMathToOmml(
   nextId: NextNodeId,
   limits?: OmmlLimits
 ): LinearMathOmmlResult {
+  return linearMathReplacementOmml(input, nextId, null, limits);
+}
+
+/**
+ * Generate the OMML that replaces `replacing`, an existing `m:oMath`. When every `m:ctrlPr`
+ * in it holds only default formatting, each emitted structure receives a copy of its first
+ * `m:ctrlPr`. Otherwise the result matches {@link linearMathToOmml}.
+ */
+export function linearMathReplacementOmml(
+  input: string,
+  nextId: NextNodeId,
+  replacing: OoxmlNode | null,
+  limits?: OmmlLimits
+): LinearMathOmmlResult {
   const parsed = parseLinearMath(input, limits);
   if (!parsed.ok) return parsed;
+  const resolved = resolveLimits(limits);
+  const controls = replacing
+    ? equationDefaultControlProperties(replacing, resolved.maxNodes, resolved.maxDepth)
+    : null;
+  const control = controls?.kind === 'default' ? controls.control : null;
   return Object.freeze({
     ok: true,
     expression: parsed.expression,
-    equation: ommlEquationFromExpression(parsed.expression, nextId),
+    equation: ommlEquationFromExpression(parsed.expression, { nextId, control }),
   });
 }

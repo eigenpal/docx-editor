@@ -1,6 +1,7 @@
 // Read only the run properties whose typography the equation lane represents.
 // Unknown properties retain the bounded fallback rather than being discarded.
 import { WML_NAMESPACE_URI, XML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { equationControlPropertiesAreDefault } from './omml-control-defaults.ts';
 import type { OoxmlElement, OoxmlGenericElementNode, OoxmlNode } from './ooxml-tree.ts';
 
 const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
@@ -116,11 +117,13 @@ export function equationRunFormat(run: OoxmlElement): EquationRunFormat | null {
 const TRACKED_CONTROL_ATTRIBUTES: ReadonlySet<string> = new Set(['id', 'author', 'date']);
 
 /**
- * True when an `m:ctrlPr` holds only source the equation lane can preserve: nothing, one
- * `w:rPr` within the math run allowlist, or one tracked `w:ins`/`w:del` around such a `w:rPr`.
+ * True when an `m:ctrlPr` holds only source the equation lane can preserve: default control
+ * properties, one `w:rPr` within the math run allowlist, or one tracked `w:ins`/`w:del` around
+ * such a `w:rPr`.
  * Any other content keeps the bounded fallback.
  */
 export function equationControlPropertiesAreSupported(node: OoxmlElement): boolean {
+  if (equationControlPropertiesAreDefault(node)) return true;
   if (node.attributes.length !== 0 || node.children.length > 1) return false;
   const child = node.children[0];
   if (!child) return true;

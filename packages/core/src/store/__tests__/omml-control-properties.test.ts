@@ -122,8 +122,7 @@ test('keeps compact syntax for the same structure without m:ctrlPr', () => {
 });
 
 test.each([
-  ['empty', '<m:ctrlPr/>'],
-  ['empty run properties', '<m:ctrlPr><w:rPr/></m:ctrlPr>'],
+  ['bold', '<m:ctrlPr><w:rPr><w:b/></w:rPr></m:ctrlPr>'],
   [
     'tracked insertion',
     '<m:ctrlPr><w:ins w:id="7" w:author="Public Author" w:date="2026-01-02T03:04:05Z">' +
@@ -147,7 +146,7 @@ test.each([
 
 test.each([
   ['unknown control child', '<m:ctrlPr><m:unknown/></m:ctrlPr>'],
-  ['unknown run property', '<m:ctrlPr><w:rPr><w:sz w:val="28"/></w:rPr></m:ctrlPr>'],
+  ['unknown run property', '<m:ctrlPr><w:rPr><w:color w:val="FF0000"/></w:rPr></m:ctrlPr>'],
   ['inherited run property name', '<m:ctrlPr><w:rPr><w:constructor/></w:rPr></m:ctrlPr>'],
   ['math run properties', '<m:ctrlPr><m:rPr><m:sty m:val="p"/></m:rPr></m:ctrlPr>'],
   ['two run property sets', '<m:ctrlPr><w:rPr/><w:rPr/></m:ctrlPr>'],
