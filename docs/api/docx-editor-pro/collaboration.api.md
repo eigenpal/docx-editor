@@ -203,6 +203,9 @@ export interface DocumentCollaborationVersions {
     readonly sharedSchemaVersion: number;
 }
 
+// @public @deprecated
+export const MAX_BASELINE_BYTES: number;
+
 // @public
 export function migrateCollaborationRoom(options: MigrateCollaborationRoomOptions): Promise<CollaborationMigration>;
 
@@ -216,6 +219,9 @@ export interface MigrateCollaborationRoomOptions {
 // @public
 export function prepareCollaborationServerDocument(document: Y.Doc): () => void;
 
+// @public @deprecated
+export const PROTOCOL_VERSION = 1;
+
 // @public
 export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array;
 
@@ -227,5 +233,14 @@ export function readCollaborationResourceUsage(ydoc: Y.Doc): CollaborationResour
 
 // @public
 export function readCollaborationRoomGeneration(document: Y.Doc): string;
+
+// @public @deprecated
+export const SCHEMA_VERSION = 1;
+
+// @public @deprecated
+export interface TextCollaborationSession extends EditorCollaborationSession {
+    // (undocumented)
+    setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: CollaborationFailureCode, detail?: string): void;
+}
 
 ```

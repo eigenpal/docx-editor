@@ -19,7 +19,7 @@ Moves every saved room to the current collaboration format. Run export-rooms.ts
 with the earlier build first, and stop the server before you run this.
 
 Options:
-  --dry-run          Check every room and write nothing.
+  --dry-run          Check every room without changing room files.
   --report <file>    Also write the result for each room as JSON. The file holds
                      document text for rooms that fail the check.
   --data-dir <dir>   The directory that holds the rooms. Default: server/.data
@@ -49,7 +49,15 @@ if (options.help) {
 }
 
 const directory = path.resolve(options['data-dir']);
-const results = await migrateStoredRooms(directory, { dryRun: options['dry-run'] });
+const results = await migrateStoredRooms(directory, { dryRun: options['dry-run'] }).catch(
+  (error: NodeJS.ErrnoException) => {
+    console.error(
+      `Cannot read room directory ${directory} (${error.code ?? 'unknown error'}). ` +
+        'Set --data-dir to the stopped server’s existing data directory and check read permissions.'
+    );
+    process.exit(1);
+  }
+);
 for (const result of results) {
   if ('report' in result) {
     const { paragraphs, hidden, hiddenAt, failed, changedParts, differenceCount, differences } =
@@ -87,6 +95,16 @@ console.log(
     `${count('current')} current, ${results.length - count('migrated') - count('would-migrate') - count('current')} need attention`
 );
 if (options.report) {
-  await writeFile(options.report, `${JSON.stringify(results, null, 2)}\n`);
+  try {
+    await writeFile(options.report, `${JSON.stringify(results, null, 2)}\n`);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code ?? 'unknown error';
+    console.error(
+      `Cannot write report ${options.report} (${code}). ` +
+        'Check the parent directory and write permissions. ' +
+        'Room results are printed above; a report failure does not undo migrations.'
+    );
+    process.exit(1);
+  }
 }
 process.exitCode = allRoomsServable(results) ? 0 : 1;

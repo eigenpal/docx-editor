@@ -147,7 +147,7 @@ describe('how the package is built and checked', () => {
   test('typecheck really type-checks', () => {
     // It used to `echo` a paragraph explaining why it could not. A script that prints and exits
     // zero is worse than no script: every aggregate `bun run typecheck` reported success.
-    expect(manifest.scripts.typecheck).toBe('tsc --noEmit');
+    expect(manifest.scripts.typecheck).toBe('bun check');
     expect(manifest.scripts['typecheck:disabled']).toBeUndefined();
   });
 
@@ -188,11 +188,14 @@ describe('the licence this package ships under', () => {
 
   test('the repository Apache licence expressly excludes this package', () => {
     const text = readFileSync(join(REPO, 'LICENSE'), 'utf8');
-    expect(text).toContain(
-      'The contents of packages/editor-api/ and packages/pro/ are not licensed under'
-    );
-    expect(text).toContain('packages/editor-api/LICENSE.md');
-    expect(text).toContain('packages/pro/LICENSE.md');
+    // The scope notice before the Apache text, with its line wrapping removed.
+    const notice = text.slice(0, text.indexOf('Apache License\n')).replace(/\s+/g, ' ');
+    const excluded = /The contents of (.+?) are not licensed under the Apache License/.exec(notice);
+    expect(excluded).not.toBeNull();
+    for (const pro of ['editor-api', 'pro', 'docx-to-pdf', 'telemetry']) {
+      expect(excluded![1]).toContain(`packages/${pro}/`);
+      expect(notice).toContain(`packages/${pro}/LICENSE.md`);
+    }
   });
 
   test('every source file carries the header, and this is the check CI runs', () => {

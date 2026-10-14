@@ -33,6 +33,9 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
   'cell split is not supported yet': 'disabledReason.splitUnsupported',
   'image changes are not supported in suggesting mode': 'disabledReason.imageSuggesting',
+  // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
+  'a picture is selected; place the caret in text to insert a picture':
+    'disabledReason.pictureSelected',
   'invalid table chrome value': 'disabledReason.invalidValue',
   'invalid value for toolbar command': 'disabledReason.invalidValue',
   'unsupported table command': 'disabledReason.unavailable',

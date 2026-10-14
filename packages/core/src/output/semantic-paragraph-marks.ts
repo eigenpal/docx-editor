@@ -40,7 +40,8 @@ export function lineTerminatorEdge(
  * below the baseline. The seat's bottom edge is the glyph's baseline whatever its font, so
  * the seat's bottom is placed on the line's published baseline. A top-anchored seat drew the
  * glyph a third of an em low: its line box starts at the glyph's box, not at the baseline. A right-to-left seat reads from its right
- * edge, so its glyph ends at the terminator edge rather than starting there.
+ * edge, so its glyph ends at the terminator edge rather than starting there. `at` moves the
+ * seat past furniture that occupies the terminator edge, such as a break label.
  */
 export function seatTerminatorMark(
   glyph: HTMLElement,
@@ -48,9 +49,10 @@ export function seatTerminatorMark(
   line: LineRecord,
   paragraphRtl: boolean,
   fontSizePt: number,
-  scale: number
+  scale: number,
+  at?: { readonly x: number; readonly rtl: boolean }
 ): void {
-  const edge = lineTerminatorEdge(line, paragraphRtl);
+  const edge = at ?? lineTerminatorEdge(line, paragraphRtl);
   const seat = lineElement.ownerDocument.createElement('span');
   seat.className = 'docx-terminator-seat';
   seat.dataset.docxMarker = '';
@@ -71,6 +73,39 @@ export function seatTerminatorMark(
   glyph.style.fontSize = `${fontSizePt * scale}px`;
   seat.append(glyph);
   lineElement.append(seat);
+}
+
+/**
+ * Colour and attribute break furniture from the break character's OWN revision: the revision
+ * colour (or author colour), a strike or underline, and the `data-revision-*` attributes review
+ * chrome reads. Leaves the element untouched for an unrevised break.
+ */
+export function applyBreakRevision(
+  glyph: HTMLElement,
+  revisions: readonly RevisionAttribution[] | undefined,
+  colors: RevisionStyleContext | undefined
+): void {
+  const presentation = revisionPresentationOf(revisions, colors?.authorSlots, colors?.styles);
+  if (!presentation) return;
+  const { attribution } = presentation;
+  const authorStyle = colors?.styles.get(attribution.author);
+  const byAuthor = colors && (authorStyle?.color !== undefined || colors.others === 'author');
+  glyph.style.color = byAuthor ? presentation.authorColor : presentation.color;
+  glyph.dataset.revisionKind = attribution.kind;
+  glyph.dataset.revisionId = attribution.id;
+  glyph.dataset.reviewAuthor = attribution.author;
+  if (colors) {
+    glyph.dataset.reviewAuthorSlot = String(
+      (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
+    );
+    for (const token of colors.classTokens.get(attribution.author) ?? [])
+      glyph.classList.add(token);
+  }
+  if (presentation.line) {
+    glyph.style.textDecorationLine = presentation.line;
+    glyph.style.textDecorationStyle = presentation.decorationStyle;
+    glyph.style.textDecorationColor = glyph.style.color;
+  }
 }
 
 /**
@@ -96,28 +131,7 @@ export function paintManualLineBreak(
   glyph.style.userSelect = 'none';
   glyph.style.color = 'var(--doc-revision-format)';
   // Read the newline's own revision, never the preceding text's attribution.
-  const presentation = revisionPresentationOf(last?.revisions, colors?.authorSlots, colors?.styles);
-  if (presentation) {
-    const { attribution } = presentation;
-    const authorStyle = colors?.styles.get(attribution.author);
-    const byAuthor = colors && (authorStyle?.color !== undefined || colors.others === 'author');
-    glyph.style.color = byAuthor ? presentation.authorColor : presentation.color;
-    glyph.dataset.revisionKind = attribution.kind;
-    glyph.dataset.revisionId = attribution.id;
-    glyph.dataset.reviewAuthor = attribution.author;
-    if (colors) {
-      glyph.dataset.reviewAuthorSlot = String(
-        (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
-      );
-      for (const token of colors.classTokens.get(attribution.author) ?? [])
-        glyph.classList.add(token);
-    }
-    if (presentation.line) {
-      glyph.style.textDecorationLine = presentation.line;
-      glyph.style.textDecorationStyle = presentation.decorationStyle;
-      glyph.style.textDecorationColor = glyph.style.color;
-    }
-  }
+  applyBreakRevision(glyph, last?.revisions, colors);
   const size = last?.style.fontSizePt ?? DEFAULT_RUN_STYLE.fontSizePt;
   seatTerminatorMark(glyph, lineElement, line, paragraphRtl, size, scale);
 }

@@ -5,6 +5,24 @@
 ```ts
 
 // @public
+export interface BreakMarkStrings {
+    // (undocumented)
+    readonly columnBreak: string;
+    // (undocumented)
+    readonly pageBreak: string;
+    // (undocumented)
+    readonly sectionBreakContinuous: string;
+    // (undocumented)
+    readonly sectionBreakEvenPage: string;
+    // (undocumented)
+    readonly sectionBreakNextColumn: string;
+    // (undocumented)
+    readonly sectionBreakNextPage: string;
+    // (undocumented)
+    readonly sectionBreakOddPage: string;
+}
+
+// @public
 export type ChangeBarsMode = 'all-markup' | 'simple-markup' | 'none';
 
 // @public
@@ -51,6 +69,7 @@ export interface PaintOptions {
     readonly activeHeaderFooterPageIndex?: number;
     readonly activeHeaderFooterRId?: string;
     readonly ariaHidden?: boolean;
+    readonly breakMarkStrings?: BreakMarkStrings;
     readonly changeBars?: ChangeBarsMode;
     readonly changeBarsToggle?: boolean;
     readonly contentControlChrome?: {

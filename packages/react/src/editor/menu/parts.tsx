@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 //
 // Host actions read their handlers from the menu context. Editing rows use engine commands.
 
-import { isValidElement, useId, useLayoutEffect, useRef, useState } from 'react';
+import { isValidElement, useContext, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
   chromeSlotIsToggle,
@@ -27,11 +27,11 @@ import {
   type ChromeMenuItemEntry,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import {
   MENU_OVERFLOW_ID,
+  MenuRowTabIndexContext,
   useMenuContext,
   useMenuLabel,
   useMenuOverflow,
@@ -113,6 +113,7 @@ export function MenuRow(props: MenuRowProps) {
   const value = props['data-value'];
   const shortcutText = usePlatformShortcut();
   const reasonId = useId();
+  const tabIndex = useContext(MenuRowTabIndexContext);
   // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
   // order and stops firing pointer events, so its `title` never renders and a screen
   // reader walking the menu skips the row entirely — which is the whole "present and
@@ -131,10 +132,8 @@ export function MenuRow(props: MenuRowProps) {
       type="button"
       role={role}
       className={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
-      // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
-      // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
-      // tab stops).
-      tabIndex={-1}
+      // Popup rows use arrow keys. Direct menubar actions remain reachable by Tab.
+      tabIndex={tabIndex}
       {...(slot ? { 'data-slot': slot } : {})}
       {...(value !== undefined ? { 'data-value': value } : {})}
       {...(active ? { 'data-active': '' } : {})}
@@ -400,13 +399,11 @@ export const MenuPrint = defineActionRow(
  * probe and is disabled with the engine's own words on a document it cannot rewrite.
  */
 function MenuPageSetupImpl({ className, hidden }: MenuActionProps) {
-  const editor = useDocxEditor();
+  const { isEnabled: engineOk, disabledReason: engineReason } = useEditorCommand(
+    chromeProbeForSlot('file.pageSetup')!
+  );
   const context = useMenuContext();
   const label = useMenuLabel();
-  const probe = chromeProbeForSlot('file.pageSetup');
-  const allowed = editor && probe ? editor.can(probe) : null;
-  const engineOk = allowed?.ok === true;
-  const engineReason = allowed && !allowed.ok ? allowed.reason : null;
   if (hidden) return null;
   const control = chromeControlForSlot('file.pageSetup');
   const text = label(control?.labelKey ?? 'file.pageSetup');
@@ -440,13 +437,11 @@ function MenuPageSetupImpl({ className, hidden }: MenuActionProps) {
  * slot's probe and is disabled with the engine's own words on a document it cannot rewrite.
  */
 function MenuParagraphDialogImpl({ className, hidden }: MenuActionProps) {
-  const editor = useDocxEditor();
+  const { isEnabled: engineOk, disabledReason: engineReason } = useEditorCommand(
+    chromeProbeForSlot('paragraph.dialog')!
+  );
   const context = useMenuContext();
   const label = useMenuLabel();
-  const probe = chromeProbeForSlot('paragraph.dialog');
-  const allowed = editor && probe ? editor.can(probe) : null;
-  const engineOk = allowed?.ok === true;
-  const engineReason = allowed && !allowed.ok ? allowed.reason : null;
   if (hidden) return null;
   const control = chromeControlForSlot('paragraph.dialog');
   const text = label(control?.labelKey ?? 'lineSpacing.options');
@@ -676,7 +671,7 @@ export function MenuSubmenu({
             }
           }}
         >
-          {children}
+          <MenuRowTabIndexContext.Provider value={-1}>{children}</MenuRowTabIndexContext.Provider>
         </div>
       ) : null}
     </div>
@@ -1039,7 +1034,7 @@ export function Menu({
             }
           }}
         >
-          {rows}
+          <MenuRowTabIndexContext.Provider value={-1}>{rows}</MenuRowTabIndexContext.Provider>
         </div>
       ) : null}
     </div>

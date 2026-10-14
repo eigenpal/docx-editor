@@ -73,7 +73,8 @@ test('PDF export reports an oversized notice without dropping note text', async 
       const content = await (await pdf.getPage(n)).getTextContent();
       text += content.items.map((i) => ('str' in i ? i.str : '')).join(' ');
     }
-    expect(text).toContain('Note line 6');
+    // Each painted span is its own text item, so collapse the joins before matching words.
+    expect(text.replace(/\s+/g, ' ')).toContain('Note line 6');
     expect(text).not.toContain('Continued');
   } finally {
     await pdf.destroy();

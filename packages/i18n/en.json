@@ -23,6 +23,7 @@
     "mergeUnsupported": "Cell merge is not supported",
     "splitUnsupported": "Cell split is not supported",
     "imageSuggesting": "Image changes are unavailable in suggesting mode",
+    "pictureSelected": "A picture is selected. Place the cursor in text to insert a picture.",
     "invalidValue": "This value is not valid for the command",
     "unavailable": "This command is unavailable",
     "bodyOnlySectionBreak": "Section breaks go in the document body.",
@@ -758,6 +759,15 @@
     "insertTotalPages": "Insert total page count",
     "insertSectionPages": "Insert section page count",
     "insertPageXofY": "Insert page X of Y"
+  },
+  "formattingMarks": {
+    "pageBreak": "Page break",
+    "columnBreak": "Column break",
+    "sectionBreakContinuous": "Section break (continuous)",
+    "sectionBreakNextPage": "Section break (next page)",
+    "sectionBreakEvenPage": "Section break (even page)",
+    "sectionBreakOddPage": "Section break (odd page)",
+    "sectionBreakNextColumn": "Section break (new column)"
   },
   "image": {
     "unsupportedFormat": "Unsupported image format ({format})",

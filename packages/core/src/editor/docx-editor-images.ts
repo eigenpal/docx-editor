@@ -1,3 +1,4 @@
+import { SUGGESTING_IMAGE_REPLACE_REASON } from './opening-editing-mode.ts';
 import {
   hasBorderPayload,
   positionCommandHasFields,
@@ -5,6 +6,7 @@ import {
 } from './image-command-fields.ts';
 import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
+import { reportCommandResult } from './command-reporting.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
 // Reads derive from layout records plus canonical projection; writes route through the
@@ -509,7 +511,7 @@ function asyncImageExecutionGate(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image changes are not supported in suggesting mode',
+      reason: SUGGESTING_IMAGE_REPLACE_REASON,
     };
   }
   return null;
@@ -566,6 +568,13 @@ function isStaleImageMutation(
   return null;
 }
 
+/**
+ * Inserting a picture while one is selected has no place to land: the selection sits on the
+ * picture, and the store refuses an insert there. Refused up front, so the toolbar can say why.
+ */
+export const PICTURE_SELECTED_INSERT_REASON =
+  'a picture is selected; place the caret in text to insert a picture';
+
 export function gateImageCommand(
   command: EditorCommand,
   surface: PaginatedSurface | null
@@ -577,6 +586,9 @@ export function gateImageCommand(
   const protectedWrite = commandProtectionRefusal(command, surface);
   if (protectedWrite) return protectedWrite;
   if (command.type === 'insertImage') {
+    if (resolveSelectedDrawingRecord(surface)) {
+      return { ok: false, code: 'invalidArgs', reason: PICTURE_SELECTED_INSERT_REASON };
+    }
     if (!(command.data instanceof Uint8Array) || command.data.byteLength === 0) {
       return { ok: false, code: 'invalidArgs', reason: 'insertImage requires image bytes' };
     }
@@ -623,7 +635,7 @@ export function gateImageCommand(
     return {
       ok: false,
       code: 'invalidArgs',
-      reason: 'image changes are not supported in suggesting mode',
+      reason: SUGGESTING_IMAGE_REPLACE_REASON,
     };
   }
   switch (command.type) {
@@ -956,9 +968,19 @@ function fitInsertExtent(
  * Run an insert or replace, re-checking the same gates {@link canExecuteImageCommand} applies.
  *
  * Async because image bytes must be decoded to derive their natural extent before the drawing can
- * be projected — the one editor command that cannot complete synchronously.
+ * be projected — the one editor command that cannot complete synchronously. It runs outside
+ * `exec`, so it reports a refusal to the editor's diagnostics itself.
  */
 export async function executeImageCommand(
+  editor: DocxEditorInstance,
+  command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
+): Promise<ExecResult> {
+  const result = await runImageCommand(editor, command);
+  reportCommandResult(editor, command, result);
+  return result;
+}
+
+async function runImageCommand(
   editor: DocxEditorInstance,
   command: Extract<EditorCommand, { type: 'insertImage' | 'replaceImage' }>
 ): Promise<ExecResult> {

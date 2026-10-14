@@ -79,6 +79,15 @@ const DOCUMENT_TRACKING_AUTHOR_REASON =
 export const FORMS_PROTECTION_SUGGESTING_REASON =
   'this document is protected for filling in forms, which does not track changes';
 
+/** Leaving suggesting under protection that allows only tracked changes. */
+export const TRACKED_ONLY_EDITING_REASON = 'this document permits editing only as tracked changes';
+
+/** Replacing a picture's bytes has no tracked-change form. */
+export const SUGGESTING_IMAGE_REPLACE_REASON = 'image changes are not supported in suggesting mode';
+
+/** Accepting or rejecting a revision kind the review lane only reads. */
+export const READ_ONLY_REVISION_REASON = 'this revision kind has no structural accept/reject yet';
+
 /**
  * The refusal every mode but viewing gets under enforced read-only protection.
  *
@@ -303,7 +312,7 @@ export function documentEditingModeRestriction(
   return {
     ok: false,
     code: 'locked',
-    reason: 'this document permits editing only as tracked changes',
+    reason: TRACKED_ONLY_EDITING_REASON,
   };
 }
 

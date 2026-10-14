@@ -10,6 +10,8 @@ import type { TextMeasurer } from '../layout/semantic-records.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hiddenMarkRemovedIds, type RevisionView } from './hidden-mark-joins.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
+import { fieldResultSpeller } from '../layout/field-copy-text.ts';
+import { cellSelectionText, type CellSelection } from '../layout/semantic-cell-selection.ts';
 import {
   parentNodeOf,
   type FragmentCoverage,
@@ -184,6 +186,26 @@ export function selectedTextIn(
       spell(paragraphId, index === ids.length - 1 ? whole.slice(0, to.offset) : whole, 0);
   }
   return text;
+}
+
+/** The plain text of a range. Each computed field reads as its painted result. */
+export function rangePlainText(
+  layout: SemanticLayout,
+  from: SemanticPosition,
+  to: SemanticPosition,
+  order: readonly string[]
+): string {
+  const fields = fieldResultSpeller(layout, paragraphTextFromLayout);
+  return selectedTextIn(layout, from, to, order, fields.resultAt, fields.markedText);
+}
+
+/** The plain text of a cell rectangle, as a grid, with each field as its painted result. */
+export function cellsPlainText(layout: SemanticLayout, cells: CellSelection): string {
+  return cellSelectionText(
+    layout,
+    cells,
+    fieldResultSpeller(layout, paragraphTextFromLayout).spelledText
+  );
 }
 
 /**

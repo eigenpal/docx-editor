@@ -38,7 +38,8 @@ export interface PaginatedSurfaceOptions {
   /**
    * How saved field results are edited. `atomic` (the default) keeps every field one unit.
    * `editable` lets the reader type, delete, and select inside the saved result of a DATE,
-   * MERGEFIELD, HYPERLINK, or similar field. Refused with a {@link collaborationModel}.
+   * MERGEFIELD, HYPERLINK, or similar field. Results must be unnested; simple fields inside
+   * complex field results are not supported. Refused with a {@link collaborationModel}.
    */
   readonly fieldResults?: FieldResultsMode;
   readonly measurer?: TextMeasurer;
@@ -115,6 +116,23 @@ export interface PaginatedSurfaceOptions {
    */
   readonly pointer?: 'engine' | 'native';
   readonly onChange?: (state: PaginatedSurfaceState) => void;
+  /**
+   * Told each time an edit is refused, with the raw reason: a store code such as `'locked'`,
+   * or the surface's own refusal sentence. The raw reason can be a sentence, so a listener
+   * maps it to a public code before it reports anything.
+   */
+  readonly onRejection?: (reason: string) => void;
+  /**
+   * Told the milliseconds of each layout pass and each paint. For `'input'`, told the browser
+   * timestamp of each key press or pointer press on the pages, so a listener can time it to
+   * the next frame. Numbers only.
+   */
+  readonly onTiming?: (phase: 'layout' | 'paint' | 'input', value: number) => void;
+  /**
+   * Told once for each local edit that changed the document, with `typing` true for buffered
+   * typing, which can land inside a later command's commit. Remote edits are not local.
+   */
+  readonly onEdit?: (typing: boolean) => void;
   /**
    * A plain click on an external (or inert) hyperlink, for a host to open its popover with.
    *

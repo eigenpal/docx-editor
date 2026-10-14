@@ -887,10 +887,10 @@ interface LayoutDrawingKeys {
 }
 
 /**
- * Repaints and virtualization can reuse the same immutable layout. Aggregate both
- * key sets once, including offscreen pages: materialization does not end a resource's
- * lifetime. A new layout rebuilds membership while reusing unchanged page extraction.
- * Weak ownership releases the aggregate with the layout; it retains no DOM or bytes.
+ * Aggregate both key sets for the supplied immutable layout. The painter passes only
+ * materialized pages so reconciliation releases resources from offscreen pages.
+ * Each supplied layout reuses unchanged page extraction. Weak ownership releases the
+ * aggregate with the layout; it retains no DOM or bytes.
  */
 const drawingKeysByLayout = new WeakMap<SemanticLayout, LayoutDrawingKeys>();
 

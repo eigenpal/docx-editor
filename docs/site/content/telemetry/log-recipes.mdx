@@ -1,0 +1,74 @@
+---
+title: 'Other log services'
+description: 'Forward editor telemetry to Axiom or Datadog Logs, or validate events without Fetch requests.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+The Axiom and Datadog recipes replace the `forward` function of the route in [Send to a log service](/docs/2.x/telemetry/log-services). The browser setup on that page stays the same.
+
+## Axiom
+
+Axiom reads the time from `_time`. Create a dataset and an API token with ingest access.
+
+```ts
+// app/api/telemetry/route.ts
+import { telemetryRoute, toLogRecord } from '@docx-editor.dev/telemetry/ingest';
+
+export const POST = telemetryRoute({
+  forward: (events) =>
+    fetch(`https://api.axiom.co/v1/datasets/${process.env.AXIOM_DATASET}/ingest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,
+      },
+      body: JSON.stringify(
+        events.map((event) => ({
+          ...toLogRecord(event),
+          _time: new Date(event.time).toISOString(),
+        }))
+      ),
+    }),
+});
+```
+
+## Datadog Logs
+
+Use the logs intake for your Datadog site and an API key.
+
+```ts
+// app/api/telemetry/route.ts
+import { telemetryRoute, toLogRecord } from '@docx-editor.dev/telemetry/ingest';
+
+export const POST = telemetryRoute({
+  forward: (events) =>
+    fetch('https://http-intake.logs.datadoghq.com/api/v2/logs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'DD-API-KEY': String(process.env.DD_API_KEY),
+      },
+      body: JSON.stringify(
+        events.map((event) => ({
+          ...toLogRecord(event),
+          ddsource: 'docx-editor',
+          service: 'my-app',
+        }))
+      ),
+    }),
+});
+```
+
+## Another server framework
+
+If your framework does not use Fetch `Request` objects, call `validateTelemetryEvents` on the parsed body yourself. It returns the events that pass, or an empty list:
+
+```ts
+import { toLogRecord, validateTelemetryEvents } from '@docx-editor.dev/telemetry/ingest';
+
+export function recordsFrom(body: unknown) {
+  return validateTelemetryEvents(body).map(toLogRecord);
+}
+```

@@ -31,9 +31,10 @@ export const explicitFontBudgetError = (source: FontSource): EditorFontError =>
 export const embeddedFontDropError = (drop: DroppedEmbeddedFont): EditorFontError =>
   new EditorFontError(
     drop.reason,
+    // The family and part name come from the document; `request` carries them, not the message.
     drop.reason === 'overLimit'
-      ? `embedded font ${drop.request.family} (${drop.partName}) exceeds the font byte budget`
-      : `embedded font part ${drop.partName} declares an invalid family name`,
+      ? 'an embedded font exceeds the font byte budget'
+      : 'an embedded font part declares an invalid family name',
     { request: drop.request }
   );
 

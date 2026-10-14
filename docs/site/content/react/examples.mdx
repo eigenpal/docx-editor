@@ -5,6 +5,8 @@ category: 'React'
 order: 34
 ---
 
+Import `@docx-editor.dev/core/styles/editor.css` once in your application entry. Give each editor a container with a height.
+
 These examples import public APIs from package roots.
 
 ## Load DOCX bytes
@@ -12,27 +14,17 @@ These examples import public APIs from package roots.
 This component fetches a DOCX file and passes its bytes to the editor:
 
 ```tsx
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditor, useDocxSource } from '@docx-editor.dev/react';
 
 export function Editor({ url }: { url: string }) {
-  const [doc, setDoc] = useState<Uint8Array>();
+  const { document, error } = useDocxSource(url);
+  if (error) return <p role="alert">{error.message}</p>;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    fetch(url)
-      .then((response) => response.arrayBuffer())
-      .then((buffer) => {
-        if (!cancelled) setDoc(new Uint8Array(buffer));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [url]);
-
-  return <DocxEditor document={doc} title="Proposal.docx" />;
+  return (
+    <div style={{ height: '100vh' }}>
+      <DocxEditor document={document} title="Proposal.docx" />
+    </div>
+  );
 }
 ```
 
@@ -85,24 +77,29 @@ function BoldButton() {
 
 export function CustomChrome({ bytes }: { bytes: Uint8Array }) {
   return (
-    <DocxEditor.Root document={bytes}>
-      <DocxEditor.Toolbar>
-        <BoldButton />
-      </DocxEditor.Toolbar>
-      <DocxEditor.Viewport>
-        <DocxEditor.Navigation />
-        <DocxEditor.Content />
-        <DocxEditor.HyperLink />
-        <DocxEditor.ContextMenu />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
+    <div
+      className="docx-editor"
+      style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}
+    >
+      <DocxEditor.Root document={bytes}>
+        <DocxEditor.Toolbar>
+          <BoldButton />
+        </DocxEditor.Toolbar>
+        <DocxEditor.Viewport style={{ flex: 1, minHeight: 0 }}>
+          <DocxEditor.Navigation />
+          <DocxEditor.Content />
+          <DocxEditor.HyperLink />
+          <DocxEditor.ContextMenu />
+        </DocxEditor.Viewport>
+      </DocxEditor.Root>
+    </div>
   );
 }
 ```
 
 ## Automate an open editor
 
-This component uses the Editing API to read the first paragraph. It disposes the browser runtime after the operation:
+Render this component inside `DocxEditor.Root`. It reads the first paragraph and disposes the browser runtime after the operation:
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';

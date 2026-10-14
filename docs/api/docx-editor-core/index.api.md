@@ -54,6 +54,9 @@ export function blankDocumentBytes(): Uint8Array;
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
+
+// @public
 export type CanResult = {
     ok: true;
 } | {
@@ -317,6 +320,7 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: 'formattingBar.groups.format';
 }, {
     readonly controls: readonly [{
+        readonly defaultToolbar: false;
         readonly id: 'revisionMarkup';
         readonly labelKey: 'revisionMarkup.title';
         readonly paths: readonly string[];
@@ -832,6 +836,28 @@ export interface ClearAnchorHighlightOptions {
 }
 
 // @public
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+// @public
+export interface CollaborationParticipantsDiagnostic extends DiagnosticBase {
+    readonly count: number;
+    // (undocumented)
+    readonly kind: 'collab.participants';
+}
+
+// @public
+export interface CollaborationStatusDiagnostic extends DiagnosticBase {
+    readonly code?: CollaborationDiagnosticCode;
+    readonly connectMs?: number;
+    // (undocumented)
+    readonly kind: 'collab.status';
+    readonly previous: CollaborationStatus | 'none';
+    readonly recovering: boolean;
+    // (undocumented)
+    readonly status: CollaborationStatus;
+}
+
+// @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
@@ -936,6 +962,9 @@ export interface ContentControlSummary {
 export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
 
 // @public
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+// @public
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance;
 
 // @public
@@ -962,10 +991,62 @@ export interface CustomFontsOptions extends Omit<LoadFontsRequest, 'signal'> {
 export type CustomFontsResolver = MarkedFontResolver<(request: FontResolutionRequest) => Promise<LoadFontsResult>>;
 
 // @public
+export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
+
+// @public
+export interface CustomNodeDiagnosticEvent extends DiagnosticBase {
+    // (undocumented)
+    readonly code: CustomNodeDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'custom-node';
+}
+
+// @public
 export const DEFAULT_FONT: FontConfiguration['defaultFont'];
 
 // @public
 export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
+
+// @public
+export const DIAGNOSTIC_SCHEMA_VERSION = 1;
+
+// @public
+export interface DiagnosticBase {
+    readonly editorSessionId: string;
+    readonly schemaVersion: number;
+    readonly time: number;
+}
+
+// @public
+export function diagnosticCauses(): readonly string[];
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+
+// @public
+export function diagnosticCodeOfRefusal(reason: string, execCode?: ExecErrorCode): EditDiagnosticCode;
+
+// @public
+export function diagnosticCodes(): readonly DiagnosticCode[];
+
+// @public
+export function diagnosticCommands(): readonly EditorCommand['type'][];
+
+// @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
+export interface DiagnosticExplanation {
+    readonly docs: string;
+    readonly hint: string;
+}
+
+// @public
+export interface DiagnosticFailureDetail {
+    readonly cause?: string;
+    readonly errorName?: DiagnosticErrorName;
+    readonly stage?: FailureStage;
+}
 
 // @public
 export interface DocAnchor {
@@ -1265,6 +1346,28 @@ export interface DocumentHandle {
 }
 
 // @public
+export type DocumentOpenDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.open';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'opened';
+    readonly pagesBucket?: CountBucket;
+    readonly shape?: DocumentShape;
+    readonly sizeBucket: ByteSizeBucket;
+} | (DiagnosticFailureDetail & {
+    readonly code: DocumentOpenDiagnosticCode;
+    readonly outcome: 'rejected';
+    readonly part?: DocumentPartKind;
+    readonly sizeBucket?: ByteSizeBucket;
+}));
+
+// @public
+export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
+
+// @public
 export type DocumentProtectionEdit = 'none' | 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
 
 // @public
@@ -1272,6 +1375,32 @@ export interface DocumentProtectionState {
     readonly edit: DocumentProtectionEdit;
     readonly enforced: boolean;
     readonly password: boolean;
+}
+
+// @public
+export type DocumentSaveDiagnostic = DiagnosticBase & {
+    readonly kind: 'document.save';
+} & ({
+    readonly durationMs: number;
+    readonly outcome: 'saved';
+    readonly sizeBucket: ByteSizeBucket;
+} | (DiagnosticFailureDetail & {
+    readonly code: DocumentSaveDiagnosticCode;
+    readonly durationMs: number;
+    readonly outcome: 'rejected';
+}));
+
+// @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
+export interface DocumentShape {
+    // (undocumented)
+    readonly embeddedFonts: CountBucket;
+    // (undocumented)
+    readonly paragraphs: CountBucket;
+    readonly parts: CountBucket;
+    readonly reviewItems: CountBucket;
 }
 
 // @public
@@ -1389,6 +1518,9 @@ export interface DrawingPositionInput {
 
 // @public (undocumented)
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
+
+// @public
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
@@ -1822,6 +1954,12 @@ export type EditorCommandShape<T> = {
 };
 
 // @public
+export type EditorDiagnostic = DocumentOpenDiagnostic | EditRejectedDiagnostic | ReviewSkippedDiagnostic | FontFailedDiagnostic | HistoryDiagnosticEvent | CustomNodeDiagnosticEvent | CollaborationStatusDiagnostic | CollaborationParticipantsDiagnostic | PerformanceDiagnostic | DocumentSaveDiagnostic | SessionDiagnostic;
+
+// @public
+export type EditorDiagnosticKind = EditorDiagnostic['kind'];
+
+// @public
 export interface EditorError extends Error {
     // (undocumented)
     readonly code?: string;
@@ -1830,6 +1968,7 @@ export interface EditorError extends Error {
 // @public
 export interface EditorEvents {
     change: (change: DocumentChange) => void;
+    diagnostic: (event: EditorDiagnostic) => void;
     // (undocumented)
     error: (error: EditorError) => void;
     // (undocumented)
@@ -1910,7 +2049,9 @@ export interface EditorModule {
     readonly customNodes?: readonly unknown[];
     readonly id: string;
     readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+    readonly onDiagnostic?: (event: EditorDiagnostic) => void;
     readonly review?: ReviewModuleContribution;
+    readonly wantsDiagnostic?: (kind: EditorDiagnosticKind) => boolean;
 }
 
 // @public
@@ -2110,6 +2251,20 @@ export interface EditorSnapshot {
 }
 
 // @public
+export interface EditRejectedDiagnostic extends DiagnosticBase, DiagnosticFailureDetail {
+    // (undocumented)
+    readonly code: EditDiagnosticCode;
+    readonly command?: EditorCommand['type'];
+    // (undocumented)
+    readonly kind: 'edit.rejected';
+    readonly origin: EditRejectionOrigin;
+    readonly tracked: boolean;
+}
+
+// @public
+export type EditRejectionOrigin = 'command' | 'input' | 'automation';
+
+// @public
 export type ExecErrorCode = 'notFound' | 'ambiguous' | 'locked' | 'bound' | 'typeMismatch' | 'kindMismatch' | 'outOfBounds' | 'unsupported' | 'invalidArgs';
 
 // @public
@@ -2129,12 +2284,18 @@ export type ExecResult = {
 };
 
 // @public
+export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
+
+// @public
 export interface Extent {
     // (undocumented)
     readonly heightEmu: number;
     // (undocumented)
     readonly widthEmu: number;
 }
+
+// @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
 
 // @public
 export type FieldResultsMode = 'atomic' | 'editable';
@@ -2191,6 +2352,9 @@ export interface FontDefinition {
 }
 
 // @public
+export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
+
+// @public
 export interface FontFaceRequest {
     // (undocumented)
     readonly family: string;
@@ -2198,6 +2362,14 @@ export interface FontFaceRequest {
     readonly style: 'normal' | 'italic';
     // (undocumented)
     readonly weight: number;
+}
+
+// @public
+export interface FontFailedDiagnostic extends DiagnosticBase {
+    // (undocumented)
+    readonly code: FontDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'font.failed';
 }
 
 // @public
@@ -2316,6 +2488,9 @@ export interface FormatPainterSurfaceState {
 }
 
 // @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
+
+// @public
 export type FurnitureVariant = 'default' | 'first' | 'even';
 
 // @public
@@ -2418,6 +2593,17 @@ export interface HistoryDiagnostic {
     readonly kind: 'split' | 'possible-ungrouped-gesture' | 'possible-fragmented-gesture';
     // (undocumented)
     readonly reason: string;
+}
+
+// @public
+export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
+
+// @public
+export interface HistoryDiagnosticEvent extends DiagnosticBase {
+    // (undocumented)
+    readonly code: HistoryDiagnosticCode;
+    // (undocumented)
+    readonly kind: 'history';
 }
 
 // @public (undocumented)
@@ -2739,6 +2925,21 @@ export interface ParagraphTabStop {
 }
 
 // @public
+export interface PerformanceDiagnostic extends DiagnosticBase {
+    readonly code?: PerformanceDiagnosticCode;
+    readonly interaction?: TimingSummary;
+    // (undocumented)
+    readonly kind: 'performance';
+    readonly layout?: TimingSummary;
+    readonly pagesBucket?: CountBucket;
+    readonly paint?: TimingSummary;
+    readonly windowMs: number;
+}
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
+
+// @public
 export interface Point {
     // (undocumented)
     readonly x: number;
@@ -2790,6 +2991,9 @@ export interface ReviewActivationOptions {
     readonly announce?: boolean;
     readonly reveal?: ScrollPlacement | false;
 }
+
+// @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
 
 // @public
 export interface ReviewChangesAttribution {
@@ -2852,6 +3056,9 @@ export interface ReviewCustomPlacement extends ReviewItemPlacementBase {
     // (undocumented)
     readonly kind: 'custom';
 }
+
+// @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
 
 // @public
 export type ReviewDisplayMode = RevisionDisplayMode | 'simple-markup';
@@ -2930,6 +3137,9 @@ export interface ReviewModuleContribution {
 }
 
 // @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
+
+// @public
 export interface ReviewPosition {
     // (undocumented)
     readonly offset: number;
@@ -3003,6 +3213,20 @@ export interface ReviewRevisionPlacement extends ReviewItemPlacementBase {
 }
 
 // @public
+export interface ReviewSkippedDiagnostic extends DiagnosticBase {
+    readonly cause?: string;
+    readonly changeKind?: ReviewChangeKind;
+    // (undocumented)
+    readonly code: ReviewDiagnosticCode;
+    readonly count: number;
+    readonly formattingKind?: FormattingChangeKind;
+    // (undocumented)
+    readonly kind: 'review.skipped';
+    readonly operation?: ReviewOperation;
+    readonly part?: DocumentPartKind;
+}
+
+// @public
 export interface Revision {
     // (undocumented)
     readonly author: string;
@@ -3039,6 +3263,7 @@ export interface RevisionBatchResult {
     readonly resolved: readonly RevisionBatchEntry[];
     // (undocumented)
     readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
         readonly key: string;
         readonly reason: RevisionBatchSkipReason;
         readonly revision?: RevisionBatchEntry;
@@ -3253,6 +3478,24 @@ export type SemanticTarget = {
 };
 
 // @public
+export interface SessionActivity {
+    readonly activeMs: number;
+    readonly automationEdits: number;
+    readonly commandEdits: number;
+    readonly durationMs: number;
+    readonly inputEdits: number;
+}
+
+// @public
+export type SessionDiagnostic = DiagnosticBase & {
+    readonly kind: 'session';
+} & ({
+    readonly phase: 'start';
+} | (SessionActivity & {
+    readonly phase: 'active' | 'end';
+}));
+
+// @public
 export type SetReviewChangesAuthorOptions = ReviewChangesAttribution & ({
     authors?: never;
     keys: readonly string[];
@@ -3439,6 +3682,15 @@ export interface Theme {
 
 // @public
 export type ThemeColorScheme = Readonly<Record<string, string>>;
+
+// @public
+export interface TimingSummary {
+    readonly bands: readonly number[];
+    readonly count: number;
+    readonly maxMs: number;
+    readonly p50Ms: number;
+    readonly p95Ms: number;
+}
 
 // @public
 export interface ToolbarCommandState {

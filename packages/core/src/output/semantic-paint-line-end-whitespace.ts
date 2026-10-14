@@ -69,12 +69,14 @@ export function prepareTextPaintHost(
   glyph.style.textDecorationStyle = element.style.textDecorationStyle;
   glyph.style.textDecorationColor = element.style.textDecorationColor;
   glyph.style.textDecorationThickness = element.style.textDecorationThickness;
+  glyph.style.textUnderlineOffset = element.style.textUnderlineOffset;
   element.style.removeProperty('transform');
   element.style.removeProperty('transform-origin');
   element.style.removeProperty('text-decoration-line');
   element.style.removeProperty('text-decoration-style');
   element.style.removeProperty('text-decoration-color');
   element.style.removeProperty('text-decoration-thickness');
+  element.style.removeProperty('text-underline-offset');
   element.append(glyph);
   return glyph;
 }

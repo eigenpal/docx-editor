@@ -16,7 +16,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-A visual `.docx` editor for React and Vue. Edit paginated Word documents in the browser and preserve untouched content and unsupported OOXML when saving. Comments and tracked changes require the EigenPal Pro License.
+**DOCX Editor** is a complete document ecosystem featuring a **WYSIWYG editor** with real-time collaboration, tracked changes, and rich editing capabilities, a **headless layout engine** that runs on both client and server, and a **PDF generation engine**. Together, they provide a unified foundation for document editing, rendering, and export.
 
 [Live demo](https://docx-editor.dev/editor) | [Documentation](https://www.docx-editor.dev/docs) | [Roadmap](https://github.com/orgs/eigenpal/projects/2)
 
@@ -53,8 +53,9 @@ For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the packag
 | [Translations](https://www.docx-editor.dev/docs/2.x/i18n) | Translate editor controls with locale catalogs and custom strings. |
 | [PDF export](https://www.docx-editor.dev/docs/2.x/export/pdf) | Convert DOCX to PDF on a Node.js server. |
 | [Markdown export](https://www.docx-editor.dev/docs/2.x/export/markdown) | Convert DOCX to Markdown with page references and images. |
+| [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) | Send anonymous diagnostics and metrics to Sentry, OpenTelemetry, Prometheus, or a log service. No document content or personal data is sent. |
 
-Review, collaboration, the Editor API, and PDF export require separate packages under the EigenPal Pro License.
+Review, collaboration, the Editor API, PDF export, and telemetry require separate packages under the EigenPal Pro License.
 
 ## Packages
 
@@ -70,8 +71,9 @@ Review, collaboration, the Editor API, and PDF export require separate packages 
 | [`@docx-editor.dev/fonts-cjk`](https://www.npmjs.com/package/@docx-editor.dev/fonts-cjk) | Optional Chinese, Japanese, and Korean font for PDF export. | [CJK font setup](https://www.docx-editor.dev/docs/2.x/export/pdf/fonts#add-chinese-japanese-and-korean-text) |
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro) | Tracked changes, comments, collaboration, and custom nodes. | [Review and collaboration](https://www.docx-editor.dev/docs/2.x/pro) |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | A supported subset of Word Office.js for browser and server editing. | [Document automation](https://www.docx-editor.dev/docs/2.x/editor-api) |
+| [`@docx-editor.dev/telemetry`](https://www.npmjs.com/package/@docx-editor.dev/telemetry) | Anonymous diagnostics, metrics, and error reporting for editors and collaboration servers. | [Telemetry](https://www.docx-editor.dev/docs/2.x/telemetry) |
 
-`@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, and `@docx-editor.dev/docx-to-pdf` use the EigenPal Pro License. See the license terms for [editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md), and [docx-to-pdf](packages/docx-to-pdf/LICENSE.md). Compare license and support options on the [pricing page](https://www.docx-editor.dev/pricing).
+`@docx-editor.dev/editor-api`, `@docx-editor.dev/pro`, `@docx-editor.dev/docx-to-pdf`, and `@docx-editor.dev/telemetry` use the EigenPal Pro License. See the license terms for [editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md), [docx-to-pdf](packages/docx-to-pdf/LICENSE.md), and [telemetry](packages/telemetry/LICENSE.md). Compare license and support options on the [pricing page](https://www.docx-editor.dev/pricing).
 
 ## React
 
@@ -161,7 +163,7 @@ bun run typecheck
 
 Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
 
-Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh)
+Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [DOCX to PDF](examples/docx-to-pdf) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review) | [Document refresh](examples/document-refresh) | [Telemetry](examples/telemetry-single-user) | [Collaboration telemetry](examples/telemetry-collaboration)
 
 [Documentation](https://www.docx-editor.dev/docs) | [React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props) | [Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)
 
@@ -195,7 +197,14 @@ bun run i18n:status      # check translation coverage
 
 ## License
 
-The repository uses [Apache 2.0](LICENSE), with the package exceptions listed in [Packages](#packages). Bundled fonts retain their own licenses.
+The repository uses [Apache 2.0](LICENSE), except for the Pro packages. These packages use the EigenPal Pro License:
+
+- [`@docx-editor.dev/pro`](packages/pro/LICENSE.md): tracked changes, comments, collaboration, and custom nodes.
+- [`@docx-editor.dev/editor-api`](packages/editor-api/LICENSE.md): document automation in a browser or on a server.
+- [`@docx-editor.dev/docx-to-pdf`](packages/docx-to-pdf/LICENSE.md): PDF export on Node.js.
+- [`@docx-editor.dev/telemetry`](packages/telemetry/LICENSE.md): anonymous diagnostics, metrics, and error reporting.
+
+Production use of a Pro package requires a commercial agreement. Compare options on the [pricing page](https://www.docx-editor.dev/pricing). Bundled fonts retain their own licenses.
 
 ## Commercial support
 

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Direct menu actions were skipped by Tab and dialog action enabled states could become stale.",
+  "after": "Direct menu actions are reachable by Tab and dialog actions follow live command availability.",
+  "reason": "Only adapter focus and command-state subscriptions change. Document writes and collaboration state stay unchanged.",
+  "tests": [
+    "packages/react/test/menu-composition.test.tsx",
+    "packages/vue/test/menu-composition.test.ts"
+  ],
+  "changeset": "menu-action-state-and-keyboard",
+  "migration": null
+}

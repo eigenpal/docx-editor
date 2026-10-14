@@ -151,7 +151,7 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
   const beforeLayout = packageFingerprint(alice.editor.surface!.session.currentPackage());
   bob.editor.setReviewPaneOptions({
     revisionsIn: 'balloons',
-    commentMarkers: 'icon',
+    commentMarkers: 'initials',
     overflow: 'scroll',
   });
   converge();
@@ -159,12 +159,12 @@ test('local markup stays private while tracked edits converge, undo, reconnect, 
     opening: 'auto',
     overflow: 'float',
     revisionsIn: 'pane',
-    commentMarkers: 'initials',
+    commentMarkers: 'icon',
   });
   expect(packageFingerprint(alice.editor.surface!.session.currentPackage())).toBe(beforeLayout);
   bob.editor.setReviewPaneOptions({
     revisionsIn: 'pane',
-    commentMarkers: 'initials',
+    commentMarkers: 'icon',
     overflow: 'float',
   });
 

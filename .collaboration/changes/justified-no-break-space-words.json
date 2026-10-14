@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "In a justified paragraph, a word that contained a no-break space could not borrow inter-word space, so it moved to the next line.",
+  "after": "A no-break space is part of its word. The word borrows inter-word space like any other word, within the same space floor.",
+  "reason": "Layout reads the same shared tree on every replica. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/paragraph-space-shrink.test.ts"
+  ],
+  "changeset": "justified-no-break-space-words",
+  "migration": null
+}

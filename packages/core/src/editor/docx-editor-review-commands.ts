@@ -35,7 +35,8 @@ import {
   type OoxmlPart,
 } from '../store/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
-import { PRO_REVIEW_REASON } from './opening-editing-mode.ts';
+import type { EditorDiagnostics } from './editor-diagnostics.ts';
+import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
 import {
   findReviewPlacement,
   isReplacementPairKey,
@@ -64,6 +65,11 @@ interface ReviewCommandDependencies {
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
   reveal(event: ReviewItemRevealEvent): void;
   setDisplayMode(mode: ReviewDisplayMode): void;
+  /** Reports a single accept or reject, which does not go through `exec`. */
+  report?: {
+    readonly diagnostics: Pick<EditorDiagnostics, 'reviewItem'>;
+    readonly tracked: () => boolean;
+  };
 }
 
 /**
@@ -414,7 +420,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       };
     return { ok: true };
   };
-  const resolveReviewItem = (key: string, action: 'accept' | 'reject'): ExecResult => {
+  const resolveReviewItemNow = (key: string, action: 'accept' | 'reject'): ExecResult => {
     const gate = ready();
     if (!gate.ok) return gate;
     if (deps.viewing()) {
@@ -439,7 +445,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return {
         ok: false,
         code: 'unsupported',
-        reason: 'this revision kind has no structural accept/reject yet',
+        reason: READ_ONLY_REVISION_REASON,
       };
     let applied: { committed: boolean; reason?: unknown } | undefined;
     deps.surface()!.commitReviewOps(() => {
@@ -538,6 +544,29 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     deps.activate(null);
     return { ok: true, changed: true, revisions: { ...result, remaining: all().length } };
   };
+  const revisionOf = (key: string) => {
+    const item = findReviewPlacement(deps.placements, key)?.item;
+    return item?.kind === 'revision' ? item : undefined;
+  };
+  const resolveReviewItem = deps.report
+    ? deps.report.diagnostics.reviewItem(
+        resolveReviewItemNow,
+        revisionOf,
+        (item, action) => {
+          const session = deps.surface()?.session;
+          const part = session && partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
+          if (!part) return {};
+          try {
+            const plan = planRevisionBatch(part, action, [reviewItemKey(item)]);
+            const detail = plan.result.skipped[0]?.detail;
+            return { partName: part.name, ...(detail ? { detail } : {}) };
+          } catch {
+            return { partName: part.name };
+          }
+        },
+        deps.report.tracked
+      )
+    : resolveReviewItemNow;
   return { can, exec, resolveReviewItem };
 }
 

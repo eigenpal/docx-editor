@@ -491,6 +491,65 @@ export function reviewItemsAt(
 }
 
 /**
+ * Every item a SELECTION is in, innermost first: {@link reviewItemsAt} at the head, keeping only
+ * the items the selection shares characters with.
+ *
+ * The head alone is the caret rule, and a caret counts both ends of a range. A range selection
+ * is not a caret: its head sits on the selection's own boundary. Selecting a word that ends
+ * where an insertion starts put the head at the insertion's first offset, and the insertion
+ * lit up as active although none of its characters were selected. A collapsed selection keeps
+ * the caret rule unchanged.
+ */
+export function reviewItemsAtSelection(
+  items: readonly ReviewItem[],
+  anchor: ReviewPosition,
+  head: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): ReviewItem[] {
+  const covering = reviewItemsAt(items, head, order);
+  const direction = comparePositions(anchor, head, order);
+  if (direction === null || direction === 0) return covering;
+  const [from, to] = direction < 0 ? [anchor, head] : [head, anchor];
+  return covering.filter((item) =>
+    reviewItemRanges(item).some((range) => rangeSharesSelection(range, from, to, order))
+  );
+}
+
+/** Document order of two positions, or null when either paragraph is outside `order`. */
+function comparePositions(
+  a: ReviewPosition,
+  b: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): number | null {
+  const first = order.get(a.paragraphId);
+  const second = order.get(b.paragraphId);
+  if (first === undefined || second === undefined) return null;
+  return first !== second ? first - second : a.offset - b.offset;
+}
+
+/**
+ * Whether a range and the selection `[from, to)` share at least one character.
+ *
+ * A point anchor counts when it sits inside the selection or at its start. The point decorates
+ * the position after it, such as a tracked paragraph mark at the paragraph end, so a selection
+ * that stops at that offset does not include it.
+ */
+function rangeSharesSelection(
+  range: ReviewRange,
+  from: ReviewPosition,
+  to: ReviewPosition,
+  order: ReadonlyMap<string, number>
+): boolean {
+  const startVsTo = comparePositions(range.start, to, order);
+  const endVsFrom = comparePositions(range.end, from, order);
+  if (startVsTo === null || endVsFrom === null) return false;
+  if (comparePositions(range.start, range.end, order) === 0) {
+    return startVsTo < 0 && endVsFrom >= 0;
+  }
+  return startVsTo < 0 && endVsFrom > 0;
+}
+
+/**
  * The item the caret is in, or null.
  *
  * A resolved comment never activates: a settled thread must not reopen itself as the reviewer

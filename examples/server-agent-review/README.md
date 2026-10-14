@@ -43,7 +43,7 @@ flowchart LR
 - `server/jobs.ts` owns job lifetime independently of requests. `server/index.ts` exposes room creation, job submission, cancellation, progress, and export.
 - The React app uses `useHocuspocusCollaboration`, `DocxEditorCollaborationRoot`, and `useReview` for the shared editor and compact decision cards.
 
-Job state and room files live in ignored `.data/`. Override the directory with `REVIEW_DATA_DIR`.
+Job state and room files live in ignored `.data/`. Override the directory with `REVIEW_DATA_DIR`. The server validates saved rooms before loading them. It refuses incompatible or damaged state and keeps the saved file for recovery. Follow [Collaboration versions and upgrades](https://www.docx-editor.dev/docs/2.x/pro/collaboration-versions) before changing the room format.
 
 ## Copyable server integration
 
@@ -99,7 +99,7 @@ try {
 }
 ```
 
-For insertions, use `range.insertText(text, 'Before')` or `range.insertText(text, 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported, as are structural or formatting mutations while tracking. Other peers keep their own editing mode. The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
+For insertions, use `range.insertText(text, 'Before')` or `range.insertText(text, 'After')`. For deletions use `range.delete()`. These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing. The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is unsupported. The API also supports tracked formatting and selected structural edits. For the supported operations and boundaries, see [Tracked changes](https://www.docx-editor.dev/docs/2.x/editor-api/revisions#supported-tracked-edits). Other peers keep their own editing mode. The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
 
 ## Office.js developer patterns
 
@@ -123,20 +123,27 @@ const modules = [reviewModule()];
 
 function SharedDocument({ room }) {
   const collaboration = useHocuspocusCollaboration({ room, modules });
-  if (collaboration.error) return <p>{collaboration.error.code}</p>;
   return (
-    <DocxEditorCollaborationRoot collaboration={collaboration}>
-      <DocxEditor.Toolbar />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-        <DocxEditorReview />
-      </DocxEditor.Viewport>
-    </DocxEditorCollaborationRoot>
+    <div className="docx-editor">
+      {collaboration.error && (
+        <p role="alert">Collaboration stopped. Save a copy before reconnecting.</p>
+      )}
+      <DocxEditorCollaborationRoot
+        collaboration={collaboration}
+        fallback={<p>{collaboration.error ? 'Could not connect.' : 'Connecting…'}</p>}
+      >
+        <DocxEditor.Toolbar />
+        <DocxEditor.Viewport>
+          <DocxEditor.Content />
+          <DocxEditorReview />
+        </DocxEditor.Viewport>
+      </DocxEditorCollaborationRoot>
+    </div>
   );
 }
 ```
 
-Pass a stable `room` configuration with the same room ID and server URL, `bootstrap: { kind: 'join' }`, and a unique actor ID for each browser attachment. Add font configuration as in the runnable app.
+Pass a stable `room` configuration with the same room ID and server URL, `bootstrap: { kind: 'join' }`, and a unique actor ID for each browser attachment. Add font configuration as in the runnable app. Keep the editor mounted after a connection failure so users can save local work.
 
 ## Behavior and limits
 

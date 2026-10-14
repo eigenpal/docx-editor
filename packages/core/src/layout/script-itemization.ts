@@ -65,6 +65,17 @@ export class UnsupportedScriptError extends Error {
  * strong item on conflicts, and the following strong item only for leading Common text.
  */
 const classify = (codePoint: number): Classified => {
+  // MS-OI29500 2.1.88: curly quotes use hAnsi without an East Asian hint.
+  // They keep the Common script, but never inherit a neighbouring Han font slot.
+  // eastAsiaRunsOfSegments applies an explicit hint before this default classification.
+  if (
+    codePoint === 0x2018 ||
+    codePoint === 0x2019 ||
+    codePoint === 0x201c ||
+    codePoint === 0x201d
+  ) {
+    return { slot: 'hAnsi', script: 'Zyyy' };
+  }
   // Full-width forms draw in the East Asian face, letters and digits included. The letters
   // keep their Latin script for shaping; the rest are punctuation, symbols and digits.
   if (inRange(codePoint, 0xff21, 0xff3a) || inRange(codePoint, 0xff41, 0xff5a)) {

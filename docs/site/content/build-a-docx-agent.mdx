@@ -31,6 +31,8 @@ Use `DocxEditor.createCollaborative(room.document, room.session)` when an agent 
 
 Commit each completed operation to show progress in the document. Send job status through your application's transport. Keep room authorization, persistence, and job lifetime in your backend. Exported DOCX files are snapshots of the shared document; do not use them to replace an active room.
 
+A completed `context.sync()` confirms the local commit. Before you close a worker connection, wait for the provider to acknowledge outgoing updates. Server persistence requires a separate storage policy.
+
 See [Collaboration](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines) for setup and worker lifecycle.
 
 ## 3. Receive complete DOCX files
@@ -43,11 +45,15 @@ Your application must receive or fetch each result; the editor does not watch a 
 
 See [Document refresh API](/docs/2.x/guides/document-refresh#api-overview) for methods, options, and failure handling. Try its [interactive effects preview](/docs/2.x/guides/document-refresh#try-the-effects) to see scroll preservation, navigation, and fading highlights.
 
+For a complete integration, see [Edit DOCX files with Vespper MCP](https://www.docx-editor.dev/blog/vespper-docx-agent). The example uses document refresh to show agent edits and tracked changes.
+
 ## Show edits as review suggestions
 
 For API-driven text review, set `document.changeTrackingMode = 'TrackMineOnly'` and use ordinary range edits. Commit each completed suggestion separately so readers can review it while the agent continues.
 
-Tracked edits require an author and support text within one paragraph, including table cells. Tracked deletions can also remove whole paragraphs with `range.delete()` or `paragraph.delete()`. Browser tracking also requires the Pro review module and an editable editor. Edits that touch pending revisions refuse, and so do structural edits outside the [supported tracked edits](/docs/2.x/editor-api/revisions#supported-tracked-edits). Tracking records the edits you submit; it does not turn a paragraph rewrite into smaller suggestions.
+Tracked edits require an author. Browser tracking also requires the Pro review module and an editable editor. Collaborative tracked replacements stay within one paragraph, including table cells. Tracked deletions can span adjacent paragraphs or remove whole paragraphs.
+
+The API also supports tracked formatting and selected structural edits. Some edits can continue the same author’s pending suggestions; edits that touch another author’s pending suggestions refuse. Check [Supported tracked edits](/docs/2.x/editor-api/revisions#supported-tracked-edits) before choosing operations. Tracking records the edits you submit; it does not divide a paragraph rewrite into smaller suggestions.
 
 If a document changes after the agent reads it, handle `StaleDocument` by reading again and reconsidering the proposal. Do not replay the old edit automatically. Serialize agent operations. Use tool-call IDs to prevent duplicate execution, including calls that are still running.
 

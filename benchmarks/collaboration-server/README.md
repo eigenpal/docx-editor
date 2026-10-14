@@ -160,7 +160,9 @@ For each document, it runs `migrateCollaborationRoom` under Node.js in a process
 
 - `Time`: how long the migration took.
 - `Peak RSS`: the most memory the whole process held, including Node.js and the loaded modules. V8 grows its heap past what it needs when no limit is set, so this value is an upper bound.
-- `Minimum heap`: the smallest `--max-old-space-size` with which the migration completes, found by bisection to within 8%. Size the worker by this value, with a margin.
+- `Minimum heap`: the smallest `--max-old-space-size` with which the migration completes, found by bisection to within 8%. This limit covers the V8 heap, not total process memory. Allow additional memory for buffers, native allocations, and the runtime.
+
+Set worker concurrency from measured process memory and available server memory. Test copies of production rooms before setting a migration window.
 
 The synthetic documents have paragraphs of about 250 characters with one bold run. `--fixtures` adds three repository fixtures. The run writes `migration/results/memory.json`.
 
@@ -183,6 +185,8 @@ The network delivers updates in one of three ways:
 The `faults` shape also damages deliveries. An update can arrive twice, never arrive, or arrive cut short. A replica then catches up through a state-vector sync, which a provider runs on reconnect: it sends its state vector, and a peer answers with every update it is missing. Each fault is part of the recorded action, so a failing seed shrinks and replays like any other. At the end, every pair of replicas syncs this way before the checks run.
 
 ### Run scenarios
+
+Run these scenario commands from `benchmarks/collaboration-server`. The tools use repository source and need the repository dependencies.
 
 Run 12 seeds of the `concurrent` scenario with server delivery:
 

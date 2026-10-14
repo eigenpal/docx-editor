@@ -98,6 +98,7 @@ import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
 import { DEMO_CITATION, type CitationFormState } from './demoCitation';
+import { storedReviewPane } from '../../shared/review-settings';
 
 void DocxEditorToolbar;
 void DocxEditorMenu;
@@ -108,7 +109,9 @@ const showAdapterSwitcher =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
 
 const proModules = [
-  reviewModule(),
+  // The review settings panel's saved choice, or the example's start: initials markers for
+  // comments and tracked change balloons, as in the React example.
+  reviewModule({ pane: storedReviewPane() }),
   customNodesModule({
     nodes: [DEMO_CITATION],
     onDiagnostic: (diagnostic) => {

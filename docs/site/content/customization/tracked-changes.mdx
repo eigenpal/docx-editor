@@ -13,7 +13,7 @@ The review module shows comments and tracked changes in a review pane beside the
 | Setting | Values | Default | What it controls |
 | --- | --- | --- | --- |
 | `revisionsIn` | `pane`, `balloons` | `pane` | Where tracked changes open. |
-| `commentMarkers` | `initials`, `icon` | `initials` | How a collapsed comment marker looks. |
+| `commentMarkers` | `initials`, `icon` | `icon` | How a collapsed comment marker looks. |
 | `opening` | `auto`, `manual` | `auto` | When the review pane opens by itself. |
 | `overflow` | `float`, `shrinkPage`, `scroll` | `float` | What the open pane does when it does not fit the page. |
 
@@ -23,7 +23,7 @@ The settings belong to one editor instance. The editor never saves them into the
 
 ### Understand the default display
 
-With no settings, the review pane lists comments and tracked changes as cards beside the text that they belong to. The pane opens when a document with review items loads, and when you make a tracked change while it is closed. A collapsed comment marker shows the initials of the thread author.
+With no settings, the review pane lists comments and tracked changes as cards beside the text that they belong to. The pane opens when a document with review items loads, and when you make a tracked change while it is closed. A collapsed comment marker shows the comment icon. Set `commentMarkers: 'initials'` to show the thread author’s initials. Clicking text with an open comment opens the review pane. Selecting text leaves the pane closed.
 
 The following example mounts the default display. `DocxEditorReview` renders the pane, its cards, its markers, and its tracked change balloons, so every example on this page includes it.
 
@@ -130,6 +130,10 @@ A collapsed comment marker marks a comment thread beside the page, for example w
 
 - `'initials'`: a badge with the thread author's initials in the author's color. A small count shows the number of replies, and a check mark replaces the initials when the thread is resolved. Each badge is a miniature of its thread, so the user can see who commented without opening the pane.
 - `'icon'`: the comment icon. Use it when initials do not identify your users, such as for anonymous reviewers.
+
+The DOCX editor shows at most three characters from a comment's saved initials. If saved initials are absent, it uses the first letters of the author's first two name parts. An empty author name shows `?`.
+
+The built-in initials badge has a maximum width of 36 pixels. Long initials stay inside the badge, while the reply count stays outside it. Dark mode preserves the badge border when you move the pointer over the marker.
 
 ```ts
 const modules = [reviewModule({ pane: { commentMarkers: 'icon' } })];
@@ -841,6 +845,7 @@ export function ContractBalloons({
     const host = container.current;
     if (!host || !editor) return;
     const click = (event: MouseEvent) => {
+      if (event.defaultPrevented || !host.ownerDocument.getSelection()?.isCollapsed) return;
       if (event.target instanceof Node && panel.current?.contains(event.target)) return;
       // Read the item under the pointer. Do not activate it: that moves the caret.
       const hit = editor
@@ -982,6 +987,7 @@ watchEffect((cleanup) => {
   const view = editor.value;
   if (!host || !view) return;
   const click = (event: MouseEvent) => {
+    if (event.defaultPrevented || !host.ownerDocument.getSelection()?.isCollapsed) return;
     if (event.target instanceof Node && panel.value?.contains(event.target)) return;
     // Read the item under the pointer. Do not activate it: that moves the caret.
     const hit = view
@@ -1062,7 +1068,9 @@ function decide(kind: 'accept' | 'reject') {
 
 ### Place the tracked change balloon
 
-Create `watch-balloon-anchor.ts` beside the tracked change balloon component. The helper reads the bands of the item from the editor with `getReviewItemRects(key)`, so it reads no painted page markup. It places the tracked change balloon under the first band, relative to your container. It reads the bands again after a scroll, a resize, each document change, a zoom change, and when the review pane opens or closes. The pages slide while the pane opens or closes, so it also reads the bands when that transition ends. It hides the tracked change balloon when the item has no painted band.
+Create `watch-balloon-anchor.ts` beside your tracked change balloon component. It reads `getReviewItemRects(key)` and positions the component below the first text band.
+
+The helper updates after scrolling, resizing, document changes, zoom changes, and review pane transitions. It hides the component when the item has no visible band.
 
 ```ts
 import type { Editor } from '@docx-editor.dev/core';

@@ -23,6 +23,7 @@ import type { SemanticTableRow } from './semantic-table.ts';
 import type { TableFlowDeps } from './semantic-table-layout.ts';
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { authoredRowMinimumFloorPt } from './table-row-minimum-insets.ts';
+import { cellSpacingGapPt } from './table-cell-spacing.ts';
 
 /**
  * Height the first fragment of `row` needs where it starts: the padded `atLeast` minimum, or
@@ -36,14 +37,18 @@ export function rowMinimumOpeningPt(
   freshRoomPt: number
 ): number | undefined {
   if (row.height.rule !== 'atLeast' || !(row.height.valuePt > 0)) return undefined;
-  const cells = row.cells.map((cell) => ({
-    cell,
-    insets: deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0),
-  }));
+  // The cell-spacing gap above the row's cells counts toward its height, as row layout places it.
+  const gapPt = cellSpacingGapPt(cellSpacingPt);
+  const cells = row.cells.map((cell) => {
+    const own =
+      deps.cellContentInsets?.get(cell.id) ?? cellContentInsets(cell, cellSpacingPt === 0);
+    return { cell, insets: { ...own, top: own.top + gapPt } };
+  });
   const minimum = authoredRowMinimumFloorPt(
     row.height.valuePt,
     cells,
-    deps.cellMinimumContentInsets
+    deps.cellMinimumContentInsets,
+    gapPt
   );
   return minimum <= freshRoomPt + 0.001 ? minimum : undefined;
 }

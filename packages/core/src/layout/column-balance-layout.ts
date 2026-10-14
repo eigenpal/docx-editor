@@ -192,10 +192,20 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
       return false;
     }
   }
+  // The natural bottoms skip out-of-flow fragments, so the starting `high` is a guess until
+  // one trial fits. A bound no trial proved must not reach the final pass: when every trial
+  // refused, the section keeps its unbalanced layout.
+  let proven = false;
   for (let step = 0; step < MAX_BALANCE_STEPS && high - low > BALANCE_TOLERANCE_PT; step += 1) {
     const mid = (low + high) / 2;
-    if (yield* fits(mid)) high = mid;
-    else low = mid;
+    if (yield* fits(mid)) {
+      high = mid;
+      proven = true;
+    } else low = mid;
+  }
+  if (!proven && !(yield* fits(high))) {
+    if (session) session.balanceLimit = null;
+    return yield* layoutPass(bodies, revision, options);
   }
 
   const final = yield* layoutPass(bodies, revision, { ...options, columnRegionBottom: high });

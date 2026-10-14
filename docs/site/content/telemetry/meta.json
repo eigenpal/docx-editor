@@ -1,0 +1,23 @@
+{
+  "title": "Telemetry",
+  "pages": [
+    "index",
+    "privacy",
+    "privacy-review",
+    "editors",
+    "sentry",
+    "opentelemetry",
+    "log-services",
+    "http-reference",
+    "log-recipes",
+    "callbacks",
+    "performance",
+    "sessions",
+    "identifiers",
+    "agents",
+    "servers",
+    "rooms",
+    "dashboards",
+    "metrics"
+  ]
+}

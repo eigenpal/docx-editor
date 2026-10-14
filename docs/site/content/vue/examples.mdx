@@ -5,28 +5,22 @@ category: 'Vue'
 order: 39
 ---
 
-Import `@docx-editor.dev/vue/styles.css` once in your application entry before you use these examples.
+Import `@docx-editor.dev/vue/styles.css` once in your application entry. Give each editor a container with a height.
 
 ## Load DOCX bytes
 
 ```vue
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { DocxEditor } from '@docx-editor.dev/vue';
+import { DocxEditor, useDocxSource } from '@docx-editor.dev/vue';
 
-const doc = ref<Uint8Array>();
-
-onMounted(() => {
-  void fetch('/template.docx')
-    .then((response) => response.arrayBuffer())
-    .then((buffer) => {
-      doc.value = new Uint8Array(buffer);
-    });
-});
+const { document, error } = useDocxSource('/template.docx');
 </script>
 
 <template>
-  <DocxEditor :document="doc" title="Proposal.docx" />
+  <p v-if="error" role="alert">{{ error.message }}</p>
+  <div v-else style="height: 100vh">
+    <DocxEditor :document="document" title="Proposal.docx" />
+  </div>
 </template>
 ```
 
@@ -37,6 +31,7 @@ onMounted(() => {
 import { ref } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 
+defineProps<{ bytes: Uint8Array }>();
 const editorRef = ref<DocxEditorRef | null>(null);
 
 async function save() {
@@ -82,20 +77,24 @@ Then place the button and editor parts under the root:
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
 import BoldButton from './BoldButton.vue';
+
+defineProps<{ bytes: Uint8Array }>();
 </script>
 
 <template>
-  <DocxEditor.Root :document="bytes">
-    <DocxEditor.Toolbar>
-      <BoldButton />
-    </DocxEditor.Toolbar>
-    <DocxEditor.Viewport>
-      <DocxEditor.Navigation />
-      <DocxEditor.Content />
-      <DocxEditor.HyperLink />
-      <DocxEditor.ContextMenu />
-    </DocxEditor.Viewport>
-  </DocxEditor.Root>
+  <div class="docx-editor" style="height: 100vh; display: flex; flex-direction: column">
+    <DocxEditor.Root :document="bytes">
+      <DocxEditor.Toolbar>
+        <BoldButton />
+      </DocxEditor.Toolbar>
+      <DocxEditor.Viewport style="flex: 1; min-height: 0">
+        <DocxEditor.Navigation />
+        <DocxEditor.Content />
+        <DocxEditor.HyperLink />
+        <DocxEditor.ContextMenu />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  </div>
 </template>
 ```
 
@@ -138,6 +137,14 @@ Install `@docx-editor.dev/editor-api` before you use this example. The runtime u
 
 ## Fetch bytes and fonts together
 
+Install `@docx-editor.dev/fonts` to use the packaged font resolver:
+
+```bash
+npm install @docx-editor.dev/fonts
+```
+
+Load document bytes with fonts for measurement:
+
 ```vue
 <script setup lang="ts">
 import {
@@ -154,11 +161,13 @@ const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
 </script>
 
 <template>
-  <DocxEditorRoot v-if="document" :document="document" :fonts="fonts">
-    <DocxEditorViewport>
-      <DocxEditorContent />
-    </DocxEditorViewport>
-  </DocxEditorRoot>
+  <div v-if="document" style="height: 100vh">
+    <DocxEditorRoot :document="document" :fonts="fonts">
+      <DocxEditorViewport style="height: 100%">
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  </div>
   <p v-else-if="error">{{ error.message }}</p>
   <p v-else-if="isLoading" aria-live="polite">Loading document</p>
 </template>

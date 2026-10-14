@@ -1,0 +1,64 @@
+---
+title: 'Measure performance'
+description: 'Measure input delay and engine layout and paint time with one summary per minute.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+The `performance` area measures input delay and engine layout and paint time.
+
+The editor collects timings and sends one `performance` event for each minute of use. It also sends one when the page is hidden and when the editor is destroyed. It never sends one event for each key press.
+
+Each event has up to three timing summaries:
+
+- `interaction`: time from a key or pointer press on a page to the next frame on screen. This includes time spent waiting for other work. It excludes modifier keys pressed alone and presses while the page is hidden.
+- `layout`: main-thread time for layout passes caused by edits or view changes, such as zoom. It includes background work and work from passes replaced by later edits. It excludes layouts caused by document, font, or image loading. The `document.open` event reports the opening layout.
+- `paint`: time for each engine paint of the pages.
+
+Each summary includes `count`, `p50Ms`, `p95Ms`, `maxMs`, and timing counts in `bands`. The bands end at 16, 33, 50, 100, 200, 500, and 1000 ms, with a final band above 1000 ms. Events also include `windowMs` and `pagesBucket`. They contain no keys, positions, or text.
+
+`windowMs` is the time from the first timing in the window to the summary, one minute or less. It includes idle time, so it is not active editing time. To measure activity, use `interaction.count`.
+
+The editor reports `performance.slow-interaction` when it times at least 20 presses and more than 5% take over 200 ms. The event includes a hint. The console exporter prints a warning. The Sentry exporter records a warning breadcrumb.
+
+The following example sends performance events from about one editor in ten. Sampling selects editors once, so each editor's summaries stay together. With a nonzero `sampleRate`, all editors measure performance and contribute metrics. Sampling limits only events, such as span events and breadcrumbs. Set `sampleRate` to `0` to stop performance measurement, including metrics.
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({
+  exporters: [otelExporter()],
+  include: { performance: { sampleRate: 0.1 }, documentOpen: true, trackedChanges: true },
+});
+```
+
+The performance metrics count every summary:
+
+- `docx_editor_editor_interaction_duration_seconds`
+- `docx_editor_editor_layout_duration_seconds`
+- `docx_editor_editor_paint_duration_seconds`
+
+Use their `pages` label to compare document sizes. Values are `0`, `1`, `2-9`, `10-99`, `100-999`, `1000+`, or `unknown` before the first paint. Bucket counts are exact; sums are estimates from the bands. For more information, see [Metrics](/docs/2.x/telemetry/metrics).
+
+Use these Prometheus queries to monitor input delay. The first estimates the 95th percentile for key presses and clicks in each page count bucket. The second gives the share of presses that take over 200 ms:
+
+```text
+histogram_quantile(0.95, sum by (le, pages) (rate(docx_editor_editor_interaction_duration_seconds_bucket[10m])))
+
+1 - sum(rate(docx_editor_editor_interaction_duration_seconds_bucket{le="0.2"}[10m]))
+  / sum(rate(docx_editor_editor_interaction_duration_seconds_count[10m]))
+```
+
+If the share of slow presses grows, compare the layout and paint histograms for the same page bucket. Slow layout follows document size. Slow paint follows the pages on screen.
+
+Use an exporter that records metrics, such as `otelExporter()`. Browser metrics reach Prometheus through your OpenTelemetry SDK and an OpenTelemetry Protocol (OTLP) collector. `prometheusRegistry()` serves metrics from a server process.
+
+Sentry records performance events as breadcrumbs beside later errors. With `callbackExporter`, an `onMetric` function receives one histogram sample per timing, estimated at the middle of its band.
+
+The editor measures performance while at least one consumer requests it:
+
+- `telemetry.module`, with the `performance` area enabled and consent given.
+- A module whose `wantsDiagnostic` returns `true` for `'performance'`.
+- An `editor.on('diagnostic')` handler.

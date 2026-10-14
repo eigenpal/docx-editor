@@ -75,12 +75,15 @@ export function authoredRowMinimumFloorPt(
     readonly cell: SemanticTableCell;
     readonly insets: { readonly top: number; readonly bottom: number };
   }[],
-  overrides?: ReadonlyMap<string, { readonly top: number; readonly bottom: number }>
+  overrides?: ReadonlyMap<string, { readonly top: number; readonly bottom: number }>,
+  /** The cell-spacing gap above the row's cells; `entry.insets` already include it. */
+  rowGapPt = 0
 ): number {
   let top = 0;
   let bottom = 0;
   for (const entry of flowed) {
-    const insets = overrides?.get(entry.cell.id) ?? entry.cell.minimumContentInsets ?? entry.insets;
+    const authored = overrides?.get(entry.cell.id) ?? entry.cell.minimumContentInsets;
+    const insets = authored ? { ...authored, top: authored.top + rowGapPt } : entry.insets;
     top = Math.max(top, insets.top);
     bottom = Math.max(bottom, insets.bottom);
   }

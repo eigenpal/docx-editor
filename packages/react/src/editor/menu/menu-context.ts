@@ -109,3 +109,6 @@ export function useMenuLabel(): (key: string) => string {
   const { t: catalogT } = useTranslation();
   return (key: string) => t?.(key) ?? catalogT(key as TranslationKey);
 }
+
+/** Direct menubar rows participate in Tab navigation; popup rows use arrow keys. */
+export const MenuRowTabIndexContext = createContext(-1);

@@ -1,0 +1,72 @@
+---
+title: 'Privacy'
+description: 'Review telemetry fields, privacy checks, and settings for your app and exporters.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Use this reference to review telemetry fields and the checks that exclude document content. For app and SDK settings, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+
+## Summary
+
+- The package sends data only through exporters that you configure.
+- Diagnostics and metrics contain no document content and no personal data. Events exclude document text, file names, part names, relationship targets, author names, and comment text. They also exclude font names, file-defined element names, and exception messages.
+- Diagnostic values use closed lists, booleans, size and count buckets, or timings in milliseconds.
+- The engine checks events when it creates them. The telemetry package checks them again before export.
+- You control added values, such as room or user identifiers. You also control other data that your Sentry and OpenTelemetry SDKs collect.
+
+## Privacy checks
+
+The engine builds diagnostics from closed lists. It converts part names to roles such as `header` and exceptions to classes such as `TypeError`. It groups document counts into buckets such as `10-99`. It maps internal refusal messages to public codes. The messages stay in the engine because they can describe document content.
+
+The telemetry package checks every event again before an exporter receives it. It removes string fields outside their allowed lists. It drops events with unknown kinds or codes and counts them in `docx_editor_telemetry_dropped_events_total`. This second check protects you when the engine and the telemetry package come from different versions.
+
+The test suites verify both checks with files that contain planted text, part names, and author names. Each test serializes every event and error message and fails if a planted string appears.
+
+## What each event contains
+
+Every event has `kind`, `schemaVersion`, `editorSessionId`, and `time`. The telemetry package adds `engineVersion`. Each editor instance generates a random `editorSessionId` and does not persist it. This identifier does not encode a person or document. If you send it together with your own user identifier, it becomes linkable to that user.
+
+| Event | Fields | Values |
+| --- | --- | --- |
+| `document.open`, opened | `sizeBucket`, `pagesBucket`, `durationMs`, and `shape` if you allow it | Size in 15 power-of-two buckets, such as `1-2MiB`. Pages in 6 buckets: `0`, `1`, `2-9`, `10-99`, `100-999`, `1000+`. Duration in milliseconds. |
+| `document.open`, rejected | `code`, `sizeBucket`, `cause`, `part`, `errorName`, `stage` | A public code, the engine's reason token, the role of the failed part, and for an exception its class and where it was caught. |
+| `edit.rejected` | `code`, `origin`, `tracked`, `command`, `cause`, `errorName`, `stage` | A public code; `command`, `input`, or `automation`; a boolean; a built-in command name such as `insertTable`. A custom command name is never sent. |
+| `review.skipped` | `code`, `count`, `operation`, `changeKind`, `formattingKind`, `part`, `cause` | `accept`, `reject`, or `reassign`; the kind of tracked change; a known property-change element or `other`. The author and the change are never sent. |
+| `font.failed` | `code` | A code. The font family name is never sent. |
+| `history`, `custom-node` | `code` | A code. A custom node's name and data are never sent. |
+| `collab.status` | `status`, `previous`, `code`, `recovering`, `connectMs` | Session states, a failure code, a boolean, milliseconds. The room name is never sent. |
+| `collab.participants` | `count` | The number of people in the room. Names are never sent. |
+| `performance` | `interaction`, `layout`, `paint`, `windowMs`, `pagesBucket`, `code` | Timing summaries in milliseconds and band counts. No key, character, or position is recorded. |
+| `document.save` | `outcome`, `sizeBucket`, `durationMs`, `code`, `cause`, `errorName`, `stage` | `saved` or `rejected`, a size bucket, milliseconds, and for a failure a code and the class of the exception. The saved bytes are never sent. |
+| `session` | `phase`, `durationMs`, `activeMs`, `inputEdits`, `commandEdits`, `automationEdits` | `start`, `active`, or `end`; milliseconds; edit counts by origin. No key, position, command argument, or text is recorded. |
+
+Every closed list is part of the public API. To read them in code, call `diagnosticCodes()` and `diagnosticCauses()` from `@docx-editor.dev/core`. For what each field means, see [Diagnostics](/docs/2.x/guides/diagnostics).
+
+### Sessions
+
+Session events contain no content, but they show when an editor is used and for how long. If you send your own user identifier with them, they show when that person works. If your privacy review does not allow this, leave user identifiers out of `attributes`, sample the `sessions` area, or turn it off. Session metrics carry no identifiers beyond the labels that you list in `metricLabels`.
+
+### Document shape
+
+By default, an opened document reports only `sizeBucket` and `pagesBucket`. With `documentShape: 'detailed'`, it also reports buckets for XML parts, paragraphs, review items, and embedded fonts. There is no option that sends exact counts.
+
+Rare combinations of buckets can distinguish documents within an organization. Detailed shape reporting is off by default. Enable it only when you need to compare open times by document structure.
+
+### Metrics
+
+Metrics carry the same codes and buckets as labels. A metric label accepts only short identifier values, matching `[A-Za-z0-9_.:+-]{0,64}`; any other value becomes `other`. Each label you add with `metricLabels` keeps at most 50 distinct values, and later values become `other`. For every metric and label, see [Metrics](/docs/2.x/telemetry/metrics).
+
+## Collaboration servers
+
+- Metrics never carry a room name.
+- `rooms.list()` uses process-local room labels, such as `room-3`. For stable labels that conceal room names, pass `roomLabel: hmacRoomLabel(secret)`. Restrict endpoints that show real names to administrators.
+- `perRoomSeries: true` accepts only the default label or `hmacRoomLabel`, so a room name cannot become a metric label.
+- Refusal reasons from your hooks become a known reason or `other`. The error message is never recorded.
+
+For more information, see [Rooms, people, and memory](/docs/2.x/telemetry/rooms).
+
+## Next step
+
+Use [Privacy review checklist](/docs/2.x/telemetry/privacy-review) to check identifiers, consent, SDK settings, and exported data.

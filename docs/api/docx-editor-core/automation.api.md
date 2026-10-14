@@ -1353,13 +1353,100 @@ export type AutomationValue = {
 };
 
 // @public
+export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
+
+// @public
+export function byteSizeBucket(bytes: number): ByteSizeBucket;
+
+// @public
+export type CollaborationDiagnosticCode = `collab.${CollaborationFailureCode}`;
+
+// @public
+export type CountBucket = '0' | '1' | '2-9' | '10-99' | '100-999' | '1000+';
+
+// @public
+export function countBucket(count: number): CountBucket;
+
+// @public
 export function createAutomationPaginationProvider(options: AutomationPaginationOptions): AutomationPaginationProvider;
+
+// @public
+export function createDiagnosticEmitter<E>(listeners: () => Iterable<(event: E) => unknown>, now?: () => number): DiagnosticEmitter<E>;
 
 // @public
 export function createServerAutomationHost(bytes: Uint8Array, options?: ServerAutomationHostOptions): ServerAutomationHostResult;
 
 // @public
+export type CustomNodeDiagnosticCode = 'custom-node.payload-invalid' | 'custom-node.payload-missing';
+
+// @public
+export function diagnosticCause(reason: string | undefined): string | undefined;
+
+// @public
+export function diagnosticCauses(): readonly string[];
+
+// @public
+export type DiagnosticCode = DocumentOpenDiagnosticCode | DocumentSaveDiagnosticCode | EditDiagnosticCode | ReviewDiagnosticCode | FontDiagnosticCode | HistoryDiagnosticCode | CustomNodeDiagnosticCode | PerformanceDiagnosticCode | CollaborationDiagnosticCode;
+
+// @public
+export function diagnosticCodes(): readonly DiagnosticCode[];
+
+// @public
+export interface DiagnosticEmitter<E> {
+    deliver(payload: DiagnosticPayload<E>): void;
+    readonly editorSessionId: string;
+}
+
+// @public
+export type DiagnosticErrorName = 'Error' | 'TypeError' | 'RangeError' | 'ReferenceError' | 'SyntaxError' | 'other';
+
+// @public
+export function diagnosticErrorName(error: unknown): DiagnosticErrorName;
+
+// @public
+export interface DiagnosticExplanation {
+    readonly docs: string;
+    readonly hint: string;
+}
+
+// @public
+export type DiagnosticPayload<T> = T extends unknown ? Omit<T, 'schemaVersion' | 'editorSessionId' | 'time'> : never;
+
+// @public
+export type DocumentOpenDiagnosticCode = 'open.unsupported-source' | 'open.zip-corrupt' | 'open.zip-invalid-entry-name' | 'open.zip-entry-limit' | 'open.zip-size-limit' | 'open.zip-ratio-limit' | 'open.xml-malformed' | 'open.xml-dtd-forbidden' | 'open.xml-part-size-limit' | 'open.xml-depth-limit' | 'open.xml-element-limit' | 'open.invalid-limits' | 'open.content-types-invalid' | 'open.missing-main-document' | 'open.relationships-invalid' | 'open.relationship-limit' | 'open.part-limit' | 'open.failed';
+
+// @public
+export type DocumentPartKind = 'package' | 'content-types' | 'relationships' | 'main-document' | 'glossary' | 'styles' | 'numbering' | 'settings' | 'web-settings' | 'font-table' | 'theme' | 'header' | 'footer' | 'footnotes' | 'endnotes' | 'comments' | 'people' | 'custom-xml' | 'document-properties' | 'media' | 'embedding' | 'other';
+
+// @public
+export function documentPartKind(detail: string | undefined): DocumentPartKind | undefined;
+
+// @public
+export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
+
+// @public
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
+
+// @public
+export function exceptionCause(): string;
+
+// @public
+export function explainDiagnostic(code: DiagnosticCode): DiagnosticExplanation;
+
+// @public
+export type FailureStage = 'open-mount' | 'open-layout' | 'command' | 'review-item' | 'automation' | 'save';
+
+// @public
+export type FontDiagnosticCode = 'font.shaper-unavailable' | 'font.load-failed' | 'font.missing' | 'font.integrity-mismatch' | 'font.malformed' | 'font.size-limit' | 'font.unsupported-face';
+
+// @public
+export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 'tblPrChange' | 'tblPrExChange' | 'tblGridChange' | 'trPrChange' | 'tcPrChange' | 'numberingChange' | 'other';
+
+// @public
 export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
+
+// @public
+export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
 
 // @public
 export function isAutomationCommand(operation: AutomationOperation): boolean;
@@ -1368,7 +1455,25 @@ export function isAutomationCommand(operation: AutomationOperation): boolean;
 export function isSolitaryAutomationCommand(operation: AutomationOperation): boolean;
 
 // @public
+export function openDiagnosticCode(reason: string, limit?: string): DocumentOpenDiagnosticCode;
+
+// @public
 export function paginationSnapshotOf(layout: SemanticLayout): AutomationPaginationSnapshot;
+
+// @public
+export type PerformanceDiagnosticCode = 'performance.slow-interaction';
+
+// @public
+export type ReviewChangeKind = 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+
+// @public
+export type ReviewDiagnosticCode = 'review.revision-unsupported' | 'review.incomplete-group' | 'review.retained-structure' | 'review.stale-revision';
+
+// @public
+export function reviewDiagnosticCode(reason: string): ReviewDiagnosticCode | null;
+
+// @public
+export type ReviewOperation = 'accept' | 'reject' | 'reassign';
 
 // @public
 export interface RevisionAuthorEntry extends RevisionBatchEntry {
@@ -1393,6 +1498,7 @@ export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revisio
 export interface RevisionBatchEntry {
     // (undocumented)
     readonly author: string;
+    readonly formattingKind?: string;
     // (undocumented)
     readonly key: string;
     // (undocumented)
@@ -1408,6 +1514,7 @@ export interface RevisionBatchResult {
     readonly resolved: readonly RevisionBatchEntry[];
     // (undocumented)
     readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
         readonly key: string;
         readonly reason: RevisionBatchSkipReason;
         readonly revision?: RevisionBatchEntry;
@@ -1415,7 +1522,13 @@ export interface RevisionBatchResult {
 }
 
 // @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
 export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
 
 // @public
 export const SERVER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
@@ -1440,5 +1553,8 @@ export type ServerAutomationHostResult = {
     readonly ok: false;
     readonly reason: ServerAutomationHostRejection;
 };
+
+// @public
+export function storeEditDiagnosticCode(reason: string): EditDiagnosticCode | null;
 
 ```

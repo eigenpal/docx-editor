@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A row resize drag could commit a height of 1pt. The row then lost its divider hit band and could not be dragged again.",
+  "after": "A row resize drag commits at least 8pt, so the row keeps a band for its own bottom divider.",
+  "reason": "The drag writes the same setTableRowHeight operation and w:trHeight value as before, only with a larger lower bound. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/surface-table-interaction.test.ts"],
+  "changeset": "row-resize-minimum-height",
+  "migration": null
+}

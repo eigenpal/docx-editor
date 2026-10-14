@@ -19,6 +19,7 @@ import {
   checkCommentMarkers,
   checkReadOnlyBalloon,
   checkBalloonFollowsLayout,
+  checkCommentClickOpensPane,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
   checkReplyCards,
@@ -40,7 +41,7 @@ async function ready(mounted: { container: HTMLElement }) {
 }
 
 describe('Vue review layout preferences', () => {
-  test('comment markers draw initials badges by default and icons on request', async () => {
+  test('comment markers draw icons by default and initials badges on request', async () => {
     const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });
     try {
       await ready(mounted);
@@ -282,6 +283,20 @@ describe('Vue review layout preferences', () => {
       await flush();
       await waitFor(() => mounted.container.querySelector('[data-paragraph-id]') !== null);
       await checkRevealReopensBalloon(
+        mounted.container,
+        mounted.editor() as DocxEditorInstance,
+        change
+      );
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('a click on commented text opens a closed pane', async () => {
+    const mounted = mountReview(BALLOON_SOURCE, {}, { author: 'Grace Hopper' });
+    try {
+      await ready(mounted);
+      await checkCommentClickOpensPane(
         mounted.container,
         mounted.editor() as DocxEditorInstance,
         change

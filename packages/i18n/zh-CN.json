@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "请选择文本以复制其格式",
     "nothingToPaint": "请选择要应用格式的文本",
     "noReviewAuthors": "此文档没有审阅作者",
-    "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。"
+    "suggestingNeedsAuthor": "建议模式需要作者。请在编辑器配置中设置作者。",
+    "pictureSelected": "已选中一张图片。请将光标放在文本中以插入图片。"
   },
   "equationPopup": {
     "apply": "应用",
@@ -981,5 +982,14 @@
     "insertionsBackground": "插入背景",
     "movedFromBackground": "移出背景",
     "movedToBackground": "移入背景"
+  },
+  "formattingMarks": {
+    "columnBreak": "分栏符",
+    "pageBreak": "分页符",
+    "sectionBreakContinuous": "分节符(连续)",
+    "sectionBreakEvenPage": "分节符(偶数页)",
+    "sectionBreakNextColumn": "分节符(新栏)",
+    "sectionBreakNextPage": "分节符(下一页)",
+    "sectionBreakOddPage": "分节符(奇数页)"
   }
 }

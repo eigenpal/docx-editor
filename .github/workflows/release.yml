@@ -87,8 +87,14 @@ jobs:
             runner: blacksmith-2vcpu-ubuntu-2404
           - label: typecheck
             command: bun run typecheck
-          - label: tests
-            command: bun run test
+          - label: tests (1/4)
+            command: bun run test --shard 1/4 --fail-fast
+          - label: tests (2/4)
+            command: bun run test --shard 2/4 --fail-fast
+          - label: tests (3/4)
+            command: bun run test --shard 3/4 --fail-fast
+          - label: tests (4/4)
+            command: bun run test --shard 4/4 --fail-fast
           - label: parity
             command: bun run check:parity
             runner: blacksmith-2vcpu-ubuntu-2404
@@ -112,7 +118,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.2'
+          bun-version: '1.4.3'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -144,7 +150,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.2'
+          bun-version: '1.4.3'
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -280,7 +286,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.4.2'
+          bun-version: '1.4.3'
 
       # Node 24 ships with npm 11.x; Trusted Publishing requires >=11.5.1.
       - name: Setup Node.js
@@ -393,9 +399,9 @@ jobs:
             --arg release "$release_url" \
             --arg packages "$packages_md" \
             '{
-              text: ":white_check_mark: docx-editor \($version) released",
+              text: ":large_green_circle: docx-editor \($version) released",
               blocks: [
-                { type: "section", text: { type: "mrkdwn", text: ":white_check_mark: *docx-editor \($version) released*" } },
+                { type: "section", text: { type: "mrkdwn", text: ":large_green_circle: *docx-editor \($version) released*" } },
                 { type: "section", fields: [
                   { type: "mrkdwn", text: "*Version*\n<\($release)|\($version)>" },
                   { type: "mrkdwn", text: "*Triggered by*\n\($actor)" }

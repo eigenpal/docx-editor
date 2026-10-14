@@ -191,7 +191,7 @@ Set the initial review display with `reviewDisplayMode`: `simple-markup`, `all-m
 
 ### Use the settings dialog
 
-In the review toolbar group, select **Track changes options**. The Pro review module provides this dialog in React and Vue. Hosts can hide or replace its toolbar control through the normal toolbar composition API. Use `popups.revisionMarkup` to customize the dialog with `DocxEditor.RevisionMarkupDialog` and its named parts. See [Customize track changes options](/docs/2.x/guides/customize-dialogs#customize-track-changes-options).
+In the **Review** menu, select **Track changes options**. The Pro review module provides this dialog in React and Vue. To add a toolbar shortcut, place the `review.revisionMarkup` slot in a `Toolbar.Group`. Use `popups.revisionMarkup` to customize the dialog with `DocxEditor.RevisionMarkupDialog` and its named parts. See [Customize track changes options](/docs/2.x/guides/customize-dialogs#customize-track-changes-options).
 
 The dialog groups settings into **Markup**, **Moves**, **Table cell highlighting**, and **Formatting**. Each mark and color control has a label. The changed-lines preview shows the selected bar position.
 
@@ -259,7 +259,7 @@ Document authors are untrusted strings. A sender can use a known name and receiv
 | Revision highlight bands | Both attributes and `--doc-review-author-current`    |
 | Review cards             | Both attributes and `--doc-review-author-current`    |
 | Replies inside cards     | Both attributes and `--doc-review-author-current`    |
-| Hover balloons           | Both attributes and `--doc-review-author-current`    |
+| Tracked change balloons  | Both attributes and `--doc-review-author-current`    |
 | Gutter markers           | Both attributes and `--doc-review-author-current`    |
 
 A reply sits inside its thread's card and carries its own author's hooks. A selector for one author also matches that author's replies in other threads.

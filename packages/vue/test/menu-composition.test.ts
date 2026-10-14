@@ -1,5 +1,6 @@
 import './dom-setup.ts';
 
+import { MenuParagraphDialog } from '../src/editor/menu/parts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createApp, h, nextTick } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
@@ -289,6 +290,52 @@ test('Markdown export shows a dismissible dialog and reports a later failure', a
     ).click();
     await flush();
     expect(view.container.querySelector('[role="alertdialog"]')).toBeNull();
+  } finally {
+    view.unmount();
+  }
+});
+
+test('direct menu actions remain tabbable and follow command state', async () => {
+  const view = mountEditorTree(() =>
+    h(
+      DocxEditorMenu,
+      { preset: false },
+      {
+        default: () => [
+          h(DocxEditorMenu.PageSetup),
+          h(MenuParagraphDialog),
+          h(DocxEditorMenu.File),
+        ],
+      }
+    )
+  );
+  try {
+    await flush();
+    const page = view.container.querySelector<HTMLButtonElement>('[data-slot="file.pageSetup"]')!;
+    const paragraph = view.container.querySelector<HTMLButtonElement>(
+      '[data-slot="paragraph.dialog"]'
+    )!;
+    for (const action of [page, paragraph]) {
+      expect(action.tabIndex).toBe(0);
+      expect(action.getAttribute('aria-disabled')).not.toBe('true');
+    }
+    view.editor().exec({ type: 'setEditingMode', mode: 'viewing' });
+    await flush();
+    for (const action of [page, paragraph])
+      expect(action.getAttribute('aria-disabled')).toBe('true');
+    view.editor().exec({ type: 'setEditingMode', mode: 'editing' });
+    await flush();
+    for (const action of [page, paragraph])
+      expect(action.getAttribute('aria-disabled')).not.toBe('true');
+    const trigger = view.container.querySelector<HTMLButtonElement>(
+      '[data-menu="file"] .docx-menubar__trigger'
+    )!;
+    trigger.click();
+    await flush();
+    const popup = view.container.querySelector('[role="menu"]')!;
+    expect(popup.querySelector<HTMLButtonElement>('[data-slot="file.pageSetup"]')!.tabIndex).toBe(
+      -1
+    );
   } finally {
     view.unmount();
   }

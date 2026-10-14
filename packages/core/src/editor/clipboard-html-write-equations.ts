@@ -132,11 +132,17 @@ function mathml(expression: EquationExpression, depth: number): string {
   const row = (inner: EquationExpression): string => `<mrow>${mathml(inner, depth + 1)}</mrow>`;
   switch (expression.kind) {
     case 'text':
-      return textTokens(expression.value);
+      return expression.format?.normalText
+        ? `<mtext>${escapeXml(expression.value)}</mtext>`
+        : textTokens(expression.value);
     case 'fallback':
       return `<mtext>${escapeXml(expression.text)}</mtext>`;
     case 'row':
       return expression.items.map((item) => mathml(item, depth + 1)).join('');
+    case 'bar':
+      return expression.position === 'top'
+        ? `<mover accent="true">${row(expression.body)}<mo>¯</mo></mover>`
+        : `<munder accentunder="true">${row(expression.body)}<mo>¯</mo></munder>`;
     case 'fraction':
       return `<mfrac>${row(expression.numerator)}${row(expression.denominator)}</mfrac>`;
     case 'radical':

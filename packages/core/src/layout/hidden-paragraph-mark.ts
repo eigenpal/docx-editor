@@ -13,8 +13,9 @@
 //     outright, so no style cascade is needed; a mark hidden through a style keeps its line.
 //   - The paragraph must render nothing visible. A hidden mark after visible text merges that
 //     text forward, and dropping the box would lose it, so such a paragraph keeps its box.
-//   - A paragraph must follow in the same container to take the join. The last paragraph of a
-//     story, cell, or content control, and one before a table, keeps its line.
+//   - A paragraph or table must follow in the same container. The last paragraph of a story,
+//     cell, or content control keeps its line. Before a table the paragraph's own space before
+//     still applies, so one that states a space before keeps its line there.
 //   - A paragraph carrying `w:sectPr` keeps its box, so section boundaries do not move.
 //
 // The paragraph stays in the tree and still advances list counters: numbering is a property
@@ -66,6 +67,27 @@ export function paragraphMarkHidden(paragraph: OoxmlNode): boolean {
       readOnOffChild(markRunProperties, 'specVanish'));
   markHiddenByParagraph.set(paragraph, hidden);
   return hidden;
+}
+
+/**
+ * Whether the paragraph states a space before directly. Before a table, a removed paragraph
+ * still keeps its space before; leaving it in place keeps that space, so only paragraphs
+ * without one leave the flow there.
+ */
+function directSpaceBefore(paragraph: OoxmlNode): boolean {
+  const properties = wmlChild(paragraph, 'pPr');
+  const spacing = properties && wmlChild(properties, 'spacing');
+  if (!spacing) return false;
+  const value = (name: string): string | undefined =>
+    spacing.attributes.find((attribute) => attribute.localName === name)?.value;
+  const auto = value('beforeAutospacing');
+  return (
+    Number(value('before') ?? 0) > 0 ||
+    Number(value('beforeLines') ?? 0) > 0 ||
+    auto === '1' ||
+    auto === 'true' ||
+    auto === 'on'
+  );
 }
 
 function carriesSectionBreak(paragraph: OoxmlNode): boolean {
@@ -147,8 +169,10 @@ export function withoutHiddenMarkParagraphs(
     const { block } = entry;
     if (
       block.kind === 'paragraph' &&
-      next?.block.kind === 'paragraph' &&
+      next !== undefined &&
       next.parentKey === entry.parentKey &&
+      (next.block.kind === 'paragraph' ||
+        (next.block.kind === 'table' && !directSpaceBefore(block))) &&
       paragraphMarkHidden(block) &&
       !carriesSectionBreak(block) &&
       paragraphRendersNothingVisible(block, displayMode, authorFilter)

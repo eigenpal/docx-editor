@@ -107,6 +107,7 @@ import {
   ReviewList,
   ReviewMarkers,
 } from './review-rail-parts.tsx';
+import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 
 function takeRoot(key: string, fallback: VNode, parts: Record<string, VNode>): VNode {
   if (!(key in parts)) return fallback;
@@ -442,6 +443,26 @@ const ReviewRoot = defineComponent({
       { flush: 'post' }
     );
     onUnmounted(() => dismissCleanup?.());
+
+    // A click on commented text opens the closed pane on its card, as a click on its marker
+    // does: a reader's own press, so the `opening` setting does not hold it back.
+    let commentClickCleanup: (() => void) | undefined;
+    watch(
+      [editorRef, documentAbsent, () => props.hidden, railRef],
+      () => {
+        commentClickCleanup?.();
+        commentClickCleanup = undefined;
+        const rail = railRef.value;
+        const editor = editorRef.value;
+        if (!editor || !rail || documentAbsent.value || props.hidden) return;
+        commentClickCleanup = listenForCommentClicks(rail, editor, (key) => {
+          if (reviewHook.paneOpen.value) return;
+          if (items.value.some((entry) => entry.key === key)) reviewHook.setPaneOpen(true);
+        });
+      },
+      { flush: 'post' }
+    );
+    onUnmounted(() => commentClickCleanup?.());
 
     const scrollWindow = ref<{ top: number; bottom: number } | null>(null);
     let scrollCleanup: (() => void) | undefined;

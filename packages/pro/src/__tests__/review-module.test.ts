@@ -283,7 +283,7 @@ describe('review pane opening', () => {
       opening: 'auto',
       overflow: 'float',
       revisionsIn: 'pane',
-      commentMarkers: 'initials',
+      commentMarkers: 'icon',
     });
     expect(editor.setReviewPaneOptions({ opening: 'manual' })).toEqual({
       ok: true,

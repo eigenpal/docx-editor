@@ -79,12 +79,22 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
           },
           {
-            find: /^@docx-editor\.dev\/core\/(binding|layout|output|store)$/,
+            // EXACT. Without it the bare entry resolved through node_modules to `dist/`: a second
+            // engine copy beside the source, with its own diagnostic codes and caches.
+            find: /^@docx-editor\.dev\/core$/,
+            replacement: path.join(monorepoRoot, 'packages/core/src/index.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/core\/(automation|binding|layout|output|store)$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
           },
           {
             find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
+          },
+          {
+            find: /^@docx-editor\.dev\/telemetry$/,
+            replacement: path.join(monorepoRoot, 'packages/telemetry/src/index.ts'),
           },
           {
             find: '@docx-editor.dev/pro/collaboration/hocuspocus',

@@ -101,3 +101,6 @@ export const MenuOverflowScope = defineComponent({
     return () => slots.default?.();
   },
 });
+
+/** Direct menubar rows participate in Tab navigation; popup rows use arrow keys. */
+export const MenuRowTabIndexContext: InjectionKey<number> = Symbol('MenuRowTabIndex');

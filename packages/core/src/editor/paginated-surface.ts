@@ -1,4 +1,5 @@
 import { DocumentSelectionHistory } from './document-selection-history.ts';
+import { timedLayout, timedPress } from './surface-timing.ts';
 import {
   armedFormatAt,
   armCaretFormat,
@@ -93,11 +94,7 @@ import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/c
 
 import { isRevisionCapable, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
-import {
-  openTreeSession,
-  type TreeApplyResult,
-  type TreeDocxSession,
-} from '@docx-editor.dev/core/binding';
+import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
   TOC_MAX_PAGE_PASSES,
   detectBodyTocs,
@@ -112,7 +109,6 @@ import {
   type DetectedToc,
   type OoxmlElement,
   type OoxmlNode,
-  type SelectionMark,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
@@ -132,11 +128,9 @@ import {
   paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
   reviewItemKey,
-  reviewItemsAt,
   reviewThreadRootOf,
   selectionRects,
   caretAt,
-  cellSelectionText,
   contentControlHoldingParagraph,
   contentControlRecordsInPart,
   contentControlsInLayout,
@@ -166,6 +160,7 @@ import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts
 import { withSavedFieldResults } from './surface-saved-field-results.ts';
 import { frameCoalescer } from './frame-coalescer.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
+import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
 import type { CaretGeometry } from '../layout/semantic-interaction.ts';
@@ -190,6 +185,10 @@ import {
   drawingPaintStringsCacheToken,
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
+import {
+  breakMarkStringsCacheToken,
+  breakMarkStringsFromTranslate,
+} from '../output/semantic-break-marks.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   collaborationParagraphAt,
@@ -200,10 +199,10 @@ import type {
   ContentControlOps,
   DrawingSelectionIntent,
   OpenPaginatedResult,
-  PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
   RemoteCaretLabelHost,
+  ScaleMutableSurface,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
@@ -211,8 +210,9 @@ import type { TableCommandPlan } from './table-command-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
+  cellsPlainText,
   orderedRangeOf,
-  selectedTextIn,
+  rangePlainText,
   type RangeDeletionPlan,
 } from './surface-selection-ops.ts';
 import {
@@ -333,23 +333,6 @@ export type {
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
 
-type ScaleMutableSurface = PaginatedSurface & {
-  setScale(nextScale: number): boolean;
-  /**
-   * The gated, attributed session write for command lanes that live OUTSIDE this file —
-   * today the content-control commands. Same collaboration gate and actor attribution as
-   * the typing lane (`applyJournaledOps`); the command's own mode/lock gate has already
-   * run. Internal, reached by cast like `setScale` — see `applyGatedSurfaceTreeOps` in
-   * `content-controls.ts` for the accessor.
-   */
-  applyGatedTreeOps(
-    ops: readonly TreeDocOp[],
-    selectionBefore?: SelectionMark | null,
-    selectionAfter?: SelectionMark | null,
-    scope?: StoryScope
-  ): TreeApplyResult;
-};
-
 /** Body blocks a sliced opening lays out at mount, before its first yield. */
 const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
 
@@ -375,6 +358,7 @@ export function mountPaginatedSurface(
       ok: false,
       reason: opened.reason,
       ...(opened.detail ? { detail: opened.detail } : {}),
+      ...('limit' in opened && opened.limit ? { limit: opened.limit } : {}),
     };
   }
   const session = scopeSession(opened.session, fieldScope);
@@ -390,6 +374,8 @@ export function mountPaginatedSurface(
   const VIEWING_REFUSAL = 'the document is open for viewing';
   /** Document protection, as opposed to the reversible mode — the wording `gateCommand` uses. */
   const TOC_READ_ONLY_REFUSAL = 'the table of contents is generated and read-only';
+  /** Set while formatting writes its ops outside a selected table of contents. */
+  let formattingOutsideToc = false;
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
   /** One timestamp per edit. The clock is the host's; the store never reads one. */
@@ -562,10 +548,16 @@ export function mountPaginatedSurface(
    * caret move. Returns false so a refusing command can `return publishRefusal(reason)`.
    */
   function publishRefusal(reason: string): false {
-    lastRejection = reason;
+    lastRejection = refuse(reason);
     options.onChange?.(currentState());
     return false;
   }
+  /** Every refusal passes here once, raw, so the host's diagnostics can classify it. */
+  function refuse(reason: string, raw = reason): string {
+    options.onRejection?.(raw);
+    return reason;
+  }
+  const reportEdit = (): void => options.onEdit?.(flushingTypeBuffer);
   const commitHistoryGroup = new CommitHistoryGroup();
   const typingHistory = new TypingHistory(() => session.currentPackage());
   const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
@@ -644,6 +636,7 @@ export function mountPaginatedSurface(
       if (collaborationSession) remoteCaret.expectHistory(false);
     }
     if (!result.changed) return;
+    reportEdit();
     // A shared undo restores the selection its step was made from, carried across the text
     // peers changed since.
     const carried =
@@ -872,6 +865,11 @@ export function mountPaginatedSurface(
   let lastLayoutMs = 0;
   let lastPaintMs = 0;
   let lastSelectionMs = 0;
+  // Timings for diagnostics. Layout is told per pass by the deferred layout, background slices
+  // included; the opening layout is not told, because the open reports its own duration.
+  const onInputTiming = (event: Event): void => {
+    if (timedPress(event)) options.onTiming?.('input', event.timeStamp);
+  };
 
   // Style and numbering indexes are identity-memoized and shared by every story.
   const { styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode } =
@@ -895,6 +893,7 @@ export function mountPaginatedSurface(
     onResourcesChanged: () => onDrawingResourcesChanged?.(),
   });
   let drawingStrings: DrawingPaintStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  let breakMarkStrings = breakMarkStringsFromTranslate(options.translate);
   let tocLabels = options.tocLabels;
   /**
    * The insertion point, or null when the selection is not collapsed — a range has two ends
@@ -1080,6 +1079,7 @@ export function mountPaginatedSurface(
     },
     // Marks the container while later pages still show the previous layout.
     pendingChanged: (pending) => container.toggleAttribute('data-docx-layout-pending', pending),
+    passTimed: (ms) => options.onTiming?.('layout', ms),
   });
   let openingBlockLimit: number | null = runtimeOptions.progressiveOpen
     ? PROGRESSIVE_OPEN_FIRST_BLOCKS
@@ -1135,6 +1135,16 @@ export function mountPaginatedSurface(
     runFormatRefusal: () =>
       commandProtectionRefusal({ type: 'toggleMark', mark: 'bold' }, surface)?.reason ?? null,
     session: gatedSession,
+    applyOutsideToc: (ops, apply) => {
+      const kept = ops.filter((op) => !opTouchesToc(op));
+      if (kept.length === 0) return apply(ops);
+      formattingOutsideToc = true;
+      try {
+        return apply(kept);
+      } finally {
+        formattingOutsideToc = false;
+      }
+    },
     storyScope,
     paragraphOrder,
     layout: editingLayout,
@@ -1627,7 +1637,7 @@ export function mountPaginatedSurface(
       finishOpeningPass();
       deferredLayout.abandon();
       const steps = layoutDocumentSteps(scope.revision, scope);
-      const layout = deferredLayout.run(steps, scope.revision);
+      const layout = deferredLayout.run(steps, scope.revision, timedLayout(scope));
       lastLayoutMs = now() - began;
       return layout;
     },
@@ -2348,7 +2358,7 @@ export function mountPaginatedSurface(
   function openContentControlWidget(controlId: string, kind: string): void {
     const reason = contentControlsOps.disabledReason(controlId, 'edit');
     if (reason) {
-      lastRejection = reason;
+      lastRejection = refuse(reason);
       options.onChange?.(currentState());
       return;
     }
@@ -2623,6 +2633,7 @@ export function mountPaginatedSurface(
         materialize: materializedSet,
         ariaHidden: false,
         drawingStrings,
+        breakMarkStrings,
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         revisionMarkup: markupSettings.current(),
@@ -2668,6 +2679,7 @@ export function mountPaginatedSurface(
     // right after is what forces the browser to resolve it. Splitting the timer here would
     // book the paint's own cost to the selection phase.
     lastPaintMs = now() - paintBegan;
+    options.onTiming?.('paint', lastPaintMs);
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);
@@ -2870,7 +2882,8 @@ export function mountPaginatedSurface(
     if (
       edits &&
       !protectionWrite &&
-      ((checkSelection && selectionTouchesToc()) || ops.some((op) => opTouchesToc(op)))
+      ((checkSelection && !formattingOutsideToc && selectionTouchesToc()) ||
+        ops.some((op) => opTouchesToc(op)))
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
@@ -3103,12 +3116,11 @@ export function mountPaginatedSurface(
       const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
       refused = rejection !== null;
       if (rejection) {
-        lastRejection = writeRejectionReason(
-          String(rejection.reason ?? 'rejected'),
-          session.settingsRoot()
-        );
+        const raw = String(rejection.reason ?? 'rejected');
+        lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
       } else {
         lastRejection = null;
+        if (typeof result === 'boolean' ? result : result.committed) reportEdit();
         // The post-edit selection is installed BEFORE the paint, so the single render below
         // paints the new pages, mirrors the new caret into the DOM and reports one state
         // change. Committing first and calling `setSelection` afterwards wrote the superseded
@@ -3461,7 +3473,7 @@ export function mountPaginatedSurface(
     notify: () => options.onChange?.(currentState()),
     lastRejection: () => lastRejection,
     setLastRejection: (reason) => {
-      lastRejection = reason;
+      lastRejection = reason === null ? null : refuse(reason);
     },
   });
 
@@ -3687,8 +3699,7 @@ export function mountPaginatedSurface(
     // An explicit activation outranks the caret's own reading of where it landed.
     const pinned = activatedReviewItem();
     if (pinned) return resolveReviewThread(pinned);
-    const at = selection?.head;
-    if (!at) return null;
+    if (!selection) return null;
     // An empty queue still builds the order index. NOT gated: the index's `partFor` reads are
     // what durably open the note stores on first render, and skipping them moved paraId
     // minting into the first note edit — where undo can no longer unwind it to opening bytes
@@ -3698,7 +3709,13 @@ export function mountPaginatedSurface(
     // The covering items, innermost first, minus the one the reader dismissed. Returning
     // null for a dismissed innermost item hid every item under it too: dismissing a comment
     // that wraps a revision meant the revision could never become active either.
-    const covering = reviewItemsAt(visibleReviewItems(), at, reviewOrderIndex()).filter(
+    // A range selection activates only what it shares characters with (see the helper).
+    const covering = reviewItemsAtSelection(
+      visibleReviewItems(),
+      selection.anchor,
+      selection.head,
+      reviewOrderIndex()
+    ).filter(
       (item) =>
         !(item.kind === 'comment' && item.resolved) &&
         !dismissedReviewKeys.has(reviewItemKey(item)) &&
@@ -4072,7 +4089,10 @@ export function mountPaginatedSurface(
         () => {
           const applied = applyOps([op], selectionMark());
           if (!applied.committed) {
-            lastRejection = applied.reason ?? 'the table could not be inserted here';
+            lastRejection = refuse(
+              applied.reason ?? 'the table could not be inserted here',
+              applied.reason ?? 'table-insert-refused'
+            );
           }
           committed = applied.committed;
           return applied;
@@ -4133,7 +4153,10 @@ export function mountPaginatedSurface(
     const existing = new Set(detectBodyTocs(session.part()).map((toc) => toc.id));
     const inserted = applyJournaledOps([op], undefined, undefined, BODY_STORY);
     if (!inserted.committed) {
-      lastRejection = inserted.reason ?? 'the table of contents could not be inserted';
+      lastRejection = refuse(
+        inserted.reason ?? 'the table of contents could not be inserted',
+        inserted.reason ?? 'table-of-contents-refused'
+      );
       return false;
     }
     const created = detectBodyTocs(session.part()).find((toc) => !existing.has(toc.id));
@@ -4173,7 +4196,10 @@ export function mountPaginatedSurface(
         BODY_STORY
       );
       if (!replaced.committed) {
-        lastRejection = replaced.reason ?? 'the table of contents could not be refreshed';
+        lastRejection = refuse(
+          replaced.reason ?? 'the table of contents could not be refreshed',
+          replaced.reason ?? 'table-of-contents-refused'
+        );
         return false;
       }
       layout = surface.layout();
@@ -4209,7 +4235,10 @@ export function mountPaginatedSurface(
       );
       if (!rewritten.committed) {
         if (rewritten.rejected) {
-          lastRejection = rewritten.reason ?? 'the table of contents page numbers were refused';
+          lastRejection = refuse(
+            rewritten.reason ?? 'the table of contents page numbers were refused',
+            rewritten.reason ?? 'table-of-contents-refused'
+          );
           return false;
         }
         break;
@@ -5256,6 +5285,16 @@ export function mountPaginatedSurface(
       translate = next;
       setSurfaceAccessibleLabel(pagesLayer, next);
       textFormInteraction?.update();
+      const nextBreakStrings = breakMarkStringsFromTranslate(next);
+      const labelsMoved =
+        breakMarkStringsCacheToken(nextBreakStrings) !==
+        breakMarkStringsCacheToken(breakMarkStrings);
+      breakMarkStrings = nextBreakStrings;
+      // Break labels paint only with paragraph marks; hidden ones repaint on the next toggle.
+      if (labelsMoved && paragraphMarks.get()) {
+        flushPendingInputAndLayout();
+        render(false);
+      }
     },
     setTocLabels: (labels) => {
       tocLabels = labels;
@@ -5413,9 +5452,10 @@ export function mountPaginatedSurface(
     selectedText() {
       // A rectangle copies as a grid — tabs between cells, newlines between rows — because
       // the text range it stands in for would paste back as one run with the grid gone.
-      if (cellSelection) return cellSelectionText(currentLayout, cellSelection);
+      // Each computed field reads as its painted result, not its one model unit.
+      if (cellSelection) return cellsPlainText(currentLayout, cellSelection);
       const { from, to } = orderedRange();
-      return selectedTextIn(editingLayout(), from, to, paragraphOrder());
+      return rangePlainText(editingLayout(), from, to, paragraphOrder());
     },
 
     copyFlavours: () => copyFlavoursNow(),
@@ -5440,7 +5480,7 @@ export function mountPaginatedSurface(
       // read-only silently rewound under the reader's hands — the one lane that walked past
       // `applyOps`, `applyPmDoc` and `commitReviewOps` alike.
       if (editingMode === 'view' || refreshWriteBlocked(container)) {
-        lastRejection = VIEWING_REFUSAL;
+        lastRejection = refuse(VIEWING_REFUSAL);
         options.onChange?.(currentState());
         return;
       }
@@ -5453,7 +5493,7 @@ export function mountPaginatedSurface(
     },
     redo: () => {
       if (editingMode === 'view' || refreshWriteBlocked(container)) {
-        lastRejection = VIEWING_REFUSAL;
+        lastRejection = refuse(VIEWING_REFUSAL);
         options.onChange?.(currentState());
         return;
       }
@@ -5672,6 +5712,8 @@ export function mountPaginatedSurface(
         document.removeEventListener('selectionchange', onSelectionChange);
         pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
+        pagesLayer.removeEventListener('keydown', onInputTiming, { capture: true });
+        pagesLayer.removeEventListener('pointerdown', onInputTiming, { capture: true });
         pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
         pagesLayer.removeEventListener('keydown', onKeyDown);
         unbindDirectionChord();
@@ -5968,6 +6010,8 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
   pagesLayer.addEventListener('keydown', onDrawingKeyGesture, { capture: true });
   pagesLayer.addEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
+  pagesLayer.addEventListener('keydown', onInputTiming, { capture: true });
+  pagesLayer.addEventListener('pointerdown', onInputTiming, { capture: true });
   pagesLayer.addEventListener('keydown', onKeyDown);
   const unbindDirectionChord = bindDirectionChord(pagesLayer, directionChord);
   pagesLayer.addEventListener('beforeinput', onBeforeInput as EventListener);

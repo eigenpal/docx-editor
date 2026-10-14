@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A cell that hides its end mark kept a full line, with spacing, for an empty final paragraph after other content. The row grew by that line.",
+  "after": "That empty final paragraph adds no line, spacing, or rule to the row height. It keeps its source position, and its caret ends at the bottom of the content above it.",
+  "reason": "Layout reads the same shared tree on every replica. Shared data, operation fields, and stored representation stay unchanged, so released readers lay out corrected documents the same way.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-cell-hide-mark.test.ts",
+    "packages/core/src/editor/__tests__/surface-caret.test.ts"
+  ],
+  "changeset": "hidden-mark-row-height",
+  "migration": null
+}

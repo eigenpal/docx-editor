@@ -1,0 +1,37 @@
+---
+title: 'Rooms, people, and memory'
+description: 'How collaboration server telemetry counts the people and memory in each room, how to find a large room without room names in metrics, and how to label metrics by room.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Use room metrics to build dashboards and find rooms that use too much memory. For setup instructions, see [Collaboration servers](/docs/2.x/telemetry/servers).
+
+## People and memory in each room
+
+Participant counts come from each room's awareness states. One person with two tabs counts twice. Connections count separately, with one connection per socket and room.
+
+With the Redis extension, each Hocuspocus instance sees participants across all instances that share a room. Do not add those counts together. With `perRoomSeries`, take the `max` for each room across instances, then add the room totals. Without per-room series, the `max` across instances is exact only when all instances hold the same rooms. Otherwise, it gives a lower bound.
+
+JavaScript cannot measure one room's heap usage. Room metrics measure encoded Yjs state, stored images and other files, and updates that await storage. Compare these values with process memory metrics, such as `prom-client` default metrics, to check whether memory grows with rooms.
+
+Each sample encodes state only for rooms that changed. Interval sampling processes one room at a time and lets other work run between rooms. To skip encoding, set `measureState: false`.
+
+The default sample interval is 60 seconds. To sample once per scrape, set `sampleInterval: false`. Then call `rooms.sample()` before rendering metrics, or pass `sampleBeforeScrape: rooms` to `serveMetrics`.
+
+With the Redis extension, only the instance that holds a room's store lock stores the room. Other instances skip the store. Telemetry does not time or count skipped stores. Pending updates remain pending on each instance until that instance completes a store.
+
+## Per-room detail
+
+Metrics omit room names to keep names private and limit the number of series. Histograms record participant counts and memory per room, with one entry per room in each sample. Query them over a time window. For example, use `histogram_quantile(0.95, rate(docx_editor_collab_room_memory_bytes_bucket[5m]))` for the 95th percentile. For the mean, divide `rate(..._sum[5m])` by `rate(..._count[5m])`.
+
+To find a large room, expose `rooms.list()` through an endpoint that only administrators can access. Each row includes the room label, participant and connection counts, state bytes, file bytes, pending bytes, and node count. It also includes age, idle time, and the largest share of any room limit.
+
+By default, the room label is an index that is valid only in the current process, such as `room-3`. To get a stable label that does not reveal the name, use `roomLabel: hmacRoomLabel(process.env.ROOM_LABEL_SECRET)`. It throws at startup when the secret is empty. To show real names, use `roomLabel: (name) => name`.
+
+## Label metrics by room
+
+To create separate series for each room, set `perRoomSeries: true`. Use the default label or `roomLabel: hmacRoomLabel(secret)`. Any other `roomLabel` throws, which prevents room names from becoming labels.
+
+Each room gets `docx_editor_collab_room_participants_current` and `docx_editor_collab_room_memory_current_bytes` gauges with a `room` label. Telemetry removes these series when the room closes. Each room adds series, so leave this option disabled on servers with many rooms.

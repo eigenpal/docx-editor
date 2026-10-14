@@ -640,8 +640,8 @@ export function parsedFieldSpansOf(
   const simpleHoldsText = (simple: OoxmlNode): boolean => {
     if (simple.kind === 'textValue') return false;
     const visit = (node: OoxmlNode, depth: number): boolean =>
-      node.kind === 'text' ||
-      node.kind === 'deletedText' ||
+      ((node.kind === 'text' || node.kind === 'deletedText') &&
+        fieldResultInlineTextOf(node).length > 0) ||
       node.kind === 'tab' ||
       node.kind === 'hardBreak' ||
       (node.kind !== 'textValue' &&
@@ -698,6 +698,7 @@ export function parsedFieldSpansOf(
     let phase: 'instruction' | 'result' | 'done' = 'instruction';
     const removeIds: string[] = [];
     const resultFormatRunIds: string[] = [];
+    let resultHasText = false;
     const seenFormatRuns = new Set<string>();
     let separateRunId: string | undefined;
     let endIndex = -1;
@@ -786,6 +787,7 @@ export function parsedFieldSpansOf(
             node.kind === 'textValue'
           ) {
             removeIds.push(node.id);
+            if (nesting === 1 && fieldResultInlineTextOf(node).length > 0) resultHasText = true;
             if (nesting === 1 && entry.runId && !seenFormatRuns.has(entry.runId)) {
               seenFormatRuns.add(entry.runId);
               resultFormatRunIds.push(entry.runId);
@@ -833,7 +835,7 @@ export function parsedFieldSpansOf(
         maxInstructionChars,
         nestedInResult,
         // No outer result run holds text: the emptied field is one unit again.
-        emptyResult: resultFormatRunIds.length === 0,
+        emptyResult: !resultHasText,
         fieldResults,
       }),
     });

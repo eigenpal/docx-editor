@@ -62,7 +62,7 @@ The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a ro
 
 Replace `onLoadDocument` and `onStoreDocument` when you need database or object storage. Keep the `prepareCollaborationServerDocument` call at the start of `onLoadDocument`, before the room's state loads.
 
-When a saved room is at least twice the size of a fresh build of its content, `onLoadDocument` compacts it with `compactCollaborationState` and stores the new generation in place of the old state. The server writes each file through a temporary file, so a crash during a write keeps the previous state. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. Keep both calls when you replace the storage hooks. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
+When a saved room is at least twice the size of a fresh build of its content, `onLoadDocument` compacts it with `compactCollaborationState` and stores the new generation in place of the old state. The server replaces each file atomically, so an interrupted write leaves either its previous state or its complete replacement. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. Keep both calls when you replace the storage hooks. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
 
 ### Recover after a version mismatch
 
@@ -76,7 +76,8 @@ The server does not migrate rooms by itself. Two scripts move every saved room t
 
 To migrate the rooms, follow these steps:
 
-1. Stop the server, so no participant edits a room during the migration.
+1. Ask users to synchronize pending edits or save a local DOCX for reconciliation. Stop the server and every background writer.
+1. Back up the complete data directory and retain the build that can open it.
 1. Copy `server/export-rooms.ts` and `server/room-files.ts` into a directory where the build that created the rooms is installed. The scripts need Node.js 22.18 or later. Replace `2.27.0` with that release:
 
    ```bash
@@ -85,10 +86,10 @@ To migrate the rooms, follow these steps:
    npm install @docx-editor.dev/pro@2.27.0 @docx-editor.dev/core@2.27.0 yjs@^13.6.32
    ```
 
-1. In that directory, run `node export-rooms.ts --data-dir <path to server/.data>`. It writes `<room>.migration.docx` beside each room, with `<room>.migration.sha256`, the SHA-256 of the state it exported. If a room fails with `not-initialized`, it holds no document: move `<room>.ydoc` out of the data directory, keep it with your backups, and run the export again.
-1. In this example, run `node server/migrate-rooms.ts --dry-run --report report.json`. For each room, it seeds a new room from the export and checks the new room against the export: every XML part, every media file, and every link target. It prints one line for each room and a summary, writes the results to `report.json`, and changes nothing.
+1. In that directory, run `node export-rooms.ts --data-dir "/absolute/path/to/server/.data"`. Replace the quoted path with your stopped server's data directory. It writes `<room>.migration.docx` beside each room, with `<room>.migration.sha256`, the SHA-256 of the state it exported. If a room fails with `not-initialized`, it holds no document: move `<room>.ydoc` out of the data directory, keep it with your backups, and run the export again.
+1. Return to `examples/collaboration-hocuspocus` in the checkout with the target build. Install dependencies and build packages with the repository-root commands in [Run the example](#run-the-example). Run `node server/migrate-rooms.ts --dry-run --report report.json` from the example directory. For each room, it seeds a new room from the export and checks the new room against the export: every XML part, every media file, and every link target. It prints one line for each room and a summary, writes the results to `report.json`, and leaves room files unchanged. The report file is still written.
 1. If any room is not `would-migrate` or `current`, stop and resolve it as the following table describes. Otherwise, run `node server/migrate-rooms.ts`. It keeps each earlier state as `<room>.ydoc.previous` and writes the new state in its place. Rooms already in the current format stay as they are, so a second run after an interruption migrates only the rest.
-1. Start the server with the new build.
+1. Check that the write run exits with status 0. Start the server with the new build. Open migrated rooms with two clients, edit, and verify DOCX export.
 
 Both scripts accept `--data-dir <dir>` and `--help`. They refuse unknown options with exit status 2.
 
@@ -96,7 +97,7 @@ Each room ends in one of these outcomes:
 
 | Outcome | Meaning |
 | --- | --- |
-| `current` | The room is already in the current format. |
+| `current` | The room uses the current format, and its document passes validation. |
 | `migrated`, `would-migrate` | The new room passed the check. A dry run reports `would-migrate`. |
 | `failed-check` | The new room differs from the export. The room is not changed. |
 | `no-export` | The room has no export. Run `export-rooms.ts` with the earlier build. |
@@ -104,9 +105,13 @@ Each room ends in one of these outcomes:
 | `later-format` | A later build wrote the room. This build does not open or replace it. |
 | `error` | The room or its export could not be read. For `not-initialized`, the state holds no document that a build can open: move `<room>.ydoc` out of the data directory, and keep it with your backups. |
 
+A write run can migrate some rooms before another room fails. Keep all servers stopped if it exits with status 1. Resolve the failure and run it again. To cancel instead, restore all migrated rooms before starting the earlier build. Never serve mixed formats with one deployment.
+
 `migrate-rooms.ts` exits with status 1 unless every room is `current`, `migrated`, or `would-migrate`. Its output names each differing paragraph by its part and position, without document text. `report.json` holds the text of differing paragraphs, so keep it with the room data. A line that counts paragraphs as not editable names text that the new room keeps but the editor cannot show; check those rooms before you resume editing.
 
-Keep the backups until you accept the migration. To roll a room back, stop the server, copy `<room>.ydoc.previous` over `<room>.ydoc`, and start the server with the earlier build. Edits made after the migration are lost on a rollback. Collaboration undo history starts afresh in a migrated room.
+Keep the backups until you accept the migration. The `.previous` file holds one earlier generation; keep separate backups across later migrations.
+
+To roll back, stop all writers and preserve pending client work. Export post-migration edits with the target build before restoring anything. Copy each migrated room's `<room>.ydoc.previous` over `<room>.ydoc`, then start the earlier build. Use a fresh browser persistence key and reconcile the saved DOCX files separately. Migrated updates cannot replay into the restored generation. Collaboration undo history starts afresh in a migrated room.
 
 ### Check admission and recovery
 

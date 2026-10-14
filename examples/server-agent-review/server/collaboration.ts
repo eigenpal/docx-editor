@@ -1,15 +1,14 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import {
   checkCollaborationRoomGeneration,
-  compactCollaborationState,
   prepareCollaborationServerDocument,
   readCollaborationDocument,
 } from '@docx-editor.dev/pro/collaboration';
 import * as Y from 'yjs';
 import { AGENT_TOKEN, COLLAB_PORT, DATA_DIR, USER_TOKEN, requireRoomId } from './config.ts';
 import { atomicWrite } from './files.ts';
+import { loadStoredReviewRoom } from './stored-room.ts';
 
 const server = new Server({
   port: COLLAB_PORT,
@@ -24,17 +23,7 @@ const server = new Server({
     // First, before any update reaches it, so the server never writes a change of its own.
     prepareCollaborationServerDocument(document);
     const file = path.join(DATA_DIR, 'rooms', `${requireRoomId(documentName)}.ydoc`);
-    let stored: Uint8Array;
-    try {
-      stored = new Uint8Array(await readFile(file));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      return document;
-    }
-    // Nobody is connected yet: a room grown well past its content becomes a new generation.
-    const compacted = await compactCollaborationState(stored).catch(() => null);
-    if (compacted) await atomicWrite(file, compacted);
-    Y.applyUpdate(document, compacted ?? stored);
+    await loadStoredReviewRoom(document, file);
     return document;
   },
   // A client holding a generation from before a compaction is refused before it merges.

@@ -22,10 +22,10 @@
 
 import {
   layoutRowFragment,
-  vMergePlanFor,
   type LayoutRowBoundedResult,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { vMergePlanFor } from './table-vmerge-plan.ts';
 import type { SemanticTableRow, SemanticTableStructure } from './semantic-table.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { measuringFlowDeps } from './table-probe-deps.ts';

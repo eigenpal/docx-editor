@@ -1,0 +1,33 @@
+---
+title: 'Server agents'
+description: 'Record anonymous diagnostics from agents that edit documents through the editing API, on a server or in the browser.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+A `DocxEditor.createServer` runtime reports document-open diagnostics and a diagnostic code for each refused batch. A refusal counts as tracked when the batch enables tracking before the refusal. Create one telemetry client per process and pass its module to every runtime:
+
+```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+const telemetry = createTelemetry({ exporters: [otelExporter()] });
+
+const runtime = await DocxEditor.createServer(bytes, {
+  author: 'Review agent',
+  modules: [telemetry.module],
+});
+try {
+  // Run the agent here.
+} finally {
+  runtime.dispose();
+}
+```
+
+In a long-running worker, call `await telemetry.shutdown()` once when the process exits. In a serverless function or single-run job, call `await telemetry.flush()` before returning to send buffered data. Do not flush after each job in a long-running worker. Each flush forces an export and closes the deduplication windows for all jobs.
+
+Each runtime has a separate `editorSessionId`, which lets you follow one agent run. A `DocxEditor.createBrowser` runtime reports refused batches through its host editor with `origin: 'automation'`. The editor's telemetry module therefore covers browser agents too.
+
+On a server, the Sentry Node SDK can attach the incoming request body to an issue. If an agent endpoint receives instructions or document bytes, remove `event.request.data` in `beforeSend`. For refusal details, read `error.debugInfo.innerError`. For more information, see [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors).

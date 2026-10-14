@@ -116,8 +116,10 @@ const lineFollowsBreak = (line: PendingLine): boolean =>
  * and the top rule open the text on the next sheet, and shading fills the break line where
  * it would sit. An anchored drawing is content, so those paragraphs keep the ordinary fit
  * rule. So does a paragraph with nothing after the break, and one that anchors floating
- * tables or text frames. A paragraph with only one break keeps the ordinary fit: after a full
- * page, its break line takes the next sheet and the content after it starts one sheet later.
+ * tables or text frames. A paragraph with only one page break keeps the ordinary fit: after a
+ * full page, its break line takes the next sheet and the content after it starts one sheet
+ * later. A line that holds only a column break stays even with nothing after it: the break
+ * starts the next column, or the next sheet after the last column.
  */
 export function opensWithPageBreak(
   entry: PaintableParagraph,
@@ -128,11 +130,18 @@ export function opensWithPageBreak(
   return (
     first !== undefined &&
     first.start === 0 &&
-    holdsOnlyPageBreak(first) &&
-    lines.some((line, index) => index > 0 && lineFollowsBreak(line)) &&
+    (holdsOnlyColumnBreak(first) ||
+      (holdsOnlyPageBreak(first) &&
+        lines.some((line, index) => index > 0 && lineFollowsBreak(line)))) &&
     !(drawingContext && anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0)
   );
 }
+
+/** Whether a line holds nothing but the column break that ends it. */
+export const holdsOnlyColumnBreak = (line: PendingLine): boolean =>
+  line.columnBreakAfter === true &&
+  line.drawings.length === 0 &&
+  line.spans.every((span) => !/[^\n]/.test(span.text));
 
 /**
  * A kept break line's shading fills where the line would sit, below the band that holds it,

@@ -13,7 +13,8 @@
       "@docx-editor.dev/fonts",
       "@docx-editor.dev/fonts-cjk",
       "@docx-editor.dev/docx-to-markdown",
-      "@docx-editor.dev/docx-to-pdf"
+      "@docx-editor.dev/docx-to-pdf",
+      "@docx-editor.dev/telemetry"
     ]
   ],
   "linked": [],

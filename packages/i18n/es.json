@@ -34,7 +34,8 @@
     "lockedSectionBreak": "Un control de contenido bloqueado o vinculado contiene la sección siguiente, así que este salto no puede cambiarla.",
     "lockedContentBreak": "Un control de contenido bloquea este texto, así que no puedes insertar aquí un salto de sección.",
     "nothingToCopyFormatting": "Selecciona texto para copiar su formato",
-    "nothingToPaint": "Selecciona texto para aplicar el formato"
+    "nothingToPaint": "Selecciona texto para aplicar el formato",
+    "pictureSelected": "Hay una imagen seleccionada. Coloque el cursor en el texto para insertar una imagen."
   },
   "toolbar": {
     "ariaLabel": "Barra de formato",
@@ -981,5 +982,14 @@
     "insertionsBackground": "Fondo de inserciones",
     "movedFromBackground": "Fondo del origen de movimientos",
     "movedToBackground": "Fondo del destino de movimientos"
+  },
+  "formattingMarks": {
+    "columnBreak": "Salto de columna",
+    "pageBreak": "Salto de página",
+    "sectionBreakContinuous": "Salto de sección (Continua)",
+    "sectionBreakEvenPage": "Salto de sección (Página par)",
+    "sectionBreakNextColumn": "Salto de sección (Columna nueva)",
+    "sectionBreakNextPage": "Salto de sección (Página siguiente)",
+    "sectionBreakOddPage": "Salto de sección (Página impar)"
   }
 }

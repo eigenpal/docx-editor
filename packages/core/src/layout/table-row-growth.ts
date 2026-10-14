@@ -126,7 +126,7 @@ export function closeGrownRow(
       box: { ...record.box, height: terminal.height },
       cells: record.cells.map((cell) => ({
         ...cell,
-        box: { ...cell.box, height: terminal.height },
+        box: { ...cell.box, height: terminal.height - (cell.box.y - record.box.y) },
       })),
     },
     insets: terminal.deps.cellContentInsets,

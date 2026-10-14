@@ -12,8 +12,8 @@ export interface CellPlaceCursor {
   readonly startOffset?: number;
   /** The continued paragraph's line break, which the next page indexes instead of re-breaking. */
   readonly heldBreak?: HeldCellBreak;
-  /** Row-boundary continuation of the nested table at blockIndex. */
-  readonly nestedTable?: { readonly nextRowIndex: number; readonly fragmentIndex: number };
+  /** Continuation of the nested table at blockIndex. */
+  readonly nestedTable?: NestedTableCursor;
   readonly previousSpaceAfter: number;
   readonly paragraphFragmentIndex: number;
   /**
@@ -25,6 +25,14 @@ export interface CellPlaceCursor {
    * terminator collapse behind a table that never appeared on that page.
    */
   readonly precededByEmittedTable: boolean;
+}
+
+/** Progress through a nested table: the next row, and its cell cursors when it was split. */
+export interface NestedTableCursor {
+  readonly nextRowIndex: number;
+  readonly fragmentIndex: number;
+  /** Set when row `nextRowIndex` continues from a page before. */
+  readonly rowCursors?: readonly CellPlaceCursor[];
 }
 
 export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
@@ -72,4 +80,24 @@ export function unplacedHeldBreak(
   return cursor.heldBreak && blockIndex === cursor.blockIndex && startOffset !== undefined
     ? { heldBreak: cursor.heldBreak }
     : {};
+}
+
+/**
+ * Whether the first line of a cell fragment is placed although it passes the band bottom.
+ * On a fresh page (`rowAtPageStart`) with nothing placed above it, a line taller than the
+ * band can never fit another page, so it is placed once and clipped to the cell. A line
+ * pushed down by a wrap exclusion would fit a band without it, so the row still refuses.
+ */
+export function placesOversizedLine(
+  options: { readonly aloneOnPage?: boolean } | undefined,
+  deps: { readonly rowAtPageStart?: boolean },
+  placedLines: number,
+  skipBefore: number
+): boolean {
+  return (
+    options?.aloneOnPage === true &&
+    deps.rowAtPageStart === true &&
+    placedLines === 0 &&
+    skipBefore === 0
+  );
 }

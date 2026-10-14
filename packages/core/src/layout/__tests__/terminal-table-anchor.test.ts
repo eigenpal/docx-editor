@@ -321,8 +321,8 @@ describe('terminal empty text-table anchors', () => {
     }
   });
 
-  test('does not bypass the existing refusal for an oversized exact row', () => {
-    expect(() => render(fixture(table(230, '', 16000)))).toThrow();
+  test('an oversized exact row fills a page instead of refusing the layout', () => {
+    expect(() => render(fixture(table(230, '', 16000)))).not.toThrow();
   });
 
   test('invalidates the group on empty-to-text edits and restores it on undo', () => {

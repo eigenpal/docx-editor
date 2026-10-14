@@ -1,135 +1,34 @@
-// The review display settings: one gear in the header that opens a small settings panel.
+// The review settings panel: one gear in the header that opens a small settings panel.
 //
-// Every control writes through `editor.setReviewPaneOptions()` and reads back from
-// `snapshot.reviewPane`, so the panel shows what the editor uses, not a copy of it. The
-// settings are view state of this editor: nothing is written into the document. The panel
-// starts with the pane closed (`EXAMPLE_REVIEW_PANE`), keeps the choice in this browser's
-// storage, and `storedReviewPane()` hands it to
-// `reviewModule({ pane })` so the next visit starts with it.
+// The model (starting settings, saved copy, and the choices) lives in
+// `examples/shared/review-settings.ts`, which the Vue example uses too. Every control writes
+// through `editor.setReviewPaneOptions()` and reads back from `snapshot.reviewPane`, so the
+// panel shows what the editor uses, not a copy of it.
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
+import type { ResolvedReviewPane, ReviewPaneOptions } from '@docx-editor.dev/core/editor';
+import { exampleText as t } from '../../shared/example-text';
 import {
-  DEFAULT_REVIEW_PANE,
-  resolveReviewPane,
-  type ResolvedReviewPane,
-  type ReviewPaneOptions,
-} from '@docx-editor.dev/core/editor';
-import { exampleText as t, type ExampleTextKey } from '../../shared/example-text';
+  EXAMPLE_REVIEW_PANE,
+  REVIEW_SETTINGS_GROUPS,
+  reviewSettingsHelp,
+  saveReviewPane,
+  storedReviewPane,
+  type ReviewSettingsPreview,
+} from '../../shared/review-settings';
 import { DemoHeaderButton } from './DemoHeaderButton';
-import './review-settings.css';
+import '../../shared/review-settings.css';
 
-const STORAGE_KEY = 'docx-editor-demo.review-pane';
+export { EXAMPLE_REVIEW_PANE, storedReviewPane };
 
-/**
- * The example's own starting settings: the pane stays closed, so comments show as miniature
- * markers in the margin until the reader opens one. The library default opens the pane.
- */
-export const EXAMPLE_REVIEW_PANE: ResolvedReviewPane = resolveReviewPane({ opening: 'manual' });
-
-/** The saved settings over the example's defaults. Invalid saved settings are ignored. */
-export function storedReviewPane(): ResolvedReviewPane {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EXAMPLE_REVIEW_PANE;
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return EXAMPLE_REVIEW_PANE;
-    const source = parsed as Record<string, unknown>;
-    const options: Record<string, unknown> = {};
-    // Copy the known fields only: a stale or edited entry must not reach the editor.
-    for (const key of Object.keys(DEFAULT_REVIEW_PANE)) {
-      if (Object.hasOwn(source, key)) options[key] = source[key];
-    }
-    return resolveReviewPane(options as ReviewPaneOptions, EXAMPLE_REVIEW_PANE);
-  } catch {
-    return EXAMPLE_REVIEW_PANE;
-  }
-}
-
-function saveReviewPane(pane: ResolvedReviewPane | null): void {
-  try {
-    if (pane) localStorage.setItem(STORAGE_KEY, JSON.stringify(pane));
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage can be off (private window, blocked site data). The setting still applies.
-  }
-}
-
-type Field = keyof ResolvedReviewPane;
-
-interface Group<F extends Field> {
-  readonly field: F;
-  readonly label: ExampleTextKey;
-  readonly options: readonly {
-    readonly value: ResolvedReviewPane[F];
-    readonly label: ExampleTextKey;
-    readonly help?: ExampleTextKey;
-    readonly preview?: ReactNode;
-  }[];
-  readonly help?: ExampleTextKey;
-}
-
-const GROUPS: readonly Group<Field>[] = [
-  {
-    field: 'revisionsIn',
-    label: 'reviewSettings.revisionsIn',
-    help: 'reviewSettings.revisionsInHelp',
-    options: [
-      { value: 'pane', label: 'reviewSettings.revisionsIn.pane' },
-      { value: 'balloons', label: 'reviewSettings.revisionsIn.balloons' },
-    ],
-  },
-  {
-    field: 'commentMarkers',
-    label: 'reviewSettings.commentMarkers',
-    help: 'reviewSettings.commentMarkersHelp',
-    options: [
-      {
-        value: 'initials',
-        label: 'reviewSettings.commentMarkers.initials',
-        preview: (
-          <span className="demo-settings__badge" aria-hidden="true">
-            AB
-          </span>
-        ),
-      },
-      {
-        value: 'icon',
-        label: 'reviewSettings.commentMarkers.icon',
-        preview: <CommentIcon />,
-      },
-    ],
-  },
-  {
-    field: 'opening',
-    label: 'reviewSettings.opening',
-    help: 'reviewSettings.openingHelp',
-    options: [
-      { value: 'auto', label: 'reviewSettings.opening.auto' },
-      { value: 'manual', label: 'reviewSettings.opening.manual' },
-    ],
-  },
-  {
-    field: 'overflow',
-    label: 'reviewSettings.overflow',
-    options: [
-      {
-        value: 'float',
-        label: 'reviewSettings.overflow.float',
-        help: 'reviewSettings.overflowHelp.float',
-      },
-      {
-        value: 'shrinkPage',
-        label: 'reviewSettings.overflow.shrinkPage',
-        help: 'reviewSettings.overflowHelp.shrinkPage',
-      },
-      {
-        value: 'scroll',
-        label: 'reviewSettings.overflow.scroll',
-        help: 'reviewSettings.overflowHelp.scroll',
-      },
-    ],
-  },
-];
+const PREVIEWS: Record<ReviewSettingsPreview, ReactNode> = {
+  initials: (
+    <span className="demo-settings__badge" aria-hidden="true">
+      AB
+    </span>
+  ),
+  icon: <CommentIcon />,
+};
 
 export function ReviewSettings() {
   const editor = useDocxEditor();
@@ -228,10 +127,9 @@ export function ReviewSettings() {
             </button>
           </header>
           <div className="demo-settings__body">
-            {GROUPS.map((group) => {
+            {REVIEW_SETTINGS_GROUPS.map((group) => {
               const current = pane[group.field];
-              const help =
-                group.options.find((option) => option.value === current)?.help ?? group.help;
+              const help = reviewSettingsHelp(group, current);
               const helpId = `${id}-${group.field}-help`;
               return (
                 <fieldset
@@ -251,7 +149,7 @@ export function ReviewSettings() {
                           onChange={() => apply({ [group.field]: option.value }, true)}
                         />
                         <span>
-                          {option.preview}
+                          {option.preview ? PREVIEWS[option.preview] : null}
                           {t(option.label)}
                         </span>
                       </label>

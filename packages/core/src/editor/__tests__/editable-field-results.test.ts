@@ -346,6 +346,41 @@ describe('typing over selected result text', () => {
   });
 });
 
+describe('saved results with empty text elements', () => {
+  test('keeps nonempty text, tabs, and line breaks editable', () => {
+    for (const result of [run(' '), '<w:r><w:tab/></w:r>', '<w:r><w:br/></w:r>']) {
+      for (const field of [
+        simple(' MERGEFIELD Name ', result),
+        complex(' MERGEFIELD Name ', result),
+      ]) {
+        expect(open(paragraphWith(field)).text()).not.toContain('\uFFFC');
+      }
+    }
+  });
+
+  for (const [name, field] of [
+    ['simple', simple(' MERGEFIELD Name ', run(''))],
+    ['complex', complex(' MERGEFIELD Name ', run(''))],
+    ['deleted text', complex(' MERGEFIELD Name ', '<w:r><w:delText/></w:r>')],
+  ]) {
+    test(`${name} stays reachable after save and reopen`, async () => {
+      const host = open(paragraphWith(field!));
+      expect(host.text()).toBe('ab \uFFFC cd');
+      const saved = await host.surface.save();
+      const reopened = openBytes(saved);
+      expect(reopened.text()).toBe('ab \uFFFC cd');
+      reopened.caret(4);
+      reopened.surface.deleteBackward();
+      expect(reopened.xml()).not.toContain('MERGEFIELD');
+      expect(reopened.text()).toBe('ab  cd');
+      reopened.surface.undo();
+      expect(reopened.text()).toBe('ab \uFFFC cd');
+      reopened.surface.redo();
+      expect(reopened.text()).toBe('ab  cd');
+    });
+  }
+});
+
 describe('an emptied saved result', () => {
   test('is one unit the caret steps over, and typing lands beside it', () => {
     const host = open(paragraphWith(MERGE));

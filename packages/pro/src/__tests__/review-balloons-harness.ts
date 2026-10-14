@@ -172,13 +172,18 @@ function press(element: Element): void {
   element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
 }
 
-/** `commentMarkers: 'initials'` (default), then `'icon'`, both read live from the editor. */
+/** `commentMarkers: 'icon'` (default), then `'initials'`, both read live from the editor. */
 export async function checkCommentMarkers(
   container: HTMLElement,
   editor: DocxEditorInstance,
   change: Change
 ): Promise<void> {
   await change(() => editor.exec({ type: 'toggleReviewPane' }));
+  for (const marker of all(container, '[data-testid="review-marker"]')) {
+    expect(marker.hasAttribute('data-marker')).toBe(false);
+    expect(q(marker, '[data-testid="review-badge"]')).toBeNull();
+  }
+  await change(() => editor.setReviewPaneOptions({ commentMarkers: 'initials' }));
   const markers = all(container, '[data-testid="review-marker"][data-kind="comment"]');
   expect(markers).toHaveLength(2);
   const [open, closed] = markers as [HTMLElement, HTMLElement];
@@ -205,7 +210,6 @@ export async function checkCommentMarkers(
     ok: false,
     code: 'invalidArgs',
   });
-  await change(() => editor.setReviewPaneOptions({ commentMarkers: 'initials' }));
   await change(() => editor.exec({ type: 'toggleReviewPane' }));
 }
 
@@ -482,6 +486,75 @@ export async function checkRevealOpensPane(
     editor.setActiveReviewItem(insert.key, { announce: true });
   });
   expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => editor.setReviewPaneOptions({ opening: 'auto' }));
+}
+
+/** A click on commented text opens a closed pane at its card; a caret move alone does not. */
+export async function checkCommentClickOpensPane(
+  container: HTMLElement,
+  editor: DocxEditorInstance,
+  change: Change
+): Promise<void> {
+  if (editor.isReviewPaneOpen()) await change(() => editor.exec({ type: 'toggleReviewPane' }));
+  const page = q(container, '.docx-paginated-surface')!;
+  const paragraphs = editor.surface!.session.paragraphIds();
+  // The first paragraph is the open thread's text; the second carries no comment.
+  const place = (index: number) => {
+    const at = { paragraphId: paragraphs[index]!, offset: 2 };
+    editor.surface!.setSelection({ anchor: at, head: at });
+  };
+  const click = () => page.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+  await change(() => place(0));
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  // A handled link click must keep its own interaction without opening the review pane.
+  await change(() => {
+    const handled = new MouseEvent('click', { bubbles: true, cancelable: true });
+    handled.preventDefault();
+    page.dispatchEvent(handled);
+  });
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  // A nested editor must not activate the outer editor's selected comment.
+  const nestedScroller = document.createElement('div');
+  nestedScroller.className = 'docx-editor__scroll-container';
+  const nestedPage = document.createElement('div');
+  nestedPage.className = 'docx-paginated-surface';
+  nestedScroller.append(nestedPage);
+  page.append(nestedScroller);
+  try {
+    await change(() => nestedPage.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    expect(editor.isReviewPaneOpen()).toBe(false);
+  } finally {
+    nestedScroller.remove();
+  }
+  // A click that ends a drag selection must not move the document by opening the pane.
+  await change(() => {
+    editor.surface!.setSelection({
+      anchor: { paragraphId: paragraphs[0]!, offset: 1 },
+      head: { paragraphId: paragraphs[0]!, offset: 3 },
+    });
+    click();
+  });
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => {
+    place(1);
+    click();
+  });
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(() => {
+    place(0);
+    click();
+  });
+  expect(editor.isReviewPaneOpen()).toBe(true);
+  const active = editor.getReviewItems({ placement: false }).find((item) => item.isActive);
+  expect(active?.kind).toBe('comment');
+
+  // A reader's own click, like a click on a marker, opens the pane under `opening: 'manual'`.
+  await change(() => editor.setReviewPaneOptions({ opening: 'manual' }));
+  await change(() => editor.exec({ type: 'toggleReviewPane' }));
+  expect(editor.isReviewPaneOpen()).toBe(false);
+  await change(click);
+  expect(editor.isReviewPaneOpen()).toBe(true);
   await change(() => editor.setReviewPaneOptions({ opening: 'auto' }));
 }
 

@@ -1,0 +1,48 @@
+---
+title: 'HTTP exporter and route reference'
+description: 'Configure HTTP event batches, delivery, filtering, and server validation.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Use this reference to configure HTTP export and server validation. For the setup steps, see [Send to a log service](/docs/2.x/telemetry/log-services).
+
+## httpExporter
+
+`httpExporter` posts a JSON array of events to your route. While the page is open, it sends a batch when `batchSize` events are waiting or `flushIntervalMs` has passed. When you call `telemetry.flush()` on an open page, it sends everything with `fetch`. When the page becomes hidden, it sends queued events with `navigator.sendBeacon`. Delivery can continue while the tab closes.
+
+A closing page has a total delivery budget of about 64 KiB. Delivery is best effort. The exporter drops events beyond that budget and reports them to `onError`. If you withdraw consent, it discards queued events.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `url` | Required | The route to post to. Use a path on your own origin. |
+| `batchSize` | `20` | Events per request, from 1 to 50. Keep it at or below the route's `maxEvents`, which defaults to 50. The route refuses larger batches. |
+| `flushIntervalMs` | `10000` | How long an event waits for its batch to fill. |
+| `headers` | None | Extra request headers. With headers, the batches sent while the page closes use `fetch` with `keepalive`, because `sendBeacon` cannot send headers. |
+| `onError` | None | Called when a request fails or a closing page drops events. The exporter never throws into your app. |
+
+## filter
+
+`filter` decides which events reach your exporters. Metrics still count every event. Filter by event kind to include summaries of repeated refusals. These summaries carry `repeated`. `isFailure` returns `false` for them. To count failures with summaries included, sum `failureCount(event)`.
+
+## browserPrivacySignals
+
+`browserPrivacySignals` returns a `consent` function. It returns `false` outside a browser page. To combine it with your consent manager, call both: `consent: () => privacy() && consentManager.analytics`.
+
+## telemetryRoute
+
+`telemetryRoute` returns a Fetch-style `POST` handler for Next.js route handlers, Hono, Bun, Deno, and Cloudflare Workers. For each request, it does the following:
+
+1. Ignores any method other than `POST`.
+2. Refuses an origin outside `allowedOrigins`, when you set it.
+3. Reads at most `maxBodyBytes` (64 KiB, counted in bytes) and refuses an array longer than `maxEvents` (50). If you raise `maxEvents`, the browser's `batchSize` still stops at 50.
+4. Checks every event with the same lists and ranges that the browser used. It drops an event with an unknown kind or code, a code of another kind, or missing required fields. It also drops an event with a value outside its list or range, such as a negative duration or a fractional count. It removes unknown fields, and numbers or timing summaries that the event's kind does not carry. A timing summary must have whole counts, and its bands must add up to its `count`. Its median must be no larger than its 95th percentile, and that no larger than its maximum. A performance summary must have at least one timing summary.
+5. Drops the `resource` and `attributes` that the browser set, except the keys you list in `attributeKeys`. Add your fixed fields, such as a service name, on the server instead.
+6. Calls `forward` with the events that pass.
+
+The handler returns `204` for every request. Use `onError` to see failures, including a log service that refuses the request. Apply rate limits through your platform; the route does not enforce them.
+
+## toLogRecord
+
+`toLogRecord(event)` adds `dt` for the timestamp and `message` for a one-line summary. For example, the summary can be `edit.rejected edit.picture-selected`. It removes `hint` and `docs`, which you can look up from the diagnostic code.

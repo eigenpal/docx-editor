@@ -1,5 +1,105 @@
 # @docx-editor.dev/core
 
+## 2.29.0
+
+### Minor Changes
+
+- e3f8337: Failed opens, refused edits, and skipped tracked changes now carry anonymous failure detail: the engine reason, the role of the part, the class of an unexpected exception, and the kind of tracked change. An open or a command that throws is now reported too.
+- e3f8337: Report undo history and custom node payload diagnostics in the anonymous diagnostics stream, add the bucketed document shape to opened documents, and stop including font family and part names in font error messages.
+- e3f8337: Report anonymous diagnostics with stable codes and fixed hints when a document fails to open, an edit or tracked change is refused, or a font fails, through `editor.on('diagnostic')` and a module `onDiagnostic` listener. Open failure messages no longer include names from inside the file.
+- e3f8337: Editors report an anonymous `performance` diagnostic once per minute of use, with the time from a key press or click to the next frame and the engine layout and paint times, and the telemetry package records it in a new `performance` area.
+- b6fdbf5: With paragraph marks shown, page breaks, column breaks, and section breaks show a labeled dotted line that names the break type.
+
+### Patch Changes
+
+- e3f8337: A collaboration status diagnostic reports a connect time only when the editor saw the room join, so a room that was ready before the editor attached no longer reports a connect time near zero.
+- 75a3ce3: Text after a column break at the start of a paragraph now gets the paragraph's space before in the next column or page.
+- f90ab3a: Copying a selected computed field now copies its whole result as plain text. Fixes #1245
+- 838394b: Fix copied header and footer field results that repeat across pages.
+- 7146830: The first paragraph of a document no longer starts below the top margin when it uses automatic space before.
+- f397ea3: A table row with an exact height taller than the page now fills a page instead of failing the whole layout. Fixes #1220
+- 3741111: Table rows no longer grow by an extra line when a cell hides its end mark and ends with an empty paragraph.
+- 6dd82b5: Justified lines keep a word that contains a no-break space on the line when its spaces can shrink to fit.
+- 6dd82b5: Justified lines that contain a tab keep their last word on the line when the spaces after the tab can shrink to fit.
+- 4270ac9: Exact line spacing keeps the font baseline under `w:noExtraLineSpacing` in every compatibility mode, including mode 15. Fixes #1205
+- 15bcf38: Lay out documents whose nested table rows, cell pictures, balanced column sections, or chains of wrapped floating objects do not fit on one page, instead of rejecting them. Separate table rows by their cell spacing, and drop hidden empty paragraphs before tables.
+- 2f60b53: A page break directly followed by a line break no longer starts a new page, and a paragraph that opens with a column break keeps that break on a full page or column. Fixes #1219. Fixes #1222
+- e3f8337: Inserting a picture while a picture is selected is refused with a clear reason, the toolbar button explains it, and refused picture inserts and replacements now reach diagnostics.
+- 388c278: Table rows keep a minimum height when you drag their border, so a resized row can always be dragged back. Fixes #1270
+- a16db3a: Selecting text next to a tracked change or comment no longer highlights that change as active.
+- a768653: Formatting a selection that includes a generated table of contents now formats the rest of the selection instead of refusing the whole change.
+- c78d733: Underlines, including tracked insertion underlines, now draw as one unbroken line across spaces and descenders.
+- Updated dependencies: @docx-editor.dev/i18n@2.29.0
+
+## 2.28.0
+
+### Minor Changes
+
+- 9535470: Home, End, Up, Down, and clicks at a wrapped line edge put the caret on the correct line, and typed text lands where the caret shows. `moveCaret` accepts and returns an optional `lineId` for the line the caret shows on.
+- 9535470: Add `compactCollaborationState` and `checkCollaborationRoomGeneration`, so a Hocuspocus server keeps each room's size bounded by compacting it into a new generation when it loads the room. A replica that still holds the previous generation reports `room-generation-changed` and rejoins.
+- 9535470: Add `loadingIndicator` to the packaged React editor and a `loadingIndicator` slot to the Vue editor, so you can replace the loading spinner, including on the first page while a large document opens.
+- 9535470: Add a `fieldResults: 'editable'` option to `createDocxEditor` and the React and Vue editors, so readers can type, delete, and select inside the saved results of DATE, MERGEFIELD, HYPERLINK, and similar fields. Fixes #1197
+- 9535470: Layout accepts a `fieldResults: 'editable'` option that lays out the saved results of DATE, MERGEFIELD, HYPERLINK, and similar fields as text, so the caret, hit testing, and selection work inside a result. The default `atomic` mode is unchanged.
+- 9535470: The store can address the saved results of DATE, MERGEFIELD, HYPERLINK, and similar fields as editable text through a new `fieldResults: 'editable'` option on transactions, edit options, and `paragraphTextOf`. The default `atomic` mode keeps every field one unit, so existing offsets do not change.
+- 9535470: Improve the layout of pictures, text boxes, drawing groups, and header and footer floating tables, honor clearing line breaks, and show embedded object and fallback previews that did not paint before.
+- 9535470: A click at a line edge keeps the caret on the clicked line, in multi-line field results, wrapped text, right-to-left lines, and beside inline pictures. `caretAt` accepts an optional `preferredLineId` that selects which painted line shows a shared position.
+- 9535470: The navigation pane now works inside `DocxEditor.Viewport`, covers the page on narrow screens, and captures the browser's find shortcut (Ctrl+F, or Cmd+F on macOS) while focus is in the editor; set `findShortcut` to `false` on the pane, or in the `navigation` prop, to leave the shortcut to the browser.
+- 9535470: Change the author, and optionally the date, of pending tracked changes without accepting or rejecting them, with `useReview().adopt()`, the `setReviewChangesAuthor` editor command, or `RevisionCollection.setAuthor()`. Fixes #1145
+- 9535470: Add tracked change balloons, comment marker styles, and horizontal review pane scrolling. Comment markers use icons by default; set `commentMarkers: 'initials'` to show author initials and reply counts.
+- 9535470: Add the `reviewItemReveal` editor event, which fires when Next Change or Previous Change lands on a review item, or when `setActiveReviewItem` succeeds with `announce: true`, so a host can open its own balloon or card.
+- 9535470: Add review pane settings, `getReviewItemsAt`, `getReviewItemRects`, `getActivatedReviewItemKey`, replacement pairing, and `scrollToBlock` scroll options for hosts that draw their own review interface. Fix the compact review card template, reply author colors, and `useReviewAuthor` outside the review rail.
+- 9535470: With `revisionsIn: 'balloons'`, comments that reply to tracked changes no longer open an empty review pane, and the new `reviewPaneListsItem` export tells a custom review pane which items to list. PDF export marks text in tracked table rows inside text boxes.
+- 9535470: Toolbar and menu popups close when focus moves elsewhere, such as to the find field, and the navigation pane stays docked beside a scrolling review column. `Toolbar.Button`, `Menu.Item`, and `ContextMenu.Slot` take `slotId`; `slot` is deprecated and still works with a development warning, and on `MenuItemProps` and `MenuSubmenuProps` both `slot` and `labelKey` are optional, because `slotId` and `label` can take their place.
+- 9535470: Pressing Tab or Shift+Tab over selected paragraphs, or over a selection from a paragraph start, changes their indent and keeps the text, where Tab replaced the text with a tab before. Fixes #1172
+- 9535470: PDF export marks text in tracked table rows, new table rows keep the source row's paragraph formatting, and tracked edits can start right after your own pending insertion. A range whose text changed since it was read now fails with `StaleDocument` instead of editing the wrong text.
+
+### Patch Changes
+
+- 9535470: Stop editing a long document from growing memory with every edit, most of all inside long tables, lists, and documents with headers or footers.
+- 9535470: Keep your caret, and the carets of other participants, next to the same character when one remote update changes text on both sides of it.
+- 9535470: Keep caret positions and selections before and after computed fields in field-only paragraphs.
+- 9535470: A list level with empty number text keeps its suffix, so the first line and the caret in an empty item start at the tab stop, after the space, or at the number position.
+- 63dde82: Keep saved fields with empty text elements selectable and removable in editable field-result mode.
+- 9535470: Use less memory to open long documents, and release a closed document's memory, including after a PDF export whose result you keep.
+- 9535470: Typing, pressing Enter, and turning paragraphs into lists respond faster in long documents.
+- 9535470: Allow selecting listed font names that contain commas or semicolons, keep script default fonts in large documents, and ignore font-table alternate names longer than 31 characters.
+- 9535470: The font substitution notice lists only fonts that the document's text renders in, so East Asian fonts named for Latin-only text and fonts overridden by a nearer style no longer appear.
+- 9535470: Text uses the correct font for full-width characters, East Asian font hints, the no-break space, and font slots that no style names, and PDF export and the font substitution notice use the same fonts.
+- 9535470: Keep a line on its page in a section with a document line grid when its text fits above the bottom margin and only the space below the text crosses it.
+- 9535470: Lay out multiple and at-least line spacing in sections with a document line grid in whole grid lines, with the text centered.
+- 9535470: Use the declared hAnsi font for eligible non-ASCII text when it differs from the ascii font.
+- 9535470: Keep line-fitting spacing adjustments out of Format Painter writes.
+- 9535470: Tables in older compatibility modes align their content with the text column for every alignment, indent, and layout, AutoFit tables without a width fit the room their indent leaves, and a compatibility mode declared outside the compat element applies.
+- 9535470: Disable the menu bar while a large document opens, and show the loading indicator higher on the page.
+- 9535470: Snap footnote and endnote lines to the document line grid of the section that holds them.
+- 9535470: A paragraph border box now starts at the first line of a hanging indent, and adjacent bordered paragraphs share one box when their box edges match.
+- 9535470: A paragraph that holds more than one `w:pPr` element now loads with its first one, shows, and saves, instead of disappearing from the editor.
+- 9535470: Editor popups close when focus moves into a host's own modal dialog, and the Vue table toolbar keeps its menus in server-rendered apps after the selection leaves a table and returns.
+- 9535470: Split mixed East Asian cached field text into font-specific display spans while preserving each field's atomic model range.
+
+  Keep note navigation and measurement reservations unchanged. This changes font selection for displayed field results, without changing canonical data.
+
+- 9535470: A selection that the host sets now stays where the host put it, also when a participant's earlier change is still showing.
+- 9535470: A paragraph that opens with a page break followed by another page or column break no longer adds an extra blank page after a full page.
+- 9535470: Tables draw the borders that a row's own table property exceptions set, so a row that clears its borders draws no rules.
+- 9535470: Read run language only from WordprocessingML namespace elements and attributes. Keep foreign extensions in saved documents.
+- 9535470: Read run and paragraph properties only from WordprocessingML namespace elements and attributes, and keep foreign extensions unchanged when you edit formatting.
+- 9535470: Give a line with large superscript, subscript, or note reference text the full height of that text above and below the baseline on every line, which also corrects these lines on a document grid, and stop scaling raised text offsets with multiple line spacing. Fixes #1198
+- 9535470: Open large documents faster without freezing the page as long, and reduce memory use and typing delays in large documents, including line breaks, numbered paragraph breaks before tables, table edits, undo, and redo.
+
+  Fix row resizing in large documents, support column resizing below horizontal merged headers, keep empty cell carets inside their cells, and correct borders and excess wrapping in tables with partial borders.
+
+- 9535470: Keep the page responsive while a large document opens by reading and laying it out in small steps, and show its first pages under the loading indicator until it is ready.
+- 9535470: Keep symbol-font bullets and checkboxes visible when the symbol font is unavailable, and lay out their lines and glyph widths with the symbol font's own metrics.
+- 9535470: Tables with a percentage width above 100% extend past the text column instead of shrinking to it, so their cells keep their line breaks.
+- 9535470: AutoFit tables share width between columns by each column's spare room above its content. Tables with zero cell margins, in text boxes, nested without a width, or right to left take their correct width and position.
+- 9535470: Preserve whole document font names and resolve unavailable faces through whole font-table alternate names.
+
+  Use the same admitted substitute for editor measurement, painting, font notices, and font-backed export.
+
+- 9535470: Render horizontal and vertical VML shape paths with one zero extent.
+- Updated dependencies: @docx-editor.dev/i18n@2.28.0
+
 ## 2.27.0
 
 ### Minor Changes

@@ -73,6 +73,19 @@ test.each([
     expect(linesOf(layout)[0]!.spans[0]!.style[mark]).toBe(true);
   if (mark.startsWith('double')) expect(span.style.textDecorationStyle).toBe('double');
 });
+test('a configured underline keeps the thin rule below the descenders', () => {
+  const { root } = render(`<w:p>${revision('ins', 'quick fox')}</w:p>`, {});
+  const span = root.querySelector<HTMLElement>('[data-revision-kind="insert"]')!;
+  expect(span.style.textDecorationLine).toBe('underline');
+  expect(span.style.textDecorationThickness).toBe(
+    'var(--doc-revision-insertion-decoration-thickness)'
+  );
+  expect(span.style.textUnderlineOffset).toBe('var(--doc-revision-insertion-underline-offset)');
+  // Each word is its own run box, so only the line can keep one rule across the spaces.
+  const line = span.closest<HTMLElement>('.docx-line')!;
+  expect(line.style.getPropertyValue('text-decoration-skip-ink')).toBe('none');
+  expect(line.style.getPropertyValue('text-decoration-skip-spaces')).toBe('none');
+});
 test.each([
   ['hidden', '', 0],
   ['caret', '^', 6],

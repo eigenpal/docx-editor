@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "Wählen Sie Text aus, um dessen Formatierung zu kopieren",
     "nothingToPaint": "Wählen Sie Text aus, auf den Sie die Formatierung übertragen möchten",
     "noReviewAuthors": "Dieses Dokument enthält keine Überarbeitungsautoren",
-    "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest."
+    "suggestingNeedsAuthor": "Vorschläge benötigen einen Autor. Legen Sie den Autor in der Editorkonfiguration fest.",
+    "pictureSelected": "Ein Bild ist ausgewählt. Setzen Sie den Cursor in den Text, um ein Bild einzufügen."
   },
   "equationPopup": {
     "apply": "Übernehmen",
@@ -981,5 +982,14 @@
     "insertionsBackground": "Hintergrund für Einfügungen",
     "movedFromBackground": "Hintergrund für Verschiebungsquellen",
     "movedToBackground": "Hintergrund für Verschiebungsziele"
+  },
+  "formattingMarks": {
+    "columnBreak": "Spaltenumbruch",
+    "pageBreak": "Seitenumbruch",
+    "sectionBreakContinuous": "Abschnittswechsel (Fortlaufend)",
+    "sectionBreakEvenPage": "Abschnittswechsel (Gerade Seite)",
+    "sectionBreakNextColumn": "Abschnittswechsel (Neue Spalte)",
+    "sectionBreakNextPage": "Abschnittswechsel (Nächste Seite)",
+    "sectionBreakOddPage": "Abschnittswechsel (Ungerade Seite)"
   }
 }

@@ -1,0 +1,276 @@
+---
+title: 'Diagnostics'
+description: 'Use diagnostic codes to investigate document, editing, review, font, and collaboration failures.'
+category: 'Guides'
+---
+
+The editor reports diagnostics for document opening, editing, review, fonts, and collaboration. Failure diagnostics carry stable codes. Look up a code to get a fixed hint with its cause and recommended action.
+
+Diagnostics never contain document content. The editor builds them from closed lists of codes, booleans, and bucketed numbers. Document text, part names, relationship targets, author names, and font names are never included. You can export these fields to an error tracker or metrics backend. Review any attributes that you add and any data your SDK collects. For more information, see [Privacy review checklist](/docs/2.x/telemetry/privacy-review).
+
+## Receive diagnostics
+
+Register a module with an `onDiagnostic` listener to receive diagnostics from the initial document open. The editor opens that document before your code can call `editor.on`.
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { explainDiagnostic, type EditorDiagnostic, type EditorModule } from '@docx-editor.dev/core';
+
+// Create the module once, outside the component. The editor reads modules only at creation.
+const diagnostics: EditorModule = {
+  id: 'diagnostics',
+  onDiagnostic: (event: EditorDiagnostic) => {
+    if (event.kind === 'edit.rejected') {
+      console.warn(event.code, explainDiagnostic(event.code).hint);
+    }
+  },
+};
+
+const MODULES = [diagnostics];
+
+export function Editor({ bytes }: { bytes: Uint8Array }) {
+  return <DocxEditor document={bytes} modules={MODULES} />;
+}
+```
+
+After the editor exists, you can also subscribe with `editor.on('diagnostic', listener)`. Both receive the same events. A listener that throws doesn't affect the editor.
+
+## Diagnostic kinds
+
+Switch on `kind` to narrow the event. Every event also has `schemaVersion`, `editorSessionId`, and `time`. Each editor instance generates a random `editorSessionId` and does not persist it. Use it to connect diagnostics from the same instance.
+
+| Kind | When | Fields |
+| --- | --- | --- |
+| `document.open` | A document opened or failed to open. | `outcome` (`opened` or `rejected`), `sizeBucket`, and `pagesBucket` and `durationMs` when opened, or `code` and the [failure detail](#failure-detail) when rejected. A headless host doesn't paginate, so it omits `pagesBucket`. An opened document also has `shape`, with part, paragraph, review item, and embedded font buckets. |
+| `edit.rejected` | An edit, a command, or a tracked change was refused. | `code`, `origin` (`command`, `input`, or `automation`), `tracked`, `command` for a refused `exec` call, and the [failure detail](#failure-detail). |
+| `review.skipped` | Accepting, rejecting, or reassigning tracked changes skipped some of them. | `code`, `count`, and the [failure detail](#failure-detail): `operation`, `changeKind`, `formattingKind`, and `part`. |
+| `font.failed` | A font did not load, and the editor used a substitute. | `code`. |
+| `history` | An undo step did not group as the gesture intended. Informational. | `code`. |
+| `custom-node` | A custom node payload in the document could not be read. The node name is not included. | `code`. |
+| `collab.status` | A collaboration session joined, disconnected, failed, or healed. | `status`, `previous`, `recovering`, and `code` when something is wrong. The first `ready` includes `connectMs` only when the editor observed the wait. |
+| `collab.participants` | The number of people in the room changed. | `count`, this editor included. |
+| `performance` | The editor summarizes timings after a minute, when the page becomes hidden, or when the editor closes. | `windowMs`, optional `pagesBucket`, and optional `interaction`, `layout`, and `paint` summaries. Slow interactions also include `code`. See [Measure performance](/docs/2.x/telemetry/performance). |
+| `document.save` | A `save()` call returned the document or failed. | `outcome` (`saved` or `rejected`) and `durationMs`, with `sizeBucket` when saved, or `code` and the [failure detail](#failure-detail) when rejected. |
+| `session` | An editor started, was used, or ended. | `phase` (`start`, `active`, or `end`). An `active` summary and an `end` event also have `durationMs`, `activeMs`, `inputEdits`, `commandEdits`, and `automationEdits`. See [Measure sessions, edits, and saves](/docs/2.x/telemetry/sessions). |
+
+Document sizes and counts use buckets, such as `4-8MiB` or `10-99`. Rare combinations can still distinguish documents within an organization. The telemetry package omits detailed shape buckets by default.
+
+## Failure detail
+
+A code identifies the failure. Optional detail fields identify the engine condition and where it occurred. These fields use closed lists and help you investigate without document content.
+
+| Field | On | What it holds |
+| --- | --- | --- |
+| `cause` | `document.open`, `document.save`, `edit.rejected`, `review.skipped` | The engine's own reason, such as `undeclared-prefix` under `open.xml-malformed`, `split-not-clean` under `edit.unmapped-change`, or `unaddressed` (a change with no `w:id` or author) under `review.revision-unsupported`. For an error the engine did not expect, `exception`. |
+| `errorName` | `document.open`, `document.save`, `edit.rejected` | The class of the exception when `cause` is `exception`, such as `TypeError`. The message is never included, because it can quote the document. |
+| `stage` | `document.open`, `document.save`, `edit.rejected` | Where an exception was caught: `open-mount`, `open-layout`, `command`, `review-item` (accept or reject from a review card), `automation` (an editing API batch), or `save`. |
+| `part` | `document.open`, `review.skipped` | The role of the package part, such as `main-document`, `header`, `footnotes`, or `relationships`, never its name. A part under a nonstandard name reports `other`. |
+| `operation` | `review.skipped` | `accept`, `reject`, or `reassign`. |
+| `changeKind` | `review.skipped` | The kind of the skipped change: `insert`, `delete`, `replace`, `moveFrom`, `moveTo`, `format`, `paragraphMark`, or `structural`. |
+| `formattingKind` | `review.skipped` | For a formatting change, its property change, such as `rPrChange` or `tblGridChange`. Any other element reports `other`. |
+
+Use `code` for application logic. Use `cause` for investigation, because these internal reasons can change between versions. To list every cause, call `diagnosticCauses()`.
+
+An open that throws reports `open.failed` with `cause: 'exception'`. A save that throws reports `save.failed` with `cause: 'exception'`. A command, a review card action, or an editing API batch that throws reports `edit.internal-invariant` with `cause: 'exception'`. The error still reaches your code as before. An exception from your own code inside `run()` is not reported.
+
+These examples show a malformed header and a skipped formatting change:
+
+```json
+{ "kind": "document.open", "outcome": "rejected", "code": "open.xml-malformed",
+  "cause": "undeclared-prefix", "part": "header", "sizeBucket": "64-128KiB" }
+
+{ "kind": "review.skipped", "code": "review.revision-unsupported", "count": 3,
+  "operation": "accept", "changeKind": "format", "formattingKind": "tblGridChange",
+  "part": "main-document" }
+```
+
+When you report a problem, include the code, the failure detail, and the `engineVersion` that your telemetry adds. A refusal's `cause` names the engine condition that refused it. An exception's `errorName` and `stage` say what kind of error it was and where it was caught; they do not include a stack trace.
+
+## Codes
+
+Codes are stable. New codes can be added, but existing codes are never renamed. To get the hint for a code in your own code, call `explainDiagnostic(code)`. To get the code for the local refusal message in `snapshot().lastRejection`, call `diagnosticCodeOfRefusal(reason)`.
+
+### Open
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="open-unsupported-source" />`open.unsupported-source` | The editor was given something that is not DOCX bytes. Pass a Uint8Array or an ArrayBuffer of a .docx file, or 'blank'. |
+| <a id="open-zip-corrupt" />`open.zip-corrupt` | The file is not a valid ZIP archive, or a compressed entry is damaged. Ask for a fresh copy of the file. |
+| <a id="open-zip-invalid-entry-name" />`open.zip-invalid-entry-name` | The archive contains an entry with an unsafe path, such as ".." or a leading "/". The editor refuses it for safety. |
+| <a id="open-zip-entry-limit" />`open.zip-entry-limit` | The archive has more entries than the open limit allows. For a trusted file, the server API accepts a higher limit: limits.zip.maxEntries in createServer. |
+| <a id="open-zip-size-limit" />`open.zip-size-limit` | The archive expands to more than the total size limit. For a trusted file, the server API accepts a higher limit: limits.zip.maxTotalBytes in createServer. |
+| <a id="open-zip-ratio-limit" />`open.zip-ratio-limit` | The file expands to many times its compressed size, which is how a decompression bomb looks. For a trusted file, the server API accepts a higher limit: limits.zip.maxRatio in createServer. |
+| <a id="open-xml-malformed" />`open.xml-malformed` | An XML part of the document is not well formed. Opening and saving the file in a desktop editor usually repairs it. |
+| <a id="open-xml-dtd-forbidden" />`open.xml-dtd-forbidden` | An XML part declares a DTD or an entity. The editor refuses these to block XML entity attacks. |
+| <a id="open-xml-part-size-limit" />`open.xml-part-size-limit` | One XML part is larger than the per-part size limit. For a trusted file, the server API accepts a higher limit: limits.xml.maxBytes in createServer. |
+| <a id="open-xml-depth-limit" />`open.xml-depth-limit` | An XML part nests deeper than the depth limit, often through deeply nested tables. This limit is fixed; flatten the nesting to open the file. |
+| <a id="open-xml-element-limit" />`open.xml-element-limit` | An XML part has more elements than the element limit. For a trusted file, the server API accepts a higher limit: limits.xml.maxElements in createServer. |
+| <a id="open-invalid-limits" />`open.invalid-limits` | The limits passed to createServer are not valid numbers. Check the limits option. |
+| <a id="open-content-types-invalid" />`open.content-types-invalid` | The file has no valid [Content_Types].xml part, so it is not a usable Office package. Save it again as .docx. |
+| <a id="open-missing-main-document" />`open.missing-main-document` | The package has no main document part. The file may be a different Office format, such as .xlsx or .pptx, renamed to .docx. |
+| <a id="open-relationships-invalid" />`open.relationships-invalid` | A relationship in the package is invalid or duplicated. Opening and saving the file in a desktop editor usually repairs it. |
+| <a id="open-relationship-limit" />`open.relationship-limit` | The package has more relationships than the open limit allows. For a trusted file, the server API accepts a higher limit: limits.maxRelationships in createServer. |
+| <a id="open-part-limit" />`open.part-limit` | The package has more XML parts than the open limit allows. For a trusted file, the server API accepts a higher limit: limits.maxXmlParts in createServer. |
+| <a id="open-failed" />`open.failed` | The document could not be opened for a reason without a specific code. Report it with the engine version. |
+
+### Save
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="save-no-document" />`save.no-document` | save() ran before a document was loaded, or after it failed to open. Wait for the open to finish, and check the document.open event for a refusal. |
+| <a id="save-document-changed" />`save.document-changed` | A new document was loaded while save() waited for a pending edit. Save again after the new document opens. |
+| <a id="save-failed" />`save.failed` | save() threw. The errorName and stage fields name the class of the error; its message is never reported. Report it with the editor version. |
+
+### Edit
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="edit-read-only" />`edit.read-only` | The document is open for viewing or is protected as read-only, so edits are refused. Change the editing mode, or remove the protection. |
+| <a id="edit-protected-content" />`edit.protected-content` | The edit touches content that document protection or a locked content control does not allow you to change. |
+| <a id="edit-suggesting-needs-author" />`edit.suggesting-needs-author` | Suggesting (tracking changes) needs an author to attribute each change to. Pass the author option or call setAuthor. |
+| <a id="edit-review-module-required" />`edit.review-module-required` | This operation needs the review module. Register reviewModule() from @docx-editor.dev/pro in modules. |
+| <a id="edit-tracked-drawing-delete-unsupported" />`edit.tracked-drawing-delete-unsupported` | This operation cannot record a drawing deletion as a tracked change, so nothing was deleted. Leave the drawing and report it, or ask a person to delete it in the editor, which records the deletion as a tracked change. |
+| <a id="edit-tracked-structure-unsupported" />`edit.tracked-structure-unsupported` | This structural edit cannot be recorded as a tracked change. Edit the text inside the structure instead, or ask a person to make the change with tracking off. |
+| <a id="edit-tracked-operation-unsupported" />`edit.tracked-operation-unsupported` | This editing API operation cannot be recorded as a tracked change, so nothing was applied. Use text edits such as range.insertText or range.delete, which tracking records. Never switch tracking off to make the edit succeed. |
+| <a id="edit-tracking-mode-unsupported" />`edit.tracking-mode-unsupported` | TrackAll needs every collaborator to enforce tracking, which this runtime cannot guarantee. Use TrackMineOnly instead. |
+| <a id="edit-tracking-author-required" />`edit.tracking-author-required` | TrackMineOnly needs an author for each tracked change. Pass the author option to createServer or createBrowser. The author set on the editor does not apply to an editing API batch. |
+| <a id="edit-tracking-unsupported-host" />`edit.tracking-unsupported-host` | This automation host does not support change tracking. The runtimes from createServer and from a mounted editor both support TrackMineOnly. |
+| <a id="edit-revision-unsupported" />`edit.revision-unsupported` | The edit, accept, or reject touches a tracked change of a kind the editor cannot change yet. Edit around it, and leave that change for a person to review. |
+| <a id="edit-tracking-required" />`edit.tracking-required` | Document protection allows edits only as tracked changes. Switch to suggesting mode, or set document.changeTrackingMode to TrackMineOnly in an editing API batch, then edit again. |
+| <a id="edit-tracked-image-replace-unsupported" />`edit.tracked-image-replace-unsupported` | Replacing a picture cannot be recorded as a tracked change, so the picture did not change. Insert the new picture as a tracked insertion, or ask a person to replace it with tracking off. |
+| <a id="edit-picture-selected" />`edit.picture-selected` | A picture is selected, so the new picture has no place to go and nothing was inserted. Place the caret in text next to the picture, then insert again. |
+| <a id="edit-cross-structure-join" />`edit.cross-structure-join` | The edit would join paragraphs that live in different containers, such as two table cells. Edit each container separately. |
+| <a id="edit-indivisible-content" />`edit.indivisible-content` | The edit would split content that must stay whole, such as an equation or a field. Select the whole item instead. |
+| <a id="edit-field-structure" />`edit.field-structure` | The edit would break the structure of a field. Edit the field result as a whole, or remove the whole field. |
+| <a id="edit-section-mark" />`edit.section-mark` | The edit would remove a section break that holds page layout settings. Remove the section break on its own. |
+| <a id="edit-table-structure-unsupported" />`edit.table-structure-unsupported` | The table edit is not supported for this table shape, for example a table with merged cells. Change the merge first. |
+| <a id="edit-table-insert-refused" />`edit.table-insert-refused` | A table cannot be inserted at the selection, for example inside a field or a locked content control. Move the caret first. |
+| <a id="edit-table-of-contents-refused" />`edit.table-of-contents-refused` | The table of contents could not be inserted or updated at this place. Check that the selection is in the main document body. |
+| <a id="edit-unsupported-content" />`edit.unsupported-content` | The edit touches content the editor shows but cannot change yet. The content is kept as it is. |
+| <a id="edit-operation-unsupported" />`edit.operation-unsupported` | This editing API operation or option is not supported by this runtime or host. Check the compatibility notes for the member you called. |
+| <a id="edit-unsupported-story" />`edit.unsupported-story` | This part of the document, such as a header, a footer or a note, does not support this edit. |
+| <a id="edit-unmapped-change" />`edit.unmapped-change` | The browser changed the page in a way the editor could not express as a document edit, so the change was undone. |
+| <a id="edit-stale-target" />`edit.stale-target` | The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and reconsider the edit before you retry. |
+| <a id="edit-invalid-argument" />`edit.invalid-argument` | The command arguments are not valid for this target. Check the command type and its fields. |
+| <a id="edit-resource-limit" />`edit.resource-limit` | The edit would exceed a size or nesting limit. Split the change into smaller edits. |
+| <a id="edit-refresh-in-progress" />`edit.refresh-in-progress` | An external document refresh is in progress. Retry the edit after the refresh completes. |
+| <a id="edit-collaboration-not-ready" />`edit.collaboration-not-ready` | The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin. |
+| <a id="edit-collaboration-text-limit" />`edit.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
+| <a id="edit-internal-invariant" />`edit.internal-invariant` | The editor refused an edit to protect the document structure. This is an engine defect: report the code with the engine version. |
+| <a id="edit-refused" />`edit.refused` | The edit was refused for a reason without a specific code. Read `snapshot().lastRejection` for the local message. |
+
+### Review
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="review-revision-unsupported" />`review.revision-unsupported` | A tracked change of this kind cannot be accepted or rejected yet. It was left in the document. |
+| <a id="review-incomplete-group" />`review.incomplete-group` | The tracked change is part of a group that was not fully selected. Select the whole group, or resolve it from the review pane. |
+| <a id="review-retained-structure" />`review.retained-structure` | Resolving the tracked change would remove structure that other content still needs, so it was left in place. |
+| <a id="review-stale-revision" />`review.stale-revision` | The tracked change no longer exists, usually because it was resolved already. Read the review items again. |
+
+### Font
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="font-shaper-unavailable" />`font.shaper-unavailable` | The text shaper did not load, so text is measured with fallback metrics. Check that your bundler serves the HarfBuzz WebAssembly file. |
+| <a id="font-load-failed" />`font.load-failed` | A font face could not be loaded. The editor uses a substitute. Check the font source URL and its CORS headers. |
+| <a id="font-missing" />`font.missing` | A font the document asks for is not available. The editor uses a substitute. Add the face to the fonts option. |
+| <a id="font-integrity-mismatch" />`font.integrity-mismatch` | A font face does not match its declared hash or metadata, so the editor refused it and used a substitute. |
+| <a id="font-malformed" />`font.malformed` | A font file is not a valid font, so the editor refused it and used a substitute. Check the file the font source points at. |
+| <a id="font-size-limit" />`font.size-limit` | A font file is larger than the font byte budget, so the editor used a substitute. Subset the font, or serve a smaller face. |
+| <a id="font-unsupported-face" />`font.unsupported-face` | A font face uses a format or face index the editor does not support. The editor uses a substitute. |
+
+### History
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="history-split" />`history.split` | An edit started a new undo step inside a gesture you meant as one. Wrap the gesture in beginHistoryGroup and end it when the gesture ends. |
+| <a id="history-possible-ungrouped-gesture" />`history.possible-ungrouped-gesture` | Several commands ran in quick succession without a history group, so undo may take them back one at a time. Use beginHistoryGroup for one user gesture. |
+| <a id="history-possible-fragmented-gesture" />`history.possible-fragmented-gesture` | One gesture was split across several history groups, so undo may need several steps. Keep one history group open for the whole gesture. |
+
+### Custom nodes
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="custom-node-payload-invalid" />`custom-node.payload-invalid` | A custom node payload in the document does not match the node schema, so the node opened without its data. Check the schema version that wrote the file. |
+| <a id="custom-node-payload-missing" />`custom-node.payload-missing` | A custom node points at a payload the document does not contain, often after a partial export or a manual edit. The node opened without its data. |
+
+### Performance
+
+A `performance` event summarizes how fast the editor responded during a window. It carries a code only when the summary needs attention.
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="performance-slow-interaction" />`performance.slow-interaction` | More than one key press or click in 20 took over 200 ms to reach the screen. Compare the layout and paint timings in this event: slow layout follows document size, slow paint follows the pages on screen. |
+
+### Collaboration
+
+A collaboration code is `collab.` followed by the session's own failure code. It appears on `collab.status` events. An edit that a session refuses is an `edit.rejected` event with an `edit.collaboration-*` code instead, so the `collab.collaboration-session-*` and `collab.collaboration-text-limit` codes appear only when a session reports them as its status reason.
+
+| Code | Cause and action |
+| --- | --- |
+| <a id="collab-collaboration-session-destroyed" />`collab.collaboration-session-destroyed` | The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed. |
+| <a id="collab-collaboration-session-not-attached" />`collab.collaboration-session-not-attached` | The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed. |
+| <a id="collab-collaboration-session-not-ready" />`collab.collaboration-session-not-ready` | The collaboration session could not take work: it was not attached, not ready yet, or already destroyed. Wait for the ready status, or rejoin when the session was destroyed. |
+| <a id="collab-collaboration-text-limit" />`collab.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
+| <a id="collab-experimental-collaboration-body-text-only" />`collab.experimental-collaboration-body-text-only` | This session replicates only body text, and the edit touched another part of the document. Make that change outside collaboration. |
+| <a id="collab-invalid-document-id" />`collab.invalid-document-id` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| <a id="collab-invalid-identity" />`collab.invalid-identity` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| <a id="collab-invalid-identity-color" />`collab.invalid-identity-color` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| <a id="collab-invalid-session-id" />`collab.invalid-session-id` | The collaboration factory rejected a value before joining. Fix the document id, session id, or identity that the host passed. |
+| <a id="collab-already-initialized" />`collab.already-initialized` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| <a id="collab-document-id-mismatch" />`collab.document-id-mismatch` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| <a id="collab-initialization-aborted" />`collab.initialization-aborted` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| <a id="collab-not-initialized" />`collab.not-initialized` | Joining the room did not complete. Check that the provider is connected and the room id is right, then rejoin. |
+| <a id="collab-baseline-too-large" />`collab.baseline-too-large` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| <a id="collab-blob-read" />`collab.blob-read` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| <a id="collab-invalid-baseline" />`collab.invalid-baseline` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| <a id="collab-missing-local-blob" />`collab.missing-local-blob` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| <a id="collab-no-main-document-part" />`collab.no-main-document-part` | The document cannot seed a collaboration room. Open the file on its own to find the problem, or seed the room from another copy. |
+| <a id="collab-collaboration-format-mismatch" />`collab.collaboration-format-mismatch` | This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room. |
+| <a id="collab-protocol-version-mismatch" />`collab.protocol-version-mismatch` | This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room. |
+| <a id="collab-schema-version-mismatch" />`collab.schema-version-mismatch` | This client and the room use different collaboration formats. Save local work, then upgrade the client or migrate the room. |
+| <a id="collab-blob-digest-mismatch" />`collab.blob-digest-mismatch` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
+| <a id="collab-concurrent-seed" />`collab.concurrent-seed` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
+| <a id="collab-port-already-attached" />`collab.port-already-attached` | The room is unusable. Save a copy, then create a new room from saved document bytes. |
+| <a id="collab-duplicate-paragraph-id" />`collab.duplicate-paragraph-id` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-invalid-relationships" />`collab.invalid-relationships` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-materialize-dropped-content" />`collab.materialize-dropped-content` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-missing-blob" />`collab.missing-blob` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-missing-root" />`collab.missing-root` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-remote-apply-failed" />`collab.remote-apply-failed` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-unknown-paragraph-id" />`collab.unknown-paragraph-id` | The session could not apply a remote update. Edits pause until a later update repairs the session. Investigate if the failure persists. |
+| <a id="collab-blob-store-full" />`collab.blob-store-full` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-blob-too-large" />`collab.blob-too-large` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-invalid-blob-descriptor" />`collab.invalid-blob-descriptor` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
+| <a id="collab-invalid-bound" />`collab.invalid-bound` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
+| <a id="collab-invalid-logical-id" />`collab.invalid-logical-id` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
+| <a id="collab-invalid-string" />`collab.invalid-string` | A shared value is not valid XML text, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
+| <a id="collab-prototype-key" />`collab.prototype-key` | A shared state key would reach object internals, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
+| <a id="collab-text-too-long" />`collab.text-too-long` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-attributes" />`collab.too-many-attributes` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-children" />`collab.too-many-children` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-nodes" />`collab.too-many-nodes` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-parts" />`collab.too-many-parts` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-too-many-relationships" />`collab.too-many-relationships` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-tree-too-deep" />`collab.tree-too-deep` | Shared state reached a resource limit. The session reverses refused local edits. If the room exceeds a limit, recreate it from a saved copy. |
+| <a id="collab-unknown-logical-id" />`collab.unknown-logical-id` | Shared state contains a malformed value or a missing reference. The session reverses refused local edits. If the room contains this value, recreate it from a saved copy. |
+| <a id="collab-unsafe-part-name" />`collab.unsafe-part-name` | A shared package part has an unsafe name, so the session refused it. A peer sent malformed state; save a copy and recreate the room. |
+| <a id="collab-invalid-saved-room" />`collab.invalid-saved-room` | The room server refused the saved room. Check the server storage, then rejoin. |
+| <a id="collab-saved-room-unavailable" />`collab.saved-room-unavailable` | The room server refused the saved room. Check the server storage, then rejoin. |
+| <a id="collab-baseline-digest-mismatch" />`collab.baseline-digest-mismatch` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-experimental-collaboration-existing-paragraphs-only" />`collab.experimental-collaboration-existing-paragraphs-only` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-experimental-collaboration-text-only" />`collab.experimental-collaboration-text-only` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-experimental-collaboration-untracked-text-only" />`collab.experimental-collaboration-untracked-text-only` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-immutable-baseline-changed" />`collab.immutable-baseline-changed` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-immutable-metadata-changed" />`collab.immutable-metadata-changed` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-invalid-shared-metadata" />`collab.invalid-shared-metadata` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-local-mirror-failed" />`collab.local-mirror-failed` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-paragraph-set-mismatch" />`collab.paragraph-set-mismatch` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-shared-schema-invalid" />`collab.shared-schema-invalid` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-unsupported-root-key" />`collab.unsupported-root-key` | This collaboration code is no longer emitted. Upgrade the packages on every client and server. |
+| <a id="collab-initialization-timeout" />`collab.initialization-timeout` | Joining the room timed out. Check that the collaboration server is reachable, then rejoin. |
+| <a id="collab-authentication-failed" />`collab.authentication-failed` | The collaboration server refused the credential. Refresh the token, then rejoin. Reconnecting with the same token fails again. |
+| <a id="collab-room-generation-changed" />`collab.room-generation-changed` | The server compacted the room while this client was away. Save a copy if it holds unsent changes, then rejoin. |
+| <a id="collab-transport" />`collab.transport` | The collaboration transport failed. Check the network and the server, then rejoin. |
+| <a id="collab-transport-disconnected" />`collab.transport-disconnected` | The connection to the collaboration server dropped. The session reconnects on its own; edits continue offline when offline editing is on. |

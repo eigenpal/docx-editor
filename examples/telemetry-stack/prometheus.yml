@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 30s
+
+# Editor metrics arrive over OTLP from the collector: `service.name` becomes `job`.
+otlp:
+  promote_resource_attributes: []
+
+scrape_configs:
+  # Room metrics from examples/telemetry-collaboration/server, running on the host.
+  - job_name: collaboration-server
+    static_configs:
+      - targets: ['host.docker.internal:1235']
+        # Marks a collaboration server for the dashboard.
+        labels:
+          docx_editor: collaboration

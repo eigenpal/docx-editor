@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Room totals for memory and the fullest room changed only at the sample interval, and a new server reported no room series until its first sample.",
+  "after": "A new server reports zero rooms at once, the fullest-room gauge follows people live, and a closed room leaves no stale memory total.",
+  "reason": "The changes are in the server telemetry wrapper, which only observes Hocuspocus hooks and room documents. Shared state, document operations, and the collaboration format are unchanged.",
+  "tests": [
+    "packages/telemetry/src/__tests__/server.test.ts",
+    "packages/telemetry/src/__tests__/hocuspocus-editors.test.ts"
+  ],
+  "changeset": "telemetry-package",
+  "migration": null
+}

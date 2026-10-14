@@ -307,6 +307,8 @@ export interface StyleSpanRecord {
 export interface LineRecord {
   /** An authored manual line break ends this line; optional display furniture can show ↵. */
   readonly manualBreakAfter?: true;
+  /** An authored page or column break ends this line; optional furniture can label it. */
+  readonly breakAfter?: 'page' | 'column';
   readonly id: string;
   readonly range: SourceRange;
   readonly spans: readonly StyleSpanRecord[];
@@ -1033,6 +1035,14 @@ export interface SemanticLayout {
    * reuse paths that would otherwise return previous pages by identity with stale boundaries.
    */
   readonly controlContextToken?: string;
+  /** Body section breaks in document order, each named by the section that FOLLOWS it. */
+  readonly sectionBreaks?: readonly SectionBreakMarkRecord[];
+}
+
+/** The paragraph whose `w:sectPr` ends a section, and how the next section starts. */
+export interface SectionBreakMarkRecord {
+  readonly paragraphId: string;
+  readonly kind: import('./section-properties.ts').SectionBreakType;
 }
 
 export { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './page-geometry.ts';

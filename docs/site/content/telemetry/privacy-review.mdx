@@ -1,0 +1,83 @@
+---
+title: 'Privacy review checklist'
+description: 'Check identifiers, consent, and SDK settings before you export editor telemetry.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+The editor sends only codes, booleans, buckets, and timings, as described in [Privacy](/docs/2.x/telemetry/privacy). This page covers what you control: the identifiers you add, consent, and the SDKs that send the data. Review each section, then complete the checklist.
+
+## Your own identifiers
+
+`attributes` and `resource` can contain identifiers that you supply. `metricLabels` selects attribute keys for metrics. Event attributes accept strings up to 256 characters. The package cannot distinguish a pseudonymous identifier from an email address.
+
+- Use pseudonymous identifiers from your backend, such as internal user numbers or random room tokens. Exclude names, email addresses, document titles, matter numbers, and file names.
+- Add a key to `metricLabels` only if it has few values, such as an environment or an app version. A user or room identifier as a metric label creates one series per user or room.
+
+The following example sends an app version and a pseudonymous tenant identifier, and labels metrics by the version only:
+
+```ts
+import { createTelemetry } from '@docx-editor.dev/telemetry';
+import { otelExporter } from '@docx-editor.dev/telemetry/otel';
+
+export const telemetry = createTelemetry({
+  exporters: [otelExporter()],
+  attributes: { 'app.version': '4.2.0', 'tenant.id': 't_8f3a' },
+  metricLabels: ['app.version'],
+});
+```
+
+## Consent
+
+Use `consent` to connect your app's consent decision. The package checks it before each event and metric. When it returns `false`, the package discards events without buffering them. Use `consent: browserPrivacySignals({ optOutKey })` to respect Global Privacy Control, Do Not Track, and your opt-out key. You can combine this function with your consent manager.
+
+`consent` controls only what this package records. Your OpenTelemetry SDK still exports the metrics it recorded before, and your Sentry and OpenTelemetry SDKs have their own consent settings. Apply your consent decision to them as well.
+
+## Sentry
+
+The Sentry SDK collects more than your diagnostics. Check each of these settings:
+
+- **Session Replay** records the page, including the document. Block the editor with `EDITOR_SELECTORS`, or turn Replay off on pages with the editor.
+- **Click and key breadcrumbs** describe interaction targets. Editor elements can contain document content in `alt`, `title`, and `aria-label` values. Remove them with `dropEditorBreadcrumbs`.
+- **Page URLs** are attached to every event and to navigation and fetch breadcrumbs. If your URLs contain a document, matter, or client identifier, remove it in `beforeSend` and `beforeBreadcrumb`.
+- **IP addresses and user data** are sent when `sendDefaultPii` is `true`. Keep it `false`.
+- **Console breadcrumbs** record what your own code logs. Drop the `console` category if your code logs document details.
+- **Request bodies** on a server can be attached to an issue. If an endpoint receives document bytes or agent instructions, remove `event.request.data` in `beforeSend`.
+- **Uncaught errors** include JavaScript messages and stack traces from your global error handler. The package does not control these values. Check them for document content before export.
+
+For a configuration that applies these settings, see [Keep document content out of Sentry](/docs/2.x/telemetry/sentry#keep-document-content-out-of-sentry).
+
+## OpenTelemetry
+
+Your OpenTelemetry SDK adds resource attributes to every metric and span, such as `service.name`. Some instrumentations also add the browser's user agent or page URL. Check the resource and the instrumentations that you register, and keep identifiers out of them.
+
+## Verify it yourself
+
+Use `memoryExporter` in your tests to collect events. Open, edit, and review a file with recognizable text. Check that the text never appears in exported events:
+
+```ts
+import { createTelemetry, memoryExporter } from '@docx-editor.dev/telemetry';
+
+export const memory = memoryExporter();
+export const telemetry = createTelemetry({ exporters: [memory] });
+
+/** Throws if any recorded event contains `text`. Call it after your test edits the file. */
+export function assertNoDocumentText(text: string): void {
+  if (JSON.stringify(memory.events).includes(text))
+    throw new Error('A telemetry event contains document text.');
+}
+```
+
+During development, `consoleExporter()` prints each event as it would be sent.
+
+## Review checklist
+
+- [ ] Exporters send only to backends that your organization controls or has approved.
+- [ ] `attributes` and `resource` contain only pseudonymous identifiers.
+- [ ] `metricLabels` lists only keys with few values.
+- [ ] `documentShape` is left at `'basic'`, or the detailed shape is approved.
+- [ ] If events carry a user identifier, sending session times with it is approved, or the `sessions` area is off.
+- [ ] `consent` reads your consent manager, and your Sentry and OpenTelemetry SDKs follow the same decision.
+- [ ] Sentry: Replay blocks the editor, `dropEditorBreadcrumbs` is set, `sendDefaultPii` is `false`, and URLs and request bodies are scrubbed.
+- [ ] Collaboration server: `rooms.list()` is behind an administrator endpoint, and `roomLabel` is the default or `hmacRoomLabel`.

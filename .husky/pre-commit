@@ -30,9 +30,8 @@ else
   printf '\nSkipping collaboration policy (no main ref to compare against).\n'
 fi
 
-# Each workspace gets compiler-managed build info under its own node_modules.
-# TypeScript tracks imported files and compiler options, not just the staged paths.
-run_check 'TypeScript type check' bun run typecheck --incremental --tsBuildInfoFile node_modules/.cache/precommit/typecheck.tsbuildinfo
+# bun check keeps no cache, so every commit checks every workspace from source.
+run_check 'TypeScript type check' bun run typecheck
 run_check 'parity gates' bun run check:parity
 run_check 'license header checks' bun run check:license-headers
 run_check 'API snapshot check' bun run api:check

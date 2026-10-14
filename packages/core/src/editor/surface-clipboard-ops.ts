@@ -36,6 +36,7 @@ import {
   paragraphTextMarkingOptionalHyphens,
   withoutOptionalHyphens,
 } from '../layout/optional-hyphen-copy-text.ts';
+import { fieldResultSpeller } from '../layout/field-copy-text.ts';
 import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
@@ -260,11 +261,11 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
       );
       return { text: '', html: null, reason: 'unsupported-content' };
     }
+    // Plain text spells each computed field with its painted result, not its one model unit.
+    const fields = fieldResultSpeller(deps.layout(), paragraphTextMarkingOptionalHyphens);
     if (rectangle) {
       return buildCopyFlavours({
-        text: plainCopyText(
-          cellSelectionText(deps.layout(), rectangle, paragraphTextMarkingOptionalHyphens)
-        ),
+        text: plainCopyText(cellSelectionText(deps.layout(), rectangle, fields.spelledText)),
         cellRectangle: true,
         coverage: null,
         pkg: null,
@@ -279,8 +280,10 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         from,
         to,
         deps.paragraphOrder(),
-        (id, offset) => (textPart ? equationPlainText(textPart, id, offset) : null),
-        paragraphTextMarkingOptionalHyphens
+        (id, offset) =>
+          fields.resultAt(id, offset) ??
+          (textPart ? equationPlainText(textPart, id, offset) : null),
+        fields.markedText
       )
     );
     const scope = deps.storyScope();

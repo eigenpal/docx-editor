@@ -60,14 +60,14 @@ test('right-to-left lines extract in logical order, as whole words, without cont
   for (const line of lines) expect(line).not.toMatch(/[\u0000-\u0008\u200b\u2060\ufffd]/);
 });
 
-test('a right-to-left line has no line ActualText; a left-to-right line keeps it', async () => {
+test('a right-to-left line has no ActualText; a left-to-right line keeps it per span', async () => {
   const stream = await contentStreams((await exportPdf(input, { useSystemFonts: false })).bytes);
   // MuPDF and Poppler reverse a logical ActualText over right-to-left glyphs. Only the
-  // left-to-right line carries one, and no glyph needs an empty one.
+  // left-to-right line's spans carry one each, and no glyph needs an empty one.
   const actualTexts = [...stream.matchAll(/\/ActualText <FEFF([0-9A-Fa-f]*)>/g)].map(([, hex]) =>
     String.fromCharCode(...(hex!.match(/.{4}/g) ?? []).map((unit) => parseInt(unit, 16)))
   );
-  expect(actualTexts).toEqual(['Hello world 123']);
+  expect(actualTexts).toEqual(['Hello ', 'world ', '123']);
   expect(stream).not.toContain('/ActualText ()');
   // The separate dot glyphs are placed as outline forms, one `q … cm` per line and a short
   // relative move for each further dot.

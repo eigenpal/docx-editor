@@ -1181,7 +1181,7 @@ export function breakParagraph(
         ...paragraphSpanMetadata(piece),
       });
       line.end = piece.end;
-      if (pageBreaksIgnored) continue;
+      if (pageBreaksIgnored || pieces[pieceIndex + 1]?.breakKind === 'line') continue;
       growLineMetrics(line, breakMetrics);
       const slotLine: boolean = firstLineOpen;
       closeLine();
@@ -1465,6 +1465,8 @@ export function breakParagraph(
         // still applies to the whole word: `wordStartSpan` says where it began.
         (opensWord || (openDecision === 'continues' && wordStartSpan > 0)) &&
         !flow.paragraphRtl &&
+        // Text after a right, center or decimal tab is placed against its stop, not justified.
+        alignedTabRight === 0 &&
         !flow.pageExclusionZones?.length &&
         sameParagraphAnchorStarts.length === 0 &&
         line.drawings.length === 0 &&

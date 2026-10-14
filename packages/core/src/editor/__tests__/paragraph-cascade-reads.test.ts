@@ -259,8 +259,8 @@ describe('a paragraph can switch its style page break off', () => {
 describe('auto paragraph spacing yields to an explicit write', () => {
   test('a space-before write moves the page even under an inherited flag', () => {
     const editor = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>', AUTOSPACING_STYLES);
-    // The flag REPLACES the 5pt beside it, so the paragraph opens at Word's auto gap.
-    expect(paintedSpacing(editor)).toEqual({ before: 14, after: 14 });
+    // The flag REPLACES the 5pt beside it. Its space before drops at the top of the document.
+    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 14 });
 
     expect(editor.exec({ type: 'setParagraphSpacing', beforePt: 36, afterPt: 36 }).ok).toBe(true);
     expect(paintedSpacing(editor)).toEqual({ before: 36, after: 36 });
@@ -280,8 +280,9 @@ describe('auto paragraph spacing yields to an explicit write', () => {
     const editor = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>', AUTOSPACING_STYLES);
     editor.exec({ type: 'setParagraphSpacing', beforePt: 36 });
     editor.exec({ type: 'setParagraphSpacing', beforePt: null });
-    // Both gone, so the paragraph inherits the pair the document defaults state.
-    expect(paintedSpacing(editor).before).toBe(14);
+    // Both gone, so the paragraph inherits the pair the document defaults state. The
+    // inherited flag drops space before at the top of the document; without it, 5pt shows.
+    expect(paintedSpacing(editor)).toEqual({ before: 0, after: 14 });
   });
 
   test('list boundary auto spacing does not change the authored spacing read', () => {

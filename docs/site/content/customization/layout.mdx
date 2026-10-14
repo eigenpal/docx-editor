@@ -64,6 +64,7 @@ Opening navigation or review controls can change the available width for a fit m
 | --- | --- |
 | `document`, `fonts`, `imageDecodePort` | An identity change creates a new editor instance. |
 | `modules` | Registers capabilities when the instance starts. Keep the module list stable. |
+| `fieldResults` | Sets saved field result editing at construction. Later changes have no effect. |
 | `author`, `locale`, `translate`, `mode` | Changes apply without creating another instance. |
 | `zoom`, `zoomMode` | Changes update the viewport without creating another instance. |
 | `revisionMarkup` | Controls viewer preferences. Accept changes through `onRevisionMarkupChange`. |
@@ -71,6 +72,8 @@ Opening navigation or review controls can change the available width for a fit m
 | `onReady` | Gives the application the ready editor instance. |
 | `onChange` | Reports document changes. It does not provide saved bytes. |
 | `onFontError` | Reports typed font initialization errors. |
+
+To enable supported field result editing, set `fieldResults: 'editable'`. Collaboration refuses this mode. See [Edit saved field results](/docs/2.x/guides/fields#edit-saved-field-results).
 
 Keep document bytes and font configuration references stable during ordinary application renders. A new instance resets selection and undo history. Use the existing instance's load operation when your application deliberately replaces its document.
 

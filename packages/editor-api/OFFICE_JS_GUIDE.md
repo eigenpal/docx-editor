@@ -131,6 +131,25 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
 | `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
 
+### Read why the engine refused
+
+`error.debugInfo` has the shape of Office.js `OfficeExtension.DebugInfo`: `code`, `message`, and `errorLocation`, the path of the refused call. When the engine knows a specific reason, `debugInfo.innerError` holds a stable diagnostic code and a fixed hint. Branch on `error.code`, and give `innerError.message` to the person or model that chose the edit. The hint never contains document content.
+
+```ts
+import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+try {
+  await context.sync();
+} catch (error) {
+  if (!isDocxEditorError(error)) throw error;
+  const reason = error.debugInfo.innerError;
+  // For example: { code: 'edit.tracked-operation-unsupported', message: 'This editing API ...' }
+  if (reason) feedback.push(`${reason.code}: ${reason.message}`);
+}
+```
+
+For all codes, see [Diagnostics](/docs/2.x/guides/diagnostics). To record anonymous refusal events, add a telemetry module to `createServer({ modules })`. For more information, see [Server agents](/docs/2.x/telemetry/agents).
+
 ### Recover from a stale range
 
 A range addresses text by paragraph identity and offsets. When text before its end changes, including through an earlier sync of the same run, using the range fails with `StaleDocument` and nothing is applied. When `error.expectedRevision` equals `error.actualRevision`, the range moved; when they differ, another writer changed the document. In both cases, search again and reconsider the proposal before writing. Never replay the failed write unchanged.
@@ -198,7 +217,7 @@ await runtime.run(async (context) => {
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 
-Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that a complex field crosses, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph or the start of the next paragraph has a pending change, including your own. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
+Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that contains a complex field boundary whose matching boundary is in another paragraph, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph or the start of the next paragraph has a pending change, including your own. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Targets that touch foreign pending revisions refuse. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
 
 An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Pending row or cell structure revisions refuse tracked row deletion with `NotImplemented`.
 

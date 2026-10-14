@@ -3,7 +3,7 @@
 
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
-import { paragraphBreaksBefore } from './paragraph-style.ts';
+import { paragraphAutoSpacingSides, paragraphBreaksBefore } from './paragraph-style.ts';
 import { markIgnoresPageBreakBefore } from './section-mark-break.ts';
 
 interface BreakingParagraph {
@@ -20,11 +20,17 @@ interface BreakingParagraph {
  * page from a continuous section; a paragraph after a leading table is not one. Any other
  * paragraph with a page break before does only in legacy compatibility modes. Ordinary
  * pagination drops it. `opensSection` must turn false once any in-flow block is placed.
+ *
+ * `spaceBeforeAt` is the space before a paragraph asks for. The document's first paragraph
+ * takes no automatic space before (`w:beforeAutospacing`) when the body starts at the top
+ * margin, as an HTML page's first block does. An authored measurement stays, and so does
+ * the automatic gap below a header that pushes the body down.
  */
 export function pageBreakBeforeRules(
   sectionBlockCount: number,
   compatibilityMode: number | undefined,
-  opensSection: () => boolean
+  opensSection: () => boolean,
+  opensDocumentAtMargin = false
 ) {
   const breakKeepsBefore = hasCompatibilityRule(compatibilityMode, 'pageBreakBeforeKeepsSpace');
   const breaksBeforeAt = (at: number, entry: BreakingParagraph): boolean =>
@@ -34,5 +40,12 @@ export function pageBreakBeforeRules(
     breaksBeforeAt,
     keepsBeforeAtPageStart: (at: number, entry: BreakingParagraph): boolean =>
       opensSection() || ((breakKeepsBefore || at === 0) && breaksBeforeAt(at, entry)),
+    spaceBeforeAt: (at: number, entry: BreakingParagraph, before: number): number =>
+      opensDocumentAtMargin &&
+      at === 0 &&
+      opensSection() &&
+      paragraphAutoSpacingSides(entry.props).before
+        ? 0
+        : before,
   };
 }

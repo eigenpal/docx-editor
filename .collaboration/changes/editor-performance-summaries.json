@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Editors reported no timings to diagnostics listeners.",
+  "after": "Each editor reports one anonymous performance summary per window, with press-to-frame, layout, and paint timings, while a diagnostics listener is registered.",
+  "reason": "The surface only reports how long its local layout and paint passes took and when a key or pointer press reached the pages. Shared state, document operations, remote updates, and the collaboration format are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/editor-performance.test.ts",
+    "packages/telemetry/src/__tests__/performance.test.ts",
+    "packages/telemetry/src/__tests__/hocuspocus-editors.test.ts"
+  ],
+  "changeset": "editor-performance-summaries",
+  "migration": null
+}

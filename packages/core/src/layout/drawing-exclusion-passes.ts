@@ -3,7 +3,12 @@ import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { anchoredDrawingAtomsInParagraph } from './drawing-atom-walk.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
-import { exclusionMapsEqual, exclusionMapsToken, type ExclusionZone } from './drawing-exclusion.ts';
+import {
+  exclusionLayoutToken,
+  exclusionMapsEqual,
+  exclusionMapsToken,
+  type ExclusionZone,
+} from './drawing-exclusion.ts';
 
 type Zones = ReadonlyMap<number, readonly ExclusionZone[]>;
 
@@ -69,4 +74,26 @@ export function createDrawingExclusionPasses(
       return 'continue';
     },
   };
+}
+
+/** How many zones one map has that the other lacks, counting both directions. */
+export function exclusionZoneChangeCount(previous: Zones, next: Zones): number {
+  const tokens = (zonesByPage: Zones): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const [page, zones] of zonesByPage)
+      for (const zone of zones) {
+        const token = `${page}:${exclusionLayoutToken([zone])}`;
+        counts.set(token, (counts.get(token) ?? 0) + 1);
+      }
+    return counts;
+  };
+  const before = tokens(previous);
+  let changed = 0;
+  for (const [token, count] of tokens(next)) {
+    const kept = Math.min(count, before.get(token) ?? 0);
+    changed += count - kept;
+    if (kept > 0) before.set(token, (before.get(token) ?? 0) - kept);
+  }
+  for (const count of before.values()) changed += count;
+  return changed;
 }

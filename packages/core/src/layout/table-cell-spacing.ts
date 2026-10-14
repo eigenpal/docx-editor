@@ -75,3 +75,21 @@ interface SpacedTable {
   readonly columnWidthsPt: readonly number[];
   readonly cellSpacingPt: number;
 }
+
+export function sumCols(cols: readonly number[], from: number, to: number): number {
+  let sum = 0;
+  for (let index = from; index < to && index < cols.length; index += 1) sum += cols[index]!;
+  return sum;
+}
+
+/**
+ * The cell-spacing gap a table leaves below its last row. Each row opens the same gap above
+ * its cells; an exact-height row keeps its authored height and opens none.
+ */
+export function closingCellSpacingPt(structure: {
+  readonly cellSpacingPt: number;
+  readonly rows: readonly { readonly height: { readonly rule: string } }[];
+}): number {
+  const last = structure.rows.at(-1);
+  return last && last.height.rule !== 'exact' ? cellSpacingGapPt(structure.cellSpacingPt) : 0;
+}

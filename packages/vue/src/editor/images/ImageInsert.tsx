@@ -73,16 +73,15 @@ export const ImageInsertProvider = defineComponent({
         widthPoints: normalized.widthPoints,
         heightPoints: normalized.heightPoints,
       };
-      const gate = editor.canExecuteImageCommand?.(command);
-      if (gate && !gate.ok) {
-        window.alert(gate.reason ?? t('imageInsert.errors.refused'));
-        return;
-      }
+      // `executeImageCommand` applies the same checks and reports a refusal to diagnostics.
       busyRef.value = true;
       try {
         const result = await executeImageCommand(editor, command);
         if (!result.ok) {
-          window.alert(result.reason ?? t('imageInsert.errors.refused'));
+          window.alert(
+            localizeDisabledReason(readableReason(result.reason) ?? null, t) ??
+              t('imageInsert.errors.refused')
+          );
         } else {
           editor.focus();
         }
@@ -202,3 +201,8 @@ export const ImageInsertTrigger = defineComponent({
 export const ToolbarImageInsert = Object.assign(ImageInsertTrigger, {
   docxSlot: 'image.insert' as const,
 });
+
+/** A reason written for people, or undefined for a bare code such as `invalid-range`. */
+function readableReason(reason: string | undefined): string | undefined {
+  return reason && /\s/.test(reason) ? reason : undefined;
+}

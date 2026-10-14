@@ -10,11 +10,30 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
 
+// No-break spaces join their neighbours into one word. They have width, never break the
+// line, and never hang, so the word-shape tests read them as word characters.
+const WORD_CHARACTER = String.raw`[\S\u00a0\u2007\u202f]`;
+// A span holding U+00A0 lends none of its space: screen paint applies `word-spacing` to
+// U+00A0 as well, so its shrink would be painted twice. The narrow forms are unaffected.
+const SPACED_SPAN = /^[\S\u2007\u202f]* $/u;
+const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ $`, 'u');
+const BARE_WORD = new RegExp(`^${WORD_CHARACTER}+$`, 'u');
+
+/**
+ * The first span whose space can shrink. Only the text after a line's last tab is
+ * justified; a tab and everything before it keep their positions.
+ */
+function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
+  for (let index = spans.length - 1; index >= 0; index -= 1)
+    if (spans[index]!.text.includes('\t')) return index + 1;
+  return 0;
+}
+
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
-    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} ]*$/u.test(span.text)) ||
+    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} \u2007\u202f]*$/u.test(span.text)) ||
     span.lineEndWhitespace ||
-    !/^[^\s]* $/u.test(span.text) ||
+    !SPACED_SPAN.test(span.text) ||
     span.equation
   )
     return 0;
@@ -58,24 +77,25 @@ export function fitsWithSpaceShrink(
   wordEnds = false,
   followingWidth = 0
 ): boolean {
-  const ownSpace = /^[^\s]+ $/u.test(candidate);
+  const ownSpace = SPACED_WORD.test(candidate);
   if (
-    !(ownSpace || (wordEnds && /^[^\s]+$/u.test(candidate))) ||
-    spans.some((s) => s.text.includes('\t') || s.wrapAdvanceBefore || s.equation)
+    !(ownSpace || (wordEnds && BARE_WORD.test(candidate))) ||
+    spans.some((s) => s.wrapAdvanceBefore || s.equation)
   )
     return false;
+  const first = firstShrinkSlot(spans);
   const visible = measureDisplayText(
     ownSpace ? candidate.slice(0, -1) : candidate,
     style,
     measurer
   );
   const needed = lineWidth + visible + followingWidth - available;
-  const budget = spans.reduce((sum, span) => sum + capacity(span, measurer), 0);
+  const budget = spans.slice(first).reduce((sum, span) => sum + capacity(span, measurer), 0);
   if (needed <= 0 || needed > budget + 0.001) return false;
   const spaceWidth = budget * 4;
   // The alternative line stops before the overflowing word, so only the spans ahead
   // of it carry its stretch, and the space in front of it is the one that hangs.
-  const before = spans.slice(0, Math.max(0, Math.min(wordStart, spans.length)));
+  const before = spans.slice(first, Math.max(first, Math.min(wordStart, spans.length)));
   const terminalSpace = before.length ? capacity(before[before.length - 1]!, measurer) * 4 : 0;
   const existingSpaces =
     before.reduce((sum, span) => sum + capacity(span, measurer) * 4, 0) - terminalSpace;
@@ -144,7 +164,10 @@ export function shrinkJustifiedSpans(
   measurer: TextMeasurer,
   slotEnd: number = spans.length - 1
 ): readonly StyleSpanRecord[] {
-  const capacities = spans.map((span, index) => (index < slotEnd ? capacity(span, measurer) : 0));
+  const first = firstShrinkSlot(spans);
+  const capacities = spans.map((span, index) =>
+    index >= first && index < slotEnd ? capacity(span, measurer) : 0
+  );
   if (needed <= 0 || needed > capacities.reduce((a, b) => a + b, 0) + 0.001) return spans;
   const amounts = capacities.map(() => 0);
   let remaining = needed;

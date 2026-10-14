@@ -1,0 +1,37 @@
+---
+title: 'Send to your own code'
+description: 'Forward editor telemetry to any function, such as Datadog RUM, PostHog, or your own logger, or write your own exporter.'
+category: 'Telemetry'
+---
+
+<Callout>`@docx-editor.dev/telemetry` is available in version 2.29.0 and later.</Callout>
+
+Use `callbackExporter` to forward events to any function:
+
+```ts
+import { callbackExporter, createTelemetry, isFailure } from '@docx-editor.dev/telemetry';
+
+export const telemetry = createTelemetry({
+  exporters: [
+    // isFailure is false for expected refusals and for deduplication summaries.
+    callbackExporter((event) =>
+      isFailure(event)
+        ? datadogRum.addError(new Error(event.kind), event)
+        : datadogRum.addAction(event.kind, event)
+    ),
+  ],
+});
+```
+
+## Write your own exporter
+
+To write your own exporter, implement `TelemetryExporter` with an `event` method, a `metric` method, or both. Add `flush` and `shutdown` if your exporter buffers events.
+
+Telemetry catches rejected callback promises and reports each exporter failure once through `onExporterError`. Exporters own pending delivery. Implement `flush()` and `shutdown()` to send buffered events and wait for delivery.
+
+An exporter can also implement `attach`. The client calls it once with a context that provides two checks:
+
+- `consented()` reports whether the user allows telemetry. Check it before sending buffered events.
+- `pageClosing()` reports whether the page is hidden or closing. Use a transport that can complete the send in that state.
+
+Every event that reaches an exporter has passed the privacy checks. For what each event contains, see [Privacy](/docs/2.x/telemetry/privacy).

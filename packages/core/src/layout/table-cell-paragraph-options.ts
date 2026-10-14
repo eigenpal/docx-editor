@@ -17,6 +17,8 @@ export interface CellParagraphPlacementOptions {
   readonly heldBreak?: HeldCellBreak;
   readonly fragmentIndex?: number;
   readonly maxBottom?: number;
+  /** Keep the visible part of a line inside a fixed, nonmerged cell band. */
+  readonly clipOverflow?: boolean;
   /** False for fixed-height or rotated cells, whose bottom is a clip boundary. */
   readonly applyWidowControl?: boolean;
   /** Fail open when moving this paragraph would leave an identical fresh page. */
@@ -65,4 +67,39 @@ export interface CellParagraphPlacementOptions {
     readonly previous: OoxmlElement | undefined;
     readonly next: OoxmlElement | undefined;
   };
+}
+
+/** Keep a partial line only when its top lies inside the fixed cell band. */
+export function cellLineFits(
+  requiredBottom: number,
+  maxBottom: number,
+  lineTop: number,
+  collapseHeight: boolean,
+  options?: CellParagraphPlacementOptions
+): boolean {
+  if (requiredBottom > maxBottom + 0.001) {
+    return options?.clipOverflow === true && !collapseHeight && lineTop < maxBottom - 0.001;
+  }
+  return true;
+}
+
+/**
+ * Page and merged-cell admission happen before fixed horizontal cell clipping. A cell that
+ * heads a vertical merge never clips to its own row, whether or not its span was admitted.
+ */
+export function clipsExactCellRow(
+  vertical: boolean,
+  exactHeightPt: number | undefined,
+  isDetached: boolean,
+  headsVerticalMerge: boolean,
+  rowTop: number,
+  maxBottom: number
+): boolean {
+  return (
+    !vertical &&
+    exactHeightPt !== undefined &&
+    !isDetached &&
+    !headsVerticalMerge &&
+    rowTop + exactHeightPt <= maxBottom + 0.001
+  );
 }

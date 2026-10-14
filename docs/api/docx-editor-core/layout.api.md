@@ -914,6 +914,16 @@ export function enumerateDocumentSections(part: OoxmlPart, displayMode?: Revisio
 export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): DocumentSectionsEnumeration;
 
 // @public (undocumented)
+export interface EquationBarGeometry extends EquationGeometryBase {
+    // (undocumented)
+    readonly bar: LayoutBox;
+    // (undocumented)
+    readonly body: EquationGeometry;
+    // (undocumented)
+    readonly kind: 'bar';
+}
+
+// @public (undocumented)
 export interface EquationFractionGeometry extends EquationGeometryBase {
     // (undocumented)
     readonly bar: LayoutBox;
@@ -926,7 +936,7 @@ export interface EquationFractionGeometry extends EquationGeometryBase {
 }
 
 // @public (undocumented)
-export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationScriptGeometry | EquationNaryGeometry;
+export type EquationGeometry = EquationTextGeometry | EquationRowGeometry | EquationFractionGeometry | EquationRadicalGeometry | EquationBarGeometry | EquationScriptGeometry | EquationNaryGeometry;
 
 // @public (undocumented)
 export interface EquationNaryGeometry extends EquationGeometryBase {
@@ -994,6 +1004,7 @@ export interface EquationTextGeometry extends EquationGeometryBase {
     readonly fontSizePt: number;
     // (undocumented)
     readonly kind: 'text' | 'fallback';
+    readonly runStyle?: ResolvedRunStyle;
     // (undocumented)
     readonly text: string;
 }
@@ -1848,6 +1859,7 @@ export interface LineRecord {
     readonly baseline: number;
     // (undocumented)
     readonly box: LayoutBox;
+    readonly breakAfter?: 'page' | 'column';
     readonly changeSites?: readonly RevisionAttribution[];
     readonly contentX: number;
     readonly deletedRanges?: readonly ModelRange[];
@@ -3401,6 +3413,14 @@ export interface ScriptItem {
 }
 
 // @public
+export interface SectionBreakMarkRecord {
+    // (undocumented)
+    readonly kind: SectionBreakType;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
 export type SectionBreakType = 'nextPage' | 'continuous' | 'evenPage' | 'oddPage' | 'nextColumn';
 
 // @public
@@ -3602,6 +3622,7 @@ export interface SemanticLayout {
     readonly pages: readonly PageRecord[];
     readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
     readonly revision: number;
+    readonly sectionBreaks?: readonly SectionBreakMarkRecord[];
 }
 
 // @public
@@ -3817,6 +3838,7 @@ export interface SemanticTableCell {
     readonly gridColumn: number;
     readonly gridColumnId?: string;
     readonly gridSpan: number;
+    readonly headsVerticalMerge?: true;
     readonly hideEndMark?: boolean;
     // (undocumented)
     readonly id: string;

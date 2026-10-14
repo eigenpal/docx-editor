@@ -31,6 +31,7 @@ import type {
   AutomationBatchResponse,
   AutomationHandle,
   AutomationHost,
+  AutomationOperation,
 } from '@docx-editor.dev/core/automation';
 import { Document } from '../model/document.ts';
 import { hostFailure } from './batch.ts';
@@ -133,6 +134,10 @@ export interface CreateRuntimeOptions {
   readonly author?: string;
   /** Revision view for standard `text` loads and `search()` calls. Omitted means `allMarkup`. */
   readonly revisionTextView?: RevisionTextView;
+  /** Told about each refused batch before it is thrown, for anonymous diagnostics. */
+  readonly onRefusal?: (error: DocxEditorError, operations: readonly AutomationOperation[]) => void;
+  /** Told about each batch that threw an engine error, for anonymous diagnostics. */
+  readonly onException?: (error: unknown, operations: readonly AutomationOperation[]) => void;
 }
 
 export function createRuntime(
@@ -170,11 +175,21 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
   const resolveRoots = (): RootHandles => {
     if (roots) return roots;
     assertLive('document');
-    const document = firstHandle(host.execute({ operations: [{ op: 'getDocument' }] }), 'document');
-    const body = firstHandle(
-      host.execute({ operations: [{ op: 'getBody', document }] }),
-      'document.body'
-    );
+    const execute = (operations: AutomationOperation[]) => {
+      try {
+        return host.execute({ operations });
+      } catch (error) {
+        // An engine error, not a refusal: reported like one inside a batch, then rethrown.
+        try {
+          options.onException?.(error, operations);
+        } catch {
+          /* an observer must never change what the caller sees */
+        }
+        throw error;
+      }
+    };
+    const document = firstHandle(execute([{ op: 'getDocument' }]), 'document');
+    const body = firstHandle(execute([{ op: 'getBody', document }]), 'document.body');
     roots = { document, body };
     return roots;
   };
@@ -184,6 +199,8 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     capabilities,
     ...(author === undefined ? {} : { author }),
     revisionTextView,
+    ...(options.onRefusal ? { onRefusal: options.onRefusal } : {}),
+    ...(options.onException ? { onException: options.onException } : {}),
     id: {},
     roots: resolveRoots,
     assertLive,

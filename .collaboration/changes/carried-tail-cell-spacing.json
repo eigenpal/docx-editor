@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A grown merged tail assigned the full row height to cells below the spacing gap.",
+  "after": "Cells in a grown merged tail end at their row boundary.",
+  "reason": "Only derived layout geometry changes. Shared operations and stored document content remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/table-vmerge-fragment-carry.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-vmerge-fragment-carry.test.ts"
+  ],
+  "changeset": "carried-tail-cell-spacing",
+  "migration": null
+}

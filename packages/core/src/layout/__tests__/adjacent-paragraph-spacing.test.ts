@@ -304,7 +304,8 @@ describe('automatic spacing under the setting', () => {
     expect(bodyPitch(body)).toBeCloseTo(LINE + 14, 6);
     expect(bodyPitch(body, FLAG)).toBeCloseTo(LINE + 10 + 5, 6);
     const first = (compat: string) => paragraphFragmentsOf(layout(body, compat).pages[0]!)[0]!;
-    expect(firstLineY(first(''))).toBeCloseTo(14, 6);
+    // The document's first paragraph takes no automatic gap at the top margin.
+    expect(firstLineY(first(''))).toBeCloseTo(0, 6);
     expect(firstLineY(first(FLAG))).toBeCloseTo(5, 6);
   });
 
@@ -342,5 +343,53 @@ describe('automatic spacing under the setting', () => {
     expect(firstLineY(second!) - firstLineY(first!)).toBeCloseTo(LINE + 10 + 5, 6);
     const [base, next] = cell('');
     expect(firstLineY(next!) - firstLineY(base!)).toBeCloseTo(LINE + 14, 6);
+  });
+});
+
+describe('automatic space before at the start of the document', () => {
+  type Furniture = Parameters<typeof layoutSemanticDocument>[2]['furniture'];
+  const first = (body: string, top = 50, furniture?: Furniture) =>
+    paragraphFragmentsOf(
+      layoutSemanticDocument(document(body), 1, {
+        measurer,
+        numberingIndex: NUMBERING,
+        styleCascade: cascade(),
+        geometry: {
+          width: 400,
+          height: 400,
+          margin: { top, right: 0, bottom: 0, left: 0 },
+          headerDistance: 10,
+        },
+        ...(furniture ? { furniture } : {}),
+      }).pages[0]!
+    );
+
+  test('the first paragraph starts at the top margin, and later ones keep the gap', () => {
+    const [one, two] = first(web('One') + web('Two'));
+    expect(firstLineY(one!)).toBeCloseTo(0, 6);
+    expect(firstLineY(two!) - firstLineY(one!)).toBeCloseTo(LINE + 14, 6);
+  });
+
+  test('an authored space before stays on the first paragraph', () => {
+    const [one] = first(paragraph('One', 'w:before="240" w:after="0"') + web('Two'));
+    expect(firstLineY(one!)).toBeCloseTo(12, 6);
+  });
+
+  test('a header that pushes the body down keeps the automatic gap', () => {
+    const header = layoutHeaderFooterStory(
+      read(`<w:hdr xmlns:w="${W}">${TWO}${TWO}${TWO}</w:hdr>`, '/word/header1.xml'),
+      400,
+      measurer,
+      'test',
+      undefined,
+      cascade()
+    );
+    const [one] = first(web('One'), 20, {
+      titlePage: false,
+      evenAndOddHeaders: false,
+      headers: new Map([['default', header]]),
+      footers: new Map(),
+    });
+    expect(firstLineY(one!)).toBeCloseTo(14, 6);
   });
 });

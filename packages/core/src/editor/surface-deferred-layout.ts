@@ -49,11 +49,20 @@ export interface DeferredLayoutHost {
   snapshot(): () => void;
   /** Told when a pass starts or stops finishing in the background. */
   pendingChanged?(pending: boolean): void;
+  /**
+   * Told the milliseconds of main-thread work one pass took, its foreground part and every
+   * background slice together, once the pass ends. A pass dropped for a newer edit is not a
+   * pass of its own: its time is added to the pass that replaces it.
+   */
+  passTimed?(ms: number): void;
 }
 
 export interface DeferredLayout {
-  /** Lay out `steps` for `revision`: the finished layout, or an interim one. */
-  run(steps: LayoutSteps<SemanticLayout>, revision: number): SemanticLayout;
+  /**
+   * Lay out `steps` for `revision`: the finished layout, or an interim one. A pass with
+   * `timed: false` reports no time through `passTimed`.
+   */
+  run(steps: LayoutSteps<SemanticLayout>, revision: number, timed?: boolean): SemanticLayout;
   /** Finish a deferred pass now. Its layout is published only if still current. */
   finish(): void;
   /**
@@ -94,8 +103,16 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     readonly steps: LayoutSteps<SemanticLayout>;
     readonly revision: number;
     readonly restore: () => void;
+    /** Main-thread milliseconds the pass has taken so far. */
+    spent: number;
+    readonly timed: boolean;
   };
   let paused: Paused | null = null;
+  /** Time of dropped passes, owed to the next pass. */
+  let carried = 0;
+  const report = (timed: boolean, ms: number): void => {
+    if (timed) host.passTimed?.(ms);
+  };
   const setPaused = (next: Paused | null): void => {
     const changed = (paused === null) !== (next === null);
     paused = next;
@@ -109,29 +126,40 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
   const drive = (): void => {
     const pass = paused;
     if (!pass) return;
-    const deadline = host.now() + BACKGROUND_SLICE_MS;
+    const began = host.now();
+    const deadline = began + BACKGROUND_SLICE_MS;
     for (;;) {
       const next = pass.steps.next();
       if (next.done) {
         setPaused(null);
         settle(next.value, pass.revision);
+        report(pass.timed, pass.spent + host.now() - began);
         return;
       }
       if (host.now() >= deadline) break;
     }
+    pass.spent += host.now() - began;
     queueTask(drive);
   };
 
   return {
-    run(steps, revision) {
+    run(steps, revision, timed = true) {
       const restore = host.snapshot();
-      const deadline = host.now() + foregroundMs;
+      const began = host.now();
+      // Only the report takes the replaced passes' time; the budget below starts now, so
+      // measuring never changes when a pass defers.
+      const owed = timed ? carried : 0;
+      if (timed) carried = 0;
+      const deadline = began + foregroundMs;
       const after = pageAfterViewForTest ?? host.pageAfterView();
       const previous = host.current();
       let progress: LayoutProgress | null = null;
       for (;;) {
         const next = steps.next();
-        if (next.done) return next.value;
+        if (next.done) {
+          report(timed, owed + host.now() - began);
+          return next.value;
+        }
         if (next.value) progress = next.value;
         if (
           after === undefined ||
@@ -145,7 +173,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
         // The completed pages, then the previous layout's pages after them, until the pass
         // ends. Each keeps the index it is painted at.
         const pages = [...progress.pages, ...previous.pages.slice(progress.pages.length)];
-        setPaused({ steps, revision, restore });
+        setPaused({ steps, revision, restore, spent: owed + host.now() - began, timed });
         afterPaint(drive);
         return progress.finalize(pages);
       }
@@ -153,14 +181,17 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     finish() {
       const pass = paused;
       if (!pass) return;
+      const began = host.now();
       setPaused(null);
       settle(drainLayoutSteps(pass.steps), pass.revision);
+      report(pass.timed, pass.spent + host.now() - began);
     },
     abandon() {
       const pass = paused;
       if (!pass) return;
       setPaused(null);
       pass.restore();
+      if (pass.timed) carried += pass.spent;
     },
     pending: () => paused !== null,
     cancel() {

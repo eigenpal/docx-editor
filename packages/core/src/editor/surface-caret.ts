@@ -212,8 +212,14 @@ export function createSurfaceCaret(
       );
       const line = placedLine?.line;
       // Stored marks describe the next glyph before any run carries that face.
-      // Align nonempty lines to their baseline; empty lines retain their top.
-      if (line && !line.drawings?.length && !isBottomToTopCaret(geometry)) {
+      // Align nonempty lines to their baseline; empty lines retain their top. A collapsed
+      // empty line has no box, and its layout caret already ends at the collapse point.
+      if (
+        line &&
+        !line.drawings?.length &&
+        !isBottomToTopCaret(geometry) &&
+        (line.spans.length > 0 || line.box.height > 0)
+      ) {
         const style = typingStyle();
         if (style) {
           const resolved = {

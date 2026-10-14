@@ -1,0 +1,116 @@
+{
+  "name": "@docx-editor.dev/telemetry",
+  "version": "2.29.0",
+  "description": "Anonymous diagnostics, metrics, and error reporting for @docx-editor.dev editors and collaboration servers, with OpenTelemetry, Prometheus, and Sentry exporters.",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./otel": {
+      "types": "./dist/otel/index.d.ts",
+      "import": "./dist/otel/index.js",
+      "require": "./dist/otel/index.cjs"
+    },
+    "./sentry": {
+      "types": "./dist/sentry/index.d.ts",
+      "import": "./dist/sentry/index.js",
+      "require": "./dist/sentry/index.cjs"
+    },
+    "./prometheus": {
+      "types": "./dist/prometheus/index.d.ts",
+      "import": "./dist/prometheus/index.js",
+      "require": "./dist/prometheus/index.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.cjs"
+    },
+    "./hocuspocus": {
+      "types": "./dist/hocuspocus/index.d.ts",
+      "import": "./dist/hocuspocus/index.js",
+      "require": "./dist/hocuspocus/index.cjs"
+    },
+    "./ingest": {
+      "types": "./dist/ingest/index.d.ts",
+      "import": "./dist/ingest/index.js",
+      "require": "./dist/ingest/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/metafile-*.json",
+    "LICENSE.md",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/check-built-siblings.mjs && node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
+    "typecheck": "bun check",
+    "license:check": "license-check-and-add check -f license-check.json",
+    "license:add": "license-check-and-add add -f license-check.json"
+  },
+  "peerDependencies": {
+    "@docx-editor.dev/core": "~2.29.0",
+    "@docx-editor.dev/pro": "~2.29.0",
+    "@opentelemetry/api": "^1.9.0",
+    "yjs": "^13.6.32",
+    "@hocuspocus/server": "^4.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@docx-editor.dev/pro": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "yjs": {
+      "optional": true
+    },
+    "@hocuspocus/server": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
+    "@happy-dom/global-registrator": "^20.8.3",
+    "@hocuspocus/server": "^4.6.0",
+    "@opentelemetry/api": "1.9.0",
+    "@sentry/core": "9.47.2",
+    "fflate": "^0.8.2",
+    "license-check-and-add": "^4.0.5",
+    "typescript7": "npm:typescript@^7.0.2",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
+  },
+  "keywords": [
+    "docx",
+    "telemetry",
+    "opentelemetry",
+    "prometheus",
+    "sentry",
+    "observability",
+    "collaboration"
+  ],
+  "author": {
+    "name": "EigenPal, Inc.",
+    "email": "licensing@eigenpal.com",
+    "url": "https://eigenpal.com"
+  },
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
+  "homepage": "https://docx-editor.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/telemetry"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

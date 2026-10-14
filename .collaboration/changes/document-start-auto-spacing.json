@@ -1,0 +1,12 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The document's first paragraph kept its automatic space before at the top margin, so the whole first page sat one gap too low.",
+  "after": "The document's first paragraph takes no automatic space before when the body starts at the top margin. Authored space before, later paragraphs, and the gap below a tall header keep their values.",
+  "reason": "Layout reads the same shared tree on every replica. Shared data, operation fields, and stored representation stay unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/adjacent-paragraph-spacing.test.ts"
+  ],
+  "changeset": "document-start-auto-spacing",
+  "migration": null
+}

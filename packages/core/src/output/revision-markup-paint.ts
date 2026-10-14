@@ -44,5 +44,10 @@ export function paintRevisionMarkup(
     element.style.textDecorationLine = line;
     element.style.textDecorationStyle = option.mark.startsWith('double') ? 'double' : 'solid';
     element.style.textDecorationColor = color;
+    if (line === 'underline') {
+      // The same thin rule, set below the descenders, as the unconfigured view draws.
+      element.style.textDecorationThickness = 'var(--doc-revision-insertion-decoration-thickness)';
+      element.style.textUnderlineOffset = 'var(--doc-revision-insertion-underline-offset)';
+    }
   }
 }

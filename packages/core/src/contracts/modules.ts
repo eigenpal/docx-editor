@@ -1,5 +1,6 @@
 import type { RevisionMarkupDialogSession } from './revision-markup.ts';
 import type { ReviewPaneOptions } from './review-pane.ts';
+import type { EditorDiagnostic, EditorDiagnosticKind } from './diagnostics.ts';
 /**
  * `@docx-editor.dev/core/contracts/modules` — the `EditorModule` seam.
  *
@@ -157,6 +158,20 @@ export interface EditorModule {
    * package that raised it.
    */
   readonly onCustomNodeDiagnostic?: (diagnostic: unknown) => void;
+  /**
+   * Told about every anonymous diagnostic of this editor, from its first open on.
+   *
+   * The same events as `editor.on('diagnostic')`, but registered before the editor exists, so
+   * a document passed at construction is observed too. A listener that throws is ignored: an
+   * observer must never break the editor it observes.
+   */
+  readonly onDiagnostic?: (event: EditorDiagnostic) => void;
+  /**
+   * Whether `onDiagnostic` wants events of `kind` now. Absent, it wants every kind. The editor
+   * asks before work that only a diagnostic needs, such as timing key presses for
+   * `performance`, and skips that work when no listener wants it. Read often: keep it cheap.
+   */
+  readonly wantsDiagnostic?: (kind: EditorDiagnosticKind) => boolean;
 }
 
 /**
@@ -172,6 +187,10 @@ export interface EditorModuleRegistry {
   readonly customNodePayloadNamespaces: readonly string[];
   /** Every registered diagnostic listener, in registration order. */
   readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
+  /** Every registered `onDiagnostic` listener, in registration order. */
+  readonly diagnosticListeners: readonly ((event: EditorDiagnostic) => void)[];
+  /** Whether any module with `onDiagnostic` wants events of `kind` now. */
+  readonly wantsDiagnostic: (kind: EditorDiagnosticKind) => boolean;
 }
 
 const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
@@ -180,6 +199,8 @@ const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
   customNodes: Object.freeze([]) as readonly unknown[],
   customNodePayloadNamespaces: Object.freeze([]) as readonly string[],
   customNodeDiagnostics: Object.freeze([]) as readonly ((diagnostic: unknown) => void)[],
+  diagnosticListeners: Object.freeze([]) as readonly ((event: EditorDiagnostic) => void)[],
+  wantsDiagnostic: () => false,
 });
 
 /** Resolve construction-time modules into the registry the instance dispatches over. */
@@ -192,6 +213,8 @@ export function resolveEditorModules(
   const customNodes: unknown[] = [];
   const namespaces = new Set<string>();
   const diagnostics: ((diagnostic: unknown) => void)[] = [];
+  const diagnosticListeners: ((event: EditorDiagnostic) => void)[] = [];
+  const wants: ((kind: EditorDiagnosticKind) => boolean)[] = [];
   for (const module of modules) {
     // First registration wins: two review modules is a configuration mistake,
     // and silently merging them would leave neither author able to say which
@@ -209,6 +232,10 @@ export function resolveEditorModules(
     if (module.customNodes) customNodes.push(...module.customNodes);
     for (const namespace of module.customNodePayloadNamespaces ?? []) namespaces.add(namespace);
     if (module.onCustomNodeDiagnostic) diagnostics.push(module.onCustomNodeDiagnostic);
+    if (module.onDiagnostic) {
+      diagnosticListeners.push(module.onDiagnostic);
+      wants.push(module.wantsDiagnostic ?? (() => true));
+    }
   }
   return {
     review,
@@ -216,5 +243,15 @@ export function resolveEditorModules(
     customNodes,
     customNodePayloadNamespaces: [...namespaces],
     customNodeDiagnostics: diagnostics,
+    diagnosticListeners,
+    // A module that throws is asked again next time; an observer never breaks the editor.
+    wantsDiagnostic: (kind) =>
+      wants.some((want) => {
+        try {
+          return want(kind) === true;
+        } catch {
+          return false;
+        }
+      }),
   };
 }

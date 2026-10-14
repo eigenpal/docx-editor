@@ -21,6 +21,7 @@ import type {
   AutomationErrorCode,
   AutomationOperation,
 } from '@docx-editor.dev/core/automation';
+import { diagnosticCause, storeEditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { DocxEditorError, type DocxEditorErrorCode } from './errors.ts';
 import type { QueuedAction } from './queue.ts';
 
@@ -79,15 +80,20 @@ export interface HostFailureContext {
   readonly actualRevision?: number;
 }
 
-/** One host error as one of ours. Nothing from `error.message`/`error.detail` survives. */
+/**
+ * One host error as one of ours. Nothing from `error.message`/`error.detail` survives: the
+ * detail only selects a public diagnostic code, whose fixed hint becomes `debugInfo.innerError`.
+ */
 export function hostFailure(
   error: AutomationError,
   context: HostFailureContext = {}
 ): DocxEditorError {
   const code = HOST_CODES[error.code] ?? 'GeneralException';
   const stale = code === 'StaleDocument';
-  return new DocxEditorError({
+  const diagnostic = error.detail === undefined ? null : storeEditDiagnosticCode(error.detail);
+  const failure = new DocxEditorError({
     code,
+    ...(diagnostic === null ? {} : { diagnostic }),
     ...(context.target === undefined ? {} : { target: context.target }),
     ...(stale && context.expectedRevision !== undefined
       ? { expectedRevision: context.expectedRevision }
@@ -96,6 +102,20 @@ export function hostFailure(
       ? { actualRevision: context.actualRevision }
       : {}),
   });
+  const cause = diagnosticCause(error.detail);
+  if (cause) REFUSAL_CAUSES.set(failure, cause);
+  return failure;
+}
+
+/**
+ * The engine reason behind a refused batch, for its diagnostic only. Kept beside the error, not
+ * on it, so `DocxEditorError` keeps the Office.js shape.
+ */
+const REFUSAL_CAUSES = new WeakMap<DocxEditorError, string>();
+
+/** The engine reason a refusal came from, when the engine named one it knows. */
+export function refusalCause(error: DocxEditorError): string | undefined {
+  return REFUSAL_CAUSES.get(error);
 }
 
 /**

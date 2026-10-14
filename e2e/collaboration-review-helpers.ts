@@ -113,6 +113,12 @@ export async function joinRoom(page: Page, invite: string, name: string): Promis
   await dialog.getByLabel('Display name').fill(name);
   await dialog.getByRole('button', { name: 'Join room' }).click();
   await expect(dialog).toHaveCount(0, { timeout: 45_000 });
+  const connected = page.getByRole('dialog', { name: 'Collaboration room' });
+  await expect(connected.getByText('Connected', { exact: true })).toBeVisible({
+    timeout: 45_000,
+  });
+  await connected.getByRole('button', { name: 'Done' }).click();
+  await expect(connected).toHaveCount(0);
 }
 
 export async function expectParticipantCount(
@@ -192,8 +198,11 @@ export async function firstTableCellParagraph(page: Page): Promise<{
 }
 
 export async function ensureReviewPaneOpen(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Review settings', exact: true }).click();
+  await page.getByRole('radio', { name: 'Review pane', exact: true }).check();
+  await page.keyboard.press('Escape');
   const rail = page.locator('[data-testid="review-rail"]');
-  await expect(rail).toBeVisible({ timeout: 20_000 });
+  await expect(rail).toBeAttached({ timeout: 20_000 });
   if (await rail.evaluate((node) => node.hasAttribute('data-open'))) return;
   const toggle = page.locator('.docx-toolbar [data-slot="review.comments"]').first();
   await expect(toggle).toBeVisible();

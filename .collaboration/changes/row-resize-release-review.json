@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Row drag minimum height and hidden cell marks had only local editor verification.",
+  "after": "Two editors verify row geometry, concurrent edits, delayed delivery, undo, redo, deletion, cursor geometry, and save/reopen.",
+  "reason": "This change adds tests. Shared operations and room versions remain unchanged.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-row-resize-minimum.test.ts"],
+  "changeset": null,
+  "migration": null
+}

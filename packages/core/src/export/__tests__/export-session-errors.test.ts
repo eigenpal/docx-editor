@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { createFixedMeasurer } from '../../layout/fixed-measurer.ts';
+import { TablePaginationError } from '../../layout/semantic-table-layout.ts';
 import { refusalYieldsHiddenFurniture } from '../../layout/furniture-drawing-exclusion.ts';
 import { ExportResourceError, openDocumentForExport } from '../export-session.ts';
 
@@ -37,13 +38,18 @@ function docx(body: string): Uint8Array {
 }
 
 test('normalizes fail-closed layout invariants at the shared exporter boundary', async () => {
-  const source = docx(
-    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
-      '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:hRule="exact" w:val="60000"/></w:trPr>' +
-      '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
-      '<w:p><w:r><w:t>Authored overheight row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
-  );
-  const opened = openDocumentForExport(source);
+  // Layout fails closed when authored geometry cannot fit its page model. The measurer raises
+  // that invariant here, so the boundary is tested without depending on one document shape.
+  const fallback = createFixedMeasurer();
+  const source = docx('<w:p><w:r><w:t>Invariant</w:t></w:r></w:p>');
+  const opened = openDocumentForExport(source, {
+    measurer: {
+      measure: () => {
+        throw new TablePaginationError('table-row-overheight', 'Authored overheight row');
+      },
+      lineMetrics: (style) => fallback.lineMetrics(style),
+    },
+  });
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
   try {

@@ -1,5 +1,15 @@
 import { warnDeprecatedSlotProp, warnMissingSlotId } from './menu-warnings';
-import { computed, defineComponent, h, isVNode, ref, type PropType, type VNode } from 'vue';
+import {
+  computed,
+  defineComponent,
+  inject,
+  provide,
+  h,
+  isVNode,
+  ref,
+  type PropType,
+  type VNode,
+} from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import { flattenChildren } from '../../lib/flattenChildren';
 import { useStableDocxId } from '../../lib/stable-id';
@@ -13,10 +23,15 @@ import {
   type ChromeMenuId,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
-import { useDocxEditor } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { MENU_OVERFLOW_ID, useMenuContext, useMenuLabel, useMenuOverflow } from './menu-context';
+import {
+  MenuRowTabIndexContext,
+  MENU_OVERFLOW_ID,
+  useMenuContext,
+  useMenuLabel,
+  useMenuOverflow,
+} from './menu-context';
 import type { MenuContextValue, MenuId } from './menu-context';
 import { menuOverflowPlacement } from './menu-overflow-state';
 import { useMenuPanelPlacement } from './menu-panel-placement';
@@ -105,6 +120,7 @@ export const MenuRow = defineComponent({
   },
   setup(props, { slots }) {
     const reasonId = useStableDocxId('menu-reason');
+    const tabIndex = inject(MenuRowTabIndexContext, -1);
     const shortcutText = usePlatformShortcut();
     // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
     // order and stops firing pointer events, so its `title` never renders and a screen
@@ -129,10 +145,8 @@ export const MenuRow = defineComponent({
           type="button"
           role={role}
           class={`docx-toolbar__menu-item docx-menubar__item${className ? ` ${className}` : ''}`}
-          // Every row is reachable by the menu's own arrow keys, never by Tab: one tab stop
-          // per menu, which is the menu pattern (and what keeps a 36-cell grid from being 36
-          // tab stops).
-          tabindex={-1}
+          // Popup rows use arrow keys. Direct menubar actions remain reachable by Tab.
+          tabindex={tabIndex}
           {...(dataSlot ? { 'data-slot': dataSlot } : {})}
           {...(active ? { 'data-active': '' } : {})}
           {...(disabled ? { 'data-disabled': '', 'aria-disabled': true } : {})}
@@ -448,16 +462,14 @@ const MenuPageSetupImpl = defineComponent({
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
+    const command = useEditorCommand(chromeProbeForSlot('file.pageSetup')!);
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
       const context = menuContext.value;
-      const probe = chromeProbeForSlot('file.pageSetup');
-      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
-      const engineOk = allowed?.ok === true;
-      const engineReason = allowed && !allowed.ok ? allowed.reason : null;
+      const engineOk = command.isEnabled.value;
+      const engineReason = command.disabledReason.value;
       const control = chromeControlForSlot('file.pageSetup');
       const text = label(control?.labelKey ?? 'file.pageSetup');
       const enabled = engineOk && !!context.onPageSetup;
@@ -495,16 +507,14 @@ const MenuParagraphDialogImpl = defineComponent({
     hidden: { type: Boolean, default: undefined },
   },
   setup(props) {
-    const editorRef = useDocxEditor();
+    const command = useEditorCommand(chromeProbeForSlot('paragraph.dialog')!);
     const menuContext = useMenuContext();
     const label = useMenuLabel();
     return () => {
       if (props.hidden) return null;
       const context = menuContext.value;
-      const probe = chromeProbeForSlot('paragraph.dialog');
-      const allowed = editorRef.value && probe ? editorRef.value.can(probe) : null;
-      const engineOk = allowed?.ok === true;
-      const engineReason = allowed && !allowed.ok ? allowed.reason : null;
+      const engineOk = command.isEnabled.value;
+      const engineReason = command.disabledReason.value;
       const control = chromeControlForSlot('paragraph.dialog');
       const text = label(control?.labelKey ?? 'lineSpacing.options');
       const enabled = engineOk && !!context.onParagraphDialog;
@@ -765,6 +775,7 @@ export const Menu = defineComponent({
     preset: { type: Boolean, default: true },
   },
   setup(props, { slots }) {
+    provide(MenuRowTabIndexContext, -1);
     const menuContext = useMenuContext();
     const menuOverflow = useMenuOverflow();
     const label = useMenuLabel();

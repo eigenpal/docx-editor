@@ -190,6 +190,7 @@ export {
   type ParagraphFragmentRecord,
   type ParagraphIndent,
   type ParagraphSpacing,
+  type SectionBreakMarkRecord,
   type SemanticLayout,
   type SourceRange,
   type SpanLinkRecord,
@@ -397,6 +398,7 @@ export { createFixedMeasurer } from './fixed-measurer.ts';
 export type { CjkTypographySettings } from './cjk-typography.ts';
 export {
   layoutEquation,
+  type EquationBarGeometry,
   type EquationFractionGeometry,
   type EquationGeometry,
   type EquationNaryGeometry,

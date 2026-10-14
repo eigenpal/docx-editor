@@ -1,0 +1,83 @@
+import { expect, test } from 'bun:test';
+import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '../index.ts';
+import { equationRunFormat } from '../package/omml-run-format.ts';
+
+const w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const m = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+
+function run(properties: string): OoxmlElement {
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${w}" xmlns:m="${m}"><w:body><w:p><m:oMath><m:r>${properties}<m:t>al</m:t></m:r></m:oMath></w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  function visit(node: OoxmlNode): OoxmlElement | undefined {
+    if (node.kind === 'textValue') return undefined;
+    if (node.namespaceUri === m && node.localName === 'r') return node;
+    return node.children.map(visit).find(Boolean);
+  }
+  const found = visit(result.part.root);
+  if (!found) throw new Error('missing math run');
+  return found;
+}
+
+test('reads explicit Word face and math normal/literal without mutating canonical source', () => {
+  const node = run(
+    '<w:rPr><w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math"/><w:b w:val="0"/></w:rPr><m:rPr><m:lit/><m:nor/></m:rPr>'
+  );
+  const before = JSON.stringify(node);
+  expect(equationRunFormat(node)).toEqual({
+    fontFamily: 'Cambria Math',
+    bold: false,
+    literal: true,
+    normalText: true,
+  });
+  expect(JSON.stringify(node)).toBe(before);
+});
+
+test.each(['0', 'false', 'off'])('retains explicit false math toggle %s', (value) => {
+  expect(equationRunFormat(run(`<m:rPr><m:nor m:val="${value}"/></m:rPr>`))).toEqual({
+    normalText: false,
+  });
+});
+
+test.each(['p', 'b', 'i', 'bi'] as const)(
+  'retains math style %s independently of Word italics',
+  (mathStyle) => {
+    const node = run(`<w:rPr><w:i w:val="0"/></w:rPr><m:rPr><m:sty m:val="${mathStyle}"/></m:rPr>`);
+    const before = JSON.stringify(node);
+    expect(equationRunFormat(node)).toEqual({ italic: false, mathStyle });
+    expect(JSON.stringify(node)).toBe(before);
+  }
+);
+
+test('uses italic for an empty math style and retains the normal-text override', () => {
+  expect(equationRunFormat(run('<m:rPr><m:sty/><m:nor/></m:rPr>'))).toEqual({
+    mathStyle: 'i',
+    normalText: true,
+  });
+});
+
+test.each([
+  '<w:rPr><w:rFonts w:ascii="Face A" w:hAnsi="Face B"/></w:rPr>',
+  '<w:rPr><w:rFonts w:asciiTheme="minorHAnsi"/></w:rPr>',
+  '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr>',
+  '<w:rPr><w:b w:val="unknown"/></w:rPr>',
+  '<w:rPr><w:b/><w:b w:val="0"/></w:rPr>',
+  '<w:rPr/><w:rPr/>',
+  '<m:rPr><m:sty m:val="unknown"/></m:rPr>',
+  '<m:rPr><m:sty w:val="i"/></m:rPr>',
+  '<m:rPr><m:sty m:val="i"/><m:sty m:val="p"/></m:rPr>',
+  '<m:rPr><m:nor w:val="1"/></m:rPr>',
+  '<m:rPr><m:nor/><m:nor m:val="0"/></m:rPr>',
+  '<m:rPr/><m:rPr/>',
+  '<w:rPr><m:b/></w:rPr>',
+  '<w:rPr><w:constructor/></w:rPr>',
+  '<w:rPr><w:toString/></w:rPr>',
+  '<m:rPr><m:__proto__/></m:rPr>',
+])('rejects unrepresented or ambiguous typography %s', (properties) => {
+  const node = run(properties);
+  const before = JSON.stringify(node);
+  expect(equationRunFormat(node)).toBeNull();
+  expect(JSON.stringify(node)).toBe(before);
+});

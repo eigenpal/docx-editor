@@ -34,7 +34,8 @@
     "lockedSectionBreak": "次のセクションは、ロックされているかデータに連結されたコンテンツ コントロール内にあるため、この区切りでは変更できません。",
     "lockedContentBreak": "このテキストはコンテンツ コントロールでロックされているため、ここにセクション区切りを挿入できません。",
     "nothingToCopyFormatting": "書式のコピー元のテキストを選択してください",
-    "nothingToPaint": "書式の適用先のテキストを選択してください"
+    "nothingToPaint": "書式の適用先のテキストを選択してください",
+    "pictureSelected": "画像が選択されています。画像を挿入するには、テキスト内にカーソルを置いてください。"
   },
   "toolbar": {
     "ariaLabel": "書式設定ツールバー",
@@ -981,5 +982,14 @@
     "insertionsBackground": "挿入の背景",
     "movedFromBackground": "移動元の背景",
     "movedToBackground": "移動先の背景"
+  },
+  "formattingMarks": {
+    "columnBreak": "段区切り",
+    "pageBreak": "改ページ",
+    "sectionBreakContinuous": "セクション区切り (現在の位置から新しいセクション)",
+    "sectionBreakEvenPage": "セクション区切り (偶数ページから新しいセクション)",
+    "sectionBreakNextColumn": "セクション区切り (次の段から新しいセクション)",
+    "sectionBreakNextPage": "セクション区切り (次のページから新しいセクション)",
+    "sectionBreakOddPage": "セクション区切り (奇数ページから新しいセクション)"
   }
 }

@@ -55,6 +55,7 @@ import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import {
   MENU_OVERFLOW_ID,
+  MenuRowTabIndexContext,
   MenuContext,
   MenuOverflowContext,
   type MenuContextValue,
@@ -574,7 +575,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         }}
       >
         <MenuOverflowContext.Provider value={overflowValue}>
-          {content}
+          <MenuRowTabIndexContext.Provider value={0}>{content}</MenuRowTabIndexContext.Provider>
           {overflow.size > 0 ? (
             <Menu
               id={MENU_OVERFLOW_ID}

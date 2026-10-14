@@ -102,3 +102,59 @@ test('nested repeated-header tables retain their atomic fallback', () => {
     linesOf(layout).filter((line) => line.spans.some((span) => span.text === 'head'))
   ).toHaveLength(1);
 });
+
+const texts = (layout: ReturnType<typeof layoutSemanticDocument>) =>
+  linesOf(layout).map((line) => line.spans.map((span) => span.text).join(''));
+const many = (prefix: string, count: number) =>
+  Array.from({ length: count }, (_, i) => p(`${prefix}${i}`)).join('');
+const nestedFragments = (layout: ReturnType<typeof layoutSemanticDocument>) =>
+  layout.pages.flatMap((page) =>
+    page.fragments.flatMap((block) =>
+      block.kind === 'table'
+        ? block.rows.flatMap((row) =>
+            row.cells.flatMap((cell) =>
+              cell.blocks.filter((child): child is TableFragmentRecord => child.kind === 'table')
+            )
+          )
+        : []
+    )
+  );
+
+test('a nested row taller than the page splits inside its cell where it starts', () => {
+  const part = source(table(row(p('first')) + row(many('x', 9)) + row(p('last'))));
+  const layout = layoutSemanticDocument(part, 0, options);
+  expect(texts(layout)).toEqual([
+    'prefix 0',
+    'prefix 1',
+    'prefix 2',
+    'first',
+    ...Array.from({ length: 9 }, (_, i) => `x${i}`),
+    'last',
+    'after',
+  ]);
+  const nested = nestedFragments(layout);
+  // The tall row starts below `first` on page 1 and continues on the next page.
+  expect(nested[0]!.rows.map((row) => [row.rowIndex, row.hasContinuation === true])).toEqual([
+    [0, false],
+    [1, true],
+  ]);
+  expect(nested[1]!.rows[0]!.rowIndex).toBe(1);
+  for (const page of layout.pages)
+    for (const block of page.fragments)
+      expect(block.box.y + block.box.height).toBeLessThanOrEqual(60.001);
+  const session = createLayoutSession();
+  for (let revision = 0; revision < 2; revision++)
+    expect(layoutSemanticDocument(part, revision, { ...options, session }).pages).toEqual(
+      layout.pages
+    );
+});
+
+test('a nested header table taller than a fresh page splits instead of failing', () => {
+  const inner = table(row(p('head'), '<w:tblHeader/>') + row(many('y', 8)));
+  const xml = `<w:document xmlns:w="${W}"><w:body>${table(row(inner))}</w:body></w:document>`;
+  const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
+  if (!result.ok) throw new Error(result.reason);
+  const layout = layoutSemanticDocument(result.part, 0, options);
+  expect(texts(layout)).toEqual(['head', ...Array.from({ length: 8 }, (_, i) => `y${i}`)]);
+  expect(layout.pages).toHaveLength(2);
+});

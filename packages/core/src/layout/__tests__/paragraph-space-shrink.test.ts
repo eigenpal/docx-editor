@@ -253,3 +253,63 @@ test('a space that opens a field result does not let the word before it compress
     for (const text of texts.slice(1)) expect(text.startsWith(' ')).toBe(false);
   }
 });
+
+// A no-break space joins its neighbours into one word with width; it neither breaks nor hangs.
+test('a final word that ends with a no-break space borrows inter-word space', () => {
+  const layout = (text: string, compatibilityMode: number) =>
+    content(layoutSemanticDocument(source('both', text, 76), 1, { measurer, compatibilityMode }));
+  expect(layout('aa bb cc\u00a0', 15)).toEqual(['aa bb cc']);
+  expect(layout('aa bb cc\u00a0', 14)).toEqual(['aa bb', 'cc']);
+  // The shrink budget still bounds the whole word, including text after the no-break space.
+  expect(layout('aa bb cc\u00a0dd', 15)).toEqual(['aa bb', 'cc\u00a0dd']);
+});
+
+// Screen paint applies `word-spacing` to U+00A0 too, so a span holding one lends no space.
+test('a no-break space inside an earlier word lends no inter-word space', () => {
+  const lines = linesOf(
+    layoutSemanticDocument(source('both', 'a\u00a0a bb cc', 76), 1, {
+      measurer,
+      compatibilityMode: 15,
+    })
+  );
+  expect(
+    lines.map((line) =>
+      line.spans
+        .map((span) => span.text)
+        .join('')
+        .trimEnd()
+    )
+  ).toEqual(['a\u00a0a bb', 'cc']);
+});
+
+// Only the text after a line's last tab is justified, so only its spaces can shrink.
+test('spaces after a tab borrow space, and the tab keeps its stop', () => {
+  const layout = (text: string) =>
+    linesOf(
+      layoutSemanticDocument(source('both', text, 102), 1, { measurer, compatibilityMode: 15 })
+    );
+  // `aa` ends at 20, the tab reaches the 36pt default stop, and `bb cc dd` needs 68 more.
+  const lines = layout('aa\tbb cc dd');
+  expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+    'aa\tbb cc dd',
+  ]);
+  const bb = lines[0]!.spans.find((span) => span.text.startsWith('bb'))!;
+  expect(bb.box.x - lines[0]!.spans[0]!.box.x).toBeCloseTo(36, 6);
+  // A space before the tab is not justified, so it cannot make the room.
+  expect(
+    layout('a a\tbb cc dd ee').map((line) => line.spans.map((span) => span.text).join(''))
+  ).toHaveLength(2);
+});
+
+test('text after a center tab is placed against its stop, not compressed', () => {
+  const body = loadBody(
+    '<w:p><w:pPr><w:jc w:val="both"/><w:tabs><w:tab w:val="center" w:pos="1200"/></w:tabs></w:pPr>' +
+      '<w:r><w:t xml:space="preserve">aa\tbb cc dd</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="2840" w:h="6000"/>' +
+      '<w:pgMar w:left="500" w:right="500" w:top="500" w:bottom="500"/></w:sectPr>'
+  );
+  // Centred at 60, `bb cc dd` would end at 94, past the 92pt measure.
+  expect(
+    content(layoutSemanticDocument(body, 1, { measurer, compatibilityMode: 15 }))
+  ).toHaveLength(2);
+});

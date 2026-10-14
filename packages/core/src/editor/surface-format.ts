@@ -43,6 +43,15 @@ import { directionalParagraphEntry } from './paragraph-direction-writes.ts';
 export interface SurfaceFormatDeps {
   runFormatRefusal?(): string | null;
   readonly session: TreeDocxSessionView;
+  /**
+   * Applies formatting ops outside every generated table of contents: ops that reach one are
+   * dropped, and the rest apply even though the selection covers the table. When every op
+   * reaches one, the write keeps the read-only refusal.
+   */
+  applyOutsideToc?(
+    ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
+    apply: (ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0]) => TreeApplyResult
+  ): TreeApplyResult;
   /** Active story for mutations — body or `{ kind: 'headerFooter', rId }`. */
   storyScope(): StoryScope;
   layout(): SemanticLayout;
@@ -124,7 +133,11 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
     before?: Parameters<TreeDocxSessionView['applyTreeOps']>[1],
     after?: Parameters<TreeDocxSessionView['applyTreeOps']>[2]
-  ) => session.applyTreeOps(ops, before, after, deps.storyScope());
+  ) => {
+    const apply = (kept: typeof ops) =>
+      session.applyTreeOps(kept, before, after, deps.storyScope());
+    return deps.applyOutsideToc ? deps.applyOutsideToc(ops, apply) : apply(ops);
+  };
   const refuseRunFormat = (): boolean => {
     const reason = deps.runFormatRefusal?.();
     if (!reason) return false;

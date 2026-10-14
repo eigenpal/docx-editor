@@ -19,6 +19,12 @@ import {
   prepareCollaborationServerDocument,
   readCollaborationDocument,
 } from '@docx-editor.dev/pro/collaboration';
+import {
+  requireBearerToken,
+  serveMetrics,
+  withCollaborationTelemetry,
+} from '@docx-editor.dev/telemetry/hocuspocus';
+import { prometheusRegistry } from '@docx-editor.dev/telemetry/prometheus';
 import * as Y from 'yjs';
 import { admissionError, authenticateDemoToken } from '../shared/admission.ts';
 import { loadStoredDemoDocument } from './stored-room.ts';
@@ -34,94 +40,126 @@ const PORT = Number(process.env.PORT ?? 1234);
  */
 const TOKEN = process.env.COLLAB_TOKEN ?? 'demo-token';
 
+/**
+ * Room telemetry: rooms, connections, people, room memory, and why connections were refused.
+ * Prometheus scrapes `/metrics`; `/rooms` lists each room's size. No room name reaches a
+ * metric. Protect both paths in a real deployment, as you protect other operational endpoints.
+ */
+const metrics = prometheusRegistry();
+
+const { config, rooms } = withCollaborationTelemetry(
+  {
+    port: PORT,
+    name: 'docx-editor-collaboration',
+
+    /**
+     * Every connection is queued until this resolves, so nothing reaches a document before the
+     * server has admitted the client.
+     *
+     * The demo checks a shared secret and compatible versions before sync. Version claims
+     * prevent accidental mixed-client rooms; they do not authenticate the client build.
+     * A real deployment verifies a signed token and returns
+     * the user it names as the connection context. Do that and the client's display name stops
+     * being the authority on who someone is — this demo trusts it, because there is nobody to
+     * ask.
+     */
+    async onAuthenticate({ token, documentName }) {
+      if (!ROOM_ID.test(documentName)) throw admissionError('unknown-room');
+      authenticateDemoToken(token, TOKEN);
+      return { room: documentName };
+    },
+
+    /**
+     * Seed a newly opened room from disk. A room nobody has saved yet stays empty.
+     *
+     * A room that has grown well past its content is compacted first, into a new generation:
+     * nobody is connected yet, so no edit is in flight. The new state is stored at once.
+     */
+    async onLoadDocument({ documentName, document }) {
+      // First, before any update reaches it, so the server never writes a change of its own.
+      prepareCollaborationServerDocument(document);
+      const file = roomFile(documentName);
+      if (!file) return document;
+      const stored = await readFile(file).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null;
+        console.warn(`[room ${documentName}] saved room unavailable: ${error.message}`);
+        throw admissionError('saved-room-unavailable');
+      });
+      if (stored) {
+        const compacted = await compactCollaborationState(new Uint8Array(stored)).catch(() => null);
+        if (compacted) await writeAtomically(file, compacted);
+        loadStoredDemoDocument(document, compacted ?? new Uint8Array(stored));
+      }
+      return document;
+    },
+
+    /**
+     * Refuse a client that still holds a generation of the room from before a compaction, before
+     * any of its state merges. It reports `room-generation-changed` and rejoins.
+     */
+    async beforeHandleMessage(payload) {
+      checkCollaborationRoomGeneration(payload);
+    },
+
+    /**
+     * Persist the room. Hocuspocus debounces this, so a burst of typing writes once.
+     *
+     * TWO files, because they answer different questions. The `.ydoc` is the room — it is what
+     * a joining peer needs, and it is the only one `onLoadDocument` reads back. The `.docx` is
+     * what everyone else needs: something you can mail, index, diff or open in Word.
+     *
+     * `readCollaborationDocument` is how the second one exists at all. The server joins
+     * nothing — no identity, no awareness, no session — so this job never appears in the room's
+     * participant list, and it cannot write back. A real deployment does this to object storage
+     * on a schedule rather than on every debounce.
+     */
+    async onStoreDocument({ documentName, document }) {
+      const file = roomFile(documentName);
+      if (!file) return;
+      await mkdir(DATA_DIR, { recursive: true });
+      await writeAtomically(file, Y.encodeStateAsUpdate(document));
+      try {
+        await writeAtomically(`${file}.docx`, readCollaborationDocument(document));
+      } catch (error) {
+        // A room mid-seed, or one two creators polluted, refuses to export. That must not stop
+        // the `.ydoc` write above — losing the room is worse than losing one export.
+        console.warn(`[room ${documentName}] no .docx export: ${(error as Error).message}`);
+      }
+    },
+
+    async onConnect({ documentName }) {
+      console.log(`[room ${documentName}] client connected`);
+    },
+
+    async onDisconnect({ documentName, clientsCount }) {
+      console.log(`[room ${documentName}] client left, ${clientsCount} remaining`);
+    },
+  },
+  {
+    exporters: [metrics],
+    // The demo's admission refusal says "invalid token"; count it under a stable label.
+    reasonOf: (error) =>
+      (error as { reason?: unknown } | null)?.reason === 'invalid token'
+        ? 'unauthorized'
+        : undefined,
+  }
+);
+
 const server = new Server({
-  port: PORT,
-  name: 'docx-editor-collaboration',
-
-  /**
-   * Every connection is queued until this resolves, so nothing reaches a document before the
-   * server has admitted the client.
-   *
-   * The demo checks a shared secret and compatible versions before sync. Version claims
-   * prevent accidental mixed-client rooms; they do not authenticate the client build.
-   * A real deployment verifies a signed token and returns
-   * the user it names as the connection context. Do that and the client's display name stops
-   * being the authority on who someone is — this demo trusts it, because there is nobody to
-   * ask.
-   */
-  async onAuthenticate({ token, documentName }) {
-    if (!ROOM_ID.test(documentName)) throw new Error('unknown room');
-    authenticateDemoToken(token, TOKEN);
-    return { room: documentName };
-  },
-
-  /**
-   * Seed a newly opened room from disk. A room nobody has saved yet stays empty.
-   *
-   * A room that has grown well past its content is compacted first, into a new generation:
-   * nobody is connected yet, so no edit is in flight. The new state is stored at once.
-   */
-  async onLoadDocument({ documentName, document }) {
-    // First, before any update reaches it, so the server never writes a change of its own.
-    prepareCollaborationServerDocument(document);
-    const file = roomFile(documentName);
-    if (!file) return document;
-    const stored = await readFile(file).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return null;
-      console.warn(`[room ${documentName}] saved room unavailable: ${error.message}`);
-      throw admissionError('saved-room-unavailable');
-    });
-    if (stored) {
-      const compacted = await compactCollaborationState(new Uint8Array(stored)).catch(() => null);
-      if (compacted) await writeAtomically(file, compacted);
-      loadStoredDemoDocument(document, compacted ?? new Uint8Array(stored));
-    }
-    return document;
-  },
-
-  /**
-   * Refuse a client that still holds a generation of the room from before a compaction, before
-   * any of its state merges. It reports `room-generation-changed` and rejoins.
-   */
-  async beforeHandleMessage(payload) {
-    checkCollaborationRoomGeneration(payload);
-  },
-
-  /**
-   * Persist the room. Hocuspocus debounces this, so a burst of typing writes once.
-   *
-   * TWO files, because they answer different questions. The `.ydoc` is the room — it is what
-   * a joining peer needs, and it is the only one `onLoadDocument` reads back. The `.docx` is
-   * what everyone else needs: something you can mail, index, diff or open in Word.
-   *
-   * `readCollaborationDocument` is how the second one exists at all. The server joins
-   * nothing — no identity, no awareness, no session — so this job never appears in the room's
-   * participant list, and it cannot write back. A real deployment does this to object storage
-   * on a schedule rather than on every debounce.
-   */
-  async onStoreDocument({ documentName, document }) {
-    const file = roomFile(documentName);
-    if (!file) return;
-    await mkdir(DATA_DIR, { recursive: true });
-    await writeAtomically(file, Y.encodeStateAsUpdate(document));
-    try {
-      await writeAtomically(`${file}.docx`, readCollaborationDocument(document));
-    } catch (error) {
-      // A room mid-seed, or one two creators polluted, refuses to export. That must not stop
-      // the `.ydoc` write above — losing the room is worse than losing one export.
-      console.warn(`[room ${documentName}] no .docx export: ${(error as Error).message}`);
-    }
-  },
-
-  async onConnect({ documentName }) {
-    console.log(`[room ${documentName}] client connected`);
-  },
-
-  async onDisconnect({ documentName, clientsCount }) {
-    console.log(`[room ${documentName}] client left, ${clientsCount} remaining`);
-  },
+  ...config,
+  // `/metrics` holds counts only. The room list is served only with a scrape token set.
+  onRequest: serveMetrics(
+    metrics,
+    process.env.METRICS_TOKEN
+      ? {
+          rooms: { telemetry: rooms, path: '/rooms' },
+          authorize: requireBearerToken(process.env.METRICS_TOKEN),
+        }
+      : {}
+  ),
 });
 
 await server.listen();
 console.log(`Hocuspocus is listening on ws://127.0.0.1:${PORT}`);
 console.log(`Rooms are stored in ${DATA_DIR}`);
+console.log(`Metrics: http://127.0.0.1:${PORT}/metrics (set METRICS_TOKEN to serve /rooms)`);

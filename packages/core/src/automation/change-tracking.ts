@@ -3,6 +3,13 @@ import { isAutomationCommand, type AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 
+/** Which change-tracking rule refused an operation, carried as the error `detail`. */
+export type ChangeTrackingRefusal =
+  | 'change-tracking-unsupported-host'
+  | 'change-tracking-mode-unsupported'
+  | 'change-tracking-author-required'
+  | 'change-tracking-operation-unsupported';
+
 export interface LocalTrackingState {
   readonly mode: 'Off' | 'TrackMineOnly';
   readonly author?: string;
@@ -12,15 +19,20 @@ export function trackingStep(
   supported: boolean,
   state: LocalTrackingState
 ): { readonly step: PlannedOperation; readonly state: LocalTrackingState } | null {
-  const refused = (message: string) => ({
+  // `detail` names which tracking rule refused, so the runtime can give the public hint for it.
+  const refused = (message: string, detail: ChangeTrackingRefusal) => ({
     state,
     step: {
       ok: false as const,
-      error: { code: 'unsupported-capability' as const, message, detail: 'changeTrackingMode' },
+      error: { code: 'unsupported-capability' as const, message, detail },
     },
   });
   if (operation.op === 'getChangeTrackingMode' || operation.op === 'setChangeTrackingMode') {
-    if (!supported) return refused('this host does not support runtime-local change tracking');
+    if (!supported)
+      return refused(
+        'this host does not support runtime-local change tracking',
+        'change-tracking-unsupported-host'
+      );
     if (operation.op === 'getChangeTrackingMode')
       return {
         state,
@@ -28,7 +40,8 @@ export function trackingStep(
       };
     if (operation.mode !== 'Off' && operation.mode !== 'TrackMineOnly')
       return refused(
-        'TrackAll requires shared tracking enforcement for every peer and is not supported'
+        'TrackAll requires shared tracking enforcement for every peer and is not supported',
+        'change-tracking-mode-unsupported'
       );
     if (
       operation.mode === 'TrackMineOnly' &&
@@ -36,7 +49,10 @@ export function trackingStep(
         !operation.author.trim() ||
         !isValidXmlText(operation.author))
     )
-      return refused('TrackMineOnly requires a non-empty XML-safe runtime author');
+      return refused(
+        'TrackMineOnly requires a non-empty XML-safe runtime author',
+        'change-tracking-author-required'
+      );
     return {
       state: {
         mode: operation.mode,
@@ -46,7 +62,10 @@ export function trackingStep(
     };
   }
   if (state.mode === 'Off' || supportsTrackedAutomationOperation(operation)) return null;
-  return refused(`${operation.op} does not support TrackMineOnly; no permanent edit was applied`);
+  return refused(
+    `${operation.op} does not support TrackMineOnly; no permanent edit was applied`,
+    'change-tracking-operation-unsupported'
+  );
 }
 
 /** The editing profile authors tracked text and property changes; annotations and decisions remain available. */

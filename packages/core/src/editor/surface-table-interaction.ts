@@ -9,7 +9,10 @@ import { readTwipsMeasure, type OoxmlElement } from '@docx-editor.dev/core/store
 import { validateTableResizeGrid } from '../store/store/table-resize-grid.ts';
 import { readEditableTableTopology } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue } from '../store/store/tree-op-table-shared.ts';
-import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from '../store/store/table-constraints.ts';
+import {
+  MIN_TABLE_COLUMN_WIDTH_TWIPS,
+  MIN_TABLE_ROW_HEIGHT_TWIPS,
+} from '../store/store/table-constraints.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { findTableOnPage, offeredHit, partOfTableIn } from './surface-table-story.ts';
 import type { CellSelection } from '../layout/semantic-cell-selection.ts';
@@ -143,6 +146,14 @@ function occurrenceRef(
     return findTableOccurrence(layout, hit.tableId, hit.rowId, hit.isHeaderRepeat);
   }
   return null;
+}
+
+/**
+ * The least height a row drag commits. A row already shorter than the minimum, such as an
+ * authored spacer row, keeps its height as the floor: dragging it up must not make it taller.
+ */
+function rowHeightFloor(startTwips: number): number {
+  return Math.min(MIN_TABLE_ROW_HEIGHT_TWIPS, startTwips);
 }
 
 export function createSurfaceTableInteraction(
@@ -646,7 +657,7 @@ export function createSurfaceTableInteraction(
           ...mode,
         },
         activeDrag.resizeTarget as TableRowOccurrenceTarget,
-        Math.max(20, activeDrag.rowHeightTwips + moveTwips)
+        Math.max(rowHeightFloor(activeDrag.rowHeightTwips), activeDrag.rowHeightTwips + moveTwips)
       );
     } else if (activeDrag.rightEdge && activeDrag.target.kind === 'rightEdge') {
       const columnWidthTwips = Math.max(
@@ -774,9 +785,15 @@ export function createSurfaceTableInteraction(
     if (drag && event.pointerId === drag.pointerId) {
       lastMoveClientX = event.clientX;
       lastMoveClientY = event.clientY;
-      const deltaPt =
+      let deltaPt =
         (drag.vertical ? event.clientY - drag.startClientY : event.clientX - drag.startClientX) /
         host.scale();
+      // The preview stops where the commit does: a row keeps its minimum height.
+      if (drag.target.kind === 'rowDivider')
+        deltaPt = Math.max(
+          deltaPt,
+          (rowHeightFloor(drag.rowHeightTwips) - drag.rowHeightTwips) / 20
+        );
       for (const child of [...layer.children]) {
         if (child !== drag.captureElement) child.remove();
       }

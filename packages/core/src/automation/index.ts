@@ -115,9 +115,55 @@ export type {
   RevisionBatchResult,
   RevisionBatchEntry,
   RevisionBatchSkipReason,
+  RevisionBatchSkipDetail,
 } from '../store/store/revision-batch.ts';
+export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
 export type {
   RevisionAuthorEntry,
   RevisionAuthorResult,
   RevisionAuthorSkipReason,
 } from '../store/store/revision-author-change.ts';
+
+// Anonymous diagnostics: the store reasons' public codes and the delivery path both hosts share.
+export {
+  byteSizeBucket,
+  countBucket,
+  createDiagnosticEmitter,
+  openDiagnosticCode,
+  reviewDiagnosticCode,
+  storeEditDiagnosticCode,
+  type DiagnosticEmitter,
+  type DiagnosticPayload,
+} from './diagnostics.ts';
+export {
+  diagnosticCodes,
+  explainDiagnostic,
+  type DiagnosticExplanation,
+} from './diagnostic-hints.ts';
+export {
+  diagnosticCause,
+  diagnosticCauses,
+  diagnosticErrorName,
+  documentPartKind,
+  exceptionCause,
+} from './diagnostic-context.ts';
+export type {
+  ByteSizeBucket,
+  CollaborationDiagnosticCode,
+  CountBucket,
+  CustomNodeDiagnosticCode,
+  DiagnosticCode,
+  DiagnosticErrorName,
+  DocumentOpenDiagnosticCode,
+  DocumentPartKind,
+  DocumentSaveDiagnosticCode,
+  FailureStage,
+  FormattingChangeKind,
+  ReviewChangeKind,
+  ReviewOperation,
+  EditDiagnosticCode,
+  FontDiagnosticCode,
+  HistoryDiagnosticCode,
+  PerformanceDiagnosticCode,
+  ReviewDiagnosticCode,
+} from './diagnostic-vocabulary.ts';

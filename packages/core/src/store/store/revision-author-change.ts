@@ -272,7 +272,13 @@ function changes(node: OoxmlElement, revision: RevisionAttributionInput): boolea
 }
 
 function entryOf(item: ReviewRevisionItem, key: string, part: OoxmlPart): RevisionBatchEntry {
-  return { key, author: item.author, partName: part.name, revisionKind: item.revisionKind };
+  return {
+    key,
+    author: item.author,
+    partName: part.name,
+    revisionKind: item.revisionKind,
+    ...(item.formattingKind ? { formattingKind: item.formattingKind } : {}),
+  };
 }
 
 /** Each site is a whole-node write, so content control locks apply to it as to any edit. */

@@ -13,7 +13,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import type { BlockFragmentRecord } from '../../layout/semantic-records.ts';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
-import { setDeferredLayoutForTest } from '../surface-deferred-layout.ts';
+import { createDeferredLayout, setDeferredLayoutForTest } from '../surface-deferred-layout.ts';
+import type { SemanticLayout } from '../../layout/semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -155,6 +156,36 @@ describe('pages after the screen finish in the background', () => {
     }
   });
 
+  test('a pass reports its layout time once, background slices included, when it ends', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const layouts: number[] = [];
+    const opened = mountPaginatedSurface(container, docx(), {
+      onTiming: (phase, ms) => void (phase === 'layout' && layouts.push(ms)),
+    });
+    if (!opened.ok) throw new Error(opened.reason);
+    const { surface } = opened;
+    try {
+      // The opening layout is the open's own duration, not an edit's.
+      expect(layouts).toEqual([]);
+      splitFirst(surface);
+      expect(layouts).toEqual([]);
+      await settled(surface, coldLines(surface));
+      expect(layouts).toHaveLength(1);
+      expect(layouts[0]).toBeGreaterThan(0);
+
+      // A second edit replaces a running pass: the replaced work joins the pass that ends, so
+      // two edits report one pass.
+      splitFirst(surface);
+      splitFirst(surface, 2);
+      await settled(surface, coldLines(surface));
+      expect(layouts).toHaveLength(2);
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  });
+
   test('a save during the pass writes the edited document', () => {
     const { surface, dispose } = mount(docx());
     try {
@@ -167,6 +198,57 @@ describe('pages after the screen finish in the background', () => {
       }
     } finally {
       dispose();
+    }
+  });
+});
+
+describe('layout timing never changes when a pass defers', () => {
+  test('a pass after a replaced one keeps its full foreground budget', () => {
+    const restore = setDeferredLayoutForTest(1, 40);
+    let time = 0;
+    const page = {} as SemanticLayout['pages'][number];
+    const previous = { pages: Array.from({ length: 100 }, () => page) } as SemanticLayout;
+    const reported: number[] = [];
+    const deferred = createDeferredLayout({
+      now: () => time,
+      pageAfterView: () => 1,
+      current: () => previous,
+      revision: () => 1,
+      publish: () => {},
+      snapshot: () => () => {},
+      passTimed: (ms) => void reported.push(ms),
+    });
+    /** One page per 10 ms; the pass defers once its budget is spent. */
+    function* steps(): Generator<
+      { pages: readonly unknown[]; finalize: () => SemanticLayout },
+      SemanticLayout,
+      void
+    > {
+      for (let pages = 1; pages <= 50; pages += 1) {
+        time += 10;
+        yield {
+          pages: new Array(pages).fill(page),
+          finalize: () => ({ pages: [] }) as unknown as SemanticLayout,
+        };
+      }
+      return previous;
+    }
+    try {
+      const deferredAt: number[] = [];
+      for (let pass = 0; pass < 2; pass += 1) {
+        const began = time;
+        deferred.abandon();
+        deferred.run(steps() as never, 1);
+        deferredAt.push(time - began);
+      }
+      // Both passes ran their whole 40 ms budget before handing pages to the background.
+      expect(deferredAt).toEqual([40, 40]);
+      deferred.finish();
+      // One report: the replaced pass's 40 ms joined the pass that ended.
+      expect(reported).toEqual([40 + 40 + 460]);
+    } finally {
+      deferred.cancel();
+      restore();
     }
   });
 });

@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "Selecione um texto para copiar sua formatação",
     "nothingToPaint": "Selecione um texto para aplicar a formatação",
     "noReviewAuthors": "Este documento não tem autores de revisão",
-    "suggestingNeedsAuthor": "O modo de sugestão precisa de um autor. Defina o autor na configuração do editor."
+    "suggestingNeedsAuthor": "O modo de sugestão precisa de um autor. Defina o autor na configuração do editor.",
+    "pictureSelected": "Uma imagem está selecionada. Coloque o cursor no texto para inserir uma imagem."
   },
   "equationPopup": {
     "apply": "Aplicar",
@@ -981,5 +982,14 @@
     "insertionsBackground": "Fundo das inserções",
     "movedFromBackground": "Fundo da origem das movimentações",
     "movedToBackground": "Fundo do destino das movimentações"
+  },
+  "formattingMarks": {
+    "columnBreak": "Quebra de coluna",
+    "pageBreak": "Quebra de página",
+    "sectionBreakContinuous": "Quebra de seção (contínua)",
+    "sectionBreakEvenPage": "Quebra de seção (página par)",
+    "sectionBreakNextColumn": "Quebra de seção (nova coluna)",
+    "sectionBreakNextPage": "Quebra de seção (próxima página)",
+    "sectionBreakOddPage": "Quebra de seção (página ímpar)"
   }
 }

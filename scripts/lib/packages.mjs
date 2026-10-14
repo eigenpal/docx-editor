@@ -306,6 +306,7 @@ export const PACKAGES = [
           'RenderableImageMime',
           'ResolvedRunStyle',
           'RevisionKind',
+          'SectionBreakMarkRecord',
           'SemanticDrawingLayer',
           'SemanticRootStoryKind',
           'SemanticStoryKind',
@@ -318,6 +319,59 @@ export const PACKAGES = [
           'VectorShapeComponent',
           'relationshipTargetIn',
         ],
+      },
+    },
+  },
+  {
+    name: '@docx-editor.dev/telemetry',
+    root: 'packages/telemetry',
+    pkgSlug: 'docx-editor-telemetry',
+    tsconfigPath: 'packages/telemetry/tsconfig.api.json',
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        // Owned by `core` and imported from there, like the pro entries above.
+        index: ['CollaborationFailureCode', 'CollaborationStatus', 'EditorCommand', 'EditorModule'],
+        // The exporter contract lives in the main entry, which every exporter's user already
+        // imports `createTelemetry` from; each entry re-exports only what its calls take.
+        otel: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        sentry: [
+          'Attributes',
+          'EditorDiagnostic',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEventContext',
+          'TelemetryExporterContext',
+        ],
+        prometheus: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        server: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        hocuspocus: [
+          'Attributes',
+          'MetricDefinition',
+          'MetricRecord',
+          'TelemetryEvent',
+          'TelemetryExporterContext',
+        ],
+        // The route re-exports `TelemetryEvent`, which the main entry and core define.
+        ingest: ['EditorDiagnostic', 'TelemetryEventContext'],
       },
     },
   },

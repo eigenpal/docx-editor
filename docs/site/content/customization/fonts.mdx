@@ -8,7 +8,7 @@ Pass a font configuration through `fonts`. Use `loadFonts()` for application fon
 
 CSS `@font-face` rules supply browser rendering only. The editor also needs font bytes to measure text.
 
-The contract preview uses packaged fonts. Select text and use the font picker to apply a family or size.
+The preview starts with **Default fonts**. Select **Default + Google Fonts** to add Lato, Arvo, and PT Serif to the toolbar font picker. Select document text, then choose a font. Changing the font source resets the preview.
 
 Embedded DOCX fonts load automatically. Font names from the document do not authorize remote font requests.
 
@@ -61,6 +61,8 @@ The failure reasons are `networkError`, `httpError`, `hashMismatch`, `overLimit`
 
 Use `createFontSource` when you already hold bytes from a file input, bundle, or application storage. It accepts a face descriptor and returns either a source or a typed failure. It also accepts `faceIndex`, an application `id`, and `maxFontBytes` where specified by its types.
 
+Browser painting uses the selected collection `faceIndex`, like text shaping. The first face uses the complete admitted collection, including its signature. Other faces use a standalone copy that preserves every selected table, including `DSIG`. Collection-header signatures do not block selecting a face. Each selected face has a separate private browser alias. Registration does not verify signatures or establish their validity after extraction. Invalid faces receive no alias. Font admission and shaping execution limits still apply.
+
 A `FontResolver` receives requested `families`, `defaultFamily`, an optional cancellation `signal`, and optional `resolvedFaces`. Use `resolvedFaces` to avoid loading faces supplied by an earlier origin. Return a configuration, fragment, or `undefined` when the resolver covers none of the requested fonts. The editor calls the resolver after loading a document and when editing requests another family.
 
 Use an application-owned family lookup to select remote assets. Do not turn document font names directly into network URLs. A network-backed resolver makes document opening fetch the assets your application approves.
@@ -82,7 +84,63 @@ A selectable family does not prove that its bytes are loaded. The font catalog i
 
 Embedded document fonts enter the font pipeline automatically when usable. Opening a document does not automatically fetch remote font declarations. A CSS `@font-face` rule changes browser rendering but does not supply the shaping pipeline with bytes. Missing font coverage can change line breaks and page layout. Use `onFontError` for initialization failures and the loader's failure list for individual URL failures.
 
+Font errors belong to the active document load. Replacing the document or destroying the editor discards delayed errors from older loads. If `onFontError` replaces the document or destroys the editor, the editor does not forward that old error event. If an `error` event listener replaces the document or destroys the editor, later listeners do not receive that error. A throwing callback does not suppress the current error event.
+
 Keep the font configuration's identity stable after editing starts. Changing `Root.fonts` creates another editor instance and resets selection and undo history. Use a stable on-demand resolver when users must choose fonts during editing.
+
+## Load Google Fonts on demand
+
+Combine packaged fonts with the Google Fonts provider. The `allow` list limits which Google families the editor can download.
+
+Use the provider's `onFailure` callback to report failed downloads. A font formatting command can succeed before its font bytes arrive.
+
+The provider fetches font files from a pinned Google Fonts catalog. It supplies bytes for text layout and browser rendering. A font change can change line breaks and pagination.
+
+Create the configuration once. Pass it to `DocxEditor.Root` through `fonts`.
+
+<FrameworkTabs variant="block">
+<Framework value="react">
+
+```tsx
+import { useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const local = packagedFonts();
+const remote = googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] });
+
+export function useContractFonts() {
+  return useFonts(local, remote);
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+defineProps<{ bytes: Uint8Array }>();
+const fonts = useFonts(packagedFonts(), googleFonts({ allow: ['Lato', 'Arvo', 'PT Serif'] }));
+</script>
+
+<template>
+  <DocxEditor.Root :document="bytes" :fonts="fonts">
+    <DocxEditor.Toolbar />
+    <DocxEditor.Viewport :style="{ height: '520px' }">
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The toolbar font picker applies the selected family to selected text. Google Fonts download when the editor needs their font bytes.
 
 ## React and Vue reference
 
@@ -220,7 +278,12 @@ export function FontEditor({ bytes }: { bytes: Uint8Array }) {
     let disposed = false;
     loadContractFonts().then(
       (value) => {
-        if (!disposed) setFonts(value);
+        if (disposed) return;
+        if (value.failures.length > 0) {
+          setFailed(true);
+          return;
+        }
+        setFonts(value);
       },
       () => {
         if (!disposed) setFailed(true);
@@ -252,7 +315,12 @@ let disposed = false;
 onMounted(() => {
   loadContractFonts().then(
     (value) => {
-      if (!disposed) fonts.value = value;
+      if (disposed) return;
+      if (value.failures.length > 0) {
+        failed.value = true;
+        return;
+      }
+      fonts.value = value;
     },
     () => {
       if (!disposed) failed.value = true;

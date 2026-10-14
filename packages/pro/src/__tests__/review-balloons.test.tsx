@@ -24,6 +24,7 @@ import {
   checkCommentMarkers,
   checkReadOnlyBalloon,
   checkBalloonFollowsLayout,
+  checkCommentClickOpensPane,
   checkRevealOpensPane,
   checkRevealReopensBalloon,
   checkReplyCards,
@@ -64,7 +65,7 @@ const change = async (run: () => void) => {
 };
 
 describe('React review layout preferences', () => {
-  test('comment markers draw initials badges by default and icons on request', async () => {
+  test('comment markers draw icons by default and initials badges on request', async () => {
     const { view, editor } = mount();
     try {
       await checkCommentMarkers(view.container, editor(), change);
@@ -174,6 +175,15 @@ describe('React review layout preferences', () => {
       }
     });
   }
+
+  test('a click on commented text opens a closed pane', async () => {
+    const { view, editor } = mount();
+    try {
+      await checkCommentClickOpensPane(view.container, editor(), change);
+    } finally {
+      view.unmount();
+    }
+  });
 
   test('useEditorEvent hears reviewItemReveal', async () => {
     const heard: { key: string; source: string }[] = [];

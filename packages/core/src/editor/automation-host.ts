@@ -38,6 +38,8 @@ import type {
 } from '../automation/document-port.ts';
 import type { ReviewWriteIntent } from './paginated-surface-contract.ts';
 import { createAutomationHost } from '../automation/host.ts';
+import { runAsAutomation } from './editor-diagnostics.ts';
+import { publicRefusal } from './diagnostic-codes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
@@ -129,7 +131,8 @@ export function createBrowserAutomationHost(editor: DocxEditorInstance): Automat
       // Nothing to settle for a batch that will be refused anyway: a disposed host must not
       // commit the editor's buffered keystrokes on its way to saying it is disposed.
       if (!disposed) editor.surface?.flushPendingInput();
-      return host.execute(request);
+      // Typing flushed above is the user's; refusals inside the batch are the batch's.
+      return runAsAutomation(editor, () => host.execute(request));
     },
   };
 }
@@ -227,7 +230,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // gate — see `applyAutomationOps`. Minting it out here would put a target in the `.rels` of a
       // document the very next line refuses to write to.
       const result = surface.applyAutomationOps(staged, scope, packageEdits, requiresReview);
-      if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
+      if (result.rejected) return { ok: false, reason: publicRefusal(result.reason) };
       return { ok: true, changed: result.committed };
     },
     applyLifecycle(op: TreeDocOp): AutomationPortApplyResult {
@@ -238,7 +241,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // store's own transaction, so this goes through the mode gates and the repaint like every
       // other write rather than reaching around them.
       const result = surface.applyAutomationOps(() => [op]);
-      if (result.rejected) return { ok: false, reason: String(result.reason ?? 'refused') };
+      if (result.rejected) return { ok: false, reason: publicRefusal(result.reason) };
       return { ok: true, changed: result.committed };
     },
     applyCommentWrites(writes, scope): AutomationCommentWriteResult {

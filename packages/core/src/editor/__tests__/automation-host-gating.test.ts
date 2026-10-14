@@ -244,7 +244,8 @@ describe('a scripted write obeys the editing mode', () => {
     expect({ ok: response.ok, changed: response.changed }).toEqual({ ok: false, changed: false });
     expect(errorAt(response, 0).code).toBe('transaction-refused');
     // The surface's own reason travels through, so a host above this can tell a reader WHY.
-    expect(errorAt(response, 0).detail).toContain('viewing');
+    // The surface's sentence leaves as its public code.
+    expect(errorAt(response, 0).detail).toBe('edit.read-only');
     expect(textOf(host, paragraphs[0]!)).toBe('alpha');
     expect(host.revision()).toBe(before);
     expect(container.textContent).not.toContain('Xalpha');
@@ -713,7 +714,8 @@ describe('a scripted write obeys the editing mode', () => {
     });
 
     expect(response.ok).toBe(false);
-    expect(errorAt(response, 0).detail).toContain('viewing');
+    // The surface's sentence leaves as its public code.
+    expect(errorAt(response, 0).detail).toBe('edit.read-only');
     // A relationship is minted on the PACKAGE, outside the undo stack and outside the mode gate
     // it was once minted before. A document open for reading must come out of a refused batch
     // byte-identical, or a reader has an external target in their file that they never authored.

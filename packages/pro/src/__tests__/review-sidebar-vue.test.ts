@@ -576,7 +576,7 @@ describe('DocxEditorReview (Vue)', () => {
   });
 
   test('collapses resolved comments to a check-badge miniature until clicked', async () => {
-    const mounted = mountReview(COMMENTED_SOURCE);
+    const mounted = mountReview(COMMENTED_SOURCE, {}, {}, { commentMarkers: 'initials' });
     try {
       await flush();
       await waitFor(
@@ -595,7 +595,7 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-card"]'
       ) as HTMLDetailsElement;
       expect(details.open).toBe(false);
-      // The default `commentMarkers: 'initials'` draws the miniature as the quiet check badge.
+      // `commentMarkers: 'initials'` draws the miniature as the quiet check badge.
       expect(details.querySelector('[data-testid="review-badge"][data-resolved]')).not.toBeNull();
 
       (details.querySelector('.docx-review__resolved-toggle') as HTMLElement).dispatchEvent(

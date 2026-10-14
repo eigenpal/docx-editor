@@ -108,7 +108,7 @@ const PROFILE_MATRIX: Record<
   },
   preserveExactLineBaseline: {
     options: '<w:noExtraLineSpacing/>',
-    on: ['absent', '11', '12', '14'],
+    on: EVERY_MODE,
   },
   strictTableStyleHierarchy: {
     options: setting('overrideTableStyleFontSizeAndJustification', '1'),

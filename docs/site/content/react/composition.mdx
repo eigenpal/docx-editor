@@ -52,7 +52,7 @@ export function Editor({ bytes }: { bytes: Uint8Array }) {
   return (
     <div className="docx-editor" style={{ height: '100vh' }}>
       <DocxEditor.Root document={bytes}>
-        <DocxEditor.Viewport>
+        <DocxEditor.Viewport style={{ height: '100%' }}>
           <DocxEditor.Content />
         </DocxEditor.Viewport>
       </DocxEditor.Root>

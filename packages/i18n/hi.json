@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "स्वरूपण की प्रतिलिपि बनाने के लिए पाठ चुनें",
     "nothingToPaint": "स्वरूपण लागू करने के लिए पाठ चुनें",
     "noReviewAuthors": "इस दस्तावेज़ में कोई समीक्षा लेखक नहीं है",
-    "suggestingNeedsAuthor": "सुझाव मोड के लिए लेखक आवश्यक है। संपादक कॉन्फ़िगरेशन में लेखक सेट करें।"
+    "suggestingNeedsAuthor": "सुझाव मोड के लिए लेखक आवश्यक है। संपादक कॉन्फ़िगरेशन में लेखक सेट करें।",
+    "pictureSelected": "एक चित्र चुना गया है। चित्र डालने के लिए कर्सर को टेक्स्ट में रखें।"
   },
   "equationPopup": {
     "apply": "लागू करें",
@@ -981,5 +982,14 @@
     "insertionsBackground": "सम्मिलन की पृष्ठभूमि",
     "movedFromBackground": "स्थानांतरण स्रोत की पृष्ठभूमि",
     "movedToBackground": "स्थानांतरण गंतव्य की पृष्ठभूमि"
+  },
+  "formattingMarks": {
+    "columnBreak": "कॉलम ब्रेक",
+    "pageBreak": "पृष्ठ ब्रेक",
+    "sectionBreakContinuous": "अनुभाग ब्रेक (निरंतर)",
+    "sectionBreakEvenPage": "अनुभाग ब्रेक (सम पृष्ठ)",
+    "sectionBreakNextColumn": "अनुभाग ब्रेक (अगला कॉलम)",
+    "sectionBreakNextPage": "अनुभाग ब्रेक (अगला पृष्ठ)",
+    "sectionBreakOddPage": "अनुभाग ब्रेक (विषम पृष्ठ)"
   }
 }

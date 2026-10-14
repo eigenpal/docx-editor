@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "Biçimlendirmesini kopyalamak için bir metin seçin",
     "nothingToPaint": "Biçimlendirmeyi uygulamak için bir metin seçin",
     "noReviewAuthors": "Bu belgede gözden geçiren yazar yok",
-    "suggestingNeedsAuthor": "Öneri modu için bir yazar gerekir. Düzenleyici yapılandırmasında yazarı ayarlayın."
+    "suggestingNeedsAuthor": "Öneri modu için bir yazar gerekir. Düzenleyici yapılandırmasında yazarı ayarlayın.",
+    "pictureSelected": "Bir resim seçili. Resim eklemek için imleci metne yerleştirin."
   },
   "equationPopup": {
     "apply": "Uygula",
@@ -981,5 +982,14 @@
     "insertionsBackground": "Eklemelerin arka planı",
     "movedFromBackground": "Taşıma kaynağının arka planı",
     "movedToBackground": "Taşıma hedefinin arka planı"
+  },
+  "formattingMarks": {
+    "columnBreak": "Sütun Sonu",
+    "pageBreak": "Sayfa Sonu",
+    "sectionBreakContinuous": "Bölüm Sonu (Sürekli)",
+    "sectionBreakEvenPage": "Bölüm Sonu (Çift Sayfa)",
+    "sectionBreakNextColumn": "Bölüm Sonu (Yeni Sütun)",
+    "sectionBreakNextPage": "Bölüm Sonu (Sonraki Sayfa)",
+    "sectionBreakOddPage": "Bölüm Sonu (Tek Sayfa)"
   }
 }

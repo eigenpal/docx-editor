@@ -352,3 +352,8 @@ export function finalizeTableRows(
     }),
   }));
 }
+
+/** A row fragment whose rest continues on the next page: the head of a split row. */
+export function splitHead(record: TableRowFragmentRecord): TableRowFragmentRecord {
+  return { ...record, hasContinuation: true };
+}

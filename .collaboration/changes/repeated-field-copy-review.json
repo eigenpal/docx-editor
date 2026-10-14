@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Copied page fields could concatenate results across shared header or footer occurrences.",
+  "after": "Copied fields read one header or footer occurrence.",
+  "reason": "The fix changes local text reads. Shared operations, stored data, and room versions remain unchanged.",
+  "tests": ["packages/core/src/editor/__tests__/clipboard-field-results.test.ts"],
+  "changeset": "copy-repeated-footer-fields",
+  "migration": null
+}

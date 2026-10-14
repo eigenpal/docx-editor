@@ -1,6 +1,6 @@
 {
   "name": "@docx-editor.dev/fonts",
-  "version": "2.27.0",
+  "version": "2.29.0",
   "description": "Open-licensed substitutes for common Word fonts, packaged for @docx-editor.dev shaped measurement.",
   "sideEffects": false,
   "type": "module",
@@ -28,7 +28,7 @@
   "scripts": {
     "build": "tsup && node scripts/check-built-assets.mjs",
     "assets:check": "node scripts/check-built-assets.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun check",
     "manifest": "node scripts/generate-manifest.mjs",
     "manifest:check": "node scripts/generate-manifest.mjs --check",
     "google:catalog": "node scripts/generate-google-catalog.mjs",

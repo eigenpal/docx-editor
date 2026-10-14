@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Inserting a picture while a picture was selected failed late with a raw store reason, and refused picture inserts and replacements sent no diagnostic.",
+  "after": "The insert is refused before any edit with a reason and the public code edit.picture-selected, and every refused picture insert or replacement sends an edit.rejected diagnostic.",
+  "reason": "The refusal happens before any operation is built, and the diagnostic only observes the result. Shared state, document operations, and the collaboration format are unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/docx-editor-images.test.ts",
+    "packages/core/src/editor/__tests__/editor-diagnostics.test.ts"
+  ],
+  "changeset": "picture-selected-insert",
+  "migration": null
+}

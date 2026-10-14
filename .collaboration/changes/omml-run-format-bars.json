@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Supported equations with Word run properties or bars used a text fallback. Compact replacement could discard source properties.",
+  "after": "Supported run properties and bars project as math. Compact replacement refuses these sources. Prose editing and equation removal remain available.",
+  "reason": "Canonical OMML elements and tree operations remain unchanged. Released clients preserve these nodes. The change affects local projection and replacement capability, not the room format.",
+  "tests": [
+    "packages/core/src/store/__tests__/omml-run-format.test.ts",
+    "packages/core/src/store/__tests__/omml-typography-projection.test.ts",
+    "packages/core/src/layout/__tests__/equation-run-format-layout.test.ts",
+    "packages/core/src/editor/__tests__/surface-equation-source-format.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-equation-source-editors.test.ts"
+  ],
+  "changeset": "omml-run-format-bars",
+  "migration": null
+}

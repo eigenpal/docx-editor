@@ -6,6 +6,24 @@ category: 'Customization'
 
 Customize your DOCX editor to fit your application. Start with the contract example, then choose a customization area. Each guide includes a live preview, supported options, and React and Vue reference code.
 
+## Design principles
+
+The DOCX editor separates document editing from interface controls. React components use the same editor state and commands as the packaged editor.
+
+Start with the smallest change that fits your application:
+
+- **Appearance:** Set `--doc-*` CSS properties on `.docx-editor`. Use `className` and `data-active` to style supported controls.
+- **Composition:** Use `DocxEditor.Root`, `.Toolbar`, `.Viewport`, and `.Content` to arrange the interface. Keep controls inside `Root`.
+- **Individual controls:** Use named parts such as `DocxEditor.Toolbar.Bold`. Replace an icon with `icon`, or supply your own element through `asChild` where supported.
+- **Control sets:** Override a toolbar slot in place, use `hidden` to remove it, or set `preset={false}` to compose the toolbar.
+- **Custom behavior:** Use `useEditorCommand(slotId)` for command state and execution. Use `useEditorState(selector)` for the state your control displays.
+
+Preserve the document selection when you build custom controls. Keep labels, keyboard support, and disabled states accessible. The area guides identify supported parts and show complete examples.
+
+Interface styling changes editor controls. Document styles and fonts change document content and can change pagination.
+
+For the React component API, see [Composition](/docs/2.x/react/composition) and [Hooks](/docs/2.x/react/hooks).
+
 <CustomizationDemo topic="start" />
 
 ## Customization guides

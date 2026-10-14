@@ -1,5 +1,5 @@
 import { readTableStructure } from '../semantic-table.ts';
-import { vMergePlanFor } from '../semantic-table-layout.ts';
+import { vMergePlanFor } from '../table-vmerge-plan.ts';
 // When a vertical merge is allowed to size its span, and what happens when it is not.
 //
 // Giving the span its own height is only safe while every row of it lands on one page and

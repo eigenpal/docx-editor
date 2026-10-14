@@ -851,7 +851,8 @@
     "nothingToCopyFormatting": "Pilih teks untuk menyalin pemformatannya",
     "nothingToPaint": "Pilih teks yang akan diberi pemformatan",
     "noReviewAuthors": "Dokumen ini tidak memiliki penulis tinjauan",
-    "suggestingNeedsAuthor": "Mode saran memerlukan penulis. Tetapkan penulis dalam konfigurasi editor."
+    "suggestingNeedsAuthor": "Mode saran memerlukan penulis. Tetapkan penulis dalam konfigurasi editor.",
+    "pictureSelected": "Sebuah gambar dipilih. Letakkan kursor di teks untuk menyisipkan gambar."
   },
   "equationPopup": {
     "apply": "Terapkan",
@@ -981,5 +982,14 @@
     "insertionsBackground": "Latar belakang penyisipan",
     "movedFromBackground": "Latar belakang asal perpindahan",
     "movedToBackground": "Latar belakang tujuan perpindahan"
+  },
+  "formattingMarks": {
+    "columnBreak": "Pemisah Kolom",
+    "pageBreak": "Pemisah Halaman",
+    "sectionBreakContinuous": "Pemisah Bagian (Berkelanjutan)",
+    "sectionBreakEvenPage": "Pemisah Bagian (Halaman Genap)",
+    "sectionBreakNextColumn": "Pemisah Bagian (Kolom Baru)",
+    "sectionBreakNextPage": "Pemisah Bagian (Halaman Berikutnya)",
+    "sectionBreakOddPage": "Pemisah Bagian (Halaman Ganjil)"
   }
 }

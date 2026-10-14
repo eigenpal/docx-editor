@@ -6,9 +6,11 @@ export const REVIEW_CHROME_GROUP = {
   labelKey: 'formattingBar.commentsAndChanges',
   controls: [
     {
+      // Packaged in the Review menu; hosts may compose a shortcut.
       id: 'revisionMarkup',
       shape: 'icon',
       labelKey: 'revisionMarkup.title',
+      defaultToolbar: false,
       paths: GENERATED_ICON_PATHS['edit_note'],
       state: { kind: 'command' },
     },

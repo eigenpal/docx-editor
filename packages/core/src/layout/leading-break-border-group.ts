@@ -90,8 +90,10 @@ export function createLeadingBreakGroups(
           : piece.breakKind === 'column'
             ? COLUMN_BREAK_MARK
             : piece.text;
-    // Only line breaks after the opening break leave it alone on its line.
-    return text.startsWith(PAGE_BREAK_CHAR) && /[^\n]/.test(text.slice(PAGE_BREAK_CHAR.length));
+    // Only line breaks after the opening break leave it alone on its line. A line break
+    // directly after it cancels the break (`page-break-before-line-break.ts`).
+    const rest = text.slice(PAGE_BREAK_CHAR.length);
+    return text.startsWith(PAGE_BREAK_CHAR) && !rest.startsWith('\n') && /[^\n]/.test(rest);
   };
 
   /** Whether a paragraph's display opens with a page break followed by content or a break. */
