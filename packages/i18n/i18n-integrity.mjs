@@ -6,9 +6,9 @@
  * directly.
  *
  * ICU parsing mirrors the runtime formatter in `packages/i18n/src/index.ts`
- * (`formatMessage` / `parseBranches`) — same regexes, so the validator
- * accepts exactly what the runtime can render. Anything the runtime would
- * leave as raw `{...}` syntax fails `malformed_braces`.
+ * (`formatMessage` / `parseBranches`). Validation also rejects unmatched
+ * branch syntax that the runtime skips. Raw `{...}` syntax fails
+ * `malformed_braces`.
  *
  * Violation codes:
  *   placeholder_mismatch    — placeholder-name set differs from English
@@ -16,7 +16,7 @@
  *   invalid_branch_label    — branch label is neither `=N` nor a valid category
  *   missing_other           — plural block lacks the required `other` branch
  *   missing_exact_branch    — an English `=N` branch was dropped
- *   malformed_braces        — stray/unbalanced brace after stripping tokens
+ *   malformed_braces        — stray brace or unmatched plural branch syntax
  *   lang_mismatch           — declared `_lang` differs from the file stem
  */
 
@@ -87,10 +87,12 @@ function parseBranches(branchStr) {
 export function extractMessageInfo(message) {
   const plurals = [];
   const outside = [];
+  let malformedPlural = false;
   let cursor = 0;
   for (const match of message.matchAll(PLURAL_BLOCK_RE)) {
     outside.push(message.slice(cursor, match.index));
     plurals.push({ name: match[1], branches: parseBranches(match[2]) });
+    if (match[2].replace(BRANCH_RE, "").trim()) malformedPlural = true;
     cursor = match.index + match[0].length;
   }
   outside.push(message.slice(cursor));
@@ -107,7 +109,7 @@ export function extractMessageInfo(message) {
     residual += segment.slice(pos);
   }
 
-  return { simple, plurals, malformedBraces: /[{}]/.test(residual) };
+  return { simple, plurals, malformedBraces: malformedPlural || /[{}]/.test(residual) };
 }
 
 /** Placeholder-name set: simple tokens plus every plural block's variable. */
@@ -151,10 +153,14 @@ function checkLeaf(key, enText, locText, code, violations) {
     // keep English's `one` branch even though their CLDR category set is
     // `['other']`; the runtime never selects it, so it is harmless). Every
     // other label must be a CLDR plural category of the locale.
-    const enLabels = new Set(enInfo.plurals.flatMap((p) => p.branches.map((b) => b.label)));
     const localeCategories = pluralCategoriesFor(code);
 
     for (const plural of locInfo.plurals) {
+      const enLabels = new Set(
+        enInfo.plurals
+          .filter((source) => source.name === plural.name)
+          .flatMap((source) => source.branches.map((branch) => branch.label)),
+      );
       if (enPluralNames.size > 0) {
         if (!enPluralNames.has(plural.name)) {
           violations.push({
@@ -184,6 +190,16 @@ function checkLeaf(key, enText, locText, code, violations) {
         });
       }
 
+      const locLabels = new Set(plural.branches.map((branch) => branch.label));
+      for (const exact of enLabels) {
+        if (!EXACT_BRANCH_RE.test(exact) || locLabels.has(exact)) continue;
+        violations.push({
+          key,
+          code: 'missing_exact_branch',
+          message: `English exact-match branch "${exact}" must be preserved for "${plural.name}"`,
+        });
+      }
+
       if (!plural.branches.some((b) => b.label === 'other')) {
         violations.push({
           key,
@@ -193,15 +209,7 @@ function checkLeaf(key, enText, locText, code, violations) {
       }
     }
 
-    const locLabels = new Set(locInfo.plurals.flatMap((p) => p.branches.map((b) => b.label)));
-    for (const exact of enLabels) {
-      if (!EXACT_BRANCH_RE.test(exact) || locLabels.has(exact)) continue;
-      violations.push({
-        key,
-        code: 'missing_exact_branch',
-        message: `English exact-match branch "${exact}" must be preserved`,
-      });
-    }
+
   }
 
   if (locInfo.malformedBraces) {
@@ -209,7 +217,7 @@ function checkLeaf(key, enText, locText, code, violations) {
       key,
       code: 'malformed_braces',
       message:
-        'stray or unbalanced braces after removing recognized placeholders and plural blocks',
+        'stray braces or unrecognized syntax within a plural block',
     });
   }
 }

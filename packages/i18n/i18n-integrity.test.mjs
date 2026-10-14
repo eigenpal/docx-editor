@@ -86,6 +86,17 @@ describe('checkLocaleIntegrity violations', () => {
     );
   });
 
+  test('rejects an invalid prefix before a plural branch label', () => {
+    const loc = '{count, plural, bogus-one {один} other {много}}';
+    expect(leaf(EN_STEP, loc).ok).toBe(false);
+  });
+
+  test('requires each exact branch on its original plural variable', () => {
+    const en = '{a, plural, =0 {none} other {#}} {b, plural, other {#}}';
+    const loc = '{a, plural, other {#}} {b, plural, =0 {нет} other {#}}';
+    expect(leafCodes(en, loc)).toContain('missing_exact_branch');
+  });
+
   test('missing_other', () => {
     expect(leafCodes(EN_STEP, '{count, plural, one {# шаг}}')).toContain('missing_other');
   });
