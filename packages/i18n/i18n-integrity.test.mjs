@@ -106,6 +106,28 @@ describe('checkLocaleIntegrity violations', () => {
     expect(leafCodes(EN_EXACT, loc)).toContain('missing_exact_branch');
   });
 
+  test('missing_exact_branch — plain placeholder replaces a plural with =N', () => {
+    const { violations } = leaf(EN_EXACT, '{count} шагов');
+    expect(violations).toEqual([
+      {
+        key: 'message',
+        code: 'missing_exact_branch',
+        message: 'English exact-match branch "=0" must be preserved for "count"',
+      },
+    ]);
+  });
+
+  test('missing_exact_branch — plain placeholder reports each lost =N once', () => {
+    const en = '{n, plural, =0 {none} other {#}} / {n, plural, =0 {zero} =1 {one} other {#}}';
+    expect(leafCodes(en, '{n} / {n}')).toEqual(['missing_exact_branch', 'missing_exact_branch']);
+  });
+
+  test('missing_exact_branch — plain placeholder beside another plural block', () => {
+    const en = '{a, plural, =0 {none} other {#}} {b, plural, other {#}}';
+    const loc = '{a} {b, plural, one {# шаг} few {# шага} many {# шагов} other {# шагов}}';
+    expect(leafCodes(en, loc)).toEqual(['missing_exact_branch']);
+  });
+
   test('malformed_braces — unclosed brace', () => {
     expect(leafCodes('Элементов: {count}', 'Элементов: {count')).toContain('malformed_braces');
   });
@@ -144,10 +166,6 @@ describe('checkLocaleIntegrity clean cases', () => {
     const en = '{count, plural, one {# item} other {# items}}';
     const loc = '{count, plural, one {# item lagi} other {# item lagi}}';
     expect(leaf(en, loc, 'id').ok).toBe(true);
-  });
-
-  test('Form B does not require English =N branches', () => {
-    expect(leaf(EN_EXACT, '{count} шагов').ok).toBe(true);
   });
 
   test('null translation is skipped', () => {

@@ -214,6 +214,26 @@ function checkLeaf(key, enText, locText, code, violations) {
     }
   }
 
+  // A plain `{count}` in place of an English plural block keeps the plural
+  // forms out, but an English `=N` branch carries distinct wording (e.g.
+  // "no steps") that a bare number cannot express, so it is still required.
+  const locPluralNames = new Set(locInfo.plurals.map((p) => p.name));
+  const plainNames = new Set(locInfo.simple.filter((name) => !locPluralNames.has(name)));
+  const reported = new Set();
+  for (const source of enInfo.plurals) {
+    if (!plainNames.has(source.name)) continue;
+    for (const { label } of source.branches) {
+      const id = `${source.name}\u0000${label}`;
+      if (!EXACT_BRANCH_RE.test(label) || reported.has(id)) continue;
+      reported.add(id);
+      violations.push({
+        key,
+        code: 'missing_exact_branch',
+        message: `English exact-match branch "${label}" must be preserved for "${source.name}"`,
+      });
+    }
+  }
+
   if (locInfo.malformedBraces) {
     violations.push({
       key,
