@@ -916,7 +916,10 @@ export function unmergedPiecesOfParagraphForDisplay(
       const start = offset++;
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
-      const style = equationRunStyle(resolveRunStyle(inheritedRunProperties, themeFonts));
+      // Runs that share one default `w:sz` size the equation; otherwise it takes the text size.
+      const text = resolveRunStyle(inheritedRunProperties, themeFonts);
+      const { fontSizePt } = equation;
+      const style = equationRunStyle(fontSizePt === undefined ? text : { ...text, fontSizePt });
       if (!style.hidden && !revisionsVisible(revisions, displayMode, authorFilter)) {
         recordRemoved(start, offset, revisions);
       }

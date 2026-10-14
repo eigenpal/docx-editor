@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   projectOmmlEquation,
   readOoxmlPart,
@@ -8,7 +8,13 @@ import {
 } from '@docx-editor.dev/core/store';
 import { layoutEquation } from '../equation-layout.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
-import { resolveRunStyle } from '../run-style.ts';
+import { resolveRunStyle, type ResolvedRunStyle } from '../run-style.ts';
+import {
+  buildStyleCascadeTable,
+  layoutSemanticDocument,
+  linesOf,
+  type TextMeasurer,
+} from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
@@ -89,4 +95,63 @@ test('the math font and italic do not change the geometry of a run without m:rPr
   expect(geometry(projection({ fontFamily: 'Cambria Math', italic: true }))).toEqual(
     geometry(projection())
   );
+});
+
+// Document layout: one `w:sz` shared by every run sizes the equation and its line.
+describe('the shared size of default run properties', () => {
+  const measurer: TextMeasurer = {
+    measure: (text, style: ResolvedRunStyle) => text.length * style.fontSizePt * 0.5,
+    lineMetrics: (style) => ({ height: style.fontSizePt * 1.15, baseline: style.fontSizePt * 0.9 }),
+  };
+  const styles = (halfPoints: number) => {
+    const read = readOoxmlPart(
+      `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:default="1" w:styleId="Normal">` +
+        `<w:rPr><w:sz w:val="${halfPoints}"/></w:rPr></w:style></w:styles>`,
+      { name: '/word/styles.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    return buildStyleCascadeTable(read.part.root);
+  };
+  /** The width and height of each line, with a 1pt mark so the mark cannot set the height. */
+  const lay = (content: string, halfPoints: number) => {
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}" xmlns:m="${M}"><w:body><w:p><w:pPr>` +
+        '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>' +
+        `<w:rPr><w:sz w:val="2"/></w:rPr></w:pPr>${content}</w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const layout = layoutSemanticDocument(read.part, 1, {
+      measurer,
+      styleCascade: styles(halfPoints),
+    });
+    return linesOf(layout).map((line) => [line.box.width, line.box.height]);
+  };
+  const properties = (halfPoints?: number) =>
+    `<w:rPr>${FONT}<w:i/>` +
+    (halfPoints ? `<w:sz w:val="${halfPoints}"/><w:szCs w:val="${halfPoints}"/>` : '') +
+    '</w:rPr>';
+  const equation = (runProperties: string) =>
+    `<m:oMath><m:r>${runProperties}<m:t>x+1</m:t></m:r>` +
+    `<m:f><m:num><m:r>${runProperties}<m:t>a</m:t></m:r></m:num>` +
+    `<m:den><m:r>${runProperties}<m:t>2</m:t></m:r></m:den></m:f></m:oMath>`;
+
+  test('a 20pt run size lays an inline equation out at 20pt in 11pt text', () => {
+    expect(lay(equation(properties(40)), 22)).toEqual(lay(equation(properties()), 40));
+    expect(lay(equation(properties(40)), 22)).not.toEqual(lay(equation(properties()), 22));
+  });
+
+  test('a display takes the size that its equations share', () => {
+    const display = (runProperties: string) =>
+      `<m:oMathPara>${equation(runProperties)}${equation(runProperties)}</m:oMathPara>`;
+    expect(lay(display(properties(16)), 22)).toEqual(lay(display(properties()), 16));
+  });
+
+  test('runs without one shared size keep the size of the text', () => {
+    const run = (runProperties: string, text: string) =>
+      `<m:r>${runProperties}<m:t>${text}</m:t></m:r>`;
+    const mixed = `<m:oMath>${run(properties(40), 'x')}${run(properties(28), 'y')}</m:oMath>`;
+    const plain = `<m:oMath>${run('', 'x')}${run('', 'y')}</m:oMath>`;
+    expect(lay(mixed, 22)).toEqual(lay(plain, 22));
+  });
 });

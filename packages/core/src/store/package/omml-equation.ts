@@ -14,7 +14,11 @@ import {
   isSupportedExpressionNode,
   mathVal,
 } from './omml-structure-support.ts';
-import { cloneEquationControl, equationDefaultFormatting } from './omml-control-defaults.ts';
+import {
+  cloneEquationControl,
+  equationDefaultFormatting,
+  equationDefaultRunSizePt,
+} from './omml-control-defaults.ts';
 import { isValidXmlText } from './sinks.ts';
 import { renderReversibleLinearMath } from './linear-math-render.ts';
 import type {
@@ -106,6 +110,11 @@ export interface OmmlEquationProjection {
   readonly fallbackText: string;
   readonly truncated: boolean;
   readonly visitedNodes: number;
+  /**
+   * The font size, in points, that every run of the equation shares through default run
+   * properties (`w:sz`). Absent, the equation takes the size of the surrounding text.
+   */
+  readonly fontSizePt?: number;
 }
 
 /**
@@ -420,6 +429,10 @@ export function projectOmmlEquation(
     truncated: false,
   };
   const expression = projectNode(node, state, 1);
+  const fontSizePt =
+    defaults.runs.kind === 'default'
+      ? equationDefaultRunSizePt(defaults.runs.properties)
+      : undefined;
   if (state.truncated) {
     const structuredFallback = state.text + '…';
     return publish(
@@ -439,6 +452,7 @@ export function projectOmmlEquation(
       fallbackText,
       truncated: false,
       visitedNodes: scan.visitedNodes,
+      ...(fontSizePt === undefined ? {} : { fontSizePt }),
     })
   );
 }

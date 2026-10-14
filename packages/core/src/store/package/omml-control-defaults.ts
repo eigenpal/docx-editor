@@ -169,15 +169,26 @@ function readDefaultRun(run: OoxmlElement): DefaultRun {
  * True when one `m:r` carries `w:rPr` that holds only default math formatting, under the
  * same rule as {@link equationControlPropertiesAreDefault}, and carries no `m:rPr`.
  *
- * Layout draws such a run exactly as it draws the same run without `w:rPr`. A run without
+ * Layout draws such a run with the glyphs of the same run without `w:rPr`. A run without
  * `m:rPr` takes the default italic math style: letters become mathematical italic glyphs in
  * the math face, and digits and operators stay upright. `w:i` and the font slots do not
- * change those glyphs. Layout sizes an equation from the surrounding run style, not from
- * `w:sz` on its runs.
+ * change those glyphs. When every run shares one `w:sz`, the equation takes that size; see
+ * {@link equationDefaultRunSizePt}.
  */
 export function equationRunPropertiesAreDefault(run: OoxmlElement): boolean {
   const read = readDefaultRun(run);
   return read !== false && read.kind === 'default';
+}
+
+/**
+ * The font size, in points, of default run properties (`w:sz`), or undefined without one.
+ * The default rule already bounds the value to a positive half-point count that `w:szCs`
+ * shares.
+ */
+export function equationDefaultRunSizePt(properties: OoxmlElement): number | undefined {
+  const size = properties.children.find((child) => wordElement(child, 'sz'));
+  const value = size && size.kind !== 'textValue' ? size.attributes[0]?.value : undefined;
+  return value && HALF_POINTS.test(value) ? Number(value) / 2 : undefined;
 }
 
 /** How compact replacement treats the control properties of one equation. */
