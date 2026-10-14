@@ -6955,7 +6955,9 @@ export interface UseOpenFailureOptions {
 
 // @public
 export interface UseOpenFailureReturn {
-    dismiss(failure?: DocumentOpenFailure): void;
+    dismiss(failure?: DocumentOpenFailure | Event | {
+        readonly nativeEvent: Event;
+    }): void;
     readonly failure: ComputedRef<DocumentOpenFailure | null>;
     readonly message: ComputedRef<string | null>;
 }

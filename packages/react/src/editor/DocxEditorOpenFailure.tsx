@@ -59,9 +59,10 @@ export interface UseOpenFailureReturn {
   /**
    * Hide this refusal. A later refusal shows again, even for the same file. Pass the failure
    * your UI showed, such as from a toast's close callback, so a late call cannot hide a newer
-   * refusal.
+   * refusal. It also works as a click handler directly, such as `onClick={dismiss}`: an event
+   * hides the refusal on screen.
    */
-  dismiss(failure?: DocumentOpenFailure): void;
+  dismiss(failure?: DocumentOpenFailure | Event | { readonly nativeEvent: Event }): void;
 }
 
 /** Options for {@link useOpenFailure}. @public */
@@ -94,7 +95,7 @@ export function useOpenFailure(options: UseOpenFailureOptions = {}): UseOpenFail
   const [dismissed, setDismissed] = useState<DocumentOpenFailure | null>(null);
   const failure = current !== null && current !== dismissed ? current : null;
   const dismiss = useCallback(
-    (failure?: DocumentOpenFailure) => {
+    (failure?: DocumentOpenFailure | Event | { readonly nativeEvent: Event }) => {
       if (!isStaleFailure(failure, current)) setDismissed(current);
     },
     [current]

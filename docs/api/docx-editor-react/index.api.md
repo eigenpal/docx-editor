@@ -3139,7 +3139,9 @@ export interface UseOpenFailureOptions {
 
 // @public
 export interface UseOpenFailureReturn {
-    dismiss(failure?: DocumentOpenFailure): void;
+    dismiss(failure?: DocumentOpenFailure | Event | {
+        readonly nativeEvent: Event;
+    }): void;
     readonly failure: DocumentOpenFailure | null;
     readonly message: string | null;
 }
