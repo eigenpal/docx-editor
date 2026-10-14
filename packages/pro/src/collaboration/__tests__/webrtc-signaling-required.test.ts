@@ -15,6 +15,8 @@ import {
   requireSignaling,
   type CreateWebrtcCollaborationOptions,
 } from '../webrtc.ts';
+import type { UseWebrtcCollaborationConnectOptions as ReactConnectOptions } from '../../react/useWebrtcCollaboration.ts';
+import type { UseWebrtcCollaborationConnectOptions as VueConnectOptions } from '../../vue/useWebrtcCollaboration.ts';
 
 const originalWebSocket = globalThis.WebSocket;
 let socketUrls: string[] = [];
@@ -76,5 +78,31 @@ describe('WebRTC signaling has no default', () => {
     expect(() => requireSignaling('wss://signaling.example' as unknown as string[])).toThrow(
       TypeError
     );
+  });
+});
+
+describe('the types require signaling', () => {
+  test('every WebRTC option type rejects an omitted signaling list', () => {
+    const base = {
+      roomId: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+      identity: { actorId: 'alex', name: 'Alex' },
+      bootstrap: { kind: 'join' },
+    } as const;
+    // @ts-expect-error `signaling` is required.
+    const factory: CreateWebrtcCollaborationOptions = base;
+    // @ts-expect-error `signaling` is required.
+    const react: ReactConnectOptions = base;
+    // @ts-expect-error `signaling` is required.
+    const vue: VueConnectOptions = base;
+    const accepted: CreateWebrtcCollaborationOptions[] = [
+      { ...base, signaling: DEMO_SIGNALING_ENDPOINTS },
+      { ...base, signaling: [] },
+      { ...base, signaling: ['wss://signaling.example'] as const },
+    ];
+    const hooks: [ReactConnectOptions, VueConnectOptions] = [
+      { ...base, signaling: DEMO_SIGNALING_ENDPOINTS },
+      { ...base, signaling: [] },
+    ];
+    expect([factory, react, vue, ...accepted, ...hooks]).toHaveLength(8);
   });
 });

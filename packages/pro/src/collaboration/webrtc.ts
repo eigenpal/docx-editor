@@ -50,9 +50,10 @@ export const DEMO_SIGNALING_ENDPOINTS = Object.freeze(['wss://turn.0docker.com/w
 export function requireSignaling(signaling: readonly string[] | undefined): readonly string[] {
   if (Array.isArray(signaling)) return signaling;
   throw new TypeError(
-    'createWebrtcCollaboration requires `signaling`. Pass your own signaling server URLs ' +
-      '(and TURN `iceServers`) in production, or pass `signaling: DEMO_SIGNALING_ENDPOINTS` ' +
-      'to use the shared public demo endpoints.'
+    'createWebrtcCollaboration requires `signaling`, an array of signaling server URLs. ' +
+      'Pass your own URLs in production. For demos, pass `signaling: DEMO_SIGNALING_ENDPOINTS` ' +
+      "from '@docx-editor.dev/pro/collaboration/webrtc'. To connect only tabs of the same " +
+      'browser, pass `signaling: []`.'
   );
 }
 
@@ -71,9 +72,10 @@ export interface CreateWebrtcCollaborationOptions {
    */
   readonly offlineEditing?: boolean;
   /**
-   * Signaling server URLs that introduce peers to each other. There is no default: a call
-   * without this value rejects with a `TypeError` before any connection opens. Pass
-   * {@link DEMO_SIGNALING_ENDPOINTS} for demos only.
+   * Signaling server URLs that introduce peers to each other. There is no default. Pass your
+   * own URLs in production, {@link DEMO_SIGNALING_ENDPOINTS} for demos, or `[]` to connect
+   * only tabs of the same browser. A call without this value rejects with a `TypeError`
+   * before any connection opens.
    */
   readonly signaling: readonly string[];
   /** STUN and TURN servers for the peer connections. Use TURN across restrictive networks. */
@@ -205,9 +207,11 @@ const releaseProvider = (provider: WebrtcProvider): void => {
 /**
  * Create one owned `y-webrtc` room and provider-neutral collaboration session.
  *
- * Rejects with a `TypeError` when `signaling` is omitted. The room never falls back to
- * public endpoints.
+ * The room reaches only the signaling servers in `signaling`. It never falls back to public
+ * endpoints.
  *
+ * @throws `TypeError` (as a rejection) when `roomId` is invalid or `signaling` is not an
+ * array. No connection opens.
  * @public
  */
 export async function createWebrtcCollaboration(

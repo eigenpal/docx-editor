@@ -535,11 +535,19 @@ To pause editing while disconnected, set `offlineEditing: false` in the `room` o
 
 ## Use your own signaling
 
-A WebRTC room needs signaling URLs that introduce peers to each other. The `signaling` option has no default. If you omit it, `createWebrtcCollaboration` rejects with a `TypeError`, and `connect` resolves with a `transport` failure. In both cases, no network connection opens.
+A WebRTC room needs signaling URLs that introduce peers to each other. The `signaling` option has no default, and the TypeScript types require it. If you omit it, no network connection opens, and the failure appears as follows:
+
+- `createWebrtcCollaboration` rejects with a `TypeError`.
+- `connect` resolves with a `transport` failure and sets `error`.
+- A `room` option connection sets `error` to a `transport` failure.
+
+To recover, add `signaling` and call `connect` again. `rejoin` reuses the options of the last connection attempt, so it fails again until you call `connect` with corrected options. Read the failure `code`. Do not parse its `detail` text.
 
 `DEMO_SIGNALING_ENDPOINTS` is a shared, unauthenticated public signaling service. It receives every room ID. Without a `password`, it also receives the signaling messages in plaintext. Use it only for demos, and pass it explicitly.
 
-For production, pass your signaling URLs to `connect` or `room`. Also provide your own Traversal Using Relays around NAT (TURN) servers. Many networks block direct WebRTC connections without TURN.
+For production, pass your signaling URLs in the `room` option of `useWebrtcCollaboration`, to `connect`, or to `createWebrtcCollaboration`. Also provide your own Traversal Using Relays around NAT (TURN) servers. Many networks block direct WebRTC connections without TURN.
+
+The following room options use your own servers. The Vue composable exports the same type from `@docx-editor.dev/pro/vue/webrtc`.
 
 ```ts
 import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';

@@ -47,8 +47,10 @@ export interface UseWebrtcCollaborationConnectOptions {
    */
   readonly offlineEditing?: boolean;
   /**
-   * Signaling server URLs. Required: a connect without them fails before any connection
-   * opens. Pass `DEMO_SIGNALING_ENDPOINTS` for demos only.
+   * Signaling server URLs that introduce peers to each other. There is no default. Pass your
+   * own URLs in production, `DEMO_SIGNALING_ENDPOINTS` for demos, or `[]` to connect only
+   * tabs of the same browser. A connect without this value resolves with a `transport`
+   * failure before any connection opens.
    */
   readonly signaling: readonly string[];
   /** STUN and TURN servers for the peer connections. Pass TURN servers in production. */

@@ -43,6 +43,14 @@ Store the room ID in your application state or URL. Do not create a new ID durin
 
 Call `useWebrtcCollaboration` with a room ID, an identity, the initial DOCX bytes, and signaling URLs. The first editor creates the room. Later editors join its document. Use a different `actorId` for each active editor, including tabs opened by the same user.
 
+The `signaling` option has no default. Choose one of these values:
+
+- Your own signaling server URLs, for production. For more information, see [Use your own signaling](/docs/2.x/pro/collaboration#use-your-own-signaling).
+- `DEMO_SIGNALING_ENDPOINTS`, a shared public service for demos.
+- An empty list, `[]`, to connect only tabs of the same browser.
+
+The examples use `DEMO_SIGNALING_ENDPOINTS`.
+
 <FrameworkTabs>
 <Framework value="react">
 
@@ -135,7 +143,7 @@ For leaving and rejoining a room, see [Connect with `useWebrtcCollaboration`](/d
 
 Open the first tab before the second tab. This sequence prevents both peers from seeding an empty room at the same time.
 
-The example passes `DEMO_SIGNALING_ENDPOINTS`, a shared public signaling service for demos. The `signaling` option has no default. If you omit it, the connection fails and no network connection opens. For production, configure your own signaling URLs and TURN servers.
+If you omit `signaling`, the hook reports a `transport` error and no network connection opens. For production, configure your own signaling URLs and TURN servers.
 
 ## Continue the setup
 
