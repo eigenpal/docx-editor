@@ -5,7 +5,7 @@
 // the screen and every exporter paint the same ink. The box is the unrotated shape; paint
 // turns it about its centre.
 import { DEFAULT_RUN_STYLE, type ResolvedRunStyle } from './run-style.ts';
-import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
+import type { LayoutBox, TextMeasurer, TextOutline } from './semantic-records.ts';
 import type { LegacyTextArtProjection } from '../store/package/legacy-vml-text-art.ts';
 
 /** Size the string is measured and, without outlines, drawn at; the fit scales it to the box. */
@@ -104,6 +104,14 @@ export function layoutTextArt(
   return record;
 }
 
+/** The outline when its ink is a finite, non-empty box; null otherwise. */
+function usableOutline(outline: TextOutline | undefined): TextOutline | null {
+  const ink = outline?.ink;
+  if (!outline || !ink) return null;
+  if (![ink.left, ink.top, ink.right, ink.bottom].every(Number.isFinite)) return null;
+  return ink.right > ink.left && ink.bottom > ink.top ? outline : null;
+}
+
 function fitTextArt(
   textArt: LegacyTextArtProjection,
   width: number,
@@ -123,19 +131,16 @@ function fitTextArt(
     strokeWidthPt: textArt.strokeWidthPt,
     rotationDegrees: textArt.rotationDegrees,
   };
+  const style = textArtRunStyle(textArt);
+  const outlineOf = (runStyle: ResolvedRunStyle) =>
+    width > 0 && height > 0 ? usableOutline(measurer?.textOutline?.(textArt.text, runStyle)) : null;
+  // A family no face resolves (a misspelled or garbled name) draws in the document's default
+  // face, as a run of body text with that name does, rather than dropping the watermark.
   const outline =
-    width > 0 && height > 0
-      ? measurer?.textOutline?.(textArt.text, textArtRunStyle(textArt))
-      : undefined;
+    outlineOf(style) ??
+    (style.fontFamily === null ? null : outlineOf({ ...style, fontFamily: null }));
   const ink = outline?.ink;
-  if (
-    !outline ||
-    !ink ||
-    ![ink.left, ink.top, ink.right, ink.bottom].every(Number.isFinite) ||
-    ink.right <= ink.left ||
-    ink.bottom <= ink.top
-  )
-    return Object.freeze({ ...base, path: null, fit: null });
+  if (!outline || !ink) return Object.freeze({ ...base, path: null, fit: null });
   // A box too small for the inset keeps its whole area for the ink.
   const insetX = width > 4 * INSET_X_PT ? INSET_X_PT : 0;
   const insetY = height > 4 * INSET_Y_PT ? INSET_Y_PT : 0;

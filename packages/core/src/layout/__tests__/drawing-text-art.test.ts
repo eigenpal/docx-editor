@@ -100,6 +100,23 @@ describe('text art layout', () => {
     expect(shaped).toBe(2);
   });
 
+  test('a family no face resolves draws in the default face instead of nothing', () => {
+    const families: Array<string | null> = [];
+    const defaultOnly: TextMeasurer = {
+      ...createFixedMeasurer(6, 14),
+      textOutline: (_text, style) => {
+        families.push(style.fontFamily);
+        return style.fontFamily === null
+          ? { path: 'M0 -10L20 -10L20 0Z', ink: { left: 0, top: -10, right: 20, bottom: 0 } }
+          : undefined;
+      },
+    };
+    const art = layoutTextArt({ ...ART, fontFamily: '&quot' }, 300, 100, defaultOnly);
+    expect(families).toEqual(['&quot', null]);
+    expect(art.path).not.toBeNull();
+    expect(art.fontFamily).toBe('&quot');
+  });
+
   test('a measurer that knows only the ink box fits the drawn text instead', () => {
     const inkOnly: TextMeasurer = {
       ...createFixedMeasurer(6, 14),
