@@ -944,7 +944,13 @@ export interface EditorCommands
   toggleParagraphMarks: Record<never, never>;
   /** Word's Protect Document: enforce filling-in-forms protection, or lift the enforced one. */
   toggleDocumentProtection: Record<never, never>;
-  /** Navigate tracked changes, including hidden formatting balloons, and wrap at the end. */
+  /**
+   * Navigate tracked changes, including hidden formatting balloons, and wrap at the end.
+   *
+   * Each stop is one review card. Under `revisionsIn: 'balloons'` a replacement is one card
+   * and one stop: navigation lands on its deletion, and `reviewItemReveal` carries the pair's
+   * `pairKey`. Under `revisionsIn: 'pane'` the deletion and the insertion are two stops.
+   */
   navigateReviewChange: { direction: 'next' | 'previous' };
   /** Resolve eligible changes shown by the active filters, or an explicit scope, in one undo step. */
   resolveAllReviewChanges: ResolveReviewChangesOptions;

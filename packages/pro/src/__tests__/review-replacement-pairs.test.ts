@@ -335,3 +335,72 @@ describe('the pair key of a revealed replacement half', () => {
     expect(events[1]).toEqual({ key: insertion!.key, source: 'host' });
   });
 });
+
+describe('Next and Previous Change under balloons', () => {
+  /** Two replacements and a lone insertion, in that order. */
+  const TWO_REPLACED = paragraph(
+    run('The '),
+    del(1, 'Ada', 'old'),
+    ins(2, 'Ada', 'new'),
+    run(' fee and the '),
+    del(3, 'Ada', 'first'),
+    ins(4, 'Ada', 'second'),
+    run(' term '),
+    ins(5, 'Ada', 'now '),
+    run('apply.')
+  );
+
+  function balloons(body: string) {
+    const editor = mount(body);
+    expect(editor.setReviewPaneOptions({ revisionsIn: 'balloons' }).ok).toBe(true);
+    const events: ReviewItemRevealEvent[] = [];
+    editor.on('reviewItemReveal', (event) => events.push(event));
+    const step = (direction: 'next' | 'previous') => {
+      expect(editor.exec({ type: 'navigateReviewChange', direction }).ok).toBe(true);
+      return events.at(-1)!;
+    };
+    const halves = () =>
+      editor.getReviewItems({ placement: false }).filter((item) => item.kind === 'revision');
+    const cards = () => editor.getReviewItems(PAIRED).filter((item) => item.kind === 'revision');
+    return { editor, step, halves, cards };
+  }
+
+  test('a replacement is one stop in each direction', () => {
+    const { editor, step, halves, cards } = balloons(TWO_REPLACED);
+    const [first, second, lone] = cards();
+    expect(cards().map((item) => item.revisionKind)).toEqual(['replace', 'replace', 'insert']);
+    const [firstDeletion, , secondDeletion, , insertion] = halves();
+    const forward = [step('next'), step('next'), step('next'), step('next')];
+    // Each landing names the deletion half and the pair's key. The lone insertion has none.
+    expect(forward).toEqual([
+      { key: firstDeletion!.key, pairKey: first!.key, source: 'navigate' },
+      { key: secondDeletion!.key, pairKey: second!.key, source: 'navigate' },
+      { key: insertion!.key, source: 'navigate' },
+      { key: firstDeletion!.key, pairKey: first!.key, source: 'navigate' },
+    ]);
+    expect(lone!.key).toBe(insertion!.key);
+    expect(editor.getReviewItems(PAIRED)[0]!.isActive).toBe(true);
+    expect(step('previous').key).toBe(insertion!.key);
+    expect(step('previous').pairKey).toBe(second!.key);
+    expect(step('previous').pairKey).toBe(first!.key);
+  });
+
+  test('a caret in the inserted half steps past its own replacement', () => {
+    const { editor, step, halves, cards } = balloons(TWO_REPLACED);
+    expect(editor.setActiveReviewItem(halves()[1]!.key).ok).toBe(true);
+    expect(cards()[0]!.isActive).toBe(true);
+    expect(step('next').pairKey).toBe(cards()[1]!.key);
+    expect(step('previous').pairKey).toBe(cards()[0]!.key);
+  });
+
+  test('a deletion and an insertion from different authors stay two stops', () => {
+    const { step } = balloons(
+      paragraph(run('The '), del(1, 'Ada', 'old'), ins(2, 'Grace', 'new'), run(' fee.'))
+    );
+    const first = step('next');
+    const second = step('next');
+    expect(second.key).not.toBe(first.key);
+    expect(first.pairKey).toBeUndefined();
+    expect(second.pairKey).toBeUndefined();
+  });
+});

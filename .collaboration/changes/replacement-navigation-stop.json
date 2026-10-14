@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Next Change and Previous Change stopped on the deletion and the insertion of a replacement separately.",
+  "after": "Under revisionsIn balloons, Next Change and Previous Change stop once on each replacement.",
+  "reason": "Navigation is a local view action. It changes no shared nodes, operations, journals, or collaboration versions.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-replacement-times.test.ts",
+    "packages/pro/src/__tests__/review-replacement-pairs.test.ts"
+  ],
+  "changeset": "replacement-navigation-stop",
+  "migration": null
+}

@@ -211,8 +211,8 @@ export function keyUnderQuery(
 
 /**
  * A reveal event with `pairKey` set when its item is a paired replacement or one half of
- * one. Navigation reads the unpaired queue, so a host that lists pairs needs the pair's key
- * to find the item. One paired read per reveal; reveals are single user actions.
+ * one. The event names a store key, so a host that lists pairs needs the pair's key to find
+ * the item. One paired read per reveal; reveals are single user actions.
  */
 export function withRevealPairKey(
   placements: (query?: ReviewItemQuery) => readonly ReviewItemPlacement[],

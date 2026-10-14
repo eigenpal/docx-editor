@@ -101,8 +101,9 @@ export type EditorHostDocument = typeof globalThis extends { readonly document: 
 export interface ReviewItemRevealEvent {
   /**
    * The key of the review item to open, as `getReviewItems()` without `pairReplacements`
-   * lists it. Next Change and Previous Change step through that unpaired queue, so for a
-   * replacement this is the key of its deletion or its insertion. `setActiveReviewItem`
+   * lists it, so for a replacement this is the key of its deletion or its insertion. Next
+   * Change and Previous Change stop once on a replacement under `revisionsIn: 'balloons'`,
+   * on its deletion, and on each half under `revisionsIn: 'pane'`. `setActiveReviewItem`
    * reports the key it was given, so a call with a pair's key reports that key here and in
    * {@link ReviewItemRevealEvent.pairKey}.
    */

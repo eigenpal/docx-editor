@@ -1736,6 +1736,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroyed: () => destroyed,
     viewing: () => editingMode === 'viewing',
     placements: reviewPlacements,
+    pairsReplacements: () => reviewPane.current().revisionsIn === 'balloons',
     visible: () =>
       filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
     scope: storyScopeOfReviewItem,

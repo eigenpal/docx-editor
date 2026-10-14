@@ -315,6 +315,51 @@ test('one tracked replacement edit synchronizes two independent decisions and on
   }
 });
 
+test('a remote replacement is one navigation stop under balloons', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  try {
+    expect(b.editor.setReviewPaneOptions({ revisionsIn: 'balloons' }).ok).toBe(true);
+    a.editor.setEditingMode('suggesting');
+    const paragraphId = a.editor.surface!.session.paragraphIds()[0]!;
+    a.editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 6 },
+      head: { paragraphId, offset: 11 },
+    });
+    a.editor.surface!.type(' end');
+    sync(a, b);
+    await converged(a, b);
+    const pairs = () =>
+      b.editor
+        .getReviewItems({ pairReplacements: true })
+        .filter((item) => item.kind === 'revision');
+    expect(pairs().map((item) => [item.revisionKind, item.author])).toEqual([
+      ['replace', 'Reviewer'],
+      ['replace', 'Alice'],
+    ]);
+    const landed: (string | undefined)[] = [];
+    b.editor.on('reviewItemReveal', (event) => landed.push(event.pairKey));
+    const next = () =>
+      expect(b.editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    next();
+    next();
+    next();
+    // The first stop follows the reader's caret. Each later stop is the other replacement.
+    expect(new Set(landed.slice(0, 2))).toEqual(new Set(pairs().map((item) => item.key)));
+    expect(landed[2]).toBe(landed[0]);
+    // The remote author withdraws the replacement while the reader navigates.
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    next();
+    expect(landed.at(-1)).toBe(pairs()[0]!.key);
+    expect(pairs()).toHaveLength(1);
+  } finally {
+    b.close();
+    a.close();
+  }
+});
+
 for (const kind of ['ins', 'del'] as const) {
   for (const action of ['accept', 'reject'] as const) {
     test(`API ${action} of same-ID ${kind} across unchanged text stays independent`, async () => {
