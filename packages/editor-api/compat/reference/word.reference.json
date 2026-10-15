@@ -1415,6 +1415,27 @@
             }
           ]
         },
+        "search": {
+          "uid": "Word.Paragraph#search",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "searchText",
+                  "type": "string"
+                },
+                {
+                  "name": "searchOptions",
+                  "type": "SearchOptions",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
         "spaceAfter": {
           "uid": "Word.Paragraph#spaceAfter",
           "kind": "property",

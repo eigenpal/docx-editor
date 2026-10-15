@@ -42,6 +42,7 @@ import { Font } from './font.ts';
 import { besideLocation, insertableText, paragraphTextLocation } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
+import { searchOptions as readSearchOptions, type SearchOptions } from './search-options.ts';
 
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
@@ -284,6 +285,28 @@ export class Paragraph extends ModelObject implements PromisedItem {
       }
     );
     return found;
+  }
+
+  /**
+   * Every occurrence of `searchText` in this paragraph, as ranges, in reading order.
+   *
+   * Takes the same options as `Body.search`. The handle is read when the batch is planned, so a
+   * paragraph from `getFirst()` can be searched in the same `sync()` that finds it.
+   */
+  search(searchText: string, searchOptions?: SearchOptions): RangeCollection {
+    const target = `${this.path.label}.search`;
+    if (typeof searchText !== 'string') fail({ code: 'InvalidArgument', target });
+    const selected = readSearchOptions(searchOptions, target);
+    this.requireUsablePath();
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'search',
+      scope: { paragraph: this.#handle() },
+      text: searchText,
+      options: {
+        ...(selected ?? {}),
+        projection: this.revisionTextView(),
+      },
+    }));
   }
 
   /** Start a new independent bullet list with this paragraph. Sync before using the returned list. */
