@@ -492,3 +492,86 @@ test("After inside another author's pending deletion lands after the deletion", 
     r.dispose();
   }
 });
+
+for (const order of ['reject theirs first', 'accept mine first'] as const) {
+  test(`words written in the middle of another author's insertion stay separate: ${order}`, async () => {
+    const r = await reviewer(counterpartyInsertion);
+    try {
+      await r.run(async (c) => {
+        c.document.changeTrackingMode = 'TrackMineOnly';
+        const written = (await match(c, 'thirty')).insertText(' (or sixty)', 'After');
+        await c.sync();
+        written.load('text');
+        await c.sync();
+        expect(written.text).toBe(' (or sixty)');
+      });
+      expect(await markup(r)).toMatch(
+        /<\/w:ins><w:ins [^>]*w:author="Avery Chen"[^>]*><w:r><w:t[^>]*> \(or sixty\)<\/w:t><\/w:r><\/w:ins><w:ins [^>]*w:author="Tailspin Legal"/
+      );
+      const reopened = await reviewer(await r.save());
+      try {
+        if (order === 'reject theirs first') {
+          await decide(reopened, 'Tailspin Legal', 'Insert', 'reject');
+          // The reviewer's words survive as their own pending insertion.
+          expect(await markup(reopened)).toMatch(
+            /<w:ins [^>]*w:author="Avery Chen"[^>]*><w:r><w:t[^>]*> \(or sixty\)/
+          );
+          expect(await markup(reopened)).not.toContain('Tailspin Legal');
+          await decide(reopened, 'Avery Chen', 'Insert', 'accept');
+        } else {
+          await decide(reopened, 'Avery Chen', 'Insert', 'accept');
+          // The reviewer's words are plain text between the halves of the pending insertion.
+          expect(await markup(reopened)).toMatch(
+            /<\/w:ins><w:r><w:t[^>]*> \(or sixty\)<\/w:t><\/w:r><w:ins [^>]*w:author="Tailspin Legal"/
+          );
+          await decide(reopened, 'Tailspin Legal', 'Insert', 'reject');
+        }
+        await reopened.run(async (c) => {
+          c.document.body.load('text');
+          c.document.body.revisions.load('items');
+          await c.sync();
+          expect(c.document.body.text).toBe('Payment is due within  (or sixty).');
+          expect(c.document.body.revisions.items).toHaveLength(0);
+        });
+      } finally {
+        reopened.dispose();
+      }
+    } finally {
+      r.dispose();
+    }
+  });
+}
+
+test('a refused tracked edit names its rule in debugInfo', async () => {
+  const r = await reviewer(counterpartyDeletion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      (await match(c, 'thirty')).insertText('sixty', 'Replace');
+      await expect(c.sync()).rejects.toMatchObject({
+        code: 'NotImplemented',
+        debugInfo: { innerError: { code: 'edit.tracked-deleted-text-only' } },
+      });
+    });
+  } finally {
+    r.dispose();
+  }
+});
+
+test('replacing the range a tracked write returned names the own-pending rule', async () => {
+  const r = await reviewer(counterpartyInsertion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const written = (await match(c, PROPOSED)).insertText(REVISED, 'Replace');
+      await c.sync();
+      written.insertText('sixty (60) days of receipt', 'Replace');
+      await expect(c.sync()).rejects.toMatchObject({
+        code: 'NotImplemented',
+        debugInfo: { innerError: { code: 'edit.tracked-own-pending-change' } },
+      });
+    });
+  } finally {
+    r.dispose();
+  }
+});

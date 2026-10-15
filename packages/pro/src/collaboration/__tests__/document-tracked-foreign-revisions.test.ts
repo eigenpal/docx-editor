@@ -40,13 +40,13 @@ const ORDERS = {
 };
 type Order = keyof typeof ORDERS;
 
-async function room(order: Order = 'reviewer first') {
+async function room(order: Order = 'reviewer first', body = BODY) {
   const harness = createPeerHarness(
     'tracked-foreign-revisions',
     { offlineEditing: true },
     ORDERS[order]
   );
-  const pair = await harness.pair(zipDocument(BODY));
+  const pair = await harness.pair(zipDocument(body));
   const mount = (peer: Peer, author: string) => {
     peer.detach();
     const container = document.createElement('div');
@@ -242,9 +242,11 @@ for (const order of Object.keys(ORDERS) as Order[])
         try {
           await concurrently(r, reviewer, counterparty);
           await converged(r);
+          await expectSamePeers(r);
           const [rejected, accepted] = await expectSameDecisions(r);
-          // Rejecting everything never loses the reviewer-free original text.
-          expect(rejected).toContain('Payment is due within');
+          // Every edit here is inside the counterparty's insertion or its own tracked change,
+          // so rejecting everything leaves the text without the insertion.
+          expect(rejected).toBe(REJECTED_ALL);
           expect(accepted).toContain('Second clause.');
           // The reviewer's proposal survives the counterparty's concurrent edit.
           if (reviewer === replaceProposal) expect(accepted).toContain(REVISED);
@@ -259,6 +261,150 @@ for (const order of Object.keys(ORDERS) as Order[])
           r.close();
         }
       });
+
+/** What a peer shows: the body text with all markup, and its revisions as author and type. */
+async function peerState(runtime: Room['peers'][number]['runtime']) {
+  return runtime.run(async (c) => {
+    const revisions = c.document.body.revisions;
+    c.document.body.load('text');
+    revisions.load('items');
+    await c.sync();
+    for (const item of revisions.items) item.load('author,type');
+    await c.sync();
+    return {
+      text: c.document.body.text,
+      revisions: revisions.items.map((item) => `${item.author}:${item.type}`).sort(),
+    };
+  });
+}
+
+/** Both peers show the same text and the same revisions. Answers that state. */
+async function expectSamePeers(r: Room) {
+  const [left, right] = await Promise.all(r.peers.map(({ runtime }) => peerState(runtime)));
+  expect(left).toEqual(right!);
+  return left!;
+}
+
+/** One peer accepts or rejects each revision with this author and type, one at a time. */
+const decideAs =
+  (author: string, type: string, action: 'accept' | 'reject'): Edit =>
+  async (c) => {
+    const revisions = c.document.body.revisions;
+    revisions.load('items');
+    await c.sync();
+    for (const item of revisions.items) item.load('author,type');
+    await c.sync();
+    const matches = revisions.items.filter((item) => item.author === author && item.type === type);
+    expect(matches.length).toBeGreaterThan(0);
+    for (const item of matches) item[action]();
+    await c.sync();
+  };
+
+const REJECTED_ALL = 'Payment is due within .\rSecond clause.';
+
+for (const order of Object.keys(ORDERS) as Order[])
+  test(`${order}: the reviewer resolves their own nested deletion and insertion alone`, async () => {
+    const r = await room(order);
+    try {
+      await r.peers[0]!.runtime.run(replaceProposal);
+      r.sync();
+      expect((await expectSamePeers(r)).revisions).toEqual([
+        `${REVIEWER}:Delete`,
+        `${REVIEWER}:Insert`,
+        `${COUNTERPARTY}:Insert`,
+      ]);
+      await r.peers[0]!.runtime.run(decideAs(REVIEWER, 'Delete', 'reject'));
+      r.sync();
+      await converged(r);
+      expect(await expectSamePeers(r)).toEqual({
+        text: `Payment is due within ${PROPOSED}${REVISED}.\rSecond clause.`,
+        revisions: [`${REVIEWER}:Insert`, `${COUNTERPARTY}:Insert`],
+      });
+      await r.peers[0]!.runtime.run(decideAs(REVIEWER, 'Insert', 'accept'));
+      r.sync();
+      await converged(r);
+      expect(await expectSamePeers(r)).toEqual({
+        text: `Payment is due within ${PROPOSED}${REVISED}.\rSecond clause.`,
+        revisions: [`${COUNTERPARTY}:Insert`],
+      });
+    } finally {
+      r.close();
+    }
+  });
+
+for (const order of Object.keys(ORDERS) as Order[])
+  test(`${order}: words in the middle of the counterparty's insertion survive its rejection`, async () => {
+    const r = await room(order);
+    try {
+      await r.peers[0]!.runtime.run(
+        onText('thirty', (range) => range.insertText(' (or sixty)', 'After'))
+      );
+      r.sync();
+      expect((await expectSamePeers(r)).revisions).toEqual([
+        `${REVIEWER}:Insert`,
+        `${COUNTERPARTY}:Insert`,
+        `${COUNTERPARTY}:Insert`,
+      ]);
+      await r.peers[1]!.runtime.run(decideAs(COUNTERPARTY, 'Insert', 'reject'));
+      r.sync();
+      await converged(r);
+      expect(await expectSamePeers(r)).toEqual({
+        text: 'Payment is due within  (or sixty).\rSecond clause.',
+        revisions: [`${REVIEWER}:Insert`],
+      });
+      await r.peers[1]!.runtime.run(decideAs(REVIEWER, 'Insert', 'accept'));
+      r.sync();
+      await converged(r);
+      expect(await expectSamePeers(r)).toEqual({
+        text: 'Payment is due within  (or sixty).\rSecond clause.',
+        revisions: [],
+      });
+    } finally {
+      r.close();
+    }
+  });
+
+const STRUCK =
+  '<w:p><w:r><w:t xml:space="preserve">Payment is due within </w:t></w:r>' +
+  `<w:del w:id="7" w:author="${COUNTERPARTY}" w:date="2026-09-01T00:00:00Z">` +
+  `<w:r><w:delText>${PROPOSED}</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>` +
+  '<w:p><w:r><w:t>Second clause.</w:t></w:r></w:p>';
+const afterStruck = onText('thirty', (range) => range.insertText('sixty days', 'After'));
+
+const STRUCK_COUNTER_EDITS: Record<string, { edit: Edit; rejected: string }> = {
+  'rejects their deletion': {
+    edit: decideAs(COUNTERPARTY, 'Delete', 'reject'),
+    rejected: `Payment is due within ${PROPOSED}.\rSecond clause.`,
+  },
+  'accepts their deletion': {
+    edit: decideAs(COUNTERPARTY, 'Delete', 'accept'),
+    rejected: REJECTED_ALL,
+  },
+  'types after the deleted words': {
+    edit: direct('.', (range) => range.insertText(' net', 'Before')),
+    rejected: `Payment is due within ${PROPOSED} net.\rSecond clause.`,
+  },
+};
+
+for (const order of Object.keys(ORDERS) as Order[])
+  for (const [name, { edit, rejected }] of Object.entries(STRUCK_COUNTER_EDITS))
+    test(`${order}: an insertion moved past the counterparty's deletion while the counterparty ${name}`, async () => {
+      const r = await room(order, STRUCK);
+      try {
+        await concurrently(r, afterStruck, edit);
+        await converged(r);
+        const state = await expectSamePeers(r);
+        expect(state.revisions).toContain(`${REVIEWER}:Insert`);
+        // The reviewer's words land after the deleted words, never inside them.
+        if (state.text.includes('receipt'))
+          expect(state.text.indexOf('sixty days')).toBeGreaterThan(state.text.indexOf('receipt'));
+        const [rejectedAll, acceptedAll] = await expectSameDecisions(r);
+        expect(rejectedAll).toBe(rejected);
+        expect(acceptedAll).toContain('sixty days');
+      } finally {
+        r.close();
+      }
+    });
 
 test("undo and redo of the reviewer's nested replacement converge on both peers", async () => {
   const r = await room();

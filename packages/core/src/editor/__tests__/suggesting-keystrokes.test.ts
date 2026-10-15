@@ -830,3 +830,22 @@ describe('a section break that retypes the following section cannot be suggested
     });
   });
 });
+
+describe("typing inside another author's insertion, in suggesting mode", () => {
+  test('splits their insertion, and the keystrokes after the first extend one insertion', () => {
+    const theirs =
+      '<w:p><w:ins w:id="1" w:author="Alan Turing" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:t>abcd</w:t></w:r></w:ins></w:p>';
+    withSurface(theirs, (surface) => {
+      caretTo(surface, 0, 2);
+      typeEach(surface, 'XY');
+      expect(surface.state().lastRejection).toBeNull();
+      const xml = serializeOoxmlPart(surface.session.part());
+      // Nested, the typed words would go with their proposal on reject.
+      expect(xml).toMatch(
+        /<w:ins [^>]*w:author="Alan Turing"[^>]*><w:r><w:t>ab<\/w:t><\/w:r><\/w:ins><w:ins [^>]*w:author="Ada Lovelace"[^>]*><w:r><w:t>XY<\/w:t><\/w:r><\/w:ins><w:ins [^>]*w:author="Alan Turing"[^>]*><w:r><w:t>cd<\/w:t><\/w:r><\/w:ins>/
+      );
+      expect(paragraphTexts(surface)).toEqual(['abXYcd']);
+    });
+  });
+});

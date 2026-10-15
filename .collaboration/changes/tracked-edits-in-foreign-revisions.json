@@ -1,9 +1,9 @@
 {
   "impact": "compatible",
   "fields": [],
-  "before": "Tracked automation edits that touched another author's pending text revision refused, and a single decision on a nested text revision refused.",
-  "after": "Tracked automation edits nest in another author's pending text insertion or deletion with the existing tree operations, and a single decision resolves a nested text revision's own sites with the existing accept and reject operations.",
-  "reason": "No new operation, field, or format is added. The edits and decisions reuse the deleteText, insertText, acceptRevision, and rejectRevision operations that released clients already apply, so released and new clients can share rooms.",
+  "before": "Tracked automation edits that touched another author's pending text revision refused, a single decision on a nested text revision refused, and a tracked insertion inside another author's insertion nested inside it.",
+  "after": "Tracked automation edits nest a deletion in another author's pending insertion and place new words beside deleted text. A tracked insertion inside another author's insertion, from automation or page typing, splits their wrapper into two halves with the same revision identity. A single decision resolves a nested text revision's own sites with the existing accept and reject operations.",
+  "reason": "No new operation, field, or format is added. The split writes two ordinary insertion wrappers that share one revision identity, a structure released readers already read. Released writers still nest, which released and new readers also understand. The edits and decisions reuse the deleteText, insertText, acceptRevision, and rejectRevision operations, so released and new clients can share rooms.",
   "tests": ["packages/pro/src/collaboration/__tests__/document-tracked-foreign-revisions.test.ts"],
   "changeset": "tracked-edits-in-foreign-revisions",
   "migration": null

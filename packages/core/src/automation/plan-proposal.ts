@@ -15,7 +15,10 @@ import {
   type ResolvedRange,
 } from './spans.ts';
 import { proposalInputError, proposalRevisionError } from './proposals.ts';
-import { trackedLandingOffset } from './proposal-foreign-revisions.ts';
+import {
+  landsInForeignInsertionContainer,
+  trackedLandingOffset,
+} from './proposal-foreign-revisions.ts';
 import {
   areSiblingParagraphs,
   followsOwnMarkDeletion,
@@ -180,7 +183,7 @@ export function planProposal(
           undefined,
           // Another author's text may hold the struck text. A range that only reaches the
           // next paragraph's start writes nothing there and keeps the strict boundary.
-          end > start ? revision.author : undefined
+          end > start ? { author: revision.author, strikesMark: index < ids.length - 1 } : undefined
         ) ?? (index < ids.length - 1 ? markStrikeRefusal(reads.part, paragraphId) : null);
       if (error) return { ok: false, error };
       // A range that ends at a paragraph's start writes nothing there, so deleting adjacent
@@ -238,16 +241,37 @@ export function planProposal(
     tracked && insertion ? operation.author.trim() : undefined,
     insertion && start === (story.value.rawText(paragraphId) ?? '').length,
     tracked && !insertion && end > start ? operation.author.trim() : undefined,
-    tracked ? operation.author.trim() : undefined
+    tracked ? { author: operation.author.trim() } : undefined
   );
   if (revisionError) return { ok: false, error: revisionError };
   if (!deletion) {
     const lineBreak = lineBreakRefusal(story.value.part, paragraphId, start, end, operation.text);
     if (lineBreak) return lineBreak;
   }
+  const revision = { author: operation.author.trim(), date: new Date().toISOString() };
+  // The store places tracked words outside struck text, so the answer names where they land.
+  const aim = insertion ? start : end;
+  const writes = tracked && !deletion && operation.text.length > 0;
+  const landing = writes
+    ? trackedLandingOffset(
+        story.value,
+        paragraphId,
+        insertion ? null : { start, end },
+        aim,
+        revision
+      )
+    : aim;
+  if (
+    writes &&
+    landsInForeignInsertionContainer(story.value, paragraphId, landing, revision.author)
+  )
+    return refuse(
+      'unsupported-revision',
+      "the new text would land inside a container within another author's pending insertion",
+      'edit.tracked-foreign-revision-unsupported'
+    );
   const conflict = claim(story.value, paragraphId);
   if (conflict) return conflict;
-  const revision = { author: operation.author.trim(), date: new Date().toISOString() };
   const ops: TreeDocOp[] = [];
   if (!insertion && end > start) ops.push({ op: 'deleteText', paragraphId, start, end, revision });
   if (!deletion && operation.text.length > 0)
@@ -258,18 +282,6 @@ export function planProposal(
       text: operation.text,
       revision,
     });
-  // The store places tracked words outside struck text, so the answer names where they land.
-  const aim = insertion ? start : end;
-  const landing =
-    tracked && !deletion && operation.text.length > 0
-      ? trackedLandingOffset(
-          story.value,
-          paragraphId,
-          insertion ? null : { start, end },
-          aim,
-          revision
-        )
-      : aim;
   return {
     ok: true,
     kind: 'command',

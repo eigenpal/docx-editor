@@ -217,7 +217,7 @@ await runtime.run(async (context) => {
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 
-Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that contains a complex field boundary whose matching boundary is in another paragraph, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph has your own pending change, another author's pending paragraph mark, formatting, move, or structural change, or only deleted text, and when the start of the next paragraph has any pending change. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion, new text lands after any deleted text, and the returned range names the new text where it lands. Each author's change stays a separate decision. Edits that cover only deleted text, or touch another author's paragraph mark, formatting, move, or structural change, fail with `NotImplemented`. Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
+Tracked range edits refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. A tracked paragraph deletion fails with `NotSupported` for the last paragraph of a story, table cell, or content control, a paragraph directly before a table or block content control, a paragraph whose mark ends a section, a paragraph with an inline content control, a paragraph that contains a complex field boundary whose matching boundary is in another paragraph, and a paragraph that nests inline content more than 64 levels deep. It fails with `NotImplemented` when the paragraph has your own pending change or another author's pending paragraph mark, formatting, move, or structural change, and when the start of the next paragraph has any pending change. Delete adjacent paragraphs in one sync; a later sync beside your own pending deletion refuses. A tracked deletion or replacement at the start of a paragraph whose previous paragraph mark you already proposed deleting also fails with `NotImplemented`. One refusal refuses the whole sync. Text that another participant types into struck text joins the proposed deletion: reject restores it, and accept removes it with no separate revision. Tracked edits can go inside or beside another author's pending text insertion or deletion. A deletion of their inserted text is recorded inside their insertion. New text lands after any deleted text, and new text inside their insertion splits it into two halves. The returned range names the new text where it lands, and each author's change stays a separate decision. For more information, see [Edit another author's pending text](#edit-another-authors-pending-text). Continuation can extend the runtime author's text and paragraph proposals. Simple fields with nested fields or other result containers refuse tracked deletion and replacement. Direct result runs remain supported.
 
 An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. Row deletion suggestions must leave a row without a pending deletion. Pending row or cell structure revisions refuse tracked row deletion with `NotImplemented`.
 
@@ -228,6 +228,45 @@ Established list definitions and page setup refuse tracked writes. Comments and 
 When a person adopts an agent's suggestions, attribute them to that person with `revisions.setAuthor(author, revisions)` or `revisions.setAuthor(author, { authors })`. This is a DocxEditor addition; Office.js has no author write. The changes stay pending. Never reject and reinsert suggestions to change their author.
 
 Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a no-op. Agent tools should require nonempty insertion/replacement text and expose deletion as an explicit model decision. The shipped worker does this. The [compatibility manifest](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/compat/manifest.json) records measured members and behavioral differences.
+
+### Edit another author's pending text
+
+A counterparty's pending insertion is ordinary text to a tracked edit. Replace it, delete part of it, or write inside it. Your changes record under the runtime author, and each author's change stays a separate decision. In the following example, the agent replaces a counterparty's proposed term, then rejects only its own revisions:
+
+```ts
+await editor.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const proposed = context.document.body
+    .search('thirty (30) days of receipt', { matchCase: true })
+    .getFirst();
+  await context.sync();
+  proposed.insertText('forty-five (45) days of receipt', 'Replace');
+  await context.sync();
+
+  // Load the revisions again after the edit. Read author and type in one sync.
+  const revisions = context.document.body.revisions;
+  revisions.load('items');
+  await context.sync();
+  for (const revision of revisions.items) revision.load('author,type');
+  await context.sync();
+
+  // Reject only this agent's changes. The counterparty's insertion stays pending.
+  for (const revision of revisions.items) {
+    if (revision.author === 'Avery Chen') revision.reject();
+  }
+  await context.sync();
+});
+```
+
+These tracked edits fail with `NotImplemented`. Read `error.debugInfo.innerError.code` for the rule:
+
+| `innerError.code` | Edit |
+| --- | --- |
+| `edit.tracked-deleted-text-only` | A deletion or replacement that covers only deleted text and no paragraph mark |
+| `edit.tracked-foreign-revision-unsupported` | An edit that touches another author's paragraph mark, formatting, move, or structural change, or new text inside a link or content control within their insertion |
+| `edit.tracked-own-pending-change` | An edit that covers or borders your own pending change |
+
+The range that a tracked `insertText()` returns names your own pending insertion. With tracking on, replacing or deleting that range fails with `edit.tracked-own-pending-change`, because the edit would cover your own pending text. Write the final text in one call, or reject your revision and write again.
 
 ## Set paragraph direction
 

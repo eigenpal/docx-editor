@@ -214,9 +214,13 @@ export class Range extends ModelObject implements PromisedItem {
    * edit attributed to the runtime author. Tracked range replacement supports adjacent sibling paragraphs outside collaboration.
    * Table and wrapper boundaries refuse. Edits can go inside or beside another author's pending
    * text insertion or deletion: a deletion of their inserted text nests inside their insertion,
-   * and the returned range names the new text after any deleted text. Each author's change stays
-   * a separate decision. Edits that cover only deleted text, or touch another author's paragraph
-   * mark, formatting, move, or structural change, refuse with `NotImplemented`. Font and paragraph
+   * new text inside their insertion splits it in two, and the returned range names the new text
+   * after any deleted text. Each author's change stays a separate decision. These refuse with
+   * `NotImplemented`, and `debugInfo.innerError.code` names the rule: a range of only deleted
+   * text (`edit.tracked-deleted-text-only`); another author's paragraph mark, formatting, move, or
+   * structural change, or a link or content control inside their insertion
+   * (`edit.tracked-foreign-revision-unsupported`); and your own pending change, including a
+   * range a tracked write returned (`edit.tracked-own-pending-change`). Font and paragraph
    * formatting support property revisions.
    * Empty text with `Replace` deletes the range; empty text at an insertion point is a no-op.
    * Agent tools that intend a replacement should validate non-empty model output first.

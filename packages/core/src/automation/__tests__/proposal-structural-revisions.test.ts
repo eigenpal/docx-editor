@@ -224,6 +224,35 @@ test("a tracked replacement nests in another author's insertion in one note only
     expect(xml).toContain(
       '<w:ins w:author="Human" w:id="1"><w:r><w:t>head target tail</w:t></w:r></w:ins>'
     );
+    // The author's own deletion and insertion each resolve alone, although the insertion
+    // around the deletion shares its identity with the other note.
+    const saved = host.save();
+    if (!saved.ok) throw new Error(saved.error.code);
+    for (const action of ['acceptRevision', 'rejectRevision'] as const) {
+      const copy = open(saved.bytes);
+      try {
+        const [note] = noteBodies(copy);
+        const found = handlesAt(
+          copy.execute({ operations: [{ op: 'getRevisions', body: note! }] }),
+          0
+        );
+        const authors = copy.execute({
+          operations: found.map((revision) => ({ op: 'getRevisionAuthor' as const, revision })),
+        });
+        const own = found.filter(
+          (_, index) =>
+            (authors.results[index] as { value: { text: string } }).value.text === 'Agent'
+        );
+        expect(own).toHaveLength(2);
+        for (const revision of own) {
+          const decided = copy.execute({ operations: [{ op: action, revision }] });
+          expect(decided.results[0]).toMatchObject({ status: 'ok' });
+        }
+        expect(savedPartBytes(copy, 'word/footnotes.xml')).not.toContain('w:author="Agent"');
+      } finally {
+        copy.dispose();
+      }
+    }
   } finally {
     host.dispose();
   }

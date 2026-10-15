@@ -56,7 +56,7 @@ export function proposalRevisionError(
   allowOwnDeleted = false,
   ownEdgeAuthor?: string,
   // A tracked edit by this author may nest in other authors' pending text revisions.
-  trackedAuthor?: string
+  tracked?: { readonly author: string; readonly strikesMark?: boolean }
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
   // individual sites and ranges, rather than discarding a group that spans note boundaries.
@@ -72,7 +72,8 @@ export function proposalRevisionError(
       if (node.id === story.root.id) break;
     }
   }
-  const overlaps = items.some((item) => {
+  let foreignRule: ProposalRevisionRule | null = null;
+  const blocking = items.find((item) => {
     // Runtime-local continuation can extend its own text or paragraph proposal.
     // Structural revisions still own their complete row or cell subtree.
     if (
@@ -83,11 +84,15 @@ export function proposalRevisionError(
     )
       return false;
     if (
-      trackedAuthor !== undefined &&
-      item.author !== trackedAuthor &&
+      tracked !== undefined &&
+      item.author !== tracked.author &&
       ['insert', 'delete', 'replace'].includes(item.revisionKind)
-    )
-      return !admitsForeignTextRevision(story, items, item, paragraphId, start, end);
+    ) {
+      if (admitsForeignTextRevision(story, items, item, paragraphId, start, end, tracked))
+        return false;
+      foreignRule = 'deleted-text-only';
+      return true;
+    }
     if (item.revisionKind === 'structural') {
       // Row/cell ranges locate review cards at the first paragraph's start. Their actual
       // coverage is the owning subtree, including later paragraphs and nested tables.
@@ -129,12 +134,31 @@ export function proposalRevisionError(
       );
     });
   });
-  if (overlaps)
+  if (!blocking) return null;
+  if (!tracked)
     return invalid(
       'unsupported-revision',
       'proposal touches or overlaps a pending revision',
       'span'
     );
-
-  return null;
+  const rule: ProposalRevisionRule =
+    foreignRule ?? (blocking.author === tracked.author ? 'own-pending' : 'foreign-revision');
+  return invalid('unsupported-revision', RULE_MESSAGES[rule], RULE_CODES[rule]);
 }
+
+/** Why a tracked edit cannot touch a pending revision. */
+type ProposalRevisionRule = 'deleted-text-only' | 'foreign-revision' | 'own-pending';
+
+const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
+  'deleted-text-only': 'a tracked deletion or replacement needs live text, not only deleted text',
+  'foreign-revision':
+    "the edit touches another author's pending paragraph mark, formatting, move, or structure",
+  'own-pending': "the edit would merge with or cover the author's own pending change",
+};
+
+/** Public diagnostic codes, which the editing API reports in `debugInfo.innerError`. */
+const RULE_CODES: Readonly<Record<ProposalRevisionRule, string>> = {
+  'deleted-text-only': 'edit.tracked-deleted-text-only',
+  'foreign-revision': 'edit.tracked-foreign-revision-unsupported',
+  'own-pending': 'edit.tracked-own-pending-change',
+};

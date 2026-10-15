@@ -61,6 +61,7 @@ import {
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
 import { emptyParagraphRunProperties } from './mark-character-style-run.ts';
+import { liftedOutOfForeignInsertions } from './tree-op-tracked-foreign-split.ts';
 
 export { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 export { build, revisionAttributes } from './tree-op-tracked-builders.ts';
@@ -474,6 +475,7 @@ function applyTrackedInsertion(
     return styled.length > 0 ? styled : null;
   };
   let exceedsDepth = false;
+  const wrappers = new Set<string>();
   const wrap = (properties: readonly OoxmlNode[], depth: number): OoxmlNode => {
     const wrapper = build(
       mint(),
@@ -492,6 +494,7 @@ function applyTrackedInsertion(
         : [payload.run!(mint)]
     );
     if (nextInlineContainerDepth(wrapper, depth) >= MAX_INLINE_CONTAINER_DEPTH) exceedsDepth = true;
+    wrappers.add(wrapper.id);
     return wrapper;
   };
 
@@ -780,7 +783,11 @@ function applyTrackedInsertion(
     return out;
   };
 
-  let children = mergedRevisions(mint, rebuild(paragraph.children, []));
+  const rebuilt = rebuild(paragraph.children, []);
+  let children = mergedRevisions(
+    mint,
+    wrappers.size ? liftedOutOfForeignInsertions(rebuilt, wrappers, revision.author, mint) : rebuilt
+  );
   if (!placed) {
     // An empty paragraph, or an offset at the very end with no run to hang it on.
     if (offset !== cursor.offset) {

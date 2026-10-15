@@ -6,6 +6,10 @@
 // leaves the other pending. Structural, paragraph mark, formatting, and move revisions keep
 // refusing, and so does a strike that would cover nothing but already struck text.
 import { findNode } from '../store/package/ooxml-edit.ts';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { insertionAuthor } from '../store/store/tree-op-retraction.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import type { ReviewRevisionItem } from '../store/store/review-items.ts';
 import { trackedInsertionLanding } from '../store/store/tree-op-tracked-adjacency.ts';
 import type { AutomationStoryReads } from './reads.ts';
@@ -66,7 +70,7 @@ function coversLiveText(
  *
  * Their inserted text, including the inserted half of a replacement, admits any edit. Their
  * struck text admits an insertion inside or at its edge, which the store places after or
- * beside the deletion, and a strike that also covers live text.
+ * beside the deletion, and a strike that also covers live text or the paragraph mark.
  */
 export function admitsForeignTextRevision(
   story: AutomationStoryReads,
@@ -74,14 +78,16 @@ export function admitsForeignTextRevision(
   item: ReviewRevisionItem,
   paragraphId: string,
   start: number,
-  end: number
+  end: number,
+  options: { readonly strikesMark?: boolean } = {}
 ): boolean {
   if (item.revisionKind === 'insert') return true;
   if (item.revisionKind !== 'delete' && item.revisionKind !== 'replace') return false;
   const struckContact = rangesIn(story, item, paragraphId).some(
     (range) => range.struck && start <= range.end && end >= range.start
   );
-  if (!struckContact || start === end) return true;
+  // A range that also strikes this paragraph's mark changes more than the deleted text.
+  if (!struckContact || start === end || options.strikesMark) return true;
   return coversLiveText(story, items, paragraphId, start, end);
 }
 
@@ -109,4 +115,45 @@ export function trackedLandingOffset(
     revision.date
   );
   return struck && struck.end > struck.start ? landing : past;
+}
+
+/**
+ * Whether tracked words aimed at `landing` would land inside a link, a content control, or
+ * another container that sits inside another author's pending insertion.
+ *
+ * The store splits another author's insertion around new words that land directly in it, so
+ * each stays a separate decision. A container inside it cannot split, and the new words would
+ * become part of the other author's proposal, so such an edit refuses.
+ */
+export function landsInForeignInsertionContainer(
+  story: AutomationStoryReads,
+  paragraphId: string,
+  landing: number,
+  author: string
+): boolean {
+  const paragraph = findNode(story.part, paragraphId);
+  if (!paragraph || paragraph.kind !== 'paragraph') return false;
+  const offsets = paragraphOffsetIndex(paragraph);
+  let foreign = false;
+  let nodes: readonly OoxmlNode[] = paragraph.children;
+  for (let depth = 0; depth < 64; depth++) {
+    const inside = nodes.find((node) => {
+      if (node.kind === 'textValue' || node.kind === 'run') return false;
+      const span = offsets.spanOf(node);
+      return span !== null && span.start < landing && landing < span.end;
+    });
+    if (!inside || inside.kind === 'textValue') return false;
+    const descends =
+      (isInlineRunContainer(inside) &&
+        inside.kind !== 'revisionDelete' &&
+        inside.kind !== 'revisionMoveFrom') ||
+      inside.kind === 'contentControl' ||
+      inside.kind === 'contentControlContent';
+    if (!descends) return false;
+    if (foreign && inside.kind !== 'contentControlContent') return true;
+    if (inside.kind === 'revisionInsert' && (insertionAuthor([inside]) ?? author) !== author)
+      foreign = true;
+    nodes = inside.children;
+  }
+  return false;
 }
