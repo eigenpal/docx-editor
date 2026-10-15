@@ -288,6 +288,8 @@ const { bookmarks, goTo } = useBookmarks();
 
 `isWritable` says whether the document accepts bookmark edits at the selection. Go To works in a read-only document too.
 
+The list has one entry per name. If collaborators left copies of a name, `duplicates` on its entry counts them. To keep the first and remove the copies, call `goTo(name)` and then `insert(name)`.
+
 ## `useParagraphFormat`
 
 Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step. Read the returned refs with `.value`:

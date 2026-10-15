@@ -20,9 +20,71 @@ A bookmark name starts with a letter. It holds only letters, digits, and undersc
 
 ## Show bookmarks
 
-Select **Review** > **Show bookmarks** to paint a gray bracket at the start and the end of each bookmark, and an I-beam at a bookmark that marks a point. The marks show bookmarks in the main text, footnotes, and endnotes. Hidden bookmarks are not shown.
+Select **Review** > **Show bookmarks** to paint a gray bracket at the start and the end of each bookmark, and an I-beam at a bookmark that marks a point. The marks show bookmarks in the main text, headers, footers, footnotes, and endnotes. A bookmark in a header or footer is marked on every page that shows that header or footer. Hidden bookmarks are not shown.
 
-The marks are a view setting. They do not change the document, its undo history, its export, or its print.
+The marks are a view setting. They do not change the document, its undo history, or its export. The selection, the caret, and the pointer pass through them. They do not print unless you ask for it.
+
+## Style the bookmark marks
+
+The marks take their look from these CSS custom properties. Set them on `.docx-editor` or on an element inside it.
+
+| Token                        | Controls                                                         |
+| ---------------------------- | ---------------------------------------------------------------- |
+| `--doc-bookmark-mark`        | The mark color. The default is gray.                             |
+| `--doc-bookmark-mark-width`  | The stroke width. The default is `1px`.                          |
+| `--doc-bookmark-mark-size`   | The width of a bracket arm at 100% zoom. The default is `3px`.   |
+| `--doc-bookmark-point-glyph` | A CSS `background` that replaces the I-beam of a point bookmark. |
+
+For example, the following rule draws thicker blue marks:
+
+```css
+.docx-editor {
+  --doc-bookmark-mark: #1a73e8;
+  --doc-bookmark-mark-width: 2px;
+  --doc-bookmark-mark-size: 4px;
+}
+```
+
+Each mark is an element with the class `docx-bookmark-mark` and one of `docx-bookmark-mark--start`, `docx-bookmark-mark--end`, or `docx-bookmark-mark--point`. Each mark also has these attributes:
+
+- `data-bookmark-name`: the bookmark's name.
+- `data-bookmark-hidden`: `true` for a hidden bookmark, else `false`.
+- `data-bookmark-edge`: `start`, `end`, or `point`.
+- `data-bookmark-story`: `body`, `headerFooter`, or `note`.
+
+To style one bookmark, select it by name:
+
+```css
+.docx-bookmark-mark[data-bookmark-name='Intro'] {
+  --doc-bookmark-mark: #c5221f;
+}
+```
+
+## Choose and customize the marks
+
+Call `editor.setBookmarkMarks(options)` to choose which bookmarks get marks, to change each mark, or to print the marks. In React and Vue, get the editor from `useDocxEditor()`. The call returns a function that restores the previous options.
+
+- `include`: `'visible'` (the default) skips hidden bookmarks. `'all'` marks every bookmark. A function receives `name`, `hidden`, and `story`, and returns whether to mark the bookmark.
+- `decorate(element, mark)`: changes a mark before the editor places it. Add a class, a `title`, or attributes, or return another element to replace the mark. The editor positions the element that you return. `mark` has `name`, `hidden`, `story`, and `edge`.
+- `print`: if `true`, the marks stay when the browser prints the page. Exports never include the marks.
+
+The following example marks only bookmarks whose names start with `Sec`, and shows the name when the pointer rests on a mark:
+
+```ts
+const restore = editor.setBookmarkMarks({
+  include: (bookmark) => bookmark.name.startsWith('Sec'),
+  decorate(element, mark) {
+    element.title = mark.name;
+    // Marks ignore the pointer by default. A tooltip needs pointer events.
+    element.style.pointerEvents = 'auto';
+  },
+});
+
+// Later, return to the default marks.
+restore();
+```
+
+A mark that receives pointer events can cover a few pixels of text, so keep the mark narrow if you turn them on.
 
 ## How editing treats bookmarks
 
@@ -48,16 +110,22 @@ editor.exec({ type: 'goToBookmark', name: 'intro' });
 editor.exec({ type: 'deleteBookmark', name: 'Intro' });
 editor.exec({ type: 'toggleBookmarks' });
 
+editor.exec({ type: 'openBookmarkDialog' });
+
 const bookmarks = editor.query({ type: 'bookmarks' });
 ```
 
-The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, `empty`, and `atSelection`. `editor.snapshot().showBookmarks` says whether the marks are shown.
+`openBookmarkDialog` opens the `bookmark` popup, the same request that the **Insert** menu row and Ctrl+Shift+F5 send. It works in a document open for viewing, because **Go To** still works there. If no bookmark dialog is registered, for example because the `bookmark` popup is `false`, the command fails with `unsupported`.
+
+The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, `empty`, `atSelection`, and `duplicates`. `editor.snapshot().showBookmarks` says whether the marks are shown.
 
 Bookmark names are unique in the whole document, across the main text, headers, footers, and notes. If another story has the name, `insertBookmark` moves the bookmark from that story. `insertBookmark` refuses a name that breaks the naming rules with `invalidArgs`. `deleteBookmark` and `goToBookmark` refuse a name that no bookmark has with `notFound`. A document open for viewing refuses writes and still accepts `goToBookmark`.
 
 ## Bookmarks in collaboration
 
-Bookmark writes synchronize like other edits. If two people add the same name at different places while one of them is offline, both bookmarks remain after they reconnect. Every participant then reads the first one in document order: the list, **Go To**, and links all use it. The next add or delete of that name replaces or removes both.
+Bookmark writes synchronize like other edits. If two people add the same name at different places while one of them is offline, both bookmarks remain after they reconnect. Every participant then uses the first one in document order: the list, **Go To**, links, and the marks all use it. The editor does not remove the copy by itself, because an automatic edit could remove a bookmark that someone placed on purpose.
+
+The copies are visible instead. The `duplicates` field of the `bookmarks` query counts them. When you pick the name in the Bookmark dialog, the dialog says how many other places use it and shows **Keep first**. **Keep first** adds the name again at the first bookmark, which removes every copy in one undo step. Deleting the name also removes every copy.
 
 ## Build your own bookmark UI
 
@@ -65,8 +133,8 @@ In React, `useBookmarks()` returns the bookmark list and the `insert`, `remove`,
 
 To replace the packaged dialog, pass your own renderer as the `bookmark` popup, or compose `DocxEditor.BookmarkDialog` from its parts. For more information, see [Customize dialogs](/docs/2.x/guides/customize-dialogs).
 
-To open your own dialog with Ctrl+Shift+F5, register it with `editor.setBookmarkChrome({ onRequest })`. The call returns a function that removes the registration.
+The packaged editor registers the `bookmark` popup for you. If you mount your own dialog outside the popup map, register it with `editor.setBookmarkChrome({ onRequest })`. The menu row, Ctrl+Shift+F5, and `openBookmarkDialog` then open it. The call returns a function that removes the registration.
 
 ## Use the document API
 
-The document API follows the Office.js shape: `Range.insertBookmark`, `Range.getBookmarks`, `Document.getBookmarkRange`, `Document.getBookmarkRangeOrNullObject`, `Document.deleteBookmark`, and `Bookmark.delete`. Replacing the text of a bookmark's range with `insertText(text, 'Replace')` removes the bookmark, as typing over it does. For details and limits, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
+The document API follows the Office.js shape: `Range.insertBookmark`, `Range.getBookmarks`, `Document.getBookmarkRange`, `Document.getBookmarkRangeOrNullObject`, `Document.deleteBookmark`, and `Bookmark.delete`. Replacing the text of a bookmark's range with `insertText(text, 'Replace')` removes the bookmark, as typing over it does. `Document.deleteBookmark` and `Bookmark.delete` can share a `context.sync()` with edits in any story. For details and limits, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
