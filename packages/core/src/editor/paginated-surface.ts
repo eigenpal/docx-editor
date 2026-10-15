@@ -3099,7 +3099,7 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  /** The commit's refusal, or null: the refresh when the write guard skips `run` entirely. */
+  /** The refusal (the refresh when the guard skips `run`), or null: landed or a no-op. */
   function commit(...args: Parameters<typeof commitNow>): string | null {
     if (refreshWriteBlocked(container)) return REFRESH_WRITE_REFUSAL;
     const finish = beginSurfaceCommit(container);
@@ -5288,7 +5288,8 @@ export function mountPaginatedSurface(
         { automation: true }
       );
       // Null only when the refresh guard skipped the commit before the thunk ran.
-      return result ?? { committed: false, rejected: true, opCount: 0, reason: refusal! };
+      if (result) return result;
+      return { committed: false, rejected: true, opCount: 0, reason: refusal ?? 'rejected' };
     },
 
     editingMode: () => editingMode,

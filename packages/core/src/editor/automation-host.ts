@@ -258,6 +258,9 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // A sentence the editor refused in (a refresh, viewing) becomes its public code.
       if (!review.ok)
         return { ok: false, reason: publicRefusal(review.reason ?? 'review-module-required') };
+      // Judged before the surface gates, so a mixed batch is named as one on every host.
+      if (writes.length !== 1 && !writes.every((write) => write.kind === 'delete'))
+        return { ok: false, reason: 'mixed-comment-writes' };
       let outcome: AutomationCommentWriteResult | null = null;
       // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
       // the pages and the rail repaint from the commit. Reaching past it would let a script
