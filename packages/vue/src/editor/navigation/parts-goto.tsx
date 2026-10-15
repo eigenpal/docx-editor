@@ -9,7 +9,8 @@
 //
 // Bookmark names come from the file. They go into text content only, never into markup.
 
-import { defineComponent, useId, type CSSProperties, type PropType } from 'vue';
+import { defineComponent, shallowRef, useId, watch, type CSSProperties, type PropType } from 'vue';
+import { scopeDispose } from '../scope-dispose';
 import type { BookmarkPlace } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
 import { selectDocumentAbsent } from '../document-presence';
@@ -52,6 +53,19 @@ export const NavigationGoTo = defineComponent({
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const listId = useId();
     const optionId = (index: number) => `${listId}-option-${index}`;
+    // The arrow keys move the highlight; keep that row in view in a long list.
+    const listRef = shallowRef<HTMLUListElement | null>(null);
+    scopeDispose(
+      watch(
+        goTo.activeIndex,
+        (index) => {
+          if (index < 0) return;
+          const row = listRef.value?.children[index] as HTMLElement | undefined;
+          row?.scrollIntoView?.({ block: 'nearest' });
+        },
+        { flush: 'post' }
+      )
+    );
 
     const jump = (name?: string) => {
       if (!goTo.go(name).ok) return;
@@ -164,6 +178,7 @@ export const NavigationGoTo = defineComponent({
 
           {rows.length > 0 && (
             <ul
+              ref={listRef}
               id={listId}
               class="docx-nav__list"
               role="listbox"

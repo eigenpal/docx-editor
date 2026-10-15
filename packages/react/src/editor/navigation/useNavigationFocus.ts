@@ -170,12 +170,14 @@ export function useNavigationFocus(
             : null;
       if (!tab || !ownsShortcutTarget(event.target, rootRef.current, viewport)) return;
       event.preventDefault();
+      // Go To goes through the editor, so a host's own Go To UI on top answers it.
+      if (tab === 'goto' && editor?.exec({ type: 'openGoTo' }).ok) return;
       const active = doc.activeElement;
       openTab(tab, isHTMLElementNode(active) ? active : null);
     };
     doc.addEventListener('keydown', onKeyDown);
     return () => doc.removeEventListener('keydown', onKeyDown);
-  }, [viewport, findShortcut, goToShortcut, openTab]);
+  }, [viewport, findShortcut, goToShortcut, openTab, editor]);
 
   // Every render answers the requests made before it (see the header).
   useEffect(() => {

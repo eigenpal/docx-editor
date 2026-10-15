@@ -57,7 +57,8 @@
     "printRefused": "Browser tidak mengizinkan pencetakan dari halaman. Pilih Buka PDF, lalu cetak dari penampil PDF.",
     "insertTextBox": "Kotak Teks",
     "bookmark": "Penanda…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Buka penanda…"
   },
   "formattingBar": {
     "groups": {

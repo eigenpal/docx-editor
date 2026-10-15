@@ -244,7 +244,8 @@ export interface GoToChromeHandlers {
   /**
    * Whether Ctrl+G (Cmd+Option+G on macOS) in the document opens this UI. Defaults to `true`.
    * With `false` the chord is left to the browser; `openGoTo` still opens the UI. The most
-   * recent registration decides.
+   * recent registration decides. It is read when the chord arrives, so a getter can follow a
+   * setting without registering again.
    */
   readonly shortcut?: boolean;
 }

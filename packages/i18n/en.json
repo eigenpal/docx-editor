@@ -89,7 +89,8 @@
     "printPdfMissing": "Printing uses PDF conversion. Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
     "insertTextBox": "Text Box",
     "bookmark": "Bookmark…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Go To Bookmark…"
   },
   "toc": {
     "refresh": "Refresh table of contents",

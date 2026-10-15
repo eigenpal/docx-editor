@@ -68,6 +68,8 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'review.bookmarks': { type: 'toggleBookmarks' },
   // Opens the host's Bookmark dialog, the `bookmark` popup; disabled while none is registered.
   'insert.bookmark': { type: 'openBookmarkDialog' },
+  // Opens the host's Go To UI, the Go to tab of the navigation pane; disabled without one.
+  'insert.goToBookmark': { type: 'openGoTo' },
   'review.protectDocument': { type: 'toggleDocumentProtection' },
   'review.simpleMarkup': { type: 'setReviewDisplayMode', mode: 'simple-markup' },
   'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },

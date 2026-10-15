@@ -57,7 +57,8 @@
     "printRefused": "Tarayıcı sayfadan yazdırmaya izin vermedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
     "insertTextBox": "Metin Kutusu",
     "bookmark": "Yer işareti…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Yer işaretine git…"
   },
   "formattingBar": {
     "groups": {

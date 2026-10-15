@@ -153,6 +153,7 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'file.pageSetup': { parity: 'same' },
   'insert.watermark': { parity: 'same' },
   'insert.bookmark': { parity: 'same' },
+  'insert.goToBookmark': { parity: 'same' },
 
   // A note reference is a body-story concept: `w:footnoteReference` lives in the main document
   // part, and Word refuses a note inside a note for the same reason.

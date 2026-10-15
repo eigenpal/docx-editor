@@ -89,7 +89,8 @@
     "printPdfMissing": "La impresión usa la conversión a PDF. Instala @docx-editor.dev/docx-to-pdf en tu servidor Node.js y configura menu.exporters.pdf.",
     "insertTextBox": "Cuadro de texto",
     "bookmark": "Marcador…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Ir a marcador…"
   },
   "toc": {
     "refresh": "Actualizar tabla de contenido",

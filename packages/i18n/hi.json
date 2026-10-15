@@ -57,7 +57,8 @@
     "printRefused": "ब्राउज़र ने पृष्ठ से प्रिंट की अनुमति नहीं दी। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
     "insertTextBox": "टेक्स्ट बॉक्स",
     "bookmark": "बुकमार्क…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "बुकमार्क पर जाएं…"
   },
   "formattingBar": {
     "groups": {

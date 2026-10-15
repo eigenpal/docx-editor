@@ -718,6 +718,7 @@ describe('chrome contracts', () => {
       'insert.endnote',
       'insert.toc',
       'insert.bookmark',
+      'insert.goToBookmark',
       'insert.watermark',
     ]);
     expect(row(view, 'insert.toc').className).toContain('my-toc');

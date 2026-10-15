@@ -12,8 +12,8 @@
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 78,
-    "chromeCommandWired": 45,
+    "chromeSlots": 79,
+    "chromeCommandWired": 46,
     "chromeProbe": 7,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 13,
@@ -1363,6 +1363,7 @@
       "insert.sectionBreakContinuous",
       "insert.toc",
       "insert.bookmark",
+      "insert.goToBookmark",
       "insert.watermark"
     ],
     "commandWired": [
@@ -1410,7 +1411,8 @@
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
       "insert.toc",
-      "insert.bookmark"
+      "insert.bookmark",
+      "insert.goToBookmark"
     ],
     "probe": [
       "text.link",

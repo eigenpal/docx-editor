@@ -57,7 +57,8 @@
     "printRefused": "Der Browser hat das Drucken von der Seite aus nicht zugelassen. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
     "insertTextBox": "Textfeld",
     "bookmark": "Textmarke…",
-    "bookmarkShortcut": "Strg+Umschalt+F5"
+    "bookmarkShortcut": "Strg+Umschalt+F5",
+    "goToBookmark": "Gehe zu Textmarke…"
   },
   "formattingBar": {
     "groups": {

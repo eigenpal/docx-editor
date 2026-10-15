@@ -57,7 +57,8 @@
     "printRefused": "O navegador não permitiu a impressão a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
     "insertTextBox": "Caixa de texto",
     "bookmark": "Indicador…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Ir para indicador…"
   },
   "formattingBar": {
     "groups": {

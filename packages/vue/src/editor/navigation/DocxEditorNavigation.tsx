@@ -136,12 +136,19 @@ const DocxEditorNavigationImpl = defineComponent({
     // The `openGoTo` command opens this pane's Go to tab.
     const editorRef = useDocxEditor();
     scopeDispose(
+      // One registration for the pane's life: a prop change must not push it back on top of
+      // a host's own Go To UI, so the shortcut flag is read when the chord arrives.
       watch(
-        [editorRef, () => props.goToShortcut],
-        ([editor, shortcut], _previous, onCleanup) => {
+        editorRef,
+        (editor, _previous, onCleanup) => {
           if (!editor) return;
           onCleanup(
-            editor.setGoToChrome({ onRequest: () => focus.intents.openTab('goto'), shortcut })
+            editor.setGoToChrome({
+              onRequest: () => focus.intents.openTab('goto'),
+              get shortcut() {
+                return props.goToShortcut;
+              },
+            })
           );
         },
         { immediate: true }

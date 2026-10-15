@@ -57,7 +57,8 @@
     "printRefused": "Браузер не разрешил печать со страницы. Выберите «Открыть PDF» и напечатайте из программы просмотра PDF.",
     "review": "Рецензирование",
     "bookmark": "Закладка…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Перейти к закладке…"
   },
   "toc": {
     "refresh": "Обновить оглавление",

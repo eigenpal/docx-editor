@@ -57,7 +57,8 @@
     "printRefused": "הדפדפן לא אפשר הדפסה מתוך הדף. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
     "insertTextBox": "תיבת טקסט",
     "bookmark": "סימנייה…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "מעבר לסימניה…"
   },
   "formattingBar": {
     "groups": {

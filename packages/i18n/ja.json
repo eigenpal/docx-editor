@@ -89,7 +89,8 @@
     "printPdfMissing": "印刷には PDF 変換を使用します。Node.js サーバーに @docx-editor.dev/docx-to-pdf をインストールし、menu.exporters.pdf を設定してください。",
     "insertTextBox": "テキスト ボックス",
     "bookmark": "ブックマーク…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "ブックマークへジャンプ…"
   },
   "toc": {
     "refresh": "目次の更新",

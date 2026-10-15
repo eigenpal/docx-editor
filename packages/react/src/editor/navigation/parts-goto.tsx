@@ -8,7 +8,7 @@
 //
 // Bookmark names come from the file. They go into `textContent` only, never into markup.
 
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { KeyboardEvent, ReactElement } from 'react';
 import type { BookmarkPlace } from '@docx-editor.dev/core/contracts/editor';
 import { MaterialSymbol } from '../../components/ui/Icons';
@@ -44,6 +44,13 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
   const documentAbsent = useEditorState(selectDocumentAbsent);
   const listId = useId();
   const optionId = (index: number) => `${listId}-option-${index}`;
+  // The arrow keys move the highlight; keep that row in view in a long list.
+  const listRef = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    if (goTo.activeIndex < 0) return;
+    const row = listRef.current?.children[goTo.activeIndex] as HTMLElement | undefined;
+    row?.scrollIntoView?.({ block: 'nearest' });
+  }, [goTo.activeIndex]);
 
   const jump = (name?: string) => {
     if (!goTo.go(name).ok) return;
@@ -151,6 +158,7 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
 
       {goTo.rows.length > 0 && (
         <ul
+          ref={listRef}
           id={listId}
           className="docx-nav__list"
           role="listbox"

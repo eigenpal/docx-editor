@@ -97,6 +97,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'insert.sectionBreakContinuous': 'border_horizontal',
   'insert.toc': 'toc',
   'insert.bookmark': 'bookmark',
+  'insert.goToBookmark': 'bookmarks',
   'insert.watermark': 'branding_watermark',
 };
 

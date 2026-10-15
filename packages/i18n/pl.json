@@ -57,7 +57,8 @@
     "printRefused": "Przeglądarka nie zezwoliła na drukowanie z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
     "insertTextBox": "Pole tekstowe",
     "bookmark": "Zakładka…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Przejdź do zakładki…"
   },
   "formattingBar": {
     "groups": {

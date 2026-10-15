@@ -145,13 +145,19 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
   const editor = useDocxEditor();
   const intentsRef = useRef(focus.intents);
   intentsRef.current = focus.intents;
+  // One registration for the pane's life: a prop change must not push it back on top of a
+  // host's own Go To UI, so the shortcut flag is read when the chord arrives.
+  const goToShortcutRef = useRef(goToShortcut);
+  goToShortcutRef.current = goToShortcut;
   useEffect(() => {
     if (!editor) return undefined;
     return editor.setGoToChrome({
       onRequest: () => intentsRef.current.openTab('goto'),
-      shortcut: goToShortcut,
+      get shortcut() {
+        return goToShortcutRef.current;
+      },
     });
-  }, [editor, goToShortcut]);
+  }, [editor]);
 
   const width = props.paneWidth ?? NAVIGATION_PANE_WIDTH;
 

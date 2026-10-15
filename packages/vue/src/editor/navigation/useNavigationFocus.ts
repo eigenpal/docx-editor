@@ -143,6 +143,8 @@ export function useNavigationFocus(
           : null;
     if (!tab || !ownsShortcutTarget(event.target, rootRef.value, viewport.value)) return;
     event.preventDefault();
+    // Go To goes through the editor, so a host's own Go To UI on top answers it.
+    if (tab === 'goto' && editor.value?.exec({ type: 'openGoTo' }).ok) return;
     const active = rootRef.value?.ownerDocument.activeElement;
     openTab(tab, isHTMLElementNode(active) ? active : null);
   };

@@ -57,7 +57,8 @@
     "printRefused": "Le navigateur a refusé l’impression depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
     "insertTextBox": "Zone de texte",
     "bookmark": "Signet…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Atteindre le signet…"
   },
   "formattingBar": {
     "groups": {

@@ -57,7 +57,8 @@
     "printRefused": "浏览器不允许从页面打印。请选择“打开 PDF”，然后从 PDF 查看器打印。",
     "insertTextBox": "文本框",
     "bookmark": "书签…",
-    "bookmarkShortcut": "Ctrl+Shift+F5"
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "定位到书签…"
   },
   "formattingBar": {
     "groups": {
