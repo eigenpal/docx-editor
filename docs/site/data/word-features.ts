@@ -959,7 +959,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Internal links jump to their bookmark and move the caret. This includes a target on a page the editor has not painted yet. Creating and renaming bookmarks is deferred.',
+      'Internal links jump to their bookmark and move the caret. This includes a target on a page the editor has not painted yet. The Bookmark dialog (Insert menu or Ctrl+Shift+F5) lists bookmarks by name or location, shows hidden bookmarks on request, adds a bookmark at the selection, deletes one, and goes to one. Names compare without case, so adding an existing name moves that bookmark. Show bookmarks paints gray brackets at each bookmark and an I-beam at a point bookmark, for bookmarks in the main text. Typing at a bookmark start extends the bookmark, typing at its end does not, and deleting all of its text removes it. A deletion across paragraphs keeps the bookmarks it encloses. The document API adds, lists, reads, and deletes bookmarks; adding a name that another story uses is refused.',
   },
   {
     id: 'fields.page-numbers',

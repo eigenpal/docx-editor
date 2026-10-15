@@ -1,0 +1,66 @@
+---
+title: 'Bookmarks'
+description: 'Show, add, delete, and go to bookmarks with the Bookmark dialog, editor commands, and hooks.'
+category: 'Guides'
+---
+
+A bookmark names a stretch of a document, or one point in it. Internal links, cross-reference fields, and tables of contents point at bookmarks. The editor keeps every bookmark a document declares, and you can show, add, delete, and go to bookmarks.
+
+## Use the Bookmark dialog
+
+Open the dialog from **Insert** > **Bookmark**, or press Ctrl+Shift+F5 (Cmd+Shift+F5 on macOS) while the document has focus. The dialog does the following:
+
+- Lists the document's bookmarks, sorted by **Name** or by **Location**.
+- Shows hidden bookmarks when you select **Hidden bookmarks**. A hidden bookmark has a name that starts with an underscore, such as the targets of a table of contents.
+- Adds a bookmark at the selection when you type a name and click **Add**. The dialog then closes.
+- Deletes the bookmark in the name box when you click **Delete**. The text stays.
+- Selects the bookmark's text and scrolls to it when you click **Go To**. The dialog stays open.
+
+A bookmark name starts with a letter. It holds only letters, digits, and underscores, and has at most 40 characters. The dialog explains why a name cannot be used. Names compare without case, so `Intro` and `INTRO` are the same bookmark: adding a name that exists moves that bookmark to the selection.
+
+## Show bookmarks
+
+Select **Review** > **Show bookmarks** to paint a gray bracket at the start and the end of each bookmark, and an I-beam at a bookmark that marks a point. The marks show bookmarks in the main text. Hidden bookmarks are not shown.
+
+The marks are a view setting. They do not change the document, its undo history, its export, or its print.
+
+## How editing treats bookmarks
+
+- Text you type at the start of a bookmark becomes part of it.
+- Text you type at the end of a bookmark stays outside it.
+- Text you type at a point bookmark goes after the point.
+- Deleting all of a bookmark's text removes the bookmark. Deleting part of it keeps the bookmark around the rest.
+- Deleting text that only touches a point bookmark keeps the bookmark.
+- A tracked deletion keeps every bookmark until you accept it.
+- A deletion across paragraphs keeps the bookmarks it encloses.
+
+Bookmarks are not tracked changes. Adding or deleting one in suggesting mode writes the change directly.
+
+## Use the editor commands
+
+The editor exposes the same operations as commands and a query. Each write is one undo step:
+
+```ts
+editor.exec({ type: 'insertBookmark', name: 'Intro' });
+editor.exec({ type: 'goToBookmark', name: 'intro' });
+editor.exec({ type: 'deleteBookmark', name: 'Intro' });
+editor.exec({ type: 'toggleBookmarks' });
+
+const bookmarks = editor.query({ type: 'bookmarks' });
+```
+
+The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, and `empty`. `editor.snapshot().showBookmarks` says whether the marks are shown.
+
+`insertBookmark` refuses a name that breaks the naming rules with `invalidArgs`. `deleteBookmark` and `goToBookmark` refuse a name that no bookmark has with `notFound`. A document open for viewing refuses writes and still accepts `goToBookmark`.
+
+## Build your own bookmark UI
+
+In React, `useBookmarks()` returns the bookmark list and the `insert`, `remove`, and `goTo` actions. In Vue, the composable with the same name returns refs. For examples, see [React hooks](/docs/2.x/react/hooks#usebookmarks) and [Vue composables](/docs/2.x/vue/composables#usebookmarks).
+
+To replace the packaged dialog, pass your own renderer as the `bookmark` popup, or compose `DocxEditor.BookmarkDialog` from its parts. For more information, see [Customize dialogs](/docs/2.x/guides/customize-dialogs).
+
+To open your own dialog with Ctrl+Shift+F5, register it with `editor.setBookmarkChrome({ onRequest })`. The call returns a function that removes the registration.
+
+## Use the document API
+
+The document API follows the Office.js shape: `Range.insertBookmark`, `Range.getBookmarks`, `Document.getBookmarkRange`, `Document.getBookmarkRangeOrNullObject`, `Document.deleteBookmark`, and `Bookmark.delete`. For details and limits, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).

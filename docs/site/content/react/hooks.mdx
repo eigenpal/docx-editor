@@ -263,6 +263,36 @@ function DraftToggle() {
 
 `read()` returns the current watermark as a `setWatermark` value. For a picture watermark it includes the picture bytes.
 
+## `useBookmarks`
+
+Use `useBookmarks` to list the document's bookmarks and change them. `insert` bookmarks the selection, `remove` deletes a bookmark, and `goTo` selects one. Each call sends one command:
+
+```tsx
+import { useBookmarks } from '@docx-editor.dev/react';
+
+function BookmarkList() {
+  const { bookmarks, goTo } = useBookmarks();
+  return (
+    <ul>
+      {bookmarks
+        .filter((bookmark) => !bookmark.hidden)
+        .map((bookmark) => (
+          <li key={bookmark.name}>
+            <button
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => goTo(bookmark.name)}
+            >
+              {bookmark.name}
+            </button>
+          </li>
+        ))}
+    </ul>
+  );
+}
+```
+
+`isWritable` says whether the document accepts bookmark edits at the selection. Go To works in a read-only document too.
+
 ## `useParagraphFormat`
 
 Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step:
@@ -546,6 +576,7 @@ Call the hook in a child component of the matching dialog. Each returns `values`
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
 | `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
+| `useBookmarkDialog()` | `BookmarkDialogFields` | `name`, `sortBy`, `showHidden` |
 
 Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
 
