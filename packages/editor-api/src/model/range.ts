@@ -53,7 +53,7 @@ import {
 } from './locations.ts';
 import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
-import { Comment } from './review.ts';
+import { Comment, RevisionCollection } from './review.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
 
 /**
@@ -82,6 +82,7 @@ export class Range extends ModelObject implements PromisedItem {
   #paragraphs: ParagraphCollection | undefined;
   #font: Font | undefined;
   #bookmarks: BookmarkCollection | undefined;
+  #revisions: RevisionCollection | undefined;
 
   /** @internal A range a read already found. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Range {
@@ -187,6 +188,39 @@ export class Range extends ModelObject implements PromisedItem {
       () => ({ op: 'getBookmarks', scope: { start: span.start, end: span.end } })
     );
     return this.#bookmarks;
+  }
+
+  /**
+   * The tracked changes whose characters this range overlaps, in document order.
+   *
+   * Lists the same `Revision` objects the story's collection lists, so a change reached here is
+   * the one `body.revisions` holds. A collapsed range lists the changes it touches. Membership
+   * uses document positions, so the runtime's `revisionTextView` changes what `text` reads, not
+   * which changes are listed. A change partly inside the range is listed whole. A replacement
+   * stored as a deletion followed by an insertion lists as two members.
+   *
+   * On this collection, `acceptAll()` and `rejectAll()` resolve exactly the listed changes, and
+   * refuse the whole sync when one of them cannot be resolved. `resolve()` and `setAuthor()`
+   * refuse with `NotSupported`; use the story's collection for them.
+   *
+   * @example Accept every change in a search result
+   * ```ts
+   * const matches = context.document.body.search('indemnify');
+   * matches.load('items');
+   * await context.sync();
+   *
+   * for (const match of matches.items) match.revisions.acceptAll();
+   * await context.sync();
+   * ```
+   */
+  get revisions(): RevisionCollection {
+    this.#revisions ??= RevisionCollection.inSpan(
+      this.context,
+      `${this.path.label}.revisions`,
+      this.path,
+      () => spanRefOf(this.path, 'span')
+    );
+    return this.#revisions;
   }
 
   /** Every occurrence of `searchText` inside this range, as ranges. */

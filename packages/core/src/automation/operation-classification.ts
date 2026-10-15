@@ -60,6 +60,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
   'getRevisionAuthor',
   'getRevisionDate',
   'getRevisionRange',
+  'getReviewItemRange',
   'getContentControls',
   'getContentControlById',
   'getContentControlsByTag',

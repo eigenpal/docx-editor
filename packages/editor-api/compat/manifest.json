@@ -83,6 +83,7 @@
         "paragraphs",
         "contentControls",
         "bookmarks",
+        "revisions",
         "hyperlink",
         "style",
         "insertComment",

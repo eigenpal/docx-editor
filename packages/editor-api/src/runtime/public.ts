@@ -92,6 +92,8 @@ export {
   type RevisionAuthorSkipReason,
   type SearchOptions,
   type SelectionMode,
+  getReviewItemRange,
+  getReviewItemRangeOrNullObject,
 } from '../model/index.ts';
 export { ClientObject } from './client-object.ts';
 export { ClientResult } from './client-result.ts';

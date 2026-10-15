@@ -15,13 +15,19 @@ import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
 import { revisionItemsInStory } from './review.ts';
+import { planScopedRevisionDecision } from './review-scope.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
 import { nestedTextDecisionOps } from './revision-nested-text.ts';
 
 /** The store's bound on one decision's explicit site list (`tree-op-validate.ts`). */
 const MAX_SITES_PER_OP = 50_000;
 
-type CollectionDecision = Extract<
+type CollectionDecision = Exclude<
+  Extract<AutomationOperation, { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions' }>,
+  { readonly scope: unknown }
+>;
+
+type AnyCollectionDecision = Extract<
   AutomationOperation,
   { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions' }
 >;
@@ -240,11 +246,12 @@ export function revisionBatchAnswer(
 
 /** Share story admission between strict collection decisions and selected-set decisions. */
 export function planRevisionDecision(
-  operation: CollectionDecision | BatchOperation,
+  operation: AnyCollectionDecision | BatchOperation,
   handles: AutomationHandleTable,
   reads: AutomationPackageReads,
   pin: (story: AutomationStoryReads) => PlannedOperation | null
 ): PlannedOperation {
+  if ('scope' in operation) return planScopedRevisionDecision(operation, handles, reads, pin);
   if (operation.op === 'setRevisionAuthorBatch') {
     const target = revisionAuthorPlan(operation, handles, reads);
     if (!target.ok) return { ok: false, error: { code: target.code, message: target.message } };

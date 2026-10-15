@@ -1692,6 +1692,18 @@
             }
           ]
         },
+        "revisions": {
+          "uid": "Word.Range#revisions",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "RevisionCollection"
+            }
+          ]
+        },
         "search": {
           "uid": "Word.Range#search",
           "kind": "method",

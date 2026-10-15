@@ -34,6 +34,7 @@ import {
   hydratedText,
   type AutomationHandle,
   type AutomationOperation,
+  type AutomationSpanRef,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -611,13 +612,16 @@ export interface RevisionAuthorOptions {
  * The tracked changes on a document, story or range, as of the batch that loaded them.
  *
  * `items` omits structural cards whose Word subtype this API cannot name; see {@link Revision}.
- * Collection-wide `acceptAll` / `rejectAll` still resolve every store-resolvable revision in this
- * story and refuse atomically if any `readOnly` or otherwise unsupported revision remains.
+ * On a story's collection, `acceptAll` / `rejectAll` still resolve every store-resolvable
+ * revision in the story and refuse atomically if any `readOnly` or otherwise unsupported
+ * revision remains. On {@link Range.revisions}, they resolve exactly the listed members, and
+ * `resolve` and `setAuthor` refuse with `NotSupported`.
  *
  * @public
  */
 export class RevisionCollection extends HandleCollection<Revision> {
-  readonly #body: AutomationHandle;
+  readonly #body: AutomationHandle | null;
+  readonly #span: (() => AutomationSpanRef) | null;
 
   /** @internal The pending decisions of one story. */
   static of(
@@ -626,12 +630,28 @@ export class RevisionCollection extends HandleCollection<Revision> {
     owner: ObjectPath,
     body: AutomationHandle
   ): RevisionCollection {
-    return new RevisionCollection(context, ObjectPath.derived(label, owner), body);
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), body, null);
   }
 
-  private constructor(context: RequestContext, path: ObjectPath, body: AutomationHandle) {
+  /** @internal The pending decisions a range overlaps, read from the range at plan time. */
+  static inSpan(
+    context: RequestContext,
+    label: string,
+    owner: ObjectPath,
+    span: () => AutomationSpanRef
+  ): RevisionCollection {
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), null, span);
+  }
+
+  private constructor(
+    context: RequestContext,
+    path: ObjectPath,
+    body: AutomationHandle | null,
+    span: (() => AutomationSpanRef) | null
+  ) {
     super(context, path);
     this.#body = body;
+    this.#span = span;
   }
 
   /**
@@ -641,16 +661,31 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * omitted from `items`. Refuses the sync outright where any `readOnly` or otherwise
    * unsupported revision remains, rather than reporting the story as reviewed while pending
    * changes remain.
+   *
+   * On a collection from {@link Range.revisions}, resolves exactly the changes that collection
+   * lists for the range at sync time, and refuses the whole sync if one of them cannot be
+   * resolved.
    */
   acceptAll(): void {
-    const body = this.#body;
-    this.commandOn('acceptAll', () => ({ op: 'acceptAllRevisions', body }));
+    this.commandOn('acceptAll', () => this.#decision('acceptAllRevisions'));
   }
 
   /** Undo every change, likewise as one decision. */
   rejectAll(): void {
-    const body = this.#body;
-    this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', body }));
+    this.commandOn('rejectAll', () => this.#decision('rejectAllRevisions'));
+  }
+
+  #decision(op: 'acceptAllRevisions' | 'rejectAllRevisions'): AutomationOperation {
+    const span = this.#span;
+    if (op === 'acceptAllRevisions')
+      return span ? { op, scope: span() } : { op, body: this.#body! };
+    return span ? { op, scope: span() } : { op, body: this.#body! };
+  }
+
+  /** The story handle, or `NotSupported` on a collection that a range scopes. */
+  #storyBody(member: string): AutomationHandle {
+    if (this.#body === null) fail({ code: 'NotSupported', target: `${this.path.label}.${member}` });
+    return this.#body;
   }
 
   /**
@@ -659,6 +694,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * Pass an empty array to select nothing. Duplicate objects resolve once; stale targets
    * are reported as unknown-revision. This must be the only write in its sync batch.
    * Unlike acceptAll/rejectAll, unsupported decisions do not block independent changes.
+   * A collection from `Range.revisions` refuses this call with `NotSupported`.
    *
    * @example
    * ```ts
@@ -678,6 +714,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       (revisions !== undefined && !Array.isArray(revisions))
     )
       fail({ code: 'InvalidArgument', target: label });
+    const body = this.#storyBody('resolve');
     const targets = revisions === undefined ? undefined : [...revisions];
     const { result, fill } = clientResult<RevisionBatchResult>(label);
     this.enqueue({
@@ -685,7 +722,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       label,
       plan: () => ({
         op: 'resolveRevisionBatch',
-        body: this.#body,
+        body,
         action,
         ...(targets === undefined
           ? {}
@@ -707,6 +744,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * author, including structural ones absent from `items`. An empty array selects nothing.
    * Each change keeps its date unless you pass `options.date`. Keep this the only write in
    * its sync batch. Revision objects you pass stay valid and read the new author after a load.
+   * A collection from `Range.revisions` refuses this call with `NotSupported`.
    *
    * @example
    * ```ts
@@ -744,6 +782,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       )
     )
       fail({ code: 'InvalidArgument', target: label });
+    const body = this.#storyBody('setAuthor');
     const targets = revisions === undefined ? undefined : [...revisions];
     const { result, fill } = clientResult<RevisionAuthorResult>(label);
     this.enqueue({
@@ -751,7 +790,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       label,
       plan: () => ({
         op: 'setRevisionAuthorBatch',
-        body: this.#body,
+        body,
         author,
         ...(date === undefined ? {} : { date: date.toISOString() }),
         ...(authors === undefined ? {} : { authors: [...authors] }),
@@ -773,7 +812,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
 
   /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
-    return { op: 'getRevisions', body: this.#body };
+    const span = this.#span;
+    return span ? { op: 'getRevisions', scope: span() } : { op: 'getRevisions', body: this.#body! };
   }
 
   /** @internal Build one member from an address the listing answered. */

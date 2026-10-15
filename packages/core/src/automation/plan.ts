@@ -26,6 +26,7 @@ import { planTableOperation } from './plan-tables.ts';
 import { planVirtualFurniture } from './virtual-furniture.ts';
 import { isAutomationCommand } from './operations.ts';
 import { planPictures } from './plan-pictures.ts';
+import { planReviewItemRange, planRevisionListing } from './review-scope.ts';
 import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
 import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import { automationListLevelExists } from './list-authoring.ts';
@@ -2372,15 +2373,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planDeleteComment(found.item, found.reads, (reads) => pinWrite(planFor(reads)));
       }
 
-      case 'getRevisions': {
-        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
-        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
-        const reads = story.value;
-        return query({
-          kind: 'handles',
-          handles: revisionReads(reads).map((item) => handles.revision(item.id, reads.story)),
-        });
-      }
+      case 'getRevisions':
+        return planRevisionListing(operation, handles, packageReads);
+
+      case 'getReviewItemRange':
+        return planReviewItemRange(operation.key, handles, packageReads);
 
       case 'getRevisionType': {
         const found = revisionAt(operation.revision);

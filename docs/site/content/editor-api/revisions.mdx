@@ -160,6 +160,32 @@ const pending = await runtime.run(async (context) => {
 
 `Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `setAuthor()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
 
+## Inspect revisions in a range
+
+`Range.revisions` returns the tracked changes that a range overlaps, in document order. The range's own story scopes the collection. A range in a header lists only that header's changes. Each member is the same `Revision` object that the story's collection lists.
+
+These rules decide membership:
+
+- A change that the range covers only in part is listed whole.
+- A collapsed range lists the changes it touches.
+- A replacement stored as a deletion and an insertion lists two members.
+- Membership uses document positions, so `revisionTextView` changes the range text but not the members.
+
+For example, accept every change inside a search result:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 30 days');
+  matches.load('items');
+  await context.sync();
+
+  for (const match of matches.items) match.revisions.acceptAll();
+  await context.sync();
+});
+```
+
+On a range collection, `acceptAll()` and `rejectAll()` resolve exactly the listed changes in one transaction. If one of them can't resolve, the sync fails and nothing changes. `resolve()` and `setAuthor()` refuse with `NotSupported`; call them on the story's collection instead.
+
 ## Resolve a batch of changes
 
 Use `RevisionCollection.resolve(action, revisions?)` to accept or reject supported changes in one story. Pass `'accept'` to keep the changes or `'reject'` to undo them. Unsupported changes remain pending.
@@ -259,6 +285,50 @@ const result = editor.exec({
 To include all authors across supported stories, pass `scope: 'document'`. To require every selected change to resolve, pass `unsupported: 'fail'`. The defaults are `scope: 'visible'` and `unsupported: 'skip'`.
 
 The result has the same fields as an API batch; `remaining` counts pending decisions across the document, including hidden changes. If no eligible changes exist, `editor.can()` returns a refusal and `editor.exec()` adds no undo step.
+
+## Work with review items
+
+A review panel lists cards from `useReview().items` or `editor.getReviewItems()`. Each card has a `key`. To act on the same change through the object model, pass the key to `getReviewItemRange(context, key)`. The function returns the range that the item covers. Then read `revisions` on that range.
+
+- A revision key resolves to the characters that the change covers.
+- A paired replacement key resolves to one range over both the deletion and the insertion.
+- A comment or reply key resolves to the range that its thread is anchored to.
+- A custom node key refuses with `NotSupported`.
+
+For example, accept the change that a review card shows. In this sample, `item` comes from `useReview().items`:
+
+```tsx
+import { getReviewItemRange, type DocxEditorRuntime } from '@docx-editor.dev/editor-api/browser';
+
+function AcceptButton(props: { runtime: DocxEditorRuntime; item: { readonly key: string } }) {
+  const { runtime, item } = props;
+  const accept = () =>
+    runtime.run(async (context) => {
+      const revisions = getReviewItemRange(context, item.key).revisions;
+      revisions.load('items');
+      await context.sync();
+
+      for (const revision of revisions.items) revision.accept();
+      await context.sync();
+    });
+  return <button onClick={accept}>Accept</button>;
+}
+```
+
+The key names a change in the current document. After someone accepts or rejects that change, the key names nothing. `getReviewItemRange` then fails the sync with `ItemNotFound`. To test for that case instead, use `getReviewItemRangeOrNullObject` and check `isNullObject`:
+
+```ts
+await runtime.run(async (context) => {
+  const range = getReviewItemRangeOrNullObject(context, item.key);
+  range.load('text');
+  await context.sync();
+
+  if (range.isNullObject) return;
+  console.log(range.text);
+});
+```
+
+Both functions are DocxEditor additions. Office.js has no review queue and no key for a revision, so the functions are not members of the Office-shaped classes. Read the key in the same run that uses the range, because a range is a snapshot.
 
 ## Change the author of tracked changes
 

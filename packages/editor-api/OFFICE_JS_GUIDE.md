@@ -282,6 +282,38 @@ These tracked edits fail with `NotImplemented`. Read `error.debugInfo.innerError
 
 The range that a tracked `insertText()` returns names your own pending insertion. With tracking on, replacing or deleting that range fails with `edit.tracked-own-pending-change`, because the edit would cover your own pending text. Write the final text in one call, or reject your revision and write again.
 
+## Review changes in a range
+
+Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members, then decide on each one, or call `acceptAll()` or `rejectAll()` to resolve exactly the listed changes:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 30 days');
+  matches.load('items');
+  await context.sync();
+
+  const revisions = matches.items.map((match) => match.revisions);
+  for (const collection of revisions) collection.load('items');
+  await context.sync();
+
+  for (const collection of revisions) {
+    for (const revision of collection.items) revision.load('author');
+  }
+  await context.sync();
+
+  for (const collection of revisions) {
+    for (const revision of collection.items) {
+      if (revision.author === 'Agent') revision.accept();
+    }
+  }
+  await context.sync();
+});
+```
+
+`resolve()` and `setAuthor()` refuse with `NotSupported` on a range collection. Use the story's `body.revisions` for them.
+
+A browser review panel identifies cards by `key`. Pass the key to the DocxEditor function `getReviewItemRange(context, key)` to get the range the card covers, then read its `revisions`. Use `getReviewItemRangeOrNullObject(context, key)` when another reviewer can resolve the change first. Do not match cards to revisions by text.
+
 ## Set paragraph direction
 
 Office.js has no paragraph direction member. Use the DocxEditor addition `Paragraph.readingOrder` to write right-to-left paragraphs, such as Arabic or Hebrew text. Queue the direction writes for several paragraphs in one sync, then read them back in the next sync:

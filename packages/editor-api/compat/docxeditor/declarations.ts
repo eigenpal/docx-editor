@@ -194,6 +194,7 @@ export declare namespace DocxEditor {
     readonly font: Font;
     hyperlink: string;
     readonly paragraphs: ParagraphCollection;
+    readonly revisions: RevisionCollection;
     style: string;
     readonly text: string;
     insertComment(commentText: string): Comment;
