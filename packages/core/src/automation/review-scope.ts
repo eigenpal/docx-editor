@@ -72,10 +72,16 @@ function query(value: AutomationValue): PlannedOperation {
 
 type Action = 'accept' | 'reject';
 
+/**
+ * What an earlier decision in the batch did to a change: accepted it, rejected it, or removed
+ * it with the text around it (a rejected insertion or an accepted deletion that holds it).
+ */
+type Decided = Action | 'removed';
+
 /** What the decisions earlier in one batch resolved. One per batch planner. */
 export interface RevisionDecisionLedger {
-  /** Store review keys an earlier decision resolved, with the action it took. */
-  readonly decided: Map<string, Action>;
+  /** Store review keys an earlier decision resolved, with what it did to them. */
+  readonly decided: Map<string, Decided>;
   /** Whether an earlier decision resolved a whole story. */
   whole: boolean;
 }
@@ -85,10 +91,13 @@ export function createRevisionDecisionLedger(): RevisionDecisionLedger {
 }
 
 /**
- * Plan accepting or rejecting exactly these store keys, as one decision in the batch.
+ * Plan accepting or rejecting exactly these changes, as one decision in the batch.
  *
- * Refuses the whole decision when any of them cannot be resolved, and when an earlier decision
- * in the batch took the contrary action on one of them or resolved the whole story.
+ * A change inside text that this decision or an earlier one removes is skipped whatever the
+ * action, because no decision on it can change the result. A change an earlier decision took the
+ * same way is skipped too. The decision refuses when an earlier decision took the contrary action
+ * on a change it still covers, when an earlier decision resolved the whole story, and when any
+ * change cannot be resolved.
  */
 export function planKeyedDecision(
   reads: AutomationStoryReads,
@@ -101,15 +110,31 @@ export function planKeyedDecision(
   if (conflict) return conflict;
   if (ledger.whole)
     return refuse('conflicting-operations', 'an earlier decision resolved the whole story');
+  const live = items.filter((item) => ledger.decided.get(reviewItemKey(item)) !== 'removed');
+  const removed = removedBy(
+    reads,
+    live.filter((item) => {
+      const earlier = ledger.decided.get(reviewItemKey(item));
+      return removesContent(item, action) && (earlier === undefined || earlier === action);
+    })
+  );
   const pending: ReviewRevisionItem[] = [];
-  for (const item of items) {
-    const earlier = ledger.decided.get(reviewItemKey(item));
+  for (const item of live) {
+    const key = reviewItemKey(item);
+    const earlier = ledger.decided.get(key);
+    if (removed.has(key)) continue;
     if (earlier === undefined) pending.push(item);
     else if (earlier !== action)
       return refuse('conflicting-operations', 'an earlier decision took the contrary action');
   }
-  if (pending.length === 0)
+  const settle = (keys: readonly string[]) => {
+    for (const key of keys) ledger.decided.set(key, action);
+    for (const key of removed) ledger.decided.set(key, 'removed');
+  };
+  if (pending.length === 0) {
+    settle([]);
     return { ok: true, kind: 'command', story: reads.story, ops: [], answer: () => APPLIED };
+  }
   const keys = pending.map(reviewItemKey);
   const decision = planRevisionBatch(
     reads.part,
@@ -130,14 +155,11 @@ export function planKeyedDecision(
         'a tracked change in that decision cannot be resolved',
         skipped[0]?.reason
       );
-    ops = nested.ops;
-    // A change whose content the decision removes is decided with it: a later rejection of it
-    // has nothing left to do, and a later acceptance would keep words that are gone.
-    for (const key of nested.removed) ledger.decided.set(key, 'reject');
+    ops = nested;
+    settle(keys);
   } else {
-    for (const entry of decision.result.resolved) ledger.decided.set(entry.key, action);
+    settle([...keys, ...decision.result.resolved.map((entry) => entry.key)]);
   }
-  for (const key of keys) ledger.decided.set(key, action);
   return { ok: true, kind: 'command', story: reads.story, ops, answer: () => APPLIED };
 }
 
@@ -147,52 +169,46 @@ function removesContent(item: ReviewRevisionItem, action: Action): boolean {
 }
 
 /**
- * Each pending item resolved alone as a nested text decision, or null when one cannot be.
+ * The story's changes that lie inside the text `removing` takes out.
  *
- * Every op is planned from the state before the batch, so an item nested inside content that
- * another pending item removes is dropped rather than resolved: its sites go with that content.
- * `removed` names every change of the story that the decision removes that way.
+ * Every op is planned from the state before the batch, so such a change is not resolved on its
+ * own: its sites go with that text, and an op naming them would name nodes that are gone.
  */
+function removedBy(
+  reads: AutomationStoryReads,
+  removing: readonly ReviewRevisionItem[]
+): ReadonlySet<string> {
+  const sites = new Set<string>();
+  for (const item of removing) for (const id of revisionSiteNodeIdsOf(item)) sites.add(id);
+  if (sites.size === 0) return new Set();
+  const underRemoved = (id: string): boolean => {
+    for (let node = parentNodeOf(reads.part, id); node; node = parentNodeOf(reads.part, node.id))
+      if (sites.has(node.id)) return true;
+    return false;
+  };
+  return new Set(
+    revisionItemsInStory(reads)
+      .filter((item) => {
+        const own = revisionSiteNodeIdsOf(item);
+        return own.length > 0 && own.every(underRemoved);
+      })
+      .map(reviewItemKey)
+  );
+}
+
+/** Each pending item resolved alone as a nested text decision, or null when one cannot be. */
 function nestedDecisionOps(
   reads: AutomationStoryReads,
   items: readonly ReviewRevisionItem[],
   action: Action
-): { readonly ops: readonly TreeDocOp[]; readonly removed: readonly string[] } | null {
-  const removing = new Set<string>();
-  for (const item of items) {
-    if (removesContent(item, action))
-      for (const id of revisionSiteNodeIdsOf(item)) removing.add(id);
-  }
-  const insideRemoved = (item: ReviewRevisionItem): boolean => {
-    const sites = revisionSiteNodeIdsOf(item);
-    return (
-      sites.length > 0 &&
-      sites.every((id) => {
-        for (
-          let node = parentNodeOf(reads.part, id);
-          node;
-          node = parentNodeOf(reads.part, node.id)
-        )
-          if (removing.has(node.id)) return true;
-        return false;
-      })
-    );
-  };
-  const removed = removing.size
-    ? revisionItemsInStory(reads).filter(insideRemoved).map(reviewItemKey)
-    : [];
-  const gone = new Set(removed);
+): readonly TreeDocOp[] | null {
   const ops: TreeDocOp[] = [];
   for (const item of items) {
-    if (gone.has(reviewItemKey(item))) continue;
     const own = nestedTextDecisionOps(reads, item, action);
     if (own.length === 0) return null;
     for (const op of own) ops.push(op);
   }
-  return {
-    ops,
-    removed: removed.filter((key) => !items.some((item) => reviewItemKey(item) === key)),
-  };
+  return ops;
 }
 
 interface Position {

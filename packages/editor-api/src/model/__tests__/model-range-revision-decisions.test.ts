@@ -149,6 +149,8 @@ describe('what a range decision covers', () => {
   });
 });
 
+const NESTED_PAIR = (outer: string) => docx(para(run('lead '), outer, run(' tail')));
+
 describe('changes nested inside another change', () => {
   // Ada's insertion holds Grace's deletion of "beta" and Bob's deletion of "gamma".
   const NESTED = docx(
@@ -198,26 +200,115 @@ describe('changes nested inside another change', () => {
     expect(xml).toContain('w:author="Bob"');
   });
 
-  test('a nested change removed by an earlier rejection refuses a contrary decision', async () => {
-    const xml = await withRuntime(NESTED, async (context) => {
-      const { ada, grace } = await byAuthor(context);
-      ada.reject();
-      grace.accept();
-      expect(await failure(context.sync())).toBe('ConflictingChanges');
-      expect(await pending(context)).toBe(3);
-    });
-    expect(xml).toContain('w:author="Ada"');
-  });
+  // When the outer text is removed, no decision on the nested change alters the result, so
+  // every order of two decisions in one sync matches deciding them in separate syncs.
+  const SHAPES = {
+    'insertion holding a deletion': NESTED_PAIR(
+      '<w:ins w:id="5" w:author="Ada">' +
+        run('alpha ') +
+        '<w:del w:id="6" w:author="Grace"><w:r><w:delText>beta</w:delText></w:r></w:del></w:ins>'
+    ),
+    'deletion holding an insertion': NESTED_PAIR(
+      '<w:del w:id="5" w:author="Ada"><w:r><w:delText xml:space="preserve">alpha </w:delText></w:r>' +
+        '<w:ins w:id="6" w:author="Grace"><w:r><w:delText>beta</w:delText></w:r></w:ins></w:del>'
+    ),
+  };
 
-  test('a nested change removed by an earlier rejection is skipped by the same decision', async () => {
-    const xml = await withRuntime(NESTED, async (context) => {
+  async function decide(
+    bytes: Uint8Array,
+    steps: readonly (readonly ['Ada' | 'Grace', 'accept' | 'reject'])[],
+    separate: boolean
+  ): Promise<{ readonly text: string; readonly pending: number }> {
+    const runtime = await createServer(bytes);
+    try {
+      return await runtime.run(async (context) => {
+        for (const [author, action] of steps) {
+          const revisions = context.document.body.revisions;
+          revisions.load('items');
+          await context.sync();
+          for (const revision of revisions.items) revision.load('author');
+          await context.sync();
+          revisions.items.find((revision) => revision.author === author)?.[action]();
+          if (separate) await context.sync();
+        }
+        await context.sync();
+        const body = context.document.body;
+        body.load('text');
+        await context.sync();
+        return { text: body.text, pending: await pending(context) };
+      });
+    } finally {
+      runtime.dispose();
+    }
+  }
+
+  for (const [shape, bytes] of Object.entries(SHAPES)) {
+    for (const ada of ['accept', 'reject'] as const) {
+      for (const grace of ['accept', 'reject'] as const) {
+        test(`${shape}: ${ada} the outer and ${grace} the nested change in either order`, async () => {
+          const outerFirst = await batched(bytes, [
+            ['Ada', ada],
+            ['Grace', grace],
+          ]);
+          const nestedFirst = await batched(bytes, [
+            ['Grace', grace],
+            ['Ada', ada],
+          ]);
+          const reference = await decide(
+            bytes,
+            [
+              ['Grace', grace],
+              ['Ada', ada],
+            ],
+            true
+          );
+          expect(outerFirst).toEqual(reference);
+          expect(nestedFirst).toEqual(reference);
+        });
+      }
+    }
+  }
+
+  /** Both decisions queued before one sync, on revisions loaded beforehand. */
+  async function batched(
+    bytes: Uint8Array,
+    steps: readonly (readonly ['Ada' | 'Grace', 'accept' | 'reject'])[]
+  ): Promise<{ readonly text: string; readonly pending: number }> {
+    const runtime = await createServer(bytes);
+    try {
+      return await runtime.run(async (context) => {
+        const revisions = context.document.body.revisions;
+        revisions.load('items');
+        await context.sync();
+        for (const revision of revisions.items) revision.load('author');
+        await context.sync();
+        for (const [author, action] of steps)
+          revisions.items.find((revision) => revision.author === author)![action]();
+        await context.sync();
+        const body = context.document.body;
+        body.load('text');
+        await context.sync();
+        return { text: body.text, pending: await pending(context) };
+      });
+    } finally {
+      runtime.dispose();
+    }
+  }
+
+  test('accepting a deletion and then the insertion nested in it matches accepting all', async () => {
+    const bytes = SHAPES['deletion holding an insertion'];
+    const all = await withRuntime(bytes, async (context) => {
+      context.document.body.revisions.acceptAll();
+      await context.sync();
+    });
+    const decided = await withRuntime(bytes, async (context) => {
       const { ada, grace } = await byAuthor(context);
-      ada.reject();
-      grace.reject();
+      ada.accept();
+      grace.accept();
       await context.sync();
       expect(await pending(context)).toBe(0);
     });
-    expect(xml).not.toContain('alpha');
+    expect(decided).toBe(all);
   });
 });
 
