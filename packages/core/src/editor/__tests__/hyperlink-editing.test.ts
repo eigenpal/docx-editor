@@ -321,6 +321,19 @@ describe('editing a hyperlink through the editor', () => {
     expect(mounted.editor.surface!.bookmarks().has('inside')).toBe(true);
   });
 
+  test('deleting a link’s whole text removes a bookmark that lay entirely inside it', () => {
+    const mounted = mount(
+      '<w:p><w:r><w:t>ab</w:t></w:r>' +
+        '<w:hyperlink w:anchor="t"><w:bookmarkStart w:id="1" w:name="inside"/>' +
+        '<w:r><w:t>cd</w:t></w:r><w:bookmarkEnd w:id="1"/></w:hyperlink>' +
+        '<w:r><w:t>ef</w:t></w:r></w:p>'
+    );
+    select(mounted, 0, 2, 4);
+    expect(mounted.editor.exec({ type: 'deleteText' }).ok).toBe(true);
+    expect(mounted.editor.surface!.session.bodyText()).toBe('abef');
+    expect(mounted.editor.surface!.bookmarks().has('inside')).toBe(false);
+  });
+
   test('a collapsed caret links the URL as its own display text', () => {
     const mounted = mount(p(''));
     caret(mounted, 0, 0);

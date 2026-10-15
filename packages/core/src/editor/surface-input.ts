@@ -102,8 +102,11 @@ export function createKeyDownHandler(
      * rather than doing something surprising.
      */
     readonly onRequestHyperlink?: () => void;
-    /** Ctrl/Cmd+Shift+F5 opens the host's bookmark dialog; absent leaves the key alone. */
-    readonly onRequestBookmark?: () => void;
+    /**
+     * Ctrl/Cmd+Shift+F5 opens the host's bookmark dialog. Answers whether chrome took the
+     * request; when none did, the key is left to the browser.
+     */
+    readonly onRequestBookmark?: () => boolean;
     readonly onToggleParagraphMarks?: () => void;
     /** @internal */
     readonly onToggleFieldCodes?: () => void;
@@ -128,10 +131,9 @@ export function createKeyDownHandler(
       (event.ctrlKey || event.metaKey) &&
       !event.altKey &&
       !event.isComposing &&
-      hooks.onRequestBookmark
+      hooks.onRequestBookmark?.()
     ) {
       event.preventDefault();
-      hooks.onRequestBookmark();
       return;
     }
     // macOS delivers Fn+Option+F9 as Alt+F9; Fn is handled by the keyboard.

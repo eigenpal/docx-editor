@@ -87,6 +87,41 @@ describe('bookmark commands', () => {
     expect(names(editor)).toEqual(['ZETA', '_Toc1', 'alpha']);
   });
 
+  test('a name another story uses moves here in one undo step', () => {
+    const { editor } = mount(SAMPLE);
+    expect(editor.exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+    expect(editor.exec({ type: 'insertText', text: 'Head' }).ok).toBe(true);
+    expect(editor.exec({ type: 'insertBookmark', name: 'zeta' }).ok).toBe(true);
+    const zetas = () =>
+      editor
+        .query({ type: 'bookmarks' })
+        .filter((bookmark) => bookmark.name.toLowerCase() === 'zeta')
+        .map((bookmark) => `${bookmark.name}:${bookmark.story}`);
+    expect(zetas()).toEqual(['zeta:headerFooter']);
+    expect(editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(zetas()).toEqual(['Zeta:body']);
+    expect(editor.exec({ type: 'redo' }).ok).toBe(true);
+    expect(zetas()).toEqual(['zeta:headerFooter']);
+  });
+
+  test('deleting across paragraphs removes the bookmarks it encloses and keeps the rest', () => {
+    const { editor } = mount(
+      `<w:p>${run('One ')}<w:bookmarkStart w:id="1" w:name="cross"/>${run('two')}</w:p>` +
+        `<w:p><w:bookmarkStart w:id="2" w:name="inner"/>${run('Three')}<w:bookmarkEnd w:id="2"/>` +
+        `<w:bookmarkEnd w:id="1"/></w:p><w:p>${run('Four')}<w:bookmarkStart w:id="3" w:name="after"/>` +
+        `${run(' five')}<w:bookmarkEnd w:id="3"/></w:p>`
+    );
+    const ids = editor.surface!.session.paragraphIds();
+    editor.surface!.setSelection({
+      anchor: { paragraphId: ids[0]!, offset: 2 },
+      head: { paragraphId: ids[2]!, offset: 2 },
+    });
+    expect(editor.exec({ type: 'deleteText' }).ok).toBe(true);
+    expect(names(editor)).toEqual(['after']);
+    editor.exec({ type: 'undo' });
+    expect(names(editor)).toEqual(['cross', 'inner', 'after']);
+  });
+
   test('insert refuses invalid and hidden names', () => {
     const { editor } = mount(SAMPLE);
     for (const name of ['', '1st', 'two words', '_hidden', 'x'.repeat(41)]) {
@@ -231,7 +266,8 @@ describe('bookmark chrome', () => {
     expect(press().defaultPrevented).toBe(true);
     expect(requests).toBe(1);
     off();
-    press();
+    // With no chrome to open, the key stays the browser's.
+    expect(press().defaultPrevented).toBe(false);
     expect(requests).toBe(1);
   });
 

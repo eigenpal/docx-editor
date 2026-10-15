@@ -193,8 +193,11 @@ export interface PaginatedSurfaceOptions {
    * rather than doing something surprising with it.
    */
   readonly onRequestHyperlink?: () => void;
-  /** Ctrl/Cmd+Shift+F5: open the host's bookmark dialog. Absent leaves the key alone. */
-  readonly onRequestBookmark?: () => void;
+  /**
+   * Ctrl/Cmd+Shift+F5: open the host's bookmark dialog. Answers whether chrome took the
+   * request; when none did, or when this is absent, the key is left to the browser.
+   */
+  readonly onRequestBookmark?: () => boolean;
   /** Return true when host chrome handles this session. */
   readonly onRequestTextFormField?: (
     session: import('./text-form-field-session.ts').TextFormFieldDialogSession

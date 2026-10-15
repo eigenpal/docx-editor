@@ -1044,7 +1044,8 @@ export function mountPaginatedSurface(
     // the body story and nowhere else. A header store has no `w:body`, so with the caret in a
     // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
     // Page Setup's Apply did nothing, with the dialog still reading the right section.
-    applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
+    applyTreeOps: (ops, before, after, scope, options) =>
+      applyOps(ops, before, after, scope, true, options?.packageEdits),
     // List definitions mint `numId` on the package before the paragraph op names it, so
     // the typing transaction never binds an actor for that scan. Same wrap the hyperlink
     // mint uses.

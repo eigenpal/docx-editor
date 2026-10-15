@@ -20,7 +20,9 @@ import {
   bookmarkNameKey,
   bookmarkNameProblem,
   listBookmarks,
+  withoutBookmarkInPart,
   type BookmarkNameProblem,
+  type OoxmlPackage,
   type BookmarkRecord,
   type OoxmlPart,
   type StoryScope,
@@ -33,12 +35,14 @@ import { storyScopeOfNodeId, type StoryScopeLookup } from './surface-scope.ts';
 export interface SurfaceBookmarkDeps {
   readonly session: StoryScopeLookup & {
     storyParts(): readonly OoxmlPart[];
+    packageRevision(): number;
     paragraphIdsIn(scope?: StoryScope): string[];
     applyTreeOps(
       ops: readonly TreeDocOp[],
       before?: unknown,
       after?: unknown,
-      scope?: StoryScope
+      scope?: StoryScope,
+      options?: { readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[] }
     ): { readonly committed: boolean; readonly reason?: string };
   };
   readonly storyScope: () => StoryScope;
@@ -118,17 +122,28 @@ function storyOf(scope: StoryScope): BookmarkStory {
 export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookmarks {
   let visible = deps.initiallyShown === true;
 
-  const located = (): { readonly record: BookmarkRecord; readonly scope: StoryScope }[] => {
-    const found: { record: BookmarkRecord; scope: StoryScope }[] = [];
+  type Located = {
+    readonly record: BookmarkRecord;
+    readonly scope: StoryScope;
+    readonly partName: string;
+  };
+  // Read once per package revision: the dialog and the marks ask on every render.
+  let cache: { readonly revision: number; readonly entries: readonly Located[] } | null = null;
+  const located = (): readonly Located[] => {
+    const revision = deps.session.packageRevision();
+    if (cache?.revision === revision) return cache.entries;
+    const entries: Located[] = [];
     for (const part of deps.session.storyParts()) {
       for (const record of recordsOf(part)) {
-        found.push({
+        entries.push({
           record,
           scope: storyScopeOfNodeId(deps.session, record.startNodeId, { kind: 'body' }),
+          partName: part.name,
         });
       }
     }
-    return found;
+    cache = { revision, entries };
+    return entries;
   };
 
   const find = (name: string) => {
@@ -136,10 +151,16 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     return located().find((entry) => bookmarkNameKey(entry.record.name) === key) ?? null;
   };
 
-  const write = (op: TreeDocOp, scope: StoryScope): boolean => {
+  const write = (
+    op: TreeDocOp,
+    scope: StoryScope,
+    packageEdits: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[] = []
+  ): boolean => {
     let committed = false;
     deps.commit(() => {
-      committed = deps.session.applyTreeOps([op], undefined, undefined, scope).committed;
+      committed = deps.session.applyTreeOps([op], undefined, undefined, scope, {
+        packageEdits,
+      }).committed;
       return committed;
     });
     return committed;
@@ -193,25 +214,27 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       const scope = deps.storyScope();
       const range = deps.orderedRange();
       const key = bookmarkNameKey(name);
-      const elsewhere = located().filter(
-        (entry) =>
-          bookmarkNameKey(entry.record.name) === key &&
-          JSON.stringify(entry.scope) !== JSON.stringify(scope)
+      // One name, one bookmark: the name leaves every other story in the same transaction,
+      // so the move is one undo step and a refused insert takes nothing away.
+      const elsewhere = new Set(
+        located()
+          .filter(
+            (entry) =>
+              bookmarkNameKey(entry.record.name) === key &&
+              JSON.stringify(entry.scope) !== JSON.stringify(scope)
+          )
+          .map((entry) => entry.partName)
       );
-      const inserted = write(
+      return write(
         {
           op: 'insertBookmark',
           name,
           start: { paragraphId: range.from.paragraphId, offset: range.from.offset },
           end: { paragraphId: range.to.paragraphId, offset: range.to.offset },
         },
-        scope
+        scope,
+        [...elsewhere].map((partName) => (pkg) => withoutBookmarkInPart(pkg, partName, name))
       );
-      // Then the other stories: one name, one bookmark. Written after the insert, so a refused
-      // insert takes nothing away.
-      if (!inserted) return false;
-      for (const entry of elsewhere) write({ op: 'deleteBookmark', name }, entry.scope);
-      return true;
     },
     remove(name) {
       const entry = find(name);

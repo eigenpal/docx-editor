@@ -94,7 +94,11 @@ export function createEditorPopupChrome() {
       onEquationPopover: (
         activation: Parameters<NonNullable<EquationChromeHandlers['onPopover']>>[0]
       ) => equation.current().onPopover?.(activation),
-      onRequestBookmark: () => bookmark.current().onRequest?.(),
+      onRequestBookmark: () => {
+        const request = bookmark.current().onRequest;
+        request?.();
+        return request !== undefined;
+      },
     },
     setters: {
       setTextFormFieldChrome: text.register,

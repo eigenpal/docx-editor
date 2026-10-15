@@ -47,6 +47,7 @@ import { trackedInsertionLanding } from '../store/store/tree-op-tracked-adjacenc
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import { findContentControl } from '../store/store/tree-op-nodes.ts';
+import { enclosedBookmarkDeletions } from '../store/store/tree-op-bookmarks.ts';
 import type { RevisionView } from './hidden-mark-joins.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
@@ -241,7 +242,10 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // mode is, and under an author who may not be the configured one. Normalized here so
     // every reader below sees either a non-empty author or undefined, never a blank.
     const author = trackedAuthor?.trim() || undefined;
-    const plan = rangeDeletionPlan();
+    const plan = withEnclosedBookmarks(
+      rangeDeletionPlan(),
+      !author && deps.editingMode() !== 'suggest'
+    );
     // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
     // landing they do not read. Replacing lanes read it once, before the ops apply, which is
     // the only window where the pre-edit layout it consults is the right oracle. The
@@ -256,6 +260,19 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
         return landing;
       },
     };
+  }
+
+  /**
+   * An untracked deletion across paragraphs takes the bookmarks it encloses with it, the way a
+   * deletion inside one paragraph does (`tree-op-bookmark-edits.ts`). A tracked one keeps them.
+   */
+  function withEnclosedBookmarks(plan: RangeDeletionPlan, untracked: boolean): RangeDeletionPlan {
+    if (!untracked || plan.ops.length === 0 || deps.cellSelection()) return plan;
+    const { from, to } = orderedRange();
+    if (from.paragraphId === to.paragraphId) return plan;
+    const part = session.partFor(deps.storyScope()) ?? session.part();
+    const drops = enclosedBookmarkDeletions(part, from, to, deps.paragraphOrder());
+    return drops.length === 0 ? plan : { ...plan, ops: [...drops, ...plan.ops] };
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {
