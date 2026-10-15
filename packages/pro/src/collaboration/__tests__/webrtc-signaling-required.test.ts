@@ -76,7 +76,14 @@ describe('WebRTC signaling has no default', () => {
 
   test('an entry that is not a WebSocket URL is refused by position', () => {
     const token = 'wss://signaling.example/?token=secret';
-    for (const entry of ['signaling.example', 'https://signaling.example', '', 42]) {
+    for (const entry of [
+      'signaling.example',
+      'https://signaling.example',
+      'wss://signaling.example/#room',
+      'wss://signaling.example/#',
+      '',
+      42,
+    ]) {
       let failure: unknown;
       try {
         requireSignaling([token, entry] as unknown as string[]);

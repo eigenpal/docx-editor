@@ -22,6 +22,10 @@ const messages = {
   'collaborationDemo.warning':
     'Public signaling is for testing. Room links are not access control, storage, or a connectivity guarantee.',
   'collaborationDemo.failed': 'The collaboration proof could not start.',
+  'collaborationDemo.failedHint':
+    'Check the room link and your network connection, then try again. If the room is gone, create a new room.',
+  'collaborationDemo.retry': 'Try again',
+  'collaborationDemo.backToLobby': 'Create or join another room',
   'collaborationDemo.connect': 'Connect',
   'collaborationDemo.online': 'online',
   'collaborationDemo.dialogTitle': 'Collaborate on this document',

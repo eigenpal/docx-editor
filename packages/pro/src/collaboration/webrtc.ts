@@ -61,7 +61,7 @@ export function requireSignaling(signaling: readonly string[] | undefined): read
     // The index, not the value: a signaling URL can carry an access token.
     if (!isSignalingUrl(url)) {
       throw new TypeError(
-        `WebRTC collaboration needs signaling[${index}] to be a ws:// or wss:// URL.`
+        `WebRTC collaboration needs signaling[${index}] to be a ws:// or wss:// URL without a #fragment.`
       );
     }
   });
@@ -71,8 +71,10 @@ export function requireSignaling(signaling: readonly string[] | undefined): read
 const isSignalingUrl = (url: unknown): boolean => {
   if (typeof url !== 'string') return false;
   try {
+    // `new WebSocket` also refuses a fragment, even an empty one. Checked here, it fails before
+    // an earlier entry in the list opens its socket.
     const { protocol } = new URL(url);
-    return protocol === 'ws:' || protocol === 'wss:';
+    return (protocol === 'ws:' || protocol === 'wss:') && !url.includes('#');
   } catch {
     return false;
   }
@@ -219,10 +221,11 @@ const installChunkedTransport = (
  *
  * The room reaches only the signaling servers in `signaling`. It never falls back to public
  * endpoints. The first room applies the same scoping to every `y-webrtc` provider in the
- * page, including providers the host creates directly.
+ * page, including providers the host creates directly. A provider created before the first
+ * room keeps its own `destroy()`: call its `disconnect()` first to close its signaling.
  *
  * @throws `TypeError` (as a rejection) when `roomId` is invalid, or `signaling` is not an
- * array of `ws://` or `wss://` URLs. No connection opens.
+ * array of `ws://` or `wss://` URLs without a fragment. No connection opens.
  * @public
  */
 export async function createWebrtcCollaboration(

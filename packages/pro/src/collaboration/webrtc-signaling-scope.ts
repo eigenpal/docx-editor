@@ -236,6 +236,8 @@ export function installSignalingScope(): void {
   );
   // `destroy()` leaves the provider registered on its signaling connections, which keeps the
   // last socket open and lets the dead provider vouch for its room name. Release them first.
+  // The constructor binds `destroy` to the instance, so only providers created after this
+  // install get the patch. An older provider releases its connections through `disconnect()`.
   patch(
     WebrtcProvider.prototype,
     'destroy',
