@@ -244,7 +244,13 @@ export function planProposal(
     tracked && insertion ? operation.author.trim() : undefined,
     insertion && start === (story.value.rawText(paragraphId) ?? '').length,
     tracked && !insertion && end > start ? operation.author.trim() : undefined,
-    tracked ? { author: operation.author.trim(), collaborative } : undefined
+    tracked
+      ? {
+          author: operation.author.trim(),
+          collaborative,
+          ...(!deletion && operation.text.length > 0 ? { insertsAt: insertion ? start : end } : {}),
+        }
+      : undefined
   );
   if (revisionError) return { ok: false, error: revisionError };
   if (!deletion) {

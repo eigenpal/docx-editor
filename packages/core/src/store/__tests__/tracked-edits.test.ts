@@ -973,7 +973,7 @@ describe("a tracked insertion inside a container within another author's inserti
         revision: ADA,
       });
       // Nested inside their proposal, rejecting it would remove these words.
-      expect(result).toMatchObject({ ok: false, reason: 'unsupported-revision' });
+      expect(result).toMatchObject({ ok: false, reason: 'unsupported-revision:foreign-insertion' });
     });
   }
 });

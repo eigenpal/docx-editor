@@ -75,13 +75,13 @@ export type ForeignTextRefusal = 'deleted-text-only' | 'collaborative-insertion'
  * struck text admits an insertion inside or at its edge, which the store places after or
  * beside the deletion, and a strike that also covers live text or the paragraph mark.
  *
- * In a collaboration session, an edit inside their inserted text refuses. Shared text keeps
- * an insertion as an attribute of its characters, and a peer that accepts or rejects the
- * insertion at the same time rewrites that attribute: a concurrent strike or new words inside
- * it can lose the decision or reorder the words. New words right after it refuse as well:
- * their shared characters restore its attribute after them, and a concurrent accept would
- * hand that attribute to the text that follows. Edits before it and strikes beside it stay
- * admitted.
+ * In a collaboration session, a strike inside their inserted text refuses, and so do new words
+ * inside or right after any of their text revisions. Shared text keeps a revision as an
+ * attribute of its characters. A peer that accepts or rejects the revision at the same time
+ * rewrites that attribute, so a concurrent strike or new words inside it can lose the
+ * decision or reorder the words. New words right after it restore its attribute after
+ * themselves, and a concurrent decision can hand that attribute to the text that follows.
+ * New words before their revision and strikes beside it stay admitted.
  */
 export function foreignTextRefusal(
   story: AutomationStoryReads,
@@ -90,17 +90,21 @@ export function foreignTextRefusal(
   paragraphId: string,
   start: number,
   end: number,
-  options: { readonly strikesMark?: boolean; readonly collaborative?: boolean } = {}
+  options: {
+    readonly strikesMark?: boolean;
+    readonly collaborative?: boolean;
+    /** Where the same edit writes new words, when it writes any. */
+    readonly insertsAt?: number;
+  } = {}
 ): ForeignTextRefusal | null {
   const ranges = rangesIn(story, item, paragraphId);
+  const at = options.insertsAt;
   if (
     options.collaborative &&
     ranges.some(
       (range) =>
-        !range.struck &&
-        (start === end
-          ? range.start < start && start <= range.end
-          : start < range.end && end > range.start)
+        (!range.struck && start < range.end && end > range.start) ||
+        (at !== undefined && range.start < at && at <= range.end)
     )
   )
     return 'collaborative-insertion';

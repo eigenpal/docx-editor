@@ -14,6 +14,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { serializeOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { selectCellRectangle } from './paginated-surface-fixtures.ts';
+import { diagnosticCodeOfRefusal } from '../diagnostic-codes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -860,6 +861,10 @@ test("typing inside a link within another author's insertion is refused, not nes
     surface.type('X');
     // The link cannot split, and nested words would go with their proposal on reject.
     expect(surface.state().lastRejection).not.toBeNull();
+    // The page names the same rule the editing API reports for this edit.
+    expect(diagnosticCodeOfRefusal(surface.state().lastRejection!)).toBe(
+      'edit.tracked-foreign-revision-unsupported'
+    );
     expect(serializeOoxmlPart(surface.session.part())).toBe(before);
   });
 });

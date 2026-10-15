@@ -61,6 +61,7 @@ export function proposalRevisionError(
     readonly author: string;
     readonly strikesMark?: boolean;
     readonly collaborative?: boolean;
+    readonly insertsAt?: number;
   }
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
@@ -159,7 +160,7 @@ type ProposalRevisionRule =
 const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
   'deleted-text-only': 'a tracked deletion or replacement needs live text, not only deleted text',
   'collaborative-insertion':
-    "in collaboration, a tracked edit cannot change text inside another author's pending insertion",
+    "in collaboration, a tracked edit cannot change another author's pending text or write right after it",
   'foreign-revision':
     "the edit touches another author's pending paragraph mark, formatting, move, or structure",
   'own-pending': "the edit would merge with or cover the author's own pending change",

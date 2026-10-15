@@ -3,12 +3,13 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// A reviewer edits beside a counterparty's pending insertion in a collaboration room. Shared
-// text keeps an insertion as an attribute of its characters, so a concurrent accept or reject
-// of the insertion cannot keep an edit inside it intact: the editing API refuses those edits
-// in a session. Edits at its edges, and insertions moved past a deletion, converge in either
-// client order to the state the edits reach one after the other, through concurrent decisions,
-// deletion, undo, redo, reconnect, and save and reopen.
+// A reviewer edits beside a counterparty's pending changes in a collaboration room. Shared
+// text keeps a revision as an attribute of its characters, so a concurrent accept or reject
+// cannot keep a strike inside their insertion, or new words inside or right after their
+// revision, intact: the editing API refuses those edits in a session. New words before their
+// changes and strikes beside them converge in either client order to the state the edits
+// reach one after the other, through concurrent decisions, deletion, undo, redo, reconnect,
+// and save and reopen.
 import { afterAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -20,6 +21,9 @@ import {
   type RequestContext,
 } from '@docx-editor.dev/editor-api/browser';
 import { collaborationModule, reviewModule } from '../../index';
+import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness';
+import { createDocumentCollaboration } from '../document-session.ts';
 import { createPeerHarness, zipDocument, type Peer } from './document-peer-support';
 
 const registered = !GlobalRegistrator.isRegistered;
@@ -265,6 +269,7 @@ for (const [name, edit] of Object.entries(INSIDE))
 const EDGES: Record<string, Edit> = {
   'writes before the insertion': onText('thirty', (range) => range.insertText('about ', 'Before')),
   'deletes the period after it': onText('.', (range) => range.delete()),
+  'deletes the words that end where it starts': onText('within ', (range) => range.delete()),
 };
 
 // A tracked deletion of the counterparty's own pending text refuses, so their deletion is a
@@ -292,38 +297,68 @@ for (const order of Object.keys(ORDERS) as Order[])
         }
       });
 
-const STRUCK =
+// The counterparty replaced "sixty days" with their insertion: their deletion stands directly
+// before their insertion.
+const REPLACED =
   '<w:p><w:r><w:t xml:space="preserve">Payment is due within </w:t></w:r>' +
-  `<w:del w:id="7" w:author="${COUNTERPARTY}" w:date="2026-09-01T00:00:00Z">` +
-  `<w:r><w:delText>${PROPOSED}</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>` +
+  `<w:del w:id="6" w:author="${COUNTERPARTY}" w:date="2026-09-01T00:00:00Z">` +
+  '<w:r><w:delText xml:space="preserve">sixty days </w:delText></w:r></w:del>' +
+  `<w:ins w:id="7" w:author="${COUNTERPARTY}" w:date="2026-09-01T00:00:00Z">` +
+  `<w:r><w:t>${PROPOSED}</w:t></w:r></w:ins><w:r><w:t>.</w:t></w:r></w:p>` +
   '<w:p><w:r><w:t>Second clause.</w:t></w:r></w:p>';
-const afterStruck = onText('thirty', (range) => range.insertText('sixty days', 'After'));
-
-const STRUCK_COUNTER_EDITS: Record<string, Edit> = {
-  'rejects their deletion': decideAs(COUNTERPARTY, 'Delete', 'reject'),
-  'accepts their deletion': decideAs(COUNTERPARTY, 'Delete', 'accept'),
-  'types after the deleted words': direct('.', (range) => range.insertText(' net', 'Before')),
-};
+const beforeTheirReplacement = onText('sixty days ', (range) => range.insertText('or ', 'Before'));
 
 for (const order of Object.keys(ORDERS) as Order[])
-  for (const [name, edit] of Object.entries(STRUCK_COUNTER_EDITS))
-    test(`${order}: an insertion moved past the counterparty's deletion while the counterparty ${name}`, async () => {
-      const r = await room(order, STRUCK);
+  for (const [counterName, counterparty] of Object.entries(COUNTER_EDITS))
+    test(`${order}: new words in front of the counterparty's replacement while the counterparty ${counterName}`, async () => {
+      const r = await room(order, REPLACED);
       try {
-        await concurrently(r, afterStruck, edit);
+        await concurrently(r, beforeTheirReplacement, counterparty);
         await converged(r);
-        const state = await expectSamePeers(r);
-        expect(state.revisions).toContain(`${REVIEWER}:Insert`);
-        // The reviewer's words land after the deleted words, never inside them.
-        if (state.text.includes('receipt'))
-          expect(state.text.indexOf('sixty days')).toBeGreaterThan(state.text.indexOf('receipt'));
-        if (name !== 'types after the deleted words')
-          expect(state).toEqual(await sequential(STRUCK, afterStruck, edit));
+        expect(await expectSamePeers(r)).toEqual(
+          await sequential(REPLACED, beforeTheirReplacement, counterparty)
+        );
         await expectSameDecisions(r);
       } finally {
         r.close();
       }
     });
+
+const STRUCK =
+  '<w:p><w:r><w:t xml:space="preserve">Payment is due within </w:t></w:r>' +
+  `<w:del w:id="7" w:author="${COUNTERPARTY}" w:date="2026-09-01T00:00:00Z">` +
+  `<w:r><w:delText>${PROPOSED}</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>` +
+  '<w:p><w:r><w:t>Second clause.</w:t></w:r></w:p>';
+
+// New words right after another author's deletion restore its attribute after themselves. A
+// concurrent decision on the deletion, or on an insertion that follows it, can then hand that
+// attribute to the next text, so these edits refuse in a session too.
+const AFTER_THEIR_DELETION: Record<string, { body: string; edit: Edit }> = {
+  'writes inside their deleted words': {
+    body: STRUCK,
+    edit: onText('thirty', (range) => range.insertText('sixty days', 'After')),
+  },
+  'writes between their deletion and their insertion': {
+    body: REPLACED,
+    edit: onText('sixty days ', (range) => range.insertText('or ', 'After')),
+  },
+};
+
+for (const [name, { body, edit }] of Object.entries(AFTER_THEIR_DELETION))
+  test(`in collaboration, a reviewer who ${name} is refused and the room is unchanged`, async () => {
+    const r = await room('reviewer first', body);
+    try {
+      const before = await converged(r);
+      await expect(r.peers[0]!.runtime.run(edit)).rejects.toMatchObject({
+        code: 'NotImplemented',
+        debugInfo: { innerError: { code: 'edit.tracked-foreign-revision-unsupported' } },
+      });
+      r.sync();
+      expect(await converged(r)).toBe(before);
+    } finally {
+      r.close();
+    }
+  });
 
 for (const order of Object.keys(ORDERS) as Order[])
   test(`${order}: the reviewer resolves their own insertion alone, and the other peer sees it`, async () => {
@@ -440,5 +475,33 @@ test('a reviewer who edits offline and reconnects converges with the counterpart
     );
   } finally {
     r.close();
+  }
+});
+
+test('a server runtime in a collaboration session refuses an edit inside their insertion', async () => {
+  const ydoc = new Y.Doc();
+  const awareness = new Awareness(ydoc);
+  const opened = await createDocumentCollaboration({
+    ydoc,
+    awareness,
+    documentId: 'tracked-foreign-revisions-server',
+    sessionId: 'server',
+    identity: { actorId: 'server', name: REVIEWER },
+    bootstrap: { kind: 'create', document: zipDocument(BODY) },
+  });
+  const runtime = await DocxEditor.createCollaborative(opened.document, opened.session, {
+    author: REVIEWER,
+  });
+  try {
+    const before = await runtime.save();
+    await expect(runtime.run(replaceProposal)).rejects.toMatchObject({
+      code: 'NotImplemented',
+      debugInfo: { innerError: { code: 'edit.tracked-foreign-revision-unsupported' } },
+    });
+    expect(await runtime.save()).toEqual(before);
+  } finally {
+    runtime.dispose();
+    opened.destroy();
+    awareness.destroy();
   }
 });

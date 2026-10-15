@@ -113,6 +113,7 @@ const STORE_EDIT_CODES: Readonly<
   packageTransactionRequired: 'edit.tracked-structure-unsupported',
   'automation-structural-tracking-unsupported': 'edit.tracked-structure-unsupported',
   'unsupported-revision': 'edit.revision-unsupported',
+  'unsupported-revision:foreign-insertion': 'edit.tracked-foreign-revision-unsupported',
   'unknown-revision': 'edit.stale-target',
   'resource-limit': 'edit.resource-limit',
   'fragment-too-deep': 'edit.resource-limit',
@@ -180,7 +181,10 @@ const STORE_EDIT_CODES: Readonly<
  * @public
  */
 export function storeEditDiagnosticCode(reason: string): EditDiagnosticCode | null {
-  // A detail after a colon never selects the code; only the token before it does.
+  // A store reason with its own code names it in full.
+  const exact = own<EditDiagnosticCode>(STORE_EDIT_CODES, reason);
+  if (exact) return exact;
+  // Otherwise a detail after a colon never selects the code; only the token before it does.
   const colon = reason.indexOf(':');
   const token = colon < 0 ? reason : reason.slice(0, colon);
   // A browser host answers with the public code when the surface refused in a sentence.
