@@ -7074,6 +7074,8 @@ a.docx-hyperlink:focus-visible {
 
 .docx-editor .docx-nav__goto-count {
   font-weight: 400;
+  /* "3 of 16" reads as words, not a label. */
+  text-transform: none;
   color: var(--doc-text-subtle);
 }
 

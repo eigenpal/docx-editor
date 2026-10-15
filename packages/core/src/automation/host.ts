@@ -427,6 +427,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         ),
         port.revision()
       );
+      // Unlike every other refusal, the operations before this one DID publish: `changed` says so.
       return { ...failed, changed };
     }
     if (!settled.ok) {
