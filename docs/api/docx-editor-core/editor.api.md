@@ -76,6 +76,36 @@ export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: H
 export function blankDocumentBytes(): Uint8Array;
 
 // @public
+export interface BookmarkChromeHandlers {
+    readonly onRequest?: () => void;
+}
+
+// @public
+export function bookmarkDialogInitialName(bookmarks: readonly BookmarkSummary[]): string;
+
+// @public
+export interface BookmarkDialogNameState {
+    readonly canAdd: boolean;
+    readonly canDelete: boolean;
+    // (undocumented)
+    readonly canGoTo: boolean;
+    readonly existing: BookmarkSummary | null;
+    readonly problem: BookmarkNameProblem | null;
+}
+
+// @public
+export function bookmarkDialogNameState(bookmarks: readonly BookmarkSummary[], name: string, writable: boolean): BookmarkDialogNameState;
+
+// @public
+export function bookmarkDialogRows(bookmarks: readonly BookmarkSummary[], options: {
+    readonly showHidden: boolean;
+    readonly sortBy: BookmarkSortOrder;
+}): readonly BookmarkSummary[];
+
+// @public
+export type BookmarkSortOrder = 'name' | 'location';
+
+// @public
 export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
@@ -488,6 +518,15 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly defaultToolbar: false;
+        readonly id: 'bookmarks';
+        readonly labelKey: 'formattingBar.showBookmarks';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
         readonly id: 'protectDocument';
         readonly labelKey: 'review.protectDocument';
         readonly paths: readonly string[];
@@ -796,6 +835,13 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'bookmark';
+        readonly labelKey: 'toolbar.bookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'watermark';
         readonly labelKey: 'toolbar.watermark';
         readonly paths: readonly string[];
@@ -1007,7 +1053,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -1392,6 +1438,7 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
+    setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
@@ -2201,6 +2248,7 @@ export interface PaginatedSurface {
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
     armForcePlainPaste(): void;
     author(): string | undefined;
+    readonly bookmarkEditing: SurfaceBookmarks;
     bookmarks(): BookmarkIndex;
     canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canEditTextFormField(): boolean;
@@ -2459,6 +2507,7 @@ export interface PaginatedSurfaceOptions {
     readonly onHostMoved?: (document: Document) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRejection?: (reason: string) => void;
+    readonly onRequestBookmark?: () => void;
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestHyperlink?: () => void;
@@ -2478,6 +2527,7 @@ export interface PaginatedSurfaceOptions {
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
+    readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
     readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     readonly tocLabels?: {

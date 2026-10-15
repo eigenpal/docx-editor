@@ -5,10 +5,10 @@
 ```ts
 
 // @public
-export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
+export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -650,6 +650,50 @@ export type AutomationOperation = AutomationAuthoringOperation | {
 | {
     readonly bookmark: AutomationHandle;
     readonly op: 'getBookmarkRange';
+}
+/**
+* The names of the bookmarks a span overlaps, in document order: `Range.getBookmarks`.
+*
+* A non-empty span holds a bookmark when the two share text, and a point bookmark when the
+* point is inside the span. An empty span holds the bookmarks around it. `includeAdjacent`
+* adds the bookmarks that only touch the span; `includeHidden` adds names starting with `_`.
+*/
+| {
+    readonly includeAdjacent: boolean;
+    readonly includeHidden: boolean;
+    readonly op: 'getBookmarkNames';
+    readonly scope: AutomationSpanRef;
+}
+/**
+* The range of the bookmark with this name, compared without case, in any story: main text
+* first, then headers, footers and notes. Answers no span when nothing declares the name.
+*/
+| {
+    readonly document: AutomationHandle;
+    readonly name: string;
+    readonly op: 'getBookmarkRangeByName';
+}
+/**
+* Add a bookmark around a span, or at a point. A bookmark the story already declares under
+* the same name, compared without case, moves here. Refused when another story declares it.
+*/
+| {
+    readonly name: string;
+    readonly op: 'insertBookmark';
+    readonly span: AutomationSpanRef;
+}
+/**
+* Remove a bookmark: by name anywhere in the document, or the one a handle names. The text
+* stays. A name nothing declares is not an error and changes nothing.
+*/
+| {
+    readonly op: 'deleteBookmark';
+    readonly target: {
+        readonly document: AutomationHandle;
+        readonly name: string;
+    } | {
+        readonly bookmark: AutomationHandle;
+    };
 }
 /**
 * The comments anchored in a scope, in document order — the TOP-LEVEL ones.
@@ -1298,6 +1342,11 @@ export type AutomationValue = {
 } | {
     readonly kind: 'text';
     readonly text: string;
+}
+/** Several strings, in document order: the names of the bookmarks a range holds. */
+| {
+    readonly kind: 'texts';
+    readonly texts: readonly string[];
 } | {
     readonly kind: 'span';
     readonly span: AutomationSpan;

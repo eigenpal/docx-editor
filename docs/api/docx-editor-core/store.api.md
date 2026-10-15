@@ -194,10 +194,49 @@ export interface BookmarkAnchor {
 export type BookmarkIndex = ReadonlyMap<string, BookmarkAnchor>;
 
 // @public
+export function bookmarkNameKey(name: string): string;
+
+// @public
+export type BookmarkNameProblem = 'empty' | 'tooLong' | 'invalidStart' | 'invalidCharacter';
+
+// @public
+export function bookmarkNameProblem(name: string): BookmarkNameProblem | null;
+
+// @public
+export interface BookmarkOpPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
 export function bookmarkPairNodes(mint: () => string, name: string, id: string): {
     readonly end: OoxmlNode;
     readonly start: OoxmlNode;
 };
+
+// @public
+export interface BookmarkPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface BookmarkRecord {
+    // (undocumented)
+    readonly end: BookmarkPosition;
+    // (undocumented)
+    readonly endNodeId: string;
+    readonly hidden: boolean;
+    readonly markerId: string;
+    readonly name: string;
+    // (undocumented)
+    readonly start: BookmarkPosition;
+    readonly startNodeId: string;
+}
 
 // @public
 export function boundCustomXmlNodeIdOf(control: OoxmlNode, storeItemId: string): string | null;
@@ -1053,6 +1092,14 @@ export interface DefaultRecord {
     readonly extension: string;
     // (undocumented)
     readonly order: number;
+}
+
+// @public
+export interface DeleteBookmarkOp {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly op: 'deleteBookmark';
 }
 
 // @public
@@ -2007,6 +2054,18 @@ export interface InlineControlSpan {
 export function inlineControlStartingAt(paragraph: OoxmlParagraphNode, offset: number): InlineControlSpan | null;
 
 // @public
+export interface InsertBookmarkOp {
+    // (undocumented)
+    readonly end: BookmarkOpPosition;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly op: 'insertBookmark';
+    // (undocumented)
+    readonly start: BookmarkOpPosition;
+}
+
+// @public
 export interface InsertBuildingBlockOp {
     readonly blocks: readonly OoxmlNode[];
     // (undocumented)
@@ -2117,6 +2176,9 @@ export function isFootnotesNode(node: OoxmlNode): node is OoxmlFootnotesNode;
 export function isHeaderFooterLifecycleOp(op: {
     readonly op: string;
 }): op is HeaderFooterLifecycleOp;
+
+// @public
+export function isHiddenBookmarkName(name: string): boolean;
 
 // @public
 export function isHyperlinkNode(node: OoxmlNode): boolean;
@@ -2299,6 +2361,9 @@ export interface LinkableReviewItem {
 export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[];
 
 // @public
+export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[];
+
+// @public
 export type ListKind = 'bullet' | 'ordered';
 
 // @public
@@ -2318,6 +2383,9 @@ export function makeLimitCounter(limits: ResourceLimits, key: keyof ResourceLimi
 
 // @public
 export function materializeGlossaryPlaceholders(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPart;
+
+// @public
+export const MAX_AUTHORED_BOOKMARK_NAME_LENGTH = 40;
 
 // @public
 export const MAX_CONTENT_CONTROL_NESTING = 32;
@@ -4486,7 +4554,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "setRevisionAttribution", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setFieldCode", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableProperties", "authorTable", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "setDocumentProtection", "setWatermark", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField", "setLegacyCheckbox", "setLegacyDropdown", "insertBuildingBlock", "insertBookmark", "deleteBookmark"];
 
 // @public
 export type TreeDocOp = SetFieldCodeOp | {
@@ -4949,7 +5017,7 @@ export type TreeDocOp = SetFieldCodeOp | {
         readonly pageNumberText: string;
         readonly paragraphId: string;
     }[];
-} | SetTextFormFieldDefaultOp | CommitTextFormFieldOp | SetLegacyCheckboxOp | SetLegacyDropdownOp | InsertBuildingBlockOp | {
+} | SetTextFormFieldDefaultOp | CommitTextFormFieldOp | SetLegacyCheckboxOp | SetLegacyDropdownOp | InsertBuildingBlockOp | InsertBookmarkOp | DeleteBookmarkOp | {
     readonly op: 'refreshFieldResults';
     readonly updates: readonly {
         readonly fieldNodeId: string;

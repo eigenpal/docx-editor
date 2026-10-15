@@ -6,6 +6,8 @@
 
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
+import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { ButtonHTMLAttributes } from 'react';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
@@ -179,6 +181,14 @@ import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 export { AnchorHighlightAnimation }
 
 export { AnchorHighlightOptions }
+
+// @public
+export interface BookmarkDialogFields {
+    name: string;
+    showHidden: boolean;
+    // (undocumented)
+    sortBy: BookmarkSortOrder;
+}
 
 export { CHROME_GROUPS }
 
@@ -539,6 +549,42 @@ export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
 }
 
 // @public
+export const DocxEditorBookmarkDialog: typeof BookmarkDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Delete: PartComponent;
+    Error: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: "list" | "name" | "showHidden" | "sortBy";
+    }) => ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    GoTo: PartComponent;
+    Header: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Title: (props: DialogPartProps & {
+        name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
 export type DocxEditorChildren = ReactNode;
 
 // @public
@@ -889,6 +935,8 @@ export const DocxEditorMenu: DocxEditorMenuNamespace;
 export interface DocxEditorMenuNamespace {
     // (undocumented)
     (props: DocxEditorMenuProps): ReactNode;
+    // (undocumented)
+    readonly Bookmark: typeof MenuBookmark;
     readonly Entry: typeof MenuEntry;
     // (undocumented)
     readonly ExportMarkdown: typeof MenuExportMarkdown;
@@ -949,6 +997,7 @@ export interface DocxEditorMenuProps {
 export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEditorProps & RefAttributes<DocxEditorRef>> {
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
+    readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
@@ -1247,6 +1296,7 @@ export type DocxEditorPopup<Props extends object> = false | ((props: Props) => D
 
 // @public
 export interface DocxEditorPopups {
+    bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
@@ -2912,6 +2962,33 @@ export interface ToolbarSlotPartProps {
 export type ToolbarTranslate = (key: string) => string;
 
 export { TranslationKey }
+
+// @public
+export function useBookmarkDialog(): UseBookmarkDialogReturn;
+
+// @public
+export interface UseBookmarkDialogReturn extends UseDialogReturn<BookmarkDialogFields> {
+    readonly canDelete: boolean;
+    // (undocumented)
+    readonly canGoTo: boolean;
+    // (undocumented)
+    goTo(): void;
+    // (undocumented)
+    remove(): void;
+    readonly rows: readonly BookmarkSummary[];
+}
+
+// @public
+export function useBookmarks(): UseBookmarksReturn;
+
+// @public
+export interface UseBookmarksReturn {
+    readonly bookmarks: readonly BookmarkSummary[];
+    readonly goTo: (name: string) => ExecResult;
+    readonly insert: (name: string) => ExecResult;
+    readonly isWritable: boolean;
+    readonly remove: (name: string) => ExecResult;
+}
 
 // @public
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;

@@ -41,6 +41,19 @@ export interface AuthoredNoteNumbering {
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export type BookmarkStory = 'body' | 'headerFooter' | 'note';
+
+// @public
+export interface BookmarkSummary {
+    readonly atSelection: boolean;
+    readonly empty: boolean;
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly order: number;
+    readonly story: BookmarkStory;
+}
+
+// @public
 export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
 
 // @public
@@ -783,6 +796,20 @@ export interface EditorAnchorNavigation {
 }
 
 // @public
+export interface EditorBookmarkCommands {
+    deleteBookmark: {
+        name: string;
+    };
+    goToBookmark: {
+        name: string;
+    };
+    insertBookmark: {
+        name: string;
+    };
+    toggleBookmarks: Record<never, never>;
+}
+
+// @public
 export type EditorCommand = {
     [K in keyof EditorCommands]: {
         type: K;
@@ -790,7 +817,7 @@ export type EditorCommand = {
 }[keyof EditorCommands];
 
 // @public
-export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands {
+export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands, EditorBookmarkCommands {
     clearFormatting: Record<never, never>;
     commitTableColumnDividerResize: {
         leftWidthTwips: number;
@@ -1172,6 +1199,7 @@ export type EditorPosition = DocAnchor | SemanticPosition;
 
 // @public
 export interface EditorQueries extends DocQueries {
+    bookmarks: Record<never, never>;
     // (undocumented)
     contentControlAt: {
         filter?: ContentControlFilter;
@@ -1210,6 +1238,8 @@ export type EditorQuery = {
 
 // @public
 export interface EditorQueryResults extends DocQueryResults {
+    // (undocumented)
+    bookmarks: readonly BookmarkSummary[];
     // (undocumented)
     contentControlAt: ContentControlSummary | null;
     // (undocumented)
@@ -1319,6 +1349,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
     // (undocumented)
     readonly table: TableContext | null;
