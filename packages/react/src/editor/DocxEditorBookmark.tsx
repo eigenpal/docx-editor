@@ -14,7 +14,7 @@ import {
 // rules come from the engine (`bookmarkDialogRows`, `bookmarkDialogNameState`), so the React
 // and Vue dialogs answer alike.
 
-import { useCallback, useId, useRef, useState } from 'react';
+import { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
   bookmarkDialogInitialName,
@@ -52,8 +52,15 @@ export interface UseBookmarkDialogReturn extends UseDialogReturn<BookmarkDialogF
   /** Whether Delete and Go To can act on the typed name. */
   readonly canDelete: boolean;
   readonly canGoTo: boolean;
+  /**
+   * How many other places carry the typed bookmark's name, which collaborators adding one name
+   * offline can leave. 0 for a name with one bookmark, or no bookmark.
+   */
+  readonly duplicates: number;
   remove(): void;
   goTo(): void;
+  /** Keep the first bookmark with the typed name and remove its copies. */
+  keepFirst(): void;
 }
 
 const PROBLEM_KEYS = {
@@ -91,6 +98,7 @@ function OpenBookmarkDialog({
   // After Go To the dialog has done something, so its dismiss button reads Close.
   const [visited, setVisited] = useState(false);
   const panelRef = useRef<HTMLDialogElement | null>(null);
+  const listRef = useRef<HTMLSelectElement | null>(null);
   const nameId = useId();
   const messageId = useId();
   const sortGroup = useId();
@@ -102,13 +110,16 @@ function OpenBookmarkDialog({
     nameState.problem && !nameState.existing && (attempted || name.length > 0)
       ? nameState.problem
       : null;
+  const duplicates = nameState.existing?.duplicates ?? 0;
   const message = refused
     ? t('dialogs.bookmark.refused')
     : problem
       ? t(PROBLEM_KEYS[problem])
-      : nameState.existing && nameState.canAdd
-        ? t('dialogs.bookmark.nameExists')
-        : null;
+      : duplicates > 0
+        ? t('dialogs.bookmark.duplicates', { count: duplicates })
+        : nameState.existing && nameState.canAdd
+          ? t('dialogs.bookmark.nameExists')
+          : null;
 
   const handleAdd = useCallback(() => {
     setAttempted(true);
@@ -136,7 +147,19 @@ function OpenBookmarkDialog({
     if (result.ok) setVisited(true);
   }, [nameState, goTo]);
 
+  // Adding the name again at the first bookmark keeps it and removes every copy, in one step.
+  const handleKeepFirst = useCallback(() => {
+    const existing = nameState.existing;
+    if (!existing || !isWritable) return;
+    const result = goTo(existing.name).ok ? insert(existing.name) : { ok: false };
+    setRefused(!result.ok);
+  }, [nameState.existing, isWritable, goTo, insert]);
+
   const selected = nameState.existing?.name ?? '';
+  // A list box with no matching value would show its first row as chosen; show none instead.
+  useLayoutEffect(() => {
+    if (!selected && listRef.current) listRef.current.selectedIndex = -1;
+  });
   const state: UseBookmarkDialogReturn = {
     values: { name, sortBy, showHidden },
     setValue(field, value) {
@@ -156,8 +179,10 @@ function OpenBookmarkDialog({
     rows,
     canDelete: nameState.canDelete,
     canGoTo: nameState.canGoTo,
+    duplicates,
     remove: handleRemove,
     goTo: handleGoTo,
+    keepFirst: handleKeepFirst,
   };
   return (
     <DialogFrame
@@ -213,6 +238,7 @@ function OpenBookmarkDialog({
 
               <div data-docx-part="field" data-docx-field="list" className="docx-dialog__row">
                 <select
+                  ref={listRef}
                   className="docx-dialog__input docx-dialog__input--full docx-bookmark-dialog__list"
                   size={8}
                   value={selected}
@@ -266,17 +292,33 @@ function OpenBookmarkDialog({
                   {t('dialogs.bookmark.showHidden')}
                 </label>
               </div>
+
+              {/* Its own row, so a long message never squeezes the buttons. Problems read as
+                  errors; a note about an existing name or its copies reads as a hint. */}
+              <div className="docx-dialog__row docx-bookmark-dialog__status">
+                <span
+                  id={messageId}
+                  data-docx-part="error"
+                  role="status"
+                  className={problem || refused ? 'docx-dialog__error' : 'docx-dialog__hint'}
+                >
+                  {message}
+                </span>
+                {duplicates > 0 ? (
+                  <button
+                    type="button"
+                    className="docx-dialog__button"
+                    data-docx-part="keepfirst"
+                    disabled={!isWritable}
+                    onClick={handleKeepFirst}
+                  >
+                    {t('dialogs.bookmark.keepFirst')}
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div data-docx-part="footer" className="docx-dialog__footer">
-              <span
-                id={messageId}
-                data-docx-part="error"
-                role="status"
-                className="docx-dialog__error"
-              >
-                {message}
-              </span>
               <button
                 type="button"
                 className="docx-dialog__button docx-dialog__apply"
@@ -347,4 +389,6 @@ export const DocxEditorBookmarkDialog = Object.assign(BookmarkDialogRoot, {
   Field: parts.Field,
   Delete: parts.part('delete') as PartComponent,
   GoTo: parts.part('goto') as PartComponent,
+  /** Shown while the typed name has copies: keep the first, remove the rest. */
+  KeepFirst: parts.part('keepfirst') as PartComponent,
 });

@@ -9,9 +9,10 @@
 // THE MARKS ARE FURNITURE. With "Show bookmarks" on, a gray bracket is painted at each visible
 // bookmark's start and end, and an I-beam at a point bookmark, in an overlay sheet BESIDE the
 // pages. Nothing is added to the editable DOM, so selection mapping, hit testing and the caret
-// never see the marks, and they are never part of the document, its export or its print.
-// Hidden bookmarks (names starting with an underscore) are not shown. Marks are painted for
-// bookmarks in the main text and in footnotes and endnotes.
+// never see the marks, and they are never part of the document or its export. They print only
+// when the host asks (`BookmarkMarkOptions.print`). Hidden bookmarks (names starting with an
+// underscore) are not shown unless the host includes them. Marks are painted in the main text,
+// headers and footers (on every page that shows them), footnotes and endnotes.
 
 import { caretAt } from '@docx-editor.dev/core/layout';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
@@ -29,6 +30,8 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import type { BookmarkStory, BookmarkSummary } from '../contracts/editor-bookmarks.ts';
+import type { BookmarkMarkInfo, BookmarkMarkOptions } from './docx-editor-types.ts';
+import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 import { storyScopeOfNodeId, type StoryScopeLookup } from './surface-scope.ts';
 
 /** What the bookmark lane reads from and writes through. */
@@ -58,15 +61,19 @@ export interface SurfaceBookmarkDeps {
   /** Settle pending input and layout before the marks change. */
   readonly beforeChange: () => void;
   readonly repaint: () => void;
-  /** Whether the marks start shown. */
-  readonly initiallyShown?: boolean;
+  /** `showBookmarks`: whether the marks start shown; `bookmarkMarks`: the host's mark options. */
+  readonly options: Pick<PaginatedSurfaceOptions, 'showBookmarks' | 'bookmarkMarks'>;
 }
 
-/** One painted mark: where it is and which shape it takes. */
-export interface BookmarkMark {
-  readonly kind: 'start' | 'end' | 'point';
+/** One painted mark: which bookmark, which edge, and where. */
+export interface BookmarkMark extends BookmarkMarkInfo {
   readonly paragraphId: string;
   readonly offset: number;
+  /**
+   * The header or footer part of a mark painted on every page that shows that header or
+   * footer. Its geometry is relative to that story's box on each page.
+   */
+  readonly repeats?: string;
 }
 
 /** The surface's bookmark lane. */
@@ -120,7 +127,13 @@ function storyOf(scope: StoryScope): BookmarkStory {
 }
 
 export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookmarks {
-  let visible = deps.initiallyShown === true;
+  let visible = deps.options.showBookmarks === true;
+  // The sheet of the last paint. A destroyed or parked surface has taken it out of the page,
+  // and repaints itself in full when it comes back, so new options repaint only a live one.
+  let sheet: HTMLElement | null = null;
+  deps.options.bookmarkMarks?.onChange(() => {
+    if (visible && sheet?.isConnected) deps.repaint();
+  });
 
   type Located = {
     readonly record: BookmarkRecord;
@@ -195,18 +208,34 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
   return {
     list() {
       const holds = holdsSelection();
-      return located().map(({ record, scope }, order) =>
-        Object.freeze({
-          name: record.name,
-          hidden: record.hidden,
-          story: storyOf(scope),
-          order,
-          empty:
-            record.start.paragraphId === record.end.paragraphId &&
-            record.start.offset === record.end.offset,
-          atSelection: holds(record, scope),
-        })
-      );
+      // One row per name: the first in document order answers, and counts the copies that
+      // concurrent edits left in any story.
+      const copies = new Map<string, number>();
+      for (const { record } of located()) {
+        const key = bookmarkNameKey(record.name);
+        copies.set(key, (copies.get(key) ?? 0) + record.copies);
+      }
+      const seen = new Set<string>();
+      const rows: BookmarkSummary[] = [];
+      for (const { record, scope } of located()) {
+        const key = bookmarkNameKey(record.name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        rows.push(
+          Object.freeze({
+            name: record.name,
+            hidden: record.hidden,
+            story: storyOf(scope),
+            order: rows.length,
+            empty:
+              record.start.paragraphId === record.end.paragraphId &&
+              record.start.offset === record.end.offset,
+            atSelection: holds(record, scope),
+            duplicates: (copies.get(key) ?? 1) - 1,
+          })
+        );
+      }
+      return rows;
     },
     insertRefusal,
     insert(name) {
@@ -239,7 +268,21 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     remove(name) {
       const entry = find(name);
       if (!entry || deps.writeRefusal() !== null) return false;
-      return write({ op: 'deleteBookmark', name }, entry.scope);
+      // Copies a merge left in other stories go in the same transaction.
+      const key = bookmarkNameKey(name);
+      const elsewhere = new Set(
+        located()
+          .filter(
+            (other) =>
+              bookmarkNameKey(other.record.name) === key && other.partName !== entry.partName
+          )
+          .map((other) => other.partName)
+      );
+      return write(
+        { op: 'deleteBookmark', name },
+        entry.scope,
+        [...elsewhere].map((partName) => (pkg) => withoutBookmarkInPart(pkg, partName, name))
+      );
     },
     goTo(name) {
       const entry = find(name);
@@ -257,65 +300,120 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       deps.repaint();
     },
     paint(frame) {
+      sheet = frame.layer;
       if (!visible) {
         frame.layer.replaceChildren();
         return;
       }
+      const options = deps.options.bookmarkMarks?.current() ?? {};
+      frame.layer.classList.toggle('docx-bookmark-overlay--print', options.print === true);
+      const include = options.include ?? 'visible';
       const marks: BookmarkMark[] = [];
-      for (const { record, scope } of located()) {
-        // A header or footer paints on every page that repeats it, from one story.
-        if (record.hidden || scope.kind === 'headerFooter') continue;
+      const seen = new Set<string>();
+      for (const { record, scope, partName } of located()) {
+        // Only the bookmark a name means: copies a merge left are not shown.
+        const key = bookmarkNameKey(record.name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const info = { name: record.name, hidden: record.hidden, story: storyOf(scope) };
+        if (include === 'visible' ? record.hidden : include !== 'all' && !include(info)) continue;
         const point =
           record.start.paragraphId === record.end.paragraphId &&
           record.start.offset === record.end.offset;
+        const repeats = scope.kind === 'headerFooter' ? partName : undefined;
         if (point) {
-          marks.push({ kind: 'point', ...record.start });
+          marks.push({ ...info, edge: 'point', ...record.start, repeats });
           continue;
         }
-        marks.push({ kind: 'start', ...record.start }, { kind: 'end', ...record.end });
+        marks.push(
+          { ...info, edge: 'start', ...record.start, repeats },
+          { ...info, edge: 'end', ...record.end, repeats }
+        );
       }
-      paintBookmarkMarks(frame, marks);
+      paintBookmarkMarks(frame, marks, options.decorate);
     },
   };
 }
 
 /**
  * Paint bracket marks over the pages. Geometry comes from layout, the same `caretAt` the caret
- * uses, so a mark sits exactly where a caret at that position would. The mark's width is fixed
- * on screen; its height is the line's.
+ * uses, so a mark sits exactly where a caret at that position would. The mark's height is the
+ * line's; its width and stroke come from the stylesheet (`--doc-bookmark-mark-*`), scaled by
+ * the zoom the layer carries.
  */
 export function paintBookmarkMarks(
   frame: Parameters<SurfaceBookmarks['paint']>[0],
-  marks: readonly BookmarkMark[]
+  marks: readonly BookmarkMark[],
+  decorate?: BookmarkMarkOptions['decorate']
 ): void {
   const { layer, layout, scale } = frame;
   const document = layer.ownerDocument;
-  const width = Math.max(3, 3 * scale);
+  layer.style.setProperty('--docx-bookmark-scale', String(scale));
   const painted: HTMLElement[] = [];
+  const pageIndexes = frame.pages ? [...frame.pages] : layout.pages.map((_page, index) => index);
   for (const mark of marks) {
-    const geometry = caretAt(
-      layout,
-      { paragraphId: mark.paragraphId, offset: mark.offset },
-      frame.measurer ? { measurer: frame.measurer } : undefined
-    );
-    if (!geometry || !(geometry.height > 0)) continue;
-    if (frame.pages && !frame.pages.has(geometry.pageIndex)) continue;
-    const page = layout.pages[geometry.pageIndex];
-    if (!page) continue;
-    const offsetX = frame.pageOffsetX?.get(geometry.pageIndex) ?? 0;
-    const x = (page.contentBox.x + geometry.x + offsetX) * scale;
-    const element = document.createElement('div');
-    element.className = `docx-bookmark-mark docx-bookmark-mark--${mark.kind}`;
-    element.dataset.docxMarker = '';
-    element.setAttribute('contenteditable', 'false');
-    element.setAttribute('aria-hidden', 'true');
-    element.style.position = 'absolute';
-    element.style.pointerEvents = 'none';
-    element.style.left = `${mark.kind === 'start' ? x : mark.kind === 'end' ? x - width : x - width / 2}px`;
-    element.style.top = `${(page.contentBox.y + geometry.y) * scale}px`;
-    element.style.width = `${width}px`;
-    element.style.height = `${geometry.height * scale}px`;
-    painted.push(element);
+    const position = { paragraphId: mark.paragraphId, offset: mark.offset };
+    // A header or footer is laid out once and shown on each page that uses it, so its marks
+    // are placed once per painted page.
+    const at = (offset: number, pageIndex?: number) =>
+      caretAt(
+        layout,
+        { paragraphId: mark.paragraphId, offset },
+        {
+          ...(frame.measurer ? { measurer: frame.measurer } : {}),
+          ...(pageIndex !== undefined ? { preferredPageIndex: pageIndex } : {}),
+        }
+      );
+    const placements = mark.repeats
+      ? pageIndexes.map((pageIndex) => at(position.offset, pageIndex))
+      : [at(position.offset)];
+    const placed = new Set<number>();
+    for (const geometry of placements) {
+      if (!geometry || !(geometry.height > 0) || placed.has(geometry.pageIndex)) continue;
+      if (frame.pages && !frame.pages.has(geometry.pageIndex)) continue;
+      const page = layout.pages[geometry.pageIndex];
+      if (!page) continue;
+      const offsetX = frame.pageOffsetX?.get(geometry.pageIndex) ?? 0;
+      // Body and note lines measure from the content box; furniture lines from their story.
+      const story = mark.repeats
+        ? [page.header, page.footer].find((entry) => entry?.partName === mark.repeats)
+        : undefined;
+      if (mark.repeats && !story) continue;
+      const origin = story?.box ?? page.contentBox;
+      placed.add(geometry.pageIndex);
+      let element: HTMLElement = document.createElement('div');
+      element.className = `docx-bookmark-mark docx-bookmark-mark--${mark.edge}`;
+      // In right-to-left text the bracket opens the other way: the text it encloses lies to
+      // the left of a start and to the right of an end. The neighbouring character says which.
+      const inward = mark.edge === 'end' ? position.offset - 1 : position.offset + 1;
+      const neighbour =
+        inward >= 0 ? at(inward, mark.repeats ? geometry.pageIndex : undefined) : null;
+      if (
+        neighbour?.lineId === geometry.lineId &&
+        (mark.edge === 'end' ? neighbour.x > geometry.x : neighbour.x < geometry.x)
+      ) {
+        element.classList.add('docx-bookmark-mark--rtl');
+      }
+      const info: BookmarkMarkInfo = {
+        name: mark.name,
+        hidden: mark.hidden,
+        story: mark.story,
+        edge: mark.edge,
+      };
+      element = decorate?.(element, info) ?? element;
+      // Whatever came back is placed the same way and stays out of editing and selection.
+      element.dataset.bookmarkName = mark.name;
+      element.dataset.bookmarkHidden = String(mark.hidden);
+      element.dataset.bookmarkEdge = mark.edge;
+      element.dataset.bookmarkStory = mark.story;
+      element.dataset.docxMarker = '';
+      element.setAttribute('contenteditable', 'false');
+      element.style.position = 'absolute';
+      element.style.left = `${(origin.x + geometry.x + offsetX) * scale}px`;
+      element.style.top = `${(origin.y + geometry.y) * scale}px`;
+      element.style.height = `${geometry.height * scale}px`;
+      painted.push(element);
+    }
   }
   layer.replaceChildren(...painted);
 }

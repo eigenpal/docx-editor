@@ -26,6 +26,12 @@ export interface BookmarkSummary {
   readonly empty: boolean;
   /** Whether the start of the selection is inside the bookmark, edges included. */
   readonly atSelection: boolean;
+  /**
+   * How many other places carry the same name. Usually 0. Collaborators who add one name while
+   * offline can leave copies; the list, Go To and links use this bookmark, the first in
+   * document order. Adding the name again at this bookmark keeps it and removes the copies.
+   */
+  readonly duplicates: number;
 }
 
 /**
@@ -50,4 +56,11 @@ export interface EditorBookmarkCommands {
   goToBookmark: { name: string };
   /** Show or hide bracket marks at bookmarks. A view command: the document does not change. */
   toggleBookmarks: Record<never, never>;
+  /**
+   * Open the Bookmark dialog the host registered, the same request the Insert menu and
+   * Ctrl/Cmd+Shift+F5 send. Allowed in a read-only document, where Go To still works.
+   * Refused with `unsupported` while no host shows a bookmark dialog, for example when the
+   * `bookmark` popup is `false`.
+   */
+  openBookmarkDialog: Record<never, never>;
 }

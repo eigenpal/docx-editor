@@ -39,7 +39,6 @@ import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from '../DocxEditorWatermark';
 import { MenuWatermark } from './menu-watermark';
-import { DocxEditorBookmarkDialog } from '../DocxEditorBookmark';
 import { MenuBookmark } from './menu-bookmark';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
@@ -225,7 +224,6 @@ const DocxEditorMenuRoot = defineComponent({
     const pageSetupOpen = ref(false);
     const paragraphDialogOpen = ref(false);
     const watermarkDialogOpen = ref(false);
-    const bookmarkDialogOpen = ref(false);
     const rootRef = ref<HTMLDivElement | null>(null);
     const fileInputRef = ref<HTMLInputElement | null>(null);
 
@@ -299,15 +297,6 @@ const DocxEditorMenuRoot = defineComponent({
           rootRef.value?.querySelector<HTMLElement>('[data-menu="insert"] .docx-menubar__trigger')
         );
       else watermarkDialogOpen.value = true;
-    };
-
-    const packagedBookmarkDialog = () => {
-      if (dialogs)
-        dialogs.open(
-          'bookmark',
-          rootRef.value?.querySelector<HTMLElement>('[data-menu="insert"] .docx-menubar__trigger')
-        );
-      else bookmarkDialogOpen.value = true;
     };
 
     const resolvedOpen = computed(() =>
@@ -424,7 +413,6 @@ const DocxEditorMenuRoot = defineComponent({
       onPageSetup: resolvedPageSetup.value,
       onParagraphDialog: editorRef.value ? packagedParagraphDialog : undefined,
       onWatermarkDialog: editorRef.value ? packagedWatermarkDialog : undefined,
-      onBookmarkDialog: editorRef.value ? packagedBookmarkDialog : undefined,
       onReportIssue: props.onReportIssue,
       reportIssue: props.reportIssue,
       opening: opening.value,
@@ -663,12 +651,6 @@ const DocxEditorMenuRoot = defineComponent({
             open={watermarkDialogOpen.value}
             onClose={() => {
               watermarkDialogOpen.value = false;
-            }}
-          />
-          <DocxEditorBookmarkDialog
-            open={bookmarkDialogOpen.value}
-            onClose={() => {
-              bookmarkDialogOpen.value = false;
             }}
           />
         </>

@@ -46,6 +46,7 @@ export type BookmarkStory = 'body' | 'headerFooter' | 'note';
 // @public
 export interface BookmarkSummary {
     readonly atSelection: boolean;
+    readonly duplicates: number;
     readonly empty: boolean;
     readonly hidden: boolean;
     readonly name: string;
@@ -806,6 +807,7 @@ export interface EditorBookmarkCommands {
     insertBookmark: {
         name: string;
     };
+    openBookmarkDialog: Record<never, never>;
     toggleBookmarks: Record<never, never>;
 }
 

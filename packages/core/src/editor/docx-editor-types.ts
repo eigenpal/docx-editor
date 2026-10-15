@@ -41,6 +41,7 @@ import type { PaginatedSurface, RemoteCaretLabelHost } from './paginated-surface
 import type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
 import type { EquationActivation } from './surface-equations.ts';
+import type { BookmarkStory } from '../contracts/editor-bookmarks.ts';
 
 /**
  * Everything {@link createDocxEditor} accepts. Every field is optional.
@@ -219,10 +220,54 @@ export interface HyperlinkChromeHandlers {
   readonly onRequest?: () => void;
 }
 
-/** Host chrome for bookmarks. */
+/**
+ * Host chrome for bookmarks.
+ *
+ * @public
+ */
 export interface BookmarkChromeHandlers {
-  /** Ctrl/Cmd+Shift+F5: open the bookmark dialog for the selection. */
+  /**
+   * Open the Bookmark dialog for the selection: the `openBookmarkDialog` command, which the
+   * Insert menu row and Ctrl/Cmd+Shift+F5 send.
+   */
   readonly onRequest?: () => void;
+}
+
+/**
+ * One painted bookmark mark, as `BookmarkMarkOptions` callbacks see it.
+ *
+ * @public
+ */
+export interface BookmarkMarkInfo {
+  /** The bookmark's name as the document writes it. */
+  readonly name: string;
+  /** Whether the name starts with an underscore. */
+  readonly hidden: boolean;
+  /** The story the bookmark is in. */
+  readonly story: BookmarkStory;
+  /** Which mark this is: the start bracket, the end bracket, or a point bookmark's I-beam. */
+  readonly edge: 'start' | 'end' | 'point';
+}
+
+/**
+ * How Show bookmarks paints its marks. Register with `setBookmarkMarks`.
+ *
+ * @public
+ */
+export interface BookmarkMarkOptions {
+  /**
+   * Which bookmarks get marks: `'visible'` (the default) skips hidden bookmarks, `'all'`
+   * includes them, and a function decides per bookmark.
+   */
+  readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+  /**
+   * Adjust each mark before it is placed: add a class, a `title` tooltip, or attributes.
+   * Return another element to replace the mark. The editor positions whatever comes back.
+   * Marks ignore the pointer; set `pointer-events: auto` on a mark that shows a tooltip.
+   */
+  readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+  /** Keep the marks when the browser prints the page. Exports never include them. */
+  readonly print?: boolean;
 }
 
 /** Host chrome that edits a clicked Office Math equation. */
@@ -279,6 +324,11 @@ export interface DocxEditorInstance extends Editor {
    * restores whatever was registered before, like {@link DocxEditorInstance.setHyperlinkChrome}.
    */
   setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+  /**
+   * Choose which bookmarks Show bookmarks marks and customize each mark. Returns an
+   * unsubscribe that restores the previous options.
+   */
+  setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
   /**
    * Register local revision settings chrome. Disposal cancels its active sessions.
    * Manual renderers take priority over fallback renderers. Pass null to use native chrome

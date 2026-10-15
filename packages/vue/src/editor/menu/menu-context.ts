@@ -32,8 +32,6 @@ export interface MenuContextValue {
   readonly onParagraphDialog: (() => void) | undefined;
   /** Open the Watermark dialog. Undefined before the editor is ready. */
   readonly onWatermarkDialog?: (() => void) | undefined;
-  /** Open the Bookmark dialog. Undefined before the editor is ready. */
-  readonly onBookmarkDialog?: (() => void) | undefined;
   readonly onReportIssue: (() => void) | undefined;
   readonly reportIssue: boolean | undefined;
   /** A document is opening: the bar is disabled, like the toolbar. */
@@ -52,7 +50,6 @@ const defaultMenuContext: MenuContextValue = {
   onPageSetup: undefined,
   onParagraphDialog: undefined,
   onWatermarkDialog: undefined,
-  onBookmarkDialog: undefined,
   onReportIssue: undefined,
   reportIssue: undefined,
 };

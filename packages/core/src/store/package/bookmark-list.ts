@@ -46,6 +46,11 @@ export interface BookmarkRecord {
   /** Node ids of the two markers. */
   readonly startNodeId: string;
   readonly endNodeId: string;
+  /**
+   * How many marker pairs in the part carry this name, compared without case: 1, or more
+   * where concurrent edits left copies. The record is the first; the rest are not listed.
+   */
+  readonly copies: number;
 }
 
 function wmlAttribute(node: OoxmlNode, localName: string): string | undefined {
@@ -73,7 +78,12 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
   const open = new Map<string, OpenStart>();
   /** Starts between blocks, waiting for the paragraph that follows them. */
   const pendingStarts: string[] = [];
-  const closed: { readonly order: number; readonly record: BookmarkRecord }[] = [];
+  const closed: {
+    readonly order: number;
+    readonly key: string;
+    readonly record: Omit<BookmarkRecord, 'copies'>;
+  }[] = [];
+  const copies = new Map<string, number>();
   const seenNames = new Set<string>();
   const startOrder = new Map<string, number>();
   let order = 0;
@@ -101,11 +111,13 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
     const end = at ?? started.start;
     if (!start || !end) return;
     const key = bookmarkNameKey(started.name);
+    copies.set(key, (copies.get(key) ?? 0) + 1);
     if (seenNames.has(key)) return;
     seenNames.add(key);
     closed.push({
       order: startOrder.get(id) ?? 0,
-      record: Object.freeze({
+      key,
+      record: {
         name: started.name,
         hidden: isHiddenBookmarkName(started.name),
         markerId: id,
@@ -113,7 +125,7 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
         end,
         startNodeId: started.nodeId,
         endNodeId: node.id,
-      }),
+      },
     });
   };
 
@@ -158,5 +170,7 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
   // Starts that no paragraph followed close against the last paragraph in the part.
   if (previous) resolvePending(previous);
   closed.sort((a, b) => a.order - b.order);
-  return Object.freeze(closed.map((entry) => entry.record));
+  return Object.freeze(
+    closed.map((entry) => Object.freeze({ ...entry.record, copies: copies.get(entry.key) ?? 1 }))
+  );
 }

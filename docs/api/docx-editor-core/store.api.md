@@ -226,6 +226,7 @@ export interface BookmarkPosition {
 
 // @public
 export interface BookmarkRecord {
+    readonly copies: number;
     // (undocumented)
     readonly end: BookmarkPosition;
     // (undocumented)

@@ -57,7 +57,6 @@ import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from '../DocxEditorWatermark';
-import { DocxEditorBookmarkDialog } from '../DocxEditorBookmark';
 import { MenuWatermark } from './menu-watermark';
 import { MenuBookmark } from './menu-bookmark';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
@@ -279,7 +278,6 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [paragraphDialogOpen, setParagraphDialogOpen] = useState(false);
   const [watermarkDialogOpen, setWatermarkDialogOpen] = useState(false);
-  const [bookmarkDialogOpen, setBookmarkDialogOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -477,17 +475,6 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
                   )
                 )
               : setWatermarkDialogOpen(true)
-        : undefined,
-      onBookmarkDialog: editor
-        ? () =>
-            dialogs
-              ? dialogs.open(
-                  'bookmark',
-                  rootRef.current?.querySelector<HTMLElement>(
-                    '[data-menu="insert"] > [role="menuitem"]'
-                  )
-                )
-              : setBookmarkDialogOpen(true)
         : undefined,
       onReportIssue,
       reportIssue,
@@ -740,10 +727,6 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       <DocxEditorWatermarkDialog
         open={watermarkDialogOpen}
         onClose={() => setWatermarkDialogOpen(false)}
-      />
-      <DocxEditorBookmarkDialog
-        open={bookmarkDialogOpen}
-        onClose={() => setBookmarkDialogOpen(false)}
       />
     </MenuContext.Provider>
   );

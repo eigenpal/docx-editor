@@ -99,6 +99,7 @@ Each entry accepts a `definePopup()` result, render callback, or `false`. Each p
 | `print`                  | `DocxEditorPrintDialogProps`               |
 | `pageSetup`, `paragraph` | Controlled dialog props: `open`, `onClose` |
 | `watermark`              | Controlled dialog props: `open`, `onClose` |
+| `bookmark`               | Controlled dialog props: `open`, `onClose` |
 | `imageInsertError`       | `{ message, onClose }`                     |
 | `textFormField`          | `{ session: TextFormFieldDialogSession }`  |
 | `revisionMarkup`         | `{ session: RevisionMarkupDialogSession }` |
@@ -118,7 +119,15 @@ Each entry accepts a `definePopup()` result, render callback, or `false`. Each p
 
 Omitted entries retain default behavior, including native widget and invalid-field dialogs. The packaged editor supplies defaults. `Root` mounts configured popups. Image and note overrides use their existing triggers. Explicit entries override `menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
 
-To manage opening and closing yourself, set the entry to `false` and mount the popup. Use `definePopup()` to customize components while the editor manages opening. Toolbar menus and pickers use their compound `.Content` parts, outside this map.
+To manage opening and closing yourself, set the entry to `false` and mount the popup.
+
+The editor opens the `bookmark` popup for the **Insert** > **Bookmark** menu row, for Ctrl+Shift+F5 (Cmd+Shift+F5 on macOS), and for the `openBookmarkDialog` command. To open it from your own control, run the command:
+
+```ts
+editor.exec({ type: 'openBookmarkDialog' });
+```
+
+If you set `bookmark` to `false`, the editor has no bookmark dialog to open. The command reports `unsupported`, and the menu row is disabled with that reason. Use `definePopup()` to customize components while the editor manages opening. Toolbar menus and pickers use their compound `.Content` parts, outside this map.
 
 <a id="customize-change-tracking-options" />
 
@@ -636,7 +645,7 @@ Optional tokens adjust the panel without replacing any part:
 | `--doc-dialog-padding`        | One length: the side inset of the header, body, and footer.    |
 | `--doc-dialog-gap`            | The vertical distance between rows and sections.               |
 
-Use `data-docx-dialog` values `pageSetup`, `paragraph`, `watermark`, `imageInsertError`, `textFormField`, or `revisionMarkup`. `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
+Use `data-docx-dialog` values `pageSetup`, `paragraph`, `watermark`, `bookmark`, `imageInsertError`, `textFormField`, or `revisionMarkup`. `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
 
 There are two ways to change how a part looks:
 

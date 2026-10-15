@@ -392,7 +392,9 @@
       "nameInvalidStart": "Ein Textmarkenname beginnt mit einem Buchstaben.",
       "nameInvalidCharacter": "Verwenden Sie nur Buchstaben, Ziffern und Unterstriche.",
       "nameExists": "Eine Textmarke mit diesem Namen ist vorhanden. „Hinzufügen“ verschiebt sie zur Auswahl.",
-      "refused": "Die Textmarke konnte nicht geändert werden."
+      "refused": "Die Textmarke konnte nicht geändert werden.",
+      "duplicates": "{count, plural, one {# weitere Stelle verwendet diesen Namen.} other {# weitere Stellen verwenden diesen Namen.}} Links und „Gehe zu“ verwenden die erste.",
+      "keepFirst": "Erste behalten"
     }
   },
   "comments": {

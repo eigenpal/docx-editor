@@ -392,7 +392,9 @@
       "nameInvalidStart": "Um nome de indicador começa com uma letra.",
       "nameInvalidCharacter": "Use apenas letras, dígitos e sublinhados.",
       "nameExists": "Já existe um indicador com este nome. Adicionar o move para a seleção.",
-      "refused": "Não foi possível alterar o indicador."
+      "refused": "Não foi possível alterar o indicador.",
+      "duplicates": "{count, plural, one {# outro local usa este nome.} other {# outros locais usam este nome.}} Links e Ir para usam o primeiro.",
+      "keepFirst": "Manter o primeiro"
     }
   },
   "comments": {

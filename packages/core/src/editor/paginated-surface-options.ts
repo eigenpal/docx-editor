@@ -15,6 +15,7 @@ import type {
 } from '../contracts/modules.ts';
 import type { EquationActivation } from './surface-equations.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
+import type { BookmarkMarkOptions } from './docx-editor-types.ts';
 import type { TextMeasurer } from '@docx-editor.dev/core/layout';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import type { PaginatedSurfaceState, SurfaceEditingMode } from './paginated-surface-contract.ts';
@@ -198,6 +199,14 @@ export interface PaginatedSurfaceOptions {
    * request; when none did, or when this is absent, the key is left to the browser.
    */
   readonly onRequestBookmark?: () => boolean;
+  /**
+   * The host's Show bookmarks options, read on every paint. `onChange` names the repaint to
+   * run when the host changes them.
+   */
+  readonly bookmarkMarks?: {
+    readonly current: () => BookmarkMarkOptions;
+    readonly onChange: (repaint: (() => void) | null) => void;
+  };
   /** Return true when host chrome handles this session. */
   readonly onRequestTextFormField?: (
     session: import('./text-form-field-session.ts').TextFormFieldDialogSession

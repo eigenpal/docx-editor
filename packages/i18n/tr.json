@@ -392,7 +392,9 @@
       "nameInvalidStart": "Yer işareti adı bir harfle başlar.",
       "nameInvalidCharacter": "Yalnızca harf, rakam ve alt çizgi kullanın.",
       "nameExists": "Bu adla bir yer işareti var. Ekle, onu seçime taşır.",
-      "refused": "Yer işareti değiştirilemedi."
+      "refused": "Yer işareti değiştirilemedi.",
+      "duplicates": "{count, plural, other {# başka yer bu adı kullanıyor.}} Bağlantılar ve Git ilkini kullanır.",
+      "keepFirst": "İlkini koru"
     }
   },
   "comments": {

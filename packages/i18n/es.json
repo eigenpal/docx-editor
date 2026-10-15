@@ -428,7 +428,9 @@
       "nameInvalidStart": "Un nombre de marcador empieza por una letra.",
       "nameInvalidCharacter": "Use solo letras, dígitos y guiones bajos.",
       "nameExists": "Ya existe un marcador con este nombre. Agregar lo mueve a la selección.",
-      "refused": "No se pudo cambiar el marcador."
+      "refused": "No se pudo cambiar el marcador.",
+      "duplicates": "{count, plural, one {# lugar más usa este nombre.} other {# lugares más usan este nombre.}} Los vínculos e Ir a usan el primero.",
+      "keepFirst": "Conservar el primero"
     }
   },
   "comments": {

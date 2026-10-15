@@ -60,6 +60,8 @@ export type {
   FontUrlSource,
   HyperlinkActivation,
   HyperlinkChromeHandlers,
+  BookmarkMarkInfo,
+  BookmarkMarkOptions,
   LockedControlNavigation,
   SurfaceHyperlink,
 } from './editor/index.ts';

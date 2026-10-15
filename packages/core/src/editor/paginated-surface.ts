@@ -1123,7 +1123,7 @@ export function mountPaginatedSurface(
     setSelection: (next) => setSelection(next),
     beforeChange: flushPendingInputAndLayout,
     repaint: () => render(false),
-    initiallyShown: options.showBookmarks === true,
+    options,
   });
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.

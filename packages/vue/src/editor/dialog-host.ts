@@ -127,13 +127,25 @@ export const DialogHost = defineComponent({
       },
       { immediate: true }
     );
-    // Ctrl/Cmd+Shift+F5 opens the Bookmark dialog where this host mounts dialogs.
+    // The `bookmark` popup answers the editor's `openBookmarkDialog` request, which the Insert
+    // menu row, Ctrl/Cmd+Shift+F5 and host code all send. A `false` popup registers nothing,
+    // so the command reports itself disabled instead of doing nothing.
     watch(
-      [editor, host.target],
-      ([value, target], _old, onCleanup) => {
-        if (!value || !target) return;
-        // `open` already refuses a kind whose popup is `false`.
-        onCleanup(value.setBookmarkChrome({ onRequest: () => host.open('bookmark') }));
+      [editor, host.target, () => p.popups?.bookmark === false],
+      ([value, target, disabled], _old, onCleanup) => {
+        if (!value || !target || disabled) return;
+        onCleanup(
+          value.setBookmarkChrome({
+            onRequest: () => {
+              // A menu row closes as the dialog opens; its menu's trigger outlives it.
+              const focused = hostDocumentOf(target).activeElement;
+              const trigger = focused
+                ?.closest('[data-menu]')
+                ?.querySelector<HTMLElement>('.docx-menubar__trigger');
+              host.open('bookmark', trigger ?? null);
+            },
+          })
+        );
       },
       { immediate: true }
     );

@@ -103,6 +103,21 @@ export function bookmarkDialogRows(bookmarks: readonly BookmarkSummary[], option
 }): readonly BookmarkSummary[];
 
 // @public
+export interface BookmarkMarkInfo {
+    readonly edge: 'start' | 'end' | 'point';
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly story: BookmarkStory;
+}
+
+// @public
+export interface BookmarkMarkOptions {
+    readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+    readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+    readonly print?: boolean;
+}
+
+// @public
 export type BookmarkSortOrder = 'name' | 'location';
 
 // @public
@@ -1439,6 +1454,7 @@ export interface DocxEditorInstance extends Editor {
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
     setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+    setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
@@ -2485,6 +2501,10 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
+    readonly bookmarkMarks?: {
+        readonly current: () => BookmarkMarkOptions;
+        readonly onChange: (repaint: (() => void) | null) => void;
+    };
     readonly collaborationModel?: CollaborationModuleContribution;
     readonly contentLockPolicy?: ContentLockPolicy;
     readonly defaultFontFamily?: string;

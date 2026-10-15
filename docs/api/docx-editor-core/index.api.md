@@ -54,11 +54,27 @@ export function blankDocumentBytes(): Uint8Array;
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export interface BookmarkMarkInfo {
+    readonly edge: 'start' | 'end' | 'point';
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly story: BookmarkStory;
+}
+
+// @public
+export interface BookmarkMarkOptions {
+    readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+    readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+    readonly print?: boolean;
+}
+
+// @public
 export type BookmarkStory = 'body' | 'headerFooter' | 'note';
 
 // @public
 export interface BookmarkSummary {
     readonly atSelection: boolean;
+    readonly duplicates: number;
     readonly empty: boolean;
     readonly hidden: boolean;
     readonly name: string;
@@ -1519,6 +1535,7 @@ export interface DocxEditorInstance extends Editor {
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
     setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+    setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
@@ -1763,6 +1780,7 @@ export interface EditorBookmarkCommands {
     insertBookmark: {
         name: string;
     };
+    openBookmarkDialog: Record<never, never>;
     toggleBookmarks: Record<never, never>;
 }
 

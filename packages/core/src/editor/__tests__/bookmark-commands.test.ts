@@ -45,11 +45,13 @@ const SAMPLE =
 describe('bookmark commands', () => {
   test('the query lists every bookmark in document order, hidden ones flagged', () => {
     const { editor } = mount(SAMPLE);
-    expect(editor.query({ type: 'bookmarks' })).toEqual([
-      { name: 'Zeta', hidden: false, story: 'body', order: 0, empty: false, atSelection: false },
-      { name: '_Toc1', hidden: true, story: 'body', order: 1, empty: false, atSelection: false },
-      { name: 'alpha', hidden: false, story: 'body', order: 2, empty: true, atSelection: false },
-    ]);
+    expect(editor.query({ type: 'bookmarks' })).toEqual(
+      [
+        { name: 'Zeta', hidden: false, story: 'body', order: 0, empty: false, atSelection: false },
+        { name: '_Toc1', hidden: true, story: 'body', order: 1, empty: false, atSelection: false },
+        { name: 'alpha', hidden: false, story: 'body', order: 2, empty: true, atSelection: false },
+      ].map((bookmark) => ({ ...bookmark, duplicates: 0 }))
+    );
   });
 
   test('the query flags the bookmarks the selection starts in', () => {
@@ -239,10 +241,11 @@ describe('show bookmarks', () => {
 });
 
 describe('bookmark chrome', () => {
-  test('slots map to the dialog probe and the view toggle', () => {
+  test('slots map to the dialog command and the view toggle', () => {
     expect(commandForSlot('review.bookmarks')).toEqual({ type: 'toggleBookmarks' });
     expect(chromeSlotIsToggle('review.bookmarks')).toBe(true);
-    expect(chromeProbeForSlot('insert.bookmark')).toEqual({ type: 'toggleBookmarks' });
+    expect(commandForSlot('insert.bookmark')).toEqual({ type: 'openBookmarkDialog' });
+    expect(chromeProbeForSlot('insert.bookmark')).toBeNull();
     expect(chromeMenuSlots()).toContain('insert.bookmark');
     expect(chromeMenuSlots()).toContain('review.bookmarks');
   });

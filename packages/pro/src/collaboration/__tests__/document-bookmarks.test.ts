@@ -183,6 +183,8 @@ describe('concurrent edits around a bookmark converge', () => {
     // every replica, so they agree on which bookmark the name means.
     expect(names(alice)).toEqual(['Same']);
     expect(names(bob)).toEqual(['Same']);
+    expect(bookmarks(alice)[0]!.copies).toBe(2);
+    expect(bookmarks(bob)[0]!.copies).toBe(2);
     // The next write of the name settles it: a delete removes every pair it names.
     applyAs(bob, [{ op: 'deleteBookmark', name: 'same' }]);
     peers.expectConverged(alice, bob);

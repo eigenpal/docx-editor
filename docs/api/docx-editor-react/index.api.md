@@ -573,6 +573,7 @@ export const DocxEditorBookmarkDialog: typeof BookmarkDialogRoot & {
     Header: (props: DialogPartProps & {
         name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
     }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    KeepFirst: PartComponent;
     Title: (props: DialogPartProps & {
         name?: "list" | "name" | "showHidden" | "sortBy" | undefined;
     }) => string | number | bigint | boolean | react.JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | Iterable<ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
@@ -2971,8 +2972,10 @@ export interface UseBookmarkDialogReturn extends UseDialogReturn<BookmarkDialogF
     readonly canDelete: boolean;
     // (undocumented)
     readonly canGoTo: boolean;
+    readonly duplicates: number;
     // (undocumented)
     goTo(): void;
+    keepFirst(): void;
     // (undocumented)
     remove(): void;
     readonly rows: readonly BookmarkSummary[];

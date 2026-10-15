@@ -392,7 +392,9 @@
       "nameInvalidStart": "Un nom de signet commence par une lettre.",
       "nameInvalidCharacter": "Utilisez uniquement des lettres, des chiffres et des traits de soulignement.",
       "nameExists": "Un signet porte déjà ce nom. Ajouter le déplace vers la sélection.",
-      "refused": "Le signet n’a pas pu être modifié."
+      "refused": "Le signet n’a pas pu être modifié.",
+      "duplicates": "{count, plural, one {# autre emplacement utilise ce nom.} other {# autres emplacements utilisent ce nom.}} Les liens et Atteindre utilisent le premier.",
+      "keepFirst": "Garder le premier"
     }
   },
   "comments": {

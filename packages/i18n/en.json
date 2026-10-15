@@ -428,7 +428,9 @@
       "nameInvalidStart": "A bookmark name starts with a letter.",
       "nameInvalidCharacter": "Use only letters, digits, and underscores.",
       "nameExists": "A bookmark with this name exists. Add moves it to the selection.",
-      "refused": "The bookmark could not be changed."
+      "refused": "The bookmark could not be changed.",
+      "duplicates": "{count, plural, one {# other place uses this name.} other {# other places use this name.}} Links and Go To use the first.",
+      "keepFirst": "Keep first"
     }
   },
   "comments": {

@@ -16,9 +16,12 @@ import type { BookmarkSummary } from '../contracts/editor-bookmarks.ts';
  */
 export type BookmarkSortOrder = 'name' | 'location';
 
+/** Without case, and digits by value, so `section2` comes before `section10`. */
+const NAME_ORDER = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 /**
  * The bookmarks the dialog lists. Hidden bookmarks show only when asked for. Names sort
- * without case, and location sorts by document order.
+ * without case and with numbers in order, and location sorts by document order.
  *
  * @public
  */
@@ -29,10 +32,7 @@ export function bookmarkDialogRows(
   const rows = bookmarks.filter((bookmark) => options.showHidden || !bookmark.hidden);
   return options.sortBy === 'location'
     ? [...rows].sort((a, b) => a.order - b.order)
-    : [...rows].sort(
-        (a, b) =>
-          bookmarkNameKey(a.name).localeCompare(bookmarkNameKey(b.name)) || a.order - b.order
-      );
+    : [...rows].sort((a, b) => NAME_ORDER.compare(a.name, b.name) || a.order - b.order);
 }
 
 /**

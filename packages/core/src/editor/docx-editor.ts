@@ -12,6 +12,7 @@ import { updateSurfaceMeasurement } from './surface-measurement.ts';
 import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import { createEditorPopupChrome } from './text-form-field-chrome.ts';
+import { bookmarkDialogResult } from './docx-editor-bookmarks.ts';
 import {
   createReviewCommands,
   dateOfReviewItem as dateOfItem,
@@ -1876,6 +1877,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
       if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.open();
+      if (command.type === 'openBookmarkDialog')
+        return bookmarkDialogResult(popupChrome, destroyed, true);
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       historyGroups.note(command);
@@ -1976,6 +1979,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           reason: 'An external document refresh is in progress.',
         };
       if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.canOpen();
+      if (command.type === 'openBookmarkDialog')
+        return bookmarkDialogResult(popupChrome, destroyed, false);
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       if (command.type === 'insertImage' || command.type === 'replaceImage') {

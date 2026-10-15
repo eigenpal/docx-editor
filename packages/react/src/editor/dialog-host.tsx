@@ -103,19 +103,21 @@ export function DialogProvider({
     setSession(null);
     setMarkupSession(null);
   }, [editor, generation]);
-  // Ctrl/Cmd+Shift+F5 opens the Bookmark dialog where this host mounts dialogs.
+  // The `bookmark` popup answers the editor's `openBookmarkDialog` request, which the Insert
+  // menu row, Ctrl/Cmd+Shift+F5 and host code all send. A `false` popup registers nothing, so
+  // the command reports itself disabled instead of doing nothing.
+  const bookmarkDisabled = popups?.bookmark === false;
   useEffect(() => {
-    if (!editor || !container) return;
+    if (!editor || !container || bookmarkDisabled) return;
     return editor.setBookmarkChrome({
       onRequest() {
-        if (popupsRef.current?.bookmark === false) return;
         sessionRef.current?.cancel();
         markupSessionRef.current?.cancel();
-        opener.current = container.ownerDocument.activeElement as HTMLElement | null;
+        opener.current = returnFocusTarget(container.ownerDocument.activeElement);
         setActive('bookmark');
       },
     });
-  }, [editor, container]);
+  }, [editor, container, bookmarkDisabled]);
   useEffect(() => {
     if (popups?.revisionMarkup === false) markupSessionRef.current?.cancel();
     if (popups?.textFormField === false) sessionRef.current?.cancel();
@@ -183,6 +185,16 @@ export function DialogProvider({
     </Context.Provider>
   );
 }
+/**
+ * Where focus returns when a dialog a request opened closes: the focused element, or for a
+ * row of a menu that closes as the dialog opens, that menu's trigger, which outlives it.
+ */
+function returnFocusTarget(focused: Element | null): HTMLElement | null {
+  const menu = focused?.closest('[data-menu]');
+  const trigger = menu?.querySelector<HTMLElement>(':scope > [role="menuitem"]');
+  return trigger ?? (focused as HTMLElement | null);
+}
+
 /** The stable mount belongs to Content, outside the engine-owned DOM. */
 export function DialogMount() {
   const host = useDialogHost();

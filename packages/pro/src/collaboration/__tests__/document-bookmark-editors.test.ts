@@ -102,3 +102,46 @@ test('bookmark commands converge across editors, undo, and survive reopen', asyn
   editors.push(reopened);
   expect(names(reopened)).toEqual(names(alice));
 });
+
+test('copies from an offline merge show on both editors, and Keep first converges', async () => {
+  const peers = await harness.pair(zipDocument(DOCUMENT));
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    return editor;
+  }) as [Editor, Editor];
+  const converged = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    const left = alice.surface!.session.currentPackage();
+    const right = bob.surface!.session.currentPackage();
+    expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+  };
+  const summary = (editor: Editor) =>
+    editor.query({ type: 'bookmarks' }).map(({ name, duplicates }) => ({ name, duplicates }));
+
+  peers.pause();
+  select(alice, 0, 6, 11);
+  expect(alice.exec({ type: 'insertBookmark', name: 'Same' }).ok).toBe(true);
+  select(bob, 1, 0, 6);
+  expect(bob.exec({ type: 'insertBookmark', name: 'SAME' }).ok).toBe(true);
+  peers.resume();
+  converged();
+  // Both pairs arrive; both editors list one row, the first, and count the copy.
+  expect(summary(alice)).toEqual([{ name: 'Same', duplicates: 1 }]);
+  expect(summary(bob)).toEqual([{ name: 'Same', duplicates: 1 }]);
+
+  // Keep first, as the dialog does it: go to the first, add the name there again.
+  expect(bob.exec({ type: 'goToBookmark', name: 'same' }).ok).toBe(true);
+  expect(bob.exec({ type: 'insertBookmark', name: 'Same' }).ok).toBe(true);
+  converged();
+  expect(summary(alice)).toEqual([{ name: 'Same', duplicates: 0 }]);
+  expect(alice.exec({ type: 'goToBookmark', name: 'Same' }).ok).toBe(true);
+  const selection = alice.surface!.state().selection;
+  expect([selection.anchor.offset, selection.head.offset]).toEqual([6, 11]);
+});

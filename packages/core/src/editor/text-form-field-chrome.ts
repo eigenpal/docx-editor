@@ -3,6 +3,7 @@ import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 import type {
   BookmarkChromeHandlers,
+  BookmarkMarkOptions,
   EquationChromeHandlers,
   HyperlinkChromeHandlers,
 } from './docx-editor-types.ts';
@@ -82,6 +83,28 @@ export function createEditorPopupChrome() {
     'buildingBlockGallery',
   ]);
   const invalid = createSessionChrome<InvalidTextFormFieldSession>();
+  const marks = createChromeHandlerStack<BookmarkMarkOptions>({});
+  // The surface that paints the marks now. One slot: a remount replaces it.
+  let repaintMarks: (() => void) | null = null;
+  const bookmarkMarks = {
+    current: marks.current,
+    onChange: (repaint: (() => void) | null) => {
+      repaintMarks = repaint;
+    },
+  };
+  const setBookmarkMarks = (options: BookmarkMarkOptions): (() => void) => {
+    const dispose = marks.push(options);
+    repaintMarks?.();
+    return () => {
+      dispose();
+      repaintMarks?.();
+    };
+  };
+  const openBookmarkDialog = (): boolean => {
+    const request = bookmark.current().onRequest;
+    request?.();
+    return request !== undefined;
+  };
   return {
     surfaceOptions: {
       onRequestTextFormField: text.request,
@@ -94,11 +117,13 @@ export function createEditorPopupChrome() {
       onEquationPopover: (
         activation: Parameters<NonNullable<EquationChromeHandlers['onPopover']>>[0]
       ) => equation.current().onPopover?.(activation),
-      onRequestBookmark: () => {
-        const request = bookmark.current().onRequest;
-        request?.();
-        return request !== undefined;
-      },
+      onRequestBookmark: () => openBookmarkDialog(),
+      bookmarkMarks,
+    },
+    /** The Bookmark dialog request: open it through the host's chrome, if a host shows one. */
+    bookmarkDialog: {
+      canOpen: () => bookmark.current().onRequest !== undefined,
+      open: openBookmarkDialog,
     },
     setters: {
       setTextFormFieldChrome: text.register,
@@ -107,6 +132,7 @@ export function createEditorPopupChrome() {
       setHyperlinkChrome: hyperlink.push,
       setEquationChrome: equation.push,
       setBookmarkChrome: bookmark.push,
+      setBookmarkMarks,
     },
   };
 }

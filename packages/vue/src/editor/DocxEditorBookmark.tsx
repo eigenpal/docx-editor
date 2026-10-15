@@ -48,8 +48,15 @@ export interface UseBookmarkDialogReturn extends UseDialogReturn<BookmarkDialogF
   /** Whether Delete and Go To can act on the typed name. */
   readonly canDelete: ComputedRef<boolean>;
   readonly canGoTo: ComputedRef<boolean>;
+  /**
+   * How many other places carry the typed bookmark's name, which collaborators adding one name
+   * offline can leave. 0 for a name with one bookmark, or no bookmark.
+   */
+  readonly duplicates: ComputedRef<number>;
   remove(): void;
   goTo(): void;
+  /** Keep the first bookmark with the typed name and remove its copies. */
+  keepFirst(): void;
 }
 
 const composition = createDialogComposition<
@@ -118,14 +125,17 @@ const OpenBookmarkDialog = defineComponent({
         ? nameState.value.problem
         : null
     );
+    const duplicates = computed(() => nameState.value.existing?.duplicates ?? 0);
     const message = computed(() =>
       refused.value
         ? t('dialogs.bookmark.refused')
         : problem.value
           ? t(PROBLEM_KEYS[problem.value])
-          : nameState.value.existing && nameState.value.canAdd
-            ? t('dialogs.bookmark.nameExists')
-            : null
+          : duplicates.value > 0
+            ? t('dialogs.bookmark.duplicates', { count: duplicates.value })
+            : nameState.value.existing && nameState.value.canAdd
+              ? t('dialogs.bookmark.nameExists')
+              : null
     );
 
     const handleAdd = () => {
@@ -148,6 +158,14 @@ const OpenBookmarkDialog = defineComponent({
       const result = goTo(existing.name);
       refused.value = !result.ok;
       if (result.ok) visited.value = true;
+    };
+
+    // Adding the name again at the first bookmark keeps it and removes every copy, in one step.
+    const handleKeepFirst = () => {
+      const existing = nameState.value.existing;
+      if (!existing || !isWritable.value) return;
+      const result = goTo(existing.name).ok ? insert(existing.name) : { ok: false };
+      refused.value = !result.ok;
     };
 
     const setValue: UseBookmarkDialogReturn['setValue'] = (field, value) => {
@@ -176,8 +194,10 @@ const OpenBookmarkDialog = defineComponent({
       rows,
       canDelete: computed(() => nameState.value.canDelete),
       canGoTo: computed(() => nameState.value.canGoTo),
+      duplicates,
       remove: handleRemove,
       goTo: handleGoTo,
+      keepFirst: handleKeepFirst,
     };
     const renderParts = composition.provideContext(context);
 
@@ -267,11 +287,31 @@ const OpenBookmarkDialog = defineComponent({
                 {t('dialogs.bookmark.showHidden')}
               </label>
             </div>
+            {/* Its own row, so a long message never squeezes the buttons. Problems read as
+                errors; a note about an existing name or its copies reads as a hint. */}
+            <div class="docx-dialog__row docx-bookmark-dialog__status">
+              <span
+                id={messageId}
+                data-docx-part="error"
+                class={problem.value || refused.value ? 'docx-dialog__error' : 'docx-dialog__hint'}
+                role="status"
+              >
+                {message.value}
+              </span>
+              {duplicates.value > 0 ? (
+                <button
+                  data-docx-part="keepfirst"
+                  class="docx-dialog__button"
+                  type="button"
+                  disabled={!isWritable.value}
+                  onClick={handleKeepFirst}
+                >
+                  {t('dialogs.bookmark.keepFirst')}
+                </button>
+              ) : null}
+            </div>
           </div>
           <div data-docx-part="footer" class="docx-dialog__footer">
-            <span id={messageId} data-docx-part="error" class="docx-dialog__error" role="status">
-              {message.value}
-            </span>
             <button
               data-docx-part="apply"
               class="docx-dialog__button docx-dialog__apply"
@@ -359,4 +399,6 @@ export const DocxEditorBookmarkDialog = Object.assign(BookmarkDialogImpl, {
   ...composition.parts,
   Delete: composition.part('Delete'),
   GoTo: composition.part('Goto'),
+  /** Shown while the typed name has copies: keep the first, remove the rest. */
+  KeepFirst: composition.part('KeepFirst'),
 });

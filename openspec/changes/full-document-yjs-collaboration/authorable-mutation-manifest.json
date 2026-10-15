@@ -13,8 +13,8 @@
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
     "chromeSlots": 78,
-    "chromeCommandWired": 44,
-    "chromeProbe": 8,
+    "chromeCommandWired": 45,
+    "chromeProbe": 7,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 13,
     "insertableContentControlTypes": 5,
@@ -1409,7 +1409,8 @@
       "insert.pageBreak",
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
-      "insert.toc"
+      "insert.toc",
+      "insert.bookmark"
     ],
     "probe": [
       "text.link",
@@ -1418,7 +1419,6 @@
       "table.insert",
       "paragraph.dialog",
       "file.pageSetup",
-      "insert.bookmark",
       "insert.watermark"
     ],
     "unwiredCommandShaped": [

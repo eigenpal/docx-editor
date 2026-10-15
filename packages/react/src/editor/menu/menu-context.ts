@@ -54,8 +54,6 @@ export interface MenuContextValue {
   readonly onParagraphDialog: (() => void) | undefined;
   /** Open the Watermark dialog. Undefined before the editor is ready. */
   readonly onWatermarkDialog?: (() => void) | undefined;
-  /** Open the Bookmark dialog. Undefined before the editor is ready. */
-  readonly onBookmarkDialog?: (() => void) | undefined;
   /** Replaces the packaged Help row's handler. */
   readonly onReportIssue: (() => void) | undefined;
   /** `false` drops the packaged Help row, and Help with it. */
@@ -77,7 +75,6 @@ export const MenuContext = createContext<MenuContextValue>({
   onPageSetup: undefined,
   onParagraphDialog: undefined,
   onWatermarkDialog: undefined,
-  onBookmarkDialog: undefined,
   onReportIssue: undefined,
   reportIssue: undefined,
 });

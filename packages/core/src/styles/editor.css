@@ -185,8 +185,11 @@
      part of the revision ramp: a field is not a pending decision. Kept light enough that a
      contents page dense with them still reads as text. Never printed. */
   --doc-field-shading: rgba(0, 0, 0, 0.09);
-  /* Bracket marks at bookmarks when "Show bookmarks" is on. A neutral grey, never printed. */
+  /* Bracket marks at bookmarks when "Show bookmarks" is on. A neutral grey, printed only when
+     the host opts in. The width is the stroke; the size is the bracket arm at 100% zoom. */
   --doc-bookmark-mark: #808080;
+  --doc-bookmark-mark-width: 1px;
+  --doc-bookmark-mark-size: 3px;
   /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
      the deletion colour — grey says "the appearance is the decision". The wash plus a faint
      dotted rule make the range findable (it is the hover balloon's target); both are quiet
@@ -891,29 +894,55 @@ a.docx-hyperlink:focus-visible {
 
 /* Bookmark marks: a bracket at a bookmark's start and end, an I-beam at a point bookmark.
  * Painted in an overlay sheet beside the pages from layout geometry, so they never take part
- * in selection, hit testing or the caret, and they are never part of an export or a print.
- * The line runs the height of the text line; the serifs are the bracket's arms. */
+ * in selection, hit testing or the caret, and they are never part of an export. The painter
+ * sets the position and the line height; everything else is here, so a host restyles a mark
+ * with the `--doc-bookmark-mark*` tokens, or with `[data-bookmark-edge]` and
+ * `[data-bookmark-name]` selectors. `--doc-bookmark-point-glyph` replaces the I-beam's stem. */
 .docx-bookmark-mark {
   box-sizing: border-box;
+  pointer-events: none;
+  width: max(
+    var(--doc-bookmark-mark-size),
+    calc(var(--doc-bookmark-mark-size) * var(--docx-bookmark-scale, 1))
+  );
   border: 0 solid var(--doc-bookmark-mark);
 }
 
 .docx-bookmark-mark--start {
-  border-width: 1px 0 1px 1px;
+  border-width: var(--doc-bookmark-mark-width) 0 var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width);
 }
 
 .docx-bookmark-mark--end {
-  border-width: 1px 1px 1px 0;
+  border-width: var(--doc-bookmark-mark-width) var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width) 0;
+  transform: translateX(-100%);
 }
 
 .docx-bookmark-mark--point {
-  border-width: 1px 0;
-  background: linear-gradient(var(--doc-bookmark-mark), var(--doc-bookmark-mark)) center / 1px 100%
-    no-repeat;
+  border-width: var(--doc-bookmark-mark-width) 0;
+  transform: translateX(-50%);
+  background: var(
+    --doc-bookmark-point-glyph,
+    linear-gradient(var(--doc-bookmark-mark), var(--doc-bookmark-mark)) center /
+      var(--doc-bookmark-mark-width) 100% no-repeat
+  );
+}
+
+.docx-bookmark-mark--start.docx-bookmark-mark--rtl {
+  border-width: var(--doc-bookmark-mark-width) var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width) 0;
+  transform: translateX(-100%);
+}
+
+.docx-bookmark-mark--end.docx-bookmark-mark--rtl {
+  border-width: var(--doc-bookmark-mark-width) 0 var(--doc-bookmark-mark-width)
+    var(--doc-bookmark-mark-width);
+  transform: none;
 }
 
 @media print {
-  .docx-bookmark-overlay {
+  .docx-bookmark-overlay:not(.docx-bookmark-overlay--print) {
     display: none;
   }
 }
@@ -7955,6 +7984,18 @@ a.docx-hyperlink:focus-visible {
   height: auto;
   min-height: 10em;
   padding: 2px;
+}
+.docx-editor.docx-dialog:where([data-docx-dialog='bookmark']) .docx-dialog__label,
+.docx-editor .docx-dialog:where([data-docx-dialog='bookmark']) .docx-dialog__label {
+  width: 120px;
+}
+/* One line kept free, so the dialog does not jump when a note appears. */
+.docx-editor .docx-bookmark-dialog__status {
+  min-height: 1.4em;
+  justify-content: space-between;
+}
+.docx-editor .docx-bookmark-dialog__status > .docx-dialog__button {
+  flex: 0 0 auto;
 }
 .docx-editor .docx-dialog__input:where(:hover),
 .docx-editor .docx-dialog__select:where(:hover),

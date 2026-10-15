@@ -237,7 +237,12 @@ export {
 } from './docx-editor.ts';
 // `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
 // has to export the answer too.
-export type { AttachOptions, FontMeasurementState } from './docx-editor-types.ts';
+export type {
+  AttachOptions,
+  BookmarkMarkInfo,
+  BookmarkMarkOptions,
+  FontMeasurementState,
+} from './docx-editor-types.ts';
 // `DocxEditorConfig.fieldResults` takes it.
 export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 // `DocxEditorConfig.contentLockPolicy` takes it.

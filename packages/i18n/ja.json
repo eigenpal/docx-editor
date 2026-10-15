@@ -428,7 +428,9 @@
       "nameInvalidStart": "ブックマーク名は文字で始まります。",
       "nameInvalidCharacter": "文字、数字、アンダースコアのみを使用してください。",
       "nameExists": "この名前のブックマークは既にあります。追加すると選択範囲に移動します。",
-      "refused": "ブックマークを変更できませんでした。"
+      "refused": "ブックマークを変更できませんでした。",
+      "duplicates": "{count, plural, other {ほかに # か所がこの名前を使用しています。}}リンクとジャンプは最初のものを使用します。",
+      "keepFirst": "最初のものを残す"
     }
   },
   "comments": {

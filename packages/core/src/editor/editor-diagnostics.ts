@@ -69,6 +69,7 @@ import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts'
 /** Commands the facade answers itself, before the command classifier sees them. */
 const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'insertImage',
+  'openBookmarkDialog',
   'openRevisionMarkupDialog',
   'proposeDeletion',
   'proposeInsertion',

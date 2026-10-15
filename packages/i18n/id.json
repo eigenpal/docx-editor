@@ -392,7 +392,9 @@
       "nameInvalidStart": "Nama penanda dimulai dengan huruf.",
       "nameInvalidCharacter": "Gunakan hanya huruf, angka, dan garis bawah.",
       "nameExists": "Penanda dengan nama ini sudah ada. Tambah memindahkannya ke pilihan.",
-      "refused": "Penanda tidak dapat diubah."
+      "refused": "Penanda tidak dapat diubah.",
+      "duplicates": "{count, plural, other {# tempat lain memakai nama ini.}} Tautan dan Buka memakai yang pertama.",
+      "keepFirst": "Pertahankan yang pertama"
     }
   },
   "comments": {

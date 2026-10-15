@@ -392,7 +392,9 @@
       "nameInvalidStart": "书签名以字母开头。",
       "nameInvalidCharacter": "只能使用字母、数字和下划线。",
       "nameExists": "已存在同名书签。添加会将其移到所选内容。",
-      "refused": "无法更改书签。"
+      "refused": "无法更改书签。",
+      "duplicates": "{count, plural, other {另有 # 处使用此名称。}}链接和“定位”使用第一个。",
+      "keepFirst": "保留第一个"
     }
   },
   "comments": {

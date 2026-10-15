@@ -2386,6 +2386,7 @@ export const DocxEditorBookmarkDialog: {
     Footer: vue.DefineComponent<DialogPartProps>;
     GoTo: vue.DefineComponent<DialogPartProps>;
     Header: vue.DefineComponent<DialogPartProps>;
+    KeepFirst: vue.DefineComponent<DialogPartProps>;
     Reset: vue.DefineComponent<DialogPartProps>;
     Title: vue.DefineComponent<DialogPartProps>;
 };
@@ -6984,8 +6985,10 @@ export interface UseBookmarkDialogReturn extends UseDialogReturn<BookmarkDialogF
     readonly canDelete: ComputedRef<boolean>;
     // (undocumented)
     readonly canGoTo: ComputedRef<boolean>;
+    readonly duplicates: ComputedRef<number>;
     // (undocumented)
     goTo(): void;
+    keepFirst(): void;
     // (undocumented)
     remove(): void;
     readonly rows: ComputedRef<readonly BookmarkSummary[]>;

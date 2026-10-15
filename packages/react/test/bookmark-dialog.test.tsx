@@ -17,6 +17,7 @@ import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorMenu } from '../src/editor/menu/index.ts';
 import { DocxEditorBookmarkDialog } from '../src/editor/DocxEditorBookmark.tsx';
+import type { DocxEditorPopups } from '../src/editor/popup-config.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -47,11 +48,15 @@ const SOURCE = docx(
     '<w:bookmarkEnd w:id="2"/><w:bookmarkStart w:id="3" w:name="alpha"/><w:bookmarkEnd w:id="3"/></w:p>'
 );
 
-function mount(children: ReactNode) {
+function mount(
+  children: ReactNode,
+  options: { popups?: DocxEditorPopups; document?: Uint8Array } = {}
+) {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
-      document={SOURCE}
+      document={options.document ?? SOURCE}
+      {...(options.popups ? { popups: options.popups } : {})}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -185,5 +190,52 @@ describe('DocxEditor.BookmarkDialog', () => {
     expect(view.getByRole('dialog', { name: 'Bookmark' })).toBeTruthy();
     // Opened inside a bookmark, the dialog names it.
     expect((view.getByLabelText('Bookmark name') as HTMLInputElement).value).toBe('Zeta');
+  });
+  test('the bookmark popup is replaceable, can be turned off, and opens by command', async () => {
+    const custom = mount(<DocxEditorMenu />, {
+      popups: {
+        bookmark: ({ onClose }) => <div role="dialog" aria-label="Mine" onClick={onClose} />,
+      },
+    });
+    await settle();
+    await act(async () => {
+      expect(custom.editor().exec({ type: 'openBookmarkDialog' }).ok).toBe(true);
+    });
+    expect(custom.view.getByRole('dialog', { name: 'Mine' })).toBeTruthy();
+    expect(custom.view.queryByRole('dialog', { name: 'Bookmark' })).toBeNull();
+    cleanup();
+
+    const off = mount(<DocxEditorMenu />, { popups: { bookmark: false } });
+    await settle();
+    expect(off.editor().can({ type: 'openBookmarkDialog' })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
+    const trigger = [
+      ...off.view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger'),
+    ].find((button) => button.textContent === 'Insert')!;
+    await click(trigger);
+    const row = off.view.container.querySelector<HTMLElement>('[data-slot="insert.bookmark"]')!;
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  test('a name with copies says so, and Keep first removes them', async () => {
+    const copies = docx(
+      '<w:p><w:bookmarkStart w:id="1" w:name="Same"/><w:r><w:t>one</w:t></w:r>' +
+        '<w:bookmarkEnd w:id="1"/><w:r><w:t xml:space="preserve"> </w:t></w:r>' +
+        '<w:bookmarkStart w:id="2" w:name="SAME"/><w:r><w:t>two</w:t></w:r>' +
+        '<w:bookmarkEnd w:id="2"/></w:p>'
+    );
+    const { view, editor } = mount(<DocxEditorBookmarkDialog open onClose={() => {}} />, {
+      document: copies,
+    });
+    await settle();
+    await type(view.getByLabelText('Bookmarks'), 'Same');
+    expect(
+      view.getByText('1 other place uses this name. Links and Go To use the first.')
+    ).toBeTruthy();
+    await click(view.getByText('Keep first'));
+    expect(editor().query({ type: 'bookmarks' })).toMatchObject([{ name: 'Same', duplicates: 0 }]);
+    expect(view.queryByText('Keep first')).toBeNull();
   });
 });

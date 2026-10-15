@@ -392,7 +392,9 @@
       "nameInvalidStart": "Nazwa zakładki zaczyna się od litery.",
       "nameInvalidCharacter": "Używaj tylko liter, cyfr i podkreśleń.",
       "nameExists": "Zakładka o tej nazwie już istnieje. Dodaj przenosi ją do zaznaczenia.",
-      "refused": "Nie udało się zmienić zakładki."
+      "refused": "Nie udało się zmienić zakładki.",
+      "duplicates": "{count, plural, one {# inne miejsce używa tej nazwy.} few {# inne miejsca używają tej nazwy.} other {# innych miejsc używa tej nazwy.}} Linki i Przejdź do używają pierwszego.",
+      "keepFirst": "Zachowaj pierwszą"
     }
   },
   "comments": {

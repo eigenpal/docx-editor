@@ -7,7 +7,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { h, nextTick } from 'vue';
-import { strToU8, zipSync } from 'fflate';
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorMenu } from '../src/editor/menu';
 import { DocxEditorBookmarkDialog } from '../src/editor/DocxEditorBookmark';
@@ -181,6 +181,80 @@ describe('DocxEditor.BookmarkDialog (Vue)', () => {
     expect(dialog()).not.toBeNull();
     // Opened inside a bookmark, the dialog names it.
     expect(nameInput().value).toBe('Zeta');
+    view.unmount();
+  });
+  test('the bookmark popup is replaceable, can be turned off, and opens by command', async () => {
+    const mine = mountEditorTree(
+      () => h(DocxEditorMenu),
+      SOURCE,
+      () => [],
+      undefined,
+      {
+        popups: { bookmark: () => h('div', { role: 'dialog', 'aria-label': 'Mine' }) },
+      }
+    );
+    await flush();
+    expect(mine.editor().exec({ type: 'openBookmarkDialog' }).ok).toBe(true);
+    await flush();
+    expect(document.querySelector('[aria-label="Mine"]')).not.toBeNull();
+    expect(dialog()).toBeNull();
+    mine.unmount();
+
+    const off = mountEditorTree(
+      () => h(DocxEditorMenu),
+      SOURCE,
+      () => [],
+      undefined,
+      {
+        popups: { bookmark: false },
+      }
+    );
+    await flush();
+    expect(off.editor().can({ type: 'openBookmarkDialog' })).toMatchObject({
+      ok: false,
+      code: 'unsupported',
+    });
+    const trigger = off.container.querySelector(
+      '[data-menu="insert"] .docx-menubar__trigger'
+    ) as HTMLButtonElement;
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    const row = off.container.querySelector('[data-slot="insert.bookmark"]') as HTMLElement;
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    off.unmount();
+  });
+
+  test('a name with copies says so, and Keep first removes them', async () => {
+    const copies = zipSync({
+      ...Object.fromEntries(
+        Object.entries(unzipSync(SOURCE)).filter(([path]) => path !== 'word/document.xml')
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>` +
+          '<w:p><w:bookmarkStart w:id="1" w:name="Same"/><w:r><w:t>one</w:t></w:r>' +
+          '<w:bookmarkEnd w:id="1"/><w:r><w:t xml:space="preserve"> </w:t></w:r>' +
+          '<w:bookmarkStart w:id="2" w:name="SAME"/><w:r><w:t>two</w:t></w:r>' +
+          '<w:bookmarkEnd w:id="2"/></w:p></w:body></w:document>'
+      ),
+    });
+    const view = mountEditorTree(
+      () => h(DocxEditorBookmarkDialog, { open: true, onClose: () => {} }),
+      copies
+    );
+    await flush();
+    await type(list(), 'Same');
+    expect(message()).toBe('1 other place uses this name. Links and Go To use the first.');
+    button('Keep first').click();
+    await flush();
+    expect(view.editor().query({ type: 'bookmarks' })).toMatchObject([
+      { name: 'Same', duplicates: 0 },
+    ]);
+    expect(
+      [...document.querySelectorAll('[data-docx-dialog="bookmark"] button')].some(
+        (node) => node.textContent?.trim() === 'Keep first'
+      )
+    ).toBe(false);
     view.unmount();
   });
 });

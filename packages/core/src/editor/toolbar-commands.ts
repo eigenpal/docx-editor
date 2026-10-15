@@ -66,6 +66,8 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'review.comments': { type: 'toggleReviewPane' },
   'review.paragraphMarks': { type: 'toggleParagraphMarks' },
   'review.bookmarks': { type: 'toggleBookmarks' },
+  // Opens the host's Bookmark dialog, the `bookmark` popup; disabled while none is registered.
+  'insert.bookmark': { type: 'openBookmarkDialog' },
   'review.protectDocument': { type: 'toggleDocumentProtection' },
   'review.simpleMarkup': { type: 'setReviewDisplayMode', mode: 'simple-markup' },
   'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },
@@ -168,10 +170,6 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // The Watermark dialog: whether the document's headers can carry a watermark is the
   // engine's question, which text or picture is the dialog's. Never executed.
   'insert.watermark': { type: 'setWatermark', watermark: { text: 'DRAFT' } },
-  // The Bookmark dialog lists, adds, deletes and goes to bookmarks; Go To works in a
-  // read-only document too, so the probe is the view command that is refused only once the
-  // editor is destroyed. The dialog asks `can` for each write. Never executed.
-  'insert.bookmark': { type: 'toggleBookmarks' },
 };
 
 /**
