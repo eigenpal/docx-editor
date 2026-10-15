@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Tracked automation edits that touched another author's pending text revision refused, and a single decision on a nested text revision refused.",
+  "after": "Tracked automation edits nest in another author's pending text insertion or deletion with the existing tree operations, and a single decision resolves a nested text revision's own sites with the existing accept and reject operations.",
+  "reason": "No new operation, field, or format is added. The edits and decisions reuse the deleteText, insertText, acceptRevision, and rejectRevision operations that released clients already apply, so released and new clients can share rooms.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-tracked-foreign-revisions.test.ts"],
+  "changeset": "tracked-edits-in-foreign-revisions",
+  "migration": null
+}

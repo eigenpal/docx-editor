@@ -4,6 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-a
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
 import { DocxEditor } from '../../index.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -47,15 +48,12 @@ for (const text of ['', 'Updated clause']) {
   }
 }
 
-for (const body of [
-  p('First') +
+{
+  const body =
+    p('First') +
     '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4680"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
-    p('Last'),
-  p('First') +
-    '<w:p><w:ins w:id="9" w:author="Other"><w:r><w:t>Pending text</w:t></w:r></w:ins></w:p>' +
-    p('Last'),
-]) {
-  test('tracked whole range refuses table boundaries or existing proposals atomically', async () => {
+    p('Last');
+  test('tracked whole range refuses table boundaries atomically', async () => {
     const runtime = await DocxEditor.createServer(docx(body), { author: 'Writer' });
     try {
       const before = await runtime.save();
@@ -74,6 +72,27 @@ for (const body of [
     }
   });
 }
+
+test('tracked whole range deletion strikes inside another author’s pending text', async () => {
+  const body =
+    p('First') +
+    '<w:p><w:ins w:id="9" w:author="Other"><w:r><w:t>Pending text</w:t></w:r></w:ins></w:p>' +
+    p('Last');
+  const runtime = await DocxEditor.createServer(docx(body), { author: 'Writer' });
+  try {
+    await runtime.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      const range = c.document.body.getRange('Content');
+      await c.sync();
+      range.delete();
+      await c.sync();
+    });
+    const xml = strFromU8(unzipSync(await runtime.save())['word/document.xml']!);
+    expect(xml).toMatch(/<w:ins [^>]*w:author="Other"[^>]*><w:del [^>]*w:author="Writer"/);
+  } finally {
+    runtime.dispose();
+  }
+});
 
 test('continuation never extends another author’s pending text', async () => {
   const runtime = await DocxEditor.createServer(

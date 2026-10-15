@@ -10,6 +10,7 @@ import { isValidXmlText } from '../store/package/sinks.ts';
 import { parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { namedChild } from '../store/store/tree-op-nodes.ts';
 import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
+import { admitsForeignTextRevision } from './proposal-foreign-revisions.ts';
 
 type Proposal = Extract<
   AutomationOperation,
@@ -53,7 +54,9 @@ export function proposalRevisionError(
   end: number,
   ownAuthor?: string,
   allowOwnDeleted = false,
-  ownEdgeAuthor?: string
+  ownEdgeAuthor?: string,
+  // A tracked edit by this author may nest in other authors' pending text revisions.
+  trackedAuthor?: string
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
   // individual sites and ranges, rather than discarding a group that spans note boundaries.
@@ -79,6 +82,12 @@ export function proposalRevisionError(
         (allowOwnDeleted && ['delete', 'replace'].includes(item.revisionKind)))
     )
       return false;
+    if (
+      trackedAuthor !== undefined &&
+      item.author !== trackedAuthor &&
+      ['insert', 'delete', 'replace'].includes(item.revisionKind)
+    )
+      return !admitsForeignTextRevision(story, items, item, paragraphId, start, end);
     if (item.revisionKind === 'structural') {
       // Row/cell ranges locate review cards at the first paragraph's start. Their actual
       // coverage is the owning subtree, including later paragraphs and nested tables.

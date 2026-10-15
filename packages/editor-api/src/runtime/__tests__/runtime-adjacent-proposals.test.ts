@@ -9,9 +9,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // range starts where the first proposal's inserted text ends. A strike there cannot join any
 // decision, so it proceeds and stays separately reviewable. Beside the author's own struck
 // text it would join their earlier decision, so that still refuses, as does covering their
-// pending text or touching another author's.
+// pending text. Another author's text proposal never joins this author's decision.
 
 import { expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
 import { DocxEditor, type DocxEditorServerRuntime, type RequestContext } from '../../index.ts';
 import { docx, p } from './support/docx.ts';
 
@@ -166,7 +167,7 @@ test('a tracked deletion still refuses to cover the same author’s pending text
   }
 });
 
-test('a tracked deletion still refuses to border another author’s proposal', async () => {
+test('a tracked deletion beside another author’s proposal stays its own decision', async () => {
   const other = await open(p('One two three.'), 'Other');
   let bytes: Uint8Array;
   try {
@@ -181,9 +182,14 @@ test('a tracked deletion still refuses to border another author’s proposal', a
   }
   const r = await DocxEditor.createServer(bytes, { author: 'Agent' });
   try {
-    await expect(
-      trackedSteps(r, [async (c) => (await first(c, ' three.')).delete()])
-    ).rejects.toMatchObject({ code: 'NotImplemented' });
+    await trackedSteps(r, [async (c) => (await first(c, ' three.')).delete()]);
+    // Different authors never review as one decision, so rejecting the deletion leaves the
+    // other author's replacement pending.
+    await rejectOne(r, ' three.');
+    expect(await bodyText(r)).toBe('One two2 three.');
+    const xml = strFromU8(unzipSync(await r.save())['word/document.xml']!);
+    expect(xml).not.toContain('w:author="Agent"');
+    expect(xml.match(/w:author="Other"/g)).toHaveLength(2);
   } finally {
     r.dispose();
   }

@@ -362,8 +362,9 @@ export class Paragraph extends ModelObject implements PromisedItem {
    * paragraph whose mark ends a section; a paragraph with an inline content control; a
    * paragraph with a complex field boundary whose matching boundary is in another paragraph;
    * and a paragraph that nests inline content more than 64 levels deep. It refuses with
-   * `NotImplemented` when the paragraph or the start of the next paragraph has a pending change,
-   * including your own. Delete adjacent paragraphs in one sync:
+   * `NotImplemented` when the paragraph has your own pending change, another author's pending
+   * paragraph mark, formatting, move, or structural change, or only deleted text, and when the
+   * start of the next paragraph has any pending change. Delete adjacent paragraphs in one sync:
    * a later sync beside your own pending deletion refuses, because the two would review as one
    * decision. A refusal refuses the whole sync.
    */

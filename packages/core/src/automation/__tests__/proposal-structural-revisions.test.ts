@@ -125,7 +125,8 @@ for (const revision of ['cellIns', 'cellDel']) {
 }
 
 for (const revision of ['rowIns', 'rowDel', 'cellMerge', 'inlineIns'] as const) {
-  for (const tracked of [false, true]) {
+  // A tracked edit nests in another author's inserted text; see the test after this loop.
+  for (const tracked of revision === 'inlineIns' ? [false] : [false, true]) {
     test(`${tracked ? 'tracked' : 'explicit'} proposals check ${revision} shared across notes`, () => {
       const content =
         revision === 'inlineIns'
@@ -186,3 +187,44 @@ for (const revision of ['rowIns', 'rowDel', 'cellMerge', 'inlineIns'] as const) 
     });
   }
 }
+
+test("a tracked replacement nests in another author's insertion in one note only", () => {
+  const inserted =
+    '<w:p><w:ins w:id="1" w:author="Human"><w:r><w:t>head target tail</w:t></w:r></w:ins></w:p>';
+  const host = open(
+    richDocx({
+      body: `<w:p>${[1, 2].map((id) => noteReference('footnote', id)).join('')}</w:p>`,
+      rels: [{ id: 'rId4', type: REL_TYPES.footnotes, target: 'footnotes.xml' }],
+      parts: [
+        notesPart('footnote', [
+          { id: 1, xml: inserted },
+          { id: 2, xml: inserted },
+        ]),
+      ],
+    })
+  );
+  try {
+    const [first] = noteBodies(host);
+    const [paragraph] = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body: first! }] }),
+      0
+    );
+    const response = host.execute({
+      operations: [
+        { op: 'setChangeTrackingMode', mode: 'TrackMineOnly', author: 'Agent' },
+        proposal(paragraph!, 'replacement', true),
+      ],
+    });
+    expect(response.ok).toBe(true);
+    const xml = savedPartBytes(host, 'word/footnotes.xml');
+    expect(xml.match(/<w:del [^>]*w:author="Agent"/g)).toHaveLength(1);
+    expect(xml).toMatch(
+      /<w:ins w:author="Human" w:id="1"><w:r>[^<]*<w:t[^>]*>head <\/w:t><\/w:r><w:del w:author="Agent"/
+    );
+    expect(xml).toContain(
+      '<w:ins w:author="Human" w:id="1"><w:r><w:t>head target tail</w:t></w:r></w:ins>'
+    );
+  } finally {
+    host.dispose();
+  }
+});

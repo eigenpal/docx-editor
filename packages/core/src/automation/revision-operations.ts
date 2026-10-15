@@ -16,6 +16,7 @@ import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
 import { revisionItemsInStory } from './review.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
+import { nestedTextDecisionOps } from './revision-nested-text.ts';
 
 /** The store's bound on one decision's explicit site list (`tree-op-validate.ts`). */
 const MAX_SITES_PER_OP = 50_000;
@@ -318,5 +319,9 @@ export function revisionItemOps(
     [reviewItemKey(item)],
     sharesItsPart(reads.story) ? reads.root : undefined
   );
-  return decision.result.skipped.length ? [] : decision.ops;
+  if (!decision.result.skipped.length) return decision.ops;
+  // Nested text revisions share a batch group, but each one is still its own decision.
+  return decision.result.skipped.every((skip) => skip.reason === 'incomplete-group')
+    ? nestedTextDecisionOps(reads, item, action)
+    : [];
 }

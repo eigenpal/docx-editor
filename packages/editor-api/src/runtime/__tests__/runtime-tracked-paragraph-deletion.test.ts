@@ -252,13 +252,32 @@ test('a paragraph whose mark ends a section refuses a tracked deletion', async (
   }
 });
 
-test('another author pending revision in the paragraph refuses with NotImplemented', async () => {
+test('another author pending paragraph mark in the paragraph refuses with NotImplemented', async () => {
+  const pending =
+    '<w:p><w:pPr><w:rPr><w:ins w:id="9" w:author="Reviewer" w:date="2026-01-01T00:00:00Z"/>' +
+    '</w:rPr></w:pPr><w:r><w:t>Proposed words</w:t></w:r></w:p>';
+  const r = await open(docx(pending + p('Second clause.')));
+  try {
+    await expectRefused(r, (c) => c.document.body.paragraphs.getFirst().delete(), 'NotImplemented');
+  } finally {
+    r.dispose();
+  }
+});
+
+test('another author pending text in the paragraph is struck inside their insertion', async () => {
   const pending =
     '<w:p><w:ins w:id="9" w:author="Reviewer" w:date="2026-01-01T00:00:00Z">' +
     '<w:r><w:t>Proposed words</w:t></w:r></w:ins></w:p>';
   const r = await open(docx(pending + p('Second clause.')));
   try {
-    await expectRefused(r, (c) => c.document.body.paragraphs.getFirst().delete(), 'NotImplemented');
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      c.document.body.paragraphs.getFirst().delete();
+      await c.sync();
+    });
+    expect(await markup(r)).toMatch(
+      /<w:ins [^>]*w:author="Reviewer"[^>]*><w:del [^>]*w:author="Agent"[^>]*><w:r><w:delText>Proposed words/
+    );
   } finally {
     r.dispose();
   }
