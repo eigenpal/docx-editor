@@ -10,6 +10,7 @@ import {
   documentOrder,
   moveCaret,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
 } from '@docx-editor.dev/core/layout';
 import type {
   BlockFragmentRecord,
@@ -711,4 +712,19 @@ function paragraphFragmentsFromBlocks(
   };
   visit(blocks);
   return found;
+}
+
+/** The note whose painted fragments hold this paragraph, or null. */
+export function noteScopeIdInLayout(layout: SemanticLayout, paragraphId: string): string | null {
+  for (const page of layout.pages) {
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+          if (fragment.paragraphId === paragraphId) return note.scopeId;
+        }
+      }
+    }
+  }
+  return null;
 }

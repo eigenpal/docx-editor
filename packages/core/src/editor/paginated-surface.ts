@@ -42,6 +42,7 @@ import {
   tocAtPosition,
   selectionTouchesTocRange,
   opTouchesTocRange,
+  paragraphInBodyToc,
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
@@ -127,7 +128,6 @@ import {
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
-  paragraphFragmentsOfBlocks,
   reviewItemKey,
   reviewThreadRootOf,
   selectionRects,
@@ -289,6 +289,7 @@ import {
   storyScopeOf,
   partOfNodeId,
   storyScopeOfNodeId,
+  noteScopeIdInLayout,
 } from './surface-scope.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import {
@@ -317,7 +318,7 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { contentLockedOrBound, removalLocked, treeLockRefusal } from './content-control-locks.ts';
 import { overlaySheet, sizeOverlaySheets } from './surface-overlay-sheet.ts';
-import type { SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
+import type { SurfaceOverlayFrame, SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
 
 export type {
   ContentControlOps,
@@ -456,15 +457,16 @@ export function mountPaginatedSurface(
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
 
   container.style.position = 'relative';
-  container.replaceChildren(
-    pagesLayer,
+  // Stacking order over the pages, bottom first.
+  const sheets = [
     tableFurnitureLayer,
     commentLayer,
     bookmarkLayer,
     highlightLayer,
     remoteSelectionLayer,
-    overlayLayer
-  );
+    overlayLayer,
+  ];
+  container.replaceChildren(pagesLayer, ...sheets);
 
   const caret = createSurfaceCaret(
     pagesLayer,
@@ -1118,10 +1120,8 @@ export function mountPaginatedSurface(
     commit: (run, selectionAfter) => commit(run, selectionAfter),
     goToPosition: (position) => navigation.goToPosition(position),
     setSelection: (next) => setSelection(next),
-    repaint: () => {
-      flushPendingInputAndLayout();
-      render(false);
-    },
+    beforeChange: flushPendingInputAndLayout,
+    repaint: () => render(false),
     initiallyShown: options.showBookmarks === true,
   });
   // The facade owns this across internal remounts of the SAME attached document. A direct
@@ -1336,26 +1336,11 @@ export function mountPaginatedSurface(
     }
     // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in,
     // and only the painted layout knows which one that is.
-    const scopeId = noteScopeIdHolding(paragraphId);
+    const scopeId = noteScopeIdInLayout(currentLayout, paragraphId);
     if (!scopeId) return false;
     if (noteOps?.activeNoteScope()?.id === scopeId) return true;
     hfScope?.exitHeaderFooter();
     return noteOps?.enterNote(scopeId) ?? false;
-  };
-
-  /** The note whose painted fragments hold this paragraph, or null. */
-  const noteScopeIdHolding = (paragraphId: string): string | null => {
-    for (const page of currentLayout.pages) {
-      for (const area of [page.footnotes, page.endnotes]) {
-        if (!area) continue;
-        for (const note of area.notes) {
-          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-            if (fragment.paragraphId === paragraphId) return note.scopeId;
-          }
-        }
-      }
-    }
-    return null;
   };
 
   const navigation = createSurfaceNavigation({
@@ -2710,18 +2695,8 @@ export function mountPaginatedSurface(
     pagesLayer.style.height = `${materializedExtent.height * scale}px`;
     container.style.width = `${materializedExtent.width * scale}px`;
     container.style.height = `${materializedExtent.height * scale}px`;
-    sizeOverlaySheets(
-      [
-        overlayLayer,
-        commentLayer,
-        bookmarkLayer,
-        highlightLayer,
-        remoteSelectionLayer,
-        tableFurnitureLayer,
-      ],
-      `${materializedExtent.width * scale}px`,
-      `${materializedExtent.height * scale}px`
-    );
+    const { width, height } = materializedExtent;
+    sizeOverlaySheets(sheets, `${width * scale}px`, `${height * scale}px`);
     tableInteraction.update();
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
@@ -2731,14 +2706,7 @@ export function mountPaginatedSurface(
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);
-    bookmarks.paint({
-      layer: bookmarkLayer,
-      layout: currentLayout,
-      scale,
-      measurer,
-      ...(materializedSet ? { pages: materializedSet } : {}),
-      ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
-    });
+    bookmarks.paint(overlayFrame(bookmarkLayer));
     paintHighlights();
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
@@ -3986,16 +3954,21 @@ export function mountPaginatedSurface(
     );
   }
 
-  function paintHighlights(): void {
-    highlightPainter?.({
-      layer: highlightLayer,
+  /** One rendered frame for an overlay painter, with the page painter's scale and offsets. */
+  function overlayFrame(layer: HTMLElement): SurfaceOverlayFrame {
+    return {
+      layer,
       layout: currentLayout,
       revision: session.packageRevision(),
       scale,
       measurer,
       ...(materializedSet ? { pages: materializedSet } : {}),
       ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
-    });
+    };
+  }
+
+  function paintHighlights(): void {
+    highlightPainter?.(overlayFrame(highlightLayer));
   }
 
   /** Draw ephemeral remote selections from semantic layout geometry. */
@@ -5134,13 +5107,7 @@ export function mountPaginatedSurface(
     refreshToc,
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
-    isInsideToc: (paragraphId) =>
-      detectBodyTocs(session.part()).some(
-        (toc) =>
-          toc.beginParagraphId === paragraphId ||
-          toc.endParagraphId === paragraphId ||
-          toc.resultParagraphIds.includes(paragraphId)
-      ),
+    isInsideToc: (paragraphId) => paragraphInBodyToc(session.part(), paragraphId),
     retainSelection: () => {
       const pin = Symbol('selection-pin');
       retainedSelections.set(pin, selection);

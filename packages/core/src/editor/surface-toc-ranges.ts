@@ -162,3 +162,13 @@ export function tocForElement(
         : fullyProtectedTocParagraphs(part).has(paragraphId))
   )?.toc;
 }
+
+/** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
+export function paragraphInBodyToc(part: OoxmlPart, paragraphId: string): boolean {
+  return detectBodyTocs(part).some(
+    (toc) =>
+      toc.beginParagraphId === paragraphId ||
+      toc.endParagraphId === paragraphId ||
+      toc.resultParagraphIds.includes(paragraphId)
+  );
+}

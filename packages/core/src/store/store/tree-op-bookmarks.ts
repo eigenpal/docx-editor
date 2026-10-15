@@ -48,13 +48,26 @@ export interface InsertBookmarkOp {
   readonly end: BookmarkOpPosition;
 }
 
-/** Remove every marker pair that declares this name, compared without case. */
+/**
+ * Remove every marker pair that declares this name, compared without case. The name is the
+ * one the file declares, so it is not held to the authoring rules.
+ */
 export interface DeleteBookmarkOp {
   readonly op: 'deleteBookmark';
   readonly name: string;
 }
 
 export type BookmarkTreeOp = InsertBookmarkOp | DeleteBookmarkOp;
+
+/** Whether an op is one of the bookmark ops this module owns. */
+export function isBookmarkTreeOp(op: { readonly op: string }): op is BookmarkTreeOp {
+  return op.op === 'insertBookmark' || op.op === 'deleteBookmark';
+}
+
+export { withBookmarkEditRules } from './tree-op-bookmark-edits.ts';
+
+/** The longest file-declared name a delete addresses; the read side lists no longer one. */
+const MAX_DELETED_NAME_LENGTH = 256;
 
 function wmlValue(node: OoxmlNode, localName: string): string | undefined {
   if (node.kind === 'textValue') return undefined;
@@ -127,10 +140,13 @@ function validPosition(part: OoxmlPart, position: BookmarkOpPosition): TreeOpRej
 
 /** Refuse a bookmark op before any tree work, so a refusal is a true no-op. */
 export function validateBookmarkOp(part: OoxmlPart, op: BookmarkTreeOp): TreeOpRejection | null {
-  if (typeof op.name !== 'string' || bookmarkNameProblem(op.name) !== null) return 'invalidArgs';
+  if (typeof op.name !== 'string') return 'invalidArgs';
+  // A delete names a bookmark the file declares, which may predate the authoring rules.
   if (op.op === 'deleteBookmark') {
+    if (op.name.length === 0 || op.name.length > MAX_DELETED_NAME_LENGTH) return 'invalidArgs';
     return markerIdsNamed(part, op.name).length > 0 ? null : 'invalidArgs';
   }
+  if (bookmarkNameProblem(op.name) !== null) return 'invalidArgs';
   const start = validPosition(part, op.start);
   if (start) return start;
   const end = validPosition(part, op.end);

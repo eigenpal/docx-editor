@@ -13,7 +13,8 @@
 // Hidden bookmarks (names starting with an underscore) are not shown. Marks are painted for
 // bookmarks in the main text.
 
-import { caretAt, type SemanticLayout, type TextMeasurer } from '@docx-editor.dev/core/layout';
+import { caretAt } from '@docx-editor.dev/core/layout';
+import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
   bookmarkNameKey,
@@ -49,6 +50,8 @@ export interface SurfaceBookmarkDeps {
   readonly commit: (run: () => boolean, selectionAfter?: () => SemanticSelection | null) => void;
   readonly goToPosition: (position: { paragraphId: string; offset: number }) => boolean;
   readonly setSelection: (selection: SemanticSelection) => void;
+  /** Settle pending input and layout before the marks change. */
+  readonly beforeChange: () => void;
   readonly repaint: () => void;
   /** Whether the marks start shown. */
   readonly initiallyShown?: boolean;
@@ -77,14 +80,7 @@ export interface SurfaceBookmarks {
   shown(): boolean;
   setShown(shown: boolean): void;
   /** Paint the marks for one rendered frame. */
-  paint(frame: {
-    readonly layer: HTMLElement;
-    readonly layout: SemanticLayout;
-    readonly scale: number;
-    readonly pageOffsetX?: ReadonlyMap<number, number>;
-    readonly pages?: ReadonlySet<number>;
-    readonly measurer?: TextMeasurer;
-  }): void;
+  paint(frame: SurfaceOverlayFrame): void;
 }
 
 const PROBLEM_REASONS: Record<BookmarkNameProblem, string> = {
@@ -203,6 +199,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     shown: () => visible,
     setShown(next) {
       if (next === visible) return;
+      deps.beforeChange();
       visible = next;
       deps.repaint();
     },

@@ -186,8 +186,7 @@ import { isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
 import { applyDrawingContentEdit } from './drawing-content-edit.ts';
 import { applyInsertBuildingBlock } from './building-block-insert.ts';
-import { applyBookmarkOp } from './tree-op-bookmarks.ts';
-import { withBookmarkEditRules } from './tree-op-bookmark-edits.ts';
+import { applyBookmarkOp, isBookmarkTreeOp, withBookmarkEditRules } from './tree-op-bookmarks.ts';
 import {
   promptInsertionOffset,
   restoreEmptiedPlaceholder,
@@ -302,8 +301,7 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
 
   if (op.op === 'insertFragment') return applyInsertFragment(part, op, options);
   if (op.op === 'insertBuildingBlock') return applyInsertBuildingBlock(part, op, options);
-  if (op.op === 'insertBookmark' || op.op === 'deleteBookmark')
-    return applyBookmarkOp(part, op, options);
+  if (isBookmarkTreeOp(op)) return applyBookmarkOp(part, op, options);
   if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
