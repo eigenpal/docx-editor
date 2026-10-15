@@ -2,13 +2,6 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** Why a write is refused while an external document refresh holds the guard. */
 export const REFRESH_WRITE_REFUSAL = 'An external document refresh is in progress.';
-/** The result a surface commit the guard skipped stands for: refused for the refresh. */
-export const REFRESH_REFUSED_COMMIT = Object.freeze({
-  committed: false,
-  rejected: true,
-  opCount: 0,
-  reason: REFRESH_WRITE_REFUSAL,
-});
 
 const guarded = new WeakSet<HTMLElement>();
 const compositions = new WeakMap<PaginatedSurface, () => boolean>();

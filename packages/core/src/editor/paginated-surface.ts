@@ -19,7 +19,7 @@ import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
-import { REFRESH_REFUSED_COMMIT, REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
+import { REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { browserInputPending } from './surface-input-pending.ts';
@@ -3099,15 +3099,15 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  function commit(...args: Parameters<typeof commitNow>): boolean {
-    if (refreshWriteBlocked(container)) return false;
+  /** The commit's refusal, or null: the refresh when the write guard skips `run` entirely. */
+  function commit(...args: Parameters<typeof commitNow>): string | null {
+    if (refreshWriteBlocked(container)) return REFRESH_WRITE_REFUSAL;
     const finish = beginSurfaceCommit(container);
     try {
-      commitNow(...args);
+      return commitNow(...args);
     } finally {
       finish();
     }
-    return true;
   }
   function commitNow(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
@@ -3125,7 +3125,7 @@ export function mountPaginatedSurface(
           readonly rearmPending?: ArmedFormat;
         }
       | undefined = {}
-  ): void {
+  ): string | null {
     // Any batched typing lands first as its own transaction, so this edit sees
     // the document and selection the user saw. Reentrancy-guarded: the flush
     // itself commits through here with an empty buffer.
@@ -3152,7 +3152,8 @@ export function mountPaginatedSurface(
     // Open until the post-edit caret is installed: the review, automation and undo selection
     // thunks read layout too. A throw skips `publishAfterCommit`, so it pays an owed paint.
     commitRunDepth += 1;
-    let refused = false;
+    // Returned rather than read back from `lastRejection`, which a listener can move.
+    let rejected: string | null = null;
     try {
       const result = commitHistoryGroup.around(
         surface,
@@ -3161,10 +3162,9 @@ export function mountPaginatedSurface(
         !options?.automation
       );
       const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
-      refused = rejection !== null;
       if (rejection) {
         const raw = String(rejection.reason ?? 'rejected');
-        lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
+        rejected = lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
       } else {
         lastRejection = null;
         if (typeof result === 'boolean' ? result : result.committed) reportEdit();
@@ -3221,7 +3221,8 @@ export function mountPaginatedSurface(
     // nothing, so the surface still has to refresh the state it just changed. Under input
     // pressure the publish may hand layout+paint to the scheduler's own task — see
     // `publishAfterCommit`.
-    publishAfterCommit(refused);
+    publishAfterCommit(rejected !== null);
+    return rejected;
   }
 
   /**
@@ -5144,7 +5145,7 @@ export function mountPaginatedSurface(
       flushPendingInputAndLayout();
       const caretParagraph = selection.head.paragraphId;
       const beforeText = textOf(caretParagraph);
-      const ran = commit(
+      return commit(
         // Reported as a RESULT, not a boolean: `commit` reads the refusal reason off it, and
         // a boolean made every refused accept clear `lastRejection` instead of setting it.
         () => {
@@ -5213,17 +5214,16 @@ export function mountPaginatedSurface(
           return clampedToDocument(editingLayout(), order, mapped);
         }
       );
-      return ran ? lastRejection : REFRESH_WRITE_REFUSAL;
     },
 
     revisionDisplayMode: reviewDisplayMode,
     replacementLanding,
     applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
       // Automation shares edit gates and repainting but retains its capture policy.
-      // Its explicit story stays the batch's. A commit the refresh guard skips keeps this default.
-      let result: ReturnType<TreeDocxSession['applyTreeOps']> = REFRESH_REFUSED_COMMIT;
+      // Its explicit story remains independent of the reader's active story.
+      let result: ReturnType<TreeDocxSession['applyTreeOps']> | null = null;
       const story = scope ?? BODY_STORY;
-      commit(
+      const refusal = commit(
         () => {
           // THE GATE BEFORE THE OPS EXIST. Building them mints the relationship an external
           // hyperlink names, which changes the PACKAGE — outside the transaction, outside the undo
@@ -5287,7 +5287,8 @@ export function mountPaginatedSurface(
         },
         { automation: true }
       );
-      return result;
+      // Null only when the refresh guard skipped the commit before the thunk ran.
+      return result ?? { committed: false, rejected: true, opCount: 0, reason: refusal! };
     },
 
     editingMode: () => editingMode,
