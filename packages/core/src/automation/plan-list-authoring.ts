@@ -170,7 +170,10 @@ export function planListAuthoring(
           // The commit numbers with the tracking revision the trial left out, so a refusal
           // here is the paragraph's own and keeps its reason.
           if (!applied.ok)
-            throw new PackageEditRefusal('cannot number this paragraph', applied.reason);
+            throw new PackageEditRefusal(
+              applied.detail ?? 'cannot number this paragraph',
+              applied.reason
+            );
           committedId = created.numId;
           return withPart(created.pkg, applied.part);
         },

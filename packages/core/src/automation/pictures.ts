@@ -111,8 +111,8 @@ export function insertPicturePlan(
     packageEdits: [
       (current) => {
         const applied = withEmbeddedImage(current, partName, { bytes, mime });
-        // Never point a preplanned drawing at a different allocation. The host plans and commits
-        // under one collaboration actor, so the two allocations agree unless the package moved.
+        // Never point a preplanned drawing at a different allocation. Plan and commit see the same
+        // package and the same collaboration actor, so a mismatch is an engine defect.
         if (
           !applied.ok ||
           applied.relationshipId !== embedded.relationshipId ||
