@@ -82,7 +82,7 @@ export interface SurfaceNavigation {
    */
   goToPosition(
     position: { paragraphId: string; offset: number },
-    options?: GoToPositionOptions
+    options?: { readonly orShow?: boolean; readonly center?: boolean }
   ): boolean | 'shown';
   /**
    * Scroll a bookmark into view and place the caret at it. Answers false for a name no
@@ -109,10 +109,7 @@ function pageInView(layout: SemanticLayout, element: HTMLElement | null, scale: 
 const JUMP_MARGIN_PX = 24;
 
 /** Options of {@link SurfaceNavigation.goToPosition}. */
-export interface GoToPositionOptions {
-  readonly orShow?: boolean;
-  readonly center?: boolean;
-}
+type GoToPositionOptions = { readonly orShow?: boolean; readonly center?: boolean };
 
 /**
  * The scroll offset that shows a target at `y` (scroll-container pixels). Centered, a target

@@ -104,7 +104,9 @@ export function goToBookmarkMatch(
  * @public
  */
 export interface GoToBookmarkGroup {
+  /** The place every row of the section is in. */
   readonly place: BookmarkPlace;
+  /** The section's rows, each with its index in the full list (the one the highlight uses). */
   readonly rows: readonly { readonly row: BookmarkSummary; readonly index: number }[];
 }
 
