@@ -38,7 +38,7 @@ export type AddCommentResult = {
 };
 
 // @public
-export function addPackageComment(packageStore: TreePackageStore, request: AddCommentRequest, scope?: StoryScope): AddCommentResult;
+export function addPackageComment(packageStore: TreePackageStore, request: AddCommentRequest, scope?: StoryScope, historyGroup?: HistoryGroup): AddCommentResult;
 
 // @public
 export const ALL_FROZEN_IDS: readonly string[];
@@ -1059,7 +1059,7 @@ export interface DefaultRecord {
 export function deleteCommentThread(pkg: OoxmlPackage, commentId: string, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
-export function deletePackageComments(packageStore: TreePackageStore, comments: readonly PackageCommentDelete[], scope?: StoryScope, noteId?: number): boolean;
+export function deletePackageComments(packageStore: TreePackageStore, comments: readonly PackageCommentDelete[], scope?: StoryScope, noteId?: number, historyGroup?: HistoryGroup): boolean;
 
 // @public (undocumented)
 export type DeleteTextOp = {
@@ -2042,7 +2042,7 @@ export function insertCustomNodeWrite(store: TreeDocumentStore, write: InsertCus
 dataOwnerPartName?: string): CustomNodeWriteResult;
 
 // @public
-export function insertPackageCustomNode(packageStore: TreePackageStore, write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+export function insertPackageCustomNode(packageStore: TreePackageStore, write: InsertCustomNodeWrite, scope?: StoryScope, historyGroup?: HistoryGroup): CustomNodeWriteResult;
 
 // @public (undocumented)
 export type InsertTextOp = {
@@ -4195,7 +4195,7 @@ export interface SetLegacyDropdownOp {
 }
 
 // @public
-export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean): SetCommentResolvedResult;
+export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean, historyGroup?: HistoryGroup): SetCommentResolvedResult;
 
 // @public
 export interface SetTextFormFieldDefaultOp {
@@ -4974,9 +4974,13 @@ export class TreeDocumentStore {
     closeHistoryGroup(): void;
     // (undocumented)
     get compositionActive(): boolean;
+    // @internal
+    discardNewestUndoEntry(): Pick<HistoryEntry, 'selectionBefore' | 'selectionAfter'> | null;
     endComposition(): void;
     graftPackage(edit: (pkg: OoxmlPackage) => OoxmlPackage): void;
     get historyDepth(): number;
+    // @internal
+    get historyPushCount(): number;
     get package(): OoxmlPackage;
     get part(): OoxmlPart;
     // (undocumented)
@@ -5194,11 +5198,14 @@ export type TreeOpResult = {
 // @public
 export class TreePackageStore {
     constructor(pkg: OoxmlPackage, main: OoxmlPart, options?: TreePackageStoreOptions);
+    // @internal
+    adoptGroupedPackageUnit(before: OoxmlPackage, historyGroup: HistoryGroup | undefined): void;
     adoptPackageUnit(before: OoxmlPackage): void;
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyLifecycleOp(op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp, options?: {
         readonly actorId?: string;
+        readonly historyGroup?: HistoryGroup;
     }): PackageTransactResult;
     // (undocumented)
     beginComposition(scope: StoryScope, selectionBefore?: SelectionMark | null): boolean;

@@ -23,7 +23,12 @@ import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
 import { packageEditTouchesShell } from './package-shell-delta.ts';
-import { closeHistoryGroupsExcept, reportHistoryGroup } from './history-group.ts';
+import { closeHistoryGroupsExcept, type HistoryGroup } from './history-group.ts';
+import {
+  PackageHistoryGroups,
+  pointerGroup,
+  type HistoryPointerGroup,
+} from './package-history-group.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { lifecycleProtectionRefusal } from './forms-protection.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
@@ -44,9 +49,7 @@ import { resolveNotesPart } from '../package/note-references.ts';
 import type { NoteKind } from '../package/note-nodes.ts';
 import {
   mergePersistentPackageShell,
-  pruneUnreachableHyperlinkShell,
   rememberShellHyperlinks,
-  retainShellHyperlinks,
 } from '../package/package-shell-persistence.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import type { ImpactClass, TreeDocOp, TreeOpRejection } from './tree-op-types.ts';
@@ -101,8 +104,8 @@ import {
   type RemotePackageAttribution,
 } from './tree-package-remote.ts';
 import {
-  retainedHyperlinkOwnerParts,
-  retainedStoryPartNames,
+  evictUnreachableStoryStores,
+  syntheticPackageChange,
   type HistoryPointer,
 } from './story-retention.ts';
 
@@ -186,6 +189,7 @@ export class TreePackageStore {
   private readonly rIdToPartName = new Map<string, string>();
   private readonly undoOrder: HistoryPointer[] = [];
   private readonly redoOrder: HistoryPointer[] = [];
+  private readonly historyGroups = new PackageHistoryGroups();
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
   private readonly contentLockPolicy: ContentLockPolicy | undefined;
@@ -255,7 +259,7 @@ export class TreePackageStore {
     registerUndoHistoryPosition(this, {
       current: () => this.undoOrder.at(-1) ?? null,
       split: () => {
-        closeHistoryGroupsExcept(this.body, this.stories, null);
+        this.closeHistoryGroups();
         this.redoOrder.length = 0;
       },
     });
@@ -402,7 +406,7 @@ export class TreePackageStore {
 
     const { store, story } = resolved;
     const beforePackage = this.currentPackage();
-    const beforeDepth = store.historyDepth;
+    const beforePushes = store.historyPushCount;
     const compositionWasOpen = store.compositionActive;
     const checkpoint = store.checkpoint();
     // `deleteText` / `deleteBlock` can remove noteReference atoms; skip package-wide
@@ -598,24 +602,27 @@ export class TreePackageStore {
     if (result.change) {
       this.packageRev += 1;
       const promoted = cascaded || promotedShellWrite;
-      if (promoted) reportHistoryGroup(options.historyGroup, 'split', 'package-unit');
       // `recordsHistory: false` opts a caller out of undo entirely; the promoted branch must
       // not push a package pointer for it either.
       if (
         !compositionWasOpen &&
         options.recordsHistory !== false &&
-        (store.historyDepth > beforeDepth || promoted)
+        (store.historyPushCount > beforePushes || promoted)
       ) {
         if (promoted) {
           // Promote to package undo so the story edit and the package write restore together.
-          this.pushUndoPointer({
-            kind: 'package',
-            before: beforePackage,
-            after: this.currentPackage(),
-            ...packageSelections?.snapshot(result.change.caret),
-          });
+          this.pushUndoPointer(
+            {
+              kind: 'package',
+              before: beforePackage,
+              after: this.currentPackage(),
+              ...packageSelections?.snapshot(result.change.caret),
+            },
+            pointerGroup(options.historyGroup, beforePackage)
+          );
         } else {
-          this.pushUndoPointer({ kind: 'story', partName: story.partName, story });
+          const grouped = pointerGroup(options.historyGroup, beforePackage);
+          this.pushUndoPointer({ kind: 'story', partName: story.partName, story }, grouped);
         }
       }
       const change = promoted
@@ -667,7 +674,7 @@ export class TreePackageStore {
     const store =
       session.partName === this.body.part.name ? this.body : this.stories.get(session.partName);
     if (!store) return;
-    const beforeDepth = store.historyDepth;
+    const beforePushes = store.historyPushCount;
     store.endComposition();
     if (session.packageWideEffects) {
       // Discard the local story undo entry endComposition just recorded — the package
@@ -681,7 +688,7 @@ export class TreePackageStore {
       });
       return;
     }
-    if (store.historyDepth > beforeDepth) {
+    if (store.historyPushCount > beforePushes) {
       const story =
         session.partName === this.body.part.name
           ? ({ kind: 'body', partName: session.partName } as const)
@@ -727,16 +734,21 @@ export class TreePackageStore {
    */
   applyLifecycleOp(
     op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp,
-    options: { readonly actorId?: string } = {}
+    options: {
+      readonly actorId?: string;
+      /** @internal */
+      readonly historyGroup?: HistoryGroup;
+    } = {}
   ): PackageTransactResult {
-    const commit = () => this.commitLifecycleOp(op);
+    const commit = () => this.commitLifecycleOp(op, options.historyGroup);
     return runWithTransactionActor(options.actorId, () =>
-      runObservedStoreTransaction(this, commit, packageTransactionPublished)
+      runObservedStoreTransaction(this, commit, packageTransactionPublished, options.historyGroup)
     );
   }
 
   private commitLifecycleOp(
-    op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
+    op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp,
+    historyGroup?: HistoryGroup
   ): PackageTransactResult {
     const before = this.currentPackage();
 
@@ -757,7 +769,8 @@ export class TreePackageStore {
         return { ok: true, change: null };
       }
       this.installPackageSnapshotInternal(result.package);
-      this.pushUndoPointer({ kind: 'package', before, after: result.package });
+      const grouped = pointerGroup(historyGroup, before);
+      this.pushUndoPointer({ kind: 'package', before, after: result.package }, grouped);
       this.packageRev += 1;
       const story: TreeStoryRef = { kind: 'body', partName: this.body.part.name };
       const change = this.publishSynthetic(
@@ -783,7 +796,8 @@ export class TreePackageStore {
     }
 
     this.installPackageSnapshotInternal(result.package);
-    this.pushUndoPointer({ kind: 'package', before, after: result.package });
+    const grouped = pointerGroup(historyGroup, before);
+    this.pushUndoPointer({ kind: 'package', before, after: result.package }, grouped);
     this.packageRev += 1;
 
     const story: TreeStoryRef = { kind: 'body', partName: this.body.part.name };
@@ -800,7 +814,7 @@ export class TreePackageStore {
   undo(): TreeModelChange | null {
     const pointer = this.undoOrder.pop();
     if (!pointer) return null;
-    closeHistoryGroupsExcept(this.body, this.stories, null);
+    this.closeHistoryGroups();
     if (pointer.kind === 'package') {
       this.installPackageSnapshotInternal(pointer.before, true, pointer.restoreNumbering);
       this.redoOrder.push(pointer);
@@ -830,7 +844,7 @@ export class TreePackageStore {
   redo(): TreeModelChange | null {
     const pointer = this.redoOrder.pop();
     if (!pointer) return null;
-    closeHistoryGroupsExcept(this.body, this.stories, null);
+    this.closeHistoryGroups();
     if (pointer.kind === 'package') {
       this.installPackageSnapshotInternal(pointer.after, true, pointer.restoreNumbering);
       this.undoOrder.push(pointer);
@@ -1026,9 +1040,13 @@ export class TreePackageStore {
    * started from to this instead, the same promotion the note cascade does.
    */
   adoptPackageUnit(before: OoxmlPackage): void {
+    this.adoptGroupedPackageUnit(before, undefined);
+  }
+  /** {@link adoptPackageUnit} as a frame of a history group. @internal */
+  adoptGroupedPackageUnit(before: OoxmlPackage, historyGroup: HistoryGroup | undefined): void {
     const after = this.currentPackage();
     if (before === after) return;
-    this.pushUndoPointer({ kind: 'package', before, after });
+    this.pushUndoPointer({ kind: 'package', before, after }, pointerGroup(historyGroup, before));
   }
 
   /** Install a full package snapshot (public seam for post-fetch cleanup). */
@@ -1225,16 +1243,26 @@ export class TreePackageStore {
     this.pkg = withPart(this.pkg, store.part);
   }
 
-  private pushUndoPointer(pointer: HistoryPointer): void {
+  /** Close every open history group: the story stores' and the coordinator's. */
+  private closeHistoryGroups(): void {
+    closeHistoryGroupsExcept(this.body, this.stories, null);
+    this.historyGroups.close();
+  }
+
+  private pushUndoPointer(pointer: HistoryPointer, grouped?: HistoryPointerGroup): void {
+    pointer = this.historyGroups.admit(
+      pointer,
+      grouped,
+      this.undoOrder,
+      (partName) =>
+        (partName === this.body.part.name
+          ? this.body
+          : this.stories.get(partName)
+        )?.discardNewestUndoEntry() ?? null,
+      () => this.currentPackage()
+    );
     // A new pointer on top means every OTHER store's open group is now buried under it.
     closeHistoryGroupsExcept(this.body, this.stories, pointer);
-    if (
-      pointer.kind === 'package' &&
-      pointer.before.parts.get('/word/numbering.xml') !==
-        pointer.after.parts.get('/word/numbering.xml')
-    ) {
-      pointer = { ...pointer, restoreNumbering: true };
-    }
     this.undoOrder.push(pointer);
     this.redoOrder.length = 0;
     if (this.undoOrder.length > this.historyLimit) this.undoOrder.shift();
@@ -1243,33 +1271,17 @@ export class TreePackageStore {
 
   /** Keep history-reachable stories and prune unreachable shell hyperlink owners. */
   private evictUnreachableStories(): void {
-    const retained = retainedStoryPartNames(
-      this.pkg,
-      this.stories.keys(),
-      this.undoOrder,
-      this.redoOrder
-    );
-    for (const [name] of [...this.stories]) {
-      if (retained.has(name)) continue;
-      this.stories.delete(name);
-      for (const [rId, partName] of [...this.rIdToPartName]) {
-        if (partName === name) this.rIdToPartName.delete(rId);
-      }
-    }
-    const hyperlinkOwners = retainedHyperlinkOwnerParts(
-      retained,
-      this.pkg.mainDocumentPart,
-      this.body.part.name,
-      this.undoOrder,
-      this.redoOrder
-    );
-    const pruned = pruneUnreachableHyperlinkShell(this.pkg, hyperlinkOwners);
-    if (pruned !== this.pkg) this.pkg = pruned;
-    this.shellHyperlinks = retainShellHyperlinks(
-      this.shellHyperlinks,
-      hyperlinkOwners,
-      this.pkg.mainDocumentPart
-    );
+    const kept = evictUnreachableStoryStores({
+      pkg: this.pkg,
+      stories: this.stories,
+      rIdToPartName: this.rIdToPartName,
+      bodyPartName: this.body.part.name,
+      shellHyperlinks: this.shellHyperlinks,
+      undoOrder: this.undoOrder,
+      redoOrder: this.redoOrder,
+    });
+    this.pkg = kept.pkg;
+    this.shellHyperlinks = kept.shellHyperlinks;
   }
 
   private publish(change: TreeModelChange): void {
@@ -1284,21 +1296,14 @@ export class TreePackageStore {
     created: readonly string[]
   ): TreeModelChange {
     this.commitCounter += 1;
-    const fromRevision = this.packageRev - 1;
-    const change: TreeModelChange = {
-      change: 'model-change',
-      fromRevision: fromRevision < 0 ? 0 : fromRevision,
-      toRevision: this.packageRev,
-      commitId: `pkg-commit-${this.commitCounter}`,
+    const change = syntheticPackageChange(
+      this.commitCounter,
+      this.packageRev,
       origin,
-      dirty: [],
-      created: [...created],
-      deleted: [],
-      splitJoin: [],
-      dependencyKeys: [],
       impact,
       story,
-    };
+      created
+    );
     this.publish(change);
     return change;
   }

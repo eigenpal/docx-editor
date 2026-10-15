@@ -500,6 +500,8 @@ For grouped writes, `result.history?.kind` is `started`, `extended`, `split`, or
 
 `useEditorCommand().execute(options)` accepts the same options and returns a boolean. Its event-handler form, `onClick={command.execute}`, still works. If you need the full result for a raw command, get the editor with `useDocxEditor()`. Check that it exists, then call `editor.exec(command, options)`.
 
+A review decision can also be one undo step. Get the editor with `useDocxEditor()`, create a handle with `editor.beginHistoryGroup()`, and pass it to each write: `editor.exec`, `editor.addComment(text, { historyGroup })`, `editor.acceptReviewItem(key, { historyGroup })`, and `runtime.run({ historyGroup }, callback)`. End the handle when the decision is complete. See [Group a review decision](/docs/2.x/core#group-a-review-decision).
+
 For optional development feedback, subscribe with `useEditorEvent('historyDiagnostic', handler)`. The editor reports interrupted groups and possible cases where each update starts a separate group. Diagnostics do not change history behavior or write to the console.
 
 ## Other hooks

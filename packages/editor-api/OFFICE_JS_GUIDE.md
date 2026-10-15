@@ -124,6 +124,35 @@ A sync either supplies data for the next decision or commits a complete edit. Ba
 
 Always await sync. Do not replace sequential syncs with `Promise.all()` or `forEach(async ...)`. Use an explicit final sync when writes remain queued. Do not add an empty sync after a completed read-only batch. These conventions follow Microsoft's [application-specific API model](https://learn.microsoft.com/en-us/office/dev/add-ins/develop/application-specific-api-model).
 
+### Make a browser decision one undo step
+
+Each sync that writes is its own undo step. In the browser runtime, a decision that also uses editor methods can be one undo step. Pass an open handle from `editor.beginHistoryGroup()` as run options. Every sync in the run joins the group, and so does each editor write that receives the same handle:
+
+```ts
+const decision = editor.beginHistoryGroup();
+try {
+  // Reply first: the card's key no longer exists after the change is accepted.
+  const reply = editor.replyToReviewItem(key, 'Accepted; see the new term.', {
+    historyGroup: decision,
+  });
+  const accepted = editor.acceptReviewItem(key, { historyGroup: decision });
+  if (!reply.ok || !accepted.ok) throw new Error('The review card was refused.');
+  await runtime.run({ historyGroup: decision }, async (context) => {
+    const ranges = context.document.body.search('30 days');
+    ranges.load('items');
+    await context.sync();
+    const target = ranges.items[0];
+    if (!target) throw new Error('The document has no "30 days" text.');
+    target.insertText('45 days', 'Replace');
+    await context.sync();
+  });
+} finally {
+  decision.end();
+}
+```
+
+This option is DocxEditor infrastructure with no Office.js equivalent. Server and collaborative runtimes refuse it with `NotSupported`. A closed handle, or a handle from another editor, refuses with `InvalidArgument` and target `historyGroup` before the callback runs, and nothing is written. The whole run is one write of the group: after it finishes, `decision.lastOutcome` is `split` if any of its syncs split the group. Do not reuse a handle after `end()`; begin a new one.
+
 ## Keep proxy lifetimes clear
 
 Keep document proxies within their `runtime.run()` callback. Return plain text or structured snapshots to the model, not `Range` or `Paragraph` objects. Do not retain a proxy in a job record or reuse it after its run finishes. Explicit tracked-object adoption exists for advanced cases; fresh reads are simpler for background workers.

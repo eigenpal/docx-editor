@@ -141,7 +141,10 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     // The store plus its provider-neutral collaboration capability. This lane is the
     // transport-neutral host port an automation object model programs against, and a server
     // has to run it without binding, output, editor, or any CRDT/network implementation.
-    mayImport: ['store', 'collaboration', 'layout', 'export'],
+    // `contracts` for the public handle types an automation run names, such as the editor's
+    // `HistoryGroup`: the contract owns them, and the runtime must name them without the
+    // editor lane. The automation lane-safety test narrows it to DOM-free contract files.
+    mayImport: ['contracts', 'store', 'collaboration', 'layout', 'export'],
     environment: 'neutral',
     subpath: './automation',
   },

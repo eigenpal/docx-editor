@@ -673,9 +673,14 @@ export interface PaginatedSurface {
    * when `run` never ran, or the reason `run` reported. A `run` that commits nothing without a
    * reason counts as refused (`'rejected'`). Gate and `run` reasons also become
    * `lastRejection`; a skipped refresh changes nothing, `lastRejection` included.
+   *
+   * `run` receives the store history token of this commit, for the store write it performs.
    */
   commitReviewOps(
-    run: () => { readonly committed: boolean; readonly reason?: unknown },
+    run: (historyToken: symbol | undefined) => {
+      readonly committed: boolean;
+      readonly reason?: unknown;
+    },
     intent?: ReviewWriteIntent
   ): string | null;
   /**

@@ -332,9 +332,11 @@ describe('the automation lane is a neutral host port (Office-compatible automati
   test('it may reach only neutral document capabilities', () => {
     // The whole point of the lane: one document-operation implementation that a server can
     // run. A dependency on binding, output or editor would put a DOM in the server host.
-    // PAGE/NUMPAGES calculation uses the neutral document-layout coordinator.
+    // PAGE/NUMPAGES calculation uses the neutral document-layout coordinator. Contracts
+    // supplies DOM-free public handle types; the lane-safety test narrows it to those files.
     expect([...CORE_LANES.automation.mayImport].sort()).toEqual([
       'collaboration',
+      'contracts',
       'export',
       'layout',
       'store',

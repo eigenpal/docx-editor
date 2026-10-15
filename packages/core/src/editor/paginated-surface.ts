@@ -2869,9 +2869,9 @@ export function mountPaginatedSurface(
             actorId: collaborationSession.identity.actorId,
             operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
             recordsHistory: false,
-            historyGroup,
+            historyToken: historyGroup,
           }
-        : { packageEdits, historyGroup }
+        : { packageEdits, historyToken: historyGroup }
     );
   }
 
@@ -5181,13 +5181,11 @@ export function mountPaginatedSurface(
           // Bound to the collaboration actor: review writes mint comment and content-control
           // ids outside `applyOps`, so nothing else would bind one. Two peers commenting on
           // the same snapshot would otherwise both take `w:id="${highest + 1}"`.
-          const result = runWithTransactionActor(collaborationSession?.identity.actorId, run);
-          return {
-            committed: result.committed,
-            rejected: !result.committed,
-            opCount: 0,
-            ...(typeof result.reason === 'string' ? { reason: result.reason } : {}),
-          };
+          const actor = collaborationSession?.identity.actorId;
+          const result = runWithTransactionActor(actor, () => run(commitHistoryGroup.value));
+          const reason = typeof result.reason === 'string' ? { reason: result.reason } : {};
+          const ok = result.committed;
+          return { committed: ok, rejected: !ok, opCount: 0, ...reason };
         },
         () => {
           // The layout is FLUSHED first, because the clamp needs post-edit lengths and this

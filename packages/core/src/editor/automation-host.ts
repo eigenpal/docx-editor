@@ -45,6 +45,41 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
+import type { AutomationBatchRequest, AutomationBatchResponse } from '../automation/index.ts';
+import type { HistoryGroup } from '../contracts/editor.ts';
+import {
+  editorAutomationFrames,
+  editorOwnsOpenHistoryGroup,
+} from './editor-history-group-registry.ts';
+import type { AutomationHistoryFrames } from './editor-history-groups.ts';
+
+/**
+ * One automation run inside a history group: every batch it executes is a frame of the
+ * group, and the run settles once into one outcome on the handle.
+ *
+ * @internal
+ */
+export interface HistoryGroupRun {
+  /** Execute one batch; `null`, executing nothing, once the group is no longer open. */
+  execute(request: AutomationBatchRequest): AutomationBatchResponse | null;
+  /** Settle the run's outcome on the handle. Safe to call more than once. */
+  finish(): void;
+}
+
+/**
+ * An automation host over a live editor.
+ *
+ * @public
+ */
+export interface BrowserAutomationHost extends AutomationHost {
+  /**
+   * Begin one run inside `group`, or `null` when `group` is not an open handle from this
+   * editor. Used by the browser runtime's `run({ historyToken }, callback)`.
+   *
+   * @internal
+   */
+  beginHistoryGroupRun(group: HistoryGroup): HistoryGroupRun | null;
+}
 
 /**
  * What a browser host can do.
@@ -93,12 +128,30 @@ function automationCommentIntent(
  * return `transaction-refused`. For autosaving from change callbacks, use the asynchronous
  * `editor.save()`, which waits for the active edit to finish.
  */
-export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost {
+export function createBrowserAutomationHost(editor: DocxEditorInstance): BrowserAutomationHost {
+  // The history frames of the batch in flight, while `executeInHistoryGroup` runs one.
+  let bound: AutomationHistoryFrames | undefined;
   const host = createAutomationHost({
-    port: sessionPort(editor),
+    port: sessionPort(editor, () => bound),
     capabilities: BROWSER_AUTOMATION_CAPABILITIES,
   });
   let disposed = false;
+  const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
+    // COALESCED TYPING FIRST, ONCE, at the batch's own entry.
+    //
+    // A keystroke still in the buffer lands as its own transaction the moment anything asks
+    // the surface for state, so a batch that read a revision or a package ahead of it
+    // planned against a document it no longer writes to — and `expectedRevision` waved
+    // through exactly the move it exists to catch. Settling HERE rather than inside those
+    // reads keeps the commit off the change-notification path: `revision()` is called from
+    // the host's own `on('change')` subscriber, and flushing there would commit typing from
+    // inside a render.
+    // Nothing to settle for a batch that will be refused anyway: a disposed host must not
+    // commit the editor's buffered keystrokes on its way to saying it is disposed.
+    if (!disposed) editor.surface?.flushPendingInput();
+    // Typing flushed above is the user's; refusals inside the batch are the batch's.
+    return runAsAutomation(editor, () => host.execute(request));
+  };
   return {
     ...host,
     save: () => {
@@ -118,26 +171,45 @@ export function createBrowserAutomationHost(editor: DocxEditorInstance): Automat
       disposed = true;
       host.dispose();
     },
-    execute: (request) => {
-      // COALESCED TYPING FIRST, ONCE, at the batch's own entry.
-      //
-      // A keystroke still in the buffer lands as its own transaction the moment anything asks
-      // the surface for state, so a batch that read a revision or a package ahead of it
-      // planned against a document it no longer writes to — and `expectedRevision` waved
-      // through exactly the move it exists to catch. Settling HERE rather than inside those
-      // reads keeps the commit off the change-notification path: `revision()` is called from
-      // the host's own `on('change')` subscriber, and flushing there would commit typing from
-      // inside a render.
-      // Nothing to settle for a batch that will be refused anyway: a disposed host must not
-      // commit the editor's buffered keystrokes on its way to saying it is disposed.
-      if (!disposed) editor.surface?.flushPendingInput();
-      // Typing flushed above is the user's; refusals inside the batch are the batch's.
-      return runAsAutomation(editor, () => host.execute(request));
+    execute,
+    beginHistoryGroupRun: (group) => {
+      const frames = disposed ? null : editorAutomationFrames(editor, group);
+      if (frames === null) return null;
+      let finished = false;
+      return {
+        execute: (request) => {
+          if (finished || disposed || !editorOwnsOpenHistoryGroup(editor, group)) return null;
+          const outer = bound;
+          bound = frames;
+          try {
+            return execute(request);
+          } finally {
+            bound = outer;
+          }
+        },
+        finish: () => {
+          if (finished) return;
+          finished = true;
+          frames.finish();
+        },
+      };
     },
   };
 }
 
-function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
+function sessionPort(
+  editor: DocxEditorInstance,
+  bound: () => AutomationHistoryFrames | undefined
+): AutomationDocumentPort {
+  /**
+   * Run one surface commit as a frame of the bound history group, if any. Bound per commit,
+   * because the surface's first commit takes the group: a batch that applies ops and then
+   * writes a comment makes two commits, and both belong to the group.
+   */
+  const grouped = <T>(surface: object, commit: () => T): T => {
+    const frames = bound();
+    return frames === undefined ? commit() : frames.bind(surface, commit);
+  };
   /**
    * Revision, made monotonic across remounts.
    *
@@ -230,7 +302,9 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // The ops are STAGED, so the relationship an external hyperlink needs is minted inside that
       // gate — see `applyAutomationOps`. Minting it out here would put a target in the `.rels` of a
       // document the very next line refuses to write to.
-      const result = surface.applyAutomationOps(staged, scope, packageEdits, requiresReview);
+      const result = grouped(surface, () =>
+        surface.applyAutomationOps(staged, scope, packageEdits, requiresReview)
+      );
       if (result.rejected) return { ok: false, reason: publicRefusal(result.reason) };
       return { ok: true, changed: result.committed };
     },
@@ -241,7 +315,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // THE SAME SURFACE PATH. `applyTreeOps` routes a solitary lifecycle op to the package
       // store's own transaction, so this goes through the mode gates and the repaint like every
       // other write rather than reaching around them.
-      const result = surface.applyAutomationOps(() => [op]);
+      const result = grouped(surface, () => surface.applyAutomationOps(() => [op]));
       if (result.rejected) return { ok: false, reason: publicRefusal(result.reason) };
       return { ok: true, changed: result.committed };
     },
@@ -265,52 +339,60 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
       // the pages and the rail repaint from the commit. Reaching past it would let a script
       // comment on a document open for reading.
-      const refused = surface.commitReviewOps(() => {
-        if (writes.every((write) => write.kind === 'delete')) {
-          const deletion = writes.find((write) => write.kind === 'delete');
-          const done = session.deleteComments(
-            writes.map((write) => {
-              if (write.kind !== 'delete') throw new Error('unreachable mixed comment write');
-              return {
-                commentId: write.commentId,
-                ...(write.parentCommentId === undefined
-                  ? {}
-                  : { parentCommentId: write.parentCommentId }),
-              };
-            }),
-            scope,
-            deletion?.kind === 'delete' ? deletion.noteId : undefined
+      const refused = grouped(surface, () =>
+        surface.commitReviewOps((historyToken) => {
+          if (writes.every((write) => write.kind === 'delete')) {
+            const deletion = writes.find((write) => write.kind === 'delete');
+            const done = session.deleteComments(
+              writes.map((write) => {
+                if (write.kind !== 'delete') throw new Error('unreachable mixed comment write');
+                return {
+                  commentId: write.commentId,
+                  ...(write.parentCommentId === undefined
+                    ? {}
+                    : { parentCommentId: write.parentCommentId }),
+                };
+              }),
+              scope,
+              deletion?.kind === 'delete' ? deletion.noteId : undefined,
+              { historyToken }
+            );
+            outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
+            return { committed: done };
+          }
+          if (writes.length !== 1) {
+            outcome = { ok: false, reason: 'mixed-comment-writes' };
+            return { committed: false };
+          }
+          const write = writes[0]!;
+          if (write.kind === 'resolve') {
+            const done = session.setCommentResolved(write.commentId, write.resolved, {
+              historyToken,
+            });
+            outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
+            return { committed: done };
+          }
+          if (write.kind !== 'create' && write.kind !== 'reply') {
+            outcome = { ok: false, reason: 'unsupported-comment-write' };
+            return { committed: false };
+          }
+          const created = session.replyToComment(
+            write.kind === 'reply' ? write.parentCommentId : null,
+            write.anchor,
+            write.text,
+            write.author,
+            write.date,
+            undefined,
+            undefined,
+            { historyToken }
           );
-          outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
-          return { committed: done };
-        }
-        if (writes.length !== 1) {
-          outcome = { ok: false, reason: 'mixed-comment-writes' };
-          return { committed: false };
-        }
-        const write = writes[0]!;
-        if (write.kind === 'resolve') {
-          const done = session.setCommentResolved(write.commentId, write.resolved);
-          outcome = done ? { ok: true, changed: true } : { ok: false, reason: 'unknown-comment' };
-          return { committed: done };
-        }
-        if (write.kind !== 'create' && write.kind !== 'reply') {
-          outcome = { ok: false, reason: 'unsupported-comment-write' };
-          return { committed: false };
-        }
-        const created = session.replyToComment(
-          write.kind === 'reply' ? write.parentCommentId : null,
-          write.anchor,
-          write.text,
-          write.author,
-          write.date
-        );
-        outcome =
-          created === null
-            ? { ok: false, reason: 'refused' }
-            : { ok: true, changed: true, commentId: created };
-        return { committed: created !== null };
-      }, automationCommentIntent(writes));
+          outcome =
+            created === null
+              ? { ok: false, reason: 'refused' }
+              : { ok: true, changed: true, commentId: created };
+          return { committed: created !== null };
+        }, automationCommentIntent(writes))
+      );
       // Null only when a gate or the refresh guard stopped the write before `run`.
       return outcome ?? { ok: false, reason: publicRefusal(refused ?? 'refused') };
     },
@@ -326,16 +408,18 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // Through `commitReviewOps`, the gate a package-scoped write goes through in the editor:
       // viewing refuses, and the pages repaint from the commit. Reaching past it would let a
       // script author a chip in a document open for reading.
-      const refused = surface.commitReviewOps(() => {
-        const result = live.insertCustomNode(write);
-        outcome = result.ok
-          ? { ok: true, changed: result.change !== null }
-          : {
-              ok: false,
-              reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
-            };
-        return { committed: result.ok };
-      }, 'package-scoped');
+      const refused = grouped(surface, () =>
+        surface.commitReviewOps((historyToken) => {
+          const result = live.insertCustomNode(write, undefined, { historyToken });
+          outcome = result.ok
+            ? { ok: true, changed: result.change !== null }
+            : {
+                ok: false,
+                reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
+              };
+          return { committed: result.ok };
+        }, 'package-scoped')
+      );
       // Null only when a gate or the refresh guard stopped the write before `run`.
       return outcome ?? { ok: false, reason: publicRefusal(refused ?? 'refused') };
     },

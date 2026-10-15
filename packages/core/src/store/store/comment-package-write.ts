@@ -26,6 +26,7 @@ import {
 import type { StoryScope, TreePackageStore } from './tree-package-store.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { lifecycleProtectionRefusal } from './forms-protection.ts';
+import type { HistoryGroup } from './history-group.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
@@ -38,7 +39,8 @@ const BODY: StoryScope = { kind: 'body' };
 export function addPackageComment(
   packageStore: TreePackageStore,
   request: AddCommentRequest,
-  scope: StoryScope = BODY
+  scope: StoryScope = BODY,
+  historyGroup?: HistoryGroup
 ): AddCommentResult {
   const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
   const store = resolved?.ok ? resolved.store : packageStore.bodyStore();
@@ -52,11 +54,12 @@ export function addPackageComment(
       if (!result.ok) return result;
       store.restoreHistoryStacks(checkpoint);
       packageStore.replacePackageShell(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return result;
     },
-    (result) => packageTransactionPublished(result)
+    (result) => packageTransactionPublished(result),
+    historyGroup
   );
 }
 
@@ -69,7 +72,8 @@ export function addPackageComment(
 export function setPackageCommentResolved(
   packageStore: TreePackageStore,
   commentId: string,
-  resolved: boolean
+  resolved: boolean,
+  historyGroup?: HistoryGroup
 ): SetCommentResolvedResult {
   const store = packageStore.bodyStore();
   const beforePackage = packageStore.currentPackage();
@@ -91,11 +95,12 @@ export function setPackageCommentResolved(
       if (!result.changed) return result;
       store.restoreHistoryStacks(checkpoint);
       packageStore.replacePackageShell(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return result;
     },
-    (result) => result.ok && result.changed
+    (result) => result.ok && result.changed,
+    historyGroup
   );
 }
 
@@ -116,7 +121,8 @@ export function deletePackageComments(
   packageStore: TreePackageStore,
   comments: readonly PackageCommentDelete[],
   scope: StoryScope = BODY,
-  noteId?: number
+  noteId?: number,
+  historyGroup?: HistoryGroup
 ): boolean {
   if (comments.length === 0) return false;
   // Package-only, like the resolve above: asked here because no story op carries it.
@@ -165,10 +171,11 @@ export function deletePackageComments(
       if (refused || !result.ok || !removed) return false;
       store.restoreHistoryStacks(checkpoint);
       packageStore.installPackageSnapshot(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return true;
     },
-    (ok) => ok
+    (ok) => ok,
+    historyGroup
   );
 }

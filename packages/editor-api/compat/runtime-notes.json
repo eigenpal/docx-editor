@@ -5,7 +5,7 @@
   },
   "Word.run": {
     "status": "different",
-    "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run."
+    "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run. runtime.run(options, batch) is a DocxEditor extension with no Office.js equivalent: historyGroup joins an editor history group on the browser runtime only, and server and collaborative runtimes refuse it with NotSupported."
   },
   "Word.SearchOptions#ignorePunct": {
     "status": "partial",

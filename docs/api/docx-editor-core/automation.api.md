@@ -1453,6 +1453,25 @@ export const HEADER_FOOTER_VARIANTS: readonly HeaderFooterVariant[];
 // @public
 export type HistoryDiagnosticCode = 'history.split' | 'history.possible-ungrouped-gesture' | 'history.possible-fragmented-gesture';
 
+// @public (undocumented)
+export interface HistoryGroup {
+    // (undocumented)
+    readonly [historyGroupBrand]: true;
+    end(): void;
+    readonly lastOutcome: HistoryGroupOutcome | null;
+    readonly state: 'open' | 'closed';
+}
+
+// @public
+export interface HistoryGroupOutcome {
+    // (undocumented)
+    readonly kind: 'started' | 'extended' | 'split' | 'none';
+    // (undocumented)
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history'
+    /** @deprecated No longer reported: writes that span document parts now extend the group. */
+    | 'package-unit' | 'composition';
+}
+
 // @public
 export function isAutomationCommand(operation: AutomationOperation): boolean;
 
