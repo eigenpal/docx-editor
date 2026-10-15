@@ -10,6 +10,7 @@ import {
   documentOrder,
   moveCaret,
   paragraphFragmentsOf,
+  paragraphFragmentsOfBlocks,
 } from '@docx-editor.dev/core/layout';
 import type {
   BlockFragmentRecord,
@@ -119,7 +120,15 @@ export function storyScopeOfNodeId(
   fallback: StoryScope
 ): StoryScope {
   const hash = nodeId?.indexOf('#') ?? -1;
-  const partName = hash === -1 ? '' : nodeId!.slice(0, hash);
+  return storyScopeOfPartName(session, hash === -1 ? '' : nodeId!.slice(0, hash), fallback);
+}
+
+/** The story a part holds: the body, a header or footer, or a notes part. */
+export function storyScopeOfPartName(
+  session: StoryScopeLookup,
+  partName: string,
+  fallback: StoryScope
+): StoryScope {
   if (partName.length === 0 || partName === session.part().name) return { kind: 'body' };
   for (const section of session.headerFooterResolutionBySection()) {
     for (const slots of [section.headers, section.footers]) {
@@ -711,4 +720,19 @@ function paragraphFragmentsFromBlocks(
   };
   visit(blocks);
   return found;
+}
+
+/** The note whose painted fragments hold this paragraph, or null. */
+export function noteScopeIdInLayout(layout: SemanticLayout, paragraphId: string): string | null {
+  for (const page of layout.pages) {
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
+          if (fragment.paragraphId === paragraphId) return note.scopeId;
+        }
+      }
+    }
+  }
+  return null;
 }

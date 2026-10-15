@@ -11,9 +11,10 @@ import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 
-type DialogKind = 'pageSetup' | 'paragraph' | 'watermark';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark';
 interface DialogHost {
   readonly container: HTMLElement | null;
   readonly ownsPageSetup: boolean;
@@ -102,6 +103,21 @@ export function DialogProvider({
     setSession(null);
     setMarkupSession(null);
   }, [editor, generation]);
+  // The `bookmark` popup answers the editor's `openBookmarkDialog` request, which the Insert
+  // menu row, Ctrl/Cmd+Shift+F5 and host code all send. A `false` popup registers nothing, so
+  // the command reports itself disabled instead of doing nothing.
+  const bookmarkDisabled = popups?.bookmark === false;
+  useEffect(() => {
+    if (!editor || !container || bookmarkDisabled) return;
+    return editor.setBookmarkChrome({
+      onRequest() {
+        sessionRef.current?.cancel();
+        markupSessionRef.current?.cancel();
+        opener.current = returnFocusTarget(container.ownerDocument.activeElement);
+        setActive('bookmark');
+      },
+    });
+  }, [editor, container, bookmarkDisabled]);
   useEffect(() => {
     if (popups?.revisionMarkup === false) markupSessionRef.current?.cancel();
     if (popups?.textFormField === false) sessionRef.current?.cancel();
@@ -143,6 +159,12 @@ export function DialogProvider({
       ) : (
         <DocxEditorWatermarkDialog {...props} />
       )
+    ) : active === 'bookmark' && popups?.bookmark !== false ? (
+      popups?.bookmark ? (
+        renderPopup(popups.bookmark, props)
+      ) : (
+        <DocxEditorBookmarkDialog {...props} />
+      )
     ) : markupSession && popups?.revisionMarkup !== false ? (
       popups?.revisionMarkup ? (
         renderPopup(popups.revisionMarkup, { session: markupSession }, markupSession)
@@ -163,6 +185,16 @@ export function DialogProvider({
     </Context.Provider>
   );
 }
+/**
+ * Where focus returns when a dialog a request opened closes: the focused element, or for a
+ * row of a menu that closes as the dialog opens, that menu's trigger, which outlives it.
+ */
+function returnFocusTarget(focused: Element | null): HTMLElement | null {
+  const menu = focused?.closest('[data-menu]');
+  const trigger = menu?.querySelector<HTMLElement>(':scope > [role="menuitem"]');
+  return trigger ?? (focused as HTMLElement | null);
+}
+
 /** The stable mount belongs to Content, outside the engine-owned DOM. */
 export function DialogMount() {
   const host = useDialogHost();

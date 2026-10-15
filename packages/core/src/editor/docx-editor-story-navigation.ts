@@ -4,6 +4,7 @@ import type { DocumentEditingMode, ExecResult, TextMatch, ViewScope } from '../c
 import type { SemanticPosition } from '../layout/semantic-interaction.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { drawingSelectionPosition } from './surface-drawing-selection.ts';
+import { captureSearchResult } from './document-search-result.ts';
 
 type ScopedStory =
   | {
@@ -133,4 +134,27 @@ export function selectDocumentSearchMatch(surface: PaginatedSurface, match: Text
   });
   surface.revealParagraph(match.blockId);
   return { ok: true, changed: false };
+}
+
+/**
+ * `findMatches`: one term, or many terms in one walk of the document. Each answer is noted for
+ * highlighting and keeps its truncation flag.
+ */
+export function findDocumentMatches(
+  surface: PaginatedSurface | null,
+  editingMode: DocumentEditingMode,
+  noteMatches: (matches: readonly TextMatch[]) => readonly TextMatch[],
+  query: string | readonly string[],
+  options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
+): readonly TextMatch[] | readonly (readonly TextMatch[])[] {
+  const scan = {
+    ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
+    ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
+    ...(surface ? { stories: searchStoriesForSurface(surface, editingMode) } : {}),
+  };
+  if (typeof query === 'string') {
+    return captureSearchResult(surface?.session.findText(query, scan), noteMatches);
+  }
+  const results = surface?.session.findText(query, scan);
+  return query.map((_, index) => captureSearchResult(results?.[index], noteMatches));
 }

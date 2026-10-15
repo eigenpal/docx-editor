@@ -20,7 +20,7 @@ import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useNavigationContext } from './navigation-context';
-import { findKeyShortcuts } from './navigation-keys';
+import { findKeyShortcuts, goToKeyShortcuts, goToShortcutLabel } from './navigation-keys';
 // Aliased: this module also EXPORTS a component called `NavigationTab`, and the two
 // declarations would collide in the generated .d.ts.
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
@@ -34,7 +34,7 @@ export interface NavigationPartProps {
 
 /** The tabs the pane supports, in strip order. Module-level so the keyboard handler
  * does not rebuild it (and its dependency identity) on every render. */
-const TABS: NavigationTabId[] = ['headings', 'find'];
+const TABS: NavigationTabId[] = ['headings', 'find', 'goto'];
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
 
@@ -138,8 +138,14 @@ export function NavigationTab({
   style,
   children,
 }: NavigationTabProps): ReactElement {
-  const { pane, t } = useNavigationContext('Tab');
+  const { pane, t, goToShortcut } = useNavigationContext('Tab');
+  const shortcut = usePlatformShortcut();
   const selected = pane.tab === value;
+  // The Go to tab names its shortcut while it is bound.
+  const goToTitle =
+    value === 'goto' && goToShortcut
+      ? t('navigation.goTo.tabTitle', { shortcut: shortcut(goToShortcutLabel()) })
+      : undefined;
   return (
     <button
       type="button"
@@ -150,6 +156,7 @@ export function NavigationTab({
       tabIndex={selected ? 0 : -1}
       className={cx('docx-nav__tab', selected && 'docx-nav__tab--selected', className)}
       style={style}
+      {...(goToTitle ? { title: goToTitle, 'aria-keyshortcuts': goToKeyShortcuts() } : {})}
       onClick={() => pane.setTab(value)}
     >
       {children ?? t(`navigation.tabs.${value}`)}

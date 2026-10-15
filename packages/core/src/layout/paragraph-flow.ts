@@ -21,6 +21,7 @@ import { spacedLine } from './positioned-run-spacing.ts';
 import { markRunPropertiesWithoutCharacterStyle } from './paragraph-mark-run.ts';
 import { paragraphSpanMetadata } from './paragraph-span-metadata.ts';
 import {
+  endsAtHyphenBreak,
   fitsWithSpaceShrink,
   opensWithHangingSpace,
   paragraphEndAt,
@@ -1468,7 +1469,7 @@ export function breakParagraph(
           followingWidth !== undefined ||
             endsParagraph(pieceIndex, boundary) ||
             (boundary < piece.text.length
-              ? !layoutOwned && piece.text[boundary] === ' '
+              ? !layoutOwned && (piece.text[boundary] === ' ' || endsAtHyphenBreak(candidate))
               : opensWithHangingSpace(pieces[pieceIndex + 1])),
           followingWidth ?? 0
         );

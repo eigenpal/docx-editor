@@ -41,6 +41,7 @@ import type { PaginatedSurface, RemoteCaretLabelHost } from './paginated-surface
 import type { OpeningIndicatorHost } from './surface-opening-indicator.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
 import type { EquationActivation } from './surface-equations.ts';
+import type { BookmarkStory } from '../contracts/editor-bookmarks.ts';
 
 /**
  * Everything {@link createDocxEditor} accepts. Every field is optional.
@@ -219,6 +220,73 @@ export interface HyperlinkChromeHandlers {
   readonly onRequest?: () => void;
 }
 
+/**
+ * Host chrome for bookmarks.
+ *
+ * @public
+ */
+export interface BookmarkChromeHandlers {
+  /**
+   * Open the Bookmark dialog for the selection: the `openBookmarkDialog` command, which the
+   * Insert menu row and Ctrl/Cmd+Shift+F5 send.
+   */
+  readonly onRequest?: () => void;
+}
+
+/**
+ * Host chrome for Go To: the Go to tab of `DocxEditor.Navigation`, or the host's own.
+ *
+ * @public
+ */
+export interface GoToChromeHandlers {
+  /** Open the Go To UI: the `openGoTo` command, which its shortcut also sends. */
+  readonly onRequest?: () => void;
+  /**
+   * Whether Ctrl+G (Cmd+Option+G on macOS) in the document opens this UI. Defaults to `true`.
+   * With `false` the chord is left to the browser; `openGoTo` still opens the UI. The most
+   * recent registration decides. It is read when the chord arrives, so a getter can follow a
+   * setting without registering again.
+   */
+  readonly shortcut?: boolean;
+}
+
+/**
+ * One painted bookmark mark, as `BookmarkMarkOptions` callbacks see it.
+ *
+ * @public
+ */
+export interface BookmarkMarkInfo {
+  /** The bookmark's name as the document writes it. */
+  readonly name: string;
+  /** Whether the name starts with an underscore. */
+  readonly hidden: boolean;
+  /** The story the bookmark is in. */
+  readonly story: BookmarkStory;
+  /** Which mark this is: the start bracket, the end bracket, or a point bookmark's I-beam. */
+  readonly edge: 'start' | 'end' | 'point';
+}
+
+/**
+ * How Show bookmarks paints its marks. Register with `setBookmarkMarks`.
+ *
+ * @public
+ */
+export interface BookmarkMarkOptions {
+  /**
+   * Which bookmarks get marks: `'visible'` (the default) skips hidden bookmarks, `'all'`
+   * includes them, and a function decides per bookmark.
+   */
+  readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+  /**
+   * Adjust each mark before it is placed: add a class, a `title` tooltip, or attributes.
+   * Return another element to replace the mark. The editor positions whatever comes back.
+   * Marks ignore the pointer; set `pointer-events: auto` on a mark that shows a tooltip.
+   */
+  readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+  /** Keep the marks when the browser prints the page. Exports never include them. */
+  readonly print?: boolean;
+}
+
 /** Host chrome that edits a clicked Office Math equation. */
 export interface EquationChromeHandlers {
   readonly onPopover?: (activation: EquationActivation) => void;
@@ -268,6 +336,21 @@ export interface DocxEditorInstance extends Editor {
    * command needs.
    */
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+  /**
+   * Wire the host's bookmark dialog to Ctrl/Cmd+Shift+F5. Returns an unsubscribe that
+   * restores whatever was registered before, like {@link DocxEditorInstance.setHyperlinkChrome}.
+   */
+  setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+  /**
+   * Wire the host's Go To UI to the `openGoTo` command. Returns an unsubscribe that restores
+   * whatever was registered before. `DocxEditor.Navigation` registers its Go to tab.
+   */
+  setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
+  /**
+   * Choose which bookmarks Show bookmarks marks and customize each mark. Returns an
+   * unsubscribe that restores the previous options.
+   */
+  setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
   /**
    * Register local revision settings chrome. Disposal cancels its active sessions.
    * Manual renderers take priority over fallback renderers. Pass null to use native chrome

@@ -6,7 +6,7 @@
 // the little state it cannot own — so React, Vue and a plain page get identical behaviour
 // instead of three hand-written keymaps that drift.
 
-import { chordLetter } from './chord-letter.ts';
+import { chordLetter, isGoToChord } from './chord-letter.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { NavigationCommand } from '@docx-editor.dev/core/layout';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
@@ -102,6 +102,16 @@ export function createKeyDownHandler(
      * rather than doing something surprising.
      */
     readonly onRequestHyperlink?: () => void;
+    /**
+     * Ctrl/Cmd+Shift+F5 opens the host's bookmark dialog. Answers whether chrome took the
+     * request; when none did, the key is left to the browser.
+     */
+    readonly onRequestBookmark?: () => boolean;
+    /**
+     * Ctrl+G (Cmd+Option+G on macOS) opens the host's Go To UI. Answers whether chrome took
+     * the request; when none did, the key is left to the browser.
+     */
+    readonly onRequestGoTo?: () => boolean;
     readonly onToggleParagraphMarks?: () => void;
     /** @internal */
     readonly onToggleFieldCodes?: () => void;
@@ -120,6 +130,21 @@ export function createKeyDownHandler(
     // drops focus from the pages once they stop being editable; a browser that keeps it would
     // walk an invisible caret, and the toolbar would follow it. Writes refuse on their own.
     if (surface.editingMode() === 'view' && keyMovesSelection(event)) return;
+    if (
+      event.key === 'F5' &&
+      event.shiftKey &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.isComposing &&
+      hooks.onRequestBookmark?.()
+    ) {
+      event.preventDefault();
+      return;
+    }
+    if (isGoToChord(event) && hooks.onRequestGoTo?.()) {
+      event.preventDefault();
+      return;
+    }
     // macOS delivers Fn+Option+F9 as Alt+F9; Fn is handled by the keyboard.
     if (
       event.key === 'F9' &&

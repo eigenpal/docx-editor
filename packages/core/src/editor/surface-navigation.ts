@@ -18,6 +18,7 @@
 // only ever with the sanitized projection, never with an authored target.
 
 import { caretAt, type SemanticLayout } from '@docx-editor.dev/core/layout';
+import { storyContentBox } from './surface-story-geometry.ts';
 import { sanitizeHref } from '../store/package/sinks.ts';
 import type { BookmarkIndex } from '@docx-editor.dev/core/store';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
@@ -74,7 +75,15 @@ export interface NavigationDeps {
  */
 export interface SurfaceNavigation {
   /** Snap to a semantic position using layout geometry, then place the caret there. */
-  goToPosition(position: { paragraphId: string; offset: number }): boolean;
+  /**
+   * With `orShow`, a story that cannot be opened is scrolled to without moving the caret into
+   * it, and the answer is `'shown'`. With `center`, the target is centered in the viewport
+   * unless it is already well inside it, so it never lands under chrome at the top edge.
+   */
+  goToPosition(
+    position: { paragraphId: string; offset: number },
+    options?: { readonly orShow?: boolean; readonly center?: boolean }
+  ): boolean | 'shown';
   /**
    * Scroll a bookmark into view and place the caret at it. Answers false for a name no
    * bookmark declares — an inert click, which is what Word does with a dangling anchor.
@@ -88,8 +97,32 @@ export interface SurfaceNavigation {
   destroy(): void;
 }
 
+/** The index of the first page whose bottom is below the scroll container's top. */
+function pageInView(layout: SemanticLayout, element: HTMLElement | null, scale: number): number {
+  if (!element) return 0;
+  const top = element.scrollTop;
+  const page = layout.pages.find((entry) => (entry.box.y + entry.box.height) * scale > top);
+  return page?.index ?? 0;
+}
+
 /** How much room to leave above a jump target, so it does not land flush against the edge. */
 const JUMP_MARGIN_PX = 24;
+
+/** Options of {@link SurfaceNavigation.goToPosition}. */
+type GoToPositionOptions = { readonly orShow?: boolean; readonly center?: boolean };
+
+/**
+ * The scroll offset that shows a target at `y` (scroll-container pixels). Centered, a target
+ * already in the middle band of the viewport stays put; otherwise it lands in the middle.
+ * Not centered, it lands one margin below the top edge, as a link jump does.
+ */
+function jumpScrollTop(element: HTMLElement, y: number, center: boolean): number {
+  if (!center) return Math.max(0, y - JUMP_MARGIN_PX);
+  const view = element.clientHeight;
+  const top = element.scrollTop;
+  if (y >= top + view * 0.2 && y <= top + view * 0.8) return top;
+  return Math.max(0, y - view / 2);
+}
 
 export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation {
   const { pagesLayer } = deps;
@@ -112,27 +145,40 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     return true;
   };
 
-  const goToPosition = (position: { paragraphId: string; offset: number }): boolean => {
+  const goToPosition = (
+    position: { paragraphId: string; offset: number },
+    options?: GoToPositionOptions
+  ): boolean | 'shown' => {
     // Geometry from the LAYOUT, not the DOM. The target of a cross-document jump is normally
     // on a virtualized page with no DOM at all, so `scrollIntoView` would resolve exactly the
     // jumps that did not need it and fail every one that did.
     // BEFORE the geometry is read: entering re-scopes the layout this resolves against, so
     // doing it afterwards would measure the target against the story the reader was leaving.
-    if (deps.enterStoryFor && !deps.enterStoryFor(position.paragraphId)) return false;
+    // A story that cannot be opened (a header in a read-only document) is shown without
+    // moving the caret into it, when the caller asks for that.
+    const entered = !deps.enterStoryFor || deps.enterStoryFor(position.paragraphId);
+    if (!entered && !options?.orShow) return false;
     const layout = deps.layout();
-    const caret = caretAt(layout, position);
+    const element = scroller();
+    // A header or footer repeats on every page: show the copy on the page in view, not the
+    // first one, when the story was not opened.
+    const caret = caretAt(
+      layout,
+      position,
+      entered ? undefined : { preferredPageIndex: pageInView(layout, element, deps.scale()) }
+    );
     if (!caret) return false;
     const page = layout.pages[caret.pageIndex];
     if (!page) return false;
 
-    // The caret is published in PAGE-CONTENT coordinates; the scroll container measures the
-    // whole sheet stack, so the page's own origin has to be added back.
-    const sheetY = page.box.y + (page.contentBox.y - page.box.y) + caret.y;
-    const element = scroller();
+    // The caret is published relative to its story's box: the content box for the body, the
+    // header, footer or note box otherwise. The scroll container measures the whole sheet stack.
+    const sheetY = storyContentBox(page, position.paragraphId).y + caret.y;
     if (element) {
-      element.scrollTop = Math.max(0, sheetY * deps.scale() - JUMP_MARGIN_PX);
+      element.scrollTop = jumpScrollTop(element, sheetY * deps.scale(), options?.center === true);
       deps.onScrolled?.();
     }
+    if (!entered) return 'shown';
     // The caret moves whether or not there was anywhere to scroll: the jump's POINT is that
     // the user is now editing at the target, and a document short enough to need no scroll
     // must still move the caret.
@@ -142,7 +188,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
 
   const goToBookmark = (name: string): boolean => {
     const anchor = deps.bookmarks().get(name);
-    return anchor ? goToPosition(anchor) : false;
+    return anchor ? goToPosition(anchor) === true : false;
   };
 
   /**

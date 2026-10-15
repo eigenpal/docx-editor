@@ -15,6 +15,7 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
+import type { AutomationStoryId } from './stories.ts';
 
 export type { InsertCustomNodeWrite };
 
@@ -220,7 +221,13 @@ export interface AutomationDocumentPort {
       readonly end: { readonly paragraphId: string; readonly offset: number };
     },
     mode: 'select' | 'start' | 'end'
-  ): void;
+  ): boolean;
+  /**
+   * Why `select` cannot place a caret at this paragraph of this story now, or null. A host that
+   * cannot open a header, footer or note (a read-only editor, or one no page shows) answers
+   * here, so the sync refuses with a reason rather than moving nothing.
+   */
+  selectRefusal?(story: AutomationStoryId, paragraphId: string): string | null;
   /** Fires once per committed change. */
   subscribe(listener: () => void): () => void;
   /** Release what the port holds. Idempotent. */

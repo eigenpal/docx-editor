@@ -23,9 +23,10 @@ import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
-type DialogKind = 'pageSetup' | 'paragraph' | 'watermark';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
 function createHost(config: () => DocxEditorPopups | undefined) {
   const target = shallowRef<HTMLElement | null>(null);
@@ -126,6 +127,28 @@ export const DialogHost = defineComponent({
       },
       { immediate: true }
     );
+    // The `bookmark` popup answers the editor's `openBookmarkDialog` request, which the Insert
+    // menu row, Ctrl/Cmd+Shift+F5 and host code all send. A `false` popup registers nothing,
+    // so the command reports itself disabled instead of doing nothing.
+    watch(
+      [editor, host.target, () => p.popups?.bookmark === false],
+      ([value, target, disabled], _old, onCleanup) => {
+        if (!value || !target || disabled) return;
+        onCleanup(
+          value.setBookmarkChrome({
+            onRequest: () => {
+              // A menu row closes as the dialog opens; its menu's trigger outlives it.
+              const focused = hostDocumentOf(target).activeElement;
+              const trigger = focused
+                ?.closest('[data-menu]')
+                ?.querySelector<HTMLElement>('.docx-menubar__trigger');
+              host.open('bookmark', trigger ?? null);
+            },
+          })
+        );
+      },
+      { immediate: true }
+    );
     watch(
       [editor, host.target, () => p.popups?.revisionMarkup === false],
       ([value, target, disabled], _old, onCleanup) => {
@@ -176,6 +199,11 @@ export const DialogHost = defineComponent({
               ? p.popups?.watermark
                 ? renderPopup(p.popups.watermark, { open: true, onClose: host.close })
                 : h(DocxEditorWatermarkDialog, { open: true, onClose: host.close })
+              : null,
+            host.active.value === 'bookmark' && p.popups?.bookmark !== false
+              ? p.popups?.bookmark
+                ? renderPopup(p.popups.bookmark, { open: true, onClose: host.close })
+                : h(DocxEditorBookmarkDialog, { open: true, onClose: host.close })
               : null,
             host.revisionSession.value && p.popups?.revisionMarkup !== false
               ? p.popups?.revisionMarkup

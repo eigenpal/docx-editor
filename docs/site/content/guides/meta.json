@@ -6,6 +6,7 @@
     "diagnostics",
     "document-refresh",
     "navigation",
+    "bookmarks",
     "toolbar",
     "chrome-slots",
     "customize-dialogs",

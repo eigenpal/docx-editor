@@ -33,6 +33,7 @@ import { DocxEditorDocumentOutline } from '../editor/DocxEditorOutline';
 import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
@@ -549,6 +550,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** Watermark dialog — none, picture or text — applied as one undo step. */
   readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
+  /** Bookmark dialog — list, add, delete and go to bookmarks. */
+  readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
@@ -613,6 +616,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   PrintDialog: DocxEditorPrintDialog,
   PageSetupDialog: DocxEditorPageSetupDialog,
   WatermarkDialog: DocxEditorWatermarkDialog,
+  BookmarkDialog: DocxEditorBookmarkDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
   TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,

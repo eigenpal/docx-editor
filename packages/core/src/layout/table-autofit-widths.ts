@@ -122,6 +122,11 @@ export interface AutofitView {
    * the nesting limit, where layout paints nothing either. See {@link narrowNestedReader}.
    */
   readonly readNested: (table: OoxmlElement, depth: number) => SemanticTableStructure | null;
+  /**
+   * The same table read with every revision shown. Column widths size for deleted content
+   * too, whatever the view shows, so a view that hides revisions measures this structure.
+   */
+  readonly markupStructure?: SemanticTableStructure;
 }
 
 /** Below this a column is already as wide as its content needs. */
@@ -672,7 +677,10 @@ export function autofitColumnMinimumsPt(
       });
       const { least, most } = measured;
       if (least < 0) continue;
-      const around = measured.wideLeft + measured.wideRight;
+      // Widening an automatic-width table keeps its shared grid lines (`autoOuterRulePt`).
+      const around = structure.autoOuterRulePt
+        ? measured.left + measured.right
+        : measured.wideLeft + measured.wideRight;
       if (cell.gridSpan !== 1) {
         // A spanning cell also covers the gaps between the columns it spans.
         const covered = (cell.gridSpan - 1) * gapPt;
@@ -736,13 +744,20 @@ export function widenAutofitColumns(
   widths: readonly number[],
   minimums: readonly number[],
   targetPt: number,
-  availablePt: number
+  availablePt: number,
+  /** Also bring a table wider than `targetPt` down to it when no column widens. */
+  shrinkToTarget = false
 ): readonly number[] {
   let deficit = 0;
+  let total = 0;
   for (const [index, width] of widths.entries()) {
     deficit += Math.max(0, minimums[index]! - width);
+    total += width;
   }
-  if (deficit <= WIDTH_EPSILON_PT) return widths;
+  if (deficit <= WIDTH_EPSILON_PT && !(shrinkToTarget && total > targetPt + WIDTH_EPSILON_PT))
+    return widths;
+  // Nothing widens: every column gives way in proportion to its width.
+  if (deficit <= WIDTH_EPSILON_PT) return widths.map((width) => (width * targetPt) / total);
   const grown = widths.map((width, index) => Math.max(width, minimums[index]!));
   const need = grown.reduce((sum, width) => sum + width, 0) - targetPt;
   if (need <= WIDTH_EPSILON_PT) return grown;
@@ -836,6 +851,29 @@ export function autofitColumnWidthsPt(
   const ifWidened: number[] = [];
   const content = emptyColumnContent();
   const minimumsNow = autofitColumnMinimumsPt(structure, context, view, ifWidened, content);
+  // Deleted content widens a column too: take the larger need of the two readings.
+  const markup = view.markupStructure;
+  if (markup && markup.columnWidthsPt.length === structure.columnWidthsPt.length) {
+    const markupWidened: number[] = [];
+    const markupContent = emptyColumnContent();
+    const markupView: AutofitView = { ...view, displayMode: 'all-markup' };
+    const markupMinimums = autofitColumnMinimumsPt(
+      markup,
+      context,
+      markupView,
+      markupWidened,
+      markupContent
+    );
+    for (const [column, minimum] of markupMinimums.entries()) {
+      if (!markupContent.measured[column]) continue;
+      minimumsNow[column] = Math.max(minimumsNow[column]!, minimum);
+      ifWidened[column] = Math.max(ifWidened[column]!, markupWidened[column]!);
+      content.maximums[column] = Math.max(
+        content.maximums[column]!,
+        markupContent.maximums[column]!
+      );
+    }
+  }
   // Everything below works on cell widths; a spaced table's gaps come back at the end.
   const cellWidths = spacedCellWidths(structure);
   const scale = cellSpacingScale(structure.columnWidthsPt, structure.cellSpacingPt);
@@ -853,6 +891,9 @@ export function autofitColumnWidthsPt(
     content.spans.map((span) => ({ ...span, minimum: span.current ?? span.minimum }))
   );
   const sizedByContent = content.sizedByContent.some(Boolean);
+  // An automatic-width table keeps its outer side rules inside the text column.
+  const roomWidthPt = contentWidthPt - (structure.autoOuterRulePt ?? 0);
+  const availableFor = (room: number): number => Math.max(0, room - leadingIndentPt(structure));
   const widens = current.some(
     (minimum, column) => minimum > cellWidths[column]! + WIDTH_EPSILON_PT
   );
@@ -863,11 +904,22 @@ export function autofitColumnWidthsPt(
         structure,
         content,
         widens && !structure.legacyContentAlignment ? ifWidened : minimumsNow,
-        contentWidthPt,
+        roomWidthPt,
         view.depth ?? 0
       );
   if (spread || (!widens && !sizedByContent)) {
-    const widths = spread ? sameOrComputed(structure, spread) : structure.columnWidthsPt;
+    // A grid that fills the text column gives way by its outer rule, never further.
+    const rule = structure.autoOuterRulePt ?? 0;
+    const settledPt = cellWidths.reduce((sum, width) => sum + width, 0);
+    const shrinkTo = Math.max(availableFor(roomWidthPt), settledPt - rule);
+    const widths = spread
+      ? sameOrComputed(structure, spread)
+      : rule > 0
+        ? sameOrComputed(
+            structure,
+            widenAutofitColumns(cellWidths, minimumsNow, shrinkTo, Infinity, true)
+          )
+        : structure.columnWidthsPt;
     byStructure.set(structure, { contentWidthPt, widths });
     return widths;
   }
@@ -876,9 +928,7 @@ export function autofitColumnWidthsPt(
   // content-aligned table owns the room its own width already spans.
   const totalPt = structure.columnWidthsPt.reduce((sum, width) => sum + width, 0);
   const legacy = structure.legacyContentAlignment === true;
-  const availablePt = legacy
-    ? Math.max(totalPt, contentWidthPt)
-    : Math.max(0, contentWidthPt - leadingIndentPt(structure));
+  const availablePt = legacy ? Math.max(totalPt, contentWidthPt) : availableFor(roomWidthPt);
   const targetPt =
     autofitTargetPt(structure.tableWidth, totalPt, availablePt, legacy, contentWidthPt) - gaps;
   const roomPt = Math.max(0, availablePt - gaps);

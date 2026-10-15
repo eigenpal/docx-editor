@@ -77,10 +77,18 @@ test.each([0, 16, 21, 31])('other code pages do not add CJK leading (bit %s)', (
   );
 });
 
-test('CJK faces with an existing gap or taller face box keep those metrics', () => {
+test('a one-em CJK face with a small gap takes the same 1.3em line', () => {
+  // SimSun declares a one-em box plus 36/256 em of leading; Word lays its 12pt lines
+  // 15.6pt apart, the same box as a face with no leading.
+  const metrics = measurer(18, 288).lineMetrics({ ...DEFAULT_RUN_STYLE, fontSizePt: 12 });
+  expect(metrics.height).toBeCloseTo(12 * 1.3, 2);
+  expect(metrics.baseline).toBeCloseTo(12 * (1760 / 2048 + 0.15), 2);
+});
+
+test('CJK faces with a larger gap or taller face box keep those metrics', () => {
   expect(
-    measurer(17, 128).lineMetrics({ ...DEFAULT_RUN_STYLE, fontSizePt: 11 }).height
-  ).toBeCloseTo((11 * 2176) / 2048, 2);
+    measurer(17, 820).lineMetrics({ ...DEFAULT_RUN_STYLE, fontSizePt: 11 }).height
+  ).toBeCloseTo((11 * 2868) / 2048, 2);
   expect(
     measurer(17, 0, 2304).lineMetrics({ ...DEFAULT_RUN_STYLE, fontSizePt: 11 }).height
   ).toBeCloseTo((11 * 2592) / 2048, 2);

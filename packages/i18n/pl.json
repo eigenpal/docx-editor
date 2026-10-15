@@ -55,7 +55,12 @@
     "printNoViewer": "Ta przeglądarka nie może drukować plików PDF z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
     "printLoadFailed": "Nie udało się wczytać pliku PDF do drukowania. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
     "printRefused": "Przeglądarka nie zezwoliła na drukowanie z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
-    "insertTextBox": "Pole tekstowe"
+    "insertTextBox": "Pole tekstowe",
+    "bookmark": "Zakładka…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Przejdź do zakładki…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "Malarz formatów (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Pokaż znaki akapitu",
     "label": "Elementy sterujące formatowaniem",
-    "addComment": "Dodaj komentarz"
+    "addComment": "Dodaj komentarz",
+    "showBookmarks": "Pokaż zakładki"
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -373,6 +379,27 @@
       "direction": "Kierunek",
       "directionLtr": "Od lewej do prawej",
       "directionRtl": "Od prawej do lewej"
+    },
+    "bookmark": {
+      "title": "Zakładka",
+      "name": "Nazwa zakładki",
+      "list": "Zakładki",
+      "empty": "Ten dokument nie ma zakładek.",
+      "sortBy": "Sortuj według",
+      "sortName": "Nazwa",
+      "sortLocation": "Położenie",
+      "showHidden": "Ukryte zakładki",
+      "add": "Dodaj",
+      "delete": "Usuń",
+      "goTo": "Przejdź do",
+      "nameEmpty": "Wpisz nazwę zakładki.",
+      "nameTooLong": "Nazwa zakładki ma najwyżej 40 znaków.",
+      "nameInvalidStart": "Nazwa zakładki zaczyna się od litery.",
+      "nameInvalidCharacter": "Używaj tylko liter, cyfr i podkreśleń.",
+      "nameExists": "Zakładka o tej nazwie już istnieje. Dodaj przenosi ją do zaznaczenia.",
+      "refused": "Nie udało się zmienić zakładki.",
+      "duplicates": "{count, plural, one {# inne miejsce używa tej nazwy.} few {# inne miejsca używają tej nazwy.} other {# innych miejsc używa tej nazwy.}} Linki i Przejdź do używają pierwszego.",
+      "keepFirst": "Zachowaj pierwszą"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "Nawigacja ({shortcut})",
     "tabs": {
       "find": "Znajdź",
-      "headings": "Nagłówki"
+      "headings": "Nagłówki",
+      "goto": "Zakładki"
     },
-    "title": "Nawigacja"
+    "title": "Nawigacja",
+    "goTo": {
+      "tabTitle": "Przejdź do zakładki ({shortcut})",
+      "label": "Zakładka",
+      "placeholder": "Szukaj zakładek",
+      "listAriaLabel": "Zakładki",
+      "countFiltered": "{shown} z {total}",
+      "enterHint": "Naciśnij Enter, aby przejść do wyróżnionej zakładki.",
+      "notFound": "Brak zakładki o nazwie „{name}”.",
+      "failed": "Nie można wyświetlić zakładki.",
+      "typeName": "Wpisz nazwę zakładki lub wybierz ją z listy.",
+      "empty": "Ten dokument nie ma zakładek.",
+      "emptyHint": "Zaznacz tekst, a następnie dodaj zakładkę, aby go nazwać.",
+      "add": "Dodaj zakładkę…",
+      "noMatches": "Brak pasujących zakładek.",
+      "atCaret": "Zawiera kursor",
+      "places": {
+        "header": "Nagłówek",
+        "footer": "Stopka",
+        "footnote": "Przypis dolny",
+        "endnote": "Przypis końcowy"
+      },
+      "groups": {
+        "body": "Tekst główny",
+        "header": "Nagłówki",
+        "footer": "Stopki",
+        "footnote": "Przypisy dolne",
+        "endnote": "Przypisy końcowe"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Tryb wypełniania formularza",

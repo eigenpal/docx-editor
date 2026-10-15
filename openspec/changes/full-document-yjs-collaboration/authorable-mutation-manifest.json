@@ -7,13 +7,13 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 85,
-    "singlePartApply": 71,
+    "treeDocOpKinds": 87,
+    "singlePartApply": 73,
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 76,
-    "chromeCommandWired": 43,
+    "chromeSlots": 79,
+    "chromeCommandWired": 46,
     "chromeProbe": 7,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 13,
@@ -119,7 +119,9 @@
       "commitTextFormField",
       "setLegacyCheckbox",
       "setLegacyDropdown",
-      "insertBuildingBlock"
+      "insertBuildingBlock",
+      "insertBookmark",
+      "deleteBookmark"
     ],
     "headerFooterLifecycle": [
       "createHeaderFooter",
@@ -224,7 +226,9 @@
     "commitTextFormField",
     "setLegacyCheckbox",
     "setLegacyDropdown",
-    "insertBuildingBlock"
+    "insertBuildingBlock",
+    "insertBookmark",
+    "deleteBookmark"
   ],
   "authorableVariants": {
     "insertText": {
@@ -1162,6 +1166,24 @@
       "commandExposure": [],
       "packageIntents": [],
       "openSpec": []
+    },
+    {
+      "kind": "insertBookmark",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "deleteBookmark",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
     }
   ],
   "packageIntents": [
@@ -1302,6 +1324,7 @@
       "review.acceptAllChanges",
       "review.rejectAllChanges",
       "review.paragraphMarks",
+      "review.bookmarks",
       "review.protectDocument",
       "review.comments",
       "review.addComment",
@@ -1339,6 +1362,8 @@
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
       "insert.toc",
+      "insert.bookmark",
+      "insert.goToBookmark",
       "insert.watermark"
     ],
     "commandWired": [
@@ -1371,6 +1396,7 @@
       "review.acceptAllChanges",
       "review.rejectAllChanges",
       "review.paragraphMarks",
+      "review.bookmarks",
       "review.protectDocument",
       "review.comments",
       "contentControl.remove",
@@ -1384,7 +1410,9 @@
       "insert.pageBreak",
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
-      "insert.toc"
+      "insert.toc",
+      "insert.bookmark",
+      "insert.goToBookmark"
     ],
     "probe": [
       "text.link",
@@ -1414,6 +1442,7 @@
       "review.previousChange",
       "review.nextChange",
       "review.paragraphMarks",
+      "review.bookmarks",
       "review.comments",
       "review.authors",
       "file.open",

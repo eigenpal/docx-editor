@@ -125,10 +125,12 @@ import type { DocumentProtectionState } from '../store/package/document-protecti
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
+import type { BookmarkSummary, EditorBookmarkCommands } from './editor-bookmarks.ts';
 export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
 export type * from './editor-format-painter.ts';
+export type * from './editor-bookmarks.ts';
 export type * from './editor-image-state.ts';
 export type * from './diagnostics.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
@@ -971,7 +973,8 @@ export interface EditorCommands
     EditorCommandShape<DocEdits>,
     EditorHeaderFooterCommands,
     EditorNoteCommands,
-    EditorFormatPainterCommands {
+    EditorFormatPainterCommands,
+    EditorBookmarkCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
   setEditingMode: { mode: DocumentEditingMode };
   /**
@@ -1404,6 +1407,8 @@ export interface EditorQueries extends DocQueries {
   contentControlAt: { filter?: ContentControlFilter };
   isInsideToc: { pos: number };
   trackedChanges: Record<never, never>;
+  /** Every bookmark in the document, hidden ones included, in document order. */
+  bookmarks: Record<never, never>;
 }
 
 /**
@@ -1427,6 +1432,7 @@ export interface EditorQueryResults extends DocQueryResults {
   contentControlAt: ContentControlSummary | null;
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
+  bookmarks: readonly BookmarkSummary[];
 }
 
 /**
@@ -1612,6 +1618,8 @@ export interface EditorSnapshot {
   readonly reviewPane: ResolvedReviewPane;
   /** Whether Show/Hide paragraph marks is enabled. */
   readonly showParagraphMarks?: boolean;
+  /** Whether bracket marks are shown at bookmarks. */
+  readonly showBookmarks?: boolean;
   /** The document's `w:documentProtection`, as the file states it; null with no document. */
   readonly documentProtection?: DocumentProtectionState | null;
   /** The displayed revision projection. The document and its revision history stay unchanged. */
@@ -1683,7 +1691,9 @@ export interface EditorSnapshot {
  * An error the engine raised, carrying a machine-readable `code` alongside the message.
  *
  * `code` is optional because an `Error` from deeper down (a parser, a codec) is surfaced as-is
- * rather than wrapped in a fabricated code.
+ * rather than wrapped in a fabricated code. The editor's own codes: `invalidTarget` (`attach`
+ * cannot mount there), `unsupported` (a source it refuses to open), and `hostCallback` (a host
+ * callback such as a bookmark mark's `decorate` threw; the editor kept its default behavior).
  */
 export interface EditorError extends Error {
   readonly code?: string;

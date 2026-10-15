@@ -9,7 +9,7 @@ import type {
   OpenFontBackedDocumentForExportResult,
   OpenFontBackedDocumentForExportOptions,
 } from '@docx-editor.dev/core/export';
-import type { FontOrigin } from '@docx-editor.dev/core/editor';
+import type { FontOrigin, FontShapingOptions } from '@docx-editor.dev/core/editor';
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
 import type { ReviewDisplayMode } from '@docx-editor.dev/core/editor';
 
@@ -37,8 +37,13 @@ export type PdfFontsSource = PdfFontOrigin | readonly PdfFontOrigin[];
 /** Node conversion controls. Font substitution follows Core's independent fontPolicy. @public */
 export interface PdfExportOptions extends Omit<
   OpenFontBackedDocumentForExportOptions,
-  'fonts' | 'measurer' | 'producer' | 'reuseAcrossRevisions'
+  'fonts' | 'measurer' | 'producer' | 'reuseAcrossRevisions' | 'fontShaping'
 > {
+  /**
+   * Text shaping limits. The per-face byte ceiling defaults to 40 MiB, so installed CJK
+   * collections such as SimSun are not replaced. The hard maximum is 64 MiB.
+   */
+  readonly fontShaping?: FontShapingOptions;
   /** Revision display mode. Defaults to proposed. */
   readonly displayMode?: ReviewDisplayMode;
   /** Apply optional document ligatures during measurement and output. Defaults to true. */

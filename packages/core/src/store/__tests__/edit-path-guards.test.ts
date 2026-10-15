@@ -103,15 +103,16 @@ describe('a range that opens AND closes at the caret stays paired', () => {
       paragraphId: firstParagraphId(part),
       offset: 5,
     });
-    // The end marker stays with the head only when its start is BEHIND it. Here both sit on
-    // the caret, and leaving the end behind emitted `…<w:bookmarkEnd/></w:p><w:p><w:bookmark
-    // Start/>…`: a close with no open before it, and an open that never closes.
+    // Both markers sit on the caret, so they must travel together: splitting them emitted
+    // `…<w:bookmarkEnd/></w:p><w:p><w:bookmarkStart/>…`, a close with no open before it.
+    // Bookmark markers at a split stay with the head, so the point stays at the end of the
+    // first paragraph.
     const xml = bodyXml(split);
     expect(xml.indexOf('bookmarkStart')).toBeLessThan(xml.indexOf('bookmarkEnd'));
     expect(xml).toBe(
-      '<w:p><w:r><w:t>alpha</w:t></w:r></w:p>' +
-        '<w:p><w:bookmarkStart w:id="1" w:name="a"/><w:bookmarkEnd w:id="1"/>' +
-        '<w:r><w:t>beta</w:t></w:r></w:p>'
+      '<w:p><w:r><w:t>alpha</w:t></w:r><w:bookmarkStart w:id="1" w:name="a"/>' +
+        '<w:bookmarkEnd w:id="1"/></w:p>' +
+        '<w:p><w:r><w:t>beta</w:t></w:r></w:p>'
     );
   });
 

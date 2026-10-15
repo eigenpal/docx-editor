@@ -889,6 +889,13 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return { supported: true, mutating: true };
     case 'setImageProperties':
       return { supported: true, mutating: true };
+    case 'insertBookmark':
+    case 'deleteBookmark':
+    case 'keepFirstBookmark':
+    case 'goToBookmark':
+      return typeof command.name === 'string' && command.name.length > 0
+        ? { supported: true, mutating: command.type !== 'goToBookmark' }
+        : { supported: false, code: 'invalidArgs', reason: `${command.type} needs a name` };
     case 'setWatermark': {
       const refusal = watermarkRefusal(command.watermark);
       return refusal

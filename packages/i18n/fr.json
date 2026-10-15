@@ -55,7 +55,12 @@
     "printNoViewer": "Ce navigateur ne peut pas imprimer de fichiers PDF depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
     "printLoadFailed": "Le PDF n’a pas pu être chargé pour l’impression. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
     "printRefused": "Le navigateur a refusé l’impression depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
-    "insertTextBox": "Zone de texte"
+    "insertTextBox": "Zone de texte",
+    "bookmark": "Signet…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Atteindre le signet…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "Reproduire la mise en forme (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Afficher les marques de paragraphe",
     "label": "Commandes de mise en forme",
-    "addComment": "Ajouter un commentaire"
+    "addComment": "Ajouter un commentaire",
+    "showBookmarks": "Afficher les signets"
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -373,6 +379,27 @@
       "direction": "Orientation",
       "directionLtr": "De gauche à droite",
       "directionRtl": "De droite à gauche"
+    },
+    "bookmark": {
+      "title": "Signet",
+      "name": "Nom du signet",
+      "list": "Signets",
+      "empty": "Ce document ne contient aucun signet.",
+      "sortBy": "Trier par",
+      "sortName": "Nom",
+      "sortLocation": "Emplacement",
+      "showHidden": "Signets masqués",
+      "add": "Ajouter",
+      "delete": "Supprimer",
+      "goTo": "Atteindre",
+      "nameEmpty": "Saisissez un nom de signet.",
+      "nameTooLong": "Un nom de signet compte au plus 40 caractères.",
+      "nameInvalidStart": "Un nom de signet commence par une lettre.",
+      "nameInvalidCharacter": "Utilisez uniquement des lettres, des chiffres et des traits de soulignement.",
+      "nameExists": "Un signet porte déjà ce nom. Ajouter le déplace vers la sélection.",
+      "refused": "Le signet n’a pas pu être modifié.",
+      "duplicates": "{count, plural, one {# autre emplacement utilise ce nom.} other {# autres emplacements utilisent ce nom.}} Les liens et Atteindre utilisent le premier.",
+      "keepFirst": "Garder le premier"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "Navigation ({shortcut})",
     "tabs": {
       "find": "Rechercher",
-      "headings": "Titres"
+      "headings": "Titres",
+      "goto": "Signets"
     },
-    "title": "Navigation"
+    "title": "Navigation",
+    "goTo": {
+      "tabTitle": "Atteindre un signet ({shortcut})",
+      "label": "Signet",
+      "placeholder": "Rechercher des signets",
+      "listAriaLabel": "Signets",
+      "countFiltered": "{shown} sur {total}",
+      "enterHint": "Appuyez sur Entrée pour atteindre le signet en surbrillance.",
+      "notFound": "Aucun signet ne s’appelle « {name} ».",
+      "failed": "Le signet n’a pas pu être affiché.",
+      "typeName": "Saisissez un nom de signet ou choisissez-en un dans la liste.",
+      "empty": "Ce document ne contient aucun signet.",
+      "emptyHint": "Sélectionnez du texte, puis ajoutez un signet pour le nommer.",
+      "add": "Ajouter un signet…",
+      "noMatches": "Aucun signet ne correspond.",
+      "atCaret": "Contient le curseur",
+      "places": {
+        "header": "En-tête",
+        "footer": "Pied de page",
+        "footnote": "Note de bas de page",
+        "endnote": "Note de fin"
+      },
+      "groups": {
+        "body": "Texte principal",
+        "header": "En-têtes",
+        "footer": "Pieds de page",
+        "footnote": "Notes de bas de page",
+        "endnote": "Notes de fin"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Mode remplissage de formulaire",

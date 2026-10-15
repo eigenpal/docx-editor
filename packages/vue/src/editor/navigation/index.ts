@@ -3,6 +3,7 @@ export {
   Navigation,
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,
@@ -14,6 +15,12 @@ export {
   type NavigationPartProps,
   type NavigationTabProps,
 } from './DocxEditorNavigation';
+export {
+  useGoToBookmark,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
+  type UseGoToBookmarkReturn,
+} from './useGoToBookmark';
 export {
   useNavigationPane,
   type NavigationTab as NavigationTabValue,

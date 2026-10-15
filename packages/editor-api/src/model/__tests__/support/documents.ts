@@ -264,6 +264,39 @@ export const WITH_BOOKMARKED_STORIES: Uint8Array = (() => {
   });
 })();
 
+/** One bookmark in each kind of story: `InBody`, `InHeader`, `InFooter` and `InNote`. */
+export const WITH_STORY_BOOKMARKS: Uint8Array = (() => {
+  const parts = unzipSync(WITH_FURNITURE);
+  const mark = (id: number, name: string, text: string) =>
+    `<w:bookmarkStart w:id="${id}" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
+    `<w:bookmarkEnd w:id="${id}"/>`;
+  const swap = (path: string, from: string, to: string) =>
+    strToU8(strFromU8(parts[path] as Uint8Array).replace(from, to));
+  return zipSync({
+    ...parts,
+    'word/document.xml': swap(
+      'word/document.xml',
+      '<w:r><w:t>in the body</w:t></w:r>',
+      mark(1, 'InBody', 'in the body')
+    ),
+    'word/header1.xml': swap(
+      'word/header1.xml',
+      '<w:r><w:t>in the header</w:t></w:r>',
+      mark(1, 'InHeader', 'in the header')
+    ),
+    'word/footer1.xml': swap(
+      'word/footer1.xml',
+      '<w:r><w:t>in the footer</w:t></w:r>',
+      mark(1, 'InFooter', 'in the footer')
+    ),
+    'word/footnotes.xml': swap(
+      'word/footnotes.xml',
+      '<w:r><w:t>in the footnote</w:t></w:r>',
+      mark(1, 'InNote', 'in the footnote')
+    ),
+  });
+})();
+
 /**
  * A document awkward enough to compare two hosts over: a style cascade, a table with cell
  * paragraphs, inline furniture (a tab and a break), and section properties.

@@ -134,11 +134,11 @@ test('compound, thick and dashed rules with each page keeping its own bottom edg
       MIXED
     )
   );
+  // A page's last row publishes its own bottom rule. A row whose rule does not fit moves to
+  // the next page, so every moved row compares like the full walk (`typeBurst` checks it).
   typeBurst(part, paragraphAt(part, 16, 0), 'bottom ');
   expect(comparisons.accepted).toBeGreaterThan(0);
-  // The terminal placement and the ordinary one publish different bottom rules, so one of the
-  // two candidates refuses on the moved last row.
-  expect(comparisons.refused).toBeGreaterThan(0);
+  expect(comparisons.refused).toBe(0);
 });
 
 test('mixed cell rules override the table rules on some rows', () => {

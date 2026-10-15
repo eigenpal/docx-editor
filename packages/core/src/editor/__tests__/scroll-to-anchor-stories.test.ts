@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { caretAt } from '../../layout/semantic-interaction.ts';
+import { storyContentBox } from '../surface-story-geometry.ts';
 import { HEADER_R_ID, FOOTNOTE_SCOPE_ID, storyParityDocx } from './story-parity-fixture.ts';
 import {
   anchorDocx,
@@ -56,7 +57,9 @@ describe('scrollToAnchor across document regions', () => {
       const caret = caretAt(layout, { paragraphId, offset: 0 })!;
       expect(caret).not.toBeNull();
       const page = layout.pages.find((page) => page.index === caret.pageIndex)!;
-      const top = ((page.contentBox.y + caret.y) * editor.getZoom() * 96) / 72;
+      // A header, footer or note caret is measured from that story's box, not the body's.
+      const storyTop = storyContentBox(page, paragraphId).y;
+      const top = ((storyTop + caret.y) * editor.getZoom() * 96) / 72;
       expect(top).toBeGreaterThanOrEqual(scroller.scrollTop);
       expect(top + (caret.height * editor.getZoom() * 96) / 72).toBeLessThanOrEqual(
         scroller.scrollTop + scroller.clientHeight
@@ -65,6 +68,10 @@ describe('scrollToAnchor across document regions', () => {
       expect(surface.state().selection).toEqual(selection);
       expect(editor.snapshot().canUndo).toBe(snapshot.canUndo);
       if (part === 'header1.xml' || part === 'footer1.xml') expect(caret.pageIndex).toBe(0);
+      // The footer sits below the body text: measured from the body box it would not.
+      if (part === 'footer1.xml') {
+        expect(storyTop + caret.y).toBeGreaterThan(page.contentBox.y + page.contentBox.height);
+      }
     });
   }
 

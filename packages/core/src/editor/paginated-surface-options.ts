@@ -15,6 +15,7 @@ import type {
 } from '../contracts/modules.ts';
 import type { EquationActivation } from './surface-equations.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
+import type { BookmarkMarkOptionsSource } from './bookmark-chrome.ts';
 import type { TextMeasurer } from '@docx-editor.dev/core/layout';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
 import type { PaginatedSurfaceState, SurfaceEditingMode } from './paginated-surface-contract.ts';
@@ -115,6 +116,8 @@ export interface PaginatedSurfaceOptions {
   /** Show paragraph-end furniture without changing document content. */
   readonly showParagraphMarks?: boolean;
   readonly onToggleParagraphMarks?: () => void;
+  /** Show bracket marks at bookmarks. Paint-level; the document does not change. */
+  readonly showBookmarks?: boolean;
   /**
    * How tracked changes are coloured: by AUTHOR (the default), by kind, or by author with
    * host-pinned colours. A paint-level option like {@link fieldShading}: it changes no
@@ -191,6 +194,18 @@ export interface PaginatedSurfaceOptions {
    * rather than doing something surprising with it.
    */
   readonly onRequestHyperlink?: () => void;
+  /**
+   * Ctrl/Cmd+Shift+F5: open the host's bookmark dialog. Answers whether chrome took the
+   * request; when none did, or when this is absent, the key is left to the browser.
+   */
+  readonly onRequestBookmark?: () => boolean;
+  /** Ctrl+G (Cmd+Option+G on macOS): open the host's Go To UI; answers whether chrome took it. */
+  readonly onRequestGoTo?: () => boolean;
+  /**
+   * The host's Show bookmarks options, read on every paint. `onChange` names the repaint to
+   * run when the host changes them.
+   */
+  readonly bookmarkMarks?: BookmarkMarkOptionsSource;
   /** Return true when host chrome handles this session. */
   readonly onRequestTextFormField?: (
     session: import('./text-form-field-session.ts').TextFormFieldDialogSession

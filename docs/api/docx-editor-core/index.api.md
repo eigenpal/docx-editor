@@ -54,6 +54,39 @@ export function blankDocumentBytes(): Uint8Array;
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export interface BookmarkMarkInfo {
+    readonly edge: 'start' | 'end' | 'point';
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly story: BookmarkStory;
+}
+
+// @public
+export interface BookmarkMarkOptions {
+    readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+    readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+    readonly print?: boolean;
+}
+
+// @public
+export type BookmarkPlace = 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
+
+// @public
+export type BookmarkStory = 'body' | 'headerFooter' | 'note';
+
+// @public
+export interface BookmarkSummary {
+    readonly atSelection: boolean;
+    readonly duplicates: number;
+    readonly empty: boolean;
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly order: number;
+    readonly place: BookmarkPlace;
+    readonly story: BookmarkStory;
+}
+
+// @public
 export type ByteSizeBucket = '0-64KiB' | '64-128KiB' | '128-256KiB' | '256-512KiB' | '512KiB-1MiB' | '1-2MiB' | '2-4MiB' | '4-8MiB' | '8-16MiB' | '16-32MiB' | '32-64MiB' | '64-128MiB' | '128-256MiB' | '256-512MiB' | '512MiB+';
 
 // @public
@@ -411,6 +444,15 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly defaultToolbar: false;
+        readonly id: 'bookmarks';
+        readonly labelKey: 'formattingBar.showBookmarks';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
         readonly id: 'protectDocument';
         readonly labelKey: 'review.protectDocument';
         readonly paths: readonly string[];
@@ -719,6 +761,20 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'bookmark';
+        readonly labelKey: 'toolbar.bookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'goToBookmark';
+        readonly labelKey: 'toolbar.goToBookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'watermark';
         readonly labelKey: 'toolbar.watermark';
         readonly paths: readonly string[];
@@ -835,7 +891,7 @@ export interface ChromePrintOptions {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export interface ClearAnchorHighlightOptions {
@@ -1489,8 +1545,11 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
+    setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+    setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+    setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
@@ -1724,6 +1783,27 @@ export interface EditorAnchorNavigation {
 }
 
 // @public
+export interface EditorBookmarkCommands {
+    deleteBookmark: {
+        name: string;
+    };
+    goToBookmark: {
+        name: string;
+    };
+    insertBookmark: {
+        name: string;
+    };
+    keepFirstBookmark: {
+        name: string;
+    };
+    openBookmarkDialog: Record<never, never>;
+    openGoTo: {
+        readonly fromShortcut?: boolean;
+    };
+    toggleBookmarks: Record<never, never>;
+}
+
+// @public
 export type EditorCommand = {
     [K in keyof EditorCommands]: {
         type: K;
@@ -1731,7 +1811,7 @@ export type EditorCommand = {
 }[keyof EditorCommands];
 
 // @public
-export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands {
+export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands, EditorBookmarkCommands {
     clearFormatting: Record<never, never>;
     commitTableColumnDividerResize: {
         leftWidthTwips: number;
@@ -2125,6 +2205,7 @@ export type EditorPosition = DocAnchor | SemanticPosition;
 
 // @public
 export interface EditorQueries extends DocQueries {
+    bookmarks: Record<never, never>;
     // (undocumented)
     contentControlAt: {
         filter?: ContentControlFilter;
@@ -2163,6 +2244,8 @@ export type EditorQuery = {
 
 // @public
 export interface EditorQueryResults extends DocQueryResults {
+    // (undocumented)
+    bookmarks: readonly BookmarkSummary[];
     // (undocumented)
     contentControlAt: ContentControlSummary | null;
     // (undocumented)
@@ -2272,6 +2355,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
     // (undocumented)
     readonly table: TableContext | null;
@@ -2530,6 +2614,12 @@ export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 
 
 // @public
 export type FurnitureVariant = 'default' | 'first' | 'even';
+
+// @public
+export interface GoToChromeHandlers {
+    readonly onRequest?: () => void;
+    readonly shortcut?: boolean;
+}
 
 // @public
 export interface HeaderFooterSet {

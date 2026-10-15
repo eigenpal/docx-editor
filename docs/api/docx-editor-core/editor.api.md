@@ -85,6 +85,59 @@ export function bindHistoryGroup(editor: Editor, element: HTMLElement, config: H
 export function blankDocumentBytes(): Uint8Array;
 
 // @public
+export interface BookmarkChromeHandlers {
+    readonly onRequest?: () => void;
+}
+
+// @public
+export function bookmarkDialogInitialName(bookmarks: readonly BookmarkSummary[]): string;
+
+// @public
+export interface BookmarkDialogNameState {
+    readonly canAdd: boolean;
+    readonly canDelete: boolean;
+    // (undocumented)
+    readonly canGoTo: boolean;
+    readonly existing: BookmarkSummary | null;
+    readonly problem: BookmarkNameProblem | null;
+}
+
+// @public
+export function bookmarkDialogNameState(bookmarks: readonly BookmarkSummary[], name: string, writable: boolean): BookmarkDialogNameState;
+
+// @public
+export function bookmarkDialogRows(bookmarks: readonly BookmarkSummary[], options: {
+    readonly showHidden: boolean;
+    readonly sortBy: BookmarkSortOrder;
+}): readonly BookmarkSummary[];
+
+// @public
+export interface BookmarkMarkInfo {
+    readonly edge: 'start' | 'end' | 'point';
+    readonly hidden: boolean;
+    readonly name: string;
+    readonly story: BookmarkStory;
+}
+
+// @public
+export interface BookmarkMarkOptions {
+    readonly decorate?: (element: HTMLElement, mark: BookmarkMarkInfo) => HTMLElement | void;
+    readonly include?: 'visible' | 'all' | ((bookmark: Omit<BookmarkMarkInfo, 'edge'>) => boolean);
+    readonly print?: boolean;
+}
+
+// @public
+export interface BookmarkMarkOptionsSource {
+    // (undocumented)
+    readonly current: () => BookmarkMarkOptions;
+    readonly onChange: (repaint: (() => void) | null) => void;
+    readonly reportError: (error: unknown) => void;
+}
+
+// @public
+export type BookmarkSortOrder = 'name' | 'location';
+
+// @public
 export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
@@ -503,6 +556,15 @@ export const CHROME_GROUPS: readonly [{
         };
     }, {
         readonly defaultToolbar: false;
+        readonly id: 'bookmarks';
+        readonly labelKey: 'formattingBar.showBookmarks';
+        readonly paths: readonly string[];
+        readonly shape: 'icon';
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly defaultToolbar: false;
         readonly id: 'protectDocument';
         readonly labelKey: 'review.protectDocument';
         readonly paths: readonly string[];
@@ -811,6 +873,20 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'command';
         };
     }, {
+        readonly id: 'bookmark';
+        readonly labelKey: 'toolbar.bookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'goToBookmark';
+        readonly labelKey: 'toolbar.goToBookmark';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
         readonly id: 'watermark';
         readonly labelKey: 'toolbar.watermark';
         readonly paths: readonly string[];
@@ -1022,7 +1098,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -1407,8 +1483,11 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
+    setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+    setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+    setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
@@ -1720,6 +1799,40 @@ export function formattingBarChromeGroups(image: ImageContext | null): readonly 
 
 // @public
 export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
+
+// @public
+export interface GoToBookmarkGroup {
+    readonly place: BookmarkPlace;
+    readonly rows: readonly {
+        readonly index: number;
+        readonly row: BookmarkSummary;
+    }[];
+}
+
+// @public
+export function goToBookmarkGroups(rows: readonly BookmarkSummary[]): readonly GoToBookmarkGroup[];
+
+// @public
+export function goToBookmarkMatch(name: string, query: string): {
+    readonly end: number;
+    readonly start: number;
+} | null;
+
+// @public
+export function goToBookmarkRows(bookmarks: readonly BookmarkSummary[], options: {
+    readonly query: string;
+    readonly showHidden: boolean;
+    readonly sortBy: BookmarkSortOrder;
+}): readonly BookmarkSummary[];
+
+// @public
+export function goToBookmarkTarget(bookmarks: readonly BookmarkSummary[], query: string, offered: readonly BookmarkSummary[]): BookmarkSummary | null;
+
+// @public
+export interface GoToChromeHandlers {
+    readonly onRequest?: () => void;
+    readonly shortcut?: boolean;
+}
 
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
@@ -2068,6 +2181,9 @@ export function isElementNode(value: unknown): value is Element;
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
 // @public
+export function isGoToChord(event: KeyboardEvent, apple?: boolean): boolean;
+
+// @public
 export function isHTMLElementNode(value: unknown): value is HTMLElement;
 
 // @public
@@ -2277,6 +2393,7 @@ export interface PaginatedSurface {
     applyTableCommandPlan(plan: TableCommandPlan): ExecResult;
     armForcePlainPaste(): void;
     author(): string | undefined;
+    readonly bookmarkEditing: SurfaceBookmarks;
     bookmarks(): BookmarkIndex;
     canAdjustIndent(direction: 'increase' | 'decrease'): boolean;
     canEditTextFormField(): boolean;
@@ -2514,6 +2631,7 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
+    readonly bookmarkMarks?: BookmarkMarkOptionsSource;
     readonly collaborationModel?: CollaborationModuleContribution;
     readonly contentLockPolicy?: ContentLockPolicy;
     readonly defaultFontFamily?: string;
@@ -2536,8 +2654,10 @@ export interface PaginatedSurfaceOptions {
     readonly onHostMoved?: (document: Document) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRejection?: (reason: string) => void;
+    readonly onRequestBookmark?: () => boolean;
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
+    readonly onRequestGoTo?: () => boolean;
     readonly onRequestHyperlink?: () => void;
     // (undocumented)
     readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
@@ -2555,6 +2675,7 @@ export interface PaginatedSurfaceOptions {
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
+    readonly showBookmarks?: boolean;
     readonly showParagraphMarks?: boolean;
     readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     readonly tocLabels?: {
@@ -3603,7 +3724,10 @@ export interface SurfaceNavigation {
     goToPosition(position: {
         offset: number;
         paragraphId: string;
-    }): boolean;
+    }, options?: {
+        readonly center?: boolean;
+        readonly orShow?: boolean;
+    }): boolean | 'shown';
     openExternal(href: string | null): boolean;
 }
 

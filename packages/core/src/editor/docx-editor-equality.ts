@@ -234,6 +234,7 @@ const SNAPSHOT_FIELDS = {
   reviewPaneOpen: 'compared',
   reviewPane: 'compared',
   showParagraphMarks: 'compared',
+  showBookmarks: 'compared',
   documentProtection: 'compared',
   reviewDisplayMode: 'compared',
   revisionMarkup: 'compared',

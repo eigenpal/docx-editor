@@ -42,6 +42,7 @@ import { findNode, paragraphTextOf, parentNodeOf } from '@docx-editor.dev/core/s
 import { allParagraphs } from '../binding/tree-binding.ts';
 import { paragraphStyleId } from '../binding/document-outline.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { bookmarkCommandRefusal } from './docx-editor-bookmarks.ts';
 
 /**
  * THE unified formatting derivation — the one place surface formatting becomes the
@@ -426,6 +427,8 @@ export function gateCommand(
       },
     };
   }
+  const bookmarkRefusal = bookmarkCommandRefusal(surface, command);
+  if (bookmarkRefusal) return { ok: false, refusal: bookmarkRefusal };
   if (command.type === 'insertToc' && !surface.canInsertToc()) {
     return {
       ok: false,

@@ -13,7 +13,6 @@ import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // row publishes into. Everything the paginator needs to mutate is on that object, so the
 // story loop keeps ownership of the cursor and this module keeps the row rules.
 
-import { autofitContextOf } from './table-autofit-widths.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
@@ -29,7 +28,11 @@ import {
 } from './semantic-table-layout.ts';
 import { closingCellSpacingPt } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
-import { prepareTerminalBorderPlan } from './table-terminal-border-plan.ts';
+import {
+  closingEdgePt,
+  terminalBorderPlanAt,
+  type TerminalRowAt,
+} from './table-terminal-border-plan.ts';
 import { firstRowContentDeps } from './table-fragment-content-insets.ts';
 import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import { bottomToTopTextKeepsRowWhole } from './table-cell-text-direction.ts';
@@ -50,8 +53,8 @@ import {
   type VMergeFragmentCarry,
 } from './table-vmerge-fragment-carry.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
-import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
-import { pinnedBreakAtCursor, withSplittableRows } from './table-pinned-break.ts';
+import { tableOriginX, type SemanticTableRow } from './semantic-table.ts';
+import { readFlowTable } from './table-flow-structure.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
 import { shiftTableFragment, splitHead } from './table-fragment-finalize.ts';
 import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
@@ -93,36 +96,14 @@ export function* paginateTableInFlowSteps(
     anchorFrames,
     verticalAnchorFrames,
     styleCascade,
-    displayMode,
-    revisionAuthorFilter,
     deps: flowDeps,
     shiftAnchor,
     publishFragment,
   } = flow;
-  const regionWidth = columnWidth();
-  const authored = readTableStructure(
-    table,
-    regionWidth,
-    0,
-    styleCascade,
-    displayMode,
-    revisionAuthorFilter,
-    flow.compatibilityMode,
-    autofitContextOf(flowDeps)
-  );
-  if (!authored || authored.rows.length === 0) return { outOfFlow: false };
-  // A page- or margin-positioned table that reaches below the bottom margin breaks across
-  // pages in the body flow instead of keeping its sheet position (`table-pinned-break.ts`).
-  const pinnedBreak = flow.positionTextTable
-    ? undefined
-    : pinnedBreakAtCursor(table, authored, flow);
-  const structure = pinnedBreak ? withSplittableRows(authored) : authored;
+  const read = readFlowTable(table, flow);
+  if (!read) return { outOfFlow: false };
+  const { structure, pinnedBreak, outOfFlow } = read;
   if (pinnedBreak) flow.cursorY = pinnedBreak.top;
-  const outOfFlow =
-    pinnedBreak === undefined &&
-    structure.float !== undefined &&
-    (structure.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
-    structure.float.ySpec !== 'inline';
   // Only a table without `w:tblpPr` honors `w:pageBreakBefore` rows (`table-row-page-break.ts`).
   const breaksPages = structure.float === undefined;
   if (
@@ -642,22 +623,24 @@ export function* paginateTableInFlowSteps(
       if (rows.length === 0 && clearance.clear(clearance.pending)) admitSpans(bodyRowIndex, row);
     }
 
+    const terminalAt = (): TerminalRowAt => ({
+      structure,
+      row,
+      left: tableLeft,
+      top: flow.cursorY,
+      bottom: contentHeight(),
+      deps: rowDeps(),
+    });
+    // The room a row that ends the page needs below it for its own closing border.
+    let closingEdge = 0;
     const tryTerminalFit = (): void => {
-      if (
-        terminalDeps ||
-        isContinuation ||
-        heldByOpenSpan ||
-        naturalHeight <= contentHeight() - flow.cursorY + 0.001
-      )
+      if (terminalDeps || isContinuation || heldByOpenSpan) return;
+      if (naturalHeight <= contentHeight() - flow.cursorY + 0.001) {
+        const next = bodyRows[bodyRowIndex + 1];
+        closingEdge = closingEdgePt(terminalAt(), naturalHeight, next, tableDeps, rowHeightOf);
         return;
-      const plan = prepareTerminalBorderPlan(
-        structure,
-        row,
-        tableLeft,
-        flow.cursorY,
-        contentHeight(),
-        rowDeps()
-      );
+      }
+      const plan = terminalBorderPlanAt(terminalAt());
       if (!plan) return;
       terminalDeps = plan.deps;
       naturalHeight = plan.height;
@@ -743,7 +726,7 @@ export function* paginateTableInFlowSteps(
         })) ||
       (!heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
-        flow.cursorY + naturalHeight > contentHeight() + 0.001 &&
+        flow.cursorY + naturalHeight + closingEdge > contentHeight() + 0.001 &&
         flow.cursorY > 0 &&
         (keepsWholeAt(flow.cursorY) ||
           row.height.rule === 'exact' ||
@@ -752,7 +735,7 @@ export function* paginateTableInFlowSteps(
             structure.columnWidthsPt,
             tableLeft,
             flow.cursorY,
-            contentHeight(),
+            contentHeight() - closingEdge,
             false,
             0,
             rowDeps(),

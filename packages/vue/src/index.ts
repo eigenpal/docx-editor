@@ -127,8 +127,12 @@ export {
   navigationShift,
   useDocumentOutline,
   useDocumentSearch,
+  useGoToBookmark,
   useNavigationPane,
   useNavigationShift,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
+  type UseGoToBookmarkReturn,
   type NavigationShiftInput,
   type NavigationTabValue,
   type OutlineHeading,
@@ -247,6 +251,7 @@ export {
   DocxEditorNavigation,
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,
@@ -366,6 +371,14 @@ export {
   type WatermarkDialogLayout,
 } from './editor/watermark-dialog-model';
 export { useWatermark, type UseWatermarkReturn } from './editor/useWatermark';
+export {
+  DocxEditorBookmarkDialog,
+  useBookmarkDialog,
+  type BookmarkDialogFields,
+  type DocxEditorBookmarkDialogProps,
+  type UseBookmarkDialogReturn,
+} from './editor/DocxEditorBookmark';
+export { useBookmarks, type UseBookmarksReturn } from './editor/useBookmarks';
 
 export {
   PaginatedDocxEditor,

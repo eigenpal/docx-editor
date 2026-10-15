@@ -180,3 +180,12 @@ function parsePageRefSwitches(tokens: readonly string[], bookmark: string): RefF
   refSpecModifiers.set(spec, REF_MODS_PAGEREF);
   return spec;
 }
+
+/**
+ * A plain REF: its result is the target's text or number, which pagination never changes.
+ * PAGEREF shows a page number and NOTEREF a note number that can restart on each page.
+ */
+export function plainRefSpec(spec: RefFieldSpec): boolean {
+  const modifiers = refSpecModifiersOf(spec);
+  return !modifiers.pageRef && !modifiers.noteRef;
+}

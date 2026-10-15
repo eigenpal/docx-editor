@@ -221,6 +221,8 @@ describe('the operation vocabulary declares which operations write', () => {
       'deleteParagraph',
       'selectSpan',
       'selectBookmark',
+      'insertBookmark',
+      'deleteBookmark',
       'setFont',
       'setParagraphFormat',
       'setStyle',

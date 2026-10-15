@@ -196,6 +196,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorBookmark": {
+      "propsAddedInReact": ["showHidden", "sortBy"],
+      "propsAddedInVue": ["children", "className", "preset", "props", "style"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorContent": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "class", "inheritAttrs", "name", "props"],

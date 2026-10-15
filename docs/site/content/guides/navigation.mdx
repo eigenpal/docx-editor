@@ -454,9 +454,13 @@ To leave the shortcut to the browser everywhere, set `findShortcut` to `false`. 
 </Framework>
 </FrameworkTabs>
 
+### Open Go to with Ctrl+G
+
+The **Bookmarks** tab jumps to a bookmark. <kbd>Ctrl</kbd>+<kbd>G</kbd> opens it, or <kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>G</kbd> on macOS. F5 is not used because browsers reload the page on it. The tab names the shortcut in its tooltip. The shortcut follows the same focus rules as Find. To leave it to the browser, set `goToShortcut` to `false`. For the tab itself, see [Bookmarks](/docs/2.x/guides/bookmarks#find-and-go-to-bookmarks).
+
 ### Pane focus
 
-When the pane opens from its button or from the shortcut, focus moves into the pane. On **Find**, the query field receives focus. On **Headings**, the current heading receives focus. If no heading is current, the first heading or the filter field receives focus.
+When the pane opens from its button or from a shortcut, focus moves into the pane. On **Find**, the query field receives focus. On **Bookmarks**, the bookmark search field receives focus. On **Headings**, the current heading receives focus. If no heading is current, the first heading or the filter field receives focus.
 
 <kbd>Esc</kbd> and the close button close the pane. Focus returns to the element that had focus when
 the shortcut opened the pane, without scrolling the document. If that element was in the document,

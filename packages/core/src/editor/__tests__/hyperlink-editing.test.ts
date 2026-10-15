@@ -302,15 +302,15 @@ describe('editing a hyperlink through the editor', () => {
     }
   );
 
-  test('deleting a link’s whole text keeps the bookmarks that were inside it', () => {
+  test('deleting a link’s whole text keeps the bookmark markers that were inside it', () => {
     // Removing the emptied `w:hyperlink` took its subtree with it, so an anchor other links
     // point at disappeared — while the identical marker written OUTSIDE a link survives the
-    // same deletion.
+    // same deletion. The bookmark runs past the link, so the deletion does not enclose it.
     const mounted = mount(
       '<w:p><w:r><w:t>ab</w:t></w:r>' +
         '<w:hyperlink w:anchor="t"><w:bookmarkStart w:id="1" w:name="inside"/>' +
-        '<w:r><w:t>cd</w:t></w:r><w:bookmarkEnd w:id="1"/></w:hyperlink>' +
-        '<w:r><w:t>ef</w:t></w:r></w:p>'
+        '<w:r><w:t>cd</w:t></w:r></w:hyperlink>' +
+        '<w:r><w:t>ef</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
     );
     expect(mounted.editor.surface!.bookmarks().has('inside')).toBe(true);
     select(mounted, 0, 2, 4);
@@ -319,6 +319,19 @@ describe('editing a hyperlink through the editor', () => {
     // The link is gone (it has no text left); the anchor it contained is not.
     expect(mounted.editor.surface!.hyperlinks.linksInCaretParagraph()).toEqual([]);
     expect(mounted.editor.surface!.bookmarks().has('inside')).toBe(true);
+  });
+
+  test('deleting a link’s whole text removes a bookmark that lay entirely inside it', () => {
+    const mounted = mount(
+      '<w:p><w:r><w:t>ab</w:t></w:r>' +
+        '<w:hyperlink w:anchor="t"><w:bookmarkStart w:id="1" w:name="inside"/>' +
+        '<w:r><w:t>cd</w:t></w:r><w:bookmarkEnd w:id="1"/></w:hyperlink>' +
+        '<w:r><w:t>ef</w:t></w:r></w:p>'
+    );
+    select(mounted, 0, 2, 4);
+    expect(mounted.editor.exec({ type: 'deleteText' }).ok).toBe(true);
+    expect(mounted.editor.surface!.session.bodyText()).toBe('abef');
+    expect(mounted.editor.surface!.bookmarks().has('inside')).toBe(false);
   });
 
   test('a collapsed caret links the URL as its own display text', () => {

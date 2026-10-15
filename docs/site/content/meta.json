@@ -36,6 +36,7 @@
     "guides/diagnostics",
     "guides/document-refresh",
     "guides/navigation",
+    "guides/bookmarks",
     "guides/toolbar",
     "guides/chrome-slots",
     "guides/customize-dialogs",

@@ -195,6 +195,17 @@
       "kind": "class",
       "requirementSet": null,
       "members": {
+        "delete": {
+          "uid": "DocxEditor.Bookmark#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "name": {
           "uid": "DocxEditor.Bookmark#name",
           "kind": "property",
@@ -722,6 +733,54 @@
             {
               "params": [],
               "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "deleteBookmark": {
+          "uid": "DocxEditor.Document#deleteBookmark",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "getBookmarkRange": {
+          "uid": "DocxEditor.Document#getBookmarkRange",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "getBookmarkRangeOrNullObject": {
+          "uid": "DocxEditor.Document#getBookmarkRangeOrNullObject",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Range"
             }
           ]
         },
@@ -1613,6 +1672,28 @@
             }
           ]
         },
+        "getBookmarks": {
+          "uid": "DocxEditor.Range#getBookmarks",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "includeHidden",
+                  "type": "boolean",
+                  "optional": true
+                },
+                {
+                  "name": "includeAdjacent",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string[]>"
+            }
+          ]
+        },
         "hyperlink": {
           "uid": "DocxEditor.Range#hyperlink",
           "kind": "property",
@@ -1621,6 +1702,22 @@
             {
               "params": [],
               "returns": "string"
+            }
+          ]
+        },
+        "insertBookmark": {
+          "uid": "DocxEditor.Range#insertBookmark",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "void"
             }
           ]
         },

@@ -79,7 +79,7 @@ For paragraph collections, use `getFirst()`, `getLast()`, `getFirstOrNullObject(
 
 ## Discover bookmarks
 
-`Body.bookmarks` enumerates bookmarks in one story, in document order. `Range.bookmarks` provides bookmarks for the addressed range scope. A `Bookmark` exposes loaded `name`, navigation `range`, and `select(selectionMode?)`. `BookmarkCollection` exposes `items`; it has no `exists()` or bookmark deletion method.
+`Body.bookmarks` enumerates bookmarks in one story, in document order. `Range.bookmarks` provides bookmarks for the addressed range scope. A `Bookmark` exposes loaded `name`, navigation `range`, `select(selectionMode?)`, and `delete()`. `BookmarkCollection` exposes `items`; it has no `exists()` method.
 
 This example returns bookmark names from the main story:
 
@@ -95,6 +95,44 @@ const names = await runtime.run(async (context) => {
 ```
 
 A header, footer, or note body has its own bookmark collection. No accessor combines bookmarks across all stories. Bookmark ranges do not expose document-wide numeric offsets.
+
+## Add, find, and delete bookmarks by name
+
+These members follow the Office.js shape:
+
+| Member | What it does |
+| --- | --- |
+| `Range.insertBookmark(name)` | Adds a bookmark around the range, or at its position when the range is empty. |
+| `Range.getBookmarks(includeHidden?, includeAdjacent?)` | Returns a `ClientResult<string[]>` with the names of the bookmarks in or overlapping the range. |
+| `Document.getBookmarkRange(name)` | Returns the range of the bookmark with that name. |
+| `Document.getBookmarkRangeOrNullObject(name)` | Like `getBookmarkRange`, but returns a null object for a missing name. |
+| `Document.deleteBookmark(name)` | Deletes the bookmark with that name. The text stays. |
+
+Names compare without case. A name starts with a letter, or with an underscore for a hidden bookmark. It holds only letters, digits, and underscores, and has at most 40 characters. Any other name makes `context.sync()` fail with `InvalidArgument`, and nothing in that batch is written. The call itself does not throw.
+
+The following example adds a bookmark, reads its text, and lists the bookmarks of a paragraph:
+
+```ts
+await runtime.run(async (context) => {
+  const found = context.document.body.search('Closing Date');
+  found.load('items');
+  await context.sync();
+  found.items[0].insertBookmark('ClosingDate');
+  await context.sync();
+
+  const range = context.document.getBookmarkRange('closingdate');
+  range.load('text');
+  const names = context.document.body.paragraphs.getFirst().getRange('Whole').getBookmarks();
+  await context.sync();
+  console.log(range.text, names.value);
+});
+```
+
+Lookups by name search the main text first, then headers, footers, and notes. `getBookmarkRange` fails with `ItemNotFound` when no bookmark has the name, and `deleteBookmark` changes nothing. `deleteBookmark` and `Bookmark.delete` can share a `context.sync()` with edits in another story: the removal is part of the same transaction.
+
+`Range.getBookmarks` answers a bookmark when it shares text with the range. A point bookmark counts when it is inside the range or at its start. An empty range answers the bookmark around it. Pass `includeAdjacent` to add bookmarks that only touch the range, and `includeHidden` to add names that start with an underscore.
+
+If you add a name that the same story uses, the bookmark moves. If another story uses the name, `insertBookmark` moves the bookmark from that story in the same sync. Bookmarks are not revisions, so with `TrackMineOnly` the bookmark is written directly.
 
 ## Select a range in the browser
 
@@ -115,6 +153,22 @@ if (runtime.capabilities.selection) {
 ```
 
 Selection requires an attached browser document. The API does not expose `Document.getSelection()` or a separate range scrolling method.
+
+### Go to a bookmark
+
+To go to a bookmark by name, read its range with `getBookmarkRangeOrNullObject`, then select it. A name that no bookmark has answers a null object:
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.getBookmarkRangeOrNullObject('Intro');
+  await context.sync();
+  if (range.isNullObject) return;
+  range.select();
+  await context.sync();
+});
+```
+
+`select()` works for a bookmark in the main text, a header, a footer, or a note. The editor opens that region first, so the selection and the editing region agree. A read-only editor selects in the main text and fails with `NotSupported` for any other region. Selecting writes nothing, so it can share a sync with edits in another region.
 
 ## Next steps
 

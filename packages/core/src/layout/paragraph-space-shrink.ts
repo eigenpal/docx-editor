@@ -20,6 +20,14 @@ const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ $`, 'u');
 const BARE_WORD = new RegExp(`^${WORD_CHARACTER}+$`, 'u');
 
 /**
+ * Whether a candidate ends at the break after a hyphen inside a word ("well-" of
+ * "well-known"). That fragment can borrow inter-word space as a whole word does.
+ */
+export function endsAtHyphenBreak(candidate: string): boolean {
+  return /\p{L}[-‐]$/u.test(candidate);
+}
+
+/**
  * The first span whose space can shrink. Only the text after a line's last tab is
  * justified; a tab and everything before it keep their positions.
  */
@@ -31,7 +39,8 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
 
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
-    (!span.style.shaping && !/^[\p{Script=Latin}\p{N}\p{P} \u2007\u202f]*$/u.test(span.text)) ||
+    (!span.style.shaping &&
+      !/^[\p{Script=Latin}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f]*$/u.test(span.text)) ||
     span.lineEndWhitespace ||
     !SPACED_SPAN.test(span.text) ||
     span.equation
@@ -96,13 +105,20 @@ export function fitsWithSpaceShrink(
   // The alternative line stops before the overflowing word, so only the spans ahead
   // of it carry its stretch, and the space in front of it is the one that hangs.
   const before = spans.slice(first, Math.max(first, Math.min(wordStart, spans.length)));
-  const terminalSpace = before.length ? capacity(before[before.length - 1]!, measurer) * 4 : 0;
+  // Every space after the last word hangs there: a run of spaces as well as the word's own.
+  let terminalSpace = 0;
+  for (let index = before.length - 1; index >= 0; index -= 1) {
+    terminalSpace += capacity(before[index]!, measurer) * 4;
+    if (!/^ +$/.test(before[index]!.text)) break;
+  }
   const existingSpaces =
     before.reduce((sum, span) => sum + capacity(span, measurer) * 4, 0) - terminalSpace;
   if (existingSpaces <= 0) return false;
   const expansion = 1 + Math.max(0, available - wordStartWidth + terminalSpace) / existingSpaces;
-  const compression = spaceWidth / (spaceWidth - needed);
-  return expansion > 1.5 || 1 + (expansion - 1) / 1.7 >= compression;
+  // Shrinking a space costs twice as much as stretching one: the word joins the line
+  // when each space would lose at most half of what the shorter line would add to it.
+  const shrink = needed / spaceWidth;
+  return 2 * shrink <= expansion - 1 + 1e-9;
 }
 
 /**

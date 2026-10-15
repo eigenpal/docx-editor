@@ -18,6 +18,7 @@ import { renderPopup, type DocxEditorPopup } from './popup-renderer';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
 import type { DocxEditorWatermarkDialogProps } from './DocxEditorWatermark';
+import type { DocxEditorBookmarkDialogProps } from './DocxEditorBookmark';
 import type { DocxEditorTextFormFieldDialogProps } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorHyperLink, type HyperLinkProps } from './DocxEditorHyperLink';
 import { DocxEditorContentControl, type ContentControlProps } from './DocxEditorContentControl';
@@ -55,6 +56,8 @@ export interface DocxEditorPopups {
   paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
   /** The Watermark dialog the Insert menu opens. Pass `presets` here to change its text choices. */
   watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
+  /** The Bookmark dialog the Insert menu and Ctrl/Cmd+Shift+F5 open. */
+  bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
   revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
   textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
   hyperlink?: DocxEditorPopup<HyperLinkProps>;

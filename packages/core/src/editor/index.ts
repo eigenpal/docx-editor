@@ -162,7 +162,7 @@ export {
   trailingGapCost,
   type BarRoomInput,
 } from './toolbar-measure.ts';
-export { chordLetter } from './chord-letter.ts';
+export { chordLetter, isGoToChord } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {
   applyTableChromePick,
@@ -233,10 +233,18 @@ export {
   type DocxEditorConfig,
   type EquationChromeHandlers,
   type HyperlinkChromeHandlers,
+  type BookmarkChromeHandlers,
 } from './docx-editor.ts';
 // `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
 // has to export the answer too.
-export type { AttachOptions, FontMeasurementState } from './docx-editor-types.ts';
+export type {
+  AttachOptions,
+  BookmarkMarkInfo,
+  BookmarkMarkOptions,
+  FontMeasurementState,
+  GoToChromeHandlers,
+} from './docx-editor-types.ts';
+export type { BookmarkMarkOptionsSource } from './bookmark-chrome.ts';
 // `DocxEditorConfig.fieldResults` takes it.
 export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 // `DocxEditorConfig.contentLockPolicy` takes it.
@@ -610,3 +618,17 @@ export {
   watermarkShapeBox,
   type WatermarkSize,
 } from './watermark-geometry.ts';
+
+/** The Bookmark dialog's list order and name rules, shared by the React and Vue dialogs. */
+export {
+  bookmarkDialogInitialName,
+  bookmarkDialogNameState,
+  bookmarkDialogRows,
+  goToBookmarkGroups,
+  goToBookmarkMatch,
+  goToBookmarkRows,
+  goToBookmarkTarget,
+  type BookmarkDialogNameState,
+  type GoToBookmarkGroup,
+  type BookmarkSortOrder,
+} from './bookmark-dialog-model.ts';

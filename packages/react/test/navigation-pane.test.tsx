@@ -193,14 +193,14 @@ describe('DocxEditor.Navigation', () => {
     expect(open.container.querySelector('.docx-nav__close')).not.toBeNull();
   });
 
-  test('renders both tabs, with headings selected first', () => {
+  test('renders the three tabs, with headings selected first', () => {
     const { container } = render(
       <DocxEditorRoot>
         <DocxEditorNavigation defaultOpen />
       </DocxEditorRoot>
     );
     const tabs = [...container.querySelectorAll('[role="tab"]')];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Headings', 'Find']);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Headings', 'Find', 'Bookmarks']);
     expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('false');
   });

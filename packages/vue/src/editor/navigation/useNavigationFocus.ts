@@ -15,12 +15,13 @@ import {
   focusPaneEntry,
   coverPage,
   isFindShortcut,
+  isGoToShortcut,
   ownsShortcutTarget,
   paneEntryTarget,
   publishViewportSize,
   returnFocus,
 } from './navigation-keys';
-import type { UseNavigationPaneResult } from './useNavigationPane';
+import type { NavigationTab, UseNavigationPaneResult } from './useNavigationPane';
 
 /** @internal */
 export interface NavigationFocus {
@@ -32,7 +33,8 @@ export interface NavigationFocus {
 /** @internal */
 export function useNavigationFocus(
   pane: UseNavigationPaneResult,
-  findShortcut: () => boolean = () => true
+  findShortcut: () => boolean = () => true,
+  goToShortcut: () => boolean = () => true
 ): NavigationFocus {
   const editor = useDocxEditor();
   const viewport = useNavigationViewportElement();
@@ -85,7 +87,26 @@ export function useNavigationFocus(
     answerRequests();
   };
 
+  // Open the pane on `tab` and focus its entry. `from` gets focus back when it closes.
+  const openTab = (tab: NavigationTab, from: HTMLElement | null) => {
+    if (from && !rootRef.value?.contains(from)) opener = from;
+    restoreRequest = false;
+    // Already open on the tab: nothing re-renders, so focus the entry now.
+    if (pane.open.value && pane.tab.value === tab) {
+      focusEntry();
+      return;
+    }
+    focusRequest = true;
+    if (pane.tab.value !== tab) pane.setTab(tab);
+    if (!pane.open.value) pane.setOpen(true);
+    answerRequests();
+  };
+
   const intents: NavigationIntents = {
+    openTab: (tab) => {
+      const active = rootRef.value?.ownerDocument.activeElement;
+      openTab(tab, isHTMLElementNode(active) ? active : null);
+    },
     toggle: () => {
       if (pane.open.value) {
         close();
@@ -109,25 +130,28 @@ export function useNavigationFocus(
     },
   };
 
-  // Ctrl/Cmd+F, on the document so it reaches the toolbar and the pane as well as the pages.
-  // Bubble phase: the engine's keymap and the viewport's zoom capture see it first, and an
-  // event either of them claimed (default prevented) is left alone.
+  // Ctrl/Cmd+F and the Go To chord, on the document so they reach the toolbar and the pane as
+  // well as the pages. Bubble phase: the engine's keymap and the viewport's zoom capture see
+  // them first, and an event either of them claimed (default prevented) is left alone.
   const onDocumentKeyDown = (event: KeyboardEvent) => {
-    if (!findShortcut() || event.defaultPrevented || !isFindShortcut(event)) return;
-    if (!ownsShortcutTarget(event.target, rootRef.value, viewport.value)) return;
-    event.preventDefault();
-    const active = rootRef.value?.ownerDocument.activeElement;
-    if (isHTMLElementNode(active) && !rootRef.value?.contains(active)) opener = active;
-    restoreRequest = false;
-    // Already open on Find: nothing re-renders, so focus the query now.
-    if (pane.open.value && pane.tab.value === 'find') {
-      focusEntry();
+    if (event.defaultPrevented) return;
+    const tab: NavigationTab | null =
+      findShortcut() && isFindShortcut(event)
+        ? 'find'
+        : goToShortcut() && isGoToShortcut(event)
+          ? 'goto'
+          : null;
+    if (!tab || !ownsShortcutTarget(event.target, rootRef.value, viewport.value)) return;
+    // Go To goes through the editor as the shortcut does: a host's own Go To UI on top
+    // answers it, and one that turned its shortcut off leaves the chord to the browser.
+    const current = editor.value;
+    if (tab === 'goto' && current?.can({ type: 'openGoTo' }).ok) {
+      if (current.exec({ type: 'openGoTo', fromShortcut: true }).ok) event.preventDefault();
       return;
     }
-    focusRequest = true;
-    if (pane.tab.value !== 'find') pane.setTab('find');
-    if (!pane.open.value) pane.setOpen(true);
-    answerRequests();
+    event.preventDefault();
+    const active = rootRef.value?.ownerDocument.activeElement;
+    openTab(tab, isHTMLElementNode(active) ? active : null);
   };
   let listening: Document | null = null;
   onMounted(() => {

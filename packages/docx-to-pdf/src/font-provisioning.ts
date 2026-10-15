@@ -586,6 +586,12 @@ export function installedWordFontResolver(roots: readonly string[]) {
         ['Aptos-Narrow-Bold-Italic.ttf'],
       ],
       Helvetica: [['Helvetica.ttc'], ['Helvetica.ttc'], ['Helvetica.ttc'], ['Helvetica.ttc']],
+      Garamond: [
+        ['GARA.ttf', 'GARA.TTF'],
+        ['GARABD.ttf', 'GARABD.TTF'],
+        ['GARAIT.ttf', 'GARAIT.TTF'],
+        ['GARABDIT.ttf', 'GARABDIT.TTF'],
+      ],
       SimHei: [['SimHei.ttf', 'simhei.ttf'], [], [], []],
       FangSong: [['Fangsong.ttf', 'simfang.ttf'], [], [], []],
       KaiTi: [['Kaiti.ttf', 'simkai.ttf'], [], [], []],

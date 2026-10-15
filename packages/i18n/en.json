@@ -87,7 +87,12 @@
     "printRefused": "The browser did not allow printing from the page. Select Open PDF, then print from the PDF viewer.",
     "printNoViewer": "This browser cannot print PDF files from the page. Select Open PDF, then print from the PDF viewer.",
     "printPdfMissing": "Printing uses PDF conversion. Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
-    "insertTextBox": "Text Box"
+    "insertTextBox": "Text Box",
+    "bookmark": "Bookmark…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Go To Bookmark…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "toc": {
     "refresh": "Refresh table of contents",
@@ -139,7 +144,8 @@
     "addComment": "Add comment",
     "more": "More",
     "unavailableInPreview": "Not available in this preview build",
-    "paragraphMarks": "Show paragraph breaks"
+    "paragraphMarks": "Show paragraph breaks",
+    "showBookmarks": "Show bookmarks"
   },
   "alignment": {
     "alignLeft": "Align Left",
@@ -409,6 +415,27 @@
       "tabMixed": "The selected paragraphs have different tab stops.",
       "mixed": "Mixed",
       "notShown": "Not shown here"
+    },
+    "bookmark": {
+      "title": "Bookmark",
+      "name": "Bookmark name",
+      "list": "Bookmarks",
+      "empty": "This document has no bookmarks.",
+      "sortBy": "Sort by",
+      "sortName": "Name",
+      "sortLocation": "Location",
+      "showHidden": "Hidden bookmarks",
+      "add": "Add",
+      "delete": "Delete",
+      "goTo": "Go To",
+      "nameEmpty": "Enter a bookmark name.",
+      "nameTooLong": "A bookmark name has at most 40 characters.",
+      "nameInvalidStart": "A bookmark name starts with a letter.",
+      "nameInvalidCharacter": "Use only letters, digits, and underscores.",
+      "nameExists": "A bookmark with this name exists. Add moves it to the selection.",
+      "refused": "The bookmark could not be changed.",
+      "duplicates": "{count, plural, one {# other place uses this name.} other {# other places use this name.}} Links and Go To use the first.",
+      "keepFirst": "Keep first"
     }
   },
   "comments": {
@@ -509,7 +536,8 @@
     "closeTitle": "Close navigation",
     "tabs": {
       "headings": "Headings",
-      "find": "Find"
+      "find": "Find",
+      "goto": "Bookmarks"
     },
     "headings": {
       "noHeadings": "No headings found. Add headings to your document to see them here."
@@ -530,6 +558,35 @@
       "counterTruncated": "Result {current} of {total}+",
       "total": "{total, plural, one {# result} other {# results}}",
       "totalTruncated": "{total, plural, other {#+ results}}"
+    },
+    "goTo": {
+      "tabTitle": "Go to a bookmark ({shortcut})",
+      "label": "Bookmark",
+      "placeholder": "Search bookmarks",
+      "listAriaLabel": "Bookmarks",
+      "countFiltered": "{shown} of {total}",
+      "enterHint": "Press Enter to go to the highlighted bookmark.",
+      "notFound": "No bookmark is named “{name}”.",
+      "failed": "The bookmark could not be shown.",
+      "typeName": "Type a bookmark name, or pick one from the list.",
+      "empty": "This document has no bookmarks.",
+      "emptyHint": "Select text, then add a bookmark to name it.",
+      "add": "Add a bookmark…",
+      "noMatches": "No bookmarks match.",
+      "atCaret": "Contains the cursor",
+      "places": {
+        "header": "Header",
+        "footer": "Footer",
+        "footnote": "Footnote",
+        "endnote": "Endnote"
+      },
+      "groups": {
+        "body": "Main text",
+        "header": "Headers",
+        "footer": "Footers",
+        "footnote": "Footnotes",
+        "endnote": "Endnotes"
+      }
     }
   },
   "viewer": {

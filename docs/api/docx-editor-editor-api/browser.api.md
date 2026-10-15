@@ -95,6 +95,7 @@ export type BodyInsertTextLocation = Extract<RangeInsertTextLocation, 'Replace' 
 export class Bookmark extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Bookmark;
+    delete(): void;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -387,8 +388,11 @@ class Document_2 extends ModelObject {
     set changeTrackingMode(mode: ChangeTrackingMode | 'Off' | 'TrackAll' | 'TrackMineOnly');
     get comments(): CommentCollection;
     get contentControls(): ContentControlCollection;
+    deleteBookmark(name: string): void;
     get endnotes(): NoteItemCollection;
     get footnotes(): NoteItemCollection;
+    getBookmarkRange(name: string): Range_2;
+    getBookmarkRangeOrNullObject(name: string): Range_2;
     // @internal
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal
@@ -1198,6 +1202,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     delete(): void;
     get fields(): FieldCollection;
     get font(): Font;
+    getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -1205,6 +1210,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     get hyperlink(): string;
     set hyperlink(value: string);
     get inlinePictures(): InlinePictureCollection;
+    insertBookmark(name: string): void;
     insertBreak(breakType: BreakType | 'Page' | 'SectionNext' | 'Next' | 'Line' | 'SectionContinuous' | 'SectionEven' | 'SectionOdd', insertLocation: InsertLocation.before | InsertLocation.after | 'Before' | 'After'): void;
     insertComment(commentText: string): Comment_2;
     insertContentControl(contentControlType?: ContentControlType.richText | ContentControlType.plainText | ContentControlType.buildingBlockGallery | ContentControlType.checkBox | ContentControlType.comboBox | ContentControlType.datePicker | ContentControlType.dropDownList | ContentControlType.group | ContentControlType.picture | ContentControlType.repeatingSection | 'RichText' | 'PlainText' | 'BuildingBlockGallery' | 'CheckBox' | 'ComboBox' | 'DatePicker' | 'DropDownList' | 'Group' | 'Picture' | 'RepeatingSection'): ContentControl;

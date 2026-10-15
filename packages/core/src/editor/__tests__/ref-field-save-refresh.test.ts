@@ -86,8 +86,9 @@ function editTarget(editor: DocxEditorInstance): void {
     {
       op: 'insertText',
       paragraphId: firstParagraphId(editor),
-      offset: 'Closing Date'.length,
-      text: 's',
+      // At the bookmark's start, so the typed text joins the bookmark.
+      offset: 0,
+      text: 'The ',
     },
   ]);
   expect(result.committed).toBe(true);
@@ -129,9 +130,9 @@ describe('save() refreshes stale REF results', () => {
     expect(xml).toContain(' REF term \\h ');
     // BOTH result caches now read the edited text (the target run serializes as two w:t).
     expect(xml).toContain(
-      '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Closing Dates</w:t></w:r>'
+      '<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>The Closing Date</w:t></w:r>'
     );
-    expect(xml).toContain('<w:fldSimple w:instr=" REF term "><w:r><w:t>Closing Dates</w:t>');
+    expect(xml).toContain('<w:fldSimple w:instr=" REF term "><w:r><w:t>The Closing Date</w:t>');
     editor.destroy();
   });
 
@@ -175,7 +176,7 @@ describe('save() refreshes stale REF results', () => {
     // transaction ran for a document whose only REF result is revision content.
     expect(xml).toContain('<w:ins');
     expect(xml).toContain('<w:t>Closing Date</w:t>');
-    expect(xml).toContain('<w:t>Closing Dates</w:t>');
+    expect(xml).toContain('<w:t>The Closing Date</w:t>');
     expect(editor.getDocumentHandle().revision).toBe(revisionAfterEdit);
     editor.destroy();
   });

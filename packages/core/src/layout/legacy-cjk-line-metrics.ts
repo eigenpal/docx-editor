@@ -1,6 +1,6 @@
-// Legacy CJK faces can declare a one-em box with no leading. Word reserves extra
-// space above and below those glyphs. Keep this narrow: faces with their own
-// leading, taller face boxes, and explicit substitution metrics stay unchanged.
+// Legacy CJK faces can declare a one-em box with little or no leading. Word reserves
+// extra space above and below those glyphs. Keep this narrow: taller face boxes and
+// explicit substitution metrics stay unchanged.
 import { trustedFontBytes, type ResolvedFont } from './font-resource.ts';
 
 const cjkFaces = new WeakMap<ResolvedFont, boolean>();
@@ -36,14 +36,13 @@ export function legacyCjkLineMetrics(
   lineGap: number,
   roundingTolerance: number
 ): { height: number; baseline: number } {
-  if (
-    lineGap > roundingTolerance ||
-    Math.abs(metrics.height - sizePt) > roundingTolerance ||
-    !hasCjkCodePages(font)
-  )
-    return metrics;
-  // Saved Word MS Gothic lines at 11pt occupy 14.28pt before paragraph spacing.
-  // The continuous 1.3em box differs only by Word's device-grid rounding.
-  const leading = sizePt * 0.3;
-  return { height: metrics.height + leading, baseline: metrics.baseline + leading / 2 };
+  const faceBox = metrics.height - lineGap;
+  if (Math.abs(faceBox - sizePt) > roundingTolerance || !hasCjkCodePages(font)) return metrics;
+  // Saved Word MS Gothic lines at 11pt occupy 14.28pt before paragraph spacing, and
+  // SimSun lines at 12pt (a one-em box plus 0.14em of its own leading) occupy 15.6pt.
+  // Both are the continuous 1.3em box up to Word's device-grid rounding; the face's own
+  // leading is absorbed, and the extra space is split above and below the glyphs.
+  const height = Math.max(metrics.height, sizePt * 1.3);
+  const ascent = metrics.baseline - lineGap;
+  return { height, baseline: ascent + (height - faceBox) / 2 };
 }

@@ -7,6 +7,8 @@
 import { AllowedComponentProps } from 'vue';
 import { AnchorHighlightAnimation } from '@docx-editor.dev/core/contracts/editor';
 import { AnchorHighlightOptions } from '@docx-editor.dev/core/contracts/editor';
+import { BookmarkSortOrder } from '@docx-editor.dev/core/editor';
+import { BookmarkSummary } from '@docx-editor.dev/core/contracts/editor';
 import { CalendarDay } from '@docx-editor.dev/core/editor';
 import { CalendarMonth } from '@docx-editor.dev/core/editor';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
@@ -188,6 +190,14 @@ import { ZoomMode } from '@docx-editor.dev/core/contracts/editor';
 export { AnchorHighlightAnimation }
 
 export { AnchorHighlightOptions }
+
+// @public
+export interface BookmarkDialogFields {
+    name: string;
+    showHidden: boolean;
+    // (undocumented)
+    sortBy: BookmarkSortOrder;
+}
 
 export { CHROME_GROUPS }
 
@@ -2280,6 +2290,114 @@ export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
 }
 
 // @public
+export const DocxEditorBookmarkDialog: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        readonly children: PropType<DocxEditorChildren>;
+        readonly className: {
+            readonly default: undefined;
+            readonly type: StringConstructor;
+        };
+        readonly onClose: {
+            readonly required: true;
+            readonly type: PropType<() => void>;
+        };
+        readonly open: {
+            readonly required: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly preset: {
+            readonly default: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        readonly className: string;
+        readonly preset: boolean;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        readonly children: PropType<DocxEditorChildren>;
+        readonly className: {
+            readonly default: undefined;
+            readonly type: StringConstructor;
+        };
+        readonly onClose: {
+            readonly required: true;
+            readonly type: PropType<() => void>;
+        };
+        readonly open: {
+            readonly required: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly preset: {
+            readonly default: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, {
+        readonly className: string;
+        readonly preset: boolean;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    readonly children: PropType<DocxEditorChildren>;
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly onClose: {
+        readonly required: true;
+        readonly type: PropType<() => void>;
+    };
+    readonly open: {
+        readonly required: true;
+        readonly type: BooleanConstructor;
+    };
+    readonly preset: {
+        readonly default: true;
+        readonly type: BooleanConstructor;
+    };
+    readonly style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    readonly className: string;
+    readonly preset: boolean;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    Apply: vue.DefineComponent<DialogPartProps>;
+    Body: vue.DefineComponent<DialogPartProps>;
+    Cancel: vue.DefineComponent<DialogPartProps>;
+    Delete: vue.DefineComponent<DialogPartProps>;
+    Error: vue.DefineComponent<DialogPartProps>;
+    Field: vue.DefineComponent<DialogPartProps & {
+        name: "list" | "name" | "showHidden" | "sortBy";
+    }>;
+    Footer: vue.DefineComponent<DialogPartProps>;
+    GoTo: vue.DefineComponent<DialogPartProps>;
+    Header: vue.DefineComponent<DialogPartProps>;
+    KeepFirst: vue.DefineComponent<DialogPartProps>;
+    Reset: vue.DefineComponent<DialogPartProps>;
+    Title: vue.DefineComponent<DialogPartProps>;
+};
+
+// @public
+export interface DocxEditorBookmarkDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
 export type DocxEditorChildren = VNode;
 
 // @public (undocumented)
@@ -3033,6 +3151,7 @@ export const DocxEditorMenu: DocxEditorMenuNamespace;
 export interface DocxEditorMenuNamespace {
     // (undocumented)
     (props: DocxEditorMenuProps): VNode;
+    readonly Bookmark: typeof MenuBookmark;
     // (undocumented)
     readonly Entry: typeof MenuEntry;
     // (undocumented)
@@ -3120,6 +3239,7 @@ export interface DocxEditorNamespace {
     }): VNode;
     // (undocumented)
     readonly AuthorStyle: typeof DocxEditorAuthorStyle;
+    readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
     // (undocumented)
     readonly ColorByChangeType: typeof DocxEditorColorByChangeType;
     // (undocumented)
@@ -3199,6 +3319,8 @@ export interface DocxEditorNavigationNamespace {
     // (undocumented)
     readonly Find: typeof NavigationFind;
     // (undocumented)
+    readonly GoTo: typeof NavigationGoTo;
+    // (undocumented)
     readonly Header: typeof NavigationHeader;
     // (undocumented)
     readonly Headings: typeof NavigationHeadings;
@@ -3219,6 +3341,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     // (undocumented)
     className?: string;
     findShortcut?: boolean;
+    goToShortcut?: boolean;
     searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
@@ -3780,6 +3903,7 @@ export type DocxEditorPopup<P extends object> = false | ((props: P) => DocxEdito
 
 // @public
 export interface DocxEditorPopups {
+    bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
     // (undocumented)
     contentControl?: DocxEditorPopup<ContentControlProps>;
     contentControlCheckbox?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
@@ -4914,6 +5038,9 @@ export { FontUrlSource }
 
 export { generateRulerTicks }
 
+// @public
+export type GoToBookmarkProblem = 'empty' | 'notFound' | 'failed';
+
 // @public (undocumented)
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
 
@@ -5563,6 +5690,30 @@ export const NavigationFind: vue.DefineComponent<vue.ExtractPropTypes<{
     style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+// @public
+export const NavigationGoTo: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    style: {
+        default: undefined;
+        type: PropType<CSSProperties>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    style: {
+        default: undefined;
+        type: PropType<CSSProperties>;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    style: CSSProperties;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 // @public (undocumented)
 export const NavigationHeader: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
@@ -5703,7 +5854,7 @@ export const NavigationTabs: vue.DefineComponent<vue.ExtractPropTypes<{
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
-export type NavigationTabValue = 'headings' | 'find';
+export type NavigationTabValue = 'headings' | 'find' | 'goto';
 
 // @public (undocumented)
 export const NavigationTitle: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -6854,6 +7005,36 @@ export type ToolbarTranslate = (key: string) => string;
 
 export { TranslationKey }
 
+// @public
+export function useBookmarkDialog(): UseBookmarkDialogReturn;
+
+// @public
+export interface UseBookmarkDialogReturn extends UseDialogReturn<BookmarkDialogFields> {
+    readonly canDelete: ComputedRef<boolean>;
+    // (undocumented)
+    readonly canGoTo: ComputedRef<boolean>;
+    readonly duplicates: ComputedRef<number>;
+    // (undocumented)
+    goTo(): void;
+    keepFirst(): void;
+    // (undocumented)
+    remove(): void;
+    readonly rows: ComputedRef<readonly BookmarkSummary[]>;
+}
+
+// @public
+export function useBookmarks(): UseBookmarksReturn;
+
+// @public
+export interface UseBookmarksReturn {
+    readonly bookmarks: Readonly<ShallowRef<readonly BookmarkSummary[]>>;
+    readonly goTo: (name: string) => ExecResult;
+    readonly insert: (name: string) => ExecResult;
+    readonly isWritable: Readonly<ShallowRef<boolean>>;
+    readonly keepFirst: (name: string) => ExecResult;
+    readonly remove: (name: string) => ExecResult;
+}
+
 // @public (undocumented)
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;
 
@@ -7086,6 +7267,35 @@ export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: rea
 
 // @public (undocumented)
 export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): MarkedFontResolver;
+
+// @public
+export function useGoToBookmark(options?: MaybeRefOrGetter_2<UseGoToBookmarkOptions>): UseGoToBookmarkReturn;
+
+// @public
+export interface UseGoToBookmarkOptions {
+    readonly enabled?: boolean;
+}
+
+// @public
+export interface UseGoToBookmarkReturn {
+    readonly activeIndex: ComputedRef<number>;
+    readonly bookmarks: Readonly<ShallowRef<readonly BookmarkSummary[]>>;
+    readonly go: (name?: string) => ExecResult;
+    readonly move: (delta: number) => void;
+    readonly problem: Readonly<ShallowRef<GoToBookmarkProblem | null>>;
+    readonly problemName: Readonly<ShallowRef<string>>;
+    readonly query: Readonly<ShallowRef<string>>;
+    readonly rows: ComputedRef<readonly BookmarkSummary[]>;
+    readonly setActiveIndex: (index: number) => void;
+    readonly setQuery: (query: string) => void;
+    // (undocumented)
+    readonly setShowHidden: (showHidden: boolean) => void;
+    // (undocumented)
+    readonly setSortBy: (sortBy: BookmarkSortOrder) => void;
+    readonly showHidden: Readonly<ShallowRef<boolean>>;
+    // (undocumented)
+    readonly sortBy: Readonly<ShallowRef<BookmarkSortOrder>>;
+}
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;

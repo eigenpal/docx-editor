@@ -87,7 +87,12 @@
     "printRefused": "El navegador no permitió imprimir desde la página. Selecciona Abrir PDF e imprime desde el visor de PDF.",
     "printNoViewer": "Este navegador no puede imprimir archivos PDF desde la página. Selecciona Abrir PDF e imprime desde el visor de PDF.",
     "printPdfMissing": "La impresión usa la conversión a PDF. Instala @docx-editor.dev/docx-to-pdf en tu servidor Node.js y configura menu.exporters.pdf.",
-    "insertTextBox": "Cuadro de texto"
+    "insertTextBox": "Cuadro de texto",
+    "bookmark": "Marcador…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Ir a marcador…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "toc": {
     "refresh": "Actualizar tabla de contenido",
@@ -139,7 +144,8 @@
     "more": "Más",
     "unavailableInPreview": "No disponible en esta versión preliminar",
     "paragraphMarks": "Mostrar marcas de párrafo",
-    "addComment": "Añadir comentario"
+    "addComment": "Añadir comentario",
+    "showBookmarks": "Mostrar marcadores"
   },
   "alignment": {
     "alignLeft": "Alinear a la izquierda",
@@ -409,6 +415,27 @@
       "tabMixed": "Los párrafos seleccionados tienen tabulaciones distintas.",
       "mixed": "Mixto",
       "notShown": "No se muestra aquí"
+    },
+    "bookmark": {
+      "title": "Marcador",
+      "name": "Nombre del marcador",
+      "list": "Marcadores",
+      "empty": "Este documento no tiene marcadores.",
+      "sortBy": "Ordenar por",
+      "sortName": "Nombre",
+      "sortLocation": "Ubicación",
+      "showHidden": "Marcadores ocultos",
+      "add": "Agregar",
+      "delete": "Eliminar",
+      "goTo": "Ir a",
+      "nameEmpty": "Escriba un nombre de marcador.",
+      "nameTooLong": "Un nombre de marcador tiene como máximo 40 caracteres.",
+      "nameInvalidStart": "Un nombre de marcador empieza por una letra.",
+      "nameInvalidCharacter": "Use solo letras, dígitos y guiones bajos.",
+      "nameExists": "Ya existe un marcador con este nombre. Agregar lo mueve a la selección.",
+      "refused": "No se pudo cambiar el marcador.",
+      "duplicates": "{count, plural, one {# lugar más usa este nombre.} other {# lugares más usan este nombre.}} Los vínculos e Ir a usan el primero.",
+      "keepFirst": "Conservar el primero"
     }
   },
   "comments": {
@@ -509,7 +536,8 @@
     "closeTitle": "Cerrar navegación",
     "tabs": {
       "headings": "Títulos",
-      "find": "Buscar"
+      "find": "Buscar",
+      "goto": "Marcadores"
     },
     "headings": {
       "noHeadings": "No se encontraron títulos. Añade títulos al documento para verlos aquí."
@@ -530,6 +558,35 @@
       "counterTruncated": "Resultado {current} de {total}+",
       "total": "{total, plural, one {# resultado} other {# resultados}}",
       "totalTruncated": "{total, plural, other {#+ resultados}}"
+    },
+    "goTo": {
+      "tabTitle": "Ir a un marcador ({shortcut})",
+      "label": "Marcador",
+      "placeholder": "Buscar marcadores",
+      "listAriaLabel": "Marcadores",
+      "countFiltered": "{shown} de {total}",
+      "enterHint": "Presione Entrar para ir al marcador resaltado.",
+      "notFound": "Ningún marcador se llama «{name}».",
+      "failed": "No se pudo mostrar el marcador.",
+      "typeName": "Escriba el nombre de un marcador o elija uno de la lista.",
+      "empty": "Este documento no tiene marcadores.",
+      "emptyHint": "Seleccione texto y agregue un marcador para asignarle un nombre.",
+      "add": "Agregar un marcador…",
+      "noMatches": "Ningún marcador coincide.",
+      "atCaret": "Contiene el cursor",
+      "places": {
+        "header": "Encabezado",
+        "footer": "Pie de página",
+        "footnote": "Nota al pie",
+        "endnote": "Nota al final"
+      },
+      "groups": {
+        "body": "Texto principal",
+        "header": "Encabezados",
+        "footer": "Pies de página",
+        "footnote": "Notas al pie",
+        "endnote": "Notas al final"
+      }
     }
   },
   "viewer": {

@@ -93,6 +93,8 @@ export const TREE_DOC_OP_KINDS = [
   'setLegacyCheckbox',
   'setLegacyDropdown',
   'insertBuildingBlock',
+  'insertBookmark',
+  'deleteBookmark',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be

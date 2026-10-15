@@ -19,6 +19,13 @@ export {
   type NavigationPartProps,
   type NavigationTabProps,
 } from './parts';
+export { NavigationGoTo } from './parts-goto';
+export {
+  useGoToBookmark,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
+  type UseGoToBookmarkReturn,
+} from './useGoToBookmark';
 export {
   useNavigationPane,
   type NavigationTab as NavigationTabValue,

@@ -1,5 +1,6 @@
 import { insertTextbox } from './textbox-commands.ts';
 import { execSetWatermark } from './docx-editor-watermark.ts';
+import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
 import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
@@ -458,6 +459,11 @@ export function execEditorCommand(
       return execSetHeaderFooterOptions(mounted, command);
     case 'setWatermark':
       return execSetWatermark(mounted, command.watermark);
+    case 'insertBookmark':
+    case 'deleteBookmark':
+    case 'keepFirstBookmark':
+    case 'goToBookmark':
+      return execBookmarkCommand(mounted, command);
     case 'insertPageField':
       return execInsertPageField(mounted, command);
     case 'insertNote':
@@ -548,6 +554,10 @@ export function execEditorCommand(
       // already-visible target still and centres one it has to travel to, rather than
       // stopping the moment it clears the bottom edge.
       if ('range' in command && isSurfaceSelection(command.range)) {
+        // Open the story the range is in first, as the anchor form below does: a header,
+        // footer or note range selected from the body would otherwise strand the caret.
+        const entered = enterStoryForSelection(mounted, command.range);
+        if (!entered.ok) return entered;
         mounted.setSelection(command.range);
         mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.

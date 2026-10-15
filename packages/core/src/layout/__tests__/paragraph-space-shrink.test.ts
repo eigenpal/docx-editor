@@ -313,3 +313,36 @@ test('text after a center tab is placed against its stop, not compressed', () =>
     content(layoutSemanticDocument(body, 1, { measurer, compatibilityMode: 15 }))
   ).toHaveLength(2);
 });
+
+const justifiedLines = (text: string, width: number) =>
+  content(
+    layoutSemanticDocument(source('both', text, width), 1, { measurer, compatibilityMode: 15 })
+  );
+
+test('a word joins the line when each space shrinks by at most half the stretch', () => {
+  const words = (count: number) => Array(count).fill('aa').join(' ');
+  // Each space would shrink by 0.22 of its width or stretch by 0.48: the word joins.
+  expect(justifiedLines(`${words(13)} bbb cc`, 330.35)[0]).toBe(`${words(13)} bbb`);
+  // Each space would shrink by 0.07 or stretch by only 0.12: the line stretches.
+  expect(justifiedLines(`${words(18)} b cc`, 437.05)[0]).toBe(words(18));
+});
+
+test('a hyphen-break fragment borrows inter-word space', () => {
+  expect(justifiedLines('aa aa aa aa aa-bb cc', 124)[0]).toBe('aa aa aa aa aa-');
+});
+
+test('a word with a currency sign lends its space', () => {
+  // The fit needs all four spaces' shrink, including the one after `$a`.
+  expect(justifiedLines('$a aa aa aa bb cc', 112)[0]).toBe('$a aa aa aa bb');
+});
+
+test('every space after the last word hangs on the shorter line', () => {
+  // A run that opens with a space after a word that already has one, as around hidden
+  // deleted text: both spaces hang on the shorter line, so ten words stretch nine gaps.
+  const words = Array(10).fill('aa').join(' ');
+  const result = layoutSemanticDocument(seamSource([`${words} `, ' bb cc'], -1, 254), 1, {
+    measurer,
+    compatibilityMode: 15,
+  });
+  expect(content(result)[0]).toBe(`${words}  bb`);
+});

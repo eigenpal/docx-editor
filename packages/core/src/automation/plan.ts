@@ -1,6 +1,12 @@
 import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
 import { TARGET_REMOVED } from './target-removed.ts';
 import { planShapes } from './plan-shapes.ts';
+import {
+  bookmarkHandleRange,
+  bookmarkWriteAdmission,
+  planBookmarks,
+  withEnclosedBookmarkDrops,
+} from './plan-bookmarks.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -111,13 +117,7 @@ import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { authorableHyperlinkTarget } from '../store/package/hyperlink-part.ts';
-import {
-  bookmarkIn,
-  bookmarkReads,
-  linkTarget,
-  linksInParagraph,
-  type AutomationLinkRead,
-} from './links.ts';
+import { bookmarkIn, linkTarget, linksInParagraph, type AutomationLinkRead } from './links.ts';
 import { listReads, membershipIn, MAX_LIST_LEVEL, type AutomationListRead } from './lists.ts';
 import { pageSetupProperties } from './sections.ts';
 import { projectedSearchSpans } from './search.ts';
@@ -183,7 +183,9 @@ export interface BatchPlannerHost {
   /** Where a tracked replacement lands — see `AutomationDocumentPort.replacementLanding`. */
   readonly replacementLanding?: (paragraphId: string, start: number, end: number) => number | null;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
-  readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
+  readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => boolean;
+  /** Why the host cannot select there now — see `AutomationDocumentPort.selectRefusal`. */
+  readonly selectRefusal?: (story: AutomationStoryId, paragraphId: string) => string | null;
 }
 
 export interface BatchPlanner {
@@ -210,7 +212,9 @@ export interface BatchPlanner {
    */
   settle(
     post: AutomationPackageReads
-  ): { readonly ok: true } | { readonly ok: false; readonly detail: string };
+  ):
+    | { readonly ok: true }
+    | { readonly ok: false; readonly detail: string; readonly selection?: number };
 }
 
 function error(code: AutomationErrorCode, message: string, detail?: string): AutomationError {
@@ -1496,6 +1500,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse('unsupported-capability', 'this host has no reader to move', 'selection');
     if (mode !== 'select' && mode !== 'start' && mode !== 'end')
       return refuse('unknown-operation', 'that is not a selection mode', String(mode));
+    const refusal = host.selectRefusal?.(reads.story, range.start.paragraphId);
+    if (refusal) return refuse('unsupported-capability', refusal, 'selection');
     // Selecting is applied after the transaction, so a batch that also EDITS one of the
     // paragraphs the selection covers would place a caret using coordinates the edit moved.
     const covered = spanParagraphIds(range, reads);
@@ -1511,26 +1517,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     for (const paragraphId of covered) plan.selected.add(paragraphId);
     selections.push({ range, mode });
     // NO SCOPE PINNED. Moving a reader's caret writes nothing, so it does not claim the batch's
-    // one write story — a script may select in a header while it edits the body.
-    return { ok: true, kind: 'command', ops: [], story: reads.story, answer: () => APPLIED };
+    // one write story — a script may select in a header while it edits the body. Answered as
+    // a read for the same reason: a read-only document still lets a reader be moved. The
+    // caret moves when the batch settles.
+    return { ok: true, kind: 'query', value: APPLIED };
   };
 
-  const resolveBookmarkRange = (handle: AutomationHandle) => {
-    const target = handles.resolve(handle, 'bookmark');
-    if (!target || target.kind !== 'bookmark')
-      return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
-    const reads = packageReads.story(target.story);
-    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
-    const bookmark = bookmarkIn(reads, target.name);
-    if (!bookmark) return removed('this document no longer declares that bookmark');
-    const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
-      story: reads.story,
-      paragraphId: marker.paragraphId,
-      index: reads.indexOf(marker.paragraphId),
-      offset: marker.offset,
-    });
-    return { reads, range: { start: point(bookmark.start), end: point(bookmark.end) } };
-  };
+  const resolveBookmarkRange = (handle: AutomationHandle) =>
+    bookmarkHandleRange(handle, handles, packageReads);
 
   const plan = (operation: AutomationOperation, trackingAuthor?: string): PlannedOperation => {
     const lineBreak = planLineBreak(operation, (text) => plan(text, trackingAuthor));
@@ -1596,6 +1590,16 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planPictures(operation, handles, packageReads, (story, paragraphId) => {
           const plan = planFor(story);
           return pinWrite(plan) ?? claim(plan, paragraphId);
+        });
+      case 'getBookmarks':
+      case 'getBookmarkName':
+      case 'getBookmarkNames':
+      case 'getBookmarkRangeByName':
+      case 'insertBookmark':
+      case 'deleteBookmark':
+        return planBookmarks(operation, handles, packageReads, {
+          admit: bookmarkWriteAdmission(planFor, pinWrite, claim),
+          pinned: () => writeStory?.reads.story ?? null,
         });
       case 'insertBreak':
         return planBreakOperation(
@@ -1808,7 +1812,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           );
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
-        return planReplaceSpan(planFor(story), resolved.value, operation.text);
+        return withEnclosedBookmarkDrops(
+          planReplaceSpan(planFor(story), resolved.value, operation.text),
+          story,
+          resolved.value,
+          host.replacementLanding?.(resolved.value.start.paragraphId, 0, 0) != null
+        );
       }
 
       case 'replaceStoryBlocks': {
@@ -2176,42 +2185,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planSetHyperlink(planFor(story), resolved.value, operation.target);
-      }
-
-      case 'getBookmarks': {
-        const resolved = resolveSpanRef(operation.scope, handles, packageReads);
-        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        const story = storyOfSpanRef(operation.scope, handles, packageReads);
-        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
-        const reads = story.value;
-        const scope = resolved.value;
-        const covered = scope === null ? null : new Set(spanParagraphIds(scope, reads));
-        const overlapping = bookmarkReads(reads).filter((bookmark) => {
-          if (!covered) return false;
-          // Overlap, not containment: a range that starts inside a bookmark and ends past it has
-          // that bookmark, which is what Word's own range collection answers.
-          if (!covered.has(bookmark.start.paragraphId) && !covered.has(bookmark.end.paragraphId))
-            return false;
-          if (scope === null) return false;
-          const startsAfter =
-            bookmark.start.paragraphId === scope.end.paragraphId &&
-            bookmark.start.offset > scope.end.offset;
-          const endsBefore =
-            bookmark.end.paragraphId === scope.start.paragraphId &&
-            bookmark.end.offset < scope.start.offset;
-          return !startsAfter && !endsBefore;
-        });
-        return query({
-          kind: 'handles',
-          handles: overlapping.map((bookmark) => handles.bookmark(bookmark.name, reads.story)),
-        });
-      }
-
-      case 'getBookmarkName': {
-        const target = handles.resolve(operation.bookmark, 'bookmark');
-        if (!target || target.kind !== 'bookmark')
-          return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
-        return query({ kind: 'text', text: target.name });
       }
 
       case 'getBookmarkRange': {
@@ -2917,10 +2890,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // exactly. "Should" is the reason for the check: if it does not — a planner bug, an op with
       // an effect this file did not model — the right outcome is that no caret moves, not that one
       // moves to a position that has stopped meaning what it meant.
-      for (const selection of selections) {
+      for (const [index, selection] of selections.entries()) {
         const story = post.story(selection.range.start.story);
         if (!story || !placeable(selection.range, story)) continue;
-        host.select?.(selection.range, selection.mode);
+        // A selection the host could not place is refused, never reported as done. `selection`
+        // names which one, so the host can say whether the batch's writes committed first.
+        if (host.select?.(selection.range, selection.mode) === false)
+          return { ok: false, detail: 'the host could not place the selection', selection: index };
       }
       return { ok: true };
     },

@@ -1,6 +1,8 @@
 // The letter a keyboard chord names, read the same way by the engine keymap and the
 // adapters' own shortcuts.
 
+import { isApplePlatform } from '@docx-editor.dev/i18n';
+
 /** A single Latin letter, which is what every chord in this keymap is named by. */
 const CHORD_LETTER = /^[a-z]$/;
 
@@ -31,4 +33,18 @@ export function chordLetter(event: KeyboardEvent): string {
   // the keydown handler.
   const physical = event.code ?? '';
   return physical.length === 4 && physical.startsWith('Key') ? physical[3]!.toLowerCase() : '';
+}
+
+/**
+ * The Go To chord: Ctrl+G, or Cmd+Option+G on Apple platforms. F5 is not used: browsers
+ * reload on it. Cmd+G alone is left to the browser's find-next on macOS.
+ *
+ * @public
+ */
+export function isGoToChord(event: KeyboardEvent, apple = isApplePlatform()): boolean {
+  if (event.shiftKey || event.isComposing) return false;
+  if (apple) {
+    if (!event.metaKey || !event.altKey || event.ctrlKey) return false;
+  } else if (!event.ctrlKey || event.metaKey || event.altKey) return false;
+  return chordLetter(event) === 'g';
 }

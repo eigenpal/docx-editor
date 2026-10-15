@@ -270,6 +270,58 @@ const isDraft = computed(() => mark.watermark.value?.text === 'DRAFT');
 
 `read()` returns the current watermark as a `setWatermark` value. For a picture watermark it includes the picture bytes.
 
+## `useBookmarks`
+
+List the document's bookmarks and change them. `insert()` bookmarks the selection, `remove()` deletes a bookmark, and `goTo()` selects one. Each call sends one command:
+
+```vue
+<script setup lang="ts">
+import { useBookmarks } from '@docx-editor.dev/vue';
+
+const { bookmarks, goTo } = useBookmarks();
+</script>
+
+<template>
+  <ul>
+    <li v-for="bookmark in bookmarks.filter((item) => !item.hidden)" :key="bookmark.name">
+      <button @mousedown.prevent @click="goTo(bookmark.name)">{{ bookmark.name }}</button>
+    </li>
+  </ul>
+</template>
+```
+
+`isWritable` says whether the document accepts bookmark edits at the selection. Go To works in a read-only document too.
+
+The list has one entry per name. If collaborators left copies of a name, `duplicates` on its entry counts them. To keep the first and remove the copies, call `keepFirst(name)`. The selection does not move.
+
+## `useGoToBookmark`
+
+Build a Go To UI of your own, as the **Bookmarks** tab of the navigation pane does. The composable filters the document's bookmarks by the typed name, keeps a highlighted row, and jumps with the `goToBookmark` command. Read the returned refs with `.value`:
+
+```vue
+<script setup lang="ts">
+import { useGoToBookmark } from '@docx-editor.dev/vue';
+
+const goTo = useGoToBookmark();
+</script>
+
+<template>
+  <input
+    :value="goTo.query.value"
+    @input="goTo.setQuery(($event.target as HTMLInputElement).value)"
+    @keydown.down="goTo.move(1)"
+    @keydown.up="goTo.move(-1)"
+    @keydown.enter="goTo.go()"
+  />
+  <p v-if="goTo.problem.value === 'notFound'">No bookmark has that name.</p>
+  <ul>
+    <li v-for="row in goTo.rows.value" :key="row.name">{{ row.name }}</li>
+  </ul>
+</template>
+```
+
+`go(name?)` jumps to `name`, or else to the highlighted row, the bookmark named exactly as typed, or the first row. It returns the command result. Call `setSortBy()` and `setShowHidden()` to choose the order and whether hidden bookmarks are offered. Pass `() => ({ enabled: isOpen.value })` to read the document only while your UI is shown. Each row's `place` says whether the bookmark is in the body, a header, a footer, a footnote, or an endnote.
+
 ## `useParagraphFormat`
 
 Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step. Read the returned refs with `.value`:
@@ -574,6 +626,7 @@ Call the composable in a child component of the matching dialog. Each returns `v
 | `useTextFormFieldDialog()` | `TextFormFieldDialogFields` | `defaultText`, `type`, `maxLength`, `format`, `enabled` |
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
 | `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
+| `useBookmarkDialog()` | `BookmarkDialogFields` | `name`, `sortBy`, `showHidden` |
 
 Vue exposes state as refs. Use `.value` in JavaScript; templates unwrap these refs.
 

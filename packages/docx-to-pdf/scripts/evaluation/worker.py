@@ -16,8 +16,8 @@ import pymupdf
 from PIL import Image, ImageChops, ImageOps
 
 PROTOCOL = 1
-MAX_PAGES = 1000
-MAX_WORDS = 250_000
+MAX_PAGES = 2000
+MAX_WORDS = 1_000_000
 MAX_PIXELS = 16_000_000
 RGB_SIZE = (144, 192)
 

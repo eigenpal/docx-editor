@@ -12,8 +12,8 @@ from pathlib import Path
 
 INDEX_VERSION = "page-words-nfc-v1"
 COMPARE_VERSION = "page-word-multiset-v1"
-MAX_PAGES = 1000
-MAX_WORDS = 250000
+MAX_PAGES = 2000
+MAX_WORDS = 1_000_000
 MAX_BYTES = 64 * 1024 * 1024
 
 

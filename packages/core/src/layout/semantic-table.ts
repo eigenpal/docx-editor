@@ -1,4 +1,5 @@
 import { cachedTableStructure } from './table-structure-cache.ts';
+import { tableHasHidableRevisions } from './table-revision-markup.ts';
 import {
   revisionCellMetadata,
   wmlRevisionChild,
@@ -6,6 +7,7 @@ import {
 } from './revision-cell-shading.ts';
 import { readTableAlignment } from './table-alignment.ts';
 import {
+  autoWidthOuterRulePt,
   withSharedGridLineSideRules,
   retargetSharedGridLineSideRules,
 } from './legacy-table-side-rules.ts';
@@ -306,6 +308,11 @@ export interface SemanticTableStructure {
    * on that edge, so its first grid line sits half a rule inward. Positive moves right.
    */
   readonly outerRuleOffsetPt?: number;
+  /**
+   * Derived, never serialized: the outer side rule an automatic-width mode-15 AutoFit table
+   * keeps inside its container, so its grid settles that much narrower than the room.
+   */
+  readonly autoOuterRulePt?: number;
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
   /**
@@ -405,12 +412,28 @@ export function readTableStructure(
       )
   );
   if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
+  // Deleted and inserted content sizes the columns in every view.
+  const markupStructure =
+    displayMode === 'all-markup' || !tableHasHidableRevisions(table)
+      ? undefined
+      : readTableStructure(
+          table,
+          contentWidthPt,
+          depth,
+          styleCascade,
+          'all-markup',
+          authorFilter,
+          compatibilityMode,
+          undefined,
+          textBox
+        );
   // Most tables already hold their content: they come back as the shared base structure.
   const widths = autofitColumnWidthsPt(base, contentWidthPt, autofit, {
     styleCascade,
     displayMode,
     authorFilter,
     depth,
+    ...(markupStructure ? { markupStructure } : {}),
     readNested: narrowNestedReader(
       readTableStructure,
       styleCascade,
@@ -900,6 +923,8 @@ function readTableStructureUncached(
       : sideRules.rows;
   const outerRuleOffsetPt =
     contentOffset ?? sideRules.outerRuleOffsetPt ?? placement.bidiRuleShiftPt;
+  const autoOuterRulePt =
+    contentOffset === undefined ? autoWidthOuterRulePt(contentRows, sideRuleShape) : 0;
   return {
     ...(bidiVisual ? { bidiVisual: true as const } : {}),
     columnWidthsPt: bidiVisual ? [...columnWidthsPt].reverse() : columnWidthsPt,
@@ -913,6 +938,7 @@ function readTableStructureUncached(
     ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
     ...(legacy?.trailingOuterEdge ? { legacyTrailingOuterEdge: true as const } : {}),
     ...(outerRuleOffsetPt === undefined ? {} : { outerRuleOffsetPt }),
+    ...(autoOuterRulePt > 0 ? { autoOuterRulePt } : {}),
     tableWidth,
     layoutFixed,
     indentPt,

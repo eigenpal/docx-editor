@@ -231,16 +231,19 @@ describe('the caret around a field whose result holds breaks', () => {
       anchor: { paragraphId, offset: 6 },
       head: { paragraphId, offset: 10 },
     });
+    // Typing over the bookmark's last word puts the new text after the bookmark's end, the way
+    // typing at a bookmark's end does, so the bookmark now ends at the break.
     surface.type('gamma');
     const texts = (target: DocxEditorInstance) =>
       paragraphLines(target).map((line) => line.spans.map((span) => span.text).join(''));
-    const painted = ['alpha\n', 'gamma', 'see alpha\n', 'gamma'];
+    const painted = ['alpha\n', 'gamma', 'see alpha\n', ''];
     expect(texts(editor)).toEqual(painted);
 
     const saved = new Uint8Array(await editor.save());
     const xml = strFromU8(unzipSync(saved)['word/document.xml']!);
     const result = xml.slice(xml.indexOf('fldCharType="separate"'));
-    expect(result).toMatch(/<w:t>alpha<\/w:t><w:br\/><w:t>gamma<\/w:t>/);
+    expect(result).toMatch(/<w:t>alpha<\/w:t><w:br\/>/);
+    expect(result.slice(0, result.indexOf('fldCharType="end"'))).not.toContain('gamma');
     expect(texts(mount(saved))).toEqual(painted);
   });
 

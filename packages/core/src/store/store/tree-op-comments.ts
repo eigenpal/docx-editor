@@ -25,6 +25,7 @@ import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { splitRunsAt } from './tree-op-apply.ts';
 import type { TreeOpResult } from './tree-op-validate.ts';
+import type { TreeOpRejection } from './tree-op-types.ts';
 
 /** Which piece of comment markup an `insertCommentMarker` op places. */
 export type CommentMarkerKind = 'start' | 'end' | 'reference';
@@ -238,6 +239,33 @@ function coincidentInsertIndex(
   return insertIndex;
 }
 
+/**
+ * Where a zero-width range marker goes at a model offset: the run straddling the offset is
+ * split first, then the offset is located the way the paragraph offset authority measures it.
+ * Shared by comment and bookmark markers, which are the same class of `EG_RangeMarkupElements`.
+ */
+export function markerSiteAt(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  options?: EditOptions
+):
+  | {
+      readonly ok: true;
+      readonly part: OoxmlPart;
+      readonly containerId: string;
+      readonly index: number;
+    }
+  | { readonly ok: false; readonly reason: TreeOpRejection } {
+  const split = splitRunsAt(part, paragraph, offset, options);
+  if (!split.ok) return { ok: false, reason: split.reason };
+  const reloaded = findNode(split.part, paragraph.id);
+  if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
+  const at = locateOffset(reloaded, reloaded, offset, 0);
+  if (!at) return { ok: false, reason: 'offset-out-of-range' };
+  return { ok: true, part: split.part, containerId: at.containerId, index: at.index };
+}
+
 export interface InsertCommentMarkerOp {
   readonly op: 'insertCommentMarker';
   readonly paragraphId: string;
@@ -262,14 +290,9 @@ export function applyInsertCommentMarker(
   op: InsertCommentMarkerOp,
   options?: EditOptions
 ): TreeOpResult {
-  const split = splitRunsAt(part, paragraph, op.offset, options);
-  if (!split.ok) return { ok: false, reason: split.reason };
-
-  const reloaded = findNode(split.part, paragraph.id);
-  if (!reloaded || reloaded.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
-
-  const at = locateOffset(reloaded, reloaded, op.offset, 0);
-  if (!at) return { ok: false, reason: 'offset-out-of-range' };
+  const at = markerSiteAt(part, paragraph, op.offset, options);
+  if (!at.ok) return at;
+  const split = at;
 
   let insertIndex = at.index;
   const container = findNode(split.part, at.containerId);

@@ -1061,6 +1061,7 @@ export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null;
 
 // @public
 export interface FieldAtomMarker {
+    readonly fixedResult?: true;
     readonly formControl?: {
         readonly accessibleName?: string;
         readonly checked: boolean;
@@ -3931,6 +3932,7 @@ export interface SemanticTableRow {
 // @public
 export interface SemanticTableStructure {
     readonly alignment: TableAlignment;
+    readonly autoOuterRulePt?: number;
     readonly bidiVisual?: true;
     readonly cellSpacingPt: number;
     // (undocumented)

@@ -2,6 +2,7 @@ import {
   computed,
   defineComponent,
   provide,
+  watch,
   type CSSProperties,
   type PropType,
   type VNode,
@@ -14,7 +15,14 @@ import { NAVIGATION_PANE_INSET, navigationPaneReservation } from './navigation-g
 import { useDocumentOutline } from './useDocumentOutline';
 import { useDocumentSearch, type DocumentSearchHighlight } from './useDocumentSearch';
 import { useNavigationFocus } from './useNavigationFocus';
-import { useNavigationPane, type UseNavigationPaneOptions } from './useNavigationPane';
+import {
+  useNavigationPane,
+  type NavigationTab as NavigationTabId,
+  type UseNavigationPaneOptions,
+} from './useNavigationPane';
+import { NavigationGoTo } from './parts-goto';
+import { useDocxEditor } from '../context';
+import { scopeDispose } from '../scope-dispose';
 import type { NavigationPartProps } from './parts';
 import {
   NavigationClose,
@@ -47,6 +55,12 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
    * browser's own search. Set `false` to leave the shortcut to the browser everywhere.
    */
   findShortcut?: boolean;
+  /**
+   * Whether Ctrl+G (Cmd+Option+G on macOS) opens the pane on the Go to tab. Defaults to
+   * `true`, and applies only while focus is in this editor. The `openGoTo` editor command
+   * opens the tab either way.
+   */
+  goToShortcut?: boolean;
   className?: string;
   style?: CSSProperties;
   children?: DocxEditorChildren;
@@ -62,6 +76,7 @@ export interface DocxEditorNavigationNamespace {
   readonly Tab: typeof NavigationTab;
   readonly Headings: typeof NavigationHeadings;
   readonly Find: typeof NavigationFind;
+  readonly GoTo: typeof NavigationGoTo;
   readonly Toggle: typeof NavigationToggle;
 }
 
@@ -72,16 +87,17 @@ const DocxEditorNavigationImpl = defineComponent({
     toggle: { type: [Boolean, Object] as PropType<boolean | NavigationPartProps>, default: true },
     searchHighlight: { type: String as PropType<DocumentSearchHighlight>, default: 'all' },
     findShortcut: { type: Boolean, default: true },
+    goToShortcut: { type: Boolean, default: true },
     className: { type: String, default: undefined },
     style: { type: Object as PropType<CSSProperties>, default: undefined },
     paneWidth: { type: Number, default: undefined },
     defaultOpen: { type: Boolean, default: undefined },
-    defaultTab: { type: String as PropType<'headings' | 'find'>, default: undefined },
+    defaultTab: { type: String as PropType<NavigationTabId>, default: undefined },
     open: { type: Boolean, default: undefined },
-    tab: { type: String as PropType<'headings' | 'find'>, default: undefined },
+    tab: { type: String as PropType<NavigationTabId>, default: undefined },
     onOpenChange: { type: Function as PropType<(open: boolean) => void>, default: undefined },
     onTabChange: {
-      type: Function as PropType<(tab: 'headings' | 'find') => void>,
+      type: Function as PropType<(tab: NavigationTabId) => void>,
       default: undefined,
     },
   },
@@ -103,7 +119,11 @@ const DocxEditorNavigationImpl = defineComponent({
     }));
     // The host's resolver, else the one `DocxEditorRoot` was given, else the catalogue.
     const rootT = useFormControlTranslate();
-    const focus = useNavigationFocus(pane, () => props.findShortcut);
+    const focus = useNavigationFocus(
+      pane,
+      () => props.findShortcut,
+      () => props.goToShortcut
+    );
     const value = computed(() => ({
       pane,
       outline,
@@ -111,7 +131,29 @@ const DocxEditorNavigationImpl = defineComponent({
       t: props.t ?? rootT,
       intents: focus.intents,
       findShortcut: props.findShortcut,
+      goToShortcut: props.goToShortcut,
     }));
+    // The `openGoTo` command opens this pane's Go to tab.
+    const editorRef = useDocxEditor();
+    scopeDispose(
+      // One registration for the pane's life: a prop change must not push it back on top of
+      // a host's own Go To UI, so the shortcut flag is read when the chord arrives.
+      watch(
+        editorRef,
+        (editor, _previous, onCleanup) => {
+          if (!editor) return;
+          onCleanup(
+            editor.setGoToChrome({
+              onRequest: () => focus.intents.openTab('goto'),
+              get shortcut() {
+                return props.goToShortcut;
+              },
+            })
+          );
+        },
+        { immediate: true }
+      )
+    );
     provide(NavigationContext, value as unknown as NavigationContextValue);
     const width = computed(() => pane.paneWidth.value);
 
@@ -142,6 +184,7 @@ const DocxEditorNavigationImpl = defineComponent({
               <NavigationTabs />
               <NavigationHeadings />
               <NavigationFind />
+              <NavigationGoTo />
             </>
           )}
         </aside>
@@ -159,6 +202,7 @@ export const DocxEditorNavigation = Object.assign(DocxEditorNavigationImpl, {
   Tab: NavigationTab,
   Headings: NavigationHeadings,
   Find: NavigationFind,
+  GoTo: NavigationGoTo,
   Toggle: NavigationToggle,
 }) as unknown as DocxEditorNavigationNamespace;
 
@@ -168,6 +212,7 @@ export const Navigation = DocxEditorNavigation;
 export {
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,

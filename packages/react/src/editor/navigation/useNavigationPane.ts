@@ -26,8 +26,8 @@ import {
 import { useNavigationLayoutStore, useNavigationViewportElement } from './navigation-layout';
 import { trackWidestPage, type WidestPageTracker } from './navigation-widest-page';
 
-/** The pane's tabs. Word's Replace tab is a later slice; nothing here pretends it exists. */
-export type NavigationTab = 'headings' | 'find';
+/** The pane's tabs: the outline, Find, and Go to (bookmarks). */
+export type NavigationTab = 'headings' | 'find' | 'goto';
 
 /** @internal */
 export interface PaneGeometry {

@@ -28,6 +28,19 @@ const bundledFonts = packagedFonts({
   }),
 });
 
+/** Per-face shaping ceiling for PDF export, below the engine's 64 MiB hard maximum. */
+export const PDF_MAX_SHAPING_FONT_BYTES = 40 * 1024 * 1024;
+
+/** The caller's shaping limits, with the PDF export default for any limit left out. */
+export function exportFontShaping(
+  options: Pick<SessionOptions, 'fontShaping'>
+): NonNullable<SessionOptions['fontShaping']> {
+  return {
+    ...options.fontShaping,
+    maxFontBytes: options.fontShaping?.maxFontBytes ?? PDF_MAX_SHAPING_FONT_BYTES,
+  };
+}
+
 /** The export options that shape the session, without the ones that shape the PDF. */
 export type SessionOptions = Omit<
   PdfExportOptions,
@@ -58,6 +71,9 @@ export function openExportSession(
     documentLigatures: options.documentLigatures ?? true,
     signal,
     displayMode: options.displayMode ?? 'proposed',
+    // Installed CJK faces such as SimSun and PMingLiU ship as 17 to 37 MB collections; the
+    // editor's 16 MiB default would drop them for a substitute with other metrics.
+    fontShaping: exportFontShaping(options),
     reuseAcrossRevisions: false,
     // Every packaged fallback face is on offer. They are read lazily, only when a family the
     // document uses needs one, so offering the whole list costs a plain Latin document nothing.

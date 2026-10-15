@@ -195,6 +195,17 @@
       "kind": "class",
       "requirementSet": "WordApiDesktop 1.4",
       "members": {
+        "delete": {
+          "uid": "Word.Bookmark#delete",
+          "kind": "method",
+          "requirementSet": "WordApiDesktop 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "name": {
           "uid": "Word.Bookmark#name",
           "kind": "property",
@@ -722,6 +733,54 @@
             {
               "params": [],
               "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "deleteBookmark": {
+          "uid": "Word.Document#deleteBookmark",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "void"
+            }
+          ]
+        },
+        "getBookmarkRange": {
+          "uid": "Word.Document#getBookmarkRange",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "getBookmarkRangeOrNullObject": {
+          "uid": "Word.Document#getBookmarkRangeOrNullObject",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "Range"
             }
           ]
         },
@@ -1613,6 +1672,28 @@
             }
           ]
         },
+        "getBookmarks": {
+          "uid": "Word.Range#getBookmarks",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "includeHidden",
+                  "type": "boolean",
+                  "optional": true
+                },
+                {
+                  "name": "includeAdjacent",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string[]>"
+            }
+          ]
+        },
         "hyperlink": {
           "uid": "Word.Range#hyperlink",
           "kind": "property",
@@ -1621,6 +1702,22 @@
             {
               "params": [],
               "returns": "string"
+            }
+          ]
+        },
+        "insertBookmark": {
+          "uid": "Word.Range#insertBookmark",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "name",
+                  "type": "string"
+                }
+              ],
+              "returns": "void"
             }
           ]
         },

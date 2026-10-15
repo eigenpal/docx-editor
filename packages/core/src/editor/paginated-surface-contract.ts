@@ -60,6 +60,7 @@ import type { RemoteCaretLabelAnchor, RemoteCaretLabelHost } from './surface-rem
 export type { RemoteCaretLabelAnchor, RemoteCaretLabelHost };
 
 import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
+import type { SurfaceBookmarks } from './surface-bookmarks.ts';
 
 export type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 
@@ -519,6 +520,8 @@ export interface PaginatedSurface {
    * calls `openExternal`; nothing else in the engine may call `window.open`.
    */
   readonly navigation: SurfaceNavigation;
+  /** List, add, delete and jump to bookmarks, and show their marks. */
+  readonly bookmarkEditing: SurfaceBookmarks;
   /**
    * Pin the current selection so it stays VISIBLY selected while focus is elsewhere.
    *

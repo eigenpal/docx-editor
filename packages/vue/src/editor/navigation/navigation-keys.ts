@@ -6,6 +6,7 @@
 import {
   chordLetter,
   editorInstanceScope,
+  isGoToChord,
   hostWindowOf,
   isDomNode,
   isElementNode,
@@ -29,6 +30,23 @@ export function isFindShortcut(event: KeyboardEvent, apple = isApplePlatform()):
 }
 
 /**
+ * Ctrl+G, or Cmd+Option+G on Apple platforms, opens Go To: the engine's own chord, so the
+ * pane and the engine keymap agree. The pages send it as the `openGoTo` command; this catches
+ * it with focus in the pane or the editor's chrome.
+ */
+export const isGoToShortcut = isGoToChord;
+
+/** The shortcut label a resolver shows for Go To: `Ctrl+G`, or `Ctrl+Alt+G` (Cmd+Option+G). */
+export function goToShortcutLabel(apple = isApplePlatform()): string {
+  return apple ? 'Ctrl+Alt+G' : 'Ctrl+G';
+}
+
+/** The `aria-keyshortcuts` value for the chord {@link isGoToShortcut} accepts. */
+export function goToKeyShortcuts(apple = isApplePlatform()): string {
+  return apple ? 'Meta+Alt+G' : 'Control+G';
+}
+
+/**
  * The `aria-keyshortcuts` value for the chord {@link isFindShortcut} accepts, from the
  * resolved shortcut label (`platformShortcut('Ctrl+F')`), so a server render and the
  * hydrating client agree on the first pass.
@@ -43,7 +61,9 @@ export function findKeyShortcuts(resolvedLabel: string): string {
  * An opener in the pages layer (after Ctrl/Cmd+F from the text) goes back through the
  * editor, which restores the caret without scrolling: the pages layer is the whole document
  * tall, and a plain `focus()` scrolls to its top. Any other opener, and the disc, take focus
- * with `preventScroll`. With neither, the editor.
+ * with `preventScroll`. An opener that has gone away (a menu row, removed when its menu
+ * closed) hands focus to the editor: the document is what the reader came from. With
+ * neither, the editor.
  */
 export function returnFocus(
   opener: HTMLElement | null,
@@ -53,6 +73,10 @@ export function returnFocus(
   if (opener?.isConnected) {
     if (focusEditor && opener.closest('.docx-pages')) focusEditor();
     else opener.focus({ preventScroll: true });
+    return;
+  }
+  if (opener && focusEditor) {
+    focusEditor();
     return;
   }
   if (disc) disc.focus({ preventScroll: true });
@@ -88,8 +112,8 @@ export function ownsShortcutTarget(
 }
 
 /**
- * Where focus lands when the pane opens: the query field on Find; on Headings the current
- * heading, else the first heading, else the filter field.
+ * Where focus lands when the pane opens: the query field on Find, the name field on Go to;
+ * on Headings the current heading, else the first heading, else the filter field.
  */
 export function paneEntryTarget(pane: Element | null, tab: NavigationTab): HTMLElement | null {
   const panel = pane?.querySelector<HTMLElement>(`#docx-nav-panel-${tab}`);
@@ -116,7 +140,9 @@ export function focusPaneEntry(element: HTMLElement): void {
  */
 function focusIntoPane(pane: Element): void {
   const selected = pane.querySelector('[role="tab"][aria-selected="true"]');
-  const tab: NavigationTab = selected?.id === 'docx-nav-tab-find' ? 'find' : 'headings';
+  const id = selected?.id ?? '';
+  const tab: NavigationTab =
+    id === 'docx-nav-tab-find' ? 'find' : id === 'docx-nav-tab-goto' ? 'goto' : 'headings';
   const target = paneEntryTarget(pane, tab);
   if (target) {
     focusPaneEntry(target);

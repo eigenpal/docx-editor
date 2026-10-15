@@ -55,7 +55,12 @@
     "printNoViewer": "यह ब्राउज़र पृष्ठ से PDF फ़ाइलें प्रिंट नहीं कर सकता। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
     "printLoadFailed": "प्रिंट के लिए PDF लोड नहीं हुआ। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
     "printRefused": "ब्राउज़र ने पृष्ठ से प्रिंट की अनुमति नहीं दी। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
-    "insertTextBox": "टेक्स्ट बॉक्स"
+    "insertTextBox": "टेक्स्ट बॉक्स",
+    "bookmark": "बुकमार्क…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "बुकमार्क पर जाएं…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "फ़ॉर्मेट पेंटर (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "अनुच्छेद विराम दिखाएँ",
     "label": "स्वरूपण नियंत्रण",
-    "addComment": "टिप्पणी जोड़ें"
+    "addComment": "टिप्पणी जोड़ें",
+    "showBookmarks": "बुकमार्क दिखाएँ"
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -373,6 +379,27 @@
       "direction": "दिशा",
       "directionLtr": "बाएँ से दाएँ",
       "directionRtl": "दाएँ से बाएँ"
+    },
+    "bookmark": {
+      "title": "बुकमार्क",
+      "name": "बुकमार्क का नाम",
+      "list": "बुकमार्क",
+      "empty": "इस दस्तावेज़ में कोई बुकमार्क नहीं है।",
+      "sortBy": "इसके अनुसार क्रमबद्ध करें",
+      "sortName": "नाम",
+      "sortLocation": "स्थान",
+      "showHidden": "छिपे हुए बुकमार्क",
+      "add": "जोड़ें",
+      "delete": "हटाएँ",
+      "goTo": "पर जाएँ",
+      "nameEmpty": "बुकमार्क का नाम दर्ज करें।",
+      "nameTooLong": "बुकमार्क के नाम में अधिकतम 40 वर्ण होते हैं।",
+      "nameInvalidStart": "बुकमार्क का नाम किसी अक्षर से शुरू होता है।",
+      "nameInvalidCharacter": "केवल अक्षर, अंक और अंडरस्कोर का उपयोग करें।",
+      "nameExists": "इस नाम का बुकमार्क मौजूद है। जोड़ें उसे चयन पर ले जाता है।",
+      "refused": "बुकमार्क बदला नहीं जा सका।",
+      "duplicates": "{count, plural, one {# अन्य स्थान इस नाम का उपयोग करता है।} other {# अन्य स्थान इस नाम का उपयोग करते हैं।}} लिंक और ‘यहां जाएं’ पहले वाले का उपयोग करते हैं।",
+      "keepFirst": "पहला रखें"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "नेविगेशन ({shortcut})",
     "tabs": {
       "find": "ढूँढें",
-      "headings": "शीर्षक"
+      "headings": "शीर्षक",
+      "goto": "बुकमार्क"
     },
-    "title": "नेविगेशन"
+    "title": "नेविगेशन",
+    "goTo": {
+      "tabTitle": "बुकमार्क पर जाएं ({shortcut})",
+      "label": "बुकमार्क",
+      "placeholder": "बुकमार्क खोजें",
+      "listAriaLabel": "बुकमार्क",
+      "countFiltered": "{total} में से {shown}",
+      "enterHint": "हाइलाइट किए गए बुकमार्क पर जाने के लिए Enter दबाएं।",
+      "notFound": "“{name}” नाम का कोई बुकमार्क नहीं है।",
+      "failed": "बुकमार्क दिखाया नहीं जा सका।",
+      "typeName": "बुकमार्क का नाम लिखें, या सूची से एक चुनें।",
+      "empty": "इस दस्तावेज़ में कोई बुकमार्क नहीं है।",
+      "emptyHint": "टेक्स्ट चुनें, फिर उसे नाम देने के लिए बुकमार्क जोड़ें।",
+      "add": "बुकमार्क जोड़ें…",
+      "noMatches": "कोई बुकमार्क मेल नहीं खाता।",
+      "atCaret": "इसमें कर्सर है",
+      "places": {
+        "header": "हेडर",
+        "footer": "फ़ुटर",
+        "footnote": "फ़ुटनोट",
+        "endnote": "एंडनोट"
+      },
+      "groups": {
+        "body": "मुख्य टेक्स्ट",
+        "header": "हेडर",
+        "footer": "फ़ुटर",
+        "footnote": "फ़ुटनोट",
+        "endnote": "एंडनोट"
+      }
+    }
   },
   "contentControl": {
     "formFill": "फ़ॉर्म भरने का मोड",

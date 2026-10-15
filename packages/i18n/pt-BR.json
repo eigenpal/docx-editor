@@ -55,7 +55,12 @@
     "printNoViewer": "Este navegador não pode imprimir arquivos PDF a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
     "printLoadFailed": "O PDF não foi carregado para impressão. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
     "printRefused": "O navegador não permitiu a impressão a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
-    "insertTextBox": "Caixa de texto"
+    "insertTextBox": "Caixa de texto",
+    "bookmark": "Indicador…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Ir para indicador…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "Pincel de formatação (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Mostrar quebras de parágrafo",
     "label": "Controles de formatação",
-    "addComment": "Adicionar comentário"
+    "addComment": "Adicionar comentário",
+    "showBookmarks": "Mostrar indicadores"
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -373,6 +379,27 @@
       "direction": "Direção",
       "directionLtr": "Da esquerda para a direita",
       "directionRtl": "Da direita para a esquerda"
+    },
+    "bookmark": {
+      "title": "Indicador",
+      "name": "Nome do indicador",
+      "list": "Indicadores",
+      "empty": "Este documento não tem indicadores.",
+      "sortBy": "Classificar por",
+      "sortName": "Nome",
+      "sortLocation": "Local",
+      "showHidden": "Indicadores ocultos",
+      "add": "Adicionar",
+      "delete": "Excluir",
+      "goTo": "Ir para",
+      "nameEmpty": "Digite um nome de indicador.",
+      "nameTooLong": "Um nome de indicador tem no máximo 40 caracteres.",
+      "nameInvalidStart": "Um nome de indicador começa com uma letra.",
+      "nameInvalidCharacter": "Use apenas letras, dígitos e sublinhados.",
+      "nameExists": "Já existe um indicador com este nome. Adicionar o move para a seleção.",
+      "refused": "Não foi possível alterar o indicador.",
+      "duplicates": "{count, plural, one {# outro local usa este nome.} other {# outros locais usam este nome.}} Links e Ir para usam o primeiro.",
+      "keepFirst": "Manter o primeiro"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "Navegação ({shortcut})",
     "tabs": {
       "find": "Localizar",
-      "headings": "Títulos"
+      "headings": "Títulos",
+      "goto": "Indicadores"
     },
-    "title": "Navegação"
+    "title": "Navegação",
+    "goTo": {
+      "tabTitle": "Ir para um indicador ({shortcut})",
+      "label": "Indicador",
+      "placeholder": "Pesquisar indicadores",
+      "listAriaLabel": "Indicadores",
+      "countFiltered": "{shown} de {total}",
+      "enterHint": "Pressione Enter para ir ao indicador realçado.",
+      "notFound": "Nenhum indicador se chama “{name}”.",
+      "failed": "Não foi possível mostrar o indicador.",
+      "typeName": "Digite o nome de um indicador ou escolha um na lista.",
+      "empty": "Este documento não tem indicadores.",
+      "emptyHint": "Selecione o texto e adicione um indicador para nomeá-lo.",
+      "add": "Adicionar um indicador…",
+      "noMatches": "Nenhum indicador corresponde.",
+      "atCaret": "Contém o cursor",
+      "places": {
+        "header": "Cabeçalho",
+        "footer": "Rodapé",
+        "footnote": "Nota de rodapé",
+        "endnote": "Nota de fim"
+      },
+      "groups": {
+        "body": "Texto principal",
+        "header": "Cabeçalhos",
+        "footer": "Rodapés",
+        "footnote": "Notas de rodapé",
+        "endnote": "Notas de fim"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Modo de preenchimento de formulário",

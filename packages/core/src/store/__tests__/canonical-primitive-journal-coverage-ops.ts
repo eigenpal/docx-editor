@@ -818,6 +818,26 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       }
     ),
     story(
+      'insertBookmark',
+      zipDoc({ body: '<w:p><w:r><w:t>Hello world</w:t></w:r></w:p><w:sectPr/>' }),
+      (store) => {
+        const paragraphId = firstParagraphId(store);
+        return {
+          op: 'insertBookmark',
+          name: 'Greeting',
+          start: { paragraphId, offset: 6 },
+          end: { paragraphId, offset: 11 },
+        };
+      }
+    ),
+    story(
+      'deleteBookmark',
+      zipDoc({
+        body: '<w:p><w:bookmarkStart w:id="1" w:name="Greeting"/><w:r><w:t>Hello</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p><w:sectPr/>',
+      }),
+      () => ({ op: 'deleteBookmark', name: 'greeting' })
+    ),
+    story(
       'insertBuildingBlock',
       zipDoc({
         body:

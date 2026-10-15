@@ -110,6 +110,9 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
     'rejectAllRevisions',
     'selectSpan',
     'selectBookmark',
+    // Bookmarks are not revisions: their markers carry no author, so they write directly.
+    'insertBookmark',
+    'deleteBookmark',
   ].includes(operation.op);
 }
 

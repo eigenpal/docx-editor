@@ -234,9 +234,34 @@ function modernEdgeAlignedOffsetPt(
   let gridWidth = 0;
   for (const column of table.columnWidthsPt) gridWidth += column;
   const left = table.alignment === 'left';
-  const fits = (left ? table.indentPt : 0) + gridWidth + rule <= table.containerWidthPt + 1e-6;
+  // AutoFit settles an automatic-width table with its outer box inside the container.
+  const fits =
+    (left ? table.indentPt : 0) + gridWidth + rule <= table.containerWidthPt + 1e-6 ||
+    autoWidthOuterRulePt(rows, table) > 0;
   if (!fits && !(left && table.layoutFixed)) return undefined;
   return left ? rule / 2 : -rule / 2;
+}
+
+/**
+ * The room a mode-15 automatic-width AutoFit table gives its outer side rules: AutoFit keeps
+ * the outer box, the grid plus half of each outer rule, inside the container for every
+ * alignment, so the grid settles one rule narrower. 0 for any other table.
+ */
+export function autoWidthOuterRulePt(
+  rows: readonly SemanticTableRow[],
+  table: SideRuleTableShape
+): number {
+  if (
+    !hasCompatibilityRule(table.compatibilityMode, 'modernGridLineSideRules') ||
+    table.widthType !== 'auto' ||
+    table.layoutFixed ||
+    table.depth !== 0 ||
+    table.bidiVisual ||
+    table.floating ||
+    table.cellSpacingPt !== 0
+  )
+    return 0;
+  return uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length) ?? 0;
 }
 
 /**

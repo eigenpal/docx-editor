@@ -25,7 +25,7 @@ import { useNavigationLayoutStore, useNavigationViewportElement } from './naviga
 import { trackWidestPage, type WidestPageTracker } from './navigation-widest-page';
 
 /** @public */
-export type NavigationTab = 'headings' | 'find';
+export type NavigationTab = 'headings' | 'find' | 'goto';
 
 /** @internal */
 export interface PaneGeometry {

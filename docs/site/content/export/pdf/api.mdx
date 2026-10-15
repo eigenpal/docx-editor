@@ -158,7 +158,7 @@ Choose best-effort output explicitly after reviewing your application's fidelity
 
 ## Resource boundaries
 
-The writer limits operations to `2000000`, diagnostics to `10000`, and uncompressed content to `67108864` bytes. Core also bounds DOCX parsing, fonts, images, and layout.
+The writer limits diagnostics to `10000`. It limits paint operations to `2000000` or `6000` for each laid-out page, whichever is greater, up to `40000000`. It limits uncompressed content to `67108864` bytes or `196608` bytes for each page, whichever is greater, up to `536870912` bytes. Text shaping accepts font faces up to `41943040` bytes (40 MiB) unless you set `fontShaping`, so large installed CJK font collections are used rather than replaced. Core also bounds DOCX parsing, fonts, images, and layout.
 
 `maxPages` and `maxOutputBytes` do not impose a process memory limit. They check completed layout and completed encoding, respectively.
 

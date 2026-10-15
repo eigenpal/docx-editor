@@ -65,6 +65,12 @@ export interface PositionalTab {
  */
 export interface FieldAtomMarker {
   /**
+   * A plain REF cross-reference with no nested field (not PAGEREF or NOTEREF): its result,
+   * the target's text or number, never changes with pagination, so a justified line may treat
+   * it as an ordinary word.
+   */
+  readonly fixedResult?: true;
+  /**
    * A legacy form field: `w:fldChar/w:ffData` (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN).
    *
    * Word shades these on a different rule from ordinary fields — always, unless the document

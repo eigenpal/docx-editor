@@ -55,7 +55,12 @@
     "printNoViewer": "דפדפן זה אינו יכול להדפיס קובצי PDF מתוך הדף. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
     "printLoadFailed": "ה-PDF לא נטען להדפסה. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
     "printRefused": "הדפדפן לא אפשר הדפסה מתוך הדף. בחר פתח PDF ולאחר מכן הדפס מתוך מציג ה-PDF.",
-    "insertTextBox": "תיבת טקסט"
+    "insertTextBox": "תיבת טקסט",
+    "bookmark": "סימנייה…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "מעבר לסימניה…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "מברשת עיצוב (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "הצג מעברי פסקה",
     "label": "פקדי עיצוב",
-    "addComment": "הוסף תגובה"
+    "addComment": "הוסף תגובה",
+    "showBookmarks": "הצג סימניות"
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -373,6 +379,27 @@
       "direction": "כיוון",
       "directionLtr": "משמאל לימין",
       "directionRtl": "מימין לשמאל"
+    },
+    "bookmark": {
+      "title": "סימנייה",
+      "name": "שם הסימנייה",
+      "list": "סימניות",
+      "empty": "אין סימניות במסמך זה.",
+      "sortBy": "מיין לפי",
+      "sortName": "שם",
+      "sortLocation": "מיקום",
+      "showHidden": "סימניות מוסתרות",
+      "add": "הוסף",
+      "delete": "מחק",
+      "goTo": "עבור אל",
+      "nameEmpty": "הזן שם סימנייה.",
+      "nameTooLong": "שם סימנייה מכיל 40 תווים לכל היותר.",
+      "nameInvalidStart": "שם סימנייה מתחיל באות.",
+      "nameInvalidCharacter": "השתמש באותיות, בספרות ובקווים תחתונים בלבד.",
+      "nameExists": "קיימת סימנייה בשם זה. הוספה מעבירה אותה לבחירה.",
+      "refused": "לא ניתן היה לשנות את הסימנייה.",
+      "duplicates": "{count, plural, one {מקום # נוסף משתמש בשם זה.} other {# מקומות נוספים משתמשים בשם זה.}} קישורים ו״עבור אל״ משתמשים בראשון.",
+      "keepFirst": "השאר את הראשון"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "ניווט ({shortcut})",
     "tabs": {
       "find": "חיפוש",
-      "headings": "כותרות"
+      "headings": "כותרות",
+      "goto": "סימניות"
     },
-    "title": "ניווט"
+    "title": "ניווט",
+    "goTo": {
+      "tabTitle": "מעבר לסימניה ({shortcut})",
+      "label": "סימניה",
+      "placeholder": "חיפוש סימניות",
+      "listAriaLabel": "סימניות",
+      "countFiltered": "{shown} מתוך {total}",
+      "enterHint": "הקש Enter כדי לעבור לסימניה המסומנת.",
+      "notFound": "אין סימניה בשם \"{name}\".",
+      "failed": "לא ניתן היה להציג את הסימניה.",
+      "typeName": "הקלד שם סימניה, או בחר אחת מהרשימה.",
+      "empty": "אין סימניות במסמך זה.",
+      "emptyHint": "בחר טקסט ולאחר מכן הוסף סימניה כדי לתת לו שם.",
+      "add": "הוספת סימניה…",
+      "noMatches": "אין סימניות תואמות.",
+      "atCaret": "מכיל את הסמן",
+      "places": {
+        "header": "כותרת עליונה",
+        "footer": "כותרת תחתונה",
+        "footnote": "הערת שוליים",
+        "endnote": "הערת סיום"
+      },
+      "groups": {
+        "body": "טקסט ראשי",
+        "header": "כותרות עליונות",
+        "footer": "כותרות תחתונות",
+        "footnote": "הערות שוליים",
+        "endnote": "הערות סיום"
+      }
+    }
   },
   "contentControl": {
     "formFill": "מצב מילוי טפסים",

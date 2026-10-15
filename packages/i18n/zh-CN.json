@@ -55,7 +55,12 @@
     "printNoViewer": "此浏览器无法从页面打印 PDF 文件。请选择“打开 PDF”，然后从 PDF 查看器打印。",
     "printLoadFailed": "未能加载要打印的 PDF。请选择“打开 PDF”，然后从 PDF 查看器打印。",
     "printRefused": "浏览器不允许从页面打印。请选择“打开 PDF”，然后从 PDF 查看器打印。",
-    "insertTextBox": "文本框"
+    "insertTextBox": "文本框",
+    "bookmark": "书签…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "定位到书签…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "格式刷 (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "显示段落标记",
     "label": "格式设置控件",
-    "addComment": "添加批注"
+    "addComment": "添加批注",
+    "showBookmarks": "显示书签"
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -373,6 +379,27 @@
       "direction": "方向",
       "directionLtr": "从左到右",
       "directionRtl": "从右到左"
+    },
+    "bookmark": {
+      "title": "书签",
+      "name": "书签名",
+      "list": "书签",
+      "empty": "此文档没有书签。",
+      "sortBy": "排序依据",
+      "sortName": "名称",
+      "sortLocation": "位置",
+      "showHidden": "隐藏书签",
+      "add": "添加",
+      "delete": "删除",
+      "goTo": "定位",
+      "nameEmpty": "请输入书签名。",
+      "nameTooLong": "书签名最多包含 40 个字符。",
+      "nameInvalidStart": "书签名以字母开头。",
+      "nameInvalidCharacter": "只能使用字母、数字和下划线。",
+      "nameExists": "已存在同名书签。添加会将其移到所选内容。",
+      "refused": "无法更改书签。",
+      "duplicates": "{count, plural, other {另有 # 处使用此名称。}}链接和“定位”使用第一个。",
+      "keepFirst": "保留第一个"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "导航 ({shortcut})",
     "tabs": {
       "find": "查找",
-      "headings": "标题"
+      "headings": "标题",
+      "goto": "书签"
     },
-    "title": "导航"
+    "title": "导航",
+    "goTo": {
+      "tabTitle": "定位到书签 ({shortcut})",
+      "label": "书签",
+      "placeholder": "搜索书签",
+      "listAriaLabel": "书签",
+      "countFiltered": "{shown}/{total}",
+      "enterHint": "按 Enter 键转到突出显示的书签。",
+      "notFound": "没有名为“{name}”的书签。",
+      "failed": "无法显示该书签。",
+      "typeName": "请输入书签名，或从列表中选择一个。",
+      "empty": "此文档没有书签。",
+      "emptyHint": "选择文本，然后添加书签为其命名。",
+      "add": "添加书签…",
+      "noMatches": "没有匹配的书签。",
+      "atCaret": "包含光标",
+      "places": {
+        "header": "页眉",
+        "footer": "页脚",
+        "footnote": "脚注",
+        "endnote": "尾注"
+      },
+      "groups": {
+        "body": "正文",
+        "header": "页眉",
+        "footer": "页脚",
+        "footnote": "脚注",
+        "endnote": "尾注"
+      }
+    }
   },
   "contentControl": {
     "formFill": "表单填写模式",

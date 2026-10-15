@@ -492,6 +492,43 @@ export type AutomationOperation =
    */
   | { readonly op: 'getBookmarkRange'; readonly bookmark: AutomationHandle }
   /**
+   * The names of the bookmarks a span overlaps, in document order: `Range.getBookmarks`.
+   *
+   * A non-empty span holds a bookmark when the two share text, and a point bookmark when the
+   * point is inside the span. An empty span holds the bookmarks around it. `includeAdjacent`
+   * adds the bookmarks that only touch the span; `includeHidden` adds names starting with `_`.
+   */
+  | {
+      readonly op: 'getBookmarkNames';
+      readonly scope: AutomationSpanRef;
+      readonly includeHidden: boolean;
+      readonly includeAdjacent: boolean;
+    }
+  /**
+   * The range of the bookmark with this name, compared without case, in any story: main text
+   * first, then headers, footers and notes. Answers no span when nothing declares the name.
+   */
+  | {
+      readonly op: 'getBookmarkRangeByName';
+      readonly document: AutomationHandle;
+      readonly name: string;
+    }
+  /**
+   * Add a bookmark around a span, or at a point. A bookmark any story declares under the same
+   * name, compared without case, moves here in the same write.
+   */
+  | { readonly op: 'insertBookmark'; readonly span: AutomationSpanRef; readonly name: string }
+  /**
+   * Remove a bookmark: by name anywhere in the document, or the one a handle names. The text
+   * stays. A name nothing declares is not an error and changes nothing.
+   */
+  | {
+      readonly op: 'deleteBookmark';
+      readonly target:
+        | { readonly document: AutomationHandle; readonly name: string }
+        | { readonly bookmark: AutomationHandle };
+    }
+  /**
    * The comments anchored in a scope, in document order — the TOP-LEVEL ones.
    *
    * A reply is reached through the comment it answers rather than listed beside it, because a flat

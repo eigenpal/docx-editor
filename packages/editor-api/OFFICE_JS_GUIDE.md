@@ -389,6 +389,20 @@ await runtime.run(async (context) => {
 
 A read returns the direction that the paragraph reads in, after its style. Writes accept only `LeftToRight` and `RightToLeft`; other values fail with `InvalidArgument`. A write of the direction that the paragraph already has changes nothing, so you can write back what you read. The write keeps `alignment` as authored: in a right-to-left paragraph, `Left` names the leading edge at the right margin. With `TrackMineOnly`, the write records a paragraph property revision.
 
+## Go to a bookmark
+
+Go to a bookmark with the standard calls: `getBookmarkRangeOrNullObject(name)`, then `range.select()`. Check `isNullObject` after a sync instead of catching `ItemNotFound`. Selection needs a browser host (`runtime.capabilities.selection`). It opens the header, footer or note that holds the bookmark. A read-only editor refuses a selection outside the main text with `NotSupported`.
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.getBookmarkRangeOrNullObject('Intro');
+  await context.sync();
+  if (range.isNullObject) return;
+  range.select();
+  await context.sync();
+});
+```
+
 ## Insert table rows
 
 `TableRow.insertRows('Before', count, values)` and `'After'` support ordinary source rows beside unrelated merged headers. Merged source rows and crossing vertical merges refuse. Keep each row insertion as the only write in its sync. Sync before editing returned rows. For more information, see [Tables and cells](https://docx-editor.dev/docs/2.x/editor-api/tables).

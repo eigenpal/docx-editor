@@ -55,7 +55,12 @@
     "printNoViewer": "Bu tarayıcı sayfadan PDF dosyalarını yazdıramaz. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
     "printLoadFailed": "PDF yazdırılmak üzere yüklenemedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
     "printRefused": "Tarayıcı sayfadan yazdırmaya izin vermedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
-    "insertTextBox": "Metin Kutusu"
+    "insertTextBox": "Metin Kutusu",
+    "bookmark": "Yer işareti…",
+    "bookmarkShortcut": "Ctrl+Shift+F5",
+    "goToBookmark": "Yer işaretine git…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +108,8 @@
     "formatPainterShortcut": "Biçim boyacısı (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Paragraf sonlarını göster",
     "label": "Biçimlendirme denetimleri",
-    "addComment": "Açıklama ekle"
+    "addComment": "Açıklama ekle",
+    "showBookmarks": "Yer işaretlerini göster"
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -373,6 +379,27 @@
       "direction": "Yön",
       "directionLtr": "Soldan sağa",
       "directionRtl": "Sağdan sola"
+    },
+    "bookmark": {
+      "title": "Yer işareti",
+      "name": "Yer işareti adı",
+      "list": "Yer işaretleri",
+      "empty": "Bu belgede yer işareti yok.",
+      "sortBy": "Sıralama ölçütü",
+      "sortName": "Ad",
+      "sortLocation": "Konum",
+      "showHidden": "Gizli yer işaretleri",
+      "add": "Ekle",
+      "delete": "Sil",
+      "goTo": "Git",
+      "nameEmpty": "Bir yer işareti adı girin.",
+      "nameTooLong": "Yer işareti adı en fazla 40 karakterdir.",
+      "nameInvalidStart": "Yer işareti adı bir harfle başlar.",
+      "nameInvalidCharacter": "Yalnızca harf, rakam ve alt çizgi kullanın.",
+      "nameExists": "Bu adla bir yer işareti var. Ekle, onu seçime taşır.",
+      "refused": "Yer işareti değiştirilemedi.",
+      "duplicates": "{count, plural, other {# başka yer bu adı kullanıyor.}} Bağlantılar ve Git ilkini kullanır.",
+      "keepFirst": "İlkini koru"
     }
   },
   "comments": {
@@ -722,9 +749,39 @@
     "openShortcutTitle": "Gezinti ({shortcut})",
     "tabs": {
       "find": "Bul",
-      "headings": "Başlıklar"
+      "headings": "Başlıklar",
+      "goto": "Yer işaretleri"
     },
-    "title": "Gezinti"
+    "title": "Gezinti",
+    "goTo": {
+      "tabTitle": "Yer işaretine git ({shortcut})",
+      "label": "Yer işareti",
+      "placeholder": "Yer işaretlerinde ara",
+      "listAriaLabel": "Yer işaretleri",
+      "countFiltered": "{total} içinden {shown}",
+      "enterHint": "Vurgulanan yer işaretine gitmek için Enter tuşuna basın.",
+      "notFound": "“{name}” adlı yer işareti yok.",
+      "failed": "Yer işareti gösterilemedi.",
+      "typeName": "Bir yer işareti adı yazın veya listeden birini seçin.",
+      "empty": "Bu belgede yer işareti yok.",
+      "emptyHint": "Metin seçin, ardından adlandırmak için bir yer işareti ekleyin.",
+      "add": "Yer işareti ekle…",
+      "noMatches": "Eşleşen yer işareti yok.",
+      "atCaret": "İmleci içerir",
+      "places": {
+        "header": "Üst bilgi",
+        "footer": "Alt bilgi",
+        "footnote": "Dipnot",
+        "endnote": "Son not"
+      },
+      "groups": {
+        "body": "Ana metin",
+        "header": "Üst bilgiler",
+        "footer": "Alt bilgiler",
+        "footnote": "Dipnotlar",
+        "endnote": "Son notlar"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Form doldurma modu",

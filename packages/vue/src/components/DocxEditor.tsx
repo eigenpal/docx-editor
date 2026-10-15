@@ -47,6 +47,7 @@ import type { DocxEditorNavigationProps } from '../editor/navigation';
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
@@ -222,6 +223,8 @@ export interface DocxEditorNamespace {
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   /** Watermark dialog — none, picture or text — applied as one undo step. */
   readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
+  /** Bookmark dialog — list, add, delete and go to bookmarks. */
+  readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
   /** The dialog that explains a file the editor refused to open. Mounted by default. */
@@ -691,6 +694,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
   WatermarkDialog: DocxEditorWatermarkDialog,
+  BookmarkDialog: DocxEditorBookmarkDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   OpenFailure: DocxEditorOpenFailure,

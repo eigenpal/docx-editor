@@ -43,6 +43,7 @@ import {
   tocAtPosition,
   selectionTouchesTocRange,
   opTouchesTocRange,
+  paragraphInBodyToc,
 } from './surface-toc-ranges.ts';
 import { tocBoundaryForLayout } from './surface-toc-boundary.ts';
 import { resolveTocSources } from '../store/package/toc-sources.ts';
@@ -128,7 +129,6 @@ import {
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
   paragraphFragmentsOf,
-  paragraphFragmentsOfBlocks,
   reviewItemKey,
   reviewThreadRootOf,
   selectionRects,
@@ -256,6 +256,7 @@ import {
   type LayoutDocumentViewOptions,
 } from '../layout/document-layout-coordinator.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
+import { createSurfaceBookmarks, storyContentBox } from './surface-bookmarks.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
@@ -288,6 +289,7 @@ import {
   storyScopeOf,
   partOfNodeId,
   storyScopeOfNodeId,
+  noteScopeIdInLayout,
 } from './surface-scope.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
 import {
@@ -316,7 +318,7 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { contentLockedOrBound, removalLocked, treeLockRefusal } from './content-control-locks.ts';
 import { overlaySheet, sizeOverlaySheets } from './surface-overlay-sheet.ts';
-import type { SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
+import type { SurfaceOverlayFrame, SurfaceOverlayPainter } from './surface-overlay-sheet.ts';
 
 export type {
   ContentControlOps,
@@ -451,17 +453,20 @@ export function mountPaginatedSurface(
   const highlightLayer = overlaySheet(mountDocument, 'docx-text-highlight-overlay');
   let highlightPainter: SurfaceOverlayPainter | null = null;
   const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
+  const bookmarkLayer = overlaySheet(mountDocument, 'docx-bookmark-overlay');
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
 
   container.style.position = 'relative';
-  container.replaceChildren(
-    pagesLayer,
+  // Stacking order over the pages, bottom first.
+  const sheets = [
     tableFurnitureLayer,
     commentLayer,
+    bookmarkLayer,
     highlightLayer,
     remoteSelectionLayer,
-    overlayLayer
-  );
+    overlayLayer,
+  ];
+  container.replaceChildren(pagesLayer, ...sheets);
 
   const caret = createSurfaceCaret(
     pagesLayer,
@@ -1039,7 +1044,8 @@ export function mountPaginatedSurface(
     // the body story and nowhere else. A header store has no `w:body`, so with the caret in a
     // header every page-setup write was refused as `tree-invariant`: the ruler snapped back and
     // Page Setup's Apply did nothing, with the dialog still reading the right section.
-    applyTreeOps: (ops, before, after, scope) => applyOps(ops, before, after, scope),
+    applyTreeOps: (ops, before, after, scope, options) =>
+      applyOps(ops, before, after, scope, true, options?.packageEdits),
     // List definitions mint `numId` on the package before the paragraph op names it, so
     // the typing transaction never binds an actor for that scan. Same wrap the hyperlink
     // mint uses.
@@ -1106,6 +1112,19 @@ export function mountPaginatedSurface(
     flushPendingInputAndLayout,
     () => render(false)
   );
+  // Declared before the first paint, like `paragraphMarks`: `render` paints its marks.
+  const bookmarks = createSurfaceBookmarks({
+    session: gatedSession,
+    storyScope,
+    orderedRange: () => orderedRange(),
+    writeRefusal: () => writeRefusal(true),
+    commit: (run, selectionAfter) => commit(run, selectionAfter),
+    goToPosition: (position, options) => navigation.goToPosition(position, options),
+    setSelection: (next) => setSelection(next),
+    beforeChange: flushPendingInputAndLayout,
+    repaint: () => render(false),
+    options,
+  });
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
@@ -1318,26 +1337,11 @@ export function mountPaginatedSurface(
     }
     // A notes PART holds every note, so the scope has to name the NOTE the paragraph is in,
     // and only the painted layout knows which one that is.
-    const scopeId = noteScopeIdHolding(paragraphId);
+    const scopeId = noteScopeIdInLayout(currentLayout, paragraphId);
     if (!scopeId) return false;
     if (noteOps?.activeNoteScope()?.id === scopeId) return true;
     hfScope?.exitHeaderFooter();
     return noteOps?.enterNote(scopeId) ?? false;
-  };
-
-  /** The note whose painted fragments hold this paragraph, or null. */
-  const noteScopeIdHolding = (paragraphId: string): string | null => {
-    for (const page of currentLayout.pages) {
-      for (const area of [page.footnotes, page.endnotes]) {
-        if (!area) continue;
-        for (const note of area.notes) {
-          for (const fragment of paragraphFragmentsOfBlocks(note.fragments)) {
-            if (fragment.paragraphId === paragraphId) return note.scopeId;
-          }
-        }
-      }
-    }
-    return null;
   };
 
   const navigation = createSurfaceNavigation({
@@ -2692,11 +2696,8 @@ export function mountPaginatedSurface(
     pagesLayer.style.height = `${materializedExtent.height * scale}px`;
     container.style.width = `${materializedExtent.width * scale}px`;
     container.style.height = `${materializedExtent.height * scale}px`;
-    sizeOverlaySheets(
-      [overlayLayer, commentLayer, highlightLayer, remoteSelectionLayer, tableFurnitureLayer],
-      `${materializedExtent.width * scale}px`,
-      `${materializedExtent.height * scale}px`
-    );
+    const { width, height } = materializedExtent;
+    sizeOverlaySheets(sheets, `${width * scale}px`, `${height * scale}px`);
     tableInteraction.update();
     // Sizing included: the style writes above invalidate layout, and the selection sync
     // right after is what forces the browser to resolve it. Splitting the timer here would
@@ -2706,6 +2707,7 @@ export function mountPaginatedSurface(
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);
+    bookmarks.paint(overlayFrame(bookmarkLayer));
     paintHighlights();
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
@@ -3898,16 +3900,21 @@ export function mountPaginatedSurface(
     );
   }
 
-  function paintHighlights(): void {
-    highlightPainter?.({
-      layer: highlightLayer,
+  /** One rendered frame for an overlay painter, with the page painter's scale and offsets. */
+  function overlayFrame(layer: HTMLElement): SurfaceOverlayFrame {
+    return {
+      layer,
       layout: currentLayout,
       revision: session.packageRevision(),
       scale,
       measurer,
       ...(materializedSet ? { pages: materializedSet } : {}),
       ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
-    });
+    };
+  }
+
+  function paintHighlights(): void {
+    highlightPainter?.(overlayFrame(highlightLayer));
   }
 
   /** Draw ephemeral remote selections from semantic layout geometry. */
@@ -5006,12 +5013,9 @@ export function mountPaginatedSurface(
       if (!caret) return false;
       const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
       if (!page) return false;
-      // 'nearest' by default: callers reveal on every activation, and a target already in
-      // view must not yank the viewport.
-      return scrollToContentY(page.contentBox.y + caret.y, caret.height, {
-        block: 'nearest',
-        ...options,
-      });
+      // 'nearest' by default; a header, footer or note line measures from its own story box.
+      const y = storyContentBox(page, position.paragraphId).y + caret.y;
+      return scrollToContentY(y, caret.height, { block: 'nearest', ...options });
     },
 
     setEditable(editable) {
@@ -5049,13 +5053,7 @@ export function mountPaginatedSurface(
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
     saveSteps: () => saveSurfaceDocumentSteps(surface, container, () => destroyed),
-    isInsideToc: (paragraphId) =>
-      detectBodyTocs(session.part()).some(
-        (toc) =>
-          toc.beginParagraphId === paragraphId ||
-          toc.endParagraphId === paragraphId ||
-          toc.resultParagraphIds.includes(paragraphId)
-      ),
+    isInsideToc: (paragraphId) => paragraphInBodyToc(session.part(), paragraphId),
     retainSelection: () => {
       const pin = Symbol('selection-pin');
       retainedSelections.set(pin, selection);
@@ -5421,6 +5419,7 @@ export function mountPaginatedSurface(
     },
 
     navigation,
+    bookmarkEditing: bookmarks,
 
     bookmarks: () => session.bookmarks(),
 

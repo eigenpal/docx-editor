@@ -58,6 +58,7 @@ import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from '../DocxEditorWatermark';
 import { MenuWatermark } from './menu-watermark';
+import { MenuBookmark } from './menu-bookmark';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import {
@@ -763,6 +764,7 @@ export interface DocxEditorMenuNamespace {
   readonly ImageInsert: typeof MenuImageInsert;
   /** Insert › Watermark, so a host can hide it or place it elsewhere by name. */
   readonly Watermark: typeof MenuWatermark;
+  readonly Bookmark: typeof MenuBookmark;
   /** Review > Markup Options > Reviewers. */
   readonly Reviewers: typeof MenuReviewers;
   /** Help › Report issue, so a host can drop it or point it elsewhere by name. */
@@ -801,6 +803,7 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
   Watermark: MenuWatermark,
+  Bookmark: MenuBookmark,
   Reviewers: MenuReviewers,
   ReportIssue: MenuReportIssue,
 });

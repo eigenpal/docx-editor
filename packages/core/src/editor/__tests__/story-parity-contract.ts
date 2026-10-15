@@ -126,6 +126,7 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'review.acceptAllChanges': { parity: 'same' },
   'review.rejectAllChanges': { parity: 'same' },
   'review.paragraphMarks': { parity: 'same' },
+  'review.bookmarks': { parity: 'same' },
   'review.protectDocument': { parity: 'same' },
   'review.addComment': { parity: 'same' },
   'review.authors': { parity: 'same' },
@@ -151,6 +152,8 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'file.print': { parity: 'same' },
   'file.pageSetup': { parity: 'same' },
   'insert.watermark': { parity: 'same' },
+  'insert.bookmark': { parity: 'same' },
+  'insert.goToBookmark': { parity: 'same' },
 
   // A note reference is a body-story concept: `w:footnoteReference` lives in the main document
   // part, and Word refuses a note inside a note for the same reason.

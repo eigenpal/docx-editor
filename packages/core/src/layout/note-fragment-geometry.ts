@@ -355,7 +355,11 @@ function referenceLineBand(
   for (const [index, line] of fragment.lines.entries()) {
     for (const segment of lineSegments(line)) {
       if (!segmentOwnsAtomOffset(segment, ref.paragraphId, ref.atomOffset)) continue;
-      return { top: line.box.y, bottom: line.box.y + line.box.height, index };
+      // The paragraph's last line carries its space after: a reference there fits only
+      // when that space fits above the note area too.
+      const after =
+        fragment.paragraphEnd && index === fragment.lines.length - 1 ? fragment.spacing.after : 0;
+      return { top: line.box.y, bottom: line.box.y + line.box.height + after, index };
     }
   }
   return null;

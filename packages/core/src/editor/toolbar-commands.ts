@@ -65,6 +65,11 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'review.revisionMarkup': { type: 'openRevisionMarkupDialog' },
   'review.comments': { type: 'toggleReviewPane' },
   'review.paragraphMarks': { type: 'toggleParagraphMarks' },
+  'review.bookmarks': { type: 'toggleBookmarks' },
+  // Opens the host's Bookmark dialog, the `bookmark` popup; disabled while none is registered.
+  'insert.bookmark': { type: 'openBookmarkDialog' },
+  // Opens the host's Go To UI, the Go to tab of the navigation pane; disabled without one.
+  'insert.goToBookmark': { type: 'openGoTo' },
   'review.protectDocument': { type: 'toggleDocumentProtection' },
   'review.simpleMarkup': { type: 'setReviewDisplayMode', mode: 'simple-markup' },
   'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },
@@ -631,6 +636,7 @@ export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
   return (
     command?.type === 'toggleMark' ||
     command?.type === 'toggleParagraphMarks' ||
+    command?.type === 'toggleBookmarks' ||
     command?.type === 'toggleDocumentProtection' ||
     command?.type === 'setReviewDisplayMode' ||
     command?.type === 'setAlignment' ||

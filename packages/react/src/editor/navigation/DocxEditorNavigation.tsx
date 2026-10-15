@@ -2,7 +2,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 // The navigation pane: `DocxEditor.Navigation`.
 //
 // `<DocxEditor.Navigation />` on its own is the whole thing — a collapsed disc button that
-// expands into a Headings/Find pane over the document's left gutter. Children replace the
+// expands into a Headings/Find/Go to pane over the document's left gutter. Children replace the
 // default composition part by part, and the three hooks behind it (`useNavigationPane`,
 // `useDocumentOutline`, `useDocumentSearch`) are the escape hatch for a pane that shares
 // none of this markup.
@@ -22,10 +22,13 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 // would scroll away with the pages; the stylesheet makes that pane sticky instead, and this
 // component publishes the viewport's size for it (see `useNavigationFocus`).
 //
-// KEYBOARD. Ctrl/Cmd+F opens the pane on Find while focus is in this editor, opening moves
-// focus into the pane, and Escape or the close arrow returns it to whatever opened it.
+// KEYBOARD. Ctrl/Cmd+F opens the pane on Find and Ctrl+G (Cmd+Option+G on macOS) on Go to,
+// while focus is in this editor. Opening moves focus into the pane, and Escape or the close
+// arrow returns it to whatever opened it. The `openGoTo` editor command opens Go to too.
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useDocxEditor } from '../context';
+import { NavigationGoTo } from './parts-goto';
 import type { CSSProperties, ReactElement } from 'react';
 import { useFormControlTranslate } from '../form-control-translate';
 import { NavigationContext } from './navigation-context';
@@ -80,6 +83,12 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
    * browser's own search. Set `false` to leave the shortcut to the browser everywhere.
    */
   findShortcut?: boolean;
+  /**
+   * Whether Ctrl+G (Cmd+Option+G on macOS) opens the pane on the Go to tab. Defaults to
+   * `true`, and applies only while focus is in this editor. The `openGoTo` editor command
+   * opens the tab either way.
+   */
+  goToShortcut?: boolean;
   className?: string;
   style?: CSSProperties;
   /** Replaces the default composition (header, tabs, both panels). */
@@ -99,6 +108,7 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
     toggle = true,
     searchHighlight = 'all',
     findShortcut = true,
+    goToShortcut = true,
     className,
     style,
     children,
@@ -125,11 +135,29 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
     [hostT, rootT]
   );
 
-  const focus = useNavigationFocus(pane, findShortcut);
+  const focus = useNavigationFocus(pane, findShortcut, goToShortcut);
   const value = useMemo(
-    () => ({ pane, outline, search, t, intents: focus.intents, findShortcut }),
-    [pane, outline, search, t, focus.intents, findShortcut]
+    () => ({ pane, outline, search, t, intents: focus.intents, findShortcut, goToShortcut }),
+    [pane, outline, search, t, focus.intents, findShortcut, goToShortcut]
   );
+
+  // The `openGoTo` command opens this pane's Go to tab.
+  const editor = useDocxEditor();
+  const intentsRef = useRef(focus.intents);
+  intentsRef.current = focus.intents;
+  // One registration for the pane's life: a prop change must not push it back on top of a
+  // host's own Go To UI, so the shortcut flag is read when the chord arrives.
+  const goToShortcutRef = useRef(goToShortcut);
+  goToShortcutRef.current = goToShortcut;
+  useEffect(() => {
+    if (!editor) return undefined;
+    return editor.setGoToChrome({
+      onRequest: () => intentsRef.current.openTab('goto'),
+      get shortcut() {
+        return goToShortcutRef.current;
+      },
+    });
+  }, [editor]);
 
   const width = props.paneWidth ?? NAVIGATION_PANE_WIDTH;
 
@@ -166,6 +194,7 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
               <NavigationTabs />
               <NavigationHeadings />
               <NavigationFind />
+              <NavigationGoTo />
             </>
           )}
         </aside>
@@ -188,6 +217,7 @@ export interface DocxEditorNavigationNamespace {
   readonly Tab: typeof NavigationTab;
   readonly Headings: typeof NavigationHeadings;
   readonly Find: typeof NavigationFind;
+  readonly GoTo: typeof NavigationGoTo;
   readonly Toggle: typeof NavigationToggle;
 }
 
@@ -199,5 +229,6 @@ export const Navigation: DocxEditorNavigationNamespace = Object.assign(DocxEdito
   Tab: NavigationTab,
   Headings: NavigationHeadings,
   Find: NavigationFind,
+  GoTo: NavigationGoTo,
   Toggle: NavigationToggle,
 });
