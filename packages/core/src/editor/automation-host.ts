@@ -343,6 +343,12 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     // canonical focus-independent path that installs the logical selection and reveals its head
     // from layout geometry. That keeps virtualized pages viable: the target usually has no DOM
     // node to measure yet, and the reveal materializes it on the way.
+    selectRefusal(story) {
+      if (story.kind === 'body') return null;
+      return editor.surface?.editingMode() === 'view'
+        ? 'a read-only editor does not open a header, footer or note to select in it'
+        : null;
+    },
     select(range, mode) {
       const surface = editor.surface;
       if (!surface) return;

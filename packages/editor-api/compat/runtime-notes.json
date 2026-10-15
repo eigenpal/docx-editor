@@ -21,7 +21,7 @@
   },
   "Word.Range#select": {
     "status": "partial",
-    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument."
+    "notes": "Selection requires an attached browser editor. Check runtime.capabilities.selection; server runtimes refuse with NotSupported. A range whose text moved since it was read refuses with StaleDocument. A range in a header, footer or note opens that story first, so the selection and the editing scope agree; a bookmark's range from getBookmarkRangeOrNullObject selects this way in any story. A read-only editor selects in the main text and refuses another story with NotSupported. Selecting writes nothing, so it works in a read-only editor and does not take the batch's write story."
   },
   "Word.ContentControl#id": {
     "status": "different",

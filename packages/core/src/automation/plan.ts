@@ -177,6 +177,8 @@ export interface BatchPlannerHost {
   readonly replacementLanding?: (paragraphId: string, start: number, end: number) => number | null;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
   readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
+  /** Why the host cannot select in a story now — see `AutomationDocumentPort.selectRefusal`. */
+  readonly selectRefusal?: (story: AutomationStoryId) => string | null;
 }
 
 export interface BatchPlanner {
@@ -1494,6 +1496,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse('unsupported-capability', 'this host has no reader to move', 'selection');
     if (mode !== 'select' && mode !== 'start' && mode !== 'end')
       return refuse('unknown-operation', 'that is not a selection mode', String(mode));
+    const refusal = host.selectRefusal?.(reads.story);
+    if (refusal) return refuse('unsupported-capability', refusal, 'selection');
     // Selecting is applied after the transaction, so a batch that also EDITS one of the
     // paragraphs the selection covers would place a caret using coordinates the edit moved.
     const covered = spanParagraphIds(range, reads);
@@ -1509,8 +1513,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     for (const paragraphId of covered) plan.selected.add(paragraphId);
     selections.push({ range, mode });
     // NO SCOPE PINNED. Moving a reader's caret writes nothing, so it does not claim the batch's
-    // one write story — a script may select in a header while it edits the body.
-    return { ok: true, kind: 'command', ops: [], story: reads.story, answer: () => APPLIED };
+    // one write story — a script may select in a header while it edits the body. Answered as
+    // a read for the same reason: a read-only document still lets a reader be moved. The
+    // caret moves when the batch settles.
+    return { ok: true, kind: 'query', value: APPLIED };
   };
 
   const resolveBookmarkRange = (handle: AutomationHandle) =>

@@ -554,6 +554,10 @@ export function execEditorCommand(
       // already-visible target still and centres one it has to travel to, rather than
       // stopping the moment it clears the bottom edge.
       if ('range' in command && isSurfaceSelection(command.range)) {
+        // Open the story the range is in first, as the anchor form below does: a header,
+        // footer or note range selected from the body would otherwise strand the caret.
+        const entered = enterStoryForSelection(mounted, command.range);
+        if (!entered.ok) return entered;
         mounted.setSelection(command.range);
         mounted.revealPosition(command.range.head, { block: 'centerIfNeeded' });
         // Selection is not document state: nothing to save changed.
