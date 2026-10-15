@@ -354,6 +354,11 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * Serialize the current document, finalizing pending text form values first.
    * Invalid input rejects with `EditorError.code === 'invalidArgs'` and remains editable.
    * Validation does not open a dialog. Other write refusals also reject the save.
+   *
+   * The bytes describe the document as it was when you called `save()`. The file is written
+   * in short tasks, so input stays responsive while a long document saves, and edits made
+   * meanwhile belong to the next save. Paragraphs and table rows unchanged since an earlier
+   * save are not written again, so autosave after a small edit stays cheap.
    */
   save(): Promise<ArrayBuffer>;
   getDocumentHandle(): DocumentHandle;

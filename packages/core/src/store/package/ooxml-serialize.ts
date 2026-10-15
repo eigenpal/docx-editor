@@ -9,7 +9,6 @@ import { isXmlNCName } from './qname.ts';
 import { escapeXmlAttributeChecked, escapeXmlChecked } from './sinks.ts';
 import {
   MC_NAMESPACE_URI,
-  MC_QNAME_LIST_ATTRIBUTES,
   WML_NAMESPACE_URI,
   XML_NAMESPACE_URI,
   XMLNS_NAMESPACE_URI,
@@ -22,6 +21,18 @@ import {
   validateQNameAttributeValues,
   wmlTextValueOf,
 } from './ooxml-shared.ts';
+import {
+  cacheMarkup,
+  cachedMarkup,
+  isMemoizedBlock,
+  serializationContext,
+} from './ooxml-serialize-cache.ts';
+import {
+  collectNamespacesAndAliases,
+  collectNonEmptyPrefixUris,
+  isMcPrefixListAttribute,
+  isQNameValuedAttribute,
+} from './ooxml-serialize-namespaces.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 function assertSerializableName(localName: string): void {
@@ -35,79 +46,7 @@ function assertSerializableNamespace(namespaceUri: string): void {
   escapeXmlChecked(namespaceUri, 'namespace URI');
 }
 
-function collectNamespacesAndAliases(
-  node: OoxmlNode,
-  namespaceUris: Set<string>,
-  aliasUris: Map<string, Set<string>>
-): void {
-  if (node.kind === 'textValue') return;
-  if (node.namespaceUri !== '') namespaceUris.add(node.namespaceUri);
-  for (const attribute of node.attributes)
-    if (attribute.namespaceUri !== '') namespaceUris.add(attribute.namespaceUri);
-  for (const binding of node.namespaceBindings) {
-    if (binding.namespaceUri !== '') namespaceUris.add(binding.namespaceUri);
-    const uris = aliasUris.get(binding.prefix) ?? new Set<string>();
-    uris.add(binding.namespaceUri);
-    aliasUris.set(binding.prefix, uris);
-  }
-  for (const child of node.children) collectNamespacesAndAliases(child, namespaceUris, aliasUris);
-}
-
-function isMcPrefixListAttribute(attribute: OoxmlAttribute, owner: OoxmlElement): boolean {
-  return (
-    (attribute.namespaceUri === MC_NAMESPACE_URI &&
-      (attribute.localName === 'Ignorable' || attribute.localName === 'MustUnderstand')) ||
-    (owner.namespaceUri === MC_NAMESPACE_URI &&
-      owner.localName === 'Choice' &&
-      attribute.namespaceUri === '' &&
-      attribute.localName === 'Requires')
-  );
-}
-
-function isQNameValuedAttribute(attribute: OoxmlAttribute): boolean {
-  return (
-    (attribute.namespaceUri === MC_NAMESPACE_URI &&
-      MC_QNAME_LIST_ATTRIBUTES.has(attribute.localName)) ||
-    (attribute.namespaceUri === XSI_NAMESPACE_URI && attribute.localName === 'type')
-  );
-}
-
-/** Namespaces that must have a non-empty controlled prefix (attrs + MC/XSI QName values). */
-function collectNonEmptyPrefixUris(
-  node: OoxmlNode,
-  inheritedBindings: ReadonlyMap<string, string>,
-  uris: Set<string>
-): void {
-  if (node.kind === 'textValue') return;
-  // Copy-on-write: most nodes declare no namespaces, and copying the inherited map per node
-  // dominated the cost of this whole-tree walk on long documents.
-  let bindings = inheritedBindings;
-  if (node.namespaceBindings.length > 0) {
-    const own = new Map(inheritedBindings);
-    for (const binding of node.namespaceBindings) own.set(binding.prefix, binding.namespaceUri);
-    bindings = own;
-  }
-  for (const attribute of node.attributes) {
-    if (attribute.namespaceUri !== '') uris.add(attribute.namespaceUri);
-    if (typeof attribute.value !== 'string') continue;
-    try {
-      if (isMcPrefixListAttribute(attribute, node)) {
-        for (const namespaceUri of resolvedPrefixNamespaceSet(attribute.value, bindings))
-          uris.add(namespaceUri);
-      } else if (isQNameValuedAttribute(attribute)) {
-        for (const token of attribute.value.trim().split(/\s+/).filter(Boolean)) {
-          const [namespaceUri] = resolvedQNameToken(token, bindings);
-          if (namespaceUri !== '') uris.add(namespaceUri);
-        }
-      }
-    } catch {
-      // Undeclared / invalid tokens fail closed later during validate/serialize.
-    }
-  }
-  for (const child of node.children) collectNonEmptyPrefixUris(child, bindings, uris);
-}
-
-interface ControlledPrefixes {
+export interface ControlledPrefixes {
   /** Element-name prefixes; may map a root-default URI to `''`. */
   readonly byUri: ReadonlyMap<string, string>;
   /**
@@ -115,6 +54,8 @@ interface ControlledPrefixes {
    * attributes or appear in MC/XSI QName / prefix-list attribute values.
    */
   readonly attributeAliases: ReadonlyMap<string, string>;
+  /** Equal for two prefix maps that emit the same names. Part of every cached paragraph key. */
+  readonly key: string;
 }
 
 /** Prefer a uniquely authored non-empty prefix for a URI (stable: sorted NCName). */
@@ -138,7 +79,8 @@ function preferredAuthoredPrefix(
   return candidates[0];
 }
 
-function controlledPrefixMap(root: OoxmlElement): ControlledPrefixes {
+/** @internal Shared with the sliced serializer. */
+export function controlledPrefixMap(root: OoxmlElement): ControlledPrefixes {
   const namespaceUris = new Set<string>();
   const aliasUris = new Map<string, Set<string>>();
   collectNamespacesAndAliases(root, namespaceUris, aliasUris);
@@ -213,7 +155,10 @@ function controlledPrefixMap(root: OoxmlElement): ControlledPrefixes {
     attributeAliases.set(namespaceUri, preferred);
     used.add(preferred);
   }
-  return { byUri, attributeAliases };
+  const key = [...byUri, ['', ''], ...attributeAliases]
+    .map(([namespaceUri, prefix]) => `${namespaceUri}\u0001${prefix}`)
+    .join('\u0002');
+  return { byUri, attributeAliases, key };
 }
 
 function prefixForAttributeOrQName(namespaceUri: string, prefixes: ControlledPrefixes): string {
@@ -337,20 +282,60 @@ export function canonicalSerializeNodeVisits(): number {
   return serializeNodeVisits;
 }
 
-function serializeNode(
+/** Nonzero while a memoized block serializes: its descendants are part of its markup. */
+let insideMemoizedBlock = 0;
+
+/** Markup text, or the UTF-8 bytes of a memoized block. */
+export type MarkupChunk = string | Uint8Array;
+
+const utf8 = new TextEncoder();
+
+/** @internal Shared with the sliced serializer. */
+export function serializeNode(
   node: OoxmlNode,
   prefixes: ControlledPrefixes,
   inheritedBindings: ReadonlyMap<string, string>,
   inheritedPreserve: boolean,
   rootDeclarations: string,
   /** Output accumulator — one flat join at the end beats per-element string assembly. */
-  out: string[]
+  out: MarkupChunk[]
 ): void {
   serializeNodeVisits += 1;
   if (node.kind === 'textValue') {
     out.push(escapeXmlChecked(node.value, 'OOXML text'));
     return;
   }
+  if (rootDeclarations === '' && insideMemoizedBlock === 0 && isMemoizedBlock(node)) {
+    const context = serializationContext(prefixes.key, inheritedBindings, inheritedPreserve);
+    const cached = cachedMarkup(node, context);
+    if (cached !== undefined) {
+      out.push(cached);
+      return;
+    }
+    // Nothing inside a memoized block is memoized, so its own output is all strings.
+    const own: string[] = [];
+    insideMemoizedBlock += 1;
+    try {
+      serializeElement(node, prefixes, inheritedBindings, inheritedPreserve, rootDeclarations, own);
+    } finally {
+      insideMemoizedBlock -= 1;
+    }
+    const markup = utf8.encode(own.join(''));
+    cacheMarkup(node, context, markup);
+    out.push(markup);
+    return;
+  }
+  serializeElement(node, prefixes, inheritedBindings, inheritedPreserve, rootDeclarations, out);
+}
+
+function serializeElement(
+  node: OoxmlElement,
+  prefixes: ControlledPrefixes,
+  inheritedBindings: ReadonlyMap<string, string>,
+  inheritedPreserve: boolean,
+  rootDeclarations: string,
+  out: MarkupChunk[]
+): void {
   // Copy-on-write: most nodes declare no namespaces, and copying the inherited map (plus the
   // sort/dedup scaffolding) per node dominated serialization cost on long documents.
   let bindings = inheritedBindings;
@@ -386,18 +371,9 @@ function serializeNode(
       .join('');
     bindings = own;
   }
-  const elementAttributes =
-    // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
-    // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
-    // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
-    // deletion later restored the words with the spacing already gone.
-    node.kind === 'text' || node.kind === 'deletedText' || node.kind === 'instrText'
-      ? normalizedWmlTextAttributes(node.attributes, wmlTextValueOf(node))
-      : node.attributes;
+  const elementAttributes = normalizedFingerprintAttributes(node);
   validateQNameAttributeValues(elementAttributes, bindings, node.namespaceUri, node.localName);
-  const ownSpace = xmlSpaceValue(elementAttributes);
-  const preserve =
-    ownSpace === 'preserve' ? true : ownSpace === 'default' ? false : inheritedPreserve;
+  const preserve = inheritedPreserveOf(elementAttributes, inheritedPreserve);
   const name = controlledQualifiedName(node.namespaceUri, node.localName, prefixes, false);
   out.push(`<${name}${rootDeclarations}${declarations}`);
   for (const attribute of sortedAttributes(elementAttributes)) {
@@ -433,7 +409,33 @@ function formatNamespaceDeclaration(namespaceUri: string, prefix: string): strin
  * writeDocx; package integration belongs to the subsequent migration pass.
  */
 export function serializeOoxmlPart(part: OoxmlPart): string {
+  const decoder = new TextDecoder();
+  return serializeOoxmlPartChunks(part)
+    .map((chunk) => (typeof chunk === 'string' ? chunk : decoder.decode(chunk)))
+    .join('');
+}
+
+/**
+ * Serialized markup in document order: strings, and the UTF-8 bytes of memoized blocks.
+ *
+ * Blocks stay bytes so a package write can copy them into the part unchanged. Joining them
+ * into one string first would build, and then encode, a string the size of the part.
+ *
+ * @internal
+ */
+export function serializeOoxmlPartChunks(part: OoxmlPart): MarkupChunk[] {
   const prefixes = controlledPrefixMap(part.root);
+  const { rootBindings, declarations } = rootSerializationScope(prefixes);
+  const out: MarkupChunk[] = [];
+  serializeNode(part.root, prefixes, rootBindings, false, declarations, out);
+  return out;
+}
+
+/** @internal The bindings and declarations the root element serializes with. */
+export function rootSerializationScope(prefixes: ControlledPrefixes): {
+  readonly rootBindings: ReadonlyMap<string, string>;
+  readonly declarations: string;
+} {
   const rootBindings = new Map<string, string>([
     ['xml', XML_NAMESPACE_URI],
     ['xmlns', XMLNS_NAMESPACE_URI],
@@ -452,9 +454,7 @@ export function serializeOoxmlPart(part: OoxmlPart): string {
       return formatNamespaceDeclaration(namespaceUri, prefix);
     })
     .join('');
-  const out: string[] = [];
-  serializeNode(part.root, prefixes, rootBindings, false, declarations, out);
-  return out.join('');
+  return { rootBindings, declarations };
 }
 
 type FingerprintValue =
@@ -514,7 +514,7 @@ export function canonicalFingerprintNodeVisits(): number {
  * is only ever read below this point, which makes sharing the instance identical to copying
  * it — and the copy was one allocation per element of the document.
  */
-function extendedBindings(
+export function extendedBindings(
   inherited: ReadonlyMap<string, string>,
   node: OoxmlElement
 ): ReadonlyMap<string, string> {
@@ -524,7 +524,7 @@ function extendedBindings(
   return bindings;
 }
 
-function normalizedFingerprintAttributes(node: OoxmlElement): readonly OoxmlAttribute[] {
+export function normalizedFingerprintAttributes(node: OoxmlElement): readonly OoxmlAttribute[] {
   // `w:delText` is `CT_Text` exactly as `w:t` is (§17.3.3.7), so it needs the same
   // `xml:space` normalization. Without it, striking " b " wrote `<w:delText> b </w:delText>`
   // with no attribute, a conformant reader dropped the edge spaces, and REJECTING the
@@ -534,7 +534,7 @@ function normalizedFingerprintAttributes(node: OoxmlElement): readonly OoxmlAttr
     : node.attributes;
 }
 
-function inheritedPreserveOf(
+export function inheritedPreserveOf(
   attributes: readonly OoxmlAttribute[],
   inheritedPreserve: boolean
 ): boolean {

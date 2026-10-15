@@ -4,8 +4,9 @@
 // (path-traversal guard) BEFORE the bytes are handed on. Writing produces a
 // deterministic archive.
 
-import { unzipSync, zipSync } from 'fflate';
+import { unzipSync } from 'fflate';
 import { normalizePartName, partNameKey } from './opc-names.ts';
+import { writeZipEntriesSteps } from './zip-write.ts';
 
 /**
  * Why a zip was refused at the trust boundary.
@@ -141,13 +142,13 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
 
 /** The modification time stamped on every entry written.
  *
- *  Without one, fflate stamps `Date.now()`, which makes the same document save to
+ *  Without one, a writer stamps `Date.now()`, which makes the same document save to
  *  different bytes depending on when it was saved: a ZIP entry carries its time in the DOS
  *  format, whose resolution is two seconds, so two saves that land either side of a tick
  *  differ in that field and nowhere else. Save/reopen/save then stops being a fixed point,
  *  and any digest a caller takes over saved bytes stops being stable.
  *
- *  Mid-day on 1980-01-02 rather than the DOS epoch itself: fflate derives the year through
+ *  Mid-day on 1980-01-02 rather than the DOS epoch itself: the writer derives the year through
  *  the local-time `getFullYear`, so midnight on 1980-01-01 UTC lands in 1979 west of
  *  Greenwich and the year field underflows. */
 const FIXED_ENTRY_MTIME = new Date(Date.UTC(1980, 0, 2, 12));
@@ -157,9 +158,23 @@ const FIXED_ENTRY_MTIME = new Date(Date.UTC(1980, 0, 2, 12));
  *  traversal/encoded/normalized-alias name from an untrusted serialized model can
  *  never be smuggled into a ZIP entry (write-side path-traversal guard). */
 export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
-  // Null-prototype: a part legitimately named `__proto__` (or `constructor`) must become a
-  // normal own entry, not invoke a prototype setter that would silently drop it.
-  const record: Record<string, Uint8Array> = Object.create(null);
+  const steps = writeZipSteps(entries);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/**
+ * {@link writeZip}, yielding between slices of a long entry. The archive is the same either
+ * way.
+ *
+ * @internal
+ */
+export function writeZipSteps(
+  entries: ReadonlyMap<string, Uint8Array>
+): Generator<void, Uint8Array> {
+  const named = new Map<string, Uint8Array>();
   const seen = new Set<string>();
   for (const [partName, data] of entries) {
     const norm = normalizePartName(partName);
@@ -169,9 +184,9 @@ export function writeZip(entries: ReadonlyMap<string, Uint8Array>): Uint8Array {
       throw new Error(`OPC-equivalent duplicate part name on write: ${norm.partName}`);
     seen.add(fold);
     // Canonical part names carry a leading slash; ZIP entry names do not.
-    record[norm.partName.replace(/^\//, '')] = data;
+    named.set(norm.partName.replace(/^\//, ''), data);
   }
-  return zipSync(record, { mtime: FIXED_ENTRY_MTIME });
+  return writeZipEntriesSteps(named, FIXED_ENTRY_MTIME);
 }
 
 export { strToU8, strFromU8 } from 'fflate';

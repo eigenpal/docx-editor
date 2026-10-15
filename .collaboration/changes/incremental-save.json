@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Every save serialized every part in one synchronous task.",
+  "after": "Saves reuse the written form of unchanged paragraphs and table rows and run in short tasks. The written bytes for a document are unchanged except the compressed form of entries longer than 256 KiB.",
+  "reason": "Serialization output, shared nodes, text offsets, and operations do not change. The save captures one immutable package, so remote edits during a save go to the next save.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-incremental-save.test.ts",
+    "packages/core/src/store/package/__tests__/serialize-memo.test.ts",
+    "packages/core/src/editor/__tests__/save-steps.test.ts"
+  ],
+  "changeset": "sliced-incremental-save",
+  "migration": null
+}

@@ -202,6 +202,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
+    saveSteps(): Generator<void, Uint8Array>;
     setCommentResolved(commentId: string, resolved: boolean): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];

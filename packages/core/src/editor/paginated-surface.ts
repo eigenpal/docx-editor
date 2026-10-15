@@ -75,7 +75,7 @@ import { createContentControlHover } from './content-control-hover.ts';
 import { contentControlAtSelection } from './content-control-at-selection.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
-import { saveSurfaceDocument } from './docx-editor-save.ts';
+import { saveSurfaceDocument, saveSurfaceDocumentSteps } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
 import { beginSurfaceCommit, withSplitSelection } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
@@ -5101,6 +5101,7 @@ export function mountPaginatedSurface(
     refreshToc,
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
+    saveSteps: () => saveSurfaceDocumentSteps(surface, container, () => destroyed),
     isInsideToc: (paragraphId) =>
       detectBodyTocs(session.part()).some(
         (toc) =>

@@ -108,8 +108,38 @@ function cloneWithFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
   } as OoxmlNode;
 }
 
-/** Fallback stories to replace in one part, as `[fallback story, replacement]` pairs. */
-function staleFallbacks(part: OoxmlPart): [OoxmlElement, OoxmlElement][] {
+/**
+ * Node counts of paragraphs and table rows that hold no `mc:AlternateContent`, by identity.
+ *
+ * Trees are immutable, so a block found clean stays clean. A save after an edit then walks
+ * only the blocks the edit rebuilt. The count is what walking the block would have cost, so
+ * the scan budget runs out on the same documents it did before.
+ */
+const alternateContentFreeSizes = new WeakMap<OoxmlElement, number>();
+
+/** The node count of a clean block, or null when it holds a text box wrapper. */
+function alternateContentFreeSize(block: OoxmlElement): number | null {
+  const known = alternateContentFreeSizes.get(block);
+  if (known !== undefined) return known;
+  let size = 0;
+  const stack: OoxmlNode[] = [block];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    size += 1;
+    if (size > MAX_SCANNED_NODES) return size;
+    if (node.kind === 'textValue') continue;
+    if (isMcAlternateContent(node)) return null;
+    for (const child of node.children) stack.push(child);
+  }
+  alternateContentFreeSizes.set(block, size);
+  return size;
+}
+
+/**
+ * Fallback stories to replace in one part, as `[fallback story, replacement]` pairs. Yields
+ * after each paragraph or table row, so a caller can pause a long scan.
+ */
+function* staleFallbacks(part: OoxmlPart): Generator<void, [OoxmlElement, OoxmlElement][]> {
   const pairs: [OoxmlElement, OoxmlElement][] = [];
   let nextId: (() => string) | null = null;
   let visits = 0;
@@ -119,6 +149,15 @@ function staleFallbacks(part: OoxmlPart): [OoxmlElement, OoxmlElement][] {
   while (stack.length > 0) {
     if (++visits > MAX_SCANNED_NODES) return [];
     const { node, scope: inherited } = stack.pop()!;
+    if (node.kind === 'paragraph' || node.kind === 'tableRow') {
+      const size = alternateContentFreeSize(node);
+      yield;
+      if (size !== null) {
+        visits += size - 1;
+        if (visits > MAX_SCANNED_NODES) return [];
+        continue;
+      }
+    }
     if (node.kind === 'textValue') continue;
     const scope = namespaceScopeForNode(inherited, node);
     if (!isMcAlternateContent(node)) {
@@ -161,9 +200,20 @@ function staleFallbacks(part: OoxmlPart): [OoxmlElement, OoxmlElement][] {
 
 /** An export snapshot in which every text box's VML fallback story matches its DrawingML one. */
 export function textboxFallbackExportPackage(pkg: OoxmlPackage): OoxmlPackage {
+  const steps = textboxFallbackExportPackageSteps(pkg);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/** {@link textboxFallbackExportPackage}, yielding between blocks of a long part. */
+export function* textboxFallbackExportPackageSteps(
+  pkg: OoxmlPackage
+): Generator<void, OoxmlPackage> {
   let next: OoxmlPackage | null = null;
   for (const part of pkg.parts.values()) {
-    const pairs = staleFallbacks(part);
+    const pairs = yield* staleFallbacks(part);
     if (pairs.length === 0) continue;
     const synced = runWithoutJournalCapture(() => {
       let current = part;

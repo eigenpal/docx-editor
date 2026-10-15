@@ -162,6 +162,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
   /**
+   * {@link save} in steps a caller can pause between. The package is captured at the call, so
+   * the bytes describe the document as it was then, whatever happens between steps.
+   */
+  saveSteps(): Generator<void, Uint8Array>;
+  /**
    * The resolved header/footer parts of the section, by variant (phase 2).
    *
    * Returns the FINAL section's effective parts after OOXML inheritance. Prefer

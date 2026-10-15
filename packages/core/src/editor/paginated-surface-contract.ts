@@ -507,6 +507,11 @@ export interface PaginatedSurface {
    * with code `destroyed`. Does not change focus.
    */
   save(): Uint8Array;
+  /**
+   * {@link save} in steps a caller can pause between. Everything `save` does before it
+   * serializes happens at the call, and the document is captured then.
+   */
+  saveSteps(): Generator<void, Uint8Array>;
   /** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
   isInsideToc(paragraphId: string): boolean;
   /**
