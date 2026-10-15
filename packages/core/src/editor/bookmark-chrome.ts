@@ -39,6 +39,26 @@ export function createBookmarkChrome(host: BookmarkChromeHost = {}) {
     },
     reportError: (error) => host.error?.(error),
   };
+  // Whether a dialog can open, as last published. A registration publishes at once. A
+  // removal waits for the end of the task: a host that registers again (a prop change re-runs
+  // its effect) removes and registers in one task, the answer does not change, and nothing is
+  // published.
+  let published = false;
+  let pending = false;
+  const publish = (): void => {
+    const now = dialog.current().onRequest !== undefined;
+    if (now === published) return;
+    published = now;
+    host.changed?.();
+  };
+  const publishLater = (): void => {
+    if (pending) return;
+    pending = true;
+    globalThis.queueMicrotask(() => {
+      pending = false;
+      publish();
+    });
+  };
   const openBookmarkDialog = (): boolean => {
     const request = dialog.current().onRequest;
     request?.();
@@ -54,10 +74,10 @@ export function createBookmarkChrome(host: BookmarkChromeHost = {}) {
     setters: {
       setBookmarkChrome(handlers: BookmarkChromeHandlers): () => void {
         const dispose = dialog.push(handlers);
-        host.changed?.();
+        publish();
         return () => {
           dispose();
-          host.changed?.();
+          publishLater();
         };
       },
       setBookmarkMarks(options: BookmarkMarkOptions): () => void {

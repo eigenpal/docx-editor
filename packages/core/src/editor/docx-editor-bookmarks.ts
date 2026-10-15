@@ -48,7 +48,7 @@ export function bookmarkCommandRefusal(
       .list()
       .find((bookmark) => bookmarkNameKey(bookmark.name) === key);
     if (!entry?.duplicates)
-      return { ok: false, code: 'notFound', reason: 'the bookmark has no copies' };
+      return { ok: false, code: 'unsupported', reason: 'the bookmark has no copies' };
   }
   if (command.type !== 'goToBookmark') {
     const refusal = surface.bookmarkEditing.writeRefusal();

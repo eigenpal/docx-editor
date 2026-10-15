@@ -58,8 +58,8 @@ export interface EditorBookmarkCommands {
   /**
    * Keep the bookmark this name means, the first in document order, and remove its copies, in
    * one undo step. The selection does not move. Collaborators who add one name while offline
-   * can leave copies; `BookmarkSummary.duplicates` counts them. Refused with `notFound` when
-   * the name has no copies.
+   * can leave copies; `BookmarkSummary.duplicates` counts them. Refused with `notFound` when no
+   * bookmark has the name, and with `unsupported` when it has no copies.
    */
   keepFirstBookmark: { name: string };
   /** Select the bookmark's text, or put the caret at a point bookmark, and scroll to it. */

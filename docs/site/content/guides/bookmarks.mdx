@@ -129,7 +129,7 @@ Bookmark writes synchronize like other edits. If two people add the same name at
 
 The copies are visible instead. The `duplicates` field of the `bookmarks` query counts them. When you pick the name in the Bookmark dialog, the dialog says how many other places use it and shows **Keep first**. **Keep first** keeps the first bookmark and removes every copy in one undo step. It does not move the selection. If two people select **Keep first** at the same time, they remove the same copies, and both end with one bookmark. Deleting the name also removes every copy.
 
-To remove the copies from your own UI, run the `keepFirstBookmark` command. It fails with `notFound` when the name has no copies:
+To remove the copies from your own UI, run the `keepFirstBookmark` command. It fails with `notFound` when no bookmark has the name, and with `unsupported` when the name has no copies:
 
 ```ts
 editor.exec({ type: 'keepFirstBookmark', name: 'Intro' });

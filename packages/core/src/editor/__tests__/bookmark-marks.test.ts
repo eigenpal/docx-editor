@@ -181,7 +181,7 @@ describe('right-to-left marks', () => {
 });
 
 describe('openBookmarkDialog', () => {
-  test('opens the registered dialog, and is refused while none is registered', () => {
+  test('opens the registered dialog, and is refused while none is registered', async () => {
     const { editor } = mount(SAMPLE);
     expect(editor.can({ type: 'openBookmarkDialog' })).toMatchObject({
       ok: false,
@@ -195,12 +195,21 @@ describe('openBookmarkDialog', () => {
     // Chrome that reads `can` re-renders when a dialog registers.
     expect(published).toBe(1);
     expect(editor.snapshot()).not.toBe(before);
+    // A host that registers again in one task, as a re-run effect does, publishes nothing.
+    const again = editor.setBookmarkChrome({ onRequest: () => (opened += 1) });
+    off();
+    await Promise.resolve();
+    expect(published).toBe(1);
+    expect(editor.can({ type: 'openBookmarkDialog' }).ok).toBe(true);
     expect(editor.can({ type: 'openBookmarkDialog' }).ok).toBe(true);
     expect(editor.exec({ type: 'openBookmarkDialog' })).toEqual({ ok: true, changed: false });
     expect(opened).toBe(1);
-    off();
+    again();
     expect(editor.exec({ type: 'openBookmarkDialog' }).ok).toBe(false);
     expect(opened).toBe(1);
+    // A removal that stands publishes once the task ends.
+    await Promise.resolve();
+    expect(published).toBe(2);
   });
 
   test('works in a read-only document, where Go To still does', () => {
@@ -248,7 +257,12 @@ describe('bookmark copies', () => {
     editor.exec({ type: 'goToBookmark', name: 'Same' });
     const selection = surface.state().selection;
     expect([selection.anchor.offset, selection.head.offset]).toEqual([0, 3]);
-    expect(editor.can({ type: 'keepFirstBookmark', name: 'Same' })).toMatchObject({
+    expect(editor.can({ type: 'keepFirstBookmark', name: 'Same' })).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'the bookmark has no copies',
+    });
+    expect(editor.can({ type: 'keepFirstBookmark', name: 'Missing' })).toMatchObject({
       ok: false,
       code: 'notFound',
     });

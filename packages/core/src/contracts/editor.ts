@@ -1650,7 +1650,12 @@ export interface EditorSnapshot {
  * An error the engine raised, carrying a machine-readable `code` alongside the message.
  *
  * `code` is optional because an `Error` from deeper down (a parser, a codec) is surfaced as-is
- * rather than wrapped in a fabricated code.
+ * rather than wrapped in a fabricated code. Codes the editor itself raises include:
+ *
+ * - `invalidTarget`: `attach` was given an element it cannot mount in.
+ * - `unsupported`: a document or source the editor refuses to open.
+ * - `hostCallback`: a host callback threw, such as a bookmark mark's `decorate`. The editor
+ *   kept its default behavior and went on.
  */
 export interface EditorError extends Error {
   readonly code?: string;

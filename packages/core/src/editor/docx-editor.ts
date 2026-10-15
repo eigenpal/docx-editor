@@ -1231,7 +1231,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const previous = cachedSnapshot;
     const fontsUnmoved = fontConfiguration() === cachedFontConfiguration;
     cachedFontConfiguration = fontConfiguration();
-    const authorUnmoved = author === cachedAuthor && views.chromeSettled();
+    const chromeSettled = views.chromeSettled(); // always called, so its counter resets
+    const authorUnmoved = author === cachedAuthor && chromeSettled;
     cachedAuthor = author;
     const caret = surface?.state().selection ?? null;
     const caretUnmoved = selectionsMatch(caret, cachedCaret);
