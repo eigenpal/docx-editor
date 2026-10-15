@@ -14,7 +14,7 @@ import {
 // rules come from the engine (`bookmarkDialogRows`, `bookmarkDialogNameState`), so the React
 // and Vue dialogs answer alike.
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
   bookmarkDialogInitialName,
@@ -63,7 +63,15 @@ const PROBLEM_KEYS = {
   invalidCharacter: 'dialogs.bookmark.nameInvalidCharacter',
 } as const satisfies Record<string, TranslationKey>;
 
-function BookmarkDialogRoot({
+/**
+ * The dialog is mounted only while it is open, so a closed dialog reads no bookmarks on each
+ * editor update. Each opening starts a fresh draft.
+ */
+function BookmarkDialogRoot(props: DocxEditorBookmarkDialogProps): ReactElement | null {
+  return props.open ? <OpenBookmarkDialog {...props} /> : null;
+}
+
+function OpenBookmarkDialog({
   open,
   onClose,
   className,
@@ -74,9 +82,8 @@ function BookmarkDialogRoot({
   const { t } = useTranslation();
   const validDocument = useDialogDocument(open, onClose);
   const { bookmarks, isWritable, insert, remove, goTo } = useBookmarks();
-  const bookmarksRef = useRef(bookmarks);
-  bookmarksRef.current = bookmarks;
-  const [name, setName] = useState('');
+  // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
+  const [name, setName] = useState(() => bookmarkDialogInitialName(bookmarks));
   const [sortBy, setSortBy] = useState<BookmarkSortOrder>('name');
   const [showHidden, setShowHidden] = useState(false);
   const [refused, setRefused] = useState(false);
@@ -86,15 +93,7 @@ function BookmarkDialogRoot({
   const panelRef = useRef<HTMLDialogElement | null>(null);
   const nameId = useId();
   const messageId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
-    setName(bookmarkDialogInitialName(bookmarksRef.current));
-    setRefused(false);
-    setAttempted(false);
-    setVisited(false);
-  }, [open]);
+  const sortGroup = useId();
 
   const rows = bookmarkDialogRows(bookmarks, { sortBy, showHidden });
   const nameState = bookmarkDialogNameState(bookmarks, name, isWritable);
@@ -137,8 +136,6 @@ function BookmarkDialogRoot({
     if (result.ok) setVisited(true);
   }, [nameState, goTo]);
 
-  if (!open) return null;
-
   const selected = nameState.existing?.name ?? '';
   const state: UseBookmarkDialogReturn = {
     values: { name, sortBy, showHidden },
@@ -173,6 +170,8 @@ function BookmarkDialogRoot({
       onKeyDown={(event) => {
         if (
           event.key === 'Enter' &&
+          !event.nativeEvent.isComposing &&
+          event.keyCode !== 229 &&
           isHTMLElementNode(event.target) &&
           event.target.localName === 'input' &&
           event.target.getAttribute('type') === 'text'
@@ -244,7 +243,7 @@ function BookmarkDialogRoot({
                   <label key={order} className="docx-dialog__checkbox-row">
                     <input
                       type="radio"
-                      name="docx-bookmark-sort"
+                      name={sortGroup}
                       checked={sortBy === order}
                       onChange={() => state.setValue('sortBy', order)}
                     />

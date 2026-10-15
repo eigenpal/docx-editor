@@ -132,6 +132,7 @@ export const DialogHost = defineComponent({
       [editor, host.target],
       ([value, target], _old, onCleanup) => {
         if (!value || !target) return;
+        // `open` already refuses a kind whose popup is `false`.
         onCleanup(value.setBookmarkChrome({ onRequest: () => host.open('bookmark') }));
       },
       { immediate: true }

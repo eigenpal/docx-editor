@@ -15,9 +15,9 @@ import {
   Fragment,
   computed,
   defineComponent,
+  h,
   ref,
   useId,
-  watch,
   type CSSProperties,
   type ComputedRef,
   type PropType,
@@ -77,21 +77,24 @@ const PROBLEM_KEYS = {
   invalidCharacter: 'dialogs.bookmark.nameInvalidCharacter',
 } as const;
 
-const BookmarkDialogImpl = defineComponent({
-  name: 'DocxEditorBookmarkDialog',
-  props: {
-    children: Object as PropType<DocxEditorChildren>,
-    open: { type: Boolean, required: true },
-    onClose: { type: Function as PropType<() => void>, required: true },
-    className: { type: String, default: undefined },
-    style: Object as PropType<CSSProperties>,
-    preset: { type: Boolean, default: true },
-  },
+const dialogProps = {
+  children: Object as PropType<DocxEditorChildren>,
+  open: { type: Boolean, required: true },
+  onClose: { type: Function as PropType<() => void>, required: true },
+  className: { type: String, default: undefined },
+  style: Object as PropType<CSSProperties>,
+  preset: { type: Boolean, default: true },
+} as const;
+
+const OpenBookmarkDialog = defineComponent({
+  name: 'DocxEditorOpenBookmarkDialog',
+  props: dialogProps,
   setup(props, { slots }) {
     const { t } = useTranslation();
     const currentGeneration = useDialogGeneration(() => props.open, props.onClose);
     const { bookmarks, isWritable, insert, remove, goTo } = useBookmarks();
-    const name = ref('');
+    // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
+    const name = ref(bookmarkDialogInitialName(bookmarks.value));
     const sortBy = ref<BookmarkSortOrder>('name');
     const showHidden = ref(false);
     const refused = ref(false);
@@ -100,19 +103,6 @@ const BookmarkDialogImpl = defineComponent({
     const visited = ref(false);
     const nameId = useId();
     const messageId = useId();
-
-    watch(
-      () => props.open,
-      (open) => {
-        if (!open) return;
-        // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
-        name.value = bookmarkDialogInitialName(bookmarks.value);
-        refused.value = false;
-        attempted.value = false;
-        visited.value = false;
-      },
-      { immediate: true }
-    );
 
     const rows = computed(() =>
       bookmarkDialogRows(bookmarks.value, { sortBy: sortBy.value, showHidden: showHidden.value })
@@ -349,6 +339,18 @@ const BookmarkDialogImpl = defineComponent({
         />
       );
     };
+  },
+});
+
+/**
+ * The dialog is mounted only while it is open, so a closed dialog reads no bookmarks on each
+ * editor update. Each opening starts a fresh draft.
+ */
+const BookmarkDialogImpl = defineComponent({
+  name: 'DocxEditorBookmarkDialog',
+  props: dialogProps,
+  setup(props, { slots }) {
+    return () => (props.open ? h(OpenBookmarkDialog, { ...props }, slots) : null);
   },
 });
 
