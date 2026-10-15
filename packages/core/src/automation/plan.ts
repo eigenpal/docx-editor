@@ -2337,7 +2337,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             },
             text: operation.text,
             author: operation.author,
-            ...(date === undefined ? {} : { date }),
+            date,
           },
           story: found.reads.story,
           answer: (_post, commentId) =>

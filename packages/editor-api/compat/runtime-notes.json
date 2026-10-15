@@ -65,11 +65,11 @@
   },
   "Word.Comment#creationDate": {
     "status": "partial",
-    "notes": "Office.js declares Date, but OOXML makes w:date optional and untrusted files can contain an invalid lexical value. DocxEditor returns Date | null rather than inventing a timestamp or exposing Invalid Date; strict consumers must narrow null before using Date methods."
+    "notes": "Office.js declares Date, but OOXML makes w:date optional and untrusted files can contain an invalid lexical value. DocxEditor returns Date | null rather than inventing a timestamp or exposing Invalid Date; strict consumers must narrow null before using Date methods. Comments that Range.insertComment creates are stamped with the time they were written, to the second, so they read back a Date and save w:date."
   },
   "Word.CommentReply#creationDate": {
     "status": "partial",
-    "notes": "Replies inherit the same nullable date getter as comments because they are CT_Comment records with the same optional, file-authored w:date. The compatibility assertion removes only this documented null before comparing with Office.js Date."
+    "notes": "Replies inherit the same nullable date getter as comments because they are CT_Comment records with the same optional, file-authored w:date. Replies that Comment.reply creates are stamped with the time they were written, to the second. The compatibility assertion removes only this documented null before comparing with Office.js Date."
   },
   "Word.Revision#date": {
     "status": "partial",
