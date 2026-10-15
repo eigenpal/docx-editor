@@ -3,7 +3,7 @@ import type { FieldAwarePiece } from '../field-pieces.ts';
 import { isSpaceShrinkWordPiece } from '../space-shrink-piece.ts';
 
 const piece = (extra: Partial<FieldAwarePiece>): FieldAwarePiece =>
-  ({ text: '2.2(d)', props: [], style: {}, start: 10, end: 11, ...extra }) as FieldAwarePiece;
+  ({ text: '3.4', props: [], style: {}, start: 10, end: 11, ...extra }) as FieldAwarePiece;
 
 test('a field shown by its saved result completes a justified word', () => {
   expect(

@@ -20,8 +20,8 @@ const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ $`, 'u');
 const BARE_WORD = new RegExp(`^${WORD_CHARACTER}+$`, 'u');
 
 /**
- * Whether a candidate ends at the break after a hyphen inside a word ("anti-" of
- * "anti-corruption"). That fragment can borrow inter-word space as a whole word does.
+ * Whether a candidate ends at the break after a hyphen inside a word ("well-" of
+ * "well-known"). That fragment can borrow inter-word space as a whole word does.
  */
 export function endsAtHyphenBreak(candidate: string): boolean {
   return /\p{L}[-‐]$/u.test(candidate);
