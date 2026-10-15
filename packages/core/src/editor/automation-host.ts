@@ -207,6 +207,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
         ? layoutProjectionOf(editor.surface.revisionDisplayMode())
         : DEFAULT_FORMATTING_DISPLAY_MODE,
     collaborative: () => !!editor.surface?.collaborationSession(),
+    allocationActor: () => editor.surface?.collaborationSession()?.identity.actorId,
     trackedRangeReplacement: () => !editor.surface?.collaborationSession(),
     replacementLanding: (paragraphId, start, end) =>
       editor.surface?.replacementLanding(paragraphId, start, end) ?? null,
@@ -255,12 +256,17 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // on the wrong one.
       if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
       const review = editor.can({ type: 'toggleReviewPane' });
-      if (!review.ok) return { ok: false, reason: review.reason ?? 'review-module-required' };
-      let outcome: AutomationCommentWriteResult = { ok: false, reason: 'refused' };
+      // A sentence the editor refused in (a refresh, viewing) becomes its public code.
+      if (!review.ok)
+        return { ok: false, reason: publicRefusal(review.reason ?? 'review-module-required') };
+      // Judged before the surface gates, so a mixed batch is named as one on every host.
+      if (writes.length !== 1 && !writes.every((write) => write.kind === 'delete'))
+        return { ok: false, reason: 'mixed-comment-writes' };
+      let outcome: AutomationCommentWriteResult | null = null;
       // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
       // the pages and the rail repaint from the commit. Reaching past it would let a script
       // comment on a document open for reading.
-      surface.commitReviewOps(() => {
+      const refused = surface.commitReviewOps(() => {
         if (writes.every((write) => write.kind === 'delete')) {
           const deletion = writes.find((write) => write.kind === 'delete');
           const done = session.deleteComments(
@@ -306,7 +312,8 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
             : { ok: true, changed: true, commentId: created };
         return { committed: created !== null };
       }, automationCommentIntent(writes));
-      return outcome;
+      // Null only when a gate or the refresh guard stopped the write before `run`.
+      return outcome ?? { ok: false, reason: publicRefusal(refused ?? 'refused') };
     },
     applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
       const surface = editor.surface;
@@ -316,11 +323,11 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // scope is carried so this refuses a story it cannot write rather than quietly authoring
       // the node somewhere else.
       if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
-      let outcome: AutomationPortApplyResult = { ok: false, reason: 'refused' };
+      let outcome: AutomationPortApplyResult | null = null;
       // Through `commitReviewOps`, the gate a package-scoped write goes through in the editor:
       // viewing refuses, and the pages repaint from the commit. Reaching past it would let a
       // script author a chip in a document open for reading.
-      surface.commitReviewOps(() => {
+      const refused = surface.commitReviewOps(() => {
         const result = live.insertCustomNode(write);
         outcome = result.ok
           ? { ok: true, changed: result.change !== null }
@@ -330,7 +337,8 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
             };
         return { committed: result.ok };
       }, 'package-scoped');
-      return outcome;
+      // Null only when a gate or the refresh guard stopped the write before `run`.
+      return outcome ?? { ok: false, reason: publicRefusal(refused ?? 'refused') };
     },
     save: () => (sync() ? (editor.surface?.save() ?? null) : null),
     // The one genuinely browser-only operation, and the reason the port declares it optional:

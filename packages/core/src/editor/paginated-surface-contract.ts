@@ -508,6 +508,11 @@ export interface PaginatedSurface {
    * with code `destroyed`. Does not change focus.
    */
   save(): Uint8Array;
+  /**
+   * {@link save} in steps a caller can pause between. Everything `save` does before it
+   * serializes happens at the call, and the document is captured then.
+   */
+  saveSteps(): Generator<void, Uint8Array>;
   /** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
   isInsideToc(paragraphId: string): boolean;
   /**
@@ -665,11 +670,17 @@ export interface PaginatedSurface {
    * pages painting text the tree no longer had, every card anchored where it used to be, and
    * the caret past the end of the paragraph — after which every keystroke was refused with
    * `offset-out-of-range` until the user happened to click somewhere else.
+   *
+   * Returns null when the write went through, and otherwise why it did not: the external
+   * refresh when the write guard skipped the commit, a gate's reason (viewing, collaboration)
+   * when `run` never ran, or the reason `run` reported. A `run` that commits nothing without a
+   * reason counts as refused (`'rejected'`). Gate and `run` reasons also become
+   * `lastRejection`; a skipped refresh changes nothing, `lastRejection` included.
    */
   commitReviewOps(
     run: () => { readonly committed: boolean; readonly reason?: unknown },
     intent?: ReviewWriteIntent
-  ): void;
+  ): string | null;
   /**
    * The layout as last PUBLISHED, without forcing pending work.
    *

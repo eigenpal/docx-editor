@@ -8,7 +8,7 @@ import { growRunBorderLineMetrics, textBandHeightWithBorders } from './run-borde
 import {
   clipLineDrawingsAtTop,
   growPendingLineDrawingExtent,
-  lineContentX,
+  lineContentEdges,
   lineHoldsContent,
   markPendingLineWrapAdvances,
   placeLeadingIgnoredBreaks,
@@ -34,6 +34,7 @@ export {
   type Alignment,
 } from './paragraph-alignment.ts';
 import { bidiPieces, paragraphIsRtl } from './rtl-paragraph.ts';
+import { lineWrapPassages } from './line-wrap-passages.ts';
 
 import { PAGE_BREAK_CHAR, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
@@ -641,30 +642,23 @@ export function breakParagraph(
   /** Room left ahead of the pen on the current line. */
   const remainingLineWidth = (): number => Math.max(0, lineAvailable() - line.width);
 
-  /**
-   * Record the float passage this line ended up in, for alignment to work inside it.
-   *
-   * Only a passage that holds the WHOLE line qualifies: a line that steps over a float owns
-   * two disjoint runs of x, and centring either of them would move glyphs onto the picture.
-   */
+  /** Record the float passages this line aligns inside; see {@link lineWrapPassages}. */
   const recordWrapSegment = (): void => {
     // Placement mirrors an RTL line's spans, so its first span is not its left edge.
     if (flow?.paragraphRtl) return;
     const zones = activeExclusionZones();
     if (zones.length === 0) return;
-    const intervals = availableIntervals(zones);
-    if (intervals.length === 0) return;
-    const fallbackStart = Math.max(contentLeft, lineOrigin());
-    const contentStart = lineContentX(line.spans, line.drawings, fallbackStart);
-    const contentEnd = lineOrigin() + line.width;
-    const segment = intervals.find(
-      (interval) => contentStart >= interval.start - 0.001 && contentStart <= interval.end + 0.001
+    const penEnd = lineOrigin() + line.width;
+    const edges = lineContentEdges(line.spans, line.drawings);
+    const contentStart = edges?.left ?? Math.max(contentLeft, lineOrigin());
+    const passages = lineWrapPassages(
+      availableIntervals(zones),
+      contentStart,
+      Math.min(penEnd, edges?.right ?? penEnd),
+      penEnd,
+      { start: contentLeft, end: wrapRight }
     );
-    if (!segment || contentEnd > segment.end + 0.001) return;
-    // The full measure is what alignment already assumes; recording it would only add a
-    // second spelling of the same geometry to every cache key.
-    if (segment.start <= contentLeft + 0.001 && segment.end >= wrapRight - 0.001) return;
-    line.wrapSegment = { start: contentStart, end: segment.end };
+    if (passages) Object.assign(line, passages);
   };
 
   const tryAdvanceToNextPassage = (): boolean => {

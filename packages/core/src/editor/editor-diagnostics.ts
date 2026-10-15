@@ -216,6 +216,8 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
   let execDepth = 0;
   /** Depth of editing API batches on this editor; their refusals are reported as automation. */
   let automationDepth = 0;
+  /** Surface refusals reported so far, so a wrapper can tell whether the surface reported one. */
+  let inputRejections = 0;
   /** Whether the outermost command or batch running now has counted its edit: one per call. */
   let callEditCounted = false;
   // History and custom-node diagnostics keep their own channels and join this one by code only:
@@ -427,6 +429,9 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     ): (key: string, action: 'accept' | 'reject') => ExecResult {
       return (key, action) => {
         const item = itemOf(key);
+        // The surface reports every refusal its commit gates make, a refresh included; one it
+        // reported during this call must not be reported again here.
+        const reportedBefore = inputRejections;
         let result: ExecResult;
         try {
           result = resolve(key, action);
@@ -436,7 +441,12 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         }
         // Inside `exec`, the command reports for itself.
         if (result.ok || execDepth > 0) return result;
-        if (result.code === 'notFound' || (result.code === 'unsupported' && item)) {
+        // A gate that refused the write before it ran is not the revision's fault, so it is no
+        // skipped change.
+        const gate: EditDiagnosticCode = diagnosticCodeOfRefusal(result.reason, result.code);
+        const gated =
+          gate === 'edit.refresh-in-progress' || gate === 'edit.collaboration-not-ready';
+        if (result.code === 'notFound' || (result.code === 'unsupported' && item && !gated)) {
           // Read only on this failure path: the planner's preflight names the exact condition.
           const described = item ? describe(item, action) : {};
           const revision = item && {
@@ -462,10 +472,11 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
           ]);
           return result;
         }
+        if (inputRejections !== reportedBefore) return result;
         const cause = diagnosticCause(result.reason);
         deliver({
           kind: 'edit.rejected',
-          code: diagnosticCodeOfRefusal(result.reason, result.code),
+          code: gate,
           origin: 'command',
           tracked: tracked(),
           ...(cause ? { cause } : {}),
@@ -528,6 +539,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
     /** A refusal from typing, the clipboard, a drag or the pointer. Inside `exec` it is not new. */
     inputRejected(reason: string, tracked: boolean): void {
       if (execDepth > 0 || automationDepth > 0) return;
+      inputRejections += 1;
       const code = diagnosticCodeOfRefusal(reason);
       const cause = diagnosticCause(reason);
       deliver({

@@ -2353,7 +2353,7 @@ export interface PaginatedSurface {
     commitReviewOps(run: () => {
         readonly committed: boolean;
         readonly reason?: unknown;
-    }, intent?: ReviewWriteIntent): void;
+    }, intent?: ReviewWriteIntent): string | null;
     readonly contentControls: ContentControlOps;
     // (undocumented)
     convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
@@ -2486,6 +2486,7 @@ export interface PaginatedSurface {
     revisionAuthors(): ReadonlyMap<string, number>;
     revisionDisplayMode(): ReviewDisplayMode;
     save(): Uint8Array;
+    saveSteps(): Generator<void, Uint8Array>;
     sectionAnchorParagraphAt(paragraphId: string): SectionAnchor;
     sectionAtPage(pageIndex: number): {
         sectionIndex: number;
@@ -4074,6 +4075,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
+    saveSteps(): Generator<void, Uint8Array>;
     setCommentResolved(commentId: string, resolved: boolean): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];

@@ -7,6 +7,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
+import {
+  reviewAuthorFilterKey,
+  reviewRefusalStore,
+  type ReviewWriteAction,
+  type ReviewWriteRefusal,
+} from '../review/review-refusal.ts';
 import type {
   Editor,
   ReviewActivationOptions,
@@ -16,6 +22,7 @@ import type {
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
 } from '@docx-editor.dev/core/contracts/editor';
+import type { ExecResult } from '@docx-editor.dev/core/contracts/types';
 import { useDocxEditor, type MaybeRefOrGetter } from '@docx-editor.dev/vue';
 import { useEditorRenderRevision, type EditorRenderRevision } from './useEditorRenderRevision.ts';
 import { nextTask } from './next-task.ts';
@@ -30,14 +37,7 @@ function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T |
 }
 
 function reviewRevisionKey(editor: Editor): string {
-  const snapshot = (
-    editor as Editor & {
-      snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] };
-    }
-  ).snapshot?.();
-  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${JSON.stringify(
-    snapshot?.hiddenReviewAuthors ?? []
-  )}`;
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
 }
 
 /** @public */
@@ -103,6 +103,16 @@ export interface UseReviewReturn {
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
   readonly selectionAnchorY: ComputedRef<number | null>;
   readonly comment: (text: string, author?: string) => boolean;
+  /**
+   * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
+   *
+   * Shared by every `useReview()` over the same editor, so a custom card sees a refusal the
+   * packaged rail recorded. Cleared by the next write that lands and by a change to the
+   * document, the editing mode, editability, the collaboration status or the author filter; a
+   * caret move keeps it. The packaged cards show it as a sentence; a custom card reads `key` to
+   * place it and `code`, the public diagnostic code, to word it.
+   */
+  readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;
   readonly paneOpen: ComputedRef<boolean>;
   readonly setPaneOpen: (open: boolean) => void;
   readonly ready: ComputedRef<boolean>;
@@ -228,16 +238,39 @@ function useReviewOfInternal(
     return editor.setActiveReviewItem(key, options).ok;
   };
 
+  // One store per EDITOR, so every hook over it, the packaged rail's included, sees the same
+  // refusal. The store clears it once the state it was refused in changes.
+  const refusalRef = shallowRef<ReviewWriteRefusal | null>(null);
+  watch(
+    () => editorRef.value,
+    (editor, _previous, onCleanup) => {
+      if (!editor) {
+        refusalRef.value = null;
+        return;
+      }
+      const store = reviewRefusalStore(editor);
+      refusalRef.value = store.get();
+      onCleanup(store.subscribe(() => (refusalRef.value = store.get())));
+    },
+    { immediate: true, flush: 'sync' }
+  );
+  const settle = (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
+    const editor = editorRef.value;
+    if (editor) reviewRefusalStore(editor).record(action, key, result);
+    return result.ok;
+  };
+  const lastRefusal = computed((): ReviewWriteRefusal | null => refusalRef.value);
+
   const accept = (item: ReviewItemView): boolean => {
     const editor = editorRef.value;
     if (!editor || item.kind !== 'revision' || item.readOnly) return false;
-    return editor.acceptReviewItem(item.key).ok;
+    return settle('accept', item.key, editor.acceptReviewItem(item.key));
   };
 
   const reject = (item: ReviewItemView): boolean => {
     const editor = editorRef.value;
     if (!editor || item.kind !== 'revision' || item.readOnly) return false;
-    return editor.rejectReviewItem(item.key).ok;
+    return settle('reject', item.key, editor.rejectReviewItem(item.key));
   };
 
   const adopt = (
@@ -248,13 +281,13 @@ function useReviewOfInternal(
   const resolve = (item: ReviewItemView): boolean => {
     const editor = editorRef.value;
     if (!editor || item.kind !== 'comment') return false;
-    return editor.setCommentResolved(item.key, true).ok;
+    return settle('resolve', item.key, editor.setCommentResolved(item.key, true));
   };
 
   const reopen = (item: ReviewItemView): boolean => {
     const editor = editorRef.value;
     if (!editor || item.kind !== 'comment') return false;
-    return editor.setCommentResolved(item.key, false).ok;
+    return settle('reopen', item.key, editor.setCommentResolved(item.key, false));
   };
 
   const commentResolutionDisabledReason = computed((): string | null => {
@@ -269,12 +302,12 @@ function useReviewOfInternal(
     if (!editor) return false;
     if (item.kind === 'custom') return false;
     if (item.kind === 'revision' && item.readOnly) return false;
-    return editor.deleteReviewItem(item.key).ok;
+    return settle('remove', item.key, editor.deleteReviewItem(item.key));
   };
 
   const reply = (item: ReviewItemView, text: string, author?: string): boolean => {
     if (text.trim().length === 0 || !editorRef.value) return false;
-    return editorRef.value.replyToReviewItem(item.key, text, author).ok;
+    return settle('reply', item.key, editorRef.value.replyToReviewItem(item.key, text, author));
   };
 
   const selectionAnchorY = computed((): number | null => {
@@ -286,7 +319,7 @@ function useReviewOfInternal(
 
   const comment = (text: string, author?: string): boolean => {
     if (text.trim().length === 0 || !editorRef.value) return false;
-    return editorRef.value.addComment(text, author).ok;
+    return settle('comment', null, editorRef.value.addComment(text, author));
   };
 
   const paneOpen = computed((): boolean => {
@@ -325,6 +358,7 @@ function useReviewOfInternal(
     reply,
     selectionAnchorY,
     comment,
+    lastRefusal,
     paneOpen,
     setPaneOpen,
     ready,

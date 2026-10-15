@@ -29,6 +29,7 @@ import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { documentProtectionRefusal, lifecycleProtectionRefusal } from './forms-protection.ts';
 import { isCommentPackageEdit } from './comment-package-edit.ts';
+import { isPackageEditRefusal } from './package-edit-refusal.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import {
   formsProtectionRefusal,
@@ -159,6 +160,10 @@ export interface TransactionContext {
    * The edit is a pure function of the working package, so a rejected transaction discards it
    * with everything else. Returning the SAME package is a no-op, not a failure — a primitive
    * that finds nothing to do says so that way.
+   *
+   * Engine package edits refuse by throwing the internal `PackageEditRefusal`
+   * (`package-edit-refusal.ts`): the transaction is refused with its reason, `package-changed`
+   * by default, and nothing is applied. Any other throw escapes `transact` as a crash.
    */
   applyPackage(edit: (pkg: OoxmlPackage) => OoxmlPackage): boolean;
   /** The selection to restore when this entry is undone. */
@@ -677,7 +682,14 @@ export class TreeDocumentStore {
         // here for the same reason a non-property op drops it.
         revisionIdOfGroup.clear();
         resetRevisionCounters();
-        const next = edit(working);
+        let next: OoxmlPackage;
+        try {
+          next = edit(working);
+        } catch (error) {
+          if (!isPackageEditRefusal(error)) throw error;
+          failure = { reason: error.reason, detail: error.message };
+          return false;
+        }
         if (next === working) return true;
         for (const [name, part] of next.parts) {
           if (working.parts.get(name) !== part) touched.add(name);

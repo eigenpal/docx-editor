@@ -96,6 +96,7 @@ export {
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview';
+export type { ReviewWriteAction, ReviewWriteRefusal } from '../review/review-refusal.ts';
 export {
   useCollaborationStatus,
   type UseCollaborationStatusReturn,

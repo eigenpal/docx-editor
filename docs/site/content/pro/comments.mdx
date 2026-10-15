@@ -339,6 +339,58 @@ Use this value to explain why a custom control is disabled.
 
 Editing and suggesting modes allow thread-state changes. Resolution changes metadata, not tracked document content.
 
+## Show why an action was refused
+
+An action can be refused after the reader clicks it. For example, an external document refresh can be in progress, or a collaboration session can still be connecting. The packaged card then shows the cause under its summary with `<DocxEditorReview.Refusal />`. The reply line and the comment box show the cause of their own refused writes.
+
+In a custom card, read `lastRefusal` from `useReview()`. Every `useReview()` over the same editor shares it, so a custom card also sees a refusal that the packaged rail recorded. It names the refused `action`, the card `key` (`null` for a new comment), and the public diagnostic `code`. The next action that lands clears it. A change to the document, the editing mode, editability, the collaboration status, or the author filter also clears it. A caret move does not.
+
+While `DocxEditorReview` is mounted, it announces every refused review action in one polite live region, including actions from your own controls that use `useReview()`. A repeated refusal is announced again. Do not add a second live region for the same refusal. If your interface does not mount `DocxEditorReview`, announce `lastRefusal` yourself and key the announcement on `lastRefusal.sequence`.
+
+| `code`                         | Cause                                         |
+| ------------------------------ | --------------------------------------------- |
+| `edit.refresh-in-progress`     | An external document refresh is in progress   |
+| `edit.read-only`               | The document is open for viewing              |
+| `edit.protected-content`       | Document protection does not allow the change |
+| `edit.collaboration-not-ready` | The collaboration session is not ready yet    |
+
+When the collaboration session has ended, `lastRefusal.final` is `true`. Retrying cannot help then, and the packaged notice asks the reader to reload the document. For every code, see [Diagnostics](/docs/2.x/guides/diagnostics#edit).
+
+This example shows the cause under a custom card:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+function RefusalNotice({ item }: { item: ReviewItemView }) {
+  const { lastRefusal } = useReview();
+  if (lastRefusal?.key !== item.key) return null;
+  return <p>Not applied: {lastRefusal.code}</p>;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { useReview, type ReviewItemView } from '@docx-editor.dev/pro/vue';
+
+defineProps<{ item: ReviewItemView }>();
+
+const review = useReview();
+</script>
+
+<template>
+  <p v-if="review.lastRefusal.value?.key === item.key">
+    Not applied: {{ review.lastRefusal.value.code }}
+  </p>
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
 ## Listen for comment changes
 
 Writing a comment or reply emits the editor's `change` event.

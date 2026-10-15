@@ -291,6 +291,7 @@ export interface DocxEditorReviewNamespace {
     // (undocumented)
     readonly List: typeof ReviewList;
     readonly Markers: typeof ReviewMarkers;
+    readonly Refusal: typeof ReviewRefusal;
     // (undocumented)
     readonly Reject: typeof ReviewReject;
     // (undocumented)
@@ -433,6 +434,18 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+
+// @public
+export interface ReviewWriteRefusal {
+    readonly action: ReviewWriteAction;
+    readonly code: EditDiagnosticCode;
+    readonly final: boolean;
+    readonly key: string | null;
+    readonly sequence: number;
+}
+
+// @public
 export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
@@ -507,6 +520,7 @@ export interface UseReviewReturn {
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
     readonly items: readonly ReviewItemView[];
+    readonly lastRefusal: ReviewWriteRefusal | null;
     readonly paneOpen: boolean;
     readonly ready: boolean;
     readonly reject: (item: ReviewItemView) => boolean;

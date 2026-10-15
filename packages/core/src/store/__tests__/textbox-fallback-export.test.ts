@@ -108,6 +108,27 @@ describe('text box fallback stories on save', () => {
     expect(reopened.ok).toBe(true);
   });
 
+  test('an edit after an earlier save still reaches the VML fallback', () => {
+    const loaded = readOoxmlPackage(docx('First', 'First'));
+    if (!loaded.ok) throw new Error(loaded.reason);
+    // The first save scans the part and remembers which blocks hold no text box.
+    writeOoxmlPackage(loaded.package);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const [box] = textboxStoriesInPart(part);
+    const paragraph = box!.root.children.find((child) => child.kind === 'paragraph')!;
+    const edited = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: paragraph.id,
+      offset: 5,
+      text: ' edit',
+    });
+    if (!edited.ok) throw new Error(edited.reason);
+    expect(storyTexts(writeOoxmlPackage(withPart(loaded.package, edited.part)))).toEqual({
+      modern: 'First edit',
+      legacy: 'First edit',
+    });
+  });
+
   test('copies that already agree are written back unchanged', () => {
     const bytes = docx('Same', 'Same');
     const loaded = readOoxmlPackage(bytes);

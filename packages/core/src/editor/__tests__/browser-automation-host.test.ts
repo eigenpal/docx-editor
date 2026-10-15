@@ -13,6 +13,10 @@ import { strToU8, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { createBrowserAutomationHost } from '../automation-host.ts';
 import type { AutomationHandle, AutomationHost } from '../../automation/index.ts';
+import { storeEditDiagnosticCode } from '../../automation/diagnostics.ts';
+import { setRefreshWriteGuard } from '../refresh-write-guard.ts';
+import { stubReviewModule } from './review-test-module.ts';
+import { stubCollaborationModule, stubCollaborationSession } from './collaboration-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -244,5 +248,133 @@ describe('a detached or destroyed editor', () => {
     expect(response.ok).toBe(false);
     expect(errorCodeAt(response, 0)).toBe('document-unavailable');
     expect(host.save().ok).toBe(false);
+  });
+});
+
+describe('an external document refresh', () => {
+  test('a picture insert during an external refresh is refused, not reported as committed', () => {
+    // The refresh guard skips the surface commit without running it. Reported as a commit that
+    // changed nothing, the picture's answer then found no drawing and threw a plain Error.
+    const { host, container, editor } = mount();
+    const { paragraphs } = handles(host);
+    const before = editor.surface!.session.packageRevision();
+    setRefreshWriteGuard(container, true);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'insertInlinePicture',
+          span: { paragraph: paragraphs[0]! },
+          base64:
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+          location: 'End',
+        },
+      ],
+    });
+    setRefreshWriteGuard(container, false);
+    expect(response.ok).toBe(false);
+    expect(errorCodeAt(response, 0)).toBe('transaction-refused');
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.refresh-in-progress');
+    expect(editor.surface!.session.packageRevision()).toBe(before);
+  });
+
+  test('a comment refused by viewing names viewing, not a refresh', () => {
+    // `commitReviewOps` also skips the write for viewing and collaboration gates. Only a
+    // skipped refresh may report the refresh; a gate reports its own reason.
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: TWO_PARAGRAPHS,
+      modules: [stubReviewModule()],
+    });
+    const host = createBrowserAutomationHost(editor);
+    const { paragraphs } = handles(host);
+    editor.surface!.setEditingMode('view');
+    const response = host.execute({
+      operations: [
+        { op: 'insertComment', span: { paragraph: paragraphs[0]! }, text: 'Note', author: 'Ann' },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.read-only');
+    editor.destroy();
+  });
+
+  // A custom-node write has no review gate in front of the surface, so it reaches both of the
+  // surface's skip reasons: the refresh guard and the viewing gate.
+  test.each([
+    ['an external refresh', 'edit.refresh-in-progress'],
+    ['viewing', 'edit.read-only'],
+  ] as const)('a custom node refused by %s names it', (cause, code) => {
+    const { host, container, editor } = mount();
+    const { paragraphs } = handles(host);
+    const before = editor.surface!.session.packageRevision();
+    if (cause === 'viewing') editor.surface!.setEditingMode('view');
+    else setRefreshWriteGuard(container, true);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'insertCustomNode',
+          at: { paragraph: paragraphs[0]!, at: 'end' },
+          tag: 'citation',
+          text: '(Smith 2024)',
+        },
+      ],
+    });
+    setRefreshWriteGuard(container, false);
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe(code);
+    expect(editor.surface!.session.packageRevision()).toBe(before);
+  });
+
+  test('a comment refused by the collaboration gate names the session state', () => {
+    const container = document.createElement('div');
+    const session = stubCollaborationSession({
+      gateOperations: () => 'collaboration-session-not-ready',
+    });
+    const editor = createDocxEditor({
+      container,
+      document: TWO_PARAGRAPHS,
+      modules: [stubReviewModule(), stubCollaborationModule(session)],
+    });
+    const host = createBrowserAutomationHost(editor);
+    const { paragraphs } = handles(host);
+    const response = host.execute({
+      operations: [
+        { op: 'insertComment', span: { paragraph: paragraphs[0]! }, text: 'Note', author: 'Ann' },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe(
+      'edit.collaboration-not-ready'
+    );
+    editor.destroy();
+  });
+
+  test('a comment written during an external refresh names the refresh', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: TWO_PARAGRAPHS,
+      modules: [stubReviewModule()],
+    });
+    const host = createBrowserAutomationHost(editor);
+    const { paragraphs } = handles(host);
+    const before = editor.surface!.session.packageRevision();
+    setRefreshWriteGuard(container, true);
+    const response = host.execute({
+      operations: [
+        { op: 'insertComment', span: { paragraph: paragraphs[0]! }, text: 'Note', author: 'Ann' },
+      ],
+    });
+    setRefreshWriteGuard(container, false);
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.refresh-in-progress');
+    expect(editor.surface!.session.packageRevision()).toBe(before);
+    editor.destroy();
   });
 });

@@ -165,7 +165,12 @@ Use `useEditorEvent` to subscribe for the component's lifetime:
 ```tsx
 import { useEditorEvent } from '@docx-editor.dev/react';
 
-useEditorEvent('selectionChange', () => setPanelOpen(false));
+// `selectionChange` also fires for other state that moves without a document change, such
+// as the collaboration status, so compare the selection itself.
+useEditorEvent('selectionChange', (snapshot) => {
+  if (snapshot.selection !== lastSelection.current) setPanelOpen(false);
+  lastSelection.current = snapshot.selection;
+});
 useEditorEvent('change', (change) => void autosave(change.revision));
 ```
 

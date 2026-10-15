@@ -23,6 +23,7 @@ import {
   type LocalTrackingState,
 } from './change-tracking.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
@@ -207,6 +208,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         );
     }
 
+    const allocationActor = port.allocationActor?.();
     const planner = createBatchPlanner({
       handles,
       reads: start,
@@ -281,7 +283,10 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         policy?.step ??
         trackPlannedChanges(
           operation,
-          planner.plan(operation, stagedTracking.author),
+          // Planned under the actor the commit binds. See `AutomationDocumentPort.allocationActor`.
+          runWithTransactionActor(allocationActor, () =>
+            planner.plan(operation, stagedTracking.author)
+          ),
           stagedTracking.author
         );
       if (policy) stagedTracking = policy.state;

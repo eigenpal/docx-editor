@@ -99,6 +99,8 @@ import {
   ReviewDraft,
   ReviewEmpty,
   ReviewReject,
+  ReviewRefusal,
+  ReviewRefusalAnnouncer,
   ReviewReopen,
   ReviewReplies,
   ReviewReply,
@@ -148,6 +150,7 @@ function buildReviewActions(hook: UseReviewReturn, list: readonly ReviewItemView
     reply: hook.reply,
     selectionAnchorY: hook.selectionAnchorY.value,
     comment: hook.comment,
+    lastRefusal: hook.lastRefusal.value,
     paneOpen: hook.paneOpen.value,
     setPaneOpen: hook.setPaneOpen,
     ready: hook.ready.value,
@@ -864,6 +867,7 @@ const ReviewRoot = defineComponent({
         ...(props.preset || 'Balloon' in rootParts
           ? [takeRoot('Balloon', h(ReviewBalloon), rootParts)]
           : []),
+        h(ReviewRefusalAnnouncer),
       ] as VNodeArrayChildren;
       const child = asChildHost;
       if (!child) return h('aside', shared, content);
@@ -920,6 +924,7 @@ export const DocxEditorReview = Object.assign(ReviewRoot, {
   Resolve: ReviewResolve,
   Reopen: ReviewReopen,
   Delete: ReviewDelete,
+  Refusal: ReviewRefusal,
   Replies: ReviewReplies,
   Reply: ReviewReply,
   Markers: ReviewMarkers,

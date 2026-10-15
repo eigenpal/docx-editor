@@ -270,6 +270,7 @@ export function packageStorePort(
   return {
     localChangeTracking: true,
     collaborative: () => !!collaboration,
+    allocationActor: () => collaboration?.identity.actorId,
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
     apply(

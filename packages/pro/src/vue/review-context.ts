@@ -74,6 +74,7 @@ const INERT_REVIEW: ReviewActions = {
   reply: () => false,
   selectionAnchorY: null,
   comment: () => false,
+  lastRefusal: null,
   paneOpen: true,
   setPaneOpen: () => {},
   ready: false,

@@ -9,6 +9,7 @@ import { alignLineWithPictures } from './line-picture-alignment.ts';
 import {
   alignSpans,
   boxLineSetsLikeLastLine,
+  lineAlignmentMeasure,
   lineAlignOffset,
   type Alignment,
 } from './paragraph-alignment.ts';
@@ -45,6 +46,9 @@ export function alignCellLine(
     range: span.range.paragraphId === paragraphId ? span.range : { ...span.range, paragraphId },
     box: { ...span.box, x: span.box.x + penX, y },
   }));
+  // A float in the cell leaves the line passages; the line aligns inside them, as in the body.
+  // Placement mirrors a right-to-left line, which records no passages.
+  const measure = lineAlignmentMeasure(pendingLine, penX, lineIndent, lineAvailableWidth);
   return alignLineWithPictures(
     placedSpans,
     placedDrawings,
@@ -53,16 +57,16 @@ export function alignCellLine(
       alignSpans(
         spans,
         shared.measurer,
-        lineIndent,
-        lineAvailableWidth,
+        measure.indent,
+        measure.available,
         alignment,
         boxLineSetsLikeLastLine(shared.props, pendingLine, isLastLine, shared.styleCascade),
-        alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+        alignment === 'center' || alignment === 'right' ? measure.used : undefined,
         shared.rtl,
         shared.inTableCell,
-        pendingLine.spaceShrink === true
+        pendingLine.spaceShrink === true,
+        measure.passages
       ),
-    (aligned) =>
-      lineAlignOffset(placedSpans, aligned, alignment, lineAvailableWidth, pendingLine.width)
+    (aligned) => lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)
   );
 }

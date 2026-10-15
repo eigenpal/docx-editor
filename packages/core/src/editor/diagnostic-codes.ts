@@ -27,6 +27,7 @@ import {
 import { COLLABORATION_FIELD_RESULTS_REFUSAL } from './field-results-scope.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { PICTURE_SELECTED_INSERT_REASON } from './docx-editor-images.ts';
+import { REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import {
   LOCKED_CONTENT_BREAK_REFUSAL,
   LOCKED_SECTION_BREAK_REFUSAL,
@@ -76,7 +77,7 @@ const EDIT_SENTENCES: ReadonlyMap<string, EditDiagnosticCode> = new Map([
   [TABLE_CELL_BREAK_REFUSAL, 'edit.section-mark'],
   [LOCKED_SECTION_BREAK_REFUSAL, 'edit.protected-content'],
   [LOCKED_CONTENT_BREAK_REFUSAL, 'edit.protected-content'],
-  ['An external document refresh is in progress.', 'edit.refresh-in-progress'],
+  [REFRESH_WRITE_REFUSAL, 'edit.refresh-in-progress'],
   ['invalid note scope id', 'edit.stale-target'],
   [TRACKED_ONLY_EDITING_REASON, 'edit.tracking-required'],
   [SUGGESTING_IMAGE_REPLACE_REASON, 'edit.tracked-image-replace-unsupported'],

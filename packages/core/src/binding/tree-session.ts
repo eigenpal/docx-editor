@@ -778,6 +778,10 @@ export function openTreeSessionFromPackage(
         return writePackage(currentPackage());
       },
 
+      saveSteps() {
+        return writePackage.steps(currentPackage());
+      },
+
       headerFooterParts: () => {
         const bySection = resolvedHeaderFooterBySection().parts;
         return bySection[bySection.length - 1] ?? resolveHeaderFooterParts(currentPackage());

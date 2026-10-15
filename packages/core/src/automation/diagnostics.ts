@@ -146,6 +146,7 @@ const STORE_EDIT_CODES: Readonly<
   'not-a-drawing': 'edit.stale-target',
   'tree-invariant': 'edit.internal-invariant',
   'package-invariant': 'edit.internal-invariant',
+  'package-changed': 'edit.internal-invariant',
   'duplicate-property-container': 'edit.internal-invariant',
   'unknown-scope': 'edit.unsupported-story',
   'dangling-relationship': 'edit.unsupported-story',
