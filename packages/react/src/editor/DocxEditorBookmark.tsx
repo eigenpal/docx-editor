@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import {
+  bookmarkDialogInitialName,
   bookmarkDialogNameState,
   bookmarkDialogRows,
   isHTMLElementNode,
@@ -73,6 +74,8 @@ function BookmarkDialogRoot({
   const { t } = useTranslation();
   const validDocument = useDialogDocument(open, onClose);
   const { bookmarks, isWritable, insert, remove, goTo } = useBookmarks();
+  const bookmarksRef = useRef(bookmarks);
+  bookmarksRef.current = bookmarks;
   const [name, setName] = useState('');
   const [sortBy, setSortBy] = useState<BookmarkSortOrder>('name');
   const [showHidden, setShowHidden] = useState(false);
@@ -86,7 +89,8 @@ function BookmarkDialogRoot({
 
   useEffect(() => {
     if (!open) return;
-    setName('');
+    // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
+    setName(bookmarkDialogInitialName(bookmarksRef.current));
     setRefused(false);
     setAttempted(false);
     setVisited(false);

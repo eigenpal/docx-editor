@@ -4,6 +4,7 @@
 
 import type { DocxEditorChildren } from '../docx-editor-children';
 import {
+  bookmarkDialogInitialName,
   bookmarkDialogNameState,
   bookmarkDialogRows,
   isHTMLElementNode,
@@ -104,7 +105,8 @@ const BookmarkDialogImpl = defineComponent({
       () => props.open,
       (open) => {
         if (!open) return;
-        name.value = '';
+        // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
+        name.value = bookmarkDialogInitialName(bookmarks.value);
         refused.value = false;
         attempted.value = false;
         visited.value = false;

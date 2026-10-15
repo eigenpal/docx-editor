@@ -33,6 +33,7 @@ import { storyScopeOfNodeId, type StoryScopeLookup } from './surface-scope.ts';
 export interface SurfaceBookmarkDeps {
   readonly session: StoryScopeLookup & {
     storyParts(): readonly OoxmlPart[];
+    paragraphIdsIn(scope?: StoryScope): string[];
     applyTreeOps(
       ops: readonly TreeDocOp[],
       before?: unknown,
@@ -147,8 +148,32 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
   const insertRefusal = (name: string): string | null =>
     bookmarkNameRefusal(name) ?? deps.writeRefusal();
 
+  /** Whether the selection's start is inside a bookmark of the story the selection is in. */
+  const holdsSelection = (): ((record: BookmarkRecord, scope: StoryScope) => boolean) => {
+    const at = deps.orderedRange().from;
+    const story = JSON.stringify(deps.storyScope());
+    let order: Map<string, number> | undefined;
+    const indexOf = (paragraphId: string) =>
+      (order ??= new Map(
+        deps.session.paragraphIdsIn(deps.storyScope()).map((id, index) => [id, index])
+      )).get(paragraphId) ?? -1;
+    const point = (paragraphId: string, offset: number) =>
+      paragraphId === at.paragraphId
+        ? [0, offset - at.offset]
+        : [indexOf(paragraphId) - indexOf(at.paragraphId), 0];
+    return (record, scope) => {
+      if (JSON.stringify(scope) !== story) return false;
+      const [startParagraph, startOffset] = point(record.start.paragraphId, record.start.offset);
+      const [endParagraph, endOffset] = point(record.end.paragraphId, record.end.offset);
+      const startsBefore = startParagraph! < 0 || (startParagraph === 0 && startOffset! <= 0);
+      const endsAfter = endParagraph! > 0 || (endParagraph === 0 && endOffset! >= 0);
+      return startsBefore && endsAfter;
+    };
+  };
+
   return {
     list() {
+      const holds = holdsSelection();
       return located().map(({ record, scope }, order) =>
         Object.freeze({
           name: record.name,
@@ -158,6 +183,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
           empty:
             record.start.paragraphId === record.end.paragraphId &&
             record.start.offset === record.end.offset,
+          atSelection: holds(record, scope),
         })
       );
     },
@@ -167,13 +193,12 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       const scope = deps.storyScope();
       const range = deps.orderedRange();
       const key = bookmarkNameKey(name);
-      // The other stories first: one name, one bookmark.
-      for (const entry of located()) {
-        if (bookmarkNameKey(entry.record.name) !== key) continue;
-        if (JSON.stringify(entry.scope) === JSON.stringify(scope)) continue;
-        if (!write({ op: 'deleteBookmark', name }, entry.scope)) return false;
-      }
-      return write(
+      const elsewhere = located().filter(
+        (entry) =>
+          bookmarkNameKey(entry.record.name) === key &&
+          JSON.stringify(entry.scope) !== JSON.stringify(scope)
+      );
+      const inserted = write(
         {
           op: 'insertBookmark',
           name,
@@ -182,6 +207,11 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
         },
         scope
       );
+      // Then the other stories: one name, one bookmark. Written after the insert, so a refused
+      // insert takes nothing away.
+      if (!inserted) return false;
+      for (const entry of elsewhere) write({ op: 'deleteBookmark', name }, entry.scope);
+      return true;
     },
     remove(name) {
       const entry = find(name);

@@ -171,10 +171,19 @@ describe('DocxEditor.BookmarkDialog', () => {
     const { view, editor } = mount(<DocxEditorMenu />);
     await settle();
     const pages = view.container.querySelector<HTMLElement>('[contenteditable="true"]')!;
-    expect(editor()).toBeTruthy();
+    await act(async () => {
+      const surface = editor().surface!;
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId, offset: 7 },
+        head: { paragraphId, offset: 7 },
+      });
+    });
     await act(async () => {
       fireEvent.keyDown(pages, { key: 'F5', ctrlKey: true, shiftKey: true });
     });
     expect(view.getByRole('dialog', { name: 'Bookmark' })).toBeTruthy();
+    // Opened inside a bookmark, the dialog names it.
+    expect((view.getByLabelText('Bookmark name') as HTMLInputElement).value).toBe('Zeta');
   });
 });

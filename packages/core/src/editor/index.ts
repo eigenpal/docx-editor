@@ -593,6 +593,7 @@ export {
 
 /** The Bookmark dialog's list order and name rules, shared by the React and Vue dialogs. */
 export {
+  bookmarkDialogInitialName,
   bookmarkDialogNameState,
   bookmarkDialogRows,
   type BookmarkDialogNameState,

@@ -164,6 +164,10 @@ describe('DocxEditor.BookmarkDialog (Vue)', () => {
     const view = mountEditorTree(() => h(DocxEditorMenu), SOURCE);
     await flush();
     const pages = view.container.querySelector<HTMLElement>('[contenteditable="true"]')!;
+    const surface = view.editor().surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({ anchor: { paragraphId, offset: 7 }, head: { paragraphId, offset: 7 } });
+    await flush();
     pages.dispatchEvent(
       new KeyboardEvent('keydown', {
         key: 'F5',
@@ -175,6 +179,8 @@ describe('DocxEditor.BookmarkDialog (Vue)', () => {
     );
     await flush();
     expect(dialog()).not.toBeNull();
+    // Opened inside a bookmark, the dialog names it.
+    expect(nameInput().value).toBe('Zeta');
     view.unmount();
   });
 });

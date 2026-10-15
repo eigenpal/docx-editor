@@ -24,6 +24,8 @@ export interface BookmarkSummary {
   readonly order: number;
   /** Whether the bookmark marks a point rather than a range of text. */
   readonly empty: boolean;
+  /** Whether the start of the selection is inside the bookmark, edges included. */
+  readonly atSelection: boolean;
 }
 
 /**
@@ -34,7 +36,8 @@ export interface BookmarkSummary {
 export interface EditorBookmarkCommands {
   /**
    * Bookmark the selection under `name`, or the caret position when the selection is
-   * collapsed. A bookmark that already has the name, compared without case, moves here.
+   * collapsed. A bookmark that already has the name, compared without case, moves here, also
+   * from another story; that removal is its own undo step.
    * Refused with `invalidArgs` for a name that does not start with a letter, holds a
    * character other than a letter, a digit or an underscore, or has more than 40 characters.
    */

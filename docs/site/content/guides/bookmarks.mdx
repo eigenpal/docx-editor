@@ -8,7 +8,7 @@ A bookmark names a stretch of a document, or one point in it. Internal links, cr
 
 ## Use the Bookmark dialog
 
-Open the dialog from **Insert** > **Bookmark**, or press Ctrl+Shift+F5 (Cmd+Shift+F5 on macOS) while the document has focus. The dialog does the following:
+Open the dialog from **Insert** > **Bookmark**, or press Ctrl+Shift+F5 (Cmd+Shift+F5 on macOS) while the document has focus. If the selection starts inside a bookmark, the dialog opens with that bookmark's name. The dialog does the following:
 
 - Lists the document's bookmarks, sorted by **Name** or by **Location**.
 - Shows hidden bookmarks when you select **Hidden bookmarks**. A hidden bookmark has a name that starts with an underscore, such as the targets of a table of contents.
@@ -49,7 +49,7 @@ editor.exec({ type: 'toggleBookmarks' });
 const bookmarks = editor.query({ type: 'bookmarks' });
 ```
 
-The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, and `empty`. `editor.snapshot().showBookmarks` says whether the marks are shown.
+The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, `empty`, and `atSelection`. `editor.snapshot().showBookmarks` says whether the marks are shown.
 
 `insertBookmark` refuses a name that breaks the naming rules with `invalidArgs`. `deleteBookmark` and `goToBookmark` refuse a name that no bookmark has with `notFound`. A document open for viewing refuses writes and still accepts `goToBookmark`.
 

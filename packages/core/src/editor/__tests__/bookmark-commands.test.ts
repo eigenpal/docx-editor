@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { docx } from './paginated-surface-fixtures.ts';
-import { bookmarkDialogNameState, bookmarkDialogRows } from '../bookmark-dialog-model.ts';
+import {
+  bookmarkDialogInitialName,
+  bookmarkDialogNameState,
+  bookmarkDialogRows,
+} from '../bookmark-dialog-model.ts';
 import { commandForSlot, chromeProbeForSlot, chromeSlotIsToggle } from '../toolbar-commands.ts';
 import { chromeMenuSlots } from '../chrome-controls.ts';
 
@@ -41,10 +45,23 @@ describe('bookmark commands', () => {
   test('the query lists every bookmark in document order, hidden ones flagged', () => {
     const { editor } = mount(SAMPLE);
     expect(editor.query({ type: 'bookmarks' })).toEqual([
-      { name: 'Zeta', hidden: false, story: 'body', order: 0, empty: false },
-      { name: '_Toc1', hidden: true, story: 'body', order: 1, empty: false },
-      { name: 'alpha', hidden: false, story: 'body', order: 2, empty: true },
+      { name: 'Zeta', hidden: false, story: 'body', order: 0, empty: false, atSelection: false },
+      { name: '_Toc1', hidden: true, story: 'body', order: 1, empty: false, atSelection: false },
+      { name: 'alpha', hidden: false, story: 'body', order: 2, empty: true, atSelection: false },
     ]);
+  });
+
+  test('the query flags the bookmarks the selection starts in', () => {
+    const { editor } = mount(SAMPLE);
+    select(editor, 0, 7);
+    expect(editor.query({ type: 'bookmarks' }).map((bookmark) => bookmark.atSelection)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(bookmarkDialogInitialName(editor.query({ type: 'bookmarks' }))).toBe('Zeta');
+    select(editor, 0, 0);
+    expect(bookmarkDialogInitialName(editor.query({ type: 'bookmarks' }))).toBe('');
   });
 
   test('insert bookmarks the selection as one undo step', () => {

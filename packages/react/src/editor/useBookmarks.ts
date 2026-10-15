@@ -36,7 +36,8 @@ function sameBookmarks(a: readonly BookmarkSummary[], b: readonly BookmarkSummar
         bookmark.name === b[index]!.name &&
         bookmark.order === b[index]!.order &&
         bookmark.story === b[index]!.story &&
-        bookmark.empty === b[index]!.empty
+        bookmark.empty === b[index]!.empty &&
+        bookmark.atSelection === b[index]!.atSelection
     )
   );
 }

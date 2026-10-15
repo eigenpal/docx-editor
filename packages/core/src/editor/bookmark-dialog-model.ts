@@ -36,6 +36,15 @@ export function bookmarkDialogRows(
 }
 
 /**
+ * The name the dialog starts with: the visible bookmark the selection is in, or an empty name.
+ *
+ * @public
+ */
+export function bookmarkDialogInitialName(bookmarks: readonly BookmarkSummary[]): string {
+  return bookmarks.find((bookmark) => bookmark.atSelection && !bookmark.hidden)?.name ?? '';
+}
+
+/**
  * What the typed name allows in the Bookmark dialog.
  *
  * @public
