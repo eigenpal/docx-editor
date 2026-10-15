@@ -307,6 +307,16 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 
 `readOnly` means the engine cannot resolve that item. Hide **Accept** and **Reject** in custom cards. Packaged actions remain visible but disabled in viewing mode.
 
+### Position custom cards
+
+If you set `preset={false}` on the sidebar or render your own rail, use `useStackedReviewPositions(items, heights, { gap, scale })` to stack cards without overlap:
+
+- Pass the review items as they are. An item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
+- Pass the measured card heights in CSS pixels.
+- Pass `editor.getRenderScale()` as `scale`.
+
+The hook returns each card's top in layout points, measured from the top of the first page. Multiply each value by `scale` and add the rail's top offset to position a card in CSS pixels.
+
 ### Activate and reveal items
 
 `setActive` moves the caret to the item start and opens its story. It does not select content. The item renders its own highlight.
@@ -686,8 +696,6 @@ If evaluation throws, the editor preserves the last complete projection and surf
 ### Saving and review actions
 
 Filtering changes layout, painted markup, review cards, and bulk actions over the visible review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document, or change saved OOXML. Saving while a filter is active writes the same canonical revision markup as saving with no filter. To change the document, call the normal accept or reject actions explicitly.
-
-If `preset={false}`, use `useStackedReviewPositions(items, heights, { gap, scale })`. Pass `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use document points. Pass the review items as they are: an item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
 
 ## Accept or reject in bulk
 

@@ -1248,7 +1248,7 @@ export interface UseReviewReturn {
     readonly setPaneOpen: (open: boolean) => void;
 }
 
-// @public (undocumented)
+// @public
 export function useStackedReviewPositions(items: MaybeRefOrGetter_2<readonly {
     readonly anchorY: number | null;
     readonly key: string;

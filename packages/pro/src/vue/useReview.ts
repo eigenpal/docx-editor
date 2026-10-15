@@ -331,7 +331,18 @@ function useReviewOfInternal(
   };
 }
 
-/** @public */
+/**
+ * Non-overlapping Y positions for cards you have measured.
+ *
+ * Pass entries in document order, each with a key and an anchor, and the measured card heights.
+ * An entry with `isActive: true` stays at its own anchor, and the entries before it move up.
+ * Anchors are in layout points. Measured heights are in CSS pixels, so pass `scale` to add them.
+ *
+ * Returns each card's top in layout points. Multiply by `scale` and add the rail's top offset
+ * to position a card in CSS pixels.
+ *
+ * @public
+ */
 export function useStackedReviewPositions(
   items: MaybeRefOrGetter<readonly { readonly key: string; readonly anchorY: number | null }[]>,
   heights: MaybeRefOrGetter<ReadonlyMap<string, number>>,
