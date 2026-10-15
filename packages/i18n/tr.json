@@ -530,6 +530,7 @@
     "linkCopied": "Bağlantı panoya kopyalandı",
     "fontSubstitutionNotice": "Bu belgedeki bazı yazı tipleri kullanılamıyor; bunların yerine şunlar gösteriliyor: {fonts}",
     "documentContent": "Belge içeriği",
+    "previewContent": "Önerilen değişikliklerin önizlemesi",
     "documentViewport": "Belge sayfaları"
   },
   "hyperlinkPopup": {

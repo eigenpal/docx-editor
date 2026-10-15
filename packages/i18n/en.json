@@ -690,6 +690,7 @@
   },
   "editor": {
     "documentContent": "Document content",
+    "previewContent": "Preview of proposed changes",
     "documentViewport": "Document pages",
     "showDocumentOutline": "Show document outline",
     "linkCopied": "Link copied to clipboard",

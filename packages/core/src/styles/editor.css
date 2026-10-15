@@ -7234,6 +7234,19 @@ p.docx-review__refused {
   margin: 24px auto;
 }
 
+/* While a preview shows over the pages, the live document's chrome describes pages the reader
+   cannot see: picture handles, control widgets, and popups stay hidden until it ends. */
+[data-docx-previewing]
+  :is(
+    .docx-image-selection-overlay,
+    .docx-content-control-widget,
+    .docx-content-control-menu,
+    .docx-equation-popup,
+    .docx-hyperlink-popup
+  ) {
+  display: none;
+}
+
 /* ── The context menu ──────────────────────────────────────────────────────────────────
  *
  * The right-click panel over the painted document. It IS the shared `.docx-toolbar__menu`

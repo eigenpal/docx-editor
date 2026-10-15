@@ -527,6 +527,7 @@
     "linkCopied": "Link in Zwischenablage kopiert",
     "fontSubstitutionNotice": "Einige Schriftarten in diesem Dokument sind nicht verfügbar, daher werden Ersatzschriftarten angezeigt: {fonts}",
     "documentContent": "Dokumentinhalt",
+    "previewContent": "Vorschau der vorgeschlagenen Änderungen",
     "documentViewport": "Dokumentseiten"
   },
   "hyperlinkPopup": {

@@ -17,6 +17,7 @@ import { DocxEditor as DocxEditorBrowser } from '../../browser.ts';
 import type { RequestContext } from '../../index.ts';
 import { reviewModule } from '../../../../pro/src/review/review-module.ts';
 import { docx, p } from './support/docx.ts';
+import { WITH_FURNITURE } from '../../model/__tests__/support/documents.ts';
 import {
   registerRefreshComposition,
   setRefreshWriteGuard,
@@ -24,7 +25,7 @@ import {
 
 const BODY = p('Notice is due within thirty (30) days of receipt.') + p('Delivery is free.');
 
-function mount(options: { review?: boolean } = {}) {
+function mount(options: { review?: boolean; bytes?: Uint8Array } = {}) {
   const host = document.createElement('div');
   const container = document.createElement('div');
   container.className = 'docx-paginated-surface';
@@ -32,7 +33,7 @@ function mount(options: { review?: boolean } = {}) {
   document.body.append(host);
   const editor = createDocxEditor({
     container,
-    document: docx(BODY),
+    document: options.bytes ?? docx(BODY),
     author: 'Reviewer',
     ...(options.review === false ? {} : { modules: [reviewModule()] }),
   });
@@ -257,7 +258,7 @@ describe('runtime.preview', () => {
     }
   });
 
-  test('rebase refuses, writing nothing, when the edit touched what the preview read', async () => {
+  test('rebase follows an edit earlier in the same paragraph', async () => {
     const mounted = mount();
     try {
       const { editor, runtime } = mounted;
@@ -265,13 +266,115 @@ describe('runtime.preview', () => {
       const session = editor.surface!.session;
       const paragraphId = session.paragraphIds()[0]!;
       session.applyTreeOps([{ op: 'insertText', paragraphId, offset: 0, text: 'Urgent: ' }]);
+      await expect(preview.commit()).rejects.toMatchObject({ code: 'StaleDocument' });
+      await preview.commit({ rebase: true });
+      const after = await saved(editor);
+      expect(after).toContain('Urgent: ');
+      expect(after).toContain('forty-five (45) days of receipt');
+      // The struck words are the ones the preview struck, not the ones at the old offsets.
+      expect(after).toMatch(/<w:delText[^>]*>thirty \(30\) days of receipt<\/w:delText>/);
+    } finally {
+      mounted.dispose();
+    }
+  });
+
+  test('rebase refuses, writing nothing, when a replayed read answers differently', async () => {
+    const mounted = mount();
+    try {
+      const { editor, runtime } = mounted;
+      const preview = await runtime.preview(counterProposal);
+      // Another writer removes the words the preview searched for.
+      const session = editor.surface!.session;
+      const paragraphId = session.paragraphIds()[0]!;
+      session.applyTreeOps([{ op: 'deleteText', paragraphId, start: 21, end: 26 }]);
       const moved = await saved(editor);
+      expect(moved).not.toContain('thirty (30)');
       await expect(preview.commit({ rebase: true })).rejects.toMatchObject({
         code: 'StaleDocument',
+        debugInfo: { innerError: { code: 'edit.preview-diverged' } },
       });
       expect(preview.status).toBe('ended');
       expect(await saved(editor)).toBe(moved);
       expect(editor.snapshot().editable).toBe(true);
+    } finally {
+      mounted.dispose();
+    }
+  });
+
+  test('header and footnote text edits show and commit; a footnote comment refuses as in run()', async () => {
+    const mounted = mount({ bytes: WITH_FURNITURE });
+    try {
+      const { editor, runtime } = mounted;
+      const preview = await runtime.preview(async (context) => {
+        context.document.sections.getFirst().getHeader('Primary').insertText(' extra', 'End');
+        await context.sync();
+        const notes = context.document.body.footnotes;
+        notes.load('items');
+        await context.sync();
+        notes.items[0]!.body.insertText(' more', 'End');
+        await context.sync();
+      });
+      expect(painted(mounted.previewPages())).toContain(' extra');
+      // Only body paragraphs are found.
+      expect(preview.reveal()).toBe(false);
+      await preview.commit();
+      const files = unzipSync(new Uint8Array(await editor.save()));
+      const parts = Object.entries(files)
+        .filter(([name]) => name.startsWith('word/'))
+        .map(([, bytes]) => strFromU8(bytes))
+        .join('');
+      expect(parts).toContain(' extra');
+      expect(parts).toContain(' more');
+
+      const comment = runtime.preview(async (context) => {
+        const notes = context.document.body.footnotes;
+        notes.load('items');
+        await context.sync();
+        notes.items[0]!.body.getRange('Whole').insertComment('note comment');
+        await context.sync();
+      });
+      await expect(comment).rejects.toMatchObject({
+        debugInfo: { innerError: { code: 'edit.unsupported-story' } },
+      });
+      expect(mounted.previewPages()).toBeNull();
+    } finally {
+      mounted.dispose();
+    }
+  });
+
+  test('the callback can answer a value, which the preview carries', async () => {
+    const mounted = mount();
+    try {
+      const preview = await mounted.runtime.preview(async (context) => {
+        await counterProposal(context);
+        return { replaced: 'thirty (30) days of receipt' };
+      });
+      expect(preview.result).toEqual({ replaced: 'thirty (30) days of receipt' });
+      preview.discard();
+    } finally {
+      mounted.dispose();
+    }
+  });
+
+  test('the preview is a labelled region the live chrome does not act on', async () => {
+    const mounted = mount();
+    try {
+      const preview = await mounted.runtime.preview(counterProposal);
+      const holder = mounted.host.querySelector<HTMLElement>('[data-docx-preview]')!;
+      expect(holder.getAttribute('role')).toBe('region');
+      expect(holder.getAttribute('aria-label')).toBe('Preview of proposed changes');
+      expect(mounted.host.hasAttribute('data-docx-previewing')).toBe(true);
+      const heard: string[] = [];
+      for (const type of ['contextmenu', 'paste', 'drop'])
+        mounted.host.addEventListener(type, () => heard.push(type));
+      for (const type of ['contextmenu', 'paste', 'drop']) {
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        holder.querySelector('.docx-pages')!.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(type !== 'contextmenu');
+      }
+      expect(heard).toEqual([]);
+      preview.discard();
+      expect(mounted.host.hasAttribute('data-docx-previewing')).toBe(false);
     } finally {
       mounted.dispose();
     }

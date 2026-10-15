@@ -160,14 +160,14 @@ A preview follows these rules:
 
 - **One preview at a time.** A second `preview()` on the same editor, from any runtime, rejects with `PreviewActive`.
 - **The editor refuses document writes while a preview shows.** `editor.exec()` edits, typing, undo, and redo are refused, and `snapshot().editable` is `false`. A write from any runtime's `run()` rejects with `PreviewActive`. Zoom, paragraph marks, the review pane toggle, and selection keep working.
-- **Reads.** Reads from `run()` see the live document. Reads inside the preview callback see the preview.
+- **Reads.** Reads from `run()` see the live document. Reads inside the preview callback see the preview. Like `run()`, the callback can return plain data, which `preview.result` holds.
 - **The review rail stays on the live document.** Review cards stay anchored to the live text, which is what a commit changes. Text highlights from `editor.setHighlights()` are hidden while the preview shows and come back when it ends.
 - **Suggesting mode.** If the editor is in suggesting mode, a write the callback makes with tracking off becomes a suggestion attributed to the editor's author. The preview and the commit write the same suggestion, as `run()` does.
 - **Status.** `preview.status` is `active`, `stale`, or `ended`. It becomes `stale` when the live document moves after the preview began, for example when a collaboration peer edits it. It becomes `ended` after `commit()` or `discard()`, when the runtime is disposed, or when the editor loads another document, detaches, or moves to another element. Subscribe with `preview.onStatusChanged(listener)`.
 - **Commit never re-runs the callback.** It replays the batches the callback sent, in order, inside one editor history group. Every read in the replay must answer what it answered in the preview, so a replay never edits text the preview did not see.
 - **Tracking mode.** A tracking mode the callback sets stays set on the runtime after `commit()`, as it does after `run()`. `discard()` discards it with the preview.
 
-If the live document moved, `commit()` rejects with `StaleDocument`, writes nothing, and keeps the preview open. To apply the preview to the current document, call `commit({ rebase: true })`. The rebase refuses with `StaleDocument`, and writes nothing, if the move changed text the preview read or wrote:
+If the live document moved, `commit()` rejects with `StaleDocument`, writes nothing, and keeps the preview open. To apply the preview to the current document, call `commit({ rebase: true })`. Ranges follow the text they name, so an edit elsewhere, even earlier in the same paragraph, rebases. The rebase refuses with `StaleDocument`, and writes nothing, if a replayed read answers differently: a search finds a different number of matches, or text the preview read now reads otherwise. `debugInfo.innerError.code` is then `edit.preview-diverged`:
 
 ```ts
 try {
@@ -195,7 +195,7 @@ A commit that fails during the replay undoes what it replayed as one step and en
 | A write the preview cannot show | `NotSupported` from `context.sync()` | `edit.preview-unsupported` |
 | The callback throws | The same error | Unchanged |
 
-A preview shows text edits, paragraph inserts, splits, and deletions, font, paragraph, and style formatting, comments, line breaks, and tracked-change proposals and decisions. It refuses tables, pictures, shapes, fields, lists, hyperlinks, content controls, notes, headers and footers, page setup, page and section breaks, and selection changes. Use `runtime.capabilities.preview` to check whether a runtime offers previews.
+A preview shows text edits, paragraph inserts, splits, and deletions, font, paragraph, and style formatting, comments, line breaks, and tracked-change proposals and decisions. Text edits work in headers, footers, and notes too; `reveal()` finds only body paragraphs. A preview refuses tables, pictures, shapes, fields, lists, hyperlinks, content controls, creating or deleting headers, footers, and notes, page setup, page and section breaks, and selection changes. It also refuses what `run()` would refuse on the live editor, such as a protected range, a generated table of contents, or a comment outside the body, so a preview never shows what its commit would refuse. Use `runtime.capabilities.preview` to check whether a runtime offers previews.
 
 A preview paints with a second, view-only copy of the editor's pages. The first screen shows at once, and the rest lays out in short tasks, as the editor opens a long document. While the preview shows, it uses about as much memory as the open document, and it releases that memory when it ends.
 

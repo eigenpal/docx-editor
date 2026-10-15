@@ -972,6 +972,12 @@ export type {
 export type ScaleMutableSurface = PaginatedSurface & {
   setScale(nextScale: number): boolean;
   /**
+   * Why the mode rules would refuse these automation ops now, or null: the check
+   * `applyAutomationOps` makes, without writing. A preview fork asks it so it refuses what a
+   * commit would.
+   */
+  automationWriteRefusal(ops: readonly TreeDocOp[], packageEdits: boolean): string | null;
+  /**
    * The gated, attributed session write for command lanes that live OUTSIDE this file —
    * today the content-control commands. Same collaboration gate and actor attribution as
    * the typing lane (`applyJournaledOps`); the command's own mode/lock gate has already

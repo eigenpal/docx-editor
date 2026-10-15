@@ -22,6 +22,8 @@ const OPENING_SLICE_MS = 40;
 
 /** The class the preview holder carries, which the surface stylesheet styles like the live one. */
 export const PREVIEW_SURFACE_CLASS = 'docx-preview-surface';
+/** Set on the editor root while a preview shows; the stylesheet hides the live chrome under it. */
+const PREVIEWING_ATTRIBUTE = 'data-docx-previewing';
 
 /** The nearest ancestor that scrolls, if any: its offsets are what a preview must not move. */
 function scrollerOf(element: HTMLElement): HTMLElement | null {
@@ -51,6 +53,7 @@ export interface PreviewDisplay {
  */
 export function showPreviewOver(
   container: HTMLElement,
+  label: string,
   mount: (holder: HTMLElement) => PaginatedSurface | null
 ): PreviewDisplay | null {
   const parent = container.parentElement;
@@ -62,8 +65,20 @@ export function showPreviewOver(
   const holder = doc.createElement('div');
   holder.className = PREVIEW_SURFACE_CLASS;
   holder.setAttribute('data-docx-preview', '');
+  // A landmark of its own, so assistive technology says the reader is looking at a preview.
+  holder.setAttribute('role', 'region');
+  holder.setAttribute('aria-label', label);
   holder.style.position = 'absolute';
   holder.style.margin = '0';
+  // Inert to the live editor's chrome: its context menu would act on the hidden selection, and
+  // a paste or a drop has no document to land in. The view-only surface refuses them itself.
+  const inert = (event: Event) => {
+    event.stopPropagation();
+    if (event.type !== 'contextmenu') event.preventDefault();
+  };
+  for (const type of ['contextmenu', 'paste', 'cut', 'drop', 'dragover']) {
+    holder.addEventListener(type, inert);
+  }
   const place = () => {
     holder.style.top = `${container.offsetTop}px`;
     holder.style.left = `${container.offsetLeft}px`;
@@ -89,9 +104,17 @@ export function showPreviewOver(
     scroller.scrollLeft = scrollLeft;
   };
   restoreScroll();
-  const View = doc.defaultView?.ResizeObserver;
-  const resize = View ? new View(place) : null;
+  // The container can move without resizing, when the review pane opens or the window
+  // narrows: the parent's box and the window's both put the holder back.
+  const view = doc.defaultView;
+  const Observer = view?.ResizeObserver;
+  const resize = Observer ? new Observer(place) : null;
   resize?.observe(container);
+  resize?.observe(parent);
+  view?.addEventListener('resize', place);
+  // The live editor's own chrome (picture handles, popups) describes the hidden pages.
+  const root = container.closest<HTMLElement>('.docx-editor') ?? parent;
+  root.setAttribute(PREVIEWING_ATTRIBUTE, '');
   // A long preview shows its first screen at once and lays the rest out in short tasks, the
   // way the editor opens a long document, so showing it never blocks the page for long.
   const timers = hostTimers(() => holder);
@@ -117,6 +140,8 @@ export function showPreviewOver(
       if (slice !== null) timers.clearTimeout(slice);
       slice = null;
       resize?.disconnect();
+      view?.removeEventListener('resize', place);
+      root.removeAttribute(PREVIEWING_ATTRIBUTE);
       const top = scroller?.scrollTop ?? 0;
       const left = scroller?.scrollLeft ?? 0;
       container.style.visibility = hiddenVisibility;

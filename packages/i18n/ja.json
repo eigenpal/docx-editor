@@ -690,6 +690,7 @@
   },
   "editor": {
     "documentContent": "文書の内容",
+    "previewContent": "提案された変更のプレビュー",
     "documentViewport": "文書のページ",
     "showDocumentOutline": "文書のアウトラインを表示",
     "linkCopied": "リンクをクリップボードにコピーしました",

@@ -527,6 +527,7 @@
     "linkCopied": "链接已复制到剪贴板",
     "fontSubstitutionNotice": "此文档中的某些字体不可用，已显示替代字体：{fonts}",
     "documentContent": "文档内容",
+    "previewContent": "建议更改的预览",
     "documentViewport": "文档页面"
   },
   "hyperlinkPopup": {

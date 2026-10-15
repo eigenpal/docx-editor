@@ -4367,6 +4367,8 @@ export function mountPaginatedSurface(
       return caret ? caret.pageIndex + 1 : 1;
     },
 
+    automationWriteRefusal: (ops, edits) =>
+      writeRefusal(ops.some(isDocumentEdit) || edits, ops, false),
     setScale(nextScale) {
       if (!(nextScale > 0) || !Number.isFinite(nextScale)) return false;
       if (nextScale === scale) return true;

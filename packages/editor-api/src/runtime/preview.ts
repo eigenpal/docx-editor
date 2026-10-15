@@ -66,9 +66,10 @@ export type DocumentPreviewStatus = 'active' | 'stale' | 'ended';
  * editable while the callback runs, so a callback that waits on a model call lets the document
  * move under it, and the preview then starts `stale`. Ask the model first, then preview.
  *
- * The callback cannot write tables, pictures, fields, lists, hyperlinks, content controls,
- * notes, headers, footers, or page setup, and it cannot move the selection: `context.sync()`
- * refuses those with `NotSupported`.
+ * Text and formatting edits work in the body, headers, footers, and notes. The callback cannot
+ * write tables, pictures, fields, lists, hyperlinks, content controls, or page setup, create or
+ * delete headers, footers, or notes, or move the selection: `context.sync()` refuses those with
+ * `NotSupported`. Comments are written in the body only, as in `run()`.
  *
  * @example
  * ```ts
@@ -82,7 +83,7 @@ export type DocumentPreviewStatus = 'active' | 'stale' | 'ended';
  * ```
  * @public
  */
-export type PreviewCallback = (context: RequestContext) => Promise<void>;
+export type PreviewCallback<T = void> = (context: RequestContext) => Promise<T>;
 
 /**
  * Options for {@link DocumentPreview.commit}.
@@ -96,9 +97,11 @@ export type PreviewCallback = (context: RequestContext) => Promise<void>;
 export interface CommitPreviewOptions {
   /**
    * When the live document moved after the preview began, replay the preview on the current
-   * document instead of refusing. The replay still refuses with `StaleDocument`, and writes
-   * nothing, when the change touched what the preview read or wrote: a search finds other
-   * text, or a range's offsets moved. Omitted or false, any move refuses.
+   * document instead of refusing. Ranges follow the text they name, so an edit elsewhere, even
+   * earlier in the same paragraph, rebases. The replay still refuses with `StaleDocument`, and
+   * writes nothing, when a replayed read answers differently: a search finds a different number
+   * of matches, or text the preview read now reads otherwise. Omitted or false, any move
+   * refuses.
    */
   readonly rebase?: boolean;
 }
@@ -124,7 +127,23 @@ export interface CommitPreviewOptions {
  * ```
  * @public
  */
-export interface DocumentPreview {
+export interface DocumentPreview<T = void> {
+  /**
+   * What the callback answered, as `run()` answers its callback's value. Return plain data from
+   * the callback, never a proxy: proxies end with the callback.
+   *
+   * @example
+   * ```ts
+   * const preview = await runtime.preview(async (context) => {
+   *   const range = context.document.body.search('thirty (30) days').getFirst();
+   *   range.insertText('forty-five (45) days', 'Replace');
+   *   await context.sync();
+   *   return { replaced: 'thirty (30) days' };
+   * });
+   * console.log(preview.result.replaced);
+   * ```
+   */
+  readonly result: T;
   /**
    * Where the preview is in its life. Read it at any time; it changes without a sync.
    *
@@ -146,8 +165,8 @@ export interface DocumentPreview {
    * - `StaleDocument` when the live document moved after the preview began
    *   (`expectedRevision` and `actualRevision` say from where to where). Nothing is written and
    *   the preview stays open: call `commit({ rebase: true })` or `discard()`.
-   * - `StaleDocument` from `commit({ rebase: true })` when the move touched what the preview
-   *   read or wrote. Nothing stays written, and the preview ends.
+   * - `StaleDocument` from `commit({ rebase: true })` when a replayed read answers differently
+   *   (`edit.preview-diverged`). Nothing stays written, and the preview ends.
    * - `PreviewEnded` when the preview was already committed, discarded, or ended by a remount.
    * - Any refusal the live document gives a replayed batch, such as a collaboration session
    *   that is not ready. Replayed writes before it are undone as one step, and the preview ends.
@@ -178,7 +197,8 @@ export interface DocumentPreview {
   discard(): void;
   /**
    * Scroll the page to the first paragraph of the document body the preview changed. Answers
-   * false, scrolling nothing, when the preview has ended or changed no body paragraph.
+   * false, scrolling nothing, when the preview has ended or changed no body paragraph: an
+   * edit only in a header, a footer, or a note is not found.
    *
    * @example
    * ```ts
@@ -242,7 +262,7 @@ export interface PreviewRuntime {
     finish(): void;
   } | null;
   /** Run `callback` in a fresh request context over `host`. */
-  runOn(host: AutomationHost, callback: PreviewCallback): Promise<void>;
+  runOn<T>(host: AutomationHost, callback: PreviewCallback<T>): Promise<T>;
 }
 
 /**
@@ -351,10 +371,10 @@ function forkRefusal(reason: PreviewForkRefusal): DocxEditorError {
  * On any failure the fork ends before the error propagates, so the page never keeps showing a
  * preview nobody holds.
  */
-export async function openPreview(
+export async function openPreview<T>(
   runtime: PreviewRuntime,
-  callback: PreviewCallback
-): Promise<DocumentPreview> {
+  callback: PreviewCallback<T>
+): Promise<DocumentPreview<T>> {
   const begun = runtime.port.begin();
   if (!begun.ok) throw forkRefusal(begun.reason);
   const fork = begun.fork;
@@ -363,10 +383,10 @@ export async function openPreview(
     seedTracking(runtime, fork.host);
     const forkBase = fork.host.revision();
     const log: PreviewEntry[] = [];
-    await runtime.runOn(recordingHost(fork.host, log), callback);
+    const result = await runtime.runOn(recordingHost(fork.host, log), callback);
     if (fork.ended) fail({ code: 'PreviewEnded', target: 'preview' });
     if (!fork.show()) fail({ code: 'GeneralException', target: 'preview' });
-    return new Preview(runtime, fork, log, base, forkBase);
+    return new Preview(runtime, fork, log, base, forkBase, result);
   } catch (error) {
     fork.end();
     throw error;
@@ -387,7 +407,7 @@ function seedTracking(runtime: PreviewRuntime, fork: AutomationHost): void {
   });
 }
 
-class Preview implements DocumentPreview {
+class Preview<T> implements DocumentPreview<T> {
   #status: DocumentPreviewStatus = 'active';
   readonly #listeners = new Set<(status: DocumentPreviewStatus) => void>();
   #unsubscribe: (() => void) | undefined;
@@ -398,7 +418,8 @@ class Preview implements DocumentPreview {
     private readonly fork: PreviewFork,
     private readonly log: readonly PreviewEntry[],
     private readonly base: number,
-    private readonly forkBase: number
+    private readonly forkBase: number,
+    readonly result: T
   ) {
     this.#unsubscribe = runtime.host.subscribe((event) => {
       if (this.#status === 'active' && event.revision !== base) this.#set('stale');
@@ -475,8 +496,9 @@ class Preview implements DocumentPreview {
             target: 'preview',
             expectedRevision: this.base,
             actualRevision: liveBase,
+            diagnostic: 'edit.preview-diverged',
           }
-        : { code: 'GeneralException', target: 'preview' }
+        : { code: 'GeneralException', target: 'preview', diagnostic: 'edit.preview-diverged' }
     );
   }
 

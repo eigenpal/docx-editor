@@ -527,6 +527,7 @@
     "linkCopied": "Skopiowano link do schowka",
     "fontSubstitutionNotice": "Niektóre czcionki w tym dokumencie są niedostępne, dlatego wyświetlane są czcionki zastępcze: {fonts}",
     "documentContent": "Zawartość dokumentu",
+    "previewContent": "Podgląd proponowanych zmian",
     "documentViewport": "Strony dokumentu"
   },
   "hyperlinkPopup": {

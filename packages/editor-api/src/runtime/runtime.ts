@@ -35,6 +35,7 @@ import type {
   AutomationOperation,
   HistoryGroup,
 } from '@docx-editor.dev/core/automation';
+import { isAutomationCommand } from '@docx-editor.dev/core/automation';
 import { Document } from '../model/document.ts';
 import { hostFailure } from './batch.ts';
 import { ClientObject } from './client-object.ts';
@@ -42,7 +43,6 @@ import { DocxEditorError, fail } from './errors.ts';
 import { hydratedHandle } from './hydrate.ts';
 import type { RootHandles } from './internals.ts';
 import { RequestContext, type RuntimeSession } from './request-context.ts';
-import { isAutomationCommand } from '@docx-editor.dev/core/automation';
 import {
   openPreview,
   type DocumentPreview,
@@ -204,8 +204,13 @@ export interface DocxEditorRuntime {
    * - `PreviewActive` (`edit.preview-active`) while another preview is open on the editor.
    * - `DocumentUnavailable` while the editor holds no mounted document.
    * - `NotSupported` (`edit.preview-unsupported`) from `context.sync()` for a write a preview
-   *   cannot show: tables, pictures, fields, lists, hyperlinks, content controls, notes,
-   *   headers and footers, section and page setup, page and section breaks, and selection.
+   *   cannot show: tables, pictures, fields, lists, hyperlinks, content controls, creating or
+   *   deleting headers, footers, and notes, section and page setup, page and section breaks,
+   *   and selection. Text edits in headers, footers, and notes show and commit.
+   * - The same refusal `run()` would give for a write the live editor refuses: a protected
+   *   range, a generated table of contents, a collaboration session that is not ready, or a
+   *   comment outside the body (`edit.unsupported-story`). A preview never shows what its
+   *   commit would refuse.
    * - Any error the callback throws. The preview ends, and the error propagates unchanged.
    *
    * @example
@@ -221,7 +226,7 @@ export interface DocxEditorRuntime {
    * await preview.commit(); // or preview.discard()
    * ```
    */
-  preview(callback: PreviewCallback): Promise<DocumentPreview>;
+  preview<T = void>(callback: PreviewCallback<T>): Promise<DocumentPreview<T>>;
   /** Release the host. Idempotent. */
   dispose(): void;
 }
@@ -281,10 +286,6 @@ export interface CreateRuntimeOptions {
   /** Told about each batch that threw an engine error, for anonymous diagnostics. */
   readonly onException?: (error: unknown, operations: readonly AutomationOperation[]) => void;
   /**
-   * Runs a batch inside an editor history group, answering `null` for a handle that is not
-   * open on the editor. Only the browser runtime has one; without it `historyGroup` refuses.
-   */
-  /**
    * The browser editor's preview fork. Only the browser runtime has one; without it
    * `preview()` refuses with `NotSupported`.
    */
@@ -292,6 +293,10 @@ export interface CreateRuntimeOptions {
     /** Whether a preview is open on the editor, from any runtime. */
     active(): boolean;
   };
+  /**
+   * Runs a batch inside an editor history group, answering `null` for a handle that is not
+   * open on the editor. Only the browser runtime has one; without it `historyGroup` refuses.
+   */
   readonly historyGroups?: {
     /** One run's frames of `group`, or `null` when it is not an open handle of the editor. */
     begin(group: HistoryGroup): {
@@ -435,7 +440,7 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     : session;
 
   /** A run over a preview's fork: its own roots, its own adoption identity, its own host. */
-  const runOn = async (on: AutomationHost, callback: PreviewCallback): Promise<void> => {
+  const runOn = async <T>(on: AutomationHost, callback: PreviewCallback<T>): Promise<T> => {
     let forkRoots: RootHandles | null = null;
     const { context, finish } = RequestContext.begin({
       ...session,
@@ -445,14 +450,14 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
       roots: () => (forkRoots ??= rootsOn(on)),
     });
     try {
-      await callback(context);
+      return await callback(context);
     } finally {
       finish();
     }
   };
 
-  const previews = new Set<DocumentPreview>();
-  async function preview(callback: PreviewCallback): Promise<DocumentPreview> {
+  const previews = new Set<DocumentPreview<unknown>>();
+  async function preview<T>(callback: PreviewCallback<T>): Promise<DocumentPreview<T>> {
     assertLive('preview');
     if (typeof callback !== 'function') fail({ code: 'InvalidArgument', target: 'preview' });
     const port = options.preview;

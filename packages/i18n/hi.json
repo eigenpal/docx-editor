@@ -530,6 +530,7 @@
     "linkCopied": "लिंक क्लिपबोर्ड पर कॉपी किया गया",
     "fontSubstitutionNotice": "इस दस्तावेज़ के कुछ फ़ॉन्ट उपलब्ध नहीं हैं, इसलिए विकल्प दिखाए जा रहे हैं: {fonts}",
     "documentContent": "दस्तावेज़ सामग्री",
+    "previewContent": "प्रस्तावित परिवर्तनों का पूर्वावलोकन",
     "documentViewport": "दस्तावेज़ पृष्ठ"
   },
   "hyperlinkPopup": {

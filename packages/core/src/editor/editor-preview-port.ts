@@ -10,7 +10,10 @@
 //   their revision and pass through unchanged, as they do in the live surface.
 // - Collaboration. Writes run under the live session's actor, so a comment or revision id the
 //   fork mints is the id the commit mints, and the planner hears the same `collaborative` flag.
-// - The review module. Writes the live editor refuses for want of it are refused here too.
+// - Refusals. The live surface's mode rules (protection, a generated table of contents, viewing)
+//   are asked of the live surface itself, the collaboration gate of the live session, and a
+//   comment outside the body or a write without the review module refuses as it does live.
+//   What the live editor would refuse never shows in a preview that could not commit.
 
 import type { AutomationDocumentPort, AutomationStagedOps } from '../automation/document-port.ts';
 import { packageStorePort } from '../automation/server-host.ts';
@@ -20,7 +23,8 @@ import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { TreePackageStore } from '../store/store/tree-package-store.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
-import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import type { PaginatedSurface, ScaleMutableSurface } from './paginated-surface-contract.ts';
+import type { OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import {
   attributeTrackedOps,
@@ -46,6 +50,7 @@ export function previewForkPort(
   display: () => PaginatedSurfaceRuntimeOptions
 ): AutomationDocumentPort {
   const base = packageStorePort(store);
+  const live = surface as ScaleMutableSurface;
   const collaboration = surface.collaborationSession();
   const actor = collaboration?.identity.actorId;
   const review = () => display().reviewModel !== undefined;
@@ -72,39 +77,58 @@ export function previewForkPort(
       const author = suggestingAuthor();
       if (author === undefined) return null;
       if (end <= start) return start;
-      const paragraph = findNode(
-        store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!,
-        paragraphId
-      );
-      if (!paragraph || paragraph.kind !== 'paragraph') return start;
+      const paragraph = paragraphInFork(store, paragraphId);
+      if (!paragraph) return start;
       return trackedReplacementLanding(paragraph, start, end, author, trackedDate());
     },
     apply(staged: AutomationStagedOps, scope, packageEdits = [], requiresReview = false) {
+      // The live surface's order: its mode rules, the review module, then attribution and the
+      // collaboration gate on the ops as they will be written.
+      let refusal = live.automationWriteRefusal([], false);
+      if (refusal !== null) return { ok: false, reason: refusal };
       if (requiresReview && !review()) return { ok: false, reason: REVIEW_REQUIRED };
-      let tracked = false;
       const result = runWithTransactionActor(actor, () =>
         base.apply(
           (relate) => {
             const ops = staged(relate);
             if (ops === null) return null;
+            refusal = live.automationWriteRefusal(ops, packageEdits.length > 0);
+            if (refusal !== null) return null;
             const written = attributed(ops);
-            if (written.some(isTrackedEdit) && !review()) {
-              tracked = true;
-              return null;
-            }
-            return written;
+            if (written.some(isTrackedEdit) && !review()) refusal = REVIEW_REQUIRED;
+            else refusal = collaboration?.gateOperations(written, scope) ?? null;
+            return refusal === null ? written : null;
           },
           scope,
           packageEdits
         )
       );
-      return tracked ? { ok: false, reason: REVIEW_REQUIRED } : result;
+      return refusal !== null ? { ok: false, reason: refusal } : result;
     },
     applyCommentWrites(writes, scope) {
+      const refusal = live.automationWriteRefusal([], false);
+      if (refusal !== null) return { ok: false, reason: refusal };
+      // The live editor's comment lane is the body's: a comment anywhere else refuses there.
+      if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
       if (!review()) return { ok: false, reason: REVIEW_REQUIRED };
+      const gated = collaboration?.gateOperations([], scope);
+      if (gated) return { ok: false, reason: gated };
       return runWithTransactionActor(actor, () => base.applyCommentWrites(writes, scope));
     },
     applyCustomNodeWrite: () => ({ ok: false, reason: UNSUPPORTED }),
     applyLifecycle: () => ({ ok: false, reason: UNSUPPORTED }),
   };
+}
+
+/** A paragraph of the fork by id, in the body first and then in any other story part. */
+function paragraphInFork(store: TreePackageStore, paragraphId: string): OoxmlParagraphNode | null {
+  const pkg = store.currentPackage();
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  const parts = main ? [main, ...pkg.parts.values()] : [...pkg.parts.values()];
+  for (const part of parts) {
+    if (!part.root) continue;
+    const node = findNode(part, paragraphId);
+    if (node?.kind === 'paragraph') return node;
+  }
+  return null;
 }

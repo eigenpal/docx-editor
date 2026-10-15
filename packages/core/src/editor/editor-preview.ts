@@ -21,6 +21,7 @@
 
 import type { AutomationCapabilities, AutomationHost } from '../automation/protocol.ts';
 import { createAutomationHost } from '../automation/host.ts';
+import { en } from '@docx-editor.dev/i18n';
 import { openTreeSessionFromPackage } from '../binding/tree-session.ts';
 import { TreePackageStore } from '../store/store/tree-package-store.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
@@ -209,7 +210,8 @@ export function beginEditorPreview(
         }
       );
       if (!opened.ok) return false;
-      display = showPreviewOver(container, (holder) => {
+      const label = paint.translate?.('editor.previewContent') ?? en.editor.previewContent;
+      display = showPreviewOver(container, label, (holder) => {
         // View-only and without a collaboration model: the fork joins no room and takes no edit.
         const options: PaginatedSurfaceRuntimeOptions = {
           ...paint,

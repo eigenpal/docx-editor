@@ -527,6 +527,7 @@
     "linkCopied": "הקישור הועתק ללוח",
     "fontSubstitutionNotice": "חלק מהגופנים במסמך זה אינם זמינים, ולכן מוצגים גופנים חלופיים: {fonts}",
     "documentContent": "תוכן המסמך",
+    "previewContent": "תצוגה מקדימה של השינויים המוצעים",
     "documentViewport": "עמודי המסמך"
   },
   "hyperlinkPopup": {

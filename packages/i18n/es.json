@@ -690,6 +690,7 @@
   },
   "editor": {
     "documentContent": "Contenido del documento",
+    "previewContent": "Vista previa de los cambios propuestos",
     "documentViewport": "Páginas del documento",
     "showDocumentOutline": "Mostrar esquema del documento",
     "linkCopied": "Vínculo copiado al portapapeles",

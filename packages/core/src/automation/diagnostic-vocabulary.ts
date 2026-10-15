@@ -74,6 +74,7 @@ export type EditDiagnosticCode =
   | 'edit.preview-active'
   | 'edit.preview-unsupported'
   | 'edit.preview-composing'
+  | 'edit.preview-diverged'
   | 'edit.collaboration-not-ready'
   | 'edit.collaboration-text-limit'
   | 'edit.internal-invariant'
