@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Bookmarks were preserved and navigated, but no operation added or removed one.",
+  "after": "insertBookmark and deleteBookmark add and remove bookmark marker pairs. Typing at a marker lands after it, and an untracked deletion removes the bookmarks it encloses.",
+  "reason": "Both operations and the edit rules reduce to existing canonical tree primitives: marker nodes inserted, removed, and moved within a paragraph. The journal replicates those node changes without changing the shared format, and new marker ids are actor-striped. Show bookmarks is local view state.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-bookmarks.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-bookmark-editors.test.ts",
+    "packages/core/src/store/__tests__/bookmark-ops.test.ts",
+    "packages/core/src/store/__tests__/canonical-primitive-journal-coverage.test.ts"
+  ],
+  "changeset": "bookmarks",
+  "migration": null
+}
