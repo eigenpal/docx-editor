@@ -396,7 +396,15 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const headroom = admitsSplit ? 0 : refLineHeight;
   // Backed off by half a point like the eviction reserve: the last kept body line's bottom
   // is exactly `bodyBottom`, and a budget equal to it flips on float drift.
-  const hold = Math.max(0, contentHeight - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT);
+  const hold = leadingLinesHold(
+    args,
+    nextBody,
+    owningAt,
+    owningBlock,
+    frontier,
+    bodyBottom,
+    Math.max(0, contentHeight - bodyBottom - RESERVE_BOUNDARY_BACKOFF_PT)
+  );
   const fitsLineQuantum =
     bodyBottom + splitOpeningHeight + headroom + areaWithPulled <= contentHeight + 0.001;
   if (!fitsLineQuantum) return hold;
@@ -418,6 +426,56 @@ export function holdOutReserveNeed(args: HoldOutArgs): number {
   const neverOfferedTheRoom = lineBandHeight + refLineHeight > offeredGap + 0.001;
   const alreadyHeldHere = Math.abs(usedReservePt - hold) <= HELD_RESERVE_TOLERANCE_PT;
   return neverOfferedTheRoom && !alreadyHeldHere ? 0 : hold;
+}
+
+/**
+ * The hold, reduced so the lines ahead of the reference line can return without it.
+ *
+ * The reserve keeps the reference line out, not the whole opening. When the owning paragraph
+ * opens the next page and splits, the lines before the reference carry no note and return
+ * like any other line, as far as the slack and the paragraph's widow/orphan control allow:
+ * at least two lines stay with the reference when the paragraph ends there, and a paragraph
+ * that starts there returns at least two. The answer stops the body just below the last line
+ * that may return, so the reference line stays out. Without such lines it is `fullHold`.
+ */
+function leadingLinesHold(
+  args: HoldOutArgs,
+  nextBody: PageRecord,
+  owningAt: number,
+  owner: ParagraphFragmentRecord,
+  frontier: NoteReferenceLineBand,
+  bodyBottom: number,
+  fullHold: number
+): number {
+  if (owningAt !== 0 || !stacksInOneColumn(args.bodyPage) || !stacksInOneColumn(nextBody)) {
+    return fullHold;
+  }
+  const keeps = paragraphKeeps(owner.props);
+  if (keeps.keepLines || owner.positionedFrame || owner.outOfFlow) return fullHold;
+  // Only a paragraph whose one footnote reference on this page is the frontier. With more,
+  // the returning lines move the later references' notes as well, and the reflow loop's
+  // settled answer for them is the full hold.
+  const cited = args
+    .pageBottomRefsOf(nextBody)
+    .filter((ref) => fragmentOwnsPosition(owner, ref.paragraphId, ref.atomOffset));
+  if (cited.length !== 1) return fullHold;
+  const lines = owner.lines;
+  const referenceLine = lines.findIndex(
+    (line) => line.box.y + line.box.height > frontier.top + 0.001
+  );
+  let most = referenceLine < 0 ? 0 : referenceLine;
+  if (keeps.widowControl && owner.paragraphEnd) most = Math.min(most, lines.length - 2);
+  const least = keeps.widowControl && owner.fragmentIndex === 0 ? 2 : 1;
+  const contentHeight = args.bodyPage.contentBox.height;
+  const ownReserve = args.ownReservePt ?? args.existingAreaHeight;
+  const top = lines[0]!.box.y - (owner.fragmentIndex === 0 ? owner.spacing.before : 0);
+  for (let count = most; count >= least; count -= 1) {
+    const last = lines[count - 1]!;
+    const bottom = bodyBottom + last.box.y + last.box.height - top;
+    const reserve = contentHeight - bottom - RESERVE_BOUNDARY_BACKOFF_PT;
+    if (reserve >= ownReserve - 0.001) return Math.min(fullHold, Math.max(0, reserve));
+  }
+  return fullHold;
 }
 
 /** The body opening that must return with a frontier reference. */

@@ -13,7 +13,6 @@ import { clippedExactRow, overheightRowError } from './table-exact-row-clip.ts';
 // row publishes into. Everything the paginator needs to mutate is on that object, so the
 // story loop keeps ownership of the cursor and this module keeps the row rules.
 
-import { autofitContextOf } from './table-autofit-widths.ts';
 import { positionedTableOriginX } from './table-origin.ts';
 import { withoutFloatingTableZones } from './table-float-overlap.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
@@ -54,8 +53,8 @@ import {
   type VMergeFragmentCarry,
 } from './table-vmerge-fragment-carry.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
-import { readTableStructure, tableOriginX, type SemanticTableRow } from './semantic-table.ts';
-import { pinnedBreakAtCursor, withSplittableRows } from './table-pinned-break.ts';
+import { tableOriginX, type SemanticTableRow } from './semantic-table.ts';
+import { readFlowTable } from './table-flow-structure.ts';
 import { tableFloatOriginY } from './table-float-position.ts';
 import { shiftTableFragment, splitHead } from './table-fragment-finalize.ts';
 import { budgetsHaveHeadroom, withBudgetProof } from './table-budget-proof.ts';
@@ -97,36 +96,14 @@ export function* paginateTableInFlowSteps(
     anchorFrames,
     verticalAnchorFrames,
     styleCascade,
-    displayMode,
-    revisionAuthorFilter,
     deps: flowDeps,
     shiftAnchor,
     publishFragment,
   } = flow;
-  const regionWidth = columnWidth();
-  const authored = readTableStructure(
-    table,
-    regionWidth,
-    0,
-    styleCascade,
-    displayMode,
-    revisionAuthorFilter,
-    flow.compatibilityMode,
-    autofitContextOf(flowDeps)
-  );
-  if (!authored || authored.rows.length === 0) return { outOfFlow: false };
-  // A page- or margin-positioned table that reaches below the bottom margin breaks across
-  // pages in the body flow instead of keeping its sheet position (`table-pinned-break.ts`).
-  const pinnedBreak = flow.positionTextTable
-    ? undefined
-    : pinnedBreakAtCursor(table, authored, flow);
-  const structure = pinnedBreak ? withSplittableRows(authored) : authored;
+  const read = readFlowTable(table, flow);
+  if (!read) return { outOfFlow: false };
+  const { structure, pinnedBreak, outOfFlow } = read;
   if (pinnedBreak) flow.cursorY = pinnedBreak.top;
-  const outOfFlow =
-    pinnedBreak === undefined &&
-    structure.float !== undefined &&
-    (structure.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
-    structure.float.ySpec !== 'inline';
   // Only a table without `w:tblpPr` honors `w:pageBreakBefore` rows (`table-row-page-break.ts`).
   const breaksPages = structure.float === undefined;
   if (

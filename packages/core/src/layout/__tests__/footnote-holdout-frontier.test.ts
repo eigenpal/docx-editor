@@ -120,6 +120,8 @@ describe('footnote hold-out uses the returning paragraph opening', () => {
       14
     );
     // The joined reference ends at 644pt. The separator and minimum body band take 28pt.
+    // The reference line stays out; the five lines ahead of it return, and widow control
+    // keeps the last line with it.
     for (const height of [648, 672]) {
       const bodyPage = { ...input.bodyPage, contentBox: { ...input.bodyPage.contentBox, height } };
       const nextPage = {
@@ -128,7 +130,7 @@ describe('footnote hold-out uses the returning paragraph opening', () => {
       };
       for (const usedReservePt of [undefined, height - 560 - 0.5]) {
         const hold = holdOutReserveNeed({ ...input, bodyPage, nextPage, usedReservePt });
-        expect(hold).toBeCloseTo(height - 560 - 0.5, 6);
+        expect(hold).toBeCloseTo(height - 560 - 5 * 14 - 0.5, 6);
       }
     }
     // A positive budget can require splitting a taller note; retain that existing release.

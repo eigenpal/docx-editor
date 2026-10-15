@@ -14,11 +14,7 @@ import {
   layoutWithCharacterHeaders,
   layoutWithCharacterHeadersSteps,
 } from './character-header-layout.ts';
-import {
-  contextualFlowInputs,
-  contextualParagraphSpacing,
-  flowNeighbourStyle,
-} from './contextual-paragraph-spacing.ts';
+import { contextualParagraphSpacing, flowNeighbourStyle } from './contextual-paragraph-spacing.ts';
 import { resolveParagraphFrame } from './paragraph-drop-cap.ts';
 import {
   anchorLineSkipsExclusion,
@@ -33,13 +29,13 @@ import {
 } from './furniture-drawing-exclusion.ts';
 import { tocLinkRanges, tocLinkStyleToken } from './toc-link-formatting.ts';
 import { tocCodeRanges } from './field-code-toc.ts';
-import { tocIdsToken, tocVerdictFor, type TocIdSets } from './toc-id-sets.ts';
+import { tocIdsToken, type TocIdSets } from './toc-id-sets.ts';
 import { paragraphIsRtl } from './rtl-paragraph.ts';
 import * as sectionPrep from './section-preparation.ts';
-import { resolveListAutoSpacing, listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
+import { resolveListAutoSpacing } from './list-auto-spacing.ts';
 import { emptyParagraphStyleFields, markStyleOf } from './empty-paragraph-style.ts';
 import { frameOrigins, positionedFrameBottom } from './paragraph-frame.ts';
-import { ParagraphFrameFlow, paragraphFrameFlowKeys } from './paragraph-frame-flow.ts';
+import { ParagraphFrameFlow } from './paragraph-frame-flow.ts';
 // Semantic paragraph layout over the canonical tree (tasks 7.1, 7.3).
 //
 // Produces the revision-tagged records in `semantic-records.ts`: pages, paragraph fragments,
@@ -87,7 +83,6 @@ import {
 } from './paragraph-style.ts';
 import {
   adjustedBreakIndex,
-  composeFlowKeys,
   keepNextChains,
   markJoinFlowKeys,
   paragraphKeeps,
@@ -238,6 +233,7 @@ export { type HeaderFooterVariantName, type PageFurniture } from './page-furnitu
 import type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 export type { SemanticLayoutOptions } from './semantic-layout-options.ts';
 import type { PreparedBlock, SectionPrepass } from './section-prepass-types.ts';
+import { sectionFlowKeys } from './section-flow-keys.ts';
 export type { SectionPrepass } from './section-prepass-types.ts';
 
 export type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
@@ -1004,47 +1000,22 @@ function* layoutBlocksPass(
       authorFilter,
       options.compatibilityMode
     );
-    const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
-    const markerTexts = prepared.map((entry) =>
-      entry.kind === 'paragraph' ? markerFlowToken(listItems?.get(entry.paragraph.id)) : undefined
-    );
-    // A paragraph's bottom edge belongs to its border GROUP, which the block after it can
-    // join or leave. A table never groups, and neither does a paragraph with no borders.
-    const borderGroupKeys = prepared.map((entry) =>
-      entry.kind === 'paragraph' ? entry.borderGroupKey : ''
-    );
-    // Which lines a TOC field's paragraphs emit at all, decided by the OTHER paragraphs of
-    // the same field. A part with no TOC skips the scan outright rather than asking three
-    // empty sets about every block it holds.
-    const tocVerdicts =
-      tocToken === ''
-        ? []
-        : prepared.map((entry) =>
-            entry.kind === 'paragraph' ? tocVerdictFor(entry.paragraph.id, tocIds) : ''
-          );
-
-    const lastBlock = prepared.at(-1);
-    const flow = composeFlowKeys(
-      leadingBreakGroups.flowKeys(
-        listAutoSpacingFlowKeys(
-          paragraphFrameFlowKeys(tableWrap.anchorFlowKeys(keys, positioned), prepared),
-          prepared
-        ),
-        prepared
-      ),
-      {
-        terminalTableGroup: terminalTextTables,
-        ...contextualFlowInputs(prepared, styleCascade),
-        borderGroupKeyAt: (index) => borderGroupKeys[index]!,
-        tocVerdicts,
-        markerTextAt: (index) => markerTexts[index],
-        keepsNextAt: (index) => keepsNext[index]! || keptTables.endsKept(prepared[index]),
-        tableAt: (index) => prepared[index]?.kind === 'table',
-        endsWithSectionMark:
-          lastBlock?.kind === 'paragraph' && !!paragraphSectionNode(lastBlock.paragraph),
-        skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
-      }
-    );
+    const {
+      flowKeys: flow,
+      keepsNext,
+      markerTexts,
+    } = sectionFlowKeys({
+      prepared,
+      keys,
+      positioned,
+      terminalTextTables,
+      styleCascade,
+      listItems,
+      tocToken,
+      tocIds,
+      leadingBreakFlowKeys: leadingBreakGroups.flowKeys,
+      keptTables,
+    });
 
     return {
       framePolicy,
