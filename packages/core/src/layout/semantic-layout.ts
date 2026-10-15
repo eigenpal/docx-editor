@@ -2638,7 +2638,8 @@ function* layoutBlocksPass(
             alignment === 'center' || alignment === 'right' ? measure.used : undefined,
             rtl,
             false,
-            pendingLine.spaceShrink === true
+            pendingLine.spaceShrink === true,
+            measure.passages
           ),
         (aligned) =>
           lineAlignOffset(placedSpans, aligned, alignment, measure.available, measure.used)

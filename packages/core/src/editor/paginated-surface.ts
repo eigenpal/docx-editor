@@ -19,6 +19,7 @@ import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
+import { REFRESH_WRITE_REFUSAL, UNEXPLAINED_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { browserInputPending } from './surface-input-pending.ts';
@@ -75,7 +76,7 @@ import { createContentControlHover } from './content-control-hover.ts';
 import { contentControlAtSelection } from './content-control-at-selection.ts';
 import { collapseHorizontalSelection as collapseSelection } from './surface-selection-collapse.ts';
 import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
-import { saveSurfaceDocument } from './docx-editor-save.ts';
+import { saveSurfaceDocument, saveSurfaceDocumentSteps } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
 import { beginSurfaceCommit, withSplitSelection } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
@@ -2868,9 +2869,9 @@ export function mountPaginatedSurface(
             actorId: collaborationSession.identity.actorId,
             operationId: `${collaborationSession.identity.actorId}:${collaborationSession.sessionId}:browser:${collaborationOperationCounter}`,
             recordsHistory: false,
-            historyGroup,
+            historyToken: historyGroup,
           }
-        : { packageEdits, historyGroup }
+        : { packageEdits, historyToken: historyGroup }
     );
   }
 
@@ -2893,7 +2894,7 @@ export function mountPaginatedSurface(
     // The PROTECTION write is document-wide, so neither the view nor where the caret happens
     // to sit has anything to say about it. Without the second exemption a caret parked in a
     // table of contents refused it with a reason about the table of contents.
-    if (refreshWriteBlocked(container)) return 'An external document refresh is in progress.';
+    if (refreshWriteBlocked(container)) return REFRESH_WRITE_REFUSAL;
     const protectionWrite = isDocumentProtectionBatch(ops);
     if (editingMode === 'view' && !protectionWrite) return VIEWING_REFUSAL;
     if (
@@ -3098,11 +3099,12 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  function commit(...args: Parameters<typeof commitNow>): void {
-    if (refreshWriteBlocked(container)) return;
+  /** The refusal (the refresh, reported, when the guard skips `run`), or null: landed or no-op. */
+  function commit(...args: Parameters<typeof commitNow>): string | null {
+    if (refreshWriteBlocked(container)) return refuse(REFRESH_WRITE_REFUSAL);
     const finish = beginSurfaceCommit(container);
     try {
-      commitNow(...args);
+      return commitNow(...args);
     } finally {
       finish();
     }
@@ -3123,7 +3125,7 @@ export function mountPaginatedSurface(
           readonly rearmPending?: ArmedFormat;
         }
       | undefined = {}
-  ): void {
+  ): string | null {
     // Any batched typing lands first as its own transaction, so this edit sees
     // the document and selection the user saw. Reentrancy-guarded: the flush
     // itself commits through here with an empty buffer.
@@ -3150,7 +3152,8 @@ export function mountPaginatedSurface(
     // Open until the post-edit caret is installed: the review, automation and undo selection
     // thunks read layout too. A throw skips `publishAfterCommit`, so it pays an owed paint.
     commitRunDepth += 1;
-    let refused = false;
+    // Returned rather than read back from `lastRejection`, which a listener can move.
+    let rejected: string | null = null;
     try {
       const result = commitHistoryGroup.around(
         surface,
@@ -3159,10 +3162,9 @@ export function mountPaginatedSurface(
         !options?.automation
       );
       const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
-      refused = rejection !== null;
       if (rejection) {
-        const raw = String(rejection.reason ?? 'rejected');
-        lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
+        const raw = String(rejection.reason ?? UNEXPLAINED_WRITE_REFUSAL);
+        rejected = lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
       } else {
         lastRejection = null;
         if (typeof result === 'boolean' ? result : result.committed) reportEdit();
@@ -3219,7 +3221,8 @@ export function mountPaginatedSurface(
     // nothing, so the surface still has to refresh the state it just changed. Under input
     // pressure the publish may hand layout+paint to the scheduler's own task — see
     // `publishAfterCommit`.
-    publishAfterCommit(refused);
+    publishAfterCommit(rejected !== null);
+    return rejected;
   }
 
   /**
@@ -5101,6 +5104,7 @@ export function mountPaginatedSurface(
     refreshToc,
     refreshRefFieldResults,
     save: () => saveSurfaceDocument(surface, container, () => destroyed),
+    saveSteps: () => saveSurfaceDocumentSteps(surface, container, () => destroyed),
     isInsideToc: (paragraphId) =>
       detectBodyTocs(session.part()).some(
         (toc) =>
@@ -5177,13 +5181,11 @@ export function mountPaginatedSurface(
           // Bound to the collaboration actor: review writes mint comment and content-control
           // ids outside `applyOps`, so nothing else would bind one. Two peers commenting on
           // the same snapshot would otherwise both take `w:id="${highest + 1}"`.
-          const result = runWithTransactionActor(collaborationSession?.identity.actorId, run);
-          return {
-            committed: result.committed,
-            rejected: !result.committed,
-            opCount: 0,
-            ...(typeof result.reason === 'string' ? { reason: result.reason } : {}),
-          };
+          const actor = collaborationSession?.identity.actorId;
+          const result = runWithTransactionActor(actor, () => run(commitHistoryGroup.value));
+          const reason = typeof result.reason === 'string' ? { reason: result.reason } : {};
+          const ok = result.committed;
+          return { committed: ok, rejected: !ok, opCount: 0, ...reason };
         },
         () => {
           // The layout is FLUSHED first, because the clamp needs post-edit lengths and this
@@ -5218,13 +5220,9 @@ export function mountPaginatedSurface(
     applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
       // Automation shares edit gates and repainting but retains its capture policy.
       // Its explicit story remains independent of the reader's active story.
-      let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
-        committed: false,
-        rejected: false,
-        opCount: 0,
-      };
+      let result: ReturnType<TreeDocxSession['applyTreeOps']> | null = null;
       const story = scope ?? BODY_STORY;
-      commit(
+      const refusal = commit(
         () => {
           // THE GATE BEFORE THE OPS EXIST. Building them mints the relationship an external
           // hyperlink names, which changes the PACKAGE — outside the transaction, outside the undo
@@ -5288,7 +5286,9 @@ export function mountPaginatedSurface(
         },
         { automation: true }
       );
-      return result;
+      // Null only when the refresh guard skipped the commit before the thunk ran.
+      const reason = refusal ?? UNEXPLAINED_WRITE_REFUSAL;
+      return result ?? { committed: false, rejected: true, opCount: 0, reason };
     },
 
     editingMode: () => editingMode,

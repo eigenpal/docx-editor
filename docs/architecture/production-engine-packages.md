@@ -17,17 +17,17 @@ The DAG was kept identical to the package graph it replaced. A lane quietly gain
 
 ## Lanes
 
-| Lane            | Directory           | Subpath           | May import                                                           | Environment |
-| --------------- | ------------------- | ----------------- | -------------------------------------------------------------------- | ----------- |
-| `contracts`     | `src/contracts`     | `./contracts`     | —                                                                    | neutral     |
-| `store`         | `src/store`         | `./store`         | —                                                                    | neutral     |
-| `collaboration` | `src/collaboration` | `./collaboration` | store                                                                | neutral     |
-| `binding`       | `src/binding`       | `./binding`       | contracts, store, collaboration                                      | browser     |
-| `layout`        | `src/layout`        | `./layout`        | contracts, store                                                                | neutral     |
-| `output`        | `src/output`        | `./output`        | contracts, store, layout                                                        | browser     |
-| `export`        | `src/export`        | `./export`        | contracts, store, layout | neutral |
-| `automation`    | `src/automation`    | `./automation`    | store, collaboration                                                 | neutral     |
-| `editor`        | `src/editor`        | `./editor`        | contracts, store, collaboration, binding, layout, output, automation | browser     |
+| Lane | Directory | Subpath | May import | Environment |
+| --- | --- | --- | --- | --- |
+| `contracts` | `src/contracts` | `./contracts` | — | neutral |
+| `store` | `src/store` | `./store` | — | neutral |
+| `collaboration` | `src/collaboration` | `./collaboration` | store | neutral |
+| `binding` | `src/binding` | `./binding` | contracts, store, collaboration | browser |
+| `layout` | `src/layout` | `./layout` | contracts, store | neutral |
+| `output` | `src/output` | `./output` | contracts, store, layout | browser |
+| `export` | `src/export` | `./export` | contracts, store, layout | neutral |
+| `automation` | `src/automation` | `./automation` | contracts, store, collaboration, layout, export | neutral |
+| `editor` | `src/editor` | `./editor` | contracts, store, collaboration, binding, layout, output, automation | browser |
 
 Responsibilities:
 
@@ -37,7 +37,7 @@ Responsibilities:
 - **`binding`** — the ONLY ProseMirror-aware lane: projects a tree revision into a PM doc, and maps an edited doc back into tree ops or refuses.
 - **`layout`** — resolved caches, shaping, convergent pagination, positioned semantic layout records. Emits geometry, never paints.
 - **`output`** — the painter over those records. Never rederives geometry or interprets CSS.
-- **`automation`** — the transport-neutral host port an automation object model programs against (`@docx-editor.dev/editor-api`). Store and nothing else: a server has to be able to run it, so reaching into binding, output or editor would put a DOM in a headless host.
+- **`automation`** — the transport-neutral host port an automation object model programs against (`@docx-editor.dev/editor-api`). It reaches the store, collaboration, layout and export lanes, and contracts only for DOM-free public types such as the editor's `HistoryGroup` handle. A server has to be able to run it, so reaching into binding, output or editor would put a DOM in a headless host.
 - **`editor`** — the browser composition root. Composes the tree session, pagination and the paginated surface into the `Editor`/`EditorHost` contract.
 
 Layout, output, and export share revision markup settings through the runtime-neutral contracts lane. This keeps settings validation and defaults consistent.

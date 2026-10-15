@@ -100,6 +100,12 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'Document protection allows edits only as tracked changes. Switch to suggesting mode, or set document.changeTrackingMode to TrackMineOnly in an editing API batch, then edit again.',
   'edit.tracked-image-replace-unsupported':
     'Replacing a picture cannot be recorded as a tracked change, so the picture did not change. Insert the new picture as a tracked insertion, or ask a person to replace it with tracking off.',
+  'edit.tracked-deleted-text-only':
+    'The tracked deletion or replacement covers only text that is already deleted, so nothing was applied. Include live text in the range, or insert next to the deleted text instead.',
+  'edit.tracked-foreign-revision-unsupported':
+    "The tracked edit touches another author's pending change in a way this editor cannot record: their paragraph mark, formatting, move, or structural change, a link or content control inside their insertion, or, in a collaboration session, strikes over another author's pending insertion or deletion, and edits that start inside or right after one. Nothing was applied. Edit outside that change, or leave it for a person to review first.",
+  'edit.tracked-own-pending-change':
+    'The tracked edit covers or borders your own pending change and would merge with that decision, so nothing was applied. Edit outside your pending change, or reject it and edit again.',
   'edit.picture-selected':
     'A picture is selected, so the new picture has no place to go and nothing was inserted. Place the caret in text next to the picture, then insert again.',
   'edit.cross-structure-join':
@@ -125,7 +131,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.unmapped-change':
     'The browser changed the page in a way the editor could not express as a document edit, so the change was undone.',
   'edit.stale-target':
-    'The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry.',
+    'The operation addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry.',
   'edit.invalid-argument':
     'The command arguments are not valid for this target. Check the command type and its fields.',
   'edit.resource-limit':

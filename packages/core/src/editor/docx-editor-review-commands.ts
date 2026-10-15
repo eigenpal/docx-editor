@@ -37,6 +37,7 @@ import {
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { EditorDiagnostics } from './editor-diagnostics.ts';
 import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
+import { reviewWriteRefusal } from './review-write-refusal.ts';
 import {
   findReviewPlacement,
   isReplacementPairKey,
@@ -366,16 +367,11 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       .placements({ placement: false, pairReplacements: false })
       .find((placement) => placement.isActive)?.key;
     let applied: { committed: boolean; reason?: unknown } | undefined;
-    surface.commitReviewOps(() => {
-      applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
+    const refused = surface.commitReviewOps((historyToken) => {
+      applied = surface.session.applyTreeOpsAtomic(groups, { partOps, historyToken });
       return applied;
     }, 'revision-attribution');
-    if (!applied?.committed)
-      return {
-        ok: false,
-        code: 'unsupported',
-        reason: typeof applied?.reason === 'string' ? applied.reason : 'the changes were refused',
-      };
+    if (!applied?.committed) return reviewWriteRefusal(refused, 'the changes were refused');
     const result = plan!.finish();
     // Keys include the author, so an active card keeps its place under its new key.
     const moved = result.updated.find((entry) => entry.previousKey === active);
@@ -431,13 +427,15 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const gate = ready();
     if (!gate.ok) return gate;
     if (deps.viewing()) {
-      deps
+      // The surface's own answer: a refresh holding the guard is reported, and answered, as
+      // the refresh rather than as viewing.
+      const refused = deps
         .surface()!
         .commitReviewOps(
           () => ({ committed: false, reason: 'the document is open for viewing' }),
           'revision-resolve'
         );
-      return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+      return reviewWriteRefusal(refused, 'the document is open for viewing', 'locked');
     }
     const protectedWrite = commandProtectionRefusal(
       { type: 'resolveAllReviewChanges', action },
@@ -455,12 +453,13 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         reason: READ_ONLY_REVISION_REASON,
       };
     let applied: { committed: boolean; reason?: unknown } | undefined;
-    deps.surface()!.commitReviewOps(() => {
+    const refused = deps.surface()!.commitReviewOps((historyToken) => {
       const session = deps.surface()!.session;
       const part = partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
       if (part && part.name === stylesPartOf(session.currentPackage())?.name) {
         applied = session.applyTreeOpsAtomic([], {
           partOps: [{ partName: part.name, ops: resolutionOps(item, action, part) }],
+          historyToken,
         });
         return applied;
       }
@@ -470,16 +469,12 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           resolutionOps(item, action, deps.surface()!.session.partFor(deps.scope(item))),
           undefined,
           undefined,
-          deps.scope(item)
+          deps.scope(item),
+          { historyToken }
         );
       return applied;
     }, 'revision-resolve');
-    if (!applied?.committed)
-      return {
-        ok: false,
-        code: 'unsupported',
-        reason: typeof applied?.reason === 'string' ? applied.reason : 'the revision was refused',
-      };
+    if (!applied?.committed) return reviewWriteRefusal(refused, 'the revision was refused');
     return { ok: true, changed: true };
   };
   const exec = (command: EditorCommand): ExecResult | null => {
@@ -542,16 +537,11 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     if (command.type !== 'resolveAllReviewChanges') return null;
     const { groups, partOps, result } = bulkPlan(command);
     let applied: { committed: boolean; reason?: unknown } | undefined;
-    surface.commitReviewOps(() => {
-      applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
+    const refused = surface.commitReviewOps((historyToken) => {
+      applied = surface.session.applyTreeOpsAtomic(groups, { partOps, historyToken });
       return applied;
     }, 'revision-resolve');
-    if (!applied?.committed)
-      return {
-        ok: false,
-        code: 'unsupported',
-        reason: typeof applied?.reason === 'string' ? applied.reason : 'the revisions were refused',
-      };
+    if (!applied?.committed) return reviewWriteRefusal(refused, 'the revisions were refused');
     deps.activate(null);
     return { ok: true, changed: true, revisions: { ...result, remaining: all().length } };
   };

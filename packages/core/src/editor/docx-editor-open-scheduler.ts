@@ -12,6 +12,7 @@
 // synchronously by definition.
 
 import { hostTimers, hostWindowOf } from './host-realm.ts';
+import { queueTask } from './sliced-steps.ts';
 
 /**
  * The UNCOMPRESSED size past which an open earns a painted loading frame first.
@@ -124,23 +125,6 @@ interface ScheduledOpen {
 
 /** The work one opening slice aims to do, in milliseconds. */
 const OPEN_SLICE_MS = 40;
-
-/**
- * Queue `run` as a new task. A message port, not a timer: nested timers are clamped to 4 ms
- * each, which a few hundred slices would turn into idle seconds.
- */
-function queueTask(run: () => void, view: Window): void {
-  if (typeof MessageChannel !== 'function') {
-    view.setTimeout(run, 0);
-    return;
-  }
-  const channel = new MessageChannel();
-  channel.port1.onmessage = () => {
-    channel.port1.close();
-    run();
-  };
-  channel.port2.postMessage(null);
-}
 
 /** The deferred-mount window, owned by the facade. See the module comment. */
 export interface OpenScheduler {

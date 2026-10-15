@@ -756,6 +756,45 @@ function validateContractShape(contract) {
   return errors;
 }
 
+/**
+ * `adapterMemberCheckedInterfaces`: interfaces both adapter entries export whose member
+ * NAMES must match (types are not compared), such as `ReviewRailRegistry`, which pro builds on in both adapters. A
+ * listed interface missing from either snapshot fails, so the list cannot go stale.
+ */
+function checkAdapterInterfaceMembers(contract, reactSnapshot, vueSnapshot, issues) {
+  const names = contract.adapterMemberCheckedInterfaces;
+  // Required and non-empty: a missing or misspelled key would otherwise pass vacuously.
+  if (!Array.isArray(names) || names.length === 0) {
+    issues.push('contract.adapterMemberCheckedInterfaces must be a non-empty array');
+    return { interfaces: 0, memberChecks: 0 };
+  }
+  const reactDecls = extractInterfaceDecls(reactSnapshot);
+  const vueDecls = extractInterfaceDecls(vueSnapshot);
+  let memberChecks = 0;
+  for (const name of names) {
+    if (!reactDecls.has(name) || !vueDecls.has(name)) {
+      issues.push(`ADAPTER INTERFACE '${name}' is listed but not exported by both entries`);
+      continue;
+    }
+    const reactFields = effectiveInterfaceFields(reactSnapshot, reactDecls, name);
+    const vueFields = effectiveInterfaceFields(vueSnapshot, vueDecls, name);
+    if (reactFields.size === 0 || vueFields.size === 0) {
+      issues.push(`ADAPTER INTERFACE '${name}' resolved to zero members in a snapshot`);
+      continue;
+    }
+    for (const k of reactFields) {
+      memberChecks++;
+      if (!vueFields.has(k))
+        issues.push(`ADAPTER INTERFACE '${name}': member '${k}' missing from Vue`);
+    }
+    for (const k of vueFields) {
+      if (!reactFields.has(k))
+        issues.push(`ADAPTER INTERFACE '${name}': member '${k}' missing from React`);
+    }
+  }
+  return { interfaces: names.length, memberChecks };
+}
+
 function main() {
   for (const f of [
     REACT_SNAPSHOT,
@@ -945,6 +984,9 @@ function main() {
     }
   }
 
+  // ── Adapter interfaces ───────────────────────────────────────────────────
+  const adapterStats = checkAdapterInterfaceMembers(contract, reactSnapshot, vueSnapshot, issues);
+
   // ── Pro entries ──────────────────────────────────────────────────────────
   const proReactSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_REACT_SNAPSHOT, 'utf8'));
   const proVueSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_VUE_SNAPSHOT, 'utf8'));
@@ -983,6 +1025,9 @@ function main() {
   console.log(`  Paired ref members:    ${refPaired.length}`);
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);
   console.log(`  Vue-exclusive refs:    ${refVueOnly.length}`);
+  console.log(
+    `  Adapter member-checked interfaces: ${adapterStats.interfaces} (${adapterStats.memberChecks} member checks)`
+  );
   console.log(
     `  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`
   );

@@ -134,7 +134,9 @@
     "addSpaceBefore": "Adicionar espaço antes do parágrafo",
     "removeSpaceAfter": "Remover espaço depois do parágrafo",
     "removeSpaceBefore": "Remover espaço antes do parágrafo",
-    "options": "Opções de espaçamento entre linhas…"
+    "options": "Opções de espaçamento entre linhas…",
+    "exactlyPoints": "Exatamente {value} pt",
+    "atLeastPoints": "Pelo menos {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Selecionar estilo de parágrafo",
@@ -801,6 +803,12 @@
     "replacedWith": "por",
     "reply": "Responder",
     "replyRefused": "Não foi possível publicar a resposta",
+    "refusedRefresh": "O documento está sendo atualizado. Tente novamente em instantes.",
+    "refusedViewing": "O documento está aberto para visualização.",
+    "refusedProtected": "Esta parte do documento está protegida.",
+    "refusedCollaboration": "Aguardando a sessão compartilhada. Tente novamente em instantes.",
+    "refusedSessionEnded": "A sessão compartilhada terminou. Recarregue o documento para continuar a revisão.",
+    "actionRefused": "Não foi possível fazer esta alteração",
     "showPane": "Mostrar comentários",
     "structural": "Estrutura do documento alterada",
     "deleteComment": "Excluir comentário",

@@ -14,7 +14,8 @@ A declaration or enum value does not guarantee runtime support for every documen
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
 | `DocxEditor`, `DocxEditorNamespace` | `createServer`, `createCollaborative`; browser entry adds `createBrowser` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
-| `DocxEditorRuntime`, `DocxEditorServerRuntime` | `capabilities`, both `run` overloads, `dispose`; server adds `save` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `DocxEditorRuntime`, `DocxEditorServerRuntime` | `capabilities`, the three `run` overloads (callback, objects and callback, options and callback), `dispose`; server adds `save` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `RunOptions`, `HistoryGroup`, `HistoryGroupOutcome` | `historyGroup` (browser runtime only), `previousObjects`; the editor history group handle's `state`, `lastOutcome`, and `end` | [Join an editor history group](/docs/2.x/editor-api/runtime#join-an-editor-history-group) |
 | `CreateServerOptions`, `CreateCollaborativeOptions`, `CreateBrowserOptions` | Author, revision view, host-specific parsing, modules, and pagination | [Runtime and setup](/docs/2.x/editor-api/runtime) |
 | `DocumentCapabilities` | `document`, `save`, `events`, `selection`, `scrolling`, `layout` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
 | `DocumentLimits`, `DocumentZipLimits`, `DocumentXmlLimits`, `EditorModule`, `RuntimeDiagnostic` | Input budgets, DOM-free module contributions, and the anonymous diagnostics a module with `onDiagnostic` receives | [Runtime and setup](/docs/2.x/editor-api/runtime) |
@@ -23,7 +24,7 @@ A declaration or enum value does not guarantee runtime support for every documen
 | `ClientObject` | Inherited `context`, `isNullObject`, and `load` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `ClientResult` | `value`, `isLoaded`; returned by `RevisionCollection.resolve()` and `setAuthor()` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `TrackedObjects` | `add`, `remove`, each accepting one object or an array | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
-| `LoadOption`, `LoadQueryOptions` | Explicit property names; `select`, `top`, `skip`; reserved `expand` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
+| `LoadOption`, `LoadQueryOptions` | Explicit property names and `items/<property>` paths on collections; `select`, `top`, `skip`; reserved `expand` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `DocxEditorError`, `DocxEditorErrorInit`, `DocxEditorErrorCode`, `DocxEditorDebugInfo`, `DocxEditorInnerError`, `isDocxEditorError` | Stable error codes, `target`, resource limit, revision metadata, and `debugInfo` with the engine reason as `innerError` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 
 ## Document and text objects
@@ -36,7 +37,7 @@ Every model object inherits the common `ClientObject` members. Each collection a
 | `RemoveDocInfoType` | All standard enum values; only `documentProperties` removal is supported | [Remove document properties](#remove-document-properties) |
 | `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category`, read-only `lastAuthor` | [Document properties](#document-properties) |
 | `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`; `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `shapes`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
-| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
+| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `search`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
 | `Range` | `text`, `paragraphs`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertBreak`, `insertContentControl`, `insertComment` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
 | `ParagraphCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `RangeCollection` | `getFirst`, `getLast`, `getFirstOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |

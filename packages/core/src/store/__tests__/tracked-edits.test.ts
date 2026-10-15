@@ -158,7 +158,7 @@ describe('a tracked insertion', () => {
     expect(out).toContain('<w:t>rest</w:t>');
   });
 
-  test("another author's insertion nests, because it is a second proposal", () => {
+  test("inside another author's insertion, their wrapper splits around a second proposal", () => {
     const before = part(
       `<w:p><w:ins w:id="1" w:author="Alan Turing"><w:r><w:t>abcd</w:t></w:r></w:ins></w:p>`
     );
@@ -170,9 +170,12 @@ describe('a tracked insertion', () => {
       revision: ADA,
     });
     const out = xml(after);
-    expect(out.match(/<w:ins\b/g)?.length).toBe(2);
-    expect(out).toMatch(/w:author="Ada Lovelace"/);
-    expect(out).toMatch(/w:author="Alan Turing"/);
+    // Nested, the new words would belong to their proposal: rejecting theirs would remove
+    // these, and accepting these would leave them pending inside theirs. Side by side, each
+    // is its own decision, and their two halves keep one revision identity.
+    expect(out).toMatch(
+      /<w:ins w:author="Alan Turing" w:id="1"><w:r><w:t>ab<\/w:t><\/w:r><\/w:ins><w:ins w:author="Ada Lovelace"[^>]*><w:r><w:t>XY<\/w:t><\/w:r><\/w:ins><w:ins w:author="Alan Turing" w:id="1"><w:r><w:t>cd<\/w:t><\/w:r><\/w:ins>/
+    );
   });
 });
 
@@ -951,4 +954,26 @@ describe('a tracked page field', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe('invalid-property-value');
   });
+});
+
+describe("a tracked insertion inside a container within another author's insertion", () => {
+  for (const [name, opening, closing] of [
+    ['link', '<w:hyperlink w:anchor="target">', '</w:hyperlink>'],
+    ['content control', '<w:sdt><w:sdtPr/><w:sdtContent>', '</w:sdtContent></w:sdt>'],
+  ] as const) {
+    test(`refuses inside a ${name}, which cannot split`, () => {
+      const before = part(
+        `<w:p><w:ins w:id="1" w:author="Alan Turing">${opening}<w:r><w:t>abcd</w:t></w:r>${closing}</w:ins></w:p>`
+      );
+      const result = applyTreeOp(before, {
+        op: 'insertText',
+        paragraphId: paragraphId(before),
+        offset: 2,
+        text: 'XY',
+        revision: ADA,
+      });
+      // Nested inside their proposal, rejecting it would remove these words.
+      expect(result).toMatchObject({ ok: false, reason: 'unsupported-revision:foreign-insertion' });
+    });
+  }
 });

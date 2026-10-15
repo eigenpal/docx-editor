@@ -307,6 +307,12 @@ Use one of these save paths:
 
 `save()` on the ref resolves `null` when no editor is mounted, so guard the result. `Editor.save()` returns an `ArrayBuffer` on success and rejects when saving fails.
 
+### What a save includes
+
+A save describes the document at the moment you call `save()`. The editor captures the document first and then writes the file in short steps. Typing, scrolling, and other scripts on the page run between those steps. Edits made while a save runs go into the next save. The promise still resolves with the captured document if you load another document before it finishes.
+
+The editor reuses the written form of paragraphs and table rows that have not changed since an earlier save. A save after a small edit to a long document therefore does much less work than the first save of that document.
+
 ### Field result refresh
 
 Save validates pending protected form input. It applies the field format using the locale active when you entered the value. Invalid input rejects with code `invalidArgs`. The editor keeps the input without opening an alert. Collaborative sessions reject saves that require form-field formatting.
@@ -339,7 +345,7 @@ async function downloadDocx(ref: DocxEditorRef, fileName: string) {
 
 ## Autosave
 
-Debounce the save call when the document reports a change. These examples use your application's document endpoint.
+Debounce the save call when the document reports a change. Run one save at a time: if the document changes while a save runs, save once more when it finishes. These examples use your application's document endpoint.
 
 Render each autosave component with a key based on `docId`. This keeps its timers and pending saves associated with one document.
 
@@ -353,6 +359,8 @@ import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Array }) {
   const ref = useRef<DocxEditorRef>(null);
   const timer = useRef<number | null>(null);
+  const saving = useRef(false);
+  const changedWhileSaving = useRef(false);
 
   useEffect(
     () => () => {
@@ -361,21 +369,34 @@ export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Ar
     []
   );
 
+  const persist = async () => {
+    if (saving.current) {
+      changedWhileSaving.current = true;
+      return;
+    }
+    saving.current = true;
+    try {
+      const buf = await ref.current?.save();
+      if (!buf) return;
+      const response = await fetch(`/api/documents/${encodeURIComponent(docId)}`, {
+        method: 'PUT',
+        body: buf,
+      });
+      if (!response.ok) throw new Error(`Save failed: ${response.status}`);
+    } catch (error) {
+      console.error('Autosave failed', error);
+    } finally {
+      saving.current = false;
+      if (changedWhileSaving.current) {
+        changedWhileSaving.current = false;
+        void persist();
+      }
+    }
+  };
+
   const onChange = () => {
     if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(async () => {
-      try {
-        const buf = await ref.current?.save();
-        if (!buf) return;
-        const response = await fetch(`/api/documents/${encodeURIComponent(docId)}`, {
-          method: 'PUT',
-          body: buf,
-        });
-        if (!response.ok) throw new Error(`Save failed: ${response.status}`);
-      } catch (error) {
-        console.error('Autosave failed', error);
-      }
-    }, 1500);
+    timer.current = window.setTimeout(() => void persist(), 1500);
   };
 
   return <DocxEditor ref={ref} document={bytes} onChange={onChange} />;
@@ -393,22 +414,37 @@ import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 const props = defineProps<{ docId: string; bytes: Uint8Array }>();
 const editorRef = ref<DocxEditorRef | null>(null);
 let timer: number | null = null;
+let saving = false;
+let changedWhileSaving = false;
+
+async function persist() {
+  if (saving) {
+    changedWhileSaving = true;
+    return;
+  }
+  saving = true;
+  try {
+    const buf = await editorRef.value?.save();
+    if (!buf) return;
+    const response = await fetch(`/api/documents/${encodeURIComponent(props.docId)}`, {
+      method: 'PUT',
+      body: buf,
+    });
+    if (!response.ok) throw new Error(`Save failed: ${response.status}`);
+  } catch (error) {
+    console.error('Autosave failed', error);
+  } finally {
+    saving = false;
+    if (changedWhileSaving) {
+      changedWhileSaving = false;
+      void persist();
+    }
+  }
+}
 
 function onChange() {
   if (timer !== null) window.clearTimeout(timer);
-  timer = window.setTimeout(async () => {
-    try {
-      const buf = await editorRef.value?.save();
-      if (!buf) return;
-      const response = await fetch(`/api/documents/${encodeURIComponent(props.docId)}`, {
-        method: 'PUT',
-        body: buf,
-      });
-      if (!response.ok) throw new Error(`Save failed: ${response.status}`);
-    } catch (error) {
-      console.error('Autosave failed', error);
-    }
-  }, 1500);
+  timer = window.setTimeout(() => void persist(), 1500);
 }
 
 onBeforeUnmount(() => {
@@ -425,6 +461,16 @@ onBeforeUnmount(() => {
 </FrameworkTabs>
 
 Choose a debounce interval that matches your API's write limits. For overlapping requests, use server-side revision checks to reject stale writes. Show save failures in your application so users can retry.
+
+### Autosave long documents
+
+You don't need a web worker or your own scheduling to keep the editor responsive during autosave. `save()` already writes the file in short steps, so the page keeps handling input while a save runs. For more information, see [What a save includes](#what-a-save-includes).
+
+The first save of a long document does the most work, because no paragraph has been written yet. Later saves rewrite only the paragraphs and table rows that changed. Keep these points in mind for long documents:
+
+- Save when the document reports a change, not on a fixed timer. A save of an unchanged document repeats the last result, but a timer still sends the same file to your server each time.
+- Keep one save in flight, as the examples do. A second save that starts during the first one repeats work that the next save does anyway.
+- Upload the saved `ArrayBuffer` as it is. The file is already compressed, so compressing it again on the main thread adds work for no gain.
 
 ## Accept server updates
 

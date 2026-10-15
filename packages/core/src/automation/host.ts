@@ -23,6 +23,7 @@ import {
   type LocalTrackingState,
 } from './change-tracking.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
@@ -72,6 +73,12 @@ function storeTransactionError(reason: string): AutomationError {
     return automationError(
       'unsupported-capability',
       'this edit requires a supported review mode',
+      reason
+    );
+  if (reason === 'unsupported-revision:foreign-insertion')
+    return automationError(
+      'unsupported-revision',
+      "the new text would land inside a container within another author's pending insertion",
       reason
     );
   const unsupported =
@@ -197,6 +204,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         );
     }
 
+    const allocationActor = port.allocationActor?.();
     const planner = createBatchPlanner({
       handles,
       reads: start,
@@ -270,7 +278,10 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         policy?.step ??
         trackPlannedChanges(
           operation,
-          planner.plan(operation, stagedTracking.author),
+          // Planned under the actor the commit binds. See `AutomationDocumentPort.allocationActor`.
+          runWithTransactionActor(allocationActor, () =>
+            planner.plan(operation, stagedTracking.author)
+          ),
           stagedTracking.author
         );
       if (policy) stagedTracking = policy.state;

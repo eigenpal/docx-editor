@@ -877,6 +877,18 @@ export const DocxEditorReview: {
             top: number;
         } | null;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Refusal: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+    }>> & Readonly<{}>, {
+        asChild: boolean;
+        hidden: boolean;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Reject: vue.DefineComponent<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
         className: StringConstructor;
@@ -1139,6 +1151,27 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
+export interface ReviewRailMetrics {
+    readonly compact: boolean;
+    readonly compactCardLeft: number | null;
+    readonly left: number | null;
+    readonly scale: number;
+    readonly top: number;
+}
+
+// @public
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+
+// @public
+export interface ReviewWriteRefusal {
+    readonly action: ReviewWriteAction;
+    readonly code: EditDiagnosticCode;
+    readonly final: boolean;
+    readonly key: string | null;
+    readonly sequence: number;
+}
+
+// @public
 export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
@@ -1214,6 +1247,20 @@ export function useReviewItem(): ComputedRef<ReviewItemView | null>;
 // @public (undocumented)
 export function useReviewOf(editorRef: Ref<Editor | null>, query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;
 
+// @public
+export function useReviewRailMetrics(railRef?: MaybeRefOrGetter<HTMLElement | null> | null, options?: MaybeRefOrGetter<UseReviewRailMetricsOptions | undefined>): UseReviewRailMetricsReturn;
+
+// @public
+export interface UseReviewRailMetricsOptions {
+    readonly reserveGutter?: boolean;
+    readonly trackScroll?: boolean;
+}
+
+// @public
+export interface UseReviewRailMetricsReturn {
+    readonly metrics: Readonly<Ref<ReviewRailMetrics>>;
+}
+
 // @public (undocumented)
 export interface UseReviewReturn {
     // (undocumented)
@@ -1227,6 +1274,7 @@ export interface UseReviewReturn {
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
     // (undocumented)
     readonly items: ComputedRef<readonly ReviewItemView[]>;
+    readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;
     // (undocumented)
     readonly paneOpen: ComputedRef<boolean>;
     // (undocumented)
@@ -1248,7 +1296,7 @@ export interface UseReviewReturn {
     readonly setPaneOpen: (open: boolean) => void;
 }
 
-// @public (undocumented)
+// @public
 export function useStackedReviewPositions(items: MaybeRefOrGetter_2<readonly {
     readonly anchorY: number | null;
     readonly key: string;

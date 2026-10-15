@@ -52,12 +52,15 @@ export {
   DocxEditorReview,
   useReviewAuthor,
   useReviewItem,
+  useReviewRailMetrics,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
   type ReviewBalloonProps,
   type ReviewMarkersProps,
   type ReviewPartProps,
   type ReviewProps,
+  type ReviewRailMetrics,
+  type UseReviewRailMetricsOptions,
 } from './DocxEditorReview';
 export {
   DocxEditorCollaboration,
@@ -96,6 +99,7 @@ export {
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview';
+export type { ReviewWriteAction, ReviewWriteRefusal } from '../review/review-refusal.ts';
 export {
   useCollaborationStatus,
   type UseCollaborationStatusReturn,

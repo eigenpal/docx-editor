@@ -96,6 +96,16 @@ export interface AutomationDocumentPort {
   readonly localChangeTracking?: true;
   /** True when a live collaboration session replicates package edits. */
   readonly collaborative?: () => boolean;
+  /**
+   * The collaboration actor this owner's commits mint ids under, or undefined when it has none.
+   *
+   * Return exactly the actor that `apply` binds for its transaction (`TransactOptions.actorId`
+   * or `runWithTransactionActor`). The host plans each operation under it, because a planner
+   * previews package allocations (a picture's `wp:docPr/@id`, relationship id and media part
+   * name) that the commit then makes again. A different actor makes those commits refuse as
+   * `package-changed`.
+   */
+  readonly allocationActor?: () => string | undefined;
   /** False when concurrent character insertion cannot retain tracked replacement coverage. */
   readonly trackedRangeReplacement?: () => boolean;
   /** The owner UI requires edits to be tracked even when this automation runtime is Off. */

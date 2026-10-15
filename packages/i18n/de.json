@@ -134,7 +134,9 @@
     "addSpaceBefore": "Abstand vor Absatz hinzufügen",
     "removeSpaceAfter": "Abstand nach Absatz entfernen",
     "removeSpaceBefore": "Abstand vor Absatz entfernen",
-    "options": "Zeilenabstandsoptionen…"
+    "options": "Zeilenabstandsoptionen…",
+    "exactlyPoints": "Genau {value} pt",
+    "atLeastPoints": "Mindestens {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Absatzformatvorlage auswählen",
@@ -801,6 +803,12 @@
     "replacedWith": "durch",
     "reply": "Antworten",
     "replyRefused": "Die Antwort konnte nicht gesendet werden",
+    "refusedRefresh": "Das Dokument wird aktualisiert. Versuchen Sie es gleich noch einmal.",
+    "refusedViewing": "Das Dokument ist zum Anzeigen geöffnet.",
+    "refusedProtected": "Dieser Teil des Dokuments ist geschützt.",
+    "refusedCollaboration": "Warten auf die gemeinsame Sitzung. Versuchen Sie es gleich noch einmal.",
+    "refusedSessionEnded": "Die gemeinsame Sitzung wurde beendet. Laden Sie das Dokument neu, um weiter zu prüfen.",
+    "actionRefused": "Diese Änderung konnte nicht vorgenommen werden",
     "showPane": "Kommentare anzeigen",
     "structural": "Dokumentstruktur geändert",
     "deleteComment": "Kommentar löschen",

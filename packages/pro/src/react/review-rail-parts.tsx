@@ -52,6 +52,7 @@ import {
   ReviewAuthor,
   ReviewAvatar,
   ReviewBalloonReply,
+  ReviewRefusal,
   ReviewCard,
   ReviewEmpty,
   ReviewReject,
@@ -677,6 +678,7 @@ export function ReviewBalloon({ className, hidden }: ReviewBalloonProps) {
                   ) : null}
                 </div>
                 {changeBalloon ? <BalloonChangeSummary entry={shownEntry} /> : <ReviewSummary />}
+                <ReviewRefusal />
                 {changeBalloon ? (
                   <>
                     <ReviewReplies />

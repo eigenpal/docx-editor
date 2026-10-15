@@ -118,6 +118,20 @@ describe('paragraph reads answer the cascade, not its floor', () => {
     expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 2 });
   });
 
+  test('a cascade that states no line spacing reads as the single spacing it lays out at', () => {
+    const editor = mount('<w:p><w:r><w:t>alpha</w:t></w:r></w:p>', AUTOSPACING_STYLES);
+    expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1 });
+    expect(editor.snapshot().formatting?.disagrees.lineSpacing).toBe(false);
+  });
+
+  test('an exact line spacing reads in points', () => {
+    const editor = mount(
+      '<w:p><w:pPr><w:spacing w:line="250" w:lineRule="exact"/></w:pPr>' +
+        '<w:r><w:t>alpha</w:t></w:r></w:p>'
+    );
+    expect(editor.snapshot().formatting?.lineSpacing).toEqual({ rule: 'exact', value: 12.5 });
+  });
+
   test('a style-supplied value reads through, and a press over it reads back', () => {
     const editor = mount(FANCY);
     expect(editor.snapshot().formatting?.alignment).toBe('center');

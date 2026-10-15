@@ -38,6 +38,7 @@ import type { ParagraphAnchorIndex } from './paragraph-anchors.ts';
 import type { RunPropertyLike, StyleRunDefaults } from './document-run-defaults.ts';
 import type { DocumentTrackingSettings } from '../store/package/tracking-settings.ts';
 import type { DocumentProperties } from '../store/package/document-properties.ts';
+import type { HistoryGroup } from '../store/store/history-group.ts';
 
 /**
  * What applying ops produced: whether it committed, and why not when it did not.
@@ -56,13 +57,23 @@ export interface TreeApplyResult {
 /** Optional collaboration attribution and history grouping for a direct tree-op transaction. */
 export type TreeApplyOptions = Pick<
   TreeTransactOptions,
-  'origin' | 'actorId' | 'operationId' | 'recordsHistory' | 'historyGroup'
+  'origin' | 'actorId' | 'operationId' | 'recordsHistory'
 > & {
+  /** The store token of the commit's history group, as `commitReviewOps` hands it over. */
+  readonly historyToken?: HistoryGroup;
+  /** @deprecated Use `historyToken`, the same store token under its one name. */
+  readonly historyGroup?: HistoryGroup;
   /** Package resources committed in the same transaction as the tree operations. */
   readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
   /** Canonical operations on related package parts, committed in the same undo unit. */
   readonly partOps?: readonly { readonly partName: string; readonly ops: readonly TreeDocOp[] }[];
 };
+
+/** History grouping for a comment or custom-node write: frames of one group share one undo step. */
+export interface PackageWriteOptions {
+  /** The store token of the commit's history group, as `commitReviewOps` hands it over. */
+  readonly historyToken?: HistoryGroup;
+}
 
 /**
  * One open document: the canonical tree, and the only write path into it.
@@ -161,6 +172,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
   collaborationPort(documentId: string): CollaborationDocumentPort;
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
+  /**
+   * {@link save} in steps a caller can pause between. The package is captured at the call, so
+   * the bytes describe the document as it was then, whatever happens between steps.
+   */
+  saveSteps(): Generator<void, Uint8Array>;
   /**
    * The resolved header/footer parts of the section, by variant (phase 2).
    *
@@ -314,7 +330,8 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     date?: string,
     scope?: StoryScope,
     /** Binds id allocation to one actor, so two peers cannot mint the same comment id. */
-    actorId?: string
+    actorId?: string,
+    options?: PackageWriteOptions
   ): string | null;
   /**
    * Resolve a comment thread, or reopen it. False when the document holds no such comment.
@@ -323,7 +340,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * `commentsExtended.xml`, a part a document with no thread does not have, so the state and the
    * part that records it commit together.
    */
-  setCommentResolved(commentId: string, resolved: boolean): boolean;
+  setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
   /**
    * Delete a comment thread outright — body, thread state and story markers.
    *
@@ -332,7 +349,12 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * shared notes part. False when the document holds no such comment, or when the removal was
    * refused.
    */
-  deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+  deleteComment(
+    commentId: string,
+    scope?: StoryScope,
+    noteId?: number,
+    options?: PackageWriteOptions
+  ): boolean;
   /**
    * Delete several comment objects as one package transaction and one undo unit.
    *
@@ -342,7 +364,8 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
   deleteComments(
     comments: readonly { readonly commentId: string; readonly parentCommentId?: string }[],
     scope?: StoryScope,
-    noteId?: number
+    noteId?: number,
+    options?: PackageWriteOptions
   ): boolean;
   /**
    * Insert a custom node, with the payload it carries, as ONE transaction.
@@ -355,7 +378,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    * to live in its `w:tag` needs.
    */
   /** `scope` names the story the paragraph is in, and defaults to the body. */
-  insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+  insertCustomNode(
+    write: InsertCustomNodeWrite,
+    scope?: StoryScope,
+    options?: PackageWriteOptions
+  ): CustomNodeWriteResult;
   /**
    * Remove a custom node and, in the same transaction, the payload it bound.
    *

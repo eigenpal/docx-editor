@@ -134,7 +134,9 @@
     "addSpaceBefore": "Tambahkan spasi sebelum paragraf",
     "removeSpaceAfter": "Hapus spasi setelah paragraf",
     "removeSpaceBefore": "Hapus spasi sebelum paragraf",
-    "options": "Opsi penspasian baris…"
+    "options": "Opsi penspasian baris…",
+    "exactlyPoints": "Tepat {value} pt",
+    "atLeastPoints": "Sedikitnya {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Pilih gaya paragraf",
@@ -801,6 +803,12 @@
     "replacedWith": "dengan",
     "reply": "Balas",
     "replyRefused": "Tidak dapat mengirim balasan",
+    "refusedRefresh": "Dokumen sedang dimuat ulang. Coba lagi sebentar lagi.",
+    "refusedViewing": "Dokumen dibuka untuk dilihat.",
+    "refusedProtected": "Bagian dokumen ini dilindungi.",
+    "refusedCollaboration": "Menunggu sesi bersama. Coba lagi sebentar lagi.",
+    "refusedSessionEnded": "Sesi bersama telah berakhir. Muat ulang dokumen untuk melanjutkan peninjauan.",
+    "actionRefused": "Tidak dapat membuat perubahan ini",
     "showPane": "Tampilkan komentar",
     "structural": "Struktur dokumen diubah",
     "deleteComment": "Hapus komentar",

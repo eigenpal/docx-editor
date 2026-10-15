@@ -498,6 +498,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // A rail registers itself here so the viewport only reserves a gutter when one is
   // actually composed in. See `ReviewRailContext`.
   const [rails, setRails] = useState(0);
+  const [gutters, setGutters] = useState(0);
   const commentDraftHandlers = useRef<Array<() => void>>([]);
   const railRegistry = useMemo<ReviewRailRegistry>(
     () => ({
@@ -505,6 +506,11 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       register: () => {
         setRails((count) => count + 1);
         return () => setRails((count) => Math.max(0, count - 1));
+      },
+      gutters,
+      reserveGutter: () => {
+        setGutters((count) => count + 1);
+        return () => setGutters((count) => Math.max(0, count - 1));
       },
       registerCommentDraft: (handler) => {
         commentDraftHandlers.current.push(handler);
@@ -520,7 +526,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
         return true;
       },
     }),
-    [rails]
+    [rails, gutters]
   );
 
   // The channel between an open navigation pane and the chrome it displaces. A store

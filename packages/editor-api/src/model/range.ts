@@ -212,7 +212,17 @@ export class Range extends ModelObject implements PromisedItem {
    *
    * With server `document.changeTrackingMode = 'TrackMineOnly'`, this creates a tracked text
    * edit attributed to the runtime author. Tracked range replacement supports adjacent sibling paragraphs outside collaboration.
-   * Table and wrapper boundaries and foreign pending revisions refuse. Font and paragraph
+   * Table and wrapper boundaries refuse. Edits can go inside or beside another author's pending
+   * text insertion or deletion: a deletion of their inserted text nests inside their insertion,
+   * new text inside their insertion splits it in two, and the returned range names the new text
+   * after any deleted text. Each author's change stays a separate decision. These refuse with
+   * `NotImplemented`, and `debugInfo.innerError.code` names the rule: a range of only deleted
+   * text (`edit.tracked-deleted-text-only`); another author's paragraph mark, formatting, move, or
+   * structural change, or a link or content control inside their insertion
+   * (`edit.tracked-foreign-revision-unsupported`); and your own pending change, including a
+   * range a tracked write returned (`edit.tracked-own-pending-change`). In a collaboration
+   * session, the API refuses strikes over another author's pending insertion or deletion,
+   * and edits that start inside or right after one, with `edit.tracked-foreign-revision-unsupported`. Font and paragraph
    * formatting support property revisions.
    * Empty text with `Replace` deletes the range; empty text at an insertion point is a no-op.
    * Agent tools that intend a replacement should validate non-empty model output first.
@@ -434,7 +444,13 @@ export class Range extends ModelObject implements PromisedItem {
     ));
   }
 
-  /** Insert a bounded PNG/JPEG image. Sync before configuring the returned picture. */
+  /**
+   * Insert a bounded PNG/JPEG image. Sync before configuring the returned picture.
+   *
+   * Works on server, browser, and collaborative runtimes; on a collaborative runtime the
+   * picture, its media part, and its relationship replicate to every participant. Insertion
+   * must be the only mutation in its sync, and tracking refuses it.
+   */
   insertInlinePictureFromBase64(
     base64EncodedImage: string,
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'

@@ -42,6 +42,7 @@ import { clippedFormattableRuns } from '../store/store/formattable-runs.ts';
 import type { SurfaceFormatting } from './paginated-surface-contract.ts';
 import { paragraphFormattingEntry } from './surface-formatting-index.ts';
 import { paragraphAlignment } from '../layout/paragraph-flow.ts';
+import { paragraphLineSpacing } from '../layout/paragraph-style.ts';
 import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import {
   cascadedParagraphAttributes,
@@ -67,12 +68,22 @@ function emptyParagraphStyleOf(
   return paragraphFormattingEntry(layout, paragraphId, true)?.emptyStyle;
 }
 
+/**
+ * What `paragraphPropertiesOf` answers for a paragraph the layout publishes no fragment
+ * for. Empty like any other unstated cascade, but by identity, so a read that resolves a
+ * default (line spacing) can tell "states nothing" from "was never laid out".
+ */
+const UNPUBLISHED_PARAGRAPH_PROPERTIES: readonly SurfaceProperty[] = Object.freeze([]);
+
 /** Cascaded paragraph properties from its first published fragment. */
 export function paragraphPropertiesOf(
   layout: SemanticLayout,
   paragraphId: string
 ): readonly SurfaceProperty[] {
-  return paragraphFormattingEntry(layout, paragraphId)?.fragment.props ?? [];
+  return (
+    paragraphFormattingEntry(layout, paragraphId)?.fragment.props ??
+    UNPUBLISHED_PARAGRAPH_PROPERTIES
+  );
 }
 
 /** Resolved paragraph tabs from its first published fragment. */
@@ -566,14 +577,19 @@ export function formattingAt(
   // showed the raw number would be right half the time.
   const spacing = (properties: readonly SurfaceProperty[]) =>
     cascadedParagraphAttributes(properties, 'spacing') ?? undefined;
+  //
+  // The EFFECTIVE line spacing, read through the layout's own resolver as alignment is, so
+  // the ticked menu row and the painted line answer from one place. A paragraph whose
+  // cascade states no `w:line` lays out single-spaced, and reporting nothing for it left
+  // the line-spacing menu without a current row on the commonest paragraph there is.
+  // A paragraph with no published fragment is unknown, not single-spaced: it reads as
+  // nothing, so it neither ticks a row on its own nor agrees with laid-out neighbours.
   const lineSpacingTextOf = (properties: readonly SurfaceProperty[]): string => {
-    const attributes = spacing(properties);
-    const line = readTwipsMeasure(attributes?.line);
-    if (line === null) return '';
-    // `w:lineRule` defaults to `auto` (17.3.1.33), which is Word's "Multiple".
-    const rule = attributes?.lineRule ?? 'auto';
-    if (rule === 'auto') return `multiple:${Math.round((line / 240) * 100) / 100}`;
-    return `${rule === 'exact' ? 'exact' : 'atLeast'}:${Math.round((line / 20) * 100) / 100}`;
+    if (properties === UNPUBLISHED_PARAGRAPH_PROPERTIES) return '';
+    const resolved = paragraphLineSpacing(properties);
+    const round = (value: number) => Math.round(value * 100) / 100;
+    if (resolved.rule === 'auto') return `multiple:${round(resolved.value / 240)}`;
+    return `${resolved.rule}:${round(resolved.value)}`;
   };
   const lineSpacingText = paragraphValue(lineSpacingTextOf);
   const lineSpacing = ((): SurfaceFormatting['lineSpacing'] => {

@@ -14,6 +14,7 @@ import { zipSync, strToU8 } from 'fflate';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import { serializeOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { selectCellRectangle } from './paginated-surface-fixtures.ts';
+import { diagnosticCodeOfRefusal } from '../diagnostic-codes.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -828,5 +829,42 @@ describe('a section break that retypes the following section cannot be suggested
       expect(surface.state().lastRejection).toBeNull();
       expect(paragraphTexts(surface)).toEqual(['Alpha', ' one']);
     });
+  });
+});
+
+describe("typing inside another author's insertion, in suggesting mode", () => {
+  test('splits their insertion, and the keystrokes after the first extend one insertion', () => {
+    const theirs =
+      '<w:p><w:ins w:id="1" w:author="Alan Turing" w:date="2026-01-01T00:00:00Z">' +
+      '<w:r><w:t>abcd</w:t></w:r></w:ins></w:p>';
+    withSurface(theirs, (surface) => {
+      caretTo(surface, 0, 2);
+      typeEach(surface, 'XY');
+      expect(surface.state().lastRejection).toBeNull();
+      const xml = serializeOoxmlPart(surface.session.part());
+      // Nested, the typed words would go with their proposal on reject.
+      expect(xml).toMatch(
+        /<w:ins [^>]*w:author="Alan Turing"[^>]*><w:r><w:t>ab<\/w:t><\/w:r><\/w:ins><w:ins [^>]*w:author="Ada Lovelace"[^>]*><w:r><w:t>XY<\/w:t><\/w:r><\/w:ins><w:ins [^>]*w:author="Alan Turing"[^>]*><w:r><w:t>cd<\/w:t><\/w:r><\/w:ins>/
+      );
+      expect(paragraphTexts(surface)).toEqual(['abXYcd']);
+    });
+  });
+});
+
+test("typing inside a link within another author's insertion is refused, not nested", () => {
+  const linked =
+    '<w:p><w:ins w:id="1" w:author="Alan Turing" w:date="2026-01-01T00:00:00Z">' +
+    '<w:hyperlink w:anchor="target"><w:r><w:t>abcd</w:t></w:r></w:hyperlink></w:ins></w:p>';
+  withSurface(linked, (surface) => {
+    const before = serializeOoxmlPart(surface.session.part());
+    caretTo(surface, 0, 2);
+    surface.type('X');
+    // The link cannot split, and nested words would go with their proposal on reject.
+    expect(surface.state().lastRejection).not.toBeNull();
+    // The page names the same rule the editing API reports for this edit.
+    expect(diagnosticCodeOfRefusal(surface.state().lastRejection!)).toBe(
+      'edit.tracked-foreign-revision-unsupported'
+    );
+    expect(serializeOoxmlPart(surface.session.part())).toBe(before);
   });
 });

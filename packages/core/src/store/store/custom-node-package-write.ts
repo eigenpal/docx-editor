@@ -19,13 +19,15 @@ import {
 } from './custom-node-writes.ts';
 import type { TreeDocumentStore } from './tree-store.ts';
 import type { StoryScope, TreePackageStore } from './tree-package-store.ts';
+import type { HistoryGroup } from './history-group.ts';
 
 const BODY: StoryScope = { kind: 'body' };
 
 function publishCustomNodeWrite(
   packageStore: TreePackageStore,
   scope: StoryScope,
-  run: (store: TreeDocumentStore) => CustomNodeWriteResult
+  run: (store: TreeDocumentStore) => CustomNodeWriteResult,
+  historyGroup?: HistoryGroup
 ): CustomNodeWriteResult {
   const resolved = scope.kind === 'body' ? null : packageStore.resolveStory(scope);
   const store = resolved?.ok ? resolved.store : packageStore.bodyStore();
@@ -39,11 +41,12 @@ function publishCustomNodeWrite(
       if (!result.ok) return result;
       store.restoreHistoryStacks(checkpoint);
       packageStore.replacePackageShell(store.package);
-      packageStore.adoptPackageUnit(beforePackage);
+      packageStore.adoptGroupedPackageUnit(beforePackage, historyGroup);
       packageStore.publishStoryWrite(result.change);
       return result;
     },
-    (result) => packageTransactionPublished(result)
+    (result) => packageTransactionPublished(result),
+    historyGroup
   );
 }
 
@@ -56,10 +59,14 @@ function publishCustomNodeWrite(
 export function insertPackageCustomNode(
   packageStore: TreePackageStore,
   write: InsertCustomNodeWrite,
-  scope: StoryScope = BODY
+  scope: StoryScope = BODY,
+  historyGroup?: HistoryGroup
 ): CustomNodeWriteResult {
-  return publishCustomNodeWrite(packageStore, scope, (store) =>
-    insertCustomNodeWrite(store, write, packageStore.bodyStore().part.name)
+  return publishCustomNodeWrite(
+    packageStore,
+    scope,
+    (store) => insertCustomNodeWrite(store, write, packageStore.bodyStore().part.name),
+    historyGroup
   );
 }
 

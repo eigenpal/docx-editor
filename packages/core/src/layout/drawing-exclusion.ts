@@ -32,7 +32,6 @@ import {
   squareExclusionBounds,
   type ScanlineInterval,
   type WrapExclusionInput,
-  type WrapTextSide,
   wrapExclusionFromProjection,
 } from './drawing-wrap.ts';
 import type { LayoutBox } from './semantic-records.ts';
@@ -195,12 +194,6 @@ function exclusionModeFromWrap(wrap: ImageWrapTarget): WrapExclusionInput['mode'
   }
 }
 
-function textSideFromWrap(wrap: ImageWrapTarget): WrapTextSide {
-  if (wrap === 'squareLeft') return 'left';
-  if (wrap === 'squareRight') return 'right';
-  return 'bothSides';
-}
-
 export function wrapExclusionInputForProjection(options: {
   readonly projection: DrawingProjection;
   readonly geometry: DrawingGeometry;
@@ -234,7 +227,9 @@ export function wrapExclusionInputForProjection(options: {
     },
     extentWidthPt: options.geometry.contentBounds.width,
     extentHeightPt: options.geometry.contentBounds.height,
-    textSide: mode === 'square' ? textSideFromWrap(options.projection.wrap) : wrap.textSide,
+    // The wrap element's own `wrapText`: the menu target has no `largest`, which keeps text on
+    // the wider side of the float only.
+    textSide: wrap.textSide,
     contentLeft: options.contentLeft,
     contentRight: options.contentRight,
   });

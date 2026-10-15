@@ -1,4 +1,5 @@
 // Host-neutral inline picture authoring. Media and drawing nodes commit in one transaction.
+import { PackageEditRefusal } from '../store/store/package-edit-refusal.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlDrawingNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -109,15 +110,18 @@ export function insertPicturePlan(
     ops: [{ op: 'insertDrawing', paragraphId, offset, drawing }],
     packageEdits: [
       (current) => {
+        // Embedded again, not reused from the plan: returning the planning result dropped the
+        // media part from collaborative replication (document-picture-automation.test.ts).
         const applied = withEmbeddedImage(current, partName, { bytes, mime });
-        // Never point a preplanned drawing at a different allocation after an earlier batch write.
+        // Never point a preplanned drawing at a different allocation. Plan and commit see the same
+        // package and the same collaboration actor, so a mismatch is an engine defect.
         if (
           !applied.ok ||
           applied.relationshipId !== embedded.relationshipId ||
           applied.docPrId !== embedded.docPrId ||
           applied.partName !== embedded.partName
         )
-          throw new Error('picture allocation changed during the batch');
+          throw new PackageEditRefusal('picture allocation changed during the batch');
         return applied.pkg;
       },
     ],

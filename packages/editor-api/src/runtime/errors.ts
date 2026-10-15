@@ -34,12 +34,14 @@ export type DocxEditorErrorCode =
   /** A `ClientResult` value was read before the sync that fills it. */
   | 'ValueNotLoaded'
   /**
-   * The object cannot be addressed, in either of the two ways that happens.
+   * The object cannot be addressed, in one of three ways.
    *
    * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
    * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
-   * is terminal. One code because from a consumer's side both are "this object cannot be used
-   * here"; the message says which one, because the fix for one is not the fix for the other.
+   * is terminal. GONE: the document no longer holds the object, because an edit removed or merged
+   * it; `debugInfo.innerError.code` is then `edit.stale-target` and the message says so. One
+   * code because from a consumer's side all three are "this object cannot be used here"; the
+   * message says which one, because the fix for one is not the fix for the others.
    */
   | 'InvalidObjectPath'
   /** The object still belongs to a run that has not finished, so it cannot be handed over. */
@@ -117,6 +119,21 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
   DocumentUnavailable: 'the document is not available right now.',
   GeneralException: 'the document could not complete the request.',
 });
+
+/**
+ * The message for `InvalidObjectPath` when the host reports that the object is gone. Fixed, like
+ * every other message, so it names no document content.
+ */
+const REMOVED_OBJECT_MESSAGE =
+  'the object no longer exists in the document. An edit removed or merged it. Read the ' +
+  'document again to get a fresh object.';
+
+/** The fixed message for an error, from its code and the diagnostic the engine gave. */
+function messageOf(code: DocxEditorErrorCode, diagnostic: DiagnosticCode | undefined): string {
+  return code === 'InvalidObjectPath' && diagnostic === 'edit.stale-target'
+    ? REMOVED_OBJECT_MESSAGE
+    : MESSAGES[code];
+}
 
 /**
  * The fields a {@link DocxEditorError} is constructed from.
@@ -246,7 +263,8 @@ export class DocxEditorError extends Error {
   readonly debugInfo: DocxEditorDebugInfo;
 
   constructor(init: DocxEditorErrorInit) {
-    const message = init.target ? `${MESSAGES[init.code]} (${init.target})` : MESSAGES[init.code];
+    const base = messageOf(init.code, init.diagnostic);
+    const message = init.target ? `${base} (${init.target})` : base;
     super(message);
     this.name = 'DocxEditorError';
     this.code = init.code;
@@ -288,8 +306,8 @@ export function isDocxEditorError(value: unknown): value is DocxEditorError {
 }
 
 /** The message this runtime uses for a code, for tests that assert nothing else is thrown. */
-export function messageFor(code: DocxEditorErrorCode): string {
-  return MESSAGES[code];
+export function messageFor(code: DocxEditorErrorCode, diagnostic?: DiagnosticCode): string {
+  return messageOf(code, diagnostic);
 }
 
 export function fail(init: DocxEditorErrorInit): never {

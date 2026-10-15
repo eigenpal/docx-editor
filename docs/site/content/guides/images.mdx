@@ -154,11 +154,15 @@ if (result.ok) {
 
 Floating pictures: select in the canvas, drag to move (`setImagePosition`), eight handles or Alt+Arrow to resize (`setImageProperties`), wrap menu for all nine choices. One undo step per completed gesture. While a picture is selected, Ctrl+Z (Cmd+Z on macOS) undoes the gesture, and Ctrl+Y or Ctrl+Shift+Z (Cmd+Shift+Z on macOS) redoes it.
 
+Inline pictures use the same wrap menu. If you choose a floating wrap for an inline picture, the picture stays where it is on the page. Its position is measured from the left margin and from the top of its paragraph, so it moves with the text. In a table cell, header, footer, or paragraph frame, the picture starts at the top-left corner of its column and paragraph. A picture with a move lock keeps its wrap.
+
 ## Wrap modes and text reflow
 
 Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box. Body flow height still sizes the furniture band.
 
 Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
+
+When a floating picture splits a line into passages, each part of the line aligns inside its own passage. Centered text is centered on each side of the picture, right-aligned text ends at the right edge of each passage, and justified text fills each passage. This applies in the body, table cells, headers, footers, and text boxes. Right-to-left paragraphs align the line as a whole. A square wrap with `wrapText="largest"` keeps text on the wider side of the picture only.
 
 A line break (`w:br`) with `w:clear` restarts the text after it on the next line that the floating objects on one side do not interrupt. The picture keeps its position; only the restart line moves.
 

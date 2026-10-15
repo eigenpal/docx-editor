@@ -110,11 +110,12 @@ import { commitSessionTreeOps, commitSessionTreeOpsAtomic } from './tree-session
 // tree-session-contract.ts; re-exported so every existing import through this module stays
 // stable.
 import type {
+  PackageWriteOptions,
   TreeApplyOptions,
   TreeApplyResult,
   TreeDocxSessionView,
 } from './tree-session-contract.ts';
-export type { TreeApplyOptions, TreeApplyResult, TreeDocxSessionView };
+export type { PackageWriteOptions, TreeApplyOptions, TreeApplyResult, TreeDocxSessionView };
 import type {
   OpenTreeSessionOptions,
   OpenTreeSessionResult,
@@ -778,6 +779,10 @@ export function openTreeSessionFromPackage(
         return writePackage(currentPackage());
       },
 
+      saveSteps() {
+        return writePackage.steps(currentPackage());
+      },
+
       headerFooterParts: () => {
         const bySection = resolvedHeaderFooterBySection().parts;
         return bySection[bySection.length - 1] ?? resolveHeaderFooterParts(currentPackage());
@@ -1109,7 +1114,16 @@ export function openTreeSessionFromPackage(
         return reviewContentCache.present;
       },
 
-      replyToComment(parentCommentId, anchor, text, author, date, scope = BODY_SCOPE, actorId) {
+      replyToComment(
+        parentCommentId,
+        anchor,
+        text,
+        author,
+        date,
+        scope = BODY_SCOPE,
+        actorId,
+        options = {}
+      ) {
         // The story that OWNS the anchor. Resolving a refused scope falls back to the body
         // rather than throwing: the caller's next check is the null return either way.
         const result = addPackageComment(
@@ -1132,26 +1146,27 @@ export function openTreeSessionFromPackage(
             ...(parentCommentId === null ? {} : { replyToCommentId: parentCommentId }),
             ...(actorId === undefined ? {} : { actorId }),
           },
-          scope
+          scope,
+          options.historyToken
         );
         return result.ok ? result.commentId : null;
       },
 
-      setCommentResolved(commentId, resolved) {
-        const result = setPackageCommentResolved(packageStore, commentId, resolved);
-        return result.ok;
+      setCommentResolved(commentId, resolved, options = {}) {
+        return setPackageCommentResolved(packageStore, commentId, resolved, options.historyToken)
+          .ok;
       },
 
-      deleteComment(commentId, scope = BODY_SCOPE, noteId) {
-        return this.deleteComments([{ commentId }], scope, noteId);
+      deleteComment(commentId, scope = BODY_SCOPE, noteId, options) {
+        return this.deleteComments([{ commentId }], scope, noteId, options);
       },
 
-      deleteComments(comments, scope = BODY_SCOPE, noteId) {
-        return deletePackageComments(packageStore, comments, scope, noteId);
+      deleteComments(comments, scope = BODY_SCOPE, noteId, options = {}) {
+        return deletePackageComments(packageStore, comments, scope, noteId, options.historyToken);
       },
 
-      insertCustomNode(write, scope = BODY_SCOPE) {
-        return insertPackageCustomNode(packageStore, write, scope);
+      insertCustomNode(write, scope = BODY_SCOPE, options = {}) {
+        return insertPackageCustomNode(packageStore, write, scope, options.historyToken);
       },
 
       removeCustomNode(controlNodeId, scope = BODY_SCOPE) {

@@ -165,7 +165,12 @@ Use `useEditorEvent` to subscribe for the component's lifetime:
 ```tsx
 import { useEditorEvent } from '@docx-editor.dev/react';
 
-useEditorEvent('selectionChange', () => setPanelOpen(false));
+// `selectionChange` also fires for other state that moves without a document change, such
+// as the collaboration status, so compare the selection itself.
+useEditorEvent('selectionChange', (snapshot) => {
+  if (snapshot.selection !== lastSelection.current) setPanelOpen(false);
+  lastSelection.current = snapshot.selection;
+});
 useEditorEvent('change', (change) => void autosave(change.revision));
 ```
 
@@ -495,6 +500,8 @@ For grouped writes, `result.history?.kind` is `started`, `extended`, `split`, or
 
 `useEditorCommand().execute(options)` accepts the same options and returns a boolean. Its event-handler form, `onClick={command.execute}`, still works. If you need the full result for a raw command, get the editor with `useDocxEditor()`. Check that it exists, then call `editor.exec(command, options)`.
 
+A review decision can also be one undo step. Get the editor with `useDocxEditor()`, create a handle with `editor.beginHistoryGroup()`, and pass it to each write: `editor.exec`, `editor.addComment(text, { historyGroup })`, `editor.acceptReviewItem(key, { historyGroup })`, and `runtime.run({ historyGroup }, callback)`. End the handle when the decision is complete. See [Group a review decision](/docs/2.x/core#group-a-review-decision).
+
 For optional development feedback, subscribe with `useEditorEvent('historyDiagnostic', handler)`. The editor reports interrupted groups and possible cases where each update starts a separate group. Diagnostics do not change history behavior or write to the console.
 
 ## Other hooks
@@ -512,7 +519,7 @@ For optional development feedback, subscribe with `useEditorEvent('historyDiagno
 | `useContextMenuTarget()` | Returns the element that received the last context-menu action. |
 | `useOpenFailure(options?)` | Returns the refused open, its packaged message, and `dismiss`, for your own toast or banner. See [Handle files that do not open](/docs/2.x/guides/open-failures). |
 | `useNavigationPane(options?)` | Provides navigation-pane open state, width, and whether the open pane covers the page (`overlay`). |
-| `useTranslation()` | Returns `{ t }` for the active locale catalog. |
+| `useTranslation()` | Returns `{ t, catalogue, lang }` for the active locale catalog. |
 | `useChromeTranslate(overrides?)` | Returns a catalog resolver that checks an override `Map` first. |
 | `useFonts(source, ...fragments)` | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts). |
 | `useNotePropertiesState()` | Provides note-numbering properties for the current scope. |

@@ -41,3 +41,16 @@ export async function replaceFirstMatch(searchText: string, replacement: string)
     await context.sync();
   });
 }
+
+export async function highlightMatchesInFirstParagraph(searchText: string): Promise<void> {
+  await DocxEditor.run(async (context) => {
+    const paragraph = context.document.body.paragraphs.getFirst();
+    const searchResults = paragraph.search(searchText);
+    await context.sync();
+
+    for (const range of searchResults.items) {
+      range.font.bold = true;
+    }
+    await context.sync();
+  });
+}

@@ -34,6 +34,22 @@ const headings = await runtime.run(async (context) => {
 
 Each loop queues item loads, then syncs once. The result contains plain data you can use outside the run. Collections expose read-only `items` arrays. Item objects remain editable proxies. Reload values after writes when your next decision needs the changed document.
 
+To load the items and their properties in one sync, name each property with an `items/` path:
+
+```ts
+const headings = await runtime.run(async (context) => {
+  const paragraphs = context.document.paragraphs;
+  paragraphs.load({ select: 'items/text,items/style', top: 100 });
+  await context.sync();
+  return paragraphs.items.map((paragraph) => ({
+    text: paragraph.text,
+    style: paragraph.style,
+  }));
+});
+```
+
+On a collection, a property name without the `items/` prefix means the same thing: `paragraphs.load('text')` loads `text` on each paragraph.
+
 `LoadOption` accepts a property string, a string array, or `LoadQueryOptions`:
 
 | Form or option | Meaning |
@@ -41,10 +57,13 @@ Each loop queues item loads, then syncs once. The result contains plain data you
 | `load('text')` | Load one scalar property |
 | `load('text,style')` or `load(['text', 'style'])` | Load named scalar properties |
 | `{ select: 'items', top: 20, skip: 40 }` | Load a collection window |
+| `load('items/text')` or `load('text')` on a collection | Load the items and `text` on each item in the same sync |
 | `load()` | Load the object's default selection; prefer explicit names |
 | `expand` | Reserved; nonempty values fail with `InvalidArgument` |
 
-`top` and `skip` require nonnegative integers and apply to collections. Unknown properties and options fail explicitly. Nested paths such as `items/text` do not work. Load `paragraph.font` or another navigation object directly.
+`top` and `skip` require nonnegative integers and apply to collections. Unknown properties and options fail explicitly. Only one level of navigation works. Deeper paths such as `items/font/bold`, and paths on objects that are not collections such as `font/bold`, fail with `InvalidArgument` and name the path in `target`. `items/<navigation property>` such as `items/font` also fails; load `font` on each item. Load `paragraph.font` or another navigation object directly.
+
+Item properties follow the same rule as other loads: in a sync that also writes, they report the document from before the writes. The range collection that `Paragraph.split()` returns accepts `items/` paths, `top`, and `skip` after the split's sync. Before that sync, such a load fails with `NotImplemented`.
 
 ## Separate dependent work
 
@@ -138,6 +157,8 @@ await runtime.run(paragraph, async (context) => {
 
 `TrackedObjects.add()` and `remove()` accept one `ClientObject` or an array. `runtime.run(objectOrArray, callback)` adopts tracked objects from completed runs of that runtime. Await the first run before adoption. Tracking does not prevent document edits or deletion of the target. No proxy survives runtime disposal.
 
+If another run, a collaborator, or an undo removes or merges the target, the next sync that uses the proxy fails with `InvalidObjectPath`. The error's `debugInfo.innerError.code` is `edit.stale-target`. Read the document again to get a fresh proxy.
+
 `ClientResult<T>` exposes `isLoaded` and `value`. Read `value` after the operation's `context.sync()` completes; reading it earlier throws `ValueNotLoaded`. For example, `RevisionCollection.resolve()` returns a `ClientResult<RevisionBatchResult>` with resolved and skipped decisions and a remaining count. `RevisionCollection.setAuthor()` returns a `ClientResult<RevisionAuthorResult>` with updated and skipped changes. See [Resolve a batch of changes](/docs/2.x/editor-api/revisions#resolve-a-batch-of-changes).
 
 ## Recover by error code
@@ -167,7 +188,7 @@ try {
 | --- | --- |
 | `PropertyNotLoaded` | Load the named property and sync before reading |
 | `ValueNotLoaded` | Complete the result-producing sync |
-| `InvalidObjectPath` | Sync a pending object, or obtain a fresh proxy after expiration or deletion |
+| `InvalidObjectPath` | Sync a pending object, or obtain a fresh proxy after expiration or deletion. If `debugInfo.innerError.code` is `edit.stale-target`, the document no longer holds the object |
 | `ObjectInUse` | Await the owning run before adopting its tracked objects |
 | `InvalidArgument` | Correct the input, property name, location, or document target |
 | `ResourceLimitExceeded` | Inspect `limit`; reject the file or deliberately adjust supported input budgets |
@@ -178,7 +199,7 @@ try {
 | `RuntimeDisposed` | Create a new runtime |
 | `StaleDocument` | Start a fresh run, read again, and reconsider the proposed change |
 | `DocumentUnavailable` | Wait for the owning editor to attach a document, then start a new run |
-| `GeneralException` | Report the error and inspect the target; do not silently discard document structure |
+| `GeneralException` | Act on `error.debugInfo.innerError.code` (see [Diagnostics](/docs/2.x/guides/diagnostics#edit-internal-invariant)); for `edit.internal-invariant`, or when `innerError` is absent, report the failure with the engine version and do not retry the write unchanged |
 
 `DocxEditorError` exposes `code`, optional `target`, and optional resource or revision metadata. `DocxEditorErrorInit` accepts the same fields.
 

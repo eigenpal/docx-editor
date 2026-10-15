@@ -10,18 +10,20 @@
 
 import { useCallback, useRef, useState } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { commandForSlotValue } from '@docx-editor.dev/core/editor';
+import {
+  lineSpacingMenuRowLabel,
+  lineSpacingMenuRows,
+  type LineSpacingMenuRow,
+} from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
 import { useEditorState } from '../useEditorState';
 import { useEditorCommand } from '../useEditorCommand';
 import { useParagraphDialog } from '../paragraph-dialog-host';
+import { useTranslation } from '../../i18n';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartProps, ToolbarSlotPartComponent } from './parts';
 import { useDropdownClose } from './useDropdownClose';
-
-/** Word's line-spacing menu, in lines. */
-const LINE_SPACING_PRESETS: readonly number[] = [1, 1.15, 1.5, 2, 2.5, 3];
 
 /**
  * What Word's "Add space before/after paragraph" writes: a flat 10pt.
@@ -67,18 +69,19 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   const paragraphDialogCommand = useEditorCommand('paragraph.dialog');
   const paragraphDialog = useParagraphDialog();
   const label = useToolbarLabel();
+  const { lang } = useTranslation();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useDropdownClose(open, setOpen, rootRef, hidden);
 
-  const applyLines = useCallback(
-    (lines: number) => {
+  const applyRow = useCallback(
+    (row: LineSpacingMenuRow) => {
       setOpen(false);
-      if (!editor) return;
-      const command = commandForSlotValue('list.lineSpacing', lines);
-      if (command && editor.can(command).ok) editor.exec(command);
+      // The selected row has no command: it already holds (see `LineSpacingMenuRow`).
+      if (!editor || !row.command) return;
+      if (editor.can(row.command).ok) editor.exec(row.command);
     },
     [editor]
   );
@@ -99,10 +102,9 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
   // never offers to add space that is already there.
   const hasBefore = (spacing.spaceBeforePt ?? 0) > 0;
   const hasAfter = (spacing.spaceAfterPt ?? 0) > 0;
-  // Only a MULTIPLE can tick a row: `exact`/`atLeast` are real spacings this menu cannot
-  // express, and ticking the nearest multiple would claim the menu set them.
-  const ticked =
-    spacing.lineSpacing?.rule === 'multiple' ? (spacing.lineSpacing?.value ?? null) : null;
+  // The spacing in force always shows as a ticked row, even one no preset matches; a mixed
+  // selection ticks none.
+  const rows = lineSpacingMenuRows(spacing.lineSpacing);
 
   return (
     <span ref={rootRef} className="docx-toolbar__line-spacing" data-slot="list.lineSpacing">
@@ -126,22 +128,25 @@ function ToolbarLineSpacingImpl({ className, hidden }: ToolbarSlotPartProps) {
       </button>
       {open && isEnabled ? (
         <div className="docx-toolbar__menu docx-toolbar__line-spacing-menu" role="menu">
-          {LINE_SPACING_PRESETS.map((lines) => {
-            const selected = ticked === lines;
+          {rows.map((row) => {
+            const selected = row.selected;
             return (
               <button
-                key={lines}
+                key={`${row.spacing.rule}:${row.spacing.value}`}
                 type="button"
                 role="menuitemradio"
                 aria-checked={selected}
                 {...(selected ? { 'data-selected': '' } : {})}
                 className="docx-toolbar__menu-item"
                 onMouseDown={guardToolbarMousedown}
-                onClick={() => applyLines(lines)}
+                onClick={() => applyRow(row)}
               >
-                {/* Word's own labels: 1.0, 1.15, 1.5, 2.0 — one decimal unless the
-                    preset needs two. */}
-                {Number.isInteger(lines * 10) ? lines.toFixed(1) : lines.toFixed(2)}
+                {lineSpacingMenuRowLabel(row, label, lang)}
+                {selected ? (
+                  <span className="docx-toolbar__menu-check" aria-hidden="true">
+                    ✓
+                  </span>
+                ) : null}
               </button>
             );
           })}

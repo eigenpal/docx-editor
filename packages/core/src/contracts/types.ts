@@ -286,8 +286,9 @@ export interface RunFormatting {
   /**
    * Line spacing at the selection, in the unit its rule implies — LINES for `multiple`,
    * points for `exact` and `atLeast`. The same vocabulary `setLineSpacing` takes, so a
-   * control can show what it reads and send back what it shows. Absent when the
-   * selection's paragraphs disagree or state no line spacing.
+   * control can show what it reads and send back what it shows. The effective value: a
+   * paragraph whose cascade states none reads as single spacing (`multiple`, 1). Absent
+   * when the selection's paragraphs disagree.
    */
   readonly lineSpacing?: {
     readonly rule: 'multiple' | 'exact' | 'atLeast';

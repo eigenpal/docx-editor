@@ -10,6 +10,7 @@ import { expect, test } from 'bun:test';
 import type { EditorDiagnostic } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditor, isDocxEditorError } from '../../index.ts';
 import { docx, p } from './support/docx.ts';
+import { hostFailure } from '../batch.ts';
 
 const SECRET = 'Confidential settlement terms';
 const sample = docx(p(SECRET) + p('Second clause.'));
@@ -182,3 +183,25 @@ test('a refused batch carries the engine reason behind its public code', async (
     runtime.dispose();
   }
 });
+
+// A package edit that finds a package other than the one it planned against is an engine
+// defect, not a race: plan and commit run in one call. The server port appends the detail and
+// the browser port does not, so both shapes are checked.
+test.each(['package-changed: picture allocation changed during the batch', 'package-changed'])(
+  'a package-changed refusal (%s) reports an engine defect',
+  (detail) => {
+    const error = hostFailure(
+      {
+        code: 'transaction-refused',
+        message: 'the document store refused the transaction',
+        detail,
+      },
+      { target: 'document.body.insertInlinePictureFromBase64' }
+    );
+    expect(error.code).toBe('GeneralException');
+    expect(error.debugInfo.innerError).toMatchObject({ code: 'edit.internal-invariant' });
+    expect(error.debugInfo.innerError!.message).toContain('engine defect');
+    // The engine detail never reaches the consumer.
+    expect(JSON.stringify(error.debugInfo)).not.toContain('allocation');
+  }
+);

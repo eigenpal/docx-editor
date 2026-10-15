@@ -6282,14 +6282,12 @@ export const ReviewRailContext: InjectionKey<ShallowRef<ReviewRailRegistry>>;
 
 // @public (undocumented)
 export interface ReviewRailRegistry {
-    // (undocumented)
+    readonly gutters?: number;
     readonly mounted: number;
-    // (undocumented)
     readonly register: () => () => void;
-    // (undocumented)
     readonly registerCommentDraft: (handler: () => void) => () => void;
-    // (undocumented)
     readonly requestCommentDraft: () => boolean;
+    readonly reserveGutter?: () => () => void;
 }
 
 export { RevisionAuthorAssignments }
@@ -7319,9 +7317,10 @@ export function useToolbarLabel(): (key: string) => string;
 // @public (undocumented)
 export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string;
 
-// @public (undocumented)
+// @public
 export function useTranslation(): {
     catalogue: ShallowRef<LocaleStrings>;
+    lang: string;
     t: TFunction;
 };
 

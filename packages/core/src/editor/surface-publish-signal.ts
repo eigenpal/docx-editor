@@ -42,6 +42,13 @@ interface PublishKeys {
    * never lights up.
    */
   formatPainter: string;
+  /**
+   * The collaboration session's status.
+   *
+   * A session that connects or drops moves no revision and no caret either, so a snapshot
+   * reader, or a notice waiting for the session, slept through it until something else moved.
+   */
+  collaborationStatus: PaginatedSurfaceState['collaborationStatus'];
 }
 
 const EMPTY: PublishKeys = {
@@ -50,6 +57,7 @@ const EMPTY: PublishKeys = {
   headerFooter: null,
   drawingIntent: 'none',
   formatPainter: 'off/none',
+  collaborationStatus: 'inactive',
 };
 
 function keysOf(state: PaginatedSurfaceState, surface: PaginatedSurface): PublishKeys {
@@ -60,6 +68,7 @@ function keysOf(state: PaginatedSurfaceState, surface: PaginatedSurface): Publis
     headerFooter: hf?.editing && hf.rId ? `${hf.editing}:${hf.rId}` : null,
     drawingIntent: drawingSelectionIntentKey(surface.drawingSelectionIntent()),
     formatPainter: `${state.formatPainter.mode}/${state.formatPainter.level}`,
+    collaborationStatus: state.collaborationStatus,
   };
 }
 
@@ -91,7 +100,8 @@ export function createPublishSignal(): PublishSignal {
         next.pendingFormat === last.pendingFormat &&
         next.headerFooter === last.headerFooter &&
         next.drawingIntent === last.drawingIntent &&
-        next.formatPainter === last.formatPainter;
+        next.formatPainter === last.formatPainter &&
+        next.collaborationStatus === last.collaborationStatus;
       last = next;
       return !quiet;
     },

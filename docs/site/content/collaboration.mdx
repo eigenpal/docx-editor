@@ -41,13 +41,22 @@ Store the room ID in your application state or URL. Do not create a new ID durin
 
 ## Add a collaborative editor
 
-Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX bytes. The first editor creates the room. Later editors join its document. Use a different `actorId` for each active editor, including tabs opened by the same user.
+Call `useWebrtcCollaboration` with a room ID, an identity, the initial DOCX bytes, and signaling URLs. The first editor creates the room. Later editors join its document. Use a different `actorId` for each active editor, including tabs opened by the same user.
+
+The `signaling` option has no default. Choose one of these values:
+
+- Your own signaling server URLs, for production. For more information, see [Use your own signaling](/docs/2.x/pro/collaboration#use-your-own-signaling).
+- `DEMO_SIGNALING_ENDPOINTS`, a shared public service for demos.
+- An empty list, `[]`, to connect only tabs of the same browser.
+
+The examples use `DEMO_SIGNALING_ENDPOINTS`.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
+import { DEMO_SIGNALING_ENDPOINTS } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
 interface CollaborativeEditorProps {
@@ -63,6 +72,8 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
       roomId,
       identity: { actorId, name },
       bootstrap: { kind: 'create-or-join', document: bytes },
+      // Demo only. Pass your own signaling URLs in production.
+      signaling: DEMO_SIGNALING_ENDPOINTS,
     },
   });
 
@@ -87,6 +98,7 @@ export function CollaborativeEditor({ roomId, bytes, actorId, name }: Collaborat
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
+import { DEMO_SIGNALING_ENDPOINTS } from '@docx-editor.dev/pro/collaboration/webrtc';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
 const props = defineProps<{
@@ -101,6 +113,8 @@ const { document, modules, session, error } = useWebrtcCollaboration(() => ({
     roomId: props.roomId,
     identity: { actorId: props.actorId, name: props.name },
     bootstrap: { kind: 'create-or-join', document: props.bytes },
+    // Demo only. Pass your own signaling URLs in production.
+    signaling: DEMO_SIGNALING_ENDPOINTS,
   },
 }));
 </script>
@@ -129,7 +143,7 @@ For leaving and rejoining a room, see [Connect with `useWebrtcCollaboration`](/d
 
 Open the first tab before the second tab. This sequence prevents both peers from seeding an empty room at the same time.
 
-The example uses the public demo signaling service when you omit `signaling`. Configure your own signaling URLs and TURN servers for production.
+If you omit `signaling`, the hook reports a `transport` error and no network connection opens. For production, configure your own signaling URLs and TURN servers.
 
 ## Continue the setup
 

@@ -17,11 +17,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const LANE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CORE_SRC = join(LANE, '..');
+/** Contract files this lane may name: DOM-free, types only. Paths are relative to `src`. */
+const NEUTRAL_CONTRACT_FILES = new Set(['contracts/editor-scope']);
 
 /** Every source file of the lane itself, tests excluded — the lane as it ships. */
 function laneFiles(): string[] {
@@ -103,6 +105,9 @@ describe('the lane imports nothing that assumes a browser', () => {
         if (target.startsWith(join(CORE_SRC, 'collaboration'))) continue;
         if (target.startsWith(join(CORE_SRC, 'layout'))) continue;
         if (target.startsWith(join(CORE_SRC, 'export'))) continue;
+        // Contracts only where a file is DOM-free and holds no behavior: the history group
+        // handle types a headless runtime names. Most contract files name DOM types.
+        if (NEUTRAL_CONTRACT_FILES.has(relative(CORE_SRC, target).replace(/\.ts$/, ''))) continue;
         foreign.push(`${file.split('/').pop()} -> ${specifier}`);
       }
     }

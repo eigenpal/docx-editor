@@ -7,6 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { ReviewActivationOptions } from '@docx-editor.dev/core/contracts/editor';
 import type { VNode } from 'vue';
 import type { ReviewAdoptOptions, ReviewItemView } from './useReview.ts';
+import type { ReviewWriteRefusal } from '../review/review-refusal.ts';
 
 /** @public */
 export interface ReviewPartProps {
@@ -78,6 +79,7 @@ export interface ReviewActions {
   reply(item: ReviewItemView, text: string, author?: string): boolean;
   readonly selectionAnchorY: number | null;
   comment(text: string, author?: string): boolean;
+  readonly lastRefusal: ReviewWriteRefusal | null;
   readonly paneOpen: boolean;
   setPaneOpen(open: boolean): void;
   readonly ready: boolean;

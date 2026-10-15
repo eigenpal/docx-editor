@@ -51,7 +51,7 @@ Community catalogs can contain untranslated entries. Missing values and `null` v
 
 Use the `Translations` type for a partial catalog. Keep the existing nested key structure and placeholder names. Set `_lang` when your custom catalog needs language-specific plural rules. The catalog formatter supports named placeholders and its supported plural message syntax.
 
-`useTranslation()` returns `t` and `catalogue` in both adapters. Use `t` with a typed `TranslationKey` and explicit placeholder values. Keep labels such as an application's approval action in the application catalog. `Toolbar.Action.label` takes resolved text, rather than a catalog key. A host group's literal `label` takes priority over `labelKey`.
+`useTranslation()` returns `t`, `catalogue`, and `lang` in both adapters. Use `lang` to format numbers for the active language. Use `t` with a typed `TranslationKey` and explicit placeholder values. Keep labels such as an application's approval action in the application catalog. `Toolbar.Action.label` takes resolved text, rather than a catalog key. A host group's literal `label` takes priority over `labelKey`.
 
 If a region's `t` overrides every label, return a useful string for every key it receives. Do not return the key itself as a visible translation. Use the active catalog as a fallback for keys your application does not override.
 

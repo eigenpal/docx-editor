@@ -53,10 +53,17 @@ export interface LoadQueryOptions {
  * paragraph.load('text');
  * paragraph.load(['text', 'style']);
  * paragraphs.load({ select: 'items', top: 5 });
+ * paragraphs.load('items/text,items/style');
  * ```
  *
- * Collections load their `items`; properties such as `text` are loaded on each item after the
- * collection has been synced.
+ * On a collection, `items/<property>` loads `items` and that property on each item in the same
+ * `context.sync()`. A property name without the `items/` prefix means the same thing on a
+ * collection, so `paragraphs.load('text')` equals `paragraphs.load('items/text')`.
+ *
+ * Only one level of navigation is supported. A deeper path, such as `items/font/bold`, and a
+ * navigation path on an object that is not a collection, such as `font/bold`, are refused as
+ * `InvalidArgument`, with the path as the error's `target`. Load the navigation object itself
+ * instead, for example `paragraph.font.load('bold')` for each item.
  *
  * @public
  */
@@ -65,6 +72,11 @@ export type LoadOption = string | readonly string[] | LoadQueryOptions;
 export interface ResolvedLoadOptions {
   /** Selected property names. Empty means "this object's default set". */
   readonly select: readonly string[];
+  /**
+   * Property names selected with an `items/` path, to load on each item of a collection. Empty
+   * when none was named. An object that is not a collection refuses a non-empty list.
+   */
+  readonly itemSelect: readonly string[];
   readonly top?: number;
   readonly skip?: number;
 }
@@ -72,26 +84,62 @@ export interface ResolvedLoadOptions {
 const KNOWN_KEYS = new Set(['select', 'expand', 'top', 'skip']);
 const PROPERTY_NAME = /^[A-Za-z][A-Za-z0-9]*$/;
 
-function names(value: string | readonly string[] | undefined, target: string): readonly string[] {
-  if (value === undefined) return [];
+/** The prefix that selects a property on each item of a collection. */
+const ITEMS_PATH = 'items/';
+/** Paths longer than this are refused without naming them in the target. */
+const MAX_NAMED_SEGMENTS = 4;
+const MAX_SEGMENT_LENGTH = 64;
+
+interface SelectedNames {
+  readonly own: readonly string[];
+  readonly items: readonly string[];
+}
+
+/**
+ * One selected entry: its own property, an `items/<property>` path, or a refusal.
+ *
+ * A short path whose segments are all identifiers is named in the refusal's target, so the error
+ * says which path is outside the supported depth. Anything else is refused against the loaded
+ * object alone, because the target must never echo an arbitrary value.
+ */
+function classify(entry: unknown, target: string): { own?: string; item?: string } {
+  if (typeof entry !== 'string') fail({ code: 'InvalidArgument', target });
+  if (PROPERTY_NAME.test(entry)) return { own: entry };
+  const segments = entry.split('/', MAX_NAMED_SEGMENTS + 1);
+  const named =
+    segments.length <= MAX_NAMED_SEGMENTS &&
+    segments.every(
+      (segment) => segment.length <= MAX_SEGMENT_LENGTH && PROPERTY_NAME.test(segment)
+    );
+  if (!named) fail({ code: 'InvalidArgument', target });
+  if (segments.length === 2 && entry.startsWith(ITEMS_PATH)) return { item: segments[1]! };
+  fail({ code: 'InvalidArgument', target: `${target}.${entry}` });
+}
+
+function names(value: string | readonly string[] | undefined, target: string): SelectedNames {
+  if (value === undefined) return { own: [], items: [] };
   const listed =
     typeof value === 'string'
       ? value.split(',').map((entry) => entry.trim())
       : Array.isArray(value)
         ? value.map((entry) => (typeof entry === 'string' ? entry.trim() : entry))
         : fail({ code: 'InvalidArgument', target });
-  const out: string[] = [];
+  const own: string[] = [];
+  const items: string[] = [];
   for (const entry of listed) {
     // An empty entry is what a trailing comma or a stray whitespace string produces. Dropping
     // it silently would make `load(' ')` mean `load()` — "load the default set" — which is the
     // opposite of what was asked for.
-    if (typeof entry !== 'string' || !PROPERTY_NAME.test(entry)) {
-      fail({ code: 'InvalidArgument', target });
-    }
-    if (!out.includes(entry)) out.push(entry);
+    const chosen = classify(entry, target);
+    if (chosen.own !== undefined && !own.includes(chosen.own)) own.push(chosen.own);
+    if (chosen.item !== undefined && !items.includes(chosen.item)) items.push(chosen.item);
   }
-  if (out.length === 0) fail({ code: 'InvalidArgument', target });
-  return out;
+  if (own.length === 0 && items.length === 0) fail({ code: 'InvalidArgument', target });
+  return { own, items };
+}
+
+function resolved(selected: SelectedNames): Pick<ResolvedLoadOptions, 'select' | 'itemSelect'> {
+  return { select: selected.own, itemSelect: selected.items };
 }
 
 function count(value: unknown, target: string): number {
@@ -118,9 +166,9 @@ export function resolveLoadOption(
   option: LoadOption | undefined,
   target: string
 ): ResolvedLoadOptions {
-  if (option === undefined) return { select: [] };
+  if (option === undefined) return { select: [], itemSelect: [] };
   if (typeof option === 'string' || Array.isArray(option)) {
-    return { select: names(option as string | readonly string[], target) };
+    return resolved(names(option as string | readonly string[], target));
   }
   if (typeof option !== 'object' || option === null) fail({ code: 'InvalidArgument', target });
 
@@ -130,7 +178,7 @@ export function resolveLoadOption(
   }
   refuseExpand(query.expand, `${target}.expand`);
   return {
-    select: names(query.select, `${target}.select`),
+    ...resolved(names(query.select, `${target}.select`)),
     ...(query.top === undefined ? {} : { top: count(query.top, `${target}.top`) }),
     ...(query.skip === undefined ? {} : { skip: count(query.skip, `${target}.skip`) }),
   };

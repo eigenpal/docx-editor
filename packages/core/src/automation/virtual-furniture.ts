@@ -1,4 +1,5 @@
 // A missing header/footer is a virtual empty body until its first content write.
+import { PackageEditRefusal } from '../store/store/package-edit-refusal.ts';
 import { applyHeaderFooterLifecycleOp } from '../store/package/hf-lifecycle.ts';
 import { withPart, type OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
@@ -149,7 +150,8 @@ export function planVirtualFurniture(
     packageEdits: [
       (current) => {
         const applied = prepare(current);
-        if (!applied) throw new Error('header/footer creation changed during transaction');
+        if (!applied)
+          throw new PackageEditRefusal('header/footer creation changed during transaction');
         prepared = applied;
         return applied.pkg;
       },

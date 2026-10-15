@@ -81,6 +81,7 @@ const CONNECT: UseWebrtcCollaborationConnectOptions = {
   roomId: 'aaaaaaaaaaaaaaaaaaaaaaaaaa',
   identity: { actorId: 'alex', name: 'Alex' },
   bootstrap: { kind: 'join' },
+  signaling: ['wss://signaling.example'],
 };
 
 afterEach(cleanup);
@@ -346,6 +347,29 @@ describe('useWebrtcCollaboration', () => {
     });
     expect(latest?.pending).toBe(false);
     expect(latest?.session).not.toBeNull();
+  });
+
+  test('connect without signaling fails before the room opens', async () => {
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    function DefaultFactoryProbe() {
+      latest = useWebrtcCollaboration();
+      return null;
+    }
+    await act(async () => {
+      render(<DefaultFactoryProbe />);
+    });
+    const { signaling: _omitted, ...withoutSignaling } = CONNECT;
+    let failure: Awaited<ReturnType<UseWebrtcCollaborationReturn['connect']>> | undefined;
+    await act(async () => {
+      failure = await latest?.connect(
+        withoutSignaling as unknown as UseWebrtcCollaborationConnectOptions
+      );
+    });
+    expect(failure?.code).toBe('transport');
+    expect(failure?.detail).toContain('DEMO_SIGNALING_ENDPOINTS');
+    expect(latest?.error?.code).toBe('transport');
+    expect(latest?.session).toBeNull();
+    expect(latest?.provider).toBeNull();
   });
 
   test('a failed auto-connect reports a typed collaboration failure', async () => {

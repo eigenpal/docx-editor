@@ -6,6 +6,7 @@ import {
 } from './image-command-fields.ts';
 import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
+import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
 import { reportCommandResult } from './command-reporting.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -238,11 +239,7 @@ function capabilityFlags(
   return Object.freeze({
     canResize: !fixed && !locks.resize && !projection.hidden,
     canMove: !fixed && !locks.move && !projection.hidden,
-    canChangeWrap:
-      projection.picture !== null &&
-      !locks.move &&
-      projection.kind === 'anchored' &&
-      !projection.hidden,
+    canChangeWrap: projection.picture !== null && !locks.move && !projection.hidden,
     canCrop:
       projection.picture !== null && !locks.resize && !locks.changeAspect && !projection.hidden,
   });
@@ -432,6 +429,17 @@ function drawingOpsResult(
     return { ok: false, code: 'invalidArgs', reason };
   }
   return null;
+}
+
+/** Keeps an inline picture where it is when a wrap change makes it float. */
+function keepPlaceWhenFloated(
+  surface: PaginatedSurface,
+  drawingNodeId: string,
+  wrap: ImageWrapTarget
+): DrawingTreeDocOp[] {
+  if (wrap === 'inline') return [];
+  const position = inlineToFloatingPosition(surface.layout(), drawingNodeId);
+  return position ? [{ op: 'positionDrawing', drawingNodeId, position }] : [];
 }
 
 function applyDrawingOps(
@@ -836,6 +844,7 @@ export function execImageCommand(
       if ('ok' in resolved) return resolved;
       return applyDrawingOps(surface, [
         { op: 'setDrawingWrap', drawingNodeId: resolved.id, wrap: command.target },
+        ...keepPlaceWhenFloated(surface, resolved.id, command.target),
       ]);
     }
     case 'transformImage': {
@@ -899,6 +908,7 @@ export function execImageCommand(
       }
       if (command.wrap !== undefined) {
         ops.push({ op: 'setDrawingWrap', drawingNodeId: resolved.id, wrap: command.wrap });
+        ops.push(...keepPlaceWhenFloated(surface, resolved.id, command.wrap));
       }
       if (propertiesCommandHasPositionFields(command)) {
         const position = positionInputFromPropertiesCommand(command, image);

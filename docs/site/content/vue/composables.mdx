@@ -145,8 +145,12 @@ Subscribe to an editor event for the component lifetime:
 ```ts
 import { useEditorEvent } from '@docx-editor.dev/vue';
 
-useEditorEvent('selectionChange', () => {
-  panelOpen.value = false;
+// `selectionChange` also fires for other state that moves without a document change, such
+// as the collaboration status, so compare the selection itself.
+let lastSelection: unknown = null;
+useEditorEvent('selectionChange', (snapshot) => {
+  if (snapshot.selection !== lastSelection) panelOpen.value = false;
+  lastSelection = snapshot.selection;
 });
 useEditorEvent('change', (change) => {
   void autosave(change.revision);
@@ -497,6 +501,8 @@ function apply(event: Event) {
 
 The native `change` event ends the gesture. The `input` handler applies values. `useEditorCommand().execute(options)` accepts group options and keeps its boolean result. You can also use `execute` as an event handler without passing options. Use `useEditorEvent('historyDiagnostic', handler)` for optional diagnostics. See [history grouping and boundaries](/docs/2.x/core#group-one-gesture-into-one-undo-step) for browser differences and a complete range control example.
 
+A review decision can also be one undo step. Read the editor from `useDocxEditor().value`, create a handle with `editor.beginHistoryGroup()`, and pass it to each write: `editor.exec`, `editor.addComment(text, { historyGroup })`, `editor.acceptReviewItem(key, { historyGroup })`, and `runtime.run({ historyGroup }, callback)`. End the handle when the decision is complete. See [Group a review decision](/docs/2.x/core#group-a-review-decision).
+
 For a font-size slider, use `useEditorValueCommand('font.size')` and `useHistoryGroup({ kind: 'range' })`. Set `type="range"` and pass `Number((event.target as HTMLInputElement).value)` to `execute`. Values use half-points: `24` means 12 pt. Pointer release and keyup end each gesture, including release outside the control. Keep your displayed value bound to the returned `value` ref.
 
 `execute(value, options?)` returns `ExecResult`. If `ok` is `false`, use `code` in application logic and display `reason`. If `ok` is `true`, `changed` tells you whether the document changed. Formatting at a caret can set the format for subsequent typing without changing the document. The change still creates a local undo entry. `result.history?.kind` reports `started`, `extended`, `split`, or `none`. An intervening edit can split a gesture while still applying the formatting.
@@ -513,7 +519,7 @@ Returns the label for the active table border target.
 
 ## `useTranslation` and `useChromeTranslate`
 
-`useTranslation` returns `{ t }` for the active locale. `useChromeTranslate` resolves labels for chrome `t` props. Pass a `Map` to override selected labels.
+`useTranslation` returns `{ t, catalogue, lang }` for the active locale. `useChromeTranslate` resolves labels for chrome `t` props. Pass a `Map` to override selected labels.
 
 ## Toolbar helpers
 
@@ -552,7 +558,8 @@ Install `@docx-editor.dev/pro` and import these APIs from `@docx-editor.dev/pro/
 - `useReviewOf(editorRef, query?)` binds the same state to an explicit editor ref.
 - `useReviewItem()` returns the item for the active review card context.
 - `useReviewAuthor(author)` returns the resolved author style, inside or outside the review rail.
-- `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap. An item with `isActive: true` stays at its own anchor.
+- `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap. An item with `isActive: true` stays at its own anchor. It returns each card's top in layout points. Multiply by `scale` and add the rail's top offset to position a card in CSS pixels.
+- `useReviewRailMetrics(railRef?, options?)` returns `{ metrics }`. Use `metrics.value.scale` and `metrics.value.top` to convert anchors and stacked positions to CSS pixels, and `metrics.value.compact` to choose the narrow layout. Omit `railRef` inside `DocxEditorReview` to read the packaged rail's values. For placement rules and a complete column, see [Place custom cards](/docs/2.x/pro/tracked-changes#place-custom-cards).
 
 The package also exports `DocxEditorReview`. Mount it inside `DocxEditor.Viewport`, beside `DocxEditor.Content`.
 

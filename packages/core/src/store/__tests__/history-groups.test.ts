@@ -283,7 +283,7 @@ describe('TreePackageStore history groups', () => {
     expect(bodyText(store, id)).toBe('Hello');
   });
 
-  test('another story’s pointer pushed above the group closes it', () => {
+  test('a frame in another story extends the group as one package unit', () => {
     const { store, id } = openPackage();
     expect(
       store.applyLifecycleOp({
@@ -297,6 +297,7 @@ describe('TreePackageStore history groups', () => {
     const headerPart = store.partFor(headerScope);
     if (!headerPart) throw new Error('no header part');
     const headerParagraph = firstParagraphId(headerPart);
+    const headerText = () => paragraphTextOf(store.partFor(headerScope)!, headerParagraph);
     const gesture = Symbol('drag');
     appendBody(store, id, ' a', gesture);
     const inHeader = store.transact(
@@ -306,11 +307,15 @@ describe('TreePackageStore history groups', () => {
     );
     expect(inHeader.ok).toBe(true);
     appendBody(store, id, ' b', gesture);
-    expect(store.undo()).not.toBeNull(); // ' b' alone
-    expect(bodyText(store, id)).toBe('Hello a');
-    expect(store.undo()).not.toBeNull(); // the header text
-    expect(store.undo()).not.toBeNull(); // ' a'
+    expect(store.undo()).not.toBeNull(); // the whole gesture
     expect(bodyText(store, id)).toBe('Hello');
+    expect(headerText()).toBe('');
+    expect(store.redo()).not.toBeNull();
+    expect(bodyText(store, id)).toBe('Hello a b');
+    expect(headerText()).toBe('H');
+    expect(store.undo()).not.toBeNull();
+    expect(store.undo()).not.toBeNull(); // the header
+    expect(store.canUndo).toBe(false);
   });
 
   test('a package-level undo closes the group', () => {

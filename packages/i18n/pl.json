@@ -134,7 +134,9 @@
     "addSpaceBefore": "Dodaj odstęp przed akapitem",
     "removeSpaceAfter": "Usuń odstęp po akapicie",
     "removeSpaceBefore": "Usuń odstęp przed akapitem",
-    "options": "Opcje interlinii…"
+    "options": "Opcje interlinii…",
+    "exactlyPoints": "Dokładnie {value} pkt",
+    "atLeastPoints": "Co najmniej {value} pkt"
   },
   "styles": {
     "selectAriaLabel": "Wybierz styl akapitu",
@@ -801,6 +803,12 @@
     "replacedWith": "na",
     "reply": "Odpowiedz",
     "replyRefused": "Nie można opublikować odpowiedzi",
+    "refusedRefresh": "Dokument jest odświeżany. Spróbuj ponownie za chwilę.",
+    "refusedViewing": "Dokument jest otwarty do wyświetlania.",
+    "refusedProtected": "Ta część dokumentu jest chroniona.",
+    "refusedCollaboration": "Oczekiwanie na wspólną sesję. Spróbuj ponownie za chwilę.",
+    "refusedSessionEnded": "Wspólna sesja się zakończyła. Wczytaj dokument ponownie, aby kontynuować przeglądanie.",
+    "actionRefused": "Nie udało się wprowadzić tej zmiany",
     "showPane": "Pokaż komentarze",
     "structural": "Zmieniono strukturę dokumentu",
     "deleteComment": "Usuń komentarz",

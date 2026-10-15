@@ -7,6 +7,7 @@ import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
 import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
+import { alignPassageSpans, partUsedWidth, type LinePassage } from './passage-alignment.ts';
 
 const OVERFLOW_TOLERANCE_PT = 0.001;
 const SLACK_RESIDUE_PT = 1e-9;
@@ -358,7 +359,8 @@ export function boxLineSetsLikeLastLine(
 
 /**
  * Align one line. `lastLineShrinks` is the line's `PendingLine.spaceShrink`: without
- * it, a justified last line that overflows keeps its natural spacing.
+ * it, a justified last line that overflows keeps its natural spacing. `passages` are the float
+ * passages of a line that steps over a float; each part of the line aligns inside its own.
  */
 export function alignSpans(
   spans: readonly StyleSpanRecord[],
@@ -370,10 +372,28 @@ export function alignSpans(
   lineUsedWidth?: number,
   paragraphRtl = spans.some((span) => span.style.shaping?.baseLevel === 1),
   pageBreaksIgnored = false,
-  lastLineShrinks = false
+  lastLineShrinks = false,
+  passages?: readonly LinePassage[]
 ): readonly StyleSpanRecord[] {
   const effective = alignment === 'both' && isLastLine && paragraphRtl ? 'right' : alignment;
   const split = splitBidiTrailingWhitespace(spans, measurer);
+  if (passages && passages.length > 1 && !paragraphRtl && !split.some(isRightToLeft)) {
+    const aligned = alignPassageSpans(split, passages, (part, passage, isLastPart) =>
+      alignLogicalSpans(
+        part,
+        measurer,
+        passage.start,
+        Math.max(1, passage.end - passage.start),
+        effective,
+        isLastLine && isLastPart,
+        effective === 'center' || effective === 'right' ? partUsedWidth(part, passage) : undefined,
+        false,
+        pageBreaksIgnored,
+        lastLineShrinks
+      )
+    );
+    if (aligned) return reorderBidiSpans(aligned, false, pageBreaksIgnored);
+  }
   const align = (
     line: readonly StyleSpanRecord[],
     measure: number,
@@ -407,6 +427,10 @@ export function alignSpans(
   return reorderBidiSpans(align(split, available, lineUsedWidth), paragraphRtl, pageBreaksIgnored);
 }
 
+function isRightToLeft(span: StyleSpanRecord): boolean {
+  return span.style.shaping?.direction === 'rtl';
+}
+
 /**
  * How far alignment moved a line. A line with no spans still aligns: an empty centred
  * paragraph puts its (zero width) content, and so the caret, at the middle of the measure.
@@ -433,24 +457,47 @@ export function lineAlignOffset(
  *
  * `used` is the line's content extent measured from that box's left edge, so the snap advance
  * a float forced before the first glyph is not mistaken for content and does not push a
- * centred line off toward the far margin.
+ * centred line off toward the far margin. A line that steps over a float also returns its
+ * `passages` in the spans' x space, for {@link alignSpans} to align each part inside its own.
  */
 export function lineAlignmentMeasure(
   line: {
     readonly width: number;
-    readonly wrapSegment?: { readonly start: number; readonly end: number };
+    readonly wrapSegment?: {
+      readonly start: number;
+      readonly end: number;
+      readonly contentEnd?: number;
+    };
+    readonly wrapPassages?: readonly LinePassage[];
   },
   columnX: number,
   lineIndent: number,
   lineAvailableWidth: number
-): { readonly indent: number; readonly available: number; readonly used: number } {
+): {
+  readonly indent: number;
+  readonly available: number;
+  readonly used: number;
+  readonly passages?: readonly LinePassage[];
+} {
   const segment = line.wrapSegment;
   if (!segment) {
-    return { indent: lineIndent, available: lineAvailableWidth, used: line.width };
+    const passages = line.wrapPassages?.map((passage) => ({
+      start: columnX + passage.start,
+      end: columnX + passage.end,
+    }));
+    return {
+      indent: lineIndent,
+      available: lineAvailableWidth,
+      used: line.width,
+      ...(passages ? { passages } : {}),
+    };
   }
   return {
     indent: columnX + segment.start,
     available: Math.max(1, segment.end - segment.start),
-    used: lineIndent - columnX + line.width - segment.start,
+    used:
+      segment.contentEnd !== undefined
+        ? segment.contentEnd - segment.start
+        : lineIndent - columnX + line.width - segment.start,
   };
 }

@@ -8,6 +8,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { DocxEditorRootProps } from '@docx-editor.dev/react';
 import * as react from 'react';
 import { ReactNode } from 'react';
+import { RefObject } from 'react';
 import { ReviewAuthorInfo } from '@docx-editor.dev/react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
 import * as Y from 'yjs';
@@ -291,6 +292,7 @@ export interface DocxEditorReviewNamespace {
     // (undocumented)
     readonly List: typeof ReviewList;
     readonly Markers: typeof ReviewMarkers;
+    readonly Refusal: typeof ReviewRefusal;
     // (undocumented)
     readonly Reject: typeof ReviewReject;
     // (undocumented)
@@ -433,6 +435,27 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
+export interface ReviewRailMetrics {
+    readonly compact: boolean;
+    readonly compactCardLeft: number | null;
+    readonly left: number | null;
+    readonly scale: number;
+    readonly top: number;
+}
+
+// @public
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+
+// @public
+export interface ReviewWriteRefusal {
+    readonly action: ReviewWriteAction;
+    readonly code: EditDiagnosticCode;
+    readonly final: boolean;
+    readonly key: string | null;
+    readonly sequence: number;
+}
+
+// @public
 export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
@@ -499,6 +522,15 @@ export function useReviewItem(): ReviewItemView | null;
 export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn;
 
 // @public
+export function useReviewRailMetrics(railRef?: RefObject<HTMLElement | null> | null, options?: UseReviewRailMetricsOptions): ReviewRailMetrics;
+
+// @public
+export interface UseReviewRailMetricsOptions {
+    readonly reserveGutter?: boolean;
+    readonly trackScroll?: boolean;
+}
+
+// @public
 export interface UseReviewReturn {
     readonly accept: (item: ReviewItemView) => boolean;
     readonly activatedKey: string | null;
@@ -507,6 +539,7 @@ export interface UseReviewReturn {
     readonly comment: (text: string, author?: string) => boolean;
     readonly commentResolutionDisabledReason: string | null;
     readonly items: readonly ReviewItemView[];
+    readonly lastRefusal: ReviewWriteRefusal | null;
     readonly paneOpen: boolean;
     readonly ready: boolean;
     readonly reject: (item: ReviewItemView) => boolean;

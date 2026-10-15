@@ -55,6 +55,11 @@ export type OpenTreeSessionResult = {
 };
 
 // @public
+export interface PackageWriteOptions {
+    readonly historyToken?: HistoryGroup;
+}
+
+// @public
 export interface ParagraphAttrs {
     readonly nodeId: string | null;
     readonly props: readonly OoxmlProperty[];
@@ -92,7 +97,9 @@ export type StoryScope = {
 export type StoryTargetRejection = 'unknown-scope' | 'dangling-relationship' | 'wrong-relationship-type' | 'external-relationship' | 'bad-relationship-target' | 'missing-part' | 'not-a-story-part' | 'too-many-story-stores';
 
 // @public
-export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory' | 'historyGroup'> & {
+export type TreeApplyOptions = Pick<TransactOptions, 'origin' | 'actorId' | 'operationId' | 'recordsHistory'> & {
+    readonly historyGroup?: HistoryGroup;
+    readonly historyToken?: HistoryGroup;
     readonly packageEdits?: readonly ((pkg: OoxmlPackage) => OoxmlPackage)[];
     readonly partOps?: readonly {
         readonly ops: readonly TreeDocOp[];
@@ -141,11 +148,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canUndo(): boolean;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
-    deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+    deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;
         readonly parentCommentId?: string;
-    }[], scope?: StoryScope, noteId?: number): boolean;
+    }[], scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     documentFonts(): readonly string[];
@@ -169,7 +176,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
-    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope, options?: PackageWriteOptions): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
     nodeIdOf(paraId: string): string | null;
     numberingRoot(): OoxmlElement | null;
@@ -197,12 +204,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
         start: number;
     }, text: string, author: string,
     date?: string, scope?: StoryScope,
-    actorId?: string): string | null;
+    actorId?: string, options?: PackageWriteOptions): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
-    setCommentResolved(commentId: string, resolved: boolean): boolean;
+    saveSteps(): Generator<void, Uint8Array>;
+    setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;

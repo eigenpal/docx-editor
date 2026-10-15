@@ -16,6 +16,10 @@ import {
 } from './spans.ts';
 import { proposalInputError, proposalRevisionError } from './proposals.ts';
 import {
+  landsInForeignInsertionContainer,
+  trackedLandingOffset,
+} from './proposal-foreign-revisions.ts';
+import {
   areSiblingParagraphs,
   followsOwnMarkDeletion,
   markStrikeRefusal,
@@ -108,7 +112,8 @@ export function planProposal(
   handles: AutomationHandleTable,
   packageReads: AutomationPackageReads,
   claim: (story: AutomationStoryReads, paragraphId: string) => PlannedOperation | null,
-  trackedRangeReplacement = true
+  trackedRangeReplacement = true,
+  collaborative = false
 ): PlannedOperation {
   const refuse = (
     code: AutomationErrorCode,
@@ -169,8 +174,20 @@ export function planProposal(
       const end =
         index === ids.length - 1 ? range.end.offset : (reads.rawText(paragraphId) ?? '').length;
       const error =
-        proposalRevisionError(reads, paragraphId, start, end) ??
-        (index < ids.length - 1 ? markStrikeRefusal(reads.part, paragraphId) : null);
+        proposalRevisionError(
+          reads,
+          paragraphId,
+          start,
+          end,
+          undefined,
+          false,
+          undefined,
+          // Another author's text may hold the struck text. A range that only reaches the
+          // next paragraph's start writes nothing there and keeps the strict boundary.
+          end > start
+            ? { author: revision.author, strikesMark: index < ids.length - 1, collaborative }
+            : undefined
+        ) ?? (index < ids.length - 1 ? markStrikeRefusal(reads.part, paragraphId) : null);
       if (error) return { ok: false, error };
       // A range that ends at a paragraph's start writes nothing there, so deleting adjacent
       // paragraphs in one batch does not claim the next one twice.
@@ -182,12 +199,15 @@ export function planProposal(
         marks.push({ op: 'setParagraphMarkRevision', paragraphId, kind: 'del', revision });
     }
     ops.push(...marks);
-    const at = { ...range.start, offset: (reads.rawText(ids[0]!) ?? '').length };
+    const aim = (reads.rawText(ids[0]!) ?? '').length;
     const text = deletion ? '' : operation.text;
-    const lineBreak = lineBreakRefusal(reads.part, ids[0]!, range.start.offset, at.offset, text);
+    const lineBreak = lineBreakRefusal(reads.part, ids[0]!, range.start.offset, aim, text);
     if (lineBreak) return lineBreak;
-    if (text)
-      ops.push({ op: 'insertText', paragraphId: ids[0]!, offset: at.offset, text, revision });
+    if (text) ops.push({ op: 'insertText', paragraphId: ids[0]!, offset: aim, text, revision });
+    const landing = text
+      ? trackedLandingOffset(reads, ids[0]!, { start: range.start.offset, end: aim }, aim, revision)
+      : aim;
+    const at = { ...range.start, offset: landing };
     return {
       ok: true,
       kind: 'command',
@@ -223,16 +243,44 @@ export function planProposal(
     end,
     tracked && insertion ? operation.author.trim() : undefined,
     insertion && start === (story.value.rawText(paragraphId) ?? '').length,
-    tracked && !insertion && end > start ? operation.author.trim() : undefined
+    tracked && !insertion && end > start ? operation.author.trim() : undefined,
+    tracked
+      ? {
+          author: operation.author.trim(),
+          collaborative,
+          ...(!deletion && operation.text.length > 0 ? { insertsAt: insertion ? start : end } : {}),
+        }
+      : undefined
   );
   if (revisionError) return { ok: false, error: revisionError };
   if (!deletion) {
     const lineBreak = lineBreakRefusal(story.value.part, paragraphId, start, end, operation.text);
     if (lineBreak) return lineBreak;
   }
+  const revision = { author: operation.author.trim(), date: new Date().toISOString() };
+  // The store places tracked words outside struck text, so the answer names where they land.
+  const aim = insertion ? start : end;
+  const writes = tracked && !deletion && operation.text.length > 0;
+  const landing = writes
+    ? trackedLandingOffset(
+        story.value,
+        paragraphId,
+        insertion ? null : { start, end },
+        aim,
+        revision
+      )
+    : aim;
+  if (
+    writes &&
+    landsInForeignInsertionContainer(story.value, paragraphId, landing, revision.author)
+  )
+    return refuse(
+      'unsupported-revision',
+      "the new text would land inside a container within another author's pending insertion",
+      'edit.tracked-foreign-revision-unsupported'
+    );
   const conflict = claim(story.value, paragraphId);
   if (conflict) return conflict;
-  const revision = { author: operation.author.trim(), date: new Date().toISOString() };
   const ops: TreeDocOp[] = [];
   if (!insertion && end > start) ops.push({ op: 'deleteText', paragraphId, start, end, revision });
   if (!deletion && operation.text.length > 0)
@@ -250,7 +298,7 @@ export function planProposal(
     story: story.value.story,
     answer: () => {
       if (!tracked) return { kind: 'applied' };
-      const at = { ...range.start, offset: insertion ? start : end };
+      const at = { ...range.start, offset: landing };
       return {
         kind: 'span',
         span: spanOf({

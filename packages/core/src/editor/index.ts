@@ -246,7 +246,12 @@ export type { LockedControlNavigation } from './paginated-surface-options.ts';
 // Automation over an editor that is already open. The protocol itself lives in the neutral
 // automation subpath — only the adapter that needs a live editor ships from here, and only as
 // a factory: there is no composition hook a consumer could point at a second document model.
-export { BROWSER_AUTOMATION_CAPABILITIES, createBrowserAutomationHost } from './automation-host.ts';
+export {
+  BROWSER_AUTOMATION_CAPABILITIES,
+  createBrowserAutomationHost,
+  type BrowserAutomationHost,
+  type HistoryGroupRun,
+} from './automation-host.ts';
 export { reportAutomationException, reportAutomationRefusal } from './editor-diagnostics.ts';
 // The capability seam: what `createDocxEditor({ modules })` accepts and what a
 // capability package (the pro review module) implements.
@@ -487,6 +492,13 @@ export {
   type ToolbarValueSlot,
   type ToolbarSlotValue,
 } from './toolbar-values.ts';
+export {
+  LINE_SPACING_PRESETS,
+  lineSpacingMenuRowLabel,
+  lineSpacingMenuRows,
+  type LineSpacingMenuRow,
+  type LineSpacingMenuValue,
+} from './line-spacing-menu.ts';
 
 export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
 export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';
@@ -537,6 +549,8 @@ export type {
   ReviewItemHit,
   ScrollPlacement,
   ScrollToAnchorOptions,
+  HistoryGroup,
+  HistoryGroupOptions,
 } from '../contracts/editor.ts';
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';

@@ -52,6 +52,7 @@ import {
   ReviewCard,
   ReviewEmpty,
   ReviewReject,
+  ReviewRefusal,
   ReviewReplies,
   ReviewSummary,
   ReviewTime,
@@ -755,6 +756,7 @@ export const ReviewBalloon = markPart(
                           changeBalloon
                             ? h(BalloonChangeSummary, { entry: matched })
                             : h(ReviewSummary),
+                          h(ReviewRefusal),
                           ...(changeBalloon
                             ? [
                                 h(ReviewReplies),

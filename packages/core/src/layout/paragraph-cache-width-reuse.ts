@@ -15,6 +15,7 @@ export function lineTiedToPlacement(line: PendingLine): boolean {
   return Boolean(
     line.drawings.length ||
     line.wrapSegment ||
+    line.wrapPassages ||
     line.exclusionSkipBefore ||
     line.anchorClearanceBefore ||
     line.pageBreakAfter ||

@@ -134,7 +134,9 @@
     "addSpaceBefore": "הוסף רווח לפני פסקה",
     "removeSpaceAfter": "הסר רווח אחרי פסקה",
     "removeSpaceBefore": "הסר רווח לפני פסקה",
-    "options": "אפשרויות מרווח בין שורות…"
+    "options": "אפשרויות מרווח בין שורות…",
+    "exactlyPoints": "מדויק {value} נק'",
+    "atLeastPoints": "לפחות {value} נק'"
   },
   "styles": {
     "selectAriaLabel": "בחר סגנון פסקה",
@@ -801,6 +803,12 @@
     "replacedWith": "ב-",
     "reply": "השב",
     "replyRefused": "לא ניתן לפרסם את התשובה",
+    "refusedRefresh": "המסמך מתרענן. נסו שוב בעוד רגע.",
+    "refusedViewing": "המסמך פתוח לצפייה.",
+    "refusedProtected": "חלק זה של המסמך מוגן.",
+    "refusedCollaboration": "ממתין לסשן המשותף. נסו שוב בעוד רגע.",
+    "refusedSessionEnded": "הסשן המשותף הסתיים. טענו מחדש את המסמך כדי להמשיך בבדיקה.",
+    "actionRefused": "לא ניתן לבצע את השינוי הזה",
     "showPane": "הצג הערות",
     "structural": "מבנה המסמך שונה",
     "deleteComment": "מחק הערה",

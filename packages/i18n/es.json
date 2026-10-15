@@ -170,7 +170,9 @@
     "removeSpaceBefore": "Quitar espacio antes del párrafo",
     "addSpaceAfter": "Añadir espacio después del párrafo",
     "removeSpaceAfter": "Quitar espacio después del párrafo",
-    "options": "Opciones de interlineado…"
+    "options": "Opciones de interlineado…",
+    "exactlyPoints": "Exacto {value} pto",
+    "atLeastPoints": "Mínimo {value} pto"
   },
   "styles": {
     "selectAriaLabel": "Seleccionar estilo de párrafo",
@@ -909,6 +911,12 @@
     "movedTo": "Movido aquí",
     "structural": "Cambió la estructura del documento",
     "replyRefused": "No se pudo publicar la respuesta",
+    "refusedRefresh": "El documento se está actualizando. Inténtalo de nuevo en un momento.",
+    "refusedViewing": "El documento está abierto para su visualización.",
+    "refusedProtected": "Esta parte del documento está protegida.",
+    "refusedCollaboration": "Esperando la sesión compartida. Inténtalo de nuevo en un momento.",
+    "refusedSessionEnded": "La sesión compartida terminó. Vuelve a cargar el documento para seguir revisando.",
+    "actionRefused": "No se pudo realizar este cambio",
     "showPane": "Mostrar comentarios",
     "resolved": "Resuelto",
     "showResolvedComment": "Mostrar comentario resuelto",

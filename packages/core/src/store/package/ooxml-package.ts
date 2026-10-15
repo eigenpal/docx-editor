@@ -18,12 +18,11 @@
 // One deliberate tolerance: a content-type record with malformed MIME syntax is ignored
 // (treated as absent) unless it decides the type of a part the document needs.
 
-import { textboxFallbackExportPackage } from './textbox-fallback-export.ts';
+import { textboxFallbackExportPackageSteps } from './textbox-fallback-export.ts';
 import { readOoxmlPartSteps } from './ooxml-part-steps.ts';
 import {
   readZip,
-  writeZip,
-  strToU8,
+  writeZipSteps,
   strFromU8,
   type ZipLimits,
   type ZipRejection,
@@ -51,7 +50,8 @@ import {
   type IgnoredContentTypes,
   type OverrideRecord,
 } from './content-types.ts';
-import { serializeOoxmlPart, type OoxmlPart, type OoxmlReadRejection } from './ooxml-tree.ts';
+import type { OoxmlPart, OoxmlReadRejection } from './ooxml-tree.ts';
+import { serializeOoxmlPartSteps } from './ooxml-serialize-steps.ts';
 import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 import { commentExportPackage } from './comment-export-cleanup.ts';
 
@@ -618,12 +618,33 @@ export function* readOoxmlPackageSteps(
  * save cannot be smuggled into the archive.
  */
 export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
-  const exported = textboxFallbackExportPackage(commentExportPackage(pkg));
+  const steps = writeOoxmlPackageSteps(pkg);
+  for (;;) {
+    const next = steps.next();
+    if (next.done) return next.value;
+  }
+}
+
+/**
+ * {@link writeOoxmlPackage}, yielding between units of work: between paragraphs of a long
+ * part and between slices of a long ZIP entry. A caller that stops between yields keeps the
+ * page responsive while a large document saves; the bytes are the same either way.
+ *
+ * The package is immutable, so the result describes `pkg` even when the caller's document
+ * moves on between steps. Paragraphs serialized by an earlier save are reused, so a save
+ * after a small edit does real work only for what the edit changed.
+ *
+ * @internal
+ */
+export function* writeOoxmlPackageSteps(pkg: OoxmlPackage): Generator<void, Uint8Array> {
+  const exported = yield* textboxFallbackExportPackageSteps(commentExportPackage(pkg));
+  yield;
   const entries = new Map<string, Uint8Array>(exported.partBytes);
   for (const [name, part] of exported.parts) {
-    entries.set(name, strToU8(serializeOoxmlPart(part)));
+    entries.set(name, yield* serializeOoxmlPartSteps(part));
+    yield;
   }
-  return writeZip(entries);
+  return yield* writeZipSteps(entries);
 }
 
 /** Replace one part's tree, returning a new package. Pure, like the tree edits themselves. */

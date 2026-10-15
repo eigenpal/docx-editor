@@ -161,6 +161,7 @@ export const INERT_RAIL: ReviewRailValue = {
     reply: () => false,
     selectionAnchorY: null,
     comment: () => false,
+    lastRefusal: null,
     activatedKey: null,
     paneOpen: true,
     setPaneOpen: () => {},

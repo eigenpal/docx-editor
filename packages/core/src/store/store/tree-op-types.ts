@@ -1195,6 +1195,11 @@ export type TreeOpRejection =
    * pointing at a part nobody created, or a part with no declared content type.
    */
   | 'package-invariant'
+  /**
+   * A package edit refused the package it was given, for example because an id or part name it
+   * expected to allocate is taken or a definition it addresses changed. Nothing was applied.
+   */
+  | 'package-changed'
   /** No revision in this part carries the addressed `(id, author, date)` triple. */
   | 'unknown-revision'
   /**
@@ -1203,6 +1208,12 @@ export type TreeOpRejection =
    * applied while leaving the row, cell, or section it describes untouched.
    */
   | 'unsupported-revision'
+  /**
+   * A tracked insertion would land inside a link, content control, or other container within
+   * another author's pending insertion. The container cannot split, and nested words would
+   * become part of that author's proposal.
+   */
+  | 'unsupported-revision:foreign-insertion'
   | 'tree-invariant'
   /** No content control in this part carries the addressed node id. */
   | 'unknown-content-control'

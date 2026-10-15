@@ -274,7 +274,7 @@ The stylesheet shows delete controls on hover or keyboard focus. Cards without a
 
 `useReview()` returns the same data and actions as the packaged rail.
 
-React returns plain values from `useReview()`. Vue returns computed refs for `items`, `activeKey`, `ready`, `paneOpen`, `selectionAnchorY`, and `commentResolutionDisabledReason`. Vue templates unwrap these refs.
+React returns plain values from `useReview()`. Vue returns computed refs for `items`, `activeKey`, `ready`, `paneOpen`, `selectionAnchorY`, `commentResolutionDisabledReason`, and `lastRefusal`. Vue templates unwrap these refs.
 
 | Member                            | Behavior                                 |
 | --------------------------------- | ---------------------------------------- |
@@ -290,6 +290,7 @@ React returns plain values from `useReview()`. Vue returns computed refs for `it
 | `paneOpen`, `setPaneOpen`         | Read or change pane state                |
 | `ready`                           | `false` before a document loads          |
 | `commentResolutionDisabledReason` | Engine refusal for comment state actions |
+| `lastRefusal`                     | Why the last review action was refused   |
 
 Render `item.text` as text. The document controls this value. Do not render it as markup.
 
@@ -306,6 +307,328 @@ The nested `item` field holds engine review data. For an `entry`, revision range
 A reply to a revision creates a comment over its range. Its `parentRevisionId` links it to the revision. Omit comments with `parentId` or `parentRevisionId` from top-level lists.
 
 `readOnly` means the engine cannot resolve that item. Hide **Accept** and **Reject** in custom cards. Packaged actions remain visible but disabled in viewing mode.
+
+### Place custom cards
+
+`anchorY` and stacked positions are layout points from the top of the first page. `useReviewRailMetrics()` returns the values that convert them to CSS pixels:
+
+| Value | Meaning |
+| --- | --- |
+| `scale` | CSS pixels per layout point, including zoom. |
+| `top` | CSS pixels from the scroll container's top padding edge to the first page. Content above the pages is included. |
+| `left` | CSS pixels from the scroll container's left padding edge to the column, 16 pixels right of the page. `null` before layout. |
+| `compact` | `true` when the pane is open but the viewport is too narrow for a full column. |
+| `compactCardLeft` | The `left` of a 300-pixel card, relative to the column, that keeps the card inside a narrow viewport. `null` before layout. |
+
+A card's CSS `top` is `metrics.top + position * metrics.scale`. To stack cards without overlap, pass their measured heights in CSS pixels to `useStackedReviewPositions(items, heights, { gap, scale: metrics.scale })`. An item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
+
+Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. Your children render inside the rail element, which already sits at `left`.
+
+For a column of your own, pass a ref to the column element. The column must meet these conditions:
+
+- The component that calls the hook renders the element.
+- The element has `position: absolute`.
+- The element is a child of `DocxEditor.Viewport`, with no positioned element in between. Its offset parent must be the scroll container that holds the pages.
+- While `left` is `null`, the element uses `visibility: hidden`, not `display: none`.
+
+Development builds print one warning when a condition fails.
+
+While the column element is mounted, it reserves the review gutter beside the page, as `DocxEditorReview` does. The page moves left while the pane is open. If a mounted `DocxEditorReview` already reserves the gutter, or your column covers the page, pass `{ reserveGutter: false }`.
+
+While the pane is closed, the viewport reserves only a narrow marker strip. Read `paneOpen` from `useReview()`, and render no cards, or small markers, while it is `false`.
+
+The reserved gutter does not show the **Add comment** controls in the toolbar and the context menu. Those controls open a comment draft in a review column. To serve them from your own column, read `ReviewRailContext` from the adapter package. Call its `register()` to show the controls, and its `registerCommentDraft(handler)` to receive each request. Both return a cleanup function. `register()` also reserves the gutter, so pass `{ reserveGutter: false }` in that case.
+
+The handler takes no arguments. It reads the selection's position with `getSelectionPlacement()`, pins the selection with `retainSelection()`, and opens the pane. When the draft closes or is cancelled, call `editor.releaseSelection(pin)`, or the highlight stays pinned. A request counts as served as soon as a handler runs, even if the handler opens nothing. So register the handler only while your column can open a draft, and not in viewing mode.
+
+In React, register in an effect. Keep `openDraft` stable with `useCallback`: a new function on each render registers the handler again each time.
+
+```tsx
+import { useContext, useEffect } from 'react';
+import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
+import { ReviewRailContext, useDocxEditor, useEditorState } from '@docx-editor.dev/react';
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
+  const registry = useContext(ReviewRailContext);
+  const editor = useDocxEditor();
+  const viewing = useEditorState((state) => state.editingMode === 'viewing');
+  const { setPaneOpen } = useReview();
+  useEffect(() => {
+    if (!registry || !editor || viewing) return undefined;
+    const unregister = registry.register();
+    const release = registry.registerCommentDraft(() => {
+      const anchorY = editor.getSelectionPlacement()?.anchorY;
+      if (anchorY === undefined) return;
+      const pin = editor.retainSelection();
+      if (!pin) return;
+      setPaneOpen(true);
+      openDraft(anchorY, pin);
+    });
+    return () => {
+      release();
+      unregister();
+    };
+  }, [registry, editor, viewing, setPaneOpen, openDraft]);
+}
+```
+
+In Vue, inject the registry. It is a ref, so read `.value`. This sketch registers on mount; also unregister while the document is in viewing mode:
+
+```ts
+import { inject, onMounted, onUnmounted } from 'vue';
+import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
+import { ReviewRailContext, useDocxEditor } from '@docx-editor.dev/vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+export function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
+  const registry = inject(ReviewRailContext, null);
+  const editorRef = useDocxEditor();
+  const { setPaneOpen } = useReview();
+  let cleanup: (() => void) | undefined;
+  onMounted(() => {
+    const rail = registry?.value;
+    if (!rail) return;
+    const unregister = rail.register();
+    const release = rail.registerCommentDraft(() => {
+      const editor = editorRef.value;
+      const anchorY = editor?.getSelectionPlacement()?.anchorY;
+      if (!editor || anchorY === undefined) return;
+      const pin = editor.retainSelection();
+      if (!pin) return;
+      setPaneOpen(true);
+      openDraft(anchorY, pin);
+    });
+    cleanup = () => {
+      release();
+      unregister();
+    };
+  });
+  onUnmounted(() => cleanup?.());
+}
+```
+
+The values update when the zoom, the window size, the page count, the document load, content above the pages, or the reserved gutter changes. They also work when the editor is in a pop-out window or an iframe.
+
+The following React example renders a complete column. It measures each card with a `ResizeObserver`, stacks the cards, shows only the active card in compact mode, and renders nothing while the pane is closed:
+
+```tsx
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
+import {
+  reviewModule,
+  useReview,
+  useReviewRailMetrics,
+  useStackedReviewPositions,
+  type ReviewItemView,
+} from '@docx-editor.dev/pro/react';
+
+const MODULES = [reviewModule()];
+
+function MeasuredCard(props: {
+  item: ReviewItemView;
+  top: number;
+  left?: number;
+  onHeight: (key: string, height: number) => void;
+}) {
+  const { item, top, left = 0, onHeight } = props;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return undefined;
+    const observer = new ResizeObserver(() => onHeight(item.key, node.offsetHeight));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [item.key, onHeight]);
+  return (
+    <div
+      ref={ref}
+      className="my-review-card"
+      style={{ position: 'absolute', top, left, width: 300 }}
+    >
+      <strong>{item.author}</strong>
+      <p>{item.text}</p>
+    </div>
+  );
+}
+
+function MyReviewColumn() {
+  const railRef = useRef<HTMLDivElement>(null);
+  const metrics = useReviewRailMetrics(railRef);
+  const { items, paneOpen } = useReview();
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
+  // Store a height only when it changed, so a measurement cannot loop.
+  const onHeight = useRef((key: string, height: number) =>
+    setHeights((previous) =>
+      previous.get(key) === height ? previous : new Map(previous).set(key, height)
+    )
+  ).current;
+  const positions = useStackedReviewPositions(items, heights, {
+    gap: 8,
+    scale: metrics.scale,
+  });
+  const topOf = (item: ReviewItemView) =>
+    metrics.top + (positions.get(item.key) ?? item.anchorY ?? 0) * metrics.scale;
+
+  let cards: ReactNode = null;
+  if (paneOpen && metrics.compact) {
+    // Too narrow for a column: float only the active card inside the viewport.
+    const active = items.find((item) => item.isActive);
+    cards = active ? (
+      <MeasuredCard
+        item={active}
+        top={metrics.top + (active.anchorY ?? 0) * metrics.scale}
+        left={metrics.compactCardLeft ?? 0}
+        onHeight={onHeight}
+      />
+    ) : null;
+  } else if (paneOpen) {
+    cards = items.map((item) => (
+      <MeasuredCard key={item.key} item={item} top={topOf(item)} onHeight={onHeight} />
+    ));
+  }
+
+  return (
+    <div
+      ref={railRef}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: metrics.left ?? 0,
+        visibility: metrics.left === null ? 'hidden' : 'visible',
+      }}
+    >
+      {cards}
+    </div>
+  );
+}
+
+export function Reviewer({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <MyReviewColumn />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
+  );
+}
+```
+
+In Vue, `useReviewRailMetrics(railRef)` returns `{ metrics }`, where `metrics` is a ref. The following component is the Vue version of the column. Mount it inside `DocxEditor.Viewport`, after `DocxEditor.Content`:
+
+```vue
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import {
+  useReview,
+  useReviewRailMetrics,
+  useStackedReviewPositions,
+  type ReviewItemView,
+} from '@docx-editor.dev/pro/vue';
+
+const railRef = ref<HTMLElement | null>(null);
+const { metrics } = useReviewRailMetrics(railRef);
+const { items, paneOpen } = useReview();
+const heights = ref<ReadonlyMap<string, number>>(new Map());
+const positions = useStackedReviewPositions(items, heights, () => ({
+  gap: 8,
+  scale: metrics.value.scale,
+}));
+
+// Observe each card once. Store a height only when it changed, so a measurement
+// cannot loop. The observer is created on mount, so server rendering skips it.
+let observer: ResizeObserver | null = null;
+const cards = new Map<string, HTMLElement>();
+onMounted(() => {
+  observer = new ResizeObserver((entries) => {
+    let next: Map<string, number> | null = null;
+    for (const entry of entries) {
+      const node = entry.target as HTMLElement;
+      const key = node.dataset.key;
+      if (!key || heights.value.get(key) === node.offsetHeight) continue;
+      next ??= new Map(heights.value);
+      next.set(key, node.offsetHeight);
+    }
+    if (next) heights.value = next;
+  });
+  for (const node of cards.values()) observer.observe(node);
+});
+onUnmounted(() => observer?.disconnect());
+
+// One stable function ref per card. Vue calls it with the element, and with null when
+// the card leaves. A nodeType check works in a pop-out window, where instanceof fails.
+const cardRefs = new Map<string, (node: unknown) => void>();
+function cardRef(key: string) {
+  let bind = cardRefs.get(key);
+  if (!bind) {
+    bind = (node) => {
+      const element = (node as Node | null)?.nodeType === 1 ? (node as HTMLElement) : null;
+      const previous = cards.get(key);
+      if (previous === element) return;
+      if (previous) observer?.unobserve(previous);
+      if (element) {
+        cards.set(key, element);
+        observer?.observe(element);
+      } else {
+        cards.delete(key);
+        cardRefs.delete(key);
+      }
+    };
+    cardRefs.set(key, bind);
+  }
+  return bind;
+}
+
+const activeItem = computed(() => items.value.find((item) => item.isActive));
+const topOf = (item: ReviewItemView) =>
+  metrics.value.top + (positions.value.get(item.key) ?? item.anchorY ?? 0) * metrics.value.scale;
+</script>
+
+<template>
+  <div
+    ref="railRef"
+    :style="{
+      position: 'absolute',
+      top: '0px',
+      left: `${metrics.left ?? 0}px`,
+      visibility: metrics.left === null ? 'hidden' : 'visible',
+    }"
+  >
+    <template v-if="paneOpen && metrics.compact">
+      <!-- Too narrow for a column: float only the active card inside the viewport. -->
+      <div
+        v-if="activeItem"
+        :ref="cardRef(activeItem.key)"
+        :data-key="activeItem.key"
+        class="my-review-card"
+        :style="{
+          position: 'absolute',
+          top: `${metrics.top + (activeItem.anchorY ?? 0) * metrics.scale}px`,
+          left: `${metrics.compactCardLeft ?? 0}px`,
+          width: '300px',
+        }"
+      >
+        <strong>{{ activeItem.author }}</strong>
+        <p>{{ activeItem.text }}</p>
+      </div>
+    </template>
+    <template v-else-if="paneOpen">
+      <div
+        v-for="item in items"
+        :key="item.key"
+        :ref="cardRef(item.key)"
+        :data-key="item.key"
+        class="my-review-card"
+        :style="{ position: 'absolute', top: `${topOf(item)}px`, width: '300px' }"
+      >
+        <strong>{{ item.author }}</strong>
+        <p>{{ item.text }}</p>
+      </div>
+    </template>
+  </div>
+</template>
+```
 
 ### Activate and reveal items
 
@@ -686,8 +1009,6 @@ If evaluation throws, the editor preserves the last complete projection and surf
 ### Saving and review actions
 
 Filtering changes layout, painted markup, review cards, and bulk actions over the visible review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document, or change saved OOXML. Saving while a filter is active writes the same canonical revision markup as saving with no filter. To change the document, call the normal accept or reject actions explicitly.
-
-If `preset={false}`, use `useStackedReviewPositions(items, heights, { gap, scale })`. Pass `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use document points. Pass the review items as they are: an item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
 
 ## Accept or reject in bulk
 

@@ -1,3 +1,4 @@
+import { PackageEditRefusal } from '../store/store/package-edit-refusal.ts';
 import { withoutDocumentProperties } from '../store/package/document-property-removal.ts';
 import {
   documentProperty,
@@ -61,7 +62,7 @@ export function planDocumentProperties(
       packageEdits: [
         (pkg) => {
           const next = withoutDocumentProperties(pkg);
-          if (!next) throw new Error('Document property parts changed');
+          if (!next) throw new PackageEditRefusal('document property parts changed');
           return next;
         },
       ],
@@ -98,7 +99,7 @@ export function planDocumentProperties(
     packageEdits: [
       (pkg) => {
         const next = withDocumentProperties(pkg, values);
-        if (!next) throw new Error('Document properties package changed');
+        if (!next) throw new PackageEditRefusal('document properties package changed');
         return next;
       },
     ],

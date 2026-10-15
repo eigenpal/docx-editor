@@ -227,14 +227,15 @@ describe('the Paragraph dialog', () => {
   });
 
   test('changing the line-spacing rule re-bases the value, so lines are not read as points', async () => {
-    // The value means LINES under Multiple and POINTS otherwise. Carrying 1.08 into
+    // The value means LINES under Multiple and POINTS otherwise. Carrying 1 into
     // "Exactly" would ask for a 1pt line box and swallow the text.
     const { view, editor, openDialog } = mountDialog(p('alpha'));
     await act(async () => {
       editor().surface!.selectAll();
     });
     await openDialog();
-    expect(field(view, 'At').value).toBe('1.08');
+    // Nothing states a line spacing, so the box shows the single spacing the page uses.
+    expect(field(view, 'At').value).toBe('1');
     await act(async () => {
       fireEvent.change(field(view, 'Line spacing'), { target: { value: 'atLeast' } });
     });

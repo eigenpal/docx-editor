@@ -1,4 +1,5 @@
 import { tocFieldCode } from './toc-field-code.ts';
+import { TARGET_REMOVED } from './target-removed.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
 import type { AutomationHandleTable } from './handles.ts';
@@ -28,8 +29,12 @@ type FieldOperation = Extract<
 >;
 const refuse = (
   message: string,
-  code: 'unsupported-content' | 'invalid-handle' | 'unsupported-capability' = 'unsupported-content'
-): PlannedOperation => ({ ok: false, error: { code, message } });
+  code: 'unsupported-content' | 'invalid-handle' | 'unsupported-capability' = 'unsupported-content',
+  detail?: string
+): PlannedOperation => ({
+  ok: false,
+  error: { code, message, ...(detail === undefined ? {} : { detail }) },
+});
 
 export function planFields(
   operation: FieldOperation,
@@ -50,7 +55,11 @@ export function planFields(
     const range = resolveSpanRef(operation.span, handles, reads);
     const storyResult = storyOfSpanRef(operation.span, handles, reads);
     if (!range.ok || !storyResult.ok)
-      return refuse('that field range no longer exists', 'invalid-handle');
+      return refuse(
+        'that field range no longer exists',
+        'invalid-handle',
+        !range.ok ? range.detail : !storyResult.ok ? storyResult.detail : undefined
+      );
     const story = storyResult.value;
     if (operation.op === 'getFields') {
       const fields = spanOffsets(range.value, story).flatMap((span) =>
@@ -137,7 +146,7 @@ export function planFields(
       (field) => field.fieldNodeId === target.fieldNodeId
     );
   if (!story || !story.has(target.paragraphId) || !field)
-    return refuse('that field no longer exists', 'invalid-handle');
+    return refuse('that field no longer exists', 'invalid-handle', TARGET_REMOVED);
   if (operation.op === 'getField')
     return { ok: true, kind: 'query', value: { kind: 'field', field: { code: field.code } } };
   if (

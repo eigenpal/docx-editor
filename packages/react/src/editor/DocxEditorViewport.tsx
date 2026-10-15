@@ -13,7 +13,7 @@ import type { DocxEditorChildren } from '../docx-editor-children';
 import { useCallback, useContext } from 'react';
 import type { CSSProperties } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor } from './context';
+import { ReviewRailContext, claimsReviewGutter, useDocxEditor } from './context';
 import { useEditorState } from './useEditorState';
 import { useNavigationLayoutStore, useNavigationShift } from './navigation/navigation-layout';
 import { REVIEW_MARKERS_GUTTER, useReviewGutter } from './review-gutter';
@@ -60,7 +60,7 @@ export function DocxEditorViewport({ className, style, children }: DocxEditorVie
   const reviewGutter = useReviewGutter();
   const fitting = useEditorState(selectZoomFitting);
   const rail = useContext(ReviewRailContext);
-  const reserve = (rail?.mounted ?? 0) > 0;
+  const reserve = claimsReviewGutter(rail);
   // The navigation pane needs this element's width to decide whether it has to move the
   // page at all, and publishes the answer back as `--docx-nav-shift`. Both directions are
   // no-ops when no pane is mounted: the store stays at 0 and the custom property falls

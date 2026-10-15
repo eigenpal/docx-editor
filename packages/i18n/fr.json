@@ -134,7 +134,9 @@
     "addSpaceBefore": "Ajouter un espace avant le paragraphe",
     "removeSpaceAfter": "Supprimer l'espace après le paragraphe",
     "removeSpaceBefore": "Supprimer l'espace avant le paragraphe",
-    "options": "Options d’interligne…"
+    "options": "Options d’interligne…",
+    "exactlyPoints": "Fixe {value} pt",
+    "atLeastPoints": "Au moins {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Sélectionner le type de paragraphe",
@@ -801,6 +803,12 @@
     "replacedWith": "par",
     "reply": "Répondre",
     "replyRefused": "Impossible de publier la réponse",
+    "refusedRefresh": "Le document est en cours d'actualisation. Réessayez dans un instant.",
+    "refusedViewing": "Le document est ouvert en lecture.",
+    "refusedProtected": "Cette partie du document est protégée.",
+    "refusedCollaboration": "En attente de la session partagée. Réessayez dans un instant.",
+    "refusedSessionEnded": "La session partagée est terminée. Rechargez le document pour continuer la révision.",
+    "actionRefused": "Impossible d'effectuer cette modification",
     "showPane": "Afficher les commentaires",
     "structural": "Structure du document modifiée",
     "deleteComment": "Supprimer le commentaire",

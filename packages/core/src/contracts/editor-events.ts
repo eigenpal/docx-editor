@@ -15,7 +15,11 @@ export interface EditorEvents {
   revisionMarkupChange: (settings: ResolvedRevisionMarkup) => void;
   /** A document mutation committed, with the ids it touched. */
   change: (change: DocumentChange) => void;
-  /** The selection or its derived formatting moved. */
+  /**
+   * Observable editor state moved without a document change: the selection or its derived
+   * formatting, the armed typing format, the open header or footer, or the collaboration
+   * session's status.
+   */
   selectionChange: (snapshot: EditorSnapshot) => void;
   error: (error: EditorError) => void;
   historyDiagnostic: (diagnostic: HistoryDiagnostic) => void;
