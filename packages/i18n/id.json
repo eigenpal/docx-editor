@@ -134,7 +134,9 @@
     "addSpaceBefore": "Tambahkan spasi sebelum paragraf",
     "removeSpaceAfter": "Hapus spasi setelah paragraf",
     "removeSpaceBefore": "Hapus spasi sebelum paragraf",
-    "options": "Opsi penspasian baris…"
+    "options": "Opsi penspasian baris…",
+    "exactlyPoints": "Tepat {value} pt",
+    "atLeastPoints": "Sedikitnya {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Pilih gaya paragraf",

@@ -170,7 +170,9 @@
     "removeSpaceBefore": "段落前の間隔を削除",
     "addSpaceAfter": "段落後に間隔を追加",
     "removeSpaceAfter": "段落後の間隔を削除",
-    "options": "行間のオプション…"
+    "options": "行間のオプション…",
+    "exactlyPoints": "固定値 {value} pt",
+    "atLeastPoints": "最小値 {value} pt"
   },
   "styles": {
     "selectAriaLabel": "段落スタイルの選択",

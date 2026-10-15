@@ -138,7 +138,9 @@
     "addSpaceBefore": "Добавить интервал перед абзацем",
     "options": "Параметры межстрочного интервала…",
     "removeSpaceAfter": "Удалить интервал после абзаца",
-    "removeSpaceBefore": "Удалить интервал перед абзацем"
+    "removeSpaceBefore": "Удалить интервал перед абзацем",
+    "exactlyPoints": "Точно {value} pt",
+    "atLeastPoints": "Минимум {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Выбрать стиль абзаца",
