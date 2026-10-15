@@ -1465,6 +1465,7 @@ export interface DocxEditorInstance extends Editor {
     setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+    setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
@@ -1759,6 +1760,21 @@ export function formattingBarChromeGroups(image: ImageContext | null): readonly 
 
 // @public
 export function generateRulerTicks(lengthPx: number, unit: RulerUnit): RulerTick[];
+
+// @public
+export function goToBookmarkRows(bookmarks: readonly BookmarkSummary[], options: {
+    readonly query: string;
+    readonly showHidden: boolean;
+    readonly sortBy: BookmarkSortOrder;
+}): readonly BookmarkSummary[];
+
+// @public
+export function goToBookmarkTarget(bookmarks: readonly BookmarkSummary[], query: string, offered: readonly BookmarkSummary[]): BookmarkSummary | null;
+
+// @public
+export interface GoToChromeHandlers {
+    readonly onRequest?: () => void;
+}
 
 // @public
 export function handlePosition(handle: RulerIndentHandle, indent: RulerIndent, page: RulerPageMetrics): number;
@@ -3601,7 +3617,9 @@ export interface SurfaceNavigation {
     goToPosition(position: {
         offset: number;
         paragraphId: string;
-    }): boolean;
+    }, options?: {
+        readonly orShow?: boolean;
+    }): boolean | 'shown';
     openExternal(href: string | null): boolean;
 }
 

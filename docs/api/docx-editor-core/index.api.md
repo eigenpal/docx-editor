@@ -69,6 +69,9 @@ export interface BookmarkMarkOptions {
 }
 
 // @public
+export type BookmarkPlace = 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
+
+// @public
 export type BookmarkStory = 'body' | 'headerFooter' | 'note';
 
 // @public
@@ -79,6 +82,7 @@ export interface BookmarkSummary {
     readonly hidden: boolean;
     readonly name: string;
     readonly order: number;
+    readonly place: BookmarkPlace;
     readonly story: BookmarkStory;
 }
 
@@ -1538,6 +1542,7 @@ export interface DocxEditorInstance extends Editor {
     setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+    setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
@@ -1784,6 +1789,7 @@ export interface EditorBookmarkCommands {
         name: string;
     };
     openBookmarkDialog: Record<never, never>;
+    openGoTo: Record<never, never>;
     toggleBookmarks: Record<never, never>;
 }
 
@@ -2598,6 +2604,11 @@ export type FormattingChangeKind = 'rPrChange' | 'pPrChange' | 'sectPrChange' | 
 
 // @public
 export type FurnitureVariant = 'default' | 'first' | 'even';
+
+// @public
+export interface GoToChromeHandlers {
+    readonly onRequest?: () => void;
+}
 
 // @public
 export interface HeaderFooterSet {

@@ -1065,6 +1065,8 @@ export interface DocxEditorNavigationNamespace {
     // (undocumented)
     readonly Find: typeof NavigationFind;
     // (undocumented)
+    readonly GoTo: typeof NavigationGoTo;
+    // (undocumented)
     readonly Header: typeof NavigationHeader;
     // (undocumented)
     readonly Headings: typeof NavigationHeadings;
@@ -1084,6 +1086,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     // (undocumented)
     className?: string;
     findShortcut?: boolean;
+    goToShortcut?: boolean;
     searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
@@ -1914,6 +1917,9 @@ export { FontUrlSource }
 export { generateRulerTicks }
 
 // @public
+export type GoToBookmarkProblem = 'empty' | 'notFound';
+
+// @public
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
 
 export { HIGHLIGHT_REFRESH_MS }
@@ -2256,6 +2262,9 @@ export function NavigationClose(input: NavigationPartProps): ReactElement;
 export function NavigationFind(input: NavigationPartProps): ReactElement;
 
 // @public
+export function NavigationGoTo(input: NavigationPartProps): ReactElement;
+
+// @public
 export function NavigationHeader(input: NavigationPartProps): ReactElement;
 
 // @public
@@ -2303,7 +2312,7 @@ export interface NavigationTabProps extends NavigationPartProps {
 export function NavigationTabs(input: NavigationPartProps): ReactElement;
 
 // @public
-export type NavigationTabValue = 'headings' | 'find';
+export type NavigationTabValue = 'headings' | 'find' | 'goto';
 
 // @public
 export function NavigationTitle(input: NavigationPartProps): ReactElement;
@@ -3200,6 +3209,30 @@ export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigu
 
 // @public
 export function useFonts(...origins: readonly FontOrigin[]): MarkedFontResolver;
+
+// @public
+export function useGoToBookmark(): UseGoToBookmarkReturn;
+
+// @public
+export interface UseGoToBookmarkReturn {
+    readonly activeIndex: number;
+    readonly bookmarks: readonly BookmarkSummary[];
+    readonly go: (name?: string) => ExecResult;
+    readonly move: (delta: number) => void;
+    readonly problem: GoToBookmarkProblem | null;
+    readonly query: string;
+    readonly rows: readonly BookmarkSummary[];
+    // (undocumented)
+    readonly setActiveIndex: (index: number) => void;
+    readonly setQuery: (query: string) => void;
+    // (undocumented)
+    readonly setShowHidden: (showHidden: boolean) => void;
+    // (undocumented)
+    readonly setSortBy: (sortBy: BookmarkSortOrder) => void;
+    readonly showHidden: boolean;
+    // (undocumented)
+    readonly sortBy: BookmarkSortOrder;
+}
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;

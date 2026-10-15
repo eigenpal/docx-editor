@@ -3319,6 +3319,8 @@ export interface DocxEditorNavigationNamespace {
     // (undocumented)
     readonly Find: typeof NavigationFind;
     // (undocumented)
+    readonly GoTo: typeof NavigationGoTo;
+    // (undocumented)
     readonly Header: typeof NavigationHeader;
     // (undocumented)
     readonly Headings: typeof NavigationHeadings;
@@ -3339,6 +3341,7 @@ export interface DocxEditorNavigationProps extends UseNavigationPaneOptions {
     // (undocumented)
     className?: string;
     findShortcut?: boolean;
+    goToShortcut?: boolean;
     searchHighlight?: DocumentSearchHighlight;
     // (undocumented)
     style?: CSSProperties;
@@ -5035,6 +5038,9 @@ export { FontUrlSource }
 
 export { generateRulerTicks }
 
+// @public
+export type GoToBookmarkProblem = 'empty' | 'notFound';
+
 // @public (undocumented)
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
 
@@ -5684,6 +5690,30 @@ export const NavigationFind: vue.DefineComponent<vue.ExtractPropTypes<{
     style: CSSProperties;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
+// @public
+export const NavigationGoTo: vue.DefineComponent<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    style: {
+        default: undefined;
+        type: PropType<CSSProperties>;
+    };
+}>, () => vue_jsx_runtime.JSX.Element, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    style: {
+        default: undefined;
+        type: PropType<CSSProperties>;
+    };
+}>> & Readonly<{}>, {
+    className: string;
+    style: CSSProperties;
+}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
 // @public (undocumented)
 export const NavigationHeader: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
@@ -5824,7 +5854,7 @@ export const NavigationTabs: vue.DefineComponent<vue.ExtractPropTypes<{
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public (undocumented)
-export type NavigationTabValue = 'headings' | 'find';
+export type NavigationTabValue = 'headings' | 'find' | 'goto';
 
 // @public (undocumented)
 export const NavigationTitle: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -7239,6 +7269,27 @@ export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: rea
 
 // @public (undocumented)
 export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): MarkedFontResolver;
+
+// @public
+export function useGoToBookmark(): UseGoToBookmarkReturn;
+
+// @public
+export interface UseGoToBookmarkReturn {
+    readonly activeIndex: ComputedRef<number>;
+    readonly bookmarks: Readonly<ShallowRef<readonly BookmarkSummary[]>>;
+    readonly go: (name?: string) => ExecResult;
+    readonly move: (delta: number) => void;
+    readonly problem: Readonly<ShallowRef<GoToBookmarkProblem | null>>;
+    readonly query: Readonly<ShallowRef<string>>;
+    readonly rows: ComputedRef<readonly BookmarkSummary[]>;
+    // (undocumented)
+    readonly setActiveIndex: (index: number) => void;
+    // (undocumented)
+    readonly setQuery: (query: string) => void;
+    readonly showHidden: ShallowRef<boolean>;
+    // (undocumented)
+    readonly sortBy: ShallowRef<BookmarkSortOrder>;
+}
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;

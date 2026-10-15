@@ -41,6 +41,9 @@ export interface AuthoredNoteNumbering {
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export type BookmarkPlace = 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
+
+// @public
 export type BookmarkStory = 'body' | 'headerFooter' | 'note';
 
 // @public
@@ -51,6 +54,7 @@ export interface BookmarkSummary {
     readonly hidden: boolean;
     readonly name: string;
     readonly order: number;
+    readonly place: BookmarkPlace;
     readonly story: BookmarkStory;
 }
 
@@ -811,6 +815,7 @@ export interface EditorBookmarkCommands {
         name: string;
     };
     openBookmarkDialog: Record<never, never>;
+    openGoTo: Record<never, never>;
     toggleBookmarks: Record<never, never>;
 }
 
