@@ -534,6 +534,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
  * heights are in CSS PIXELS, because that is what the DOM reports. Pass `scale` so the two
  * can be added. Without it a 330px card advanced the run by 330 POINTS — 440px — and two
  * comments on adjacent lines of one paragraph sat a third of a page apart.
+ *
+ * Returns each card's top in layout points. Multiply by `scale` and add the rail's top offset
+ * to position a card in CSS pixels.
  */
 export function useStackedReviewPositions(
   items: readonly { readonly key: string; readonly anchorY: number | null }[],

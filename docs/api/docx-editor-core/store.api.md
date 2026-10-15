@@ -5189,7 +5189,13 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 * implemented. Refusing is deliberate: removing the markup alone would report the decision
 * applied while leaving the row, cell, or section it describes untouched.
 */
-| 'unsupported-revision' | 'tree-invariant'
+| 'unsupported-revision'
+/**
+* A tracked insertion would land inside a link, content control, or other container within
+* another author's pending insertion. The container cannot split, and nested words would
+* become part of that author's proposal.
+*/
+| 'unsupported-revision:foreign-insertion' | 'tree-invariant'
 /** No content control in this part carries the addressed node id. */
 | 'unknown-content-control'
 /** The addressed node exists and is not a `w:sdt`. */

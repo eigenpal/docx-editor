@@ -21,6 +21,7 @@ import type { AutomationHandleTable } from './handles.ts';
 import { bookmarkIn, bookmarkReads, type AutomationBookmarkRead } from './links.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan-types.ts';
+import { TARGET_REMOVED } from './target-removed.ts';
 import type { AutomationHandle, AutomationValue } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { resolveSpanRef, spanParagraphIds, spanValue, storyOfSpanRef } from './spans.ts';
@@ -197,8 +198,13 @@ export function bookmarkHandleRange(
   const story = reads.story(target.story);
   if (!story) return refuse('invalid-handle', 'that story is not in this document');
   const bookmark = bookmarkIn(story, target.name);
+  // Removed by an edit, a peer, or an undo: reading again finds a fresh handle.
   if (!bookmark)
-    return refuse('invalid-handle', 'this document no longer declares that bookmark', target.name);
+    return refuse(
+      'invalid-handle',
+      'this document no longer declares that bookmark',
+      TARGET_REMOVED
+    );
   const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
     story: story.story,
     paragraphId: marker.paragraphId,

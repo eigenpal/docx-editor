@@ -49,7 +49,8 @@ let causes: ReadonlySet<string> | undefined;
 
 function causeSet(): ReadonlySet<string> {
   causes ??= new Set([
-    ...knownReasonTokens(),
+    // A reason with a colon is never a cause: `diagnosticCause` reports its token.
+    ...knownReasonTokens().filter((token) => !token.includes(':')),
     ...BINDING_CAUSES,
     ...Object.keys(REVIEW_SKIP_CAUSES),
     EXCEPTION_CAUSE,
@@ -71,7 +72,8 @@ export function diagnosticCauses(): readonly string[] {
 /**
  * The engine reason token in a refusal reason, or undefined when the reason is not one the
  * engine knows, such as a sentence. Only the token before a colon counts; the detail after it
- * can name parts of the file and is never returned.
+ * can name parts of the file and is never returned. A full reason such as
+ * `unsupported-revision:foreign-insertion` reports its token; its public code names the rule.
  */
 export function diagnosticCause(reason: string | undefined): string | undefined {
   if (!reason) return undefined;

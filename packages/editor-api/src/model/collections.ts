@@ -36,6 +36,9 @@ export { HandleCollection, ItemCollection, type PromisedItem } from './item-coll
  * {@link Paragraph.split} answers are filled in by the split's own command rather than by a
  * separate listing read.
  *
+ * Load the paragraphs and a property of each in one sync with an `items/` path, such as
+ * `paragraphs.load('items/text')`.
+ *
  * @public
  */
 export class ParagraphCollection extends ItemCollection<Paragraph> {
@@ -131,6 +134,9 @@ export class ParagraphCollection extends ItemCollection<Paragraph> {
  * Its members are SPANS rather than handles, which is what separates it from the handle-backed
  * collections: each item carries its own paragraph-plus-offset endpoints instead of an opaque
  * host-minted id.
+ *
+ * Load the ranges and a property of each in one sync with an `items/` path, such as
+ * `results.load('items/text')`.
  *
  * @public
  */

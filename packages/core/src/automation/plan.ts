@@ -1,4 +1,5 @@
 import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
+import { TARGET_REMOVED } from './target-removed.ts';
 import { planShapes } from './plan-shapes.ts';
 import {
   bookmarkHandleRange,
@@ -217,6 +218,8 @@ function error(code: AutomationErrorCode, message: string, detail?: string): Aut
 function refuse(code: AutomationErrorCode, message: string, detail?: string): PlannedOperation {
   return { ok: false, error: error(code, message, detail) };
 }
+/** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
+const removed = (message: string) => refuse('invalid-handle', message, TARGET_REMOVED);
 
 const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
@@ -344,11 +347,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!item) {
       return {
         ok: false,
-        planned: refuse(
-          'invalid-handle',
-          'this document no longer holds that comment',
-          target.commentId
-        ),
+        planned: removed('this document no longer holds that comment'),
       };
     }
     return { ok: true, reads, item };
@@ -381,11 +380,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!item) {
       return {
         ok: false,
-        planned: refuse(
-          'invalid-handle',
-          'this document no longer holds that tracked change',
-          target.revisionId
-        ),
+        planned: removed('this document no longer holds that tracked change'),
       };
     }
     return { ok: true, reads, item };
@@ -1207,8 +1202,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = packageReads.story(target.story);
     if (!reads) return refuse('invalid-handle', 'that story is not in this document');
     const found = listReads(reads).find((list) => list.numId === target.numId);
-    if (!found)
-      return refuse('invalid-handle', 'this story numbers nothing with that list', target.numId);
+    if (!found) return removed('this story numbers nothing with that list');
     return { ok: true, plan: planFor(reads), list: found };
   };
 
@@ -1263,7 +1257,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const control = contentControlReadOf(reads, target.nodeId);
     const node = contentControlNodeOf(reads, target.nodeId);
     if (!control || !node) {
-      return refuse('invalid-handle', 'this document no longer holds that content control');
+      return removed('this document no longer holds that content control');
     }
     return { reads, control, node };
   };
@@ -1771,7 +1765,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             const storyPlan = planFor(story);
             return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
           },
-          host.trackedRangeReplacement !== false
+          host.trackedRangeReplacement !== false,
+          host.collaborative === true
         );
 
       case 'insertText': {
@@ -1977,8 +1972,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             'that is not a furniture variant',
             String(operation.variant)
           );
-        if (!packageReads.sections()[target.index])
-          return refuse('invalid-handle', 'that section no longer exists');
+        if (!packageReads.sections()[target.index]) return removed('that section no longer exists');
         return query({ kind: 'handle', handle: handles.body(story) });
       }
 
@@ -2267,6 +2261,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range in this document');
         const span = spanOfReviewRange(found.reads, range);
+        // The comment object still exists, so this refusal is not a stale target.
         if (!span)
           return refuse('invalid-handle', 'that comment’s range is no longer in the story');
         return query({ kind: 'span', span });
@@ -2401,7 +2396,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           operation.op === 'acceptRevision' ? 'accept' : 'reject'
         );
         if (!ops.length)
-          return refuse('unsupported-revision', 'the table decision has unresolved dependencies');
+          return refuse('unsupported-revision', 'that change cannot resolve apart from its group');
         return { ok: true, kind: 'command', story: found.reads.story, ops, answer: () => APPLIED };
       }
 

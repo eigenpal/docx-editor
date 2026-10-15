@@ -51,9 +51,25 @@ The runtime's tracking setting does not change the browser editor UI mode. Read 
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 
-Tracked ranges refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. Targets that touch foreign pending revisions refuse. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
+Tracked ranges refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
-Appends can follow the author's pending deletion at the paragraph tail. Within one paragraph, a tracked replacement or deletion can start where the author's own pending inserted text ends, and it stays a separate decision. Other boundaries with the author's pending changes refuse: a deletion beside their deletion, or directly before their insertion, would review as one decision with it. A replacement or deletion that covers the author's pending text, or touches another author's change, also refuses. Structural and move revisions also block continuation.
+Tracked edits can go inside or beside another author's pending text insertion or deletion. If you delete or replace text that another author inserted, your deletion is recorded inside their insertion. New text lands after any deleted text. If new text lands inside their insertion, it splits their insertion into two halves that keep its revision identity. `revisions.items` and the review pane then list two revisions for their insertion, one on each side of your text. To accept or reject all of it, decide both revisions, or pass both to `RevisionCollection.resolve()` in one call. The returned range names the new text where it lands.
+
+Each author's change stays a separate decision. Accepting their insertion leaves your deletion pending, rejecting their insertion keeps your new text as your own pending insertion, and rejecting your changes restores their insertion.
+
+In a collaboration session, the editing API refuses strikes over another author's pending insertion or deletion, and edits that start inside or right after one. Shared text stores each change as an attribute of its characters. If another participant accepts or rejects that change at the same time, the decision can be lost, the next text can join the change, or the new characters can change order. Edits that end before another author's changes stay available. Typing in the page in suggesting mode has the same collaboration limit, so review those decisions after the participants sync.
+
+These tracked edits fail with `NotImplemented`, and `debugInfo.innerError.code` names the rule:
+
+| Edit | `innerError.code` |
+| --- | --- |
+| A deletion or replacement that covers only deleted text and no paragraph mark | `edit.tracked-deleted-text-only` |
+| An edit that touches another author's paragraph mark, formatting, move, or structural change | `edit.tracked-foreign-revision-unsupported` |
+| New text inside a link or content control that sits within another author's insertion | `edit.tracked-foreign-revision-unsupported` |
+| In a collaboration session, strikes over another author's pending insertion or deletion, and edits that start inside or right after one | `edit.tracked-foreign-revision-unsupported` |
+| An edit that covers or borders your own pending change, such as replacing a range that a tracked write returned | `edit.tracked-own-pending-change` |
+
+Appends can follow the author's pending deletion at the paragraph tail. Within one paragraph, a tracked replacement or deletion can start where the author's own pending inserted text ends, and it stays a separate decision. Other boundaries with the author's pending changes refuse: a deletion beside their deletion, or directly before their insertion, would review as one decision with it. A replacement or deletion that covers the author's pending text also refuses. Structural and move revisions also block continuation.
 
 A pending row insertion or deletion blocks tracked text edits throughout that row, including nested tables. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. See [Tables and cells](/docs/2.x/editor-api/tables#row-suggestions) for row deletion limits.
 
@@ -102,7 +118,8 @@ These tracked deletions refuse and change nothing:
 | A paragraph that contains an inline content control | `NotSupported` |
 | A paragraph that contains a complex field start or end whose matching boundary is in another paragraph | `NotSupported` |
 | A paragraph that nests inline content more than 64 levels deep | `NotSupported` |
-| A paragraph with a pending change, including your own | `NotImplemented` |
+| A paragraph with your own pending change | `NotImplemented` |
+| A paragraph with another author's pending paragraph mark, formatting, move, or structural change | `NotImplemented` |
 | A paragraph whose next paragraph starts with a pending change, including your own | `NotImplemented` |
 | A paragraph whose previous paragraph mark you already proposed deleting, including a deletion or replacement at its start | `NotImplemented` |
 
@@ -201,7 +218,7 @@ A decision can contain several XML markers, such as split deletion fragments. A 
 | `retained-structure` | A row remains to preserve nested table content. Other selected text changes may have applied; inspect the remaining decision. |
 | `unknown-revision` | Reload the collection; the target no longer exists. |
 
-Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection. A `retained-structure` result is different: supported text changes in the selected row can resolve while its structural marker stays pending to preserve the nested table.
+Nested changes, move pairs, tracked rows, and paragraph marks with property changes can form inseparable groups. A single `Revision.accept()` or `Revision.reject()` call on a text insertion or deletion nested in another pending text change resolves that change alone, also when several authors' changes share one insertion. If a group contains an excluded or unsupported decision, the batch skips the group, even if the action could preserve part of it. It doesn't expand your selection. A `retained-structure` result is different: supported text changes in the selected row can resolve while its structural marker stays pending to preserve the nested table.
 
 Pass an empty array to select nothing. Duplicate objects resolve once; stale objects produce `unknown-revision`. Objects from another context or story fail validation.
 

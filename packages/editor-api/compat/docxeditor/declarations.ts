@@ -238,6 +238,7 @@ export declare namespace DocxEditor {
     delete(): void;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
+    search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
     split(delimiters: string[], trimDelimiters?: boolean, trimSpacing?: boolean): RangeCollection;
   }
 

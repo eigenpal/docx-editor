@@ -1,4 +1,5 @@
 import { findNode } from '../store/package/ooxml-edit.ts';
+import { TARGET_REMOVED } from './target-removed.ts';
 import { projectDrawingsInPart } from '../store/package/drawing-projection.ts';
 import { segmentsOf } from '../store/store/tree-op-segments.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -29,8 +30,12 @@ type PictureOperation = Extract<
 >;
 const refuse = (
   message: string,
-  code: 'unsupported-content' | 'invalid-handle' = 'unsupported-content'
-): PlannedOperation => ({ ok: false, error: { code, message } });
+  code: 'unsupported-content' | 'invalid-handle' = 'unsupported-content',
+  detail?: string
+): PlannedOperation => ({
+  ok: false,
+  error: { code, message, ...(detail === undefined ? {} : { detail }) },
+});
 
 /** Root admission must make insertion solitary and reject mutations while tracking. */
 export function planPictures(
@@ -43,7 +48,11 @@ export function planPictures(
     const range = resolveSpanRef(operation.span, handles, reads);
     const resolvedStory = storyOfSpanRef(operation.span, handles, reads);
     if (!range.ok || !resolvedStory.ok)
-      return refuse('that picture range no longer exists', 'invalid-handle');
+      return refuse(
+        'that picture range no longer exists',
+        'invalid-handle',
+        !range.ok ? range.detail : !resolvedStory.ok ? resolvedStory.detail : undefined
+      );
     const story = resolvedStory.value;
     if (operation.op === 'getInlinePictures')
       return {
@@ -130,7 +139,7 @@ export function planPictures(
   const story = reads.story(target.story);
   const projection = story && pictureProjection(story.part, target.drawingNodeId);
   if (!story || !projection)
-    return refuse('that inline picture no longer exists', 'invalid-handle');
+    return refuse('that inline picture no longer exists', 'invalid-handle', TARGET_REMOVED);
   if (operation.op === 'getInlinePicture')
     return {
       ok: true,

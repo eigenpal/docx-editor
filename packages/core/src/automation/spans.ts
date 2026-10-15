@@ -79,7 +79,7 @@ export function storyOfHandle(
   if (!story) return fail('invalid-handle', `no-such-story:${storyKey(resolved.story)}`);
   if (resolved.kind === 'body' && resolved.rootNodeId) {
     const root = findNode(story.part, resolved.rootNodeId);
-    if (!root || root.kind !== 'tableCell') return fail('invalid-handle', 'cell no longer exists');
+    if (!root || root.kind !== 'tableCell') return fail('invalid-handle', 'cell-not-in-story');
     return ok(scopedStoryReads(story, root));
   }
   return ok(story);

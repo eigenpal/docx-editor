@@ -205,7 +205,20 @@ export class RequestContext {
         if (ready.length === 0)
           fail({ code: 'InvalidObjectPath', target: remaining.find(blocked)?.label });
         await this.#dispatch(ready, pinnedRevision, reportedRevision);
+        await this.#continue(pinnedRevision, reportedRevision);
         const sent = new Set(ready);
+        remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
+      }
+      // A listing whose items load properties, in a batch that writes. Every read in a batch
+      // answers the document as it was before the batch's writes, so the listing and the item
+      // reads it queues go first, on the same pinned revision as the writes.
+      const early = hasWrites ? remaining.filter((action) => action.continues === true) : [];
+      if (early.length) {
+        pinnedRevision ??=
+          this.#readRevision !== null ? this.#readRevision : this.#session.host.revision();
+        await this.#dispatch(early, pinnedRevision, reportedRevision);
+        await this.#continue(pinnedRevision, reportedRevision);
+        const sent = new Set(early);
         remaining = remaining.filter((action) => !sent.has(action) && !action.nullableLoad?.isNull);
       }
       if (remaining.length) {
@@ -213,10 +226,27 @@ export class RequestContext {
           pinnedRevision ??
           (hasWrites && this.#readRevision !== null ? this.#readRevision : undefined);
         await this.#dispatch(remaining, expected, reportedRevision);
+        // A batch with no writes: the item reads follow on the revision the listing answered.
+        await this.#continue(this.#readRevision ?? undefined, reportedRevision);
       }
     } finally {
       for (const action of actions) action.dispose?.();
+      for (const action of this.#queue.takeContinuations()) action.dispose?.();
       this.#syncInFlight = false;
+    }
+  }
+
+  /** Send the item reads that settling the previous batch queued, on the given revision. */
+  async #continue(
+    expectedRevision: number | undefined,
+    reportedRevision: number | undefined
+  ): Promise<void> {
+    const reads = this.#queue.takeContinuations();
+    if (reads.length === 0) return;
+    try {
+      await this.#dispatch(reads, expectedRevision, reportedRevision);
+    } finally {
+      for (const action of reads) action.dispose?.();
     }
   }
 

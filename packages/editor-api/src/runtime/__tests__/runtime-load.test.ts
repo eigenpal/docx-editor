@@ -155,9 +155,11 @@ describe('the shapes load accepts', () => {
   test('omitted and empty expand preserve ordinary load behavior', async () => {
     expect(resolveLoadOption({ select: 'text' }, 'document.body')).toEqual({
       select: ['text'],
+      itemSelect: [],
     });
     expect(resolveLoadOption({ select: 'text', expand: [] }, 'document.body')).toEqual({
       select: ['text'],
+      itemSelect: [],
     });
 
     const runtime = createRuntime({ host: openHost(), save: true });

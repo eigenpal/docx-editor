@@ -6,6 +6,7 @@
  * Only the RESULT of a lookup leaves the engine. A raw reason can be a sentence, and a package
  * `detail` can name parts of the file, so neither is ever copied into a diagnostic.
  */
+import { TARGET_REMOVED } from './target-removed.ts';
 import type {
   ByteSizeBucket,
   CountBucket,
@@ -88,7 +89,15 @@ type HostRejectionToken =
   | 'collaboration-session-not-ready'
   | 'collaboration-session-not-attached'
   | 'collaboration-session-destroyed'
-  | 'collaboration-text-limit';
+  | 'collaboration-text-limit'
+  // Automation handles whose object an edit removed. See `target-removed.ts`.
+  | typeof TARGET_REMOVED
+  | 'paragraph-not-in-body'
+  | 'no-such-story'
+  | 'cell-not-in-story'
+  | 'deleted-table-object'
+  | 'missing-parent-table'
+  | 'missing-table-story';
 
 /** Exhaustive over the store and story reasons, like {@link OPEN_CODES}. */
 const STORE_EDIT_CODES: Readonly<
@@ -113,6 +122,7 @@ const STORE_EDIT_CODES: Readonly<
   packageTransactionRequired: 'edit.tracked-structure-unsupported',
   'automation-structural-tracking-unsupported': 'edit.tracked-structure-unsupported',
   'unsupported-revision': 'edit.revision-unsupported',
+  'unsupported-revision:foreign-insertion': 'edit.tracked-foreign-revision-unsupported',
   'unknown-revision': 'edit.stale-target',
   'resource-limit': 'edit.resource-limit',
   'fragment-too-deep': 'edit.resource-limit',
@@ -132,6 +142,15 @@ const STORE_EDIT_CODES: Readonly<
   typeMismatch: 'edit.invalid-argument',
   invalidArgs: 'edit.invalid-argument',
   'unknown-paragraph': 'edit.stale-target',
+  // A handle the document no longer resolves: an edit, a peer, or an undo removed or merged
+  // its object. A handle that never named a valid target keeps its own reason, or none.
+  [TARGET_REMOVED]: 'edit.stale-target',
+  'paragraph-not-in-body': 'edit.stale-target',
+  'no-such-story': 'edit.stale-target',
+  'cell-not-in-story': 'edit.stale-target',
+  'deleted-table-object': 'edit.stale-target',
+  'missing-parent-table': 'edit.stale-target',
+  'missing-table-story': 'edit.stale-target',
   'not-a-paragraph': 'edit.stale-target',
   'unknown-block': 'edit.stale-target',
   'not-a-block': 'edit.stale-target',
@@ -176,12 +195,16 @@ const STORE_EDIT_CODES: Readonly<
 /**
  * The public code for a store or host refusal reason, or `null` for a reason this table does
  * not know (a sentence, a binding reason). `unsupported-revision:<kind>` counts as
- * `unsupported-revision`.
+ * `unsupported-revision`, except `unsupported-revision:foreign-insertion`, which has its own
+ * code.
  *
  * @public
  */
 export function storeEditDiagnosticCode(reason: string): EditDiagnosticCode | null {
-  // A detail after a colon never selects the code; only the token before it does.
+  // A store reason with its own code names it in full.
+  const exact = own<EditDiagnosticCode>(STORE_EDIT_CODES, reason);
+  if (exact) return exact;
+  // Otherwise a detail after a colon never selects the code; only the token before it does.
   const colon = reason.indexOf(':');
   const token = colon < 0 ? reason : reason.slice(0, colon);
   // A browser host answers with the public code when the surface refused in a sentence.
