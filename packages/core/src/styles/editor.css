@@ -908,15 +908,17 @@ a.docx-hyperlink:focus-visible {
   border: 0 solid var(--doc-bookmark-mark);
 }
 
+/* Brackets sit OUTSIDE the range: the start one just before the first bookmarked character,
+ * the end one just after the last, so neither covers a glyph. */
 .docx-bookmark-mark--start {
   border-width: var(--doc-bookmark-mark-width) 0 var(--doc-bookmark-mark-width)
     var(--doc-bookmark-mark-width);
+  transform: translateX(-100%);
 }
 
 .docx-bookmark-mark--end {
   border-width: var(--doc-bookmark-mark-width) var(--doc-bookmark-mark-width)
     var(--doc-bookmark-mark-width) 0;
-  transform: translateX(-100%);
 }
 
 .docx-bookmark-mark--point {
@@ -932,13 +934,13 @@ a.docx-hyperlink:focus-visible {
 .docx-bookmark-mark--start.docx-bookmark-mark--rtl {
   border-width: var(--doc-bookmark-mark-width) var(--doc-bookmark-mark-width)
     var(--doc-bookmark-mark-width) 0;
-  transform: translateX(-100%);
+  transform: none;
 }
 
 .docx-bookmark-mark--end.docx-bookmark-mark--rtl {
   border-width: var(--doc-bookmark-mark-width) 0 var(--doc-bookmark-mark-width)
     var(--doc-bookmark-mark-width);
-  transform: none;
+  transform: translateX(-100%);
 }
 
 @media print {

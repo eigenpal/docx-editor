@@ -3,6 +3,7 @@
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { strToU8, zipSync } from 'fflate';
 import { docx } from './paginated-surface-fixtures.ts';
 
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
@@ -156,6 +157,68 @@ describe('bookmark mark options', () => {
     expect(starts[0]!.style.left).toBe(starts[1]!.style.left);
     expect(Number.parseFloat(starts[1]!.style.top)).toBeGreaterThan(
       Number.parseFloat(starts[0]!.style.top)
+    );
+  });
+});
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+/** A body paragraph with a bookmark and a footnote reference, and a footnote with one too. */
+function withFootnote(): Uint8Array {
+  const body =
+    `<w:p><w:bookmarkStart w:id="1" w:name="InBody"/>${run('Alpha')}` +
+    `<w:bookmarkEnd w:id="1"/><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr>` +
+    `<w:footnoteReference w:id="1"/></w:r></w:p>`;
+  const footnotes =
+    `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:type="continuationSeparator" w:id="0">` +
+    `<w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
+    `<w:footnote w:id="1"><w:p>${run('Note ')}<w:bookmarkStart w:id="2" w:name="InNote"/>` +
+    `${run('text')}<w:bookmarkEnd w:id="2"/></w:p></w:footnote>`;
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-' +
+        'officedocument.wordprocessingml.footnotes+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">` +
+        `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${footnotes}</w:footnotes>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+    ),
+  });
+}
+
+describe('note marks', () => {
+  test('a footnote bookmark is marked in the note area, not at the top of the page', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: withFootnote() });
+    editors.push(editor);
+    editor.exec({ type: 'toggleBookmarks' });
+    const start = (name: string) =>
+      marksOf(container).find(
+        (mark) => mark.dataset.bookmarkName === name && mark.dataset.bookmarkEdge === 'start'
+      )!;
+    const body = start('InBody');
+    const note = start('InNote');
+    expect(note.dataset.bookmarkStory).toBe('note');
+    // The note area sits at the bottom of the page, far below the first body line.
+    expect(Number.parseFloat(note.style.top) - Number.parseFloat(body.style.top)).toBeGreaterThan(
+      300
     );
   });
 });

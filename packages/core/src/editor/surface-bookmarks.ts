@@ -16,7 +16,12 @@
 // takes no pointer events, but a host can turn them on for one mark (a tooltip): a press on a
 // mark then never reaches the pages, so it cannot move the caret.
 
-import { caretAt, type CaretGeometry } from '@docx-editor.dev/core/layout';
+import {
+  caretAt,
+  paragraphFragmentsOfBlocks,
+  type CaretGeometry,
+  type LayoutBox,
+} from '@docx-editor.dev/core/layout';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
@@ -379,6 +384,22 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
   };
 }
 
+/** The note on this page whose lines hold the paragraph, footnotes first. */
+function noteOnPage(
+  page: SurfaceOverlayFrame['layout']['pages'][number],
+  paragraphId: string
+): { readonly box: LayoutBox } | undefined {
+  for (const area of [page.footnotes, page.endnotes]) {
+    const note = area?.notes.find((entry) =>
+      paragraphFragmentsOfBlocks(entry.fragments).some(
+        (fragment) => fragment.paragraphId === paragraphId
+      )
+    );
+    if (note) return note;
+  }
+  return undefined;
+}
+
 /** Caret geometry per layout: one layout object per revision, released with it. */
 const placementCache = new WeakMap<object, Map<string, CaretGeometry | null>>();
 
@@ -450,11 +471,15 @@ export function paintBookmarkMarks(
       const page = layout.pages[geometry.pageIndex];
       if (!page) continue;
       const offsetX = frame.pageOffsetX?.get(geometry.pageIndex) ?? 0;
-      // Body and note lines measure from the content box; furniture lines from their story.
+      // Body lines measure from the content box. Header, footer and note lines measure from
+      // their own story's box on this page; a note that continues measures from this page's
+      // part of it.
       const story = mark.repeats
         ? [page.header, page.footer].find((entry) => entry?.partName === mark.repeats)
-        : undefined;
-      if (mark.repeats && !story) continue;
+        : mark.story === 'note'
+          ? noteOnPage(page, mark.paragraphId)
+          : undefined;
+      if ((mark.repeats || mark.story === 'note') && !story) continue;
       const origin = story?.box ?? page.contentBox;
       placed.add(geometry.pageIndex);
       let element: HTMLElement = document.createElement('div');
