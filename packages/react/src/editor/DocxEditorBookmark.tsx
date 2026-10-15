@@ -291,7 +291,7 @@ function BookmarkDialogRoot({
               <button
                 type="button"
                 className="docx-dialog__button"
-                data-docx-part="goTo"
+                data-docx-part="goto"
                 disabled={!nameState.canGoTo}
                 onClick={handleGoTo}
               >
@@ -339,5 +339,5 @@ export const DocxEditorBookmarkDialog = Object.assign(BookmarkDialogRoot, {
   Error: parts.Error,
   Field: parts.Field,
   Delete: parts.part('delete') as PartComponent,
-  GoTo: parts.part('goTo') as PartComponent,
+  GoTo: parts.part('goto') as PartComponent,
 });
