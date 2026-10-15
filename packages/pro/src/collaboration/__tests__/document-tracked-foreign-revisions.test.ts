@@ -367,6 +367,10 @@ const AFTER_THEIR_DELETION: Record<string, { body: string; edit: Edit }> = {
     body: STRUCK,
     edit: onText('.', (range) => range.delete()),
   },
+  'strikes only their deleted words': {
+    body: STRUCK,
+    edit: onText('(30) days', (range) => range.delete()),
+  },
   'strikes their deleted words and the live text after them': {
     body: STRUCK,
     edit: onText('receipt.', (range) => range.delete()),

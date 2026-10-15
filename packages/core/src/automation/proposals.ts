@@ -160,7 +160,7 @@ type ProposalRevisionRule =
 const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
   'deleted-text-only': 'a tracked deletion or replacement needs live text, not only deleted text',
   'collaborative-insertion':
-    "in collaboration, a tracked edit cannot strike another author's pending change or start inside or right after it",
+    "in a collaboration session, the API refuses strikes over another author's pending insertion or deletion, and edits that start inside or right after one",
   'foreign-revision':
     "the edit touches another author's pending paragraph mark, formatting, move, or structure",
   'own-pending': "the edit would merge with or cover the author's own pending change",
