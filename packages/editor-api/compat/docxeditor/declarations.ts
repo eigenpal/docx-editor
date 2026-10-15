@@ -197,7 +197,7 @@ export declare namespace DocxEditor {
   // document-wide counter for a range to report. Declaring the members and never implementing them
   // would make this file a roadmap rather than an inventory. The recorded reasons are the
   // `Word.Range#start` / `Word.Range#end` entries in `compat/manifest.json`'s omissions.
-  export class Range {
+  export class Range extends ClientObject {
     clear(): void;
     delete(): void;
     readonly bookmarks: BookmarkCollection;

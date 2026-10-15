@@ -74,8 +74,10 @@ async function mount(options: MountOptions = {}) {
   };
   cleanups.push(unmount);
   await update();
-  const paragraphId = view.container
-    .querySelector('[data-paragraph-id]')!
+  // The first paragraph of the main text: a header paints before it, and selecting a header
+  // paragraph opens the header.
+  const paragraphId = [...view.container.querySelectorAll('[data-paragraph-id]')]
+    .find((node) => !node.closest('[data-docx-hf]'))!
     .getAttribute('data-paragraph-id')!;
   const caret = { paragraphId, offset: 0 };
   await update(() => editor!.exec({ type: 'setSelection', range: { anchor: caret, head: caret } }));
