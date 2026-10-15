@@ -242,3 +242,30 @@ describe('deleting a comment that another comment covers', () => {
     }
   });
 });
+
+describe('deleting the open comment', () => {
+  test('closes its card, and undo brings the comment and its open card back', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(),
+      author: 'Grace Hopper',
+      modules: [reviewModule()],
+    });
+    try {
+      const active = () =>
+        editor.getReviewItems({ pairReplacements: false }).filter((item) => item.isActive);
+      const comment = editor
+        .getReviewItems({ pairReplacements: false })
+        .find((item) => item.kind === 'comment')!;
+      expect(editor.setActiveReviewItem(comment.key).ok).toBe(true);
+      expect(editor.deleteReviewItem(comment.key)).toEqual({ ok: true, changed: true });
+      // Activation reads the live queue, so a deleted card is not left open with no item.
+      expect(active()).toEqual([]);
+      expect(editor.exec({ type: 'undo' })).toMatchObject({ ok: true });
+      // Nothing was dismissed, so the restored comment opens where the reader left it.
+      expect(active().map((item) => item.key)).toEqual([comment.key]);
+    } finally {
+      editor.destroy();
+    }
+  });
+});

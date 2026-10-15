@@ -436,8 +436,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         if (result.ok || execDepth > 0) return result;
         // A gate that refused the write before it ran is not the revision's fault, so it is no
         // skipped change. The surface already reported a collaboration gate it ran; an external
-        // refresh skipped the commit, so only this wrapper can report that one. (Viewing answers
-        // `locked`, which never reaches here.)
+        // refresh skipped the commit, so only this wrapper can report that one.
         const gate: EditDiagnosticCode = diagnosticCodeOfRefusal(result.reason, result.code);
         if (gate === 'edit.collaboration-not-ready') return result;
         const gated = gate === 'edit.refresh-in-progress';
@@ -470,7 +469,7 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         const cause = diagnosticCause(result.reason);
         deliver({
           kind: 'edit.rejected',
-          code: diagnosticCodeOfRefusal(result.reason, result.code),
+          code: gate,
           origin: 'command',
           tracked: tracked(),
           ...(cause ? { cause } : {}),
