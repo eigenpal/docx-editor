@@ -46,9 +46,9 @@ export const NavigationGoTo = defineComponent({
     const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
     const editorRef = useDocxEditor();
     // The document's bookmarks are read only while this tab is on screen.
-    const goTo = useGoToBookmark({
-      enabled: () => nav.pane.open.value && nav.pane.tab.value === 'goto',
-    });
+    const goTo = useGoToBookmark(() => ({
+      enabled: nav.pane.open.value && nav.pane.tab.value === 'goto',
+    }));
     const documentAbsent = useEditorState(selectDocumentAbsent);
     const listId = useId();
     const optionId = (index: number) => `${listId}-option-${index}`;

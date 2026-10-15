@@ -120,9 +120,10 @@ describe('Go to bookmark in the navigation pane', () => {
   test('Ctrl+G opens the pane on Go to with the name box focused', async () => {
     const { container } = mount();
     await settle();
-    const scroller = q(container, '.docx-editor__scroll-container');
-    scroller.focus();
-    expect(ctrlG(scroller).defaultPrevented).toBe(true);
+    // From the document itself: the engine keymap sends openGoTo to the pane.
+    const pages = q(container, '.docx-pages');
+    pages.focus();
+    expect(ctrlG(pages).defaultPrevented).toBe(true);
     expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('true');
     expect(q(container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('true');
     expect(q(container, '#docx-nav-tab-goto').getAttribute('title')).toBe('Go to (Ctrl+G)');
@@ -143,15 +144,19 @@ describe('Go to bookmark in the navigation pane', () => {
   test('the openGoTo command opens the tab, and a pane without the shortcut leaves Ctrl+G', async () => {
     const { container, editor } = mount({ navigation: { goToShortcut: false } });
     await settle();
-    const scroller = q(container, '.docx-editor__scroll-container');
-    expect(ctrlG(scroller).defaultPrevented).toBe(false);
+    // Neither the pages (the engine keymap) nor the rest of the editor take the chord.
+    expect(ctrlG(q(container, '.docx-pages')).defaultPrevented).toBe(false);
+    expect(ctrlG(q(container, '.docx-editor__scroll-container')).defaultPrevented).toBe(false);
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
     expect(q(container, '#docx-nav-tab-goto').getAttribute('title')).toBeNull();
+    // Opened closed, the tab reads the bookmarks once it is on screen.
     await act(async () => {
       expect(editor().exec({ type: 'openGoTo' })).toEqual({ ok: true, changed: false });
     });
     await settle();
     expect(q(container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(nameBox(container));
+    expect(rowNames(container)).toEqual(['Intro', 'Section2', 'Section10']);
   });
 
   test('lists visible bookmarks by name, numbers in order; hidden ones on request', async () => {

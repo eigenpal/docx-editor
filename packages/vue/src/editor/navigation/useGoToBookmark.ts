@@ -7,7 +7,14 @@
 // bookmark's text in whichever story holds it and scrolls it into view, in a read-only
 // document too.
 
-import { computed, shallowRef, type ComputedRef, type ShallowRef } from 'vue';
+import {
+  computed,
+  shallowRef,
+  toValue,
+  type ComputedRef,
+  type MaybeRefOrGetter,
+  type ShallowRef,
+} from 'vue';
 import type {
   BookmarkSummary,
   EditorSnapshot,
@@ -33,10 +40,11 @@ export type GoToBookmarkProblem = 'empty' | 'notFound' | 'failed';
 /** How `useGoToBookmark` is configured. @public */
 export interface UseGoToBookmarkOptions {
   /**
-   * Whether to read the document's bookmarks. Defaults to `true`. Return `false` while your UI
-   * is hidden: the list is then empty and the document is not read on each change.
+   * Whether to read the document's bookmarks. Defaults to `true`. Pass `false` while your UI
+   * is hidden: the list is then empty and the document is not read on each change. Pass the
+   * options as a getter or a ref to change it; the list is read again when it turns true.
    */
-  readonly enabled?: () => boolean;
+  readonly enabled?: boolean;
 }
 
 /** What `useGoToBookmark` returns. @public */
@@ -83,13 +91,17 @@ const NONE: readonly BookmarkSummary[] = Object.freeze([]);
  *
  * @public
  */
-export function useGoToBookmark(options: UseGoToBookmarkOptions = {}): UseGoToBookmarkReturn {
+export function useGoToBookmark(
+  options: MaybeRefOrGetter<UseGoToBookmarkOptions> = {}
+): UseGoToBookmarkReturn {
   const editorRef = useDocxEditor();
-  const enabled = options.enabled ?? (() => true);
+  const enabled = () => toValue(options).enabled ?? true;
   const bookmarks = useEditorState(
     (_snapshot: EditorSnapshot): readonly BookmarkSummary[] =>
       enabled() ? (editorRef.value?.query({ type: 'bookmarks' }) ?? NONE) : NONE,
-    sameBookmarks
+    sameBookmarks,
+    // Opening the UI is no editor change: read again when `enabled` flips.
+    { extraDeps: enabled }
   );
   const query = shallowRef('');
   const sortBy = shallowRef<BookmarkSortOrder>('name');
@@ -118,10 +130,12 @@ export function useGoToBookmark(options: UseGoToBookmarkOptions = {}): UseGoToBo
   const setSortBy = (next: BookmarkSortOrder) => {
     sortBy.value = next;
     highlight.value = null;
+    problem.value = null;
   };
   const setShowHidden = (next: boolean) => {
     showHidden.value = next;
     highlight.value = null;
+    problem.value = null;
   };
 
   const move = (delta: number) => {

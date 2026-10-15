@@ -118,10 +118,12 @@ export function useGoToBookmark(options: UseGoToBookmarkOptions = {}): UseGoToBo
   const setSortBy = useCallback((next: BookmarkSortOrder) => {
     setSortByState(next);
     setHighlight(null);
+    setProblem(null);
   }, []);
   const setShowHidden = useCallback((next: boolean) => {
     setShowHiddenState(next);
     setHighlight(null);
+    setProblem(null);
   }, []);
 
   const move = useCallback(

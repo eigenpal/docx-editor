@@ -18,7 +18,7 @@
 // only ever with the sanitized projection, never with an authored target.
 
 import { caretAt, type SemanticLayout } from '@docx-editor.dev/core/layout';
-import { storyContentBox } from './surface-bookmarks.ts';
+import { storyContentBox } from './surface-story-geometry.ts';
 import { sanitizeHref } from '../store/package/sinks.ts';
 import type { BookmarkIndex } from '@docx-editor.dev/core/store';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';

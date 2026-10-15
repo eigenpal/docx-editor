@@ -147,8 +147,11 @@ export function DocxEditorNavigation(props: DocxEditorNavigationProps): ReactEle
   intentsRef.current = focus.intents;
   useEffect(() => {
     if (!editor) return undefined;
-    return editor.setGoToChrome({ onRequest: () => intentsRef.current.openTab('goto') });
-  }, [editor]);
+    return editor.setGoToChrome({
+      onRequest: () => intentsRef.current.openTab('goto'),
+      shortcut: goToShortcut,
+    });
+  }, [editor, goToShortcut]);
 
   const width = props.paneWidth ?? NAVIGATION_PANE_WIDTH;
 

@@ -100,9 +100,10 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
   test('Ctrl+G opens the pane on Go to with the name box focused', async () => {
     const view = mountPane();
     await flush();
-    const scroller = q(view.container, '.docx-editor__scroll-container');
-    scroller.focus();
-    expect((await ctrlG(scroller)).defaultPrevented).toBe(true);
+    // From the document itself: the engine keymap sends openGoTo to the pane.
+    const pages = q(view.container, '.docx-pages');
+    pages.focus();
+    expect((await ctrlG(pages)).defaultPrevented).toBe(true);
     expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('true');
     expect(q(view.container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('true');
     expect(q(view.container, '#docx-nav-tab-goto').getAttribute('title')).toBe('Go to (Ctrl+G)');
@@ -112,12 +113,17 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
   test('the openGoTo command opens the tab, and a pane without the shortcut leaves Ctrl+G', async () => {
     const view = mountPane({ goToShortcut: false });
     await flush();
+    // Neither the pages (the engine keymap) nor the rest of the editor take the chord.
+    expect((await ctrlG(q(view.container, '.docx-pages'))).defaultPrevented).toBe(false);
     const scroller = q(view.container, '.docx-editor__scroll-container');
     expect((await ctrlG(scroller)).defaultPrevented).toBe(false);
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('false');
+    // Opened closed, the tab reads the bookmarks once it is on screen.
     expect(view.editor().exec({ type: 'openGoTo' })).toEqual({ ok: true, changed: false });
     await flush();
     expect(q(view.container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(nameBox(view.container));
+    expect(rowNames(view.container)).toEqual(['Intro', 'Section2', 'Section10']);
   });
 
   test('lists visible bookmarks by name, numbers in order; hidden ones on request', async () => {

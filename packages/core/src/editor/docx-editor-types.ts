@@ -241,6 +241,12 @@ export interface BookmarkChromeHandlers {
 export interface GoToChromeHandlers {
   /** Open the Go To UI: the `openGoTo` command, which its shortcut also sends. */
   readonly onRequest?: () => void;
+  /**
+   * Whether Ctrl+G (Cmd+Option+G on macOS) in the document opens this UI. Defaults to `true`.
+   * With `false` the chord is left to the browser; `openGoTo` still opens the UI. The most
+   * recent registration decides.
+   */
+  readonly shortcut?: boolean;
 }
 
 /**

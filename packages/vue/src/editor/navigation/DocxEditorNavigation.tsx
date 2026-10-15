@@ -137,10 +137,12 @@ const DocxEditorNavigationImpl = defineComponent({
     const editorRef = useDocxEditor();
     scopeDispose(
       watch(
-        editorRef,
-        (editor, _previous, onCleanup) => {
+        [editorRef, () => props.goToShortcut],
+        ([editor, shortcut], _previous, onCleanup) => {
           if (!editor) return;
-          onCleanup(editor.setGoToChrome({ onRequest: () => focus.intents.openTab('goto') }));
+          onCleanup(
+            editor.setGoToChrome({ onRequest: () => focus.intents.openTab('goto'), shortcut })
+          );
         },
         { immediate: true }
       )

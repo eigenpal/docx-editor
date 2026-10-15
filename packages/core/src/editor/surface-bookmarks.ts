@@ -16,12 +16,7 @@
 // takes no pointer events, but a host can turn them on for one mark (a tooltip): a press on a
 // mark then never reaches the pages, so it cannot move the caret.
 
-import {
-  caretAt,
-  paragraphFragmentsOfBlocks,
-  type CaretGeometry,
-  type LayoutBox,
-} from '@docx-editor.dev/core/layout';
+import { caretAt, type CaretGeometry } from '@docx-editor.dev/core/layout';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
@@ -44,6 +39,9 @@ import type {
 import type { BookmarkMarkInfo, BookmarkMarkOptions } from './docx-editor-types.ts';
 import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 import { storyScopeOfPartName, type StoryScopeLookup } from './surface-scope.ts';
+import { noteOnPage, storyContentBox } from './surface-story-geometry.ts';
+
+export { storyContentBox };
 
 /** What the bookmark lane reads from and writes through. */
 export interface SurfaceBookmarkDeps {
@@ -399,38 +397,6 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       paintBookmarkMarks(frame, marks, options.decorate, deps.options.bookmarkMarks?.reportError);
     },
   };
-}
-
-/** The note on this page whose lines hold the paragraph, footnotes first. */
-function noteOnPage(
-  page: SurfaceOverlayFrame['layout']['pages'][number],
-  paragraphId: string
-): { readonly box: LayoutBox } | undefined {
-  for (const area of [page.footnotes, page.endnotes]) {
-    const note = area?.notes.find((entry) =>
-      paragraphFragmentsOfBlocks(entry.fragments).some(
-        (fragment) => fragment.paragraphId === paragraphId
-      )
-    );
-    if (note) return note;
-  }
-  return undefined;
-}
-
-/**
- * The box a line's caret geometry is measured from on `page`: the header, footer or note that
- * holds the paragraph there, else the page's content box.
- */
-export function storyContentBox(
-  page: SurfaceOverlayFrame['layout']['pages'][number],
-  paragraphId: string
-): LayoutBox {
-  for (const story of [page.header, page.footer]) {
-    if (!story) continue;
-    const fragments = paragraphFragmentsOfBlocks(story.fragments);
-    if (fragments.some((fragment) => fragment.paragraphId === paragraphId)) return story.box;
-  }
-  return noteOnPage(page, paragraphId)?.box ?? page.contentBox;
 }
 
 /** Caret geometry per layout: one layout object per revision, released with it. */

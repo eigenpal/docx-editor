@@ -2903,7 +2903,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       for (const selection of selections) {
         const story = post.story(selection.range.start.story);
         if (!story || !placeable(selection.range, story)) continue;
-        if (host.select?.(selection.range, selection.mode) === false)
+        // A selection the host could not place refuses a batch that only selects. With writes
+        // in the batch it cannot: they have committed, and a refusal would invite a replay.
+        if (host.select?.(selection.range, selection.mode) === false && !commandPolicy.hasCommands)
           return { ok: false, detail: 'the host could not place the selection' };
       }
       return { ok: true };

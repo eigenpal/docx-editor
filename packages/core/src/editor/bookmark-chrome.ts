@@ -41,7 +41,10 @@ export interface BookmarkMarkOptionsSource {
  * answer does not change, and nothing is published.
  */
 function createRequestChrome(changed: (() => void) | undefined) {
-  const stack = createChromeHandlerStack<{ readonly onRequest?: () => void }>({});
+  const stack = createChromeHandlerStack<{
+    readonly onRequest?: () => void;
+    readonly shortcut?: boolean;
+  }>({});
   let published = false;
   let pending = false;
   const canOpen = (): boolean => stack.current().onRequest !== undefined;
@@ -58,7 +61,17 @@ function createRequestChrome(changed: (() => void) | undefined) {
       request?.();
       return request !== undefined;
     },
-    register(handlers: { readonly onRequest?: () => void }): () => void {
+    /** The keyboard's request: refused when the current UI turned its shortcut off. */
+    openFromShortcut(): boolean {
+      if (stack.current().shortcut === false) return false;
+      const request = stack.current().onRequest;
+      request?.();
+      return request !== undefined;
+    },
+    register(handlers: {
+      readonly onRequest?: () => void;
+      readonly shortcut?: boolean;
+    }): () => void {
       const dispose = stack.push(handlers);
       publish();
       return () => {
@@ -87,7 +100,11 @@ export function createBookmarkChrome(host: BookmarkChromeHost = {}) {
     reportError: (error) => host.error?.(error),
   };
   return {
-    surfaceOptions: { onRequestBookmark: dialog.open, onRequestGoTo: goTo.open, bookmarkMarks },
+    surfaceOptions: {
+      onRequestBookmark: dialog.open,
+      onRequestGoTo: goTo.openFromShortcut,
+      bookmarkMarks,
+    },
     /** The `openBookmarkDialog` command: open the host's dialog, if a host shows one. */
     bookmarkDialog: dialog,
     /** The `openGoTo` command: open the host's Go To UI, if a host shows one. */
