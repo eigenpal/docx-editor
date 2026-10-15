@@ -121,7 +121,10 @@ const BookmarkDialogImpl = defineComponent({
       bookmarkDialogNameState(bookmarks.value, name.value, isWritable.value)
     );
     const problem = computed(() =>
-      nameState.value.problem && (attempted.value || name.value.length > 0)
+      // A picked existing name (a hidden one, say) is for Go To and Delete: no complaint.
+      nameState.value.problem &&
+      !nameState.value.existing &&
+      (attempted.value || name.value.length > 0)
         ? nameState.value.problem
         : null
     );

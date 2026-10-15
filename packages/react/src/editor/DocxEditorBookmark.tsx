@@ -98,7 +98,11 @@ function BookmarkDialogRoot({
 
   const rows = bookmarkDialogRows(bookmarks, { sortBy, showHidden });
   const nameState = bookmarkDialogNameState(bookmarks, name, isWritable);
-  const problem = nameState.problem && (attempted || name.length > 0) ? nameState.problem : null;
+  // A picked existing name (a hidden one, say) is for Go To and Delete: no complaint about it.
+  const problem =
+    nameState.problem && !nameState.existing && (attempted || name.length > 0)
+      ? nameState.problem
+      : null;
   const message = refused
     ? t('dialogs.bookmark.refused')
     : problem
