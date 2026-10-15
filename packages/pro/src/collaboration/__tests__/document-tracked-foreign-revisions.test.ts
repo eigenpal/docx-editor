@@ -5,11 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // A reviewer edits beside a counterparty's pending changes in a collaboration room. Shared
 // text keeps a revision as an attribute of its characters, so a concurrent accept or reject
-// cannot keep a strike inside their insertion, or new words inside or right after their
-// revision, intact: the editing API refuses those edits in a session. New words before their
-// changes and strikes beside them converge in either client order to the state the edits
-// reach one after the other, through concurrent decisions, deletion, undo, redo, reconnect,
-// and save and reopen.
+// cannot keep a strike over their change, or an edit that starts inside or right after it,
+// intact: the editing API refuses those edits in a session. Edits that end before their
+// changes converge in either client order to the state the edits reach one after the other,
+// through concurrent decisions, deletion, undo, redo, reconnect, and save and reopen.
 import { afterAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
@@ -268,7 +267,6 @@ for (const [name, edit] of Object.entries(INSIDE))
 // At the edges of the counterparty's insertion, every edit keeps its own shared characters.
 const EDGES: Record<string, Edit> = {
   'writes before the insertion': onText('thirty', (range) => range.insertText('about ', 'Before')),
-  'deletes the period after it': onText('.', (range) => range.delete()),
   'deletes the words that end where it starts': onText('within ', (range) => range.delete()),
 };
 
@@ -330,10 +328,49 @@ const STRUCK =
   `<w:r><w:delText>${PROPOSED}</w:delText></w:r></w:del><w:r><w:t>.</w:t></w:r></w:p>` +
   '<w:p><w:r><w:t>Second clause.</w:t></w:r></w:p>';
 
-// New words right after another author's deletion restore its attribute after themselves. A
-// concurrent decision on the deletion, or on an insertion that follows it, can then hand that
-// attribute to the next text, so these edits refuse in a session too.
+// A strike that ends where the counterparty's deleted words start stays admitted in a session.
+const STRUCK_EDGES: Record<string, Edit> = {
+  'strikes up to the start of their deletion': onText('within ', (range) => range.delete()),
+};
+
+const STRUCK_DECISIONS: Record<string, Edit> = {
+  'accepts their deletion': decideAs(COUNTERPARTY, 'Delete', 'accept'),
+  'rejects their deletion': decideAs(COUNTERPARTY, 'Delete', 'reject'),
+};
+
+for (const order of Object.keys(ORDERS) as Order[])
+  for (const [reviewerName, reviewer] of Object.entries(STRUCK_EDGES))
+    for (const [counterName, counterparty] of Object.entries(STRUCK_DECISIONS))
+      test(`${order}: the reviewer ${reviewerName} while the counterparty ${counterName}`, async () => {
+        const r = await room(order, STRUCK);
+        try {
+          await concurrently(r, reviewer, counterparty);
+          await converged(r);
+          expect(await expectSamePeers(r)).toEqual(
+            await sequential(STRUCK, reviewer, counterparty)
+          );
+          await expectSameDecisions(r);
+        } finally {
+          r.close();
+        }
+      });
+
+// An edit that starts right after another author's change, or strikes over it, writes a marker
+// next to the one that ends the change. A concurrent decision removes that marker, and the
+// change's attribute can pass to the next text, so these edits refuse in a session too.
 const AFTER_THEIR_DELETION: Record<string, { body: string; edit: Edit }> = {
+  'strikes the text right after their insertion': {
+    body: BODY,
+    edit: onText('.', (range) => range.delete()),
+  },
+  'strikes the text right after their deletion': {
+    body: STRUCK,
+    edit: onText('.', (range) => range.delete()),
+  },
+  'strikes their deleted words and the live text after them': {
+    body: STRUCK,
+    edit: onText('receipt.', (range) => range.delete()),
+  },
   'writes inside their deleted words': {
     body: STRUCK,
     edit: onText('thirty', (range) => range.insertText('sixty days', 'After')),

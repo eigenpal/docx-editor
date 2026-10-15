@@ -57,7 +57,7 @@ Tracked edits can go inside or beside another author's pending text insertion or
 
 Each author's change stays a separate decision. Accepting their insertion leaves your deletion pending, rejecting their insertion keeps your new text as your own pending insertion, and rejecting your changes restores their insertion.
 
-In a collaboration session, the editing API refuses strikes inside another author's pending insertion, and new text inside or right after another author's pending insertion or deletion. Shared text stores each change as an attribute of its characters. If another participant accepts or rejects that change at the same time, the decision can be lost, the next text can join the change, or the new characters can change order. New text before their changes and strikes beside them stay available. Typing in the page in suggesting mode has the same collaboration limit, so review those decisions after the participants sync.
+In a collaboration session, the editing API refuses strikes over their insertion or deletion, and edits that start inside or right after one. Here, "their" means another author's pending change. Shared text stores each change as an attribute of its characters. If another participant accepts or rejects that change at the same time, the decision can be lost, the next text can join the change, or the new characters can change order. Edits that end before their changes stay available. Typing in the page in suggesting mode has the same collaboration limit, so review those decisions after the participants sync.
 
 These tracked edits fail with `NotImplemented`, and `debugInfo.innerError.code` names the rule:
 
@@ -66,7 +66,7 @@ These tracked edits fail with `NotImplemented`, and `debugInfo.innerError.code` 
 | A deletion or replacement that covers only deleted text and no paragraph mark | `edit.tracked-deleted-text-only` |
 | An edit that touches another author's paragraph mark, formatting, move, or structural change | `edit.tracked-foreign-revision-unsupported` |
 | New text inside a link or content control that sits within another author's insertion | `edit.tracked-foreign-revision-unsupported` |
-| In a collaboration session, a strike inside another author's insertion, or new text inside or right after another author's insertion or deletion | `edit.tracked-foreign-revision-unsupported` |
+| In a collaboration session, strikes over their insertion or deletion, and edits that start inside or right after one, where "their" means another author's pending change | `edit.tracked-foreign-revision-unsupported` |
 | An edit that covers or borders your own pending change, such as replacing a range that a tracked write returned | `edit.tracked-own-pending-change` |
 
 Appends can follow the author's pending deletion at the paragraph tail. Within one paragraph, a tracked replacement or deletion can start where the author's own pending inserted text ends, and it stays a separate decision. Other boundaries with the author's pending changes refuse: a deletion beside their deletion, or directly before their insertion, would review as one decision with it. A replacement or deletion that covers the author's pending text also refuses. Structural and move revisions also block continuation.

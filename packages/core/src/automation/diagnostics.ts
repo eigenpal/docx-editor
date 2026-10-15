@@ -176,7 +176,8 @@ const STORE_EDIT_CODES: Readonly<
 /**
  * The public code for a store or host refusal reason, or `null` for a reason this table does
  * not know (a sentence, a binding reason). `unsupported-revision:<kind>` counts as
- * `unsupported-revision`.
+ * `unsupported-revision`, except `unsupported-revision:foreign-insertion`, which has its own
+ * code.
  *
  * @public
  */

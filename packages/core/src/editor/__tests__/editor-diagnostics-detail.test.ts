@@ -286,6 +286,9 @@ describe('context helpers', () => {
   test('a cause is an engine token; sentences, details and prototype keys never pass', () => {
     expect(diagnosticCause('undeclared-prefix')).toBe('undeclared-prefix');
     expect(diagnosticCause(`unsupported-revision:${SECRET_PART}`)).toBe('unsupported-revision');
+    // A store reason with its own public code still reports the token as its cause.
+    expect(diagnosticCause('unsupported-revision:foreign-insertion')).toBe('unsupported-revision');
+    expect(diagnosticCauses()).not.toContain('unsupported-revision:foreign-insertion');
     expect(diagnosticCause('split-not-clean')).toBe('split-not-clean');
     expect(diagnosticCause(`a sentence about ${SECRET_TEXT}`)).toBeUndefined();
     expect(diagnosticCause('constructor')).toBeUndefined();

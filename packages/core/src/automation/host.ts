@@ -74,6 +74,12 @@ function storeTransactionError(reason: string): AutomationError {
       'this edit requires a supported review mode',
       reason
     );
+  if (reason === 'unsupported-revision:foreign-insertion')
+    return automationError(
+      'unsupported-revision',
+      "the new text would land inside a container within another author's pending insertion",
+      reason
+    );
   const unsupported =
     reason === 'unsupported-revision' || reason.startsWith('unsupported-revision:');
   return automationError(
