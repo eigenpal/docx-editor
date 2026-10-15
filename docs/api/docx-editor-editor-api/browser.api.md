@@ -423,10 +423,11 @@ export interface DocumentLimits {
 }
 
 // @public
-export interface DocumentPreview {
+export interface DocumentPreview<T = void> {
     commit(options?: CommitPreviewOptions): Promise<void>;
     discard(): void;
     onStatusChanged(listener: (status: DocumentPreviewStatus) => void): () => void;
+    readonly result: T;
     reveal(): boolean;
     readonly status: DocumentPreviewStatus;
 }
@@ -582,7 +583,7 @@ export interface DocxEditorNamespace {
 export interface DocxEditorRuntime {
     readonly capabilities: DocumentCapabilities;
     dispose(): void;
-    preview(callback: PreviewCallback): Promise<DocumentPreview>;
+    preview<T = void>(callback: PreviewCallback<T>): Promise<DocumentPreview<T>>;
     run<T>(callback: RunCallback<T>): Promise<T>;
     run<T>(object: ClientObject | readonly ClientObject[], callback: RunCallback<T>): Promise<T>;
     run<T>(options: RunOptions, callback: RunCallback<T>): Promise<T>;
@@ -1186,7 +1187,7 @@ export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Repl
 export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
 
 // @public
-export type PreviewCallback = (context: RequestContext) => Promise<void>;
+export type PreviewCallback<T = void> = (context: RequestContext) => Promise<T>;
 
 // @public
 class Range_2 extends ModelObject implements PromisedItem {
