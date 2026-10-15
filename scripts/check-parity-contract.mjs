@@ -758,13 +758,14 @@ function validateContractShape(contract) {
 
 /**
  * `adapterMemberCheckedInterfaces`: interfaces both adapter entries export whose member
- * names must match, such as `ReviewRailRegistry`, which pro builds on in both adapters. A
+ * NAMES must match (types are not compared), such as `ReviewRailRegistry`, which pro builds on in both adapters. A
  * listed interface missing from either snapshot fails, so the list cannot go stale.
  */
 function checkAdapterInterfaceMembers(contract, reactSnapshot, vueSnapshot, issues) {
-  const names = contract.adapterMemberCheckedInterfaces ?? [];
-  if (!Array.isArray(names)) {
-    issues.push('contract.adapterMemberCheckedInterfaces must be an array');
+  const names = contract.adapterMemberCheckedInterfaces;
+  // Required and non-empty: a missing or misspelled key would otherwise pass vacuously.
+  if (!Array.isArray(names) || names.length === 0) {
+    issues.push('contract.adapterMemberCheckedInterfaces must be a non-empty array');
     return { interfaces: 0, memberChecks: 0 };
   }
   const reactDecls = extractInterfaceDecls(reactSnapshot);

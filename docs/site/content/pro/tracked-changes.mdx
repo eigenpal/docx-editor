@@ -339,16 +339,17 @@ While the pane is closed, the viewport reserves only a narrow marker strip. Read
 
 The reserved gutter does not show the **Add comment** controls in the toolbar and the context menu. Those controls open a comment draft in a review column. To serve them from your own column, read `ReviewRailContext` from the adapter package. Call its `register()` to show the controls, and its `registerCommentDraft(handler)` to receive each request. Both return a cleanup function. `register()` also reserves the gutter, so pass `{ reserveGutter: false }` in that case.
 
-The handler takes no arguments. It reads the selection from the editor with `getSelectionPlacement()` and `retainSelection()`, and opens the pane. A request counts as served as soon as a handler runs, even if the handler opens nothing. So register the handler only while your column can open a draft, and not in viewing mode.
+The handler takes no arguments. It reads the selection's position with `getSelectionPlacement()`, pins the selection with `retainSelection()`, and opens the pane. When the draft closes or is cancelled, call `editor.releaseSelection(pin)`, or the highlight stays pinned. A request counts as served as soon as a handler runs, even if the handler opens nothing. So register the handler only while your column can open a draft, and not in viewing mode.
 
-In React, register in an effect:
+In React, register in an effect. Keep `openDraft` stable with `useCallback`: a new function on each render registers the handler again each time.
 
 ```tsx
 import { useContext, useEffect } from 'react';
+import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, useDocxEditor, useEditorState } from '@docx-editor.dev/react';
 import { useReview } from '@docx-editor.dev/pro/react';
 
-function useCommentDrafts(openDraft: (anchorY: number) => void) {
+function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
   const registry = useContext(ReviewRailContext);
   const editor = useDocxEditor();
   const viewing = useEditorState((state) => state.editingMode === 'viewing');
@@ -358,9 +359,11 @@ function useCommentDrafts(openDraft: (anchorY: number) => void) {
     const unregister = registry.register();
     const release = registry.registerCommentDraft(() => {
       const anchorY = editor.getSelectionPlacement()?.anchorY;
-      if (anchorY === undefined || !editor.retainSelection()) return;
+      if (anchorY === undefined) return;
+      const pin = editor.retainSelection();
+      if (!pin) return;
       setPaneOpen(true);
-      openDraft(anchorY);
+      openDraft(anchorY, pin);
     });
     return () => {
       release();
@@ -374,10 +377,11 @@ In Vue, inject the registry. It is a ref, so read `.value`. This sketch register
 
 ```ts
 import { inject, onMounted, onUnmounted } from 'vue';
+import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
 import { ReviewRailContext, useDocxEditor } from '@docx-editor.dev/vue';
 import { useReview } from '@docx-editor.dev/pro/vue';
 
-export function useCommentDrafts(openDraft: (anchorY: number) => void) {
+export function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
   const registry = inject(ReviewRailContext, null);
   const editorRef = useDocxEditor();
   const { setPaneOpen } = useReview();
@@ -389,9 +393,11 @@ export function useCommentDrafts(openDraft: (anchorY: number) => void) {
     const release = rail.registerCommentDraft(() => {
       const editor = editorRef.value;
       const anchorY = editor?.getSelectionPlacement()?.anchorY;
-      if (!editor || anchorY === undefined || !editor.retainSelection()) return;
+      if (!editor || anchorY === undefined) return;
+      const pin = editor.retainSelection();
+      if (!pin) return;
       setPaneOpen(true);
-      openDraft(anchorY);
+      openDraft(anchorY, pin);
     });
     cleanup = () => {
       release();

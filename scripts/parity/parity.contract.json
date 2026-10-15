@@ -69,6 +69,7 @@
     "pairedViaInheritance": {},
     "vueExclusive": {}
   },
+  "adapterMemberCheckedInterfacesComment": "Interfaces exported by both adapter entries whose member names must match. Only member names are compared, not their types.",
   "adapterMemberCheckedInterfaces": ["ReviewRailRegistry"],
   "pro": {
     "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list. webrtcExports covers the separate {react,vue}-webrtc.api.md pair and hocuspocusExports the {react,vue}-hocuspocus.api.md pair, which the review entries do not include.",

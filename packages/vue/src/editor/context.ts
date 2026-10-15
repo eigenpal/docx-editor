@@ -58,8 +58,9 @@ export interface ReviewRailRegistry {
   readonly reserveGutter?: () => () => void;
   /**
    * Receive the Add comment requests. The handler takes no arguments: it reads the
-   * selection from the editor (`getSelectionPlacement`, `retainSelection`) and opens the
-   * pane. The most recently registered handler receives each request. Do not register
+   * selection's position with `getSelectionPlacement`, pins the selection with
+   * `retainSelection`, and opens the pane. Release the pin with `releaseSelection` when the
+   * draft closes or is cancelled. The most recently registered handler receives each request. Do not register
    * while the column cannot open a draft, such as in viewing mode: a request counts as
    * served once a handler runs. Returns the unregister function.
    */
