@@ -277,6 +277,29 @@ describe('an external document refresh', () => {
     expect(editor.surface!.session.packageRevision()).toBe(before);
   });
 
+  test('a comment refused by viewing names viewing, not a refresh', () => {
+    // `commitReviewOps` also skips the write for viewing and collaboration gates. Only a
+    // skipped refresh may report the refresh; a gate reports its own reason.
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: TWO_PARAGRAPHS,
+      modules: [stubReviewModule()],
+    });
+    const host = createBrowserAutomationHost(editor);
+    const { paragraphs } = handles(host);
+    editor.surface!.setEditingMode('view');
+    const response = host.execute({
+      operations: [
+        { op: 'insertComment', span: { paragraph: paragraphs[0]! }, text: 'Note', author: 'Ann' },
+      ],
+    });
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.read-only');
+    editor.destroy();
+  });
+
   test('a comment written during an external refresh names the refresh', () => {
     const container = document.createElement('div');
     const editor = createDocxEditor({

@@ -138,6 +138,18 @@ export function createBrowserAutomationHost(editor: DocxEditorInstance): Automat
   };
 }
 
+/**
+ * Why `commitReviewOps` did not run a write: the refresh guard skipped the commit (`ran` is
+ * false), or a gate such as viewing or a collaboration refusal stopped it and recorded why.
+ */
+function skippedWrite(
+  surface: NonNullable<DocxEditorInstance['surface']>,
+  ran: boolean
+): { readonly ok: false; readonly reason: string } {
+  const reason = ran ? (surface.state().lastRejection ?? 'refused') : REFRESH_WRITE_REFUSAL;
+  return { ok: false, reason: publicRefusal(reason) };
+}
+
 function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
   /**
    * Revision, made monotonic across remounts.
@@ -259,15 +271,11 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // A sentence the editor refused in (a refresh, viewing) becomes its public code.
       if (!review.ok)
         return { ok: false, reason: publicRefusal(review.reason ?? 'review-module-required') };
-      // A commit the refresh guard skips never runs the thunk, so the default is that refusal.
-      let outcome: AutomationCommentWriteResult = {
-        ok: false,
-        reason: publicRefusal(REFRESH_WRITE_REFUSAL),
-      };
+      let outcome: AutomationCommentWriteResult | null = null;
       // `commitReviewOps` is the gate a comment goes through in the editor: viewing refuses, and
       // the pages and the rail repaint from the commit. Reaching past it would let a script
       // comment on a document open for reading.
-      surface.commitReviewOps(() => {
+      const ran = surface.commitReviewOps(() => {
         if (writes.every((write) => write.kind === 'delete')) {
           const deletion = writes.find((write) => write.kind === 'delete');
           const done = session.deleteComments(
@@ -313,7 +321,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
             : { ok: true, changed: true, commentId: created };
         return { committed: created !== null };
       }, automationCommentIntent(writes));
-      return outcome;
+      return outcome ?? skippedWrite(surface, ran);
     },
     applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
       const surface = editor.surface;
@@ -323,15 +331,11 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
       // scope is carried so this refuses a story it cannot write rather than quietly authoring
       // the node somewhere else.
       if (scope.kind !== 'body') return { ok: false, reason: 'unsupported-story' };
-      // A commit the refresh guard skips never runs the thunk, so the default is that refusal.
-      let outcome: AutomationPortApplyResult = {
-        ok: false,
-        reason: publicRefusal(REFRESH_WRITE_REFUSAL),
-      };
+      let outcome: AutomationPortApplyResult | null = null;
       // Through `commitReviewOps`, the gate a package-scoped write goes through in the editor:
       // viewing refuses, and the pages repaint from the commit. Reaching past it would let a
       // script author a chip in a document open for reading.
-      surface.commitReviewOps(() => {
+      const ran = surface.commitReviewOps(() => {
         const result = live.insertCustomNode(write);
         outcome = result.ok
           ? { ok: true, changed: result.change !== null }
@@ -341,7 +345,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
             };
         return { committed: result.ok };
       }, 'package-scoped');
-      return outcome;
+      return outcome ?? skippedWrite(surface, ran);
     },
     save: () => (sync() ? (editor.surface?.save() ?? null) : null),
     // The one genuinely browser-only operation, and the reason the port declares it optional:

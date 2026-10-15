@@ -19,8 +19,8 @@ import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import {
+  REFRESH_REFUSED_COMMIT,
   REFRESH_WRITE_REFUSAL,
-  refreshRefusedCommit,
   refreshWriteBlocked,
   registerRefreshComposition,
 } from './refresh-write-guard.ts';
@@ -3103,14 +3103,15 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  function commit(...args: Parameters<typeof commitNow>): void {
-    if (refreshWriteBlocked(container)) return;
+  function commit(...args: Parameters<typeof commitNow>): boolean {
+    if (refreshWriteBlocked(container)) return false;
     const finish = beginSurfaceCommit(container);
     try {
       commitNow(...args);
     } finally {
       finish();
     }
+    return true;
   }
   function commitNow(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
@@ -5222,9 +5223,8 @@ export function mountPaginatedSurface(
     replacementLanding,
     applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
       // Automation shares edit gates and repainting but retains its capture policy.
-      // Its explicit story remains independent of the reader's active story. A commit the
-      // refresh guard skips never runs the thunk below, so the default is that refusal.
-      let result: ReturnType<TreeDocxSession['applyTreeOps']> = refreshRefusedCommit();
+      // Its explicit story stays the batch's. A commit the refresh guard skips keeps this default.
+      let result: ReturnType<TreeDocxSession['applyTreeOps']> = REFRESH_REFUSED_COMMIT;
       const story = scope ?? BODY_STORY;
       commit(
         () => {

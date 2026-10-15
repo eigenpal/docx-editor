@@ -662,11 +662,15 @@ export interface PaginatedSurface {
    * pages painting text the tree no longer had, every card anchored where it used to be, and
    * the caret past the end of the paragraph — after which every keystroke was refused with
    * `offset-out-of-range` until the user happened to click somewhere else.
+   *
+   * Returns false when an external refresh holds the write guard and `run` never ran. When it
+   * returns true and `run` did not run either, a gate (viewing, collaboration) refused the write
+   * and recorded why as `state().lastRejection`.
    */
   commitReviewOps(
     run: () => { readonly committed: boolean; readonly reason?: unknown },
     intent?: ReviewWriteIntent
-  ): void;
+  ): boolean;
   /**
    * The layout as last PUBLISHED, without forcing pending work.
    *

@@ -434,7 +434,13 @@ export class Range extends ModelObject implements PromisedItem {
     ));
   }
 
-  /** Insert a bounded PNG/JPEG image. Sync before configuring the returned picture. */
+  /**
+   * Insert a bounded PNG/JPEG image. Sync before configuring the returned picture.
+   *
+   * Works on server, browser, and collaborative runtimes; on a collaborative runtime the
+   * picture, its media part, and its relationship replicate to every participant. Insertion
+   * must be the only mutation in its sync, and tracking refuses it.
+   */
   insertInlinePictureFromBase64(
     base64EncodedImage: string,
     insertLocation: InsertLocation | 'Before' | 'After' | 'Start' | 'End' | 'Replace'
