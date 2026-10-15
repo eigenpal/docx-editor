@@ -13,6 +13,8 @@ import { strToU8, zipSync } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { createBrowserAutomationHost } from '../automation-host.ts';
 import type { AutomationHandle, AutomationHost } from '../../automation/index.ts';
+import { storeEditDiagnosticCode } from '../../automation/diagnostics.ts';
+import { setRefreshWriteGuard } from '../refresh-write-guard.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -244,5 +246,33 @@ describe('a detached or destroyed editor', () => {
     expect(response.ok).toBe(false);
     expect(errorCodeAt(response, 0)).toBe('document-unavailable');
     expect(host.save().ok).toBe(false);
+  });
+});
+
+describe('an external document refresh', () => {
+  test('a picture insert during an external refresh is refused, not reported as committed', () => {
+    // The refresh guard skips the surface commit without running it. Reported as a commit that
+    // changed nothing, the picture's answer then found no drawing and threw a plain Error.
+    const { host, container, editor } = mount();
+    const { paragraphs } = handles(host);
+    const before = editor.surface!.session.packageRevision();
+    setRefreshWriteGuard(container, true);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'insertInlinePicture',
+          span: { paragraph: paragraphs[0]! },
+          base64:
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+          location: 'End',
+        },
+      ],
+    });
+    setRefreshWriteGuard(container, false);
+    expect(response.ok).toBe(false);
+    expect(errorCodeAt(response, 0)).toBe('transaction-refused');
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.refresh-in-progress');
+    expect(editor.surface!.session.packageRevision()).toBe(before);
   });
 });

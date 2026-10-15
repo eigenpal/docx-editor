@@ -687,7 +687,7 @@ export class TreeDocumentStore {
           next = edit(working);
         } catch (error) {
           if (!isPackageEditRefusal(error)) throw error;
-          failure = { reason: error.reason, detail: error.detail };
+          failure = { reason: error.reason, detail: error.message };
           return false;
         }
         if (next === working) return true;

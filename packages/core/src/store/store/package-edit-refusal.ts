@@ -19,8 +19,9 @@ const PACKAGE_EDIT_REFUSAL = Symbol.for('docx-editor.package-edit-refusal');
 export class PackageEditRefusal extends Error {
   readonly [PACKAGE_EDIT_REFUSAL] = true;
 
+  /** `message` is the refusal's detail. */
   constructor(
-    readonly detail: string,
+    detail: string,
     readonly reason: TreeOpRejection = 'package-changed'
   ) {
     super(detail);

@@ -5217,11 +5217,13 @@ export function mountPaginatedSurface(
     replacementLanding,
     applyAutomationOps: (staged, scope, packageEdits, requiresReview = false) => {
       // Automation shares edit gates and repainting but retains its capture policy.
-      // Its explicit story remains independent of the reader's active story.
+      // Its explicit story remains independent of the reader's active story. A commit the
+      // refresh guard skips never runs the thunk below, so the default is that refusal.
       let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
         committed: false,
-        rejected: false,
+        rejected: true,
         opCount: 0,
+        reason: 'An external document refresh is in progress.',
       };
       const story = scope ?? BODY_STORY;
       commit(

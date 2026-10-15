@@ -1067,7 +1067,7 @@ Participants see the same document after their updates synchronize. These rules 
 | Add comments, including the first comments in a document. | Both comments stay. Undo removes only your own comment. |
 | Move, resize, or change wrapping on the same image. | Every participant keeps the same winning value. Deletion takes precedence over an image change. |
 | Paste several paragraphs at the same position. | Both pastes stay. Surrounding text appears once. |
-| Insert pictures at the same time, from the editor or the document API. | Both pictures stay, each with its own media part. |
+| Insert pictures at the same time, from the editor or the document API. | Both pictures stay. Each participant allocates picture identifiers and media part names from its own range, so they rarely collide. |
 | Insert a picture into a paragraph that another participant deletes. | The deletion wins. The picture's media part stays in the package so undo can restore it. |
 
 Local and remote carets stay beside the same characters during edits and reconnection. A paragraph split or join moves each caret with its text. Text inserted exactly at your caret appears after it.

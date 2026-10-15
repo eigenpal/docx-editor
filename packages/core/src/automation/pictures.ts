@@ -110,6 +110,8 @@ export function insertPicturePlan(
     ops: [{ op: 'insertDrawing', paragraphId, offset, drawing }],
     packageEdits: [
       (current) => {
+        // Embedded again, not reused from the plan: returning the planning result dropped the
+        // media part from collaborative replication (document-picture-automation.test.ts).
         const applied = withEmbeddedImage(current, partName, { bytes, mime });
         // Never point a preplanned drawing at a different allocation. Plan and commit see the same
         // package and the same collaboration actor, so a mismatch is an engine defect.

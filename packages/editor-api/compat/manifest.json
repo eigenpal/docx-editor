@@ -533,7 +533,7 @@
     },
     {
       "uid": "Word.Range#insertInlinePictureFromBase64",
-      "note": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse."
+      "note": "Supports canonical padded base64 for PNG/JPEG only, up to 20 MiB and 40 million pixels. Validates bounded raster headers and container structure without invoking a pixel decoder. Sizes use header DPI when present, otherwise 96 DPI. Before/Start and After/End use range endpoints; Replace supports one paragraph. Insertion must be the only mutation in its sync; sync before configuring the returned proxy. New pictures lock aspect ratio by default. Tracking and protected content refuse. Collaborative runtimes allocate the picture's ids and media part name from the participant's own range."
     },
     {
       "uid": "Word.InlinePicture#width",
