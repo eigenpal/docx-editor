@@ -242,7 +242,8 @@ export interface UseReviewReturn {
    * @example
    * ```tsx
    * const { lastRefusal } = useReview();
-   * return lastRefusal?.key === item.key ? <p role="status">{lastRefusal.code}</p> : null;
+   * // The packaged rail announces it; this only shows it.
+   * return lastRefusal?.key === item.key ? <p>{lastRefusal.code}</p> : null;
    * ```
    */
   readonly lastRefusal: ReviewWriteRefusal | null;

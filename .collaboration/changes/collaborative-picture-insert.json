@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "A document API batch planned package allocations without the collaboration actor and committed them with it, so a picture insert on a collaborative runtime refused its own plan with a plain Error.",
-  "after": "The batch plans and commits under the same collaboration actor, so the picture takes the actor's id stripe; a package edit that finds a changed package refuses the transaction as package-changed. Refused review writes name their cause in results, diagnostics and the review UI.",
+  "after": "The batch plans and commits under the same collaboration actor, so the picture takes the actor's id stripe; a package edit that finds a changed package refuses the transaction as package-changed. Refused review writes name their cause in results, diagnostics and the review UI. A collaboration status change now emits selectionChange, so snapshot readers hear it.",
   "reason": "Collaborative pictures use the existing actor-scoped docPr, relationship, and media allocation. Shared node shapes, operations, and package serialization stay the same.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-picture-automation.test.ts",
@@ -10,7 +10,9 @@
     "packages/core/src/store/__tests__/package-transaction.test.ts",
     "packages/pro/src/__tests__/review-write-refusals.test.ts",
     "packages/pro/src/__tests__/review-refusal-ui.test.tsx",
-    "packages/pro/src/__tests__/review-refusal-ui-vue.test.ts"
+    "packages/pro/src/__tests__/review-refusal-ui-vue.test.ts",
+    "packages/core/src/editor/__tests__/collaboration-status-signal.test.ts",
+    "packages/pro/src/__tests__/review-refusal-store.test.ts"
   ],
   "changeset": "collaborative-picture-insert",
   "migration": null

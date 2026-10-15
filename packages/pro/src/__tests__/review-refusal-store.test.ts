@@ -84,12 +84,32 @@ test('every refusal moves the sequence, so a repeat is announced again', () => {
   expect(store.get()!.sequence).toBe(first + 1);
 });
 
-test('a refusal held while nobody listened is rechecked on subscribe', () => {
+test('a refusal held while nobody listened is rechecked after subscribe', async () => {
   const { editor, state } = fakeEditor();
   const store = reviewRefusalStore(editor);
   store.record('accept', 'k1', REFUSED);
   state.mode = 'viewing';
+  let notified = 0;
+  const off = store.subscribe(() => (notified += 1));
+  // Never from inside the subscribe call itself.
+  expect(notified).toBe(0);
+  await Promise.resolve();
+  expect(store.get()).toBeNull();
+  expect(notified).toBe(1);
+  off();
+});
+
+test('a session moving between not-ready states keeps the refusal', () => {
+  const { editor, state, emit } = fakeEditor();
+  state.collaboration = 'initializing';
+  const store = reviewRefusalStore(editor);
   const off = store.subscribe(() => undefined);
+  store.record('accept', 'k1', REFUSED);
+  state.collaboration = 'disconnected';
+  emit('change');
+  expect(store.get()).not.toBeNull();
+  state.collaboration = 'ready';
+  emit('change');
   expect(store.get()).toBeNull();
   off();
 });

@@ -345,7 +345,7 @@ An action can be refused after the reader clicks it. For example, an external do
 
 In a custom card, read `lastRefusal` from `useReview()`. Every `useReview()` over the same editor shares it, so a custom card also sees a refusal that the packaged rail recorded. It names the refused `action`, the card `key` (`null` for a new comment), and the public diagnostic `code`. The next action that lands clears it. A change to the document, the editing mode, editability, the collaboration status, or the author filter also clears it. A caret move does not.
 
-The rail announces every refused review action in one polite live region, including actions from your own controls that use `useReview()`. A repeated refusal is announced again. To key your own announcement the same way, use `lastRefusal.sequence`.
+While `DocxEditorReview` is mounted, it announces every refused review action in one polite live region, including actions from your own controls that use `useReview()`. A repeated refusal is announced again. Do not add a second live region for the same refusal. If your interface does not mount `DocxEditorReview`, announce `lastRefusal` yourself and key the announcement on `lastRefusal.sequence`.
 
 | `code`                         | Cause                                         |
 | ------------------------------ | --------------------------------------------- |
@@ -365,7 +365,7 @@ This example shows the cause under a custom card:
 function RefusalNotice({ item }: { item: ReviewItemView }) {
   const { lastRefusal } = useReview();
   if (lastRefusal?.key !== item.key) return null;
-  return <p role="alert">Not applied ({lastRefusal.code}). Try again later.</p>;
+  return <p>Not applied: {lastRefusal.code}</p>;
 }
 ```
 
@@ -382,8 +382,8 @@ const review = useReview();
 </script>
 
 <template>
-  <p v-if="review.lastRefusal.value?.key === item.key" role="alert">
-    Not applied ({{ review.lastRefusal.value.code }}). Try again later.
+  <p v-if="review.lastRefusal.value?.key === item.key">
+    Not applied: {{ review.lastRefusal.value.code }}
   </p>
 </template>
 ```

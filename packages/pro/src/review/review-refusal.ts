@@ -53,7 +53,7 @@ export function reviewWriteRefusalOf(
   action: ReviewWriteAction,
   key: string | null,
   result: ExecResult,
-  sequence = 0
+  sequence: number
 ): ReviewWriteRefusal | null {
   if (result.ok) return null;
   return { action, key, code: diagnosticCodeOfRefusal(result.reason, result.code), sequence };
@@ -115,7 +115,9 @@ function refusalStateKey(editor: Editor): string {
     editor.getDocumentHandle().revision,
     editor.getEditingMode(),
     snapshot.editable,
-    snapshot.collaborationStatus,
+    // Whether the session takes writes, not its raw status: a refusal for a session that is
+    // not ready stays while it moves between not-ready states, and clears once it can write.
+    snapshot.collaborationStatus === 'ready' || snapshot.collaborationStatus === 'inactive',
     reviewAuthorFilterKey(editor),
   ].join(':');
 }
@@ -180,7 +182,7 @@ export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
   const store: ReviewRefusalStore = {
     get: () => held?.refusal ?? null,
     record(action, key, result) {
-      const refusal = reviewWriteRefusalOf(action, key, result, result.ok ? count : count + 1);
+      const refusal = reviewWriteRefusalOf(action, key, result, count + 1);
       if (refusal) count = refusal.sequence;
       const changed = refusal !== null || held !== null;
       held = refusal ? { refusal, at: refusalStateKey(editor) } : null;
@@ -191,7 +193,9 @@ export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
       listeners.add(listener);
       sync();
       // A refusal held while nobody listened may be about a state that has since moved on.
-      recheck();
+      // Checked after the subscribe returns, so subscribing never notifies other readers from
+      // inside a render or a watcher setup.
+      queueMicrotask(recheck);
       return () => {
         listeners.delete(listener);
         sync();
