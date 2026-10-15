@@ -6282,7 +6282,7 @@ export const ReviewRailContext: InjectionKey<ShallowRef<ReviewRailRegistry>>;
 
 // @public (undocumented)
 export interface ReviewRailRegistry {
-    // (undocumented)
+    readonly gutters?: number;
     readonly mounted: number;
     // (undocumented)
     readonly register: () => () => void;
@@ -6290,6 +6290,7 @@ export interface ReviewRailRegistry {
     readonly registerCommentDraft: (handler: () => void) => () => void;
     // (undocumented)
     readonly requestCommentDraft: () => boolean;
+    readonly reserveGutter?: () => () => void;
 }
 
 export { RevisionAuthorAssignments }

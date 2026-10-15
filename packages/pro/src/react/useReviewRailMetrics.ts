@@ -38,11 +38,12 @@ export interface UseReviewRailMetricsOptions {
    */
   readonly trackScroll?: boolean;
   /**
-   * With a `railRef`, reserve the review gutter beside the page for your column, as
-   * `DocxEditorReview` does. The viewport then shifts the page left while the pane is open,
-   * and the comment controls in the toolbar and the context menu appear. Set `false` when
-   * a mounted `DocxEditorReview` already reserves it, or when your column overlays the page.
-   * Default: `true`.
+   * With a `railRef`, reserve the review gutter beside the page while the column element is
+   * mounted, as `DocxEditorReview` does. The viewport then shifts the page left while the
+   * pane is open. The reservation does not show the comment controls in the toolbar and the
+   * context menu; see `ReviewRailContext` to serve them from your column. Set `false` when a
+   * mounted `DocxEditorReview` already reserves the gutter, or when your column overlays the
+   * page. Default: `true`.
    */
   readonly reserveGutter?: boolean;
 }
@@ -67,6 +68,9 @@ const selectPaneOpen = (snapshot: EditorSnapshot) => snapshot.reviewPaneOpen ?? 
  * inside `DocxEditor.Viewport` with no positioned element in between: its offset parent
  * must be the scroll container that holds the pages. Development builds warn once when it
  * is not. The column reserves the review gutter unless `reserveGutter` is `false`.
+ *
+ * While `useReview().paneOpen` is false the viewport reserves only a marker strip, so
+ * render no cards then. `compact` is true when the pane is open but too narrow for a column.
  *
  * The value updates when the zoom, the window size, the page count, the document load,
  * content above the pages, or the reserved review gutter changes. It works in a pop-out
@@ -118,8 +122,6 @@ export function useReviewRailMetrics(
   const paneOpen = useEditorState(selectPaneOpen);
   const gutter = useReviewGutter();
   const refMode = railRef !== undefined && railRef !== null;
-  const reserve = refMode && (options?.reserveGutter ?? true);
-  useEffect(() => (reserve ? registry?.register() : undefined), [registry, reserve]);
   // A ref object does not notify when its element mounts, so check it after every commit
   // and re-bind only when the element itself changed. The updater returns the previous
   // state when nothing changed, so React bails out and the effect cannot loop.
@@ -130,6 +132,10 @@ export function useReviewRailMetrics(
     setElement((previous) => (previous === next ? previous : next));
   });
   const elementRef = useMemo(() => ({ current: element }), [element]);
+  // Only while the element exists: a column rendered conditionally must not leave the page
+  // shifted after it is gone.
+  const reserve = refMode && element !== null && (options?.reserveGutter ?? true);
+  useEffect(() => (reserve ? registry?.reserveGutter?.() : undefined), [registry, reserve]);
   const geometry = useRailMetrics(
     refMode ? editor : null,
     elementRef,

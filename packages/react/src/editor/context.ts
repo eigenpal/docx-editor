@@ -36,10 +36,24 @@ export function useDocxEditor(): DocxEditorInstance | null {
  * legitimately compose two rails.
  */
 export interface ReviewRailRegistry {
+  /** Packaged review rails registered through `register`. The comment controls need one. */
   readonly mounted: number;
   readonly register: () => () => void;
+  /**
+   * Claims registered through `reserveGutter`: columns that need the review gutter but
+   * serve no comment draft. The viewport reserves the gutter while `mounted + gutters` is
+   * above zero.
+   */
+  readonly gutters?: number;
+  /** Reserve the review gutter without showing comment controls. Returns the release. */
+  readonly reserveGutter?: () => () => void;
   readonly registerCommentDraft: (handler: () => void) => () => void;
   readonly requestCommentDraft: () => boolean;
+}
+
+/** Whether anything under the Root claims the review gutter. @internal */
+export function claimsReviewGutter(registry: ReviewRailRegistry | null | undefined): boolean {
+  return (registry?.mounted ?? 0) + (registry?.gutters ?? 0) > 0;
 }
 
 export const ReviewRailContext = createContext<ReviewRailRegistry | null>(null);

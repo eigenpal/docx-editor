@@ -189,6 +189,13 @@ export function useDocxEditorRootOwner(
   provide(formControlTranslateKey, translateResolver);
 
   const railCount = shallowRef(0);
+  const gutterCount = shallowRef(0);
+  const reserveGutter = () => {
+    gutterCount.value++;
+    return () => {
+      gutterCount.value = Math.max(0, gutterCount.value - 1);
+    };
+  };
   const commentDraftHandlers: Array<() => void> = [];
   const registerCommentDraft = (handler: () => void) => {
     commentDraftHandlers.push(handler);
@@ -206,12 +213,14 @@ export function useDocxEditorRootOwner(
   const railRegistry = shallowRef<ReviewRailRegistry>({
     mounted: 0,
     register: () => () => {},
+    gutters: 0,
+    reserveGutter,
     registerCommentDraft,
     requestCommentDraft,
   });
   watch(
-    railCount,
-    (mounted) => {
+    [railCount, gutterCount],
+    ([mounted, gutters]) => {
       railRegistry.value = {
         mounted,
         register: () => {
@@ -220,6 +229,8 @@ export function useDocxEditorRootOwner(
             railCount.value = Math.max(0, railCount.value - 1);
           };
         },
+        gutters,
+        reserveGutter,
         registerCommentDraft,
         requestCommentDraft,
       };

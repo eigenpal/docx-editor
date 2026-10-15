@@ -93,11 +93,12 @@ export interface UseReviewRailMetricsOptions {
    */
   readonly trackScroll?: boolean;
   /**
-   * With a `railRef`, reserve the review gutter beside the page for your column, as
-   * `DocxEditorReview` does. The viewport then shifts the page left while the pane is open,
-   * and the comment controls in the toolbar and the context menu appear. Set `false` when
-   * a mounted `DocxEditorReview` already reserves it, or when your column overlays the page.
-   * Default: `true`.
+   * With a `railRef`, reserve the review gutter beside the page while the column element is
+   * mounted, as `DocxEditorReview` does. The viewport then shifts the page left while the
+   * pane is open. The reservation does not show the comment controls in the toolbar and the
+   * context menu; see `ReviewRailContext` to serve them from your column. Set `false` when a
+   * mounted `DocxEditorReview` already reserves the gutter, or when your column overlays the
+   * page. Default: `true`.
    */
   readonly reserveGutter?: boolean;
 }
@@ -127,6 +128,9 @@ const selectPaneOpen = (snapshot: EditorSnapshot) => snapshot.reviewPaneOpen ?? 
  * positioned element in between: its offset parent must be the scroll container that holds
  * the pages. Development builds warn once when it is not. The column reserves the review
  * gutter unless `reserveGutter` is `false`.
+ *
+ * While `useReview().paneOpen` is false the viewport reserves only a marker strip, so
+ * render no cards then. `compact` is true when the pane is open but too narrow for a column.
  *
  * The value updates when the zoom, the window size, the page count, the document load,
  * content above the pages, or the reserved review gutter changes. It works in a pop-out
@@ -197,14 +201,15 @@ export function useReviewRailMetrics(
   const gutter = useReviewGutter();
   const registry = inject(ReviewRailContext, null);
 
-  // Keyed on the option alone: registering replaces the registry's value (its count
-  // changes), so watching that value too re-registered on every registration.
+  // Keyed on the option and the element alone: reserving replaces the registry's value (its
+  // count changes), so watching that value too re-reserved on every reservation. Only while
+  // the element exists, so a column rendered conditionally does not leave the page shifted.
   let unregister: (() => void) | undefined;
   watch(
-    () => toValue(options)?.reserveGutter ?? true,
+    () => element.value !== null && (toValue(options)?.reserveGutter ?? true),
     (reserve) => {
       unregister?.();
-      unregister = reserve ? registry?.value.register() : undefined;
+      unregister = reserve ? registry?.value.reserveGutter?.() : undefined;
     },
     { immediate: true }
   );

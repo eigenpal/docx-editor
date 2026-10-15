@@ -48,7 +48,7 @@ import {
   reviewPaneEntitledZoom,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
-import { ReviewRailContext } from './context';
+import { ReviewRailContext, claimsReviewGutter } from './context';
 import { useEditorState } from './useEditorState';
 import {
   useNavigationReservation,
@@ -270,7 +270,7 @@ export function useReviewGutter(): ReviewGutter {
   if (pageSetup) lastPageWidthTwips.current = pageSetup.pageWidthTwips;
   const pageWidthTwips = pageSetup?.pageWidthTwips ?? lastPageWidthTwips.current;
 
-  const mounted = (rail?.mounted ?? 0) > 0;
+  const mounted = claimsReviewGutter(rail);
   const compute = useCallback(
     (width: number | null): ReviewGutter => {
       if (!mounted) return NO_GUTTER;

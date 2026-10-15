@@ -84,6 +84,28 @@ function surfaceRect(surface: HTMLElement) {
 }
 
 /**
+ * Work around a happy-dom defect: it holds each MutationObserver's delivery function only
+ * through a `WeakRef`, so a garbage collection in the middle of a test silently stops an
+ * observer that is still connected. While installed, `WeakRef` holds its target strongly.
+ * Returns the restore function.
+ */
+function keepHappyDomObserversAlive(): () => void {
+  const NativeWeakRef = globalThis.WeakRef;
+  globalThis.WeakRef = class StrongRef<T extends object> {
+    readonly #target: T;
+    constructor(target: T) {
+      this.#target = target;
+    }
+    deref(): T {
+      return this.#target;
+    }
+  } as unknown as WeakRefConstructor;
+  return () => {
+    globalThis.WeakRef = NativeWeakRef;
+  };
+}
+
+/**
  * Install the geometry; returns the restore function.
  *
  * `offsetParent` follows the real rule closely enough for these tests: an element inside a
@@ -97,19 +119,7 @@ export function installRailGeometry(): () => void {
   );
   railGeometry.surfaceRight = 1116;
   railGeometry.clientWidth = 1400;
-  // happy-dom holds each MutationObserver's delivery function only through a `WeakRef`, so
-  // a garbage collection mid-test silently stops an observer that is still connected. A
-  // strong stand-in keeps the observers these tests depend on alive.
-  const NativeWeakRef = globalThis.WeakRef;
-  globalThis.WeakRef = class<T extends object> {
-    readonly #target: T;
-    constructor(target: T) {
-      this.#target = target;
-    }
-    deref(): T {
-      return this.#target;
-    }
-  } as unknown as WeakRefConstructor;
+  const releaseObservers = keepHappyDomObserversAlive();
   Object.defineProperty(proto, 'clientWidth', {
     configurable: true,
     get: () => railGeometry.clientWidth,
@@ -131,7 +141,7 @@ export function installRailGeometry(): () => void {
     },
   });
   return () => {
-    globalThis.WeakRef = NativeWeakRef;
+    releaseObservers();
     for (const [key, descriptor] of saved) {
       if (descriptor) Object.defineProperty(proto, key, descriptor);
       else delete (proto as unknown as Record<string, unknown>)[key];

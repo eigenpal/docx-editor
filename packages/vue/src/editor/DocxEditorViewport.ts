@@ -12,7 +12,7 @@ import {
   type PropType,
 } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { useDocxEditor, useReviewRailRegistry } from './context';
+import { claimsReviewGutter, useDocxEditor, useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
 import { ScopedByAncestorContext, useScopeClassName } from './scope-context';
 import { InsideViewportContext } from './viewport-context';
@@ -50,7 +50,7 @@ export const DocxEditorViewport = defineComponent({
     const paneOpen = useEditorState(selectPaneOpen);
     const fitting = useEditorState(selectZoomFitting);
     const rail = useReviewRailRegistry();
-    const reserve = computed(() => (rail.value.mounted ?? 0) > 0);
+    const reserve = computed(() => claimsReviewGutter(rail.value));
     const reviewGutter = useReviewGutter();
     const navShift = useNavigationShift();
     const layoutStore = useNavigationLayoutStore();

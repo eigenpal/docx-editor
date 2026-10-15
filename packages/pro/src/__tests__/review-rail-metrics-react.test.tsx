@@ -21,6 +21,7 @@ import {
   DocxEditorContent,
   DocxEditorLoading,
   DocxEditorRoot,
+  DocxEditorToolbar,
   DocxEditorViewport,
   useDocxEditor,
 } from '@docx-editor.dev/react';
@@ -121,6 +122,9 @@ function tree(children: ReactNode, loading = false) {
   return (
     <DocxEditorRoot document={COMMENTED_SOURCE} modules={[reviewModule()]}>
       <CaptureEditor />
+      <DocxEditorToolbar preset={false}>
+        <DocxEditorToolbar.AddComment />
+      </DocxEditorToolbar>
       <DocxEditorViewport>
         {loading ? <DocxEditorLoading when /> : null}
         <DocxEditorContent />
@@ -224,6 +228,30 @@ describe('useReviewRailMetrics (React)', () => {
     const bare = mount(<CustomColumn options={{ reserveGutter: false }} />);
     await waitFor(() => readMetrics(columnOf(bare.container))?.left === EXPECTED_AT_100.left);
     expect(scroller(bare.container).style.getPropertyValue('--docx-review-gutter')).toBe('');
+  });
+
+  test('a custom column alone shows no Add comment control', async () => {
+    const addComment = (root: HTMLElement) => root.querySelector('[data-slot="review.addComment"]');
+    // The control: the packaged rail serves comment drafts, so the button shows.
+    const packaged = mount(<DocxEditorReview />);
+    await waitFor(() => addComment(packaged.container) !== null);
+    expect(addComment(packaged.container)).not.toBeNull();
+    cleanup();
+    const view = mount(<CustomColumn />);
+    await waitFor(
+      () => scroller(view.container).style.getPropertyValue('--docx-review-gutter') !== ''
+    );
+    expect(scroller(view.container).style.getPropertyValue('--docx-review-gutter')).not.toBe('');
+    expect(addComment(view.container)).toBeNull();
+  });
+
+  test('releases the gutter when the column unmounts', async () => {
+    const view = mount(<CustomColumn />);
+    const gutter = () => scroller(view.container).style.getPropertyValue('--docx-review-gutter');
+    await waitFor(() => gutter() !== '');
+    view.rerender(tree(null));
+    await waitFor(() => gutter() === '');
+    expect(gutter()).toBe('');
   });
 
   test('reports compact when the viewport is too narrow for a full column', async () => {

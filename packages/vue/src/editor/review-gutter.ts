@@ -6,7 +6,7 @@ import {
   hostWindowOf,
 } from '@docx-editor.dev/core/editor';
 import { twipsToPixels } from '../lib/units';
-import { useReviewRailRegistry } from './context';
+import { claimsReviewGutter, useReviewRailRegistry } from './context';
 import { useEditorState } from './useEditorState';
 import {
   useNavigationReservation,
@@ -170,7 +170,7 @@ export function useReviewGutter(): ShallowRef<ReviewGutter> {
     ([registry, current, element, startReservation], _, onCleanup) => {
       if (current.pageSetup) lastPageWidthTwips.value = current.pageSetup.pageWidthTwips;
       const compute = (): ReviewGutter => {
-        if ((registry.mounted ?? 0) === 0) return NO_GUTTER;
+        if (!claimsReviewGutter(registry)) return NO_GUTTER;
         const pageWidthTwips = current.pageSetup?.pageWidthTwips ?? lastPageWidthTwips.value;
         return reviewGutter({
           open: current.reviewPaneOpen,

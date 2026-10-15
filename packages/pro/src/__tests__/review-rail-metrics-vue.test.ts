@@ -10,7 +10,18 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import { defineComponent, h, ref, type PropType, type VNode } from 'vue';
+import {
+  computed,
+  defineComponent,
+  h,
+  onMounted,
+  onUnmounted,
+  onUpdated,
+  ref,
+  type PropType,
+  type VNode,
+} from 'vue';
+import { DocxEditorToolbar } from '@docx-editor.dev/vue';
 import { flush, waitFor } from './review-vue-harness.ts';
 import {
   DocxEditorReview,
@@ -96,9 +107,92 @@ const CustomColumn = defineComponent({
   },
 });
 
+/** The Vue column from the tracked changes guide, with a render counter. */
+const DocumentedColumn = defineComponent({
+  name: 'DocumentedColumn',
+  emits: ['render'],
+  setup(_props, { emit }) {
+    const railRef = ref<HTMLElement | null>(null);
+    const { metrics } = useReviewRailMetrics(railRef);
+    const { items, paneOpen } = useReview();
+    const heights = ref<ReadonlyMap<string, number>>(new Map());
+    const positions = useStackedReviewPositions(items, heights, () => ({
+      gap: 8,
+      scale: metrics.value.scale,
+    }));
+    let observer: ResizeObserver | null = null;
+    const cards = new Map<string, HTMLElement>();
+    onMounted(() => {
+      observer = new ResizeObserver((entries) => {
+        let next: Map<string, number> | null = null;
+        for (const entry of entries) {
+          const node = entry.target as HTMLElement;
+          const key = node.dataset.key;
+          if (!key || heights.value.get(key) === node.offsetHeight) continue;
+          next ??= new Map(heights.value);
+          next.set(key, node.offsetHeight);
+        }
+        if (next) heights.value = next;
+      });
+      for (const node of cards.values()) observer.observe(node);
+    });
+    onUnmounted(() => observer?.disconnect());
+    const cardRefs = new Map<string, (node: unknown) => void>();
+    function cardRef(key: string) {
+      let bind = cardRefs.get(key);
+      if (!bind) {
+        bind = (node) => {
+          const element = (node as Node | null)?.nodeType === 1 ? (node as HTMLElement) : null;
+          const previous = cards.get(key);
+          if (previous === element) return;
+          if (previous) observer?.unobserve(previous);
+          if (element) {
+            cards.set(key, element);
+            observer?.observe(element);
+          } else {
+            cards.delete(key);
+          }
+        };
+        cardRefs.set(key, bind);
+      }
+      return bind;
+    }
+    const visible = computed(() => (paneOpen.value ? items.value : []));
+    onUpdated(() => emit('render'));
+    return () =>
+      h(
+        'div',
+        {
+          ref: railRef,
+          style: {
+            position: 'absolute',
+            top: '0px',
+            left: `${metrics.value.left ?? 0}px`,
+            visibility: metrics.value.left === null ? 'hidden' : 'visible',
+          },
+        },
+        visible.value.map((item) =>
+          h('div', {
+            key: item.key,
+            ref: cardRef(item.key),
+            'data-key': item.key,
+            class: 'my-review-card',
+            style: {
+              position: 'absolute',
+              top: `${metrics.value.top + (positions.value.get(item.key) ?? item.anchorY ?? 0) * metrics.value.scale}px`,
+              width: '300px',
+            },
+          })
+        )
+      );
+  },
+});
+
 async function mount(children: () => VNode): Promise<MountedEditor> {
   const mounted = mountEditorTree(
-    () => [],
+    () => [
+      h(DocxEditorToolbar, { preset: false }, { default: () => [h(DocxEditorToolbar.AddComment)] }),
+    ],
     COMMENTED_SOURCE,
     () => [children()],
     [reviewModule()]
@@ -245,6 +339,80 @@ describe('useReviewRailMetrics (Vue)', () => {
         expect(scroller(mounted.container).style.getPropertyValue('--docx-review-gutter')).toBe('');
       }
     );
+  });
+
+  test('a custom column alone shows no Add comment control', async () => {
+    const addComment = (root: HTMLElement) => root.querySelector('[data-slot="review.addComment"]');
+    // The control: the packaged rail serves comment drafts, so the button shows.
+    await withMount(
+      () => h(DocxEditorReview),
+      async (mounted) => {
+        await waitFor(() => addComment(mounted.container) !== null);
+        expect(addComment(mounted.container)).not.toBeNull();
+      }
+    );
+    await withMount(
+      () => h(CustomColumn),
+      async (mounted) => {
+        const gutter = () =>
+          scroller(mounted.container).style.getPropertyValue('--docx-review-gutter');
+        await waitFor(() => gutter() !== '');
+        expect(gutter()).not.toBe('');
+        expect(addComment(mounted.container)).toBeNull();
+      }
+    );
+  });
+
+  test('releases the gutter when the column unmounts', async () => {
+    await withMount(
+      () => h(CustomColumn),
+      async (mounted) => {
+        const gutter = () =>
+          scroller(mounted.container).style.getPropertyValue('--docx-review-gutter');
+        await waitFor(() => gutter() !== '');
+        mounted.viewportVisible.value = false;
+        await waitFor(() => gutter() === '');
+        expect(gutter()).toBe('');
+      }
+    );
+  });
+
+  test('the documented column settles after measuring its cards', async () => {
+    // The browser reports every observed element once on observe. Deliver that here, so a
+    // column that stores heights unconditionally would re-render forever.
+    const NativeObserver = globalThis.ResizeObserver;
+    class InitialReportObserver {
+      readonly #callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.#callback = callback;
+      }
+      observe(target: Element) {
+        queueMicrotask(() =>
+          this.#callback([{ target } as ResizeObserverEntry], this as unknown as ResizeObserver)
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = InitialReportObserver as unknown as typeof ResizeObserver;
+    let renders = 0;
+    try {
+      await withMount(
+        () => h(DocumentedColumn, { onRender: () => renders++ }),
+        async (mounted) => {
+          await waitFor(() => mounted.container.querySelector('.my-review-card') !== null);
+          await flush();
+          // The first report stored the heights and re-rendered once.
+          expect(renders).toBeGreaterThan(0);
+          const settled = renders;
+          await flush();
+          await flush();
+          expect(renders).toBe(settled);
+        }
+      );
+    } finally {
+      globalThis.ResizeObserver = NativeObserver;
+    }
   });
 
   test('reports compact when the viewport is too narrow for a full column', async () => {
