@@ -120,6 +120,7 @@ import {
 } from './docx-editor-support.ts';
 import { createDocumentOpenFailureState } from './document-open-failure.ts';
 import { execEditorCommand } from './docx-editor-exec.ts';
+import { replaceMatchStoryRefusal } from './docx-editor-replace-match.ts';
 import { createMountHistoryGroups } from './editor-history-groups.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
@@ -2019,6 +2020,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
+      if (command.type === 'replaceMatch') {
+        const story = replaceMatchStoryRefusal(surface!, command.match);
+        if (story) return story;
+      }
       if (
         command.type === 'proposeInsertion' ||
         command.type === 'proposeDeletion' ||
@@ -2354,10 +2359,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // Through `activateReview`, not `setSelection`: the card this opens has to be named
         // before the selection is published, or the surface reports whichever card the caret
         // classifies to — the wrong twin, when two cards share one span — for one frame.
+        // No caret follow: the reveal below owns the scroll. Following the caret first scrolled
+        // the minimum, so `centerIfNeeded` found the item on screen and parked it at the edge,
+        // and `reveal: false` scrolled anyway.
         surface.activateReview(
           pinKey,
           { anchor: caret, head: caret },
-          { allowExcluded: allowExcludedFormatNavigation }
+          { allowExcluded: allowExcludedFormatNavigation, preventScroll: true }
         );
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.

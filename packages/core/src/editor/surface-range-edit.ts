@@ -114,11 +114,23 @@ export interface SurfaceRangeEditOps {
   splitEndsTheParagraph(position: SemanticPosition): boolean;
   deleteSelectionPlan(trackedAuthor?: string): RangeDeletionPlan;
   deleteSelectionOps(): readonly TreeDocOp[];
+  /** The plan for an explicit range of the active story; the selection does not move. */
+  deleteRangePlan(range: SemanticSelection): {
+    readonly ops: readonly TreeDocOp[];
+    readonly replaceAt: SemanticPosition;
+  };
   replacementOffset(from: SemanticPosition, to: SemanticPosition, trackedAuthor?: string): number;
 }
 
 export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRangeEditOps {
   const { session } = deps;
+  /**
+   * The range a plan is built for in place of the selection, set only inside
+   * {@link deleteRangePlan}. The selection itself never moves, so nothing is published.
+   */
+  let rangeOverride: SemanticSelection | null = null;
+  const planSelection = (): SemanticSelection => rangeOverride ?? deps.selection();
+  const planCells = (): CellSelection | null => (rangeOverride ? null : deps.cellSelection());
 
   /** The current selection as a history mark — one paragraph or nothing. */
   function selectionMark(): { paragraphId: string; start: number; end: number } | null {
@@ -131,7 +143,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // and layout the typed text produced — including a layout pass a commit
     // deferred under input pressure. (No-op mid-flush and when empty.)
     deps.flushPendingInputAndLayout();
-    const selection = deps.selection();
+    const selection = planSelection();
     // One paragraph is ordered by offset alone; skip the document-wide order walk.
     const order =
       selection.anchor.paragraphId === selection.head.paragraphId
@@ -251,7 +263,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // the only window where the pre-edit layout it consults is the right oracle. The
     // rectangle is captured NOW, not read at getter time: `commit` nulls `cellSelection` at
     // its head, so a late read would answer for a selection the plan was not built from.
-    const rectangle = deps.cellSelection();
+    const rectangle = planCells();
     let landing: SemanticPosition | null = null;
     return {
       ...plan,
@@ -267,7 +279,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
    * deletion inside one paragraph does (`tree-op-bookmark-edits.ts`). A tracked one keeps them.
    */
   function withEnclosedBookmarks(plan: RangeDeletionPlan, untracked: boolean): RangeDeletionPlan {
-    if (!untracked || plan.ops.length === 0 || deps.cellSelection()) return plan;
+    if (!untracked || plan.ops.length === 0 || planCells()) return plan;
     const { from, to } = orderedRange();
     if (from.paragraphId === to.paragraphId) return plan;
     // A pure ancestry read: `partOfNodeId`, never `partFor`, which would retain a story store.
@@ -283,7 +295,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // as its text oracle, so a deferred layout pass lands with it. (No-op
     // mid-flush.)
     deps.flushPendingInputAndLayout();
-    const rectangle = deps.cellSelection();
+    const rectangle = planCells();
     // A RECTANGLE is not the range it stands in for. Rows one and two of column one, read as
     // a range, run through every cell between them — so deleting through the range empties
     // cells the drag never covered, which is the exact failure the rectangle exists to
@@ -298,7 +310,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       // Nothing structural goes, so the range start is still there to collapse onto.
       return { ops, collapseTo: orderedStart() };
     }
-    const selection = deps.selection();
+    const selection = planSelection();
     if (
       selection.anchor.paragraphId === selection.head.paragraphId &&
       selection.anchor.offset === selection.head.offset
@@ -322,6 +334,26 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
 
   function deleteSelectionOps(): readonly TreeDocOp[] {
     return deleteSelectionPlan().ops;
+  }
+
+  /**
+   * {@link deleteSelectionPlan} for an explicit range of the active story, with the landing
+   * resolved now. The selection stays where the reader left it: a host replacing a found match
+   * must not move the caret or scroll the page.
+   */
+  function deleteRangePlan(range: SemanticSelection): {
+    readonly ops: readonly TreeDocOp[];
+    readonly replaceAt: SemanticPosition;
+  } {
+    const outer = rangeOverride;
+    rangeOverride = range;
+    try {
+      const plan = deleteSelectionPlan();
+      // Read INSIDE the override: the getter orders the range it lands after.
+      return { ops: plan.ops, replaceAt: plan.replaceAt ?? plan.collapseTo };
+    } finally {
+      rangeOverride = outer;
+    }
   }
 
   /**
@@ -583,6 +615,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
+    deleteRangePlan,
     replacementOffset,
   };
 }

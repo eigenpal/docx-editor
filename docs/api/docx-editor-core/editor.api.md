@@ -2371,6 +2371,7 @@ export interface PaginatedSurface {
     activatedReviewKey(): string | null;
     activateReview(key: string, selection?: SemanticSelection, options?: {
         readonly allowExcluded?: boolean;
+        readonly preventScroll?: boolean;
     }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
@@ -2536,6 +2537,7 @@ export interface PaginatedSurface {
         readonly expectedPackageRevision: number;
     }): Promise<ImageIntentResult>;
     replacementLanding(paragraphId: string, start: number, end: number): number | null;
+    replaceTextInPlace(paragraphId: string, start: number, end: number, text: string): boolean;
     retainedSelection(): SemanticSelection | null;
     retainSelection(): SelectionPin;
     revealPage(pageIndex: number, options?: RevealOptions): boolean;

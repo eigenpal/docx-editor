@@ -292,6 +292,7 @@ import {
   noteScopeIdInLayout,
 } from './surface-scope.ts';
 import { createCaretViewFollower, type CaretFollowMode } from './surface-caret-follow.ts';
+import { createInPlaceReplacement } from './surface-replace-in-place.ts';
 import {
   contentChildrenOf,
   contentControlSelectionRange,
@@ -1653,6 +1654,38 @@ export function mountPaginatedSurface(
     );
     return committed;
   }
+
+  /** Run `body` with no caret follow inside it and none owed to a later paint. */
+  function withoutCaretFollow(body: () => void): void {
+    caretFollowPending = false;
+    caretView.without(body);
+    caretFollowPending = false;
+  }
+
+  const replaceTextInPlace = createInPlaceReplacement({
+    settle: () => flushPendingInputAndLayout(),
+    refuse: (reason) => publishRefusal(reason),
+    storyParagraphs: () => paragraphOrder(),
+    textOf: (paragraphId) => textOf(paragraphId),
+    rangePlan: (range) => deleteRangePlan(range),
+    insertionPoint: (position) => positionPastDeletion(editingLayout(), position),
+    selection: () => selection,
+    selectionMark: () => selectionMark(),
+    commitWithoutFollow: (ops, mark, after) => {
+      let committed = false;
+      withoutCaretFollow(() =>
+        commit(() => {
+          const result = applyOps(ops, mark, mark, storyScope(), false);
+          committed = result.committed;
+          return result;
+        }, after)
+      );
+      return committed;
+    },
+    flushLayout: () => flushLayout(),
+    noteModelMoved: () => selectionSync.noteModelMoved(),
+    selectionsEqual,
+  });
 
   const scheduler = createLayoutScheduler({
     // The DOCUMENT's geometry, exactly as the first paint uses. Omitting it meant the first
@@ -4292,6 +4325,7 @@ export function mountPaginatedSurface(
     splitEndsTheParagraph,
     deleteSelectionPlan,
     deleteSelectionOps,
+    deleteRangePlan,
     replacementOffset,
   } = createSurfaceRangeEditOps({
     session,
@@ -4494,6 +4528,7 @@ export function mountPaginatedSurface(
       );
     },
     proposeTextChange: (kind, text, author) => commitProposedTextChange(kind, text, author),
+    replaceTextInPlace,
 
     // The newline-aware sibling of `type`, declared below in this same scope. On the
     // contract because text arriving from OUTSIDE the editor — a paste from the clipboard,
@@ -5393,12 +5428,18 @@ export function mountPaginatedSurface(
         ? { key, anchor: next.anchor, head: next.head }
         : { key, anchor: selection.anchor, head: selection.head };
       if (next) {
-        activationSelectionWrite = true;
-        try {
-          setSelection(next);
-        } finally {
-          activationSelectionWrite = false;
-        }
+        const install = (): void => {
+          activationSelectionWrite = true;
+          try {
+            setSelection(next, false, activationOptions?.preventScroll ? 'none' : 'caret');
+          } finally {
+            activationSelectionWrite = false;
+          }
+        };
+        // HELD for the whole write: the paint that builds an unbuilt destination page follows
+        // on its own terms, and a nudge owed by earlier typing scrolls on the next repaint.
+        if (activationOptions?.preventScroll) withoutCaretFollow(install);
+        else install();
         return;
       }
       renderCommentHighlights();

@@ -88,8 +88,12 @@ export function createCaretViewFollower(deps: {
       // record: the head is a point the reader is sweeping through, not one they left a
       // caret at, and the only reader of the record compares it against a caret.
       if (!collapsed && mode !== 'head') return;
+      // Focus gates the SCROLL. A declined follow still records, whoever holds focus: a caret
+      // placed while a host's own list had focus would otherwise read as a page change on the
+      // first repaint after focus returns, and scroll then.
       const active = deps.pagesLayer.ownerDocument.activeElement;
-      if (active !== deps.pagesLayer && (!active || !deps.pagesLayer.contains(active))) return;
+      const focused = active === deps.pagesLayer || (!!active && deps.pagesLayer.contains(active));
+      if (!focused && mode !== 'none') return;
 
       const preferredPageIndex = deps.preferredPageIndex();
       const preferredLineId = deps.preferredLineId?.();

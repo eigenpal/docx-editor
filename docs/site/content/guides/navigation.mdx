@@ -18,6 +18,7 @@ These methods belong to the browser `Editor` API, separate from the Office.js-sh
 | `clearAnchorHighlight(options)` | Dismiss the paragraph highlight. | No |
 | `findMatches(query, options)` | Find text in every document region. | No |
 | `selectMatch(match)` | Select a match and show it. | Yes |
+| `exec({ type: 'replaceMatch', match, text })` | Replace a match where it is. | No |
 | `setHighlights(name, ranges, options)` | Mark text ranges, such as search results or glossary terms. | No |
 | `clearHighlights(name)` | Remove one set of text highlights, or all of them. | No |
 | `getHighlightsAt(clientX, clientY)` | Read the text highlights under a pointer position. | No |
@@ -314,6 +315,22 @@ Each `TextMatch` includes the matched `text`. It can include `contextBefore` and
 `selectMatch()` selects the match and shows it. If the match is in a header, footer, or note, the editor opens that region first. A match in a text box selects the text box drawing. The method does not move focus. It returns an `ExecResult`; check `ok` before you update your interface.
 
 Matches refer to positions in the open document. After the document changes, search again.
+
+## Replace a match
+
+To replace one match without moving the selection, pass it to the `replaceMatch` command:
+
+```ts
+const [match] = editor.findMatches('Supplier', { wholeWord: true });
+if (match) {
+  const result = editor.exec({ type: 'replaceMatch', match, text: 'Vendor' });
+  if (!result.ok) console.warn(result.reason);
+}
+```
+
+The command keeps the caret, the selection, and the scroll position. An empty `text` deletes the match. In suggesting mode, the editor records a tracked deletion and a tracked insertion under its author, and one undo removes both. The command follows the same tracked-change rules as `proposeReplacement`, so it refuses an edit that cannot be tracked, such as an insertion inside a link in another author's pending insertion.
+
+The match must be in the region the reader is editing. A match in a header, footer, or note needs that region open first. A match in a text box returns `unsupported`.
 
 ## Search and highlight
 

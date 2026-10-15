@@ -1175,11 +1175,10 @@ export interface EditorCommands
   removeTabMark: { positionTwips: number };
 
   /**
-   * Replace one found match with `text`. Addressed by {@link TextMatch} rather than a
-   * `DocTarget` because that is what `findMatches` hands back, and re-deriving a target
-   * from it in the caller is where an off-by-one would come from. An empty `text`
-   * deletes the match, which is what a find/replace dialog means by replacing with
-   * nothing.
+   * Replace one found match with `text`, addressed by the {@link TextMatch} `findMatches`
+   * returns. An empty `text` deletes it. The selection and scroll position stay put. In
+   * suggesting mode it is a tracked replacement under the editor's author, refused where
+   * `proposeReplacement` would be. The match must be in the open story, not a text box.
    */
   replaceMatch: { match: TextMatch; text: string };
 

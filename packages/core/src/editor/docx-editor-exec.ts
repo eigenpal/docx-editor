@@ -4,6 +4,7 @@ import { execBookmarkCommand } from './docx-editor-bookmarks.ts';
 import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
+import { execReplaceMatch } from './docx-editor-replace-match.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
 // One switch, one vocabulary: every `EditorCommand` the gate admitted lands here and is
@@ -406,6 +407,8 @@ export function execEditorCommand(
       }
       break;
     }
+    case 'replaceMatch':
+      return execReplaceMatch(mounted, command);
     case 'undo':
       mounted.undo();
       break;

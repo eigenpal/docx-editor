@@ -138,6 +138,8 @@ export interface PaginatedSurface {
     text: string,
     author?: string
   ): boolean;
+  /** Replace a paragraph range of the active story in place; suggesting tracks it. */
+  replaceTextInPlace(paragraphId: string, start: number, end: number, text: string): boolean;
   /**
    * Queue plain typed text for a batched commit at the caret.
    *
@@ -741,11 +743,12 @@ export interface PaginatedSurface {
    * other order repainted the bands and reported state while the caret was still the only
    * evidence, so a host saw the wrong twin active for one frame and then a correction. Omit it
    * to pin against the live selection, which is what a header or note scope has already set.
+   * `preventScroll` installs `selection` with no scroll, now or on a later repaint.
    */
   activateReview(
     key: string,
     selection?: SemanticSelection,
-    options?: { readonly allowExcluded?: boolean }
+    options?: { readonly allowExcluded?: boolean; readonly preventScroll?: boolean }
   ): void;
   /**
    * The key {@link activateReview} pinned, or null once its selection is no longer live.
