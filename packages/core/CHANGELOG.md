@@ -1,5 +1,46 @@
 # @docx-editor.dev/core
 
+## 2.31.0
+
+### Minor Changes
+
+- f19be09: Add bookmarks: show, insert, delete, and go to bookmarks in the editor and the automation API.
+- 61aa80e: Support picture insertion in collaborative automation runtimes and expose specific refusal reasons for scripted edits and review actions. Fixes #1348
+- ffbe8cf: The Add comment control is disabled until something can open a comment draft, and the `useCommentDraftRequest` hook lets your own comment UI serve it.
+- bc6b51a: Render text and picture watermarks in the editor and PDF export, and add a Watermark dialog.
+- 2741998: Support pop-out windows and iframes while preserving edits, selection, undo history, and collaboration when the editor moves. Fixes #1312
+- 02b31d7: Long documents with justified text, footnotes, tables, and SimSun text now break lines and pages more accurately. PDF export now completes long documents and uses installed Garamond and large CJK fonts.
+- 173b73c: Show the applied paragraph spacing in the line-spacing menu. Expose the active language through `useTranslation().lang`.
+- e42431e: Explain document opening failures in a customizable React and Vue dialog with stable error codes.
+- bc6b51a: Show picture insertion failures in a customizable editor dialog.
+- f94c8a5: The `replaceMatch` command now replaces a found match without moving the selection or the page, and records a tracked replacement in suggesting mode. Activating a review item with `reveal: false` no longer scrolls the page.
+- 1bf0015: Group tracked replacements into one review item and navigation stop by default. Set `pairReplacements: false` to list each change separately.
+- 72f2cc3: Group review decisions into one undo step. Keep note and comment removal with its related text edit during undo.
+- 784b7d7: Preserve authored vector line caps and round or bevel joins in SVG and PDF output.
+
+### Patch Changes
+
+- 23b9fcf: Comments and replies created through the editing API now record when they were written, so `creationDate` reads a date and saved files keep it.
+- a15181f: Preserve bookmark copies outside replaced text, and remove old copies when you move a bookmark across document stories.
+- a15181f: Preserve protected bookmarks when a move or deletion targets locked or bound content controls.
+- 722e648: Export the `TextMatch` type from `@docx-editor.dev/core/editor`, next to the other editor search and highlight types.
+- 504a0e2: Allow equation editing with shared default control properties and preserve size, language, and complex-script italic during layout. Fixes #1335
+- 504a0e2: Allow equation editing with shared default run formatting and apply run sizes during layout. Fixes #1340
+- adee88a: Show merged cell text through every fixed-height row it covers and clip it at the bottom of the last row. Fixes #1305
+- 8f68066: Report font shaping byte-limit refusals through the host font-error callback while retaining fallback measurement.
+- 3c6a0d3: Inline pictures can change their text wrapping, and a floating wrap keeps the picture in place on the page.
+- aaebb18: Open long documents faster and keep editing, review decisions, comments, and scrolling responsive in documents with thousands of pages, tracked changes, and footnotes. Pages with footnotes now paginate the same after edits as when the saved document is opened again.
+- a15181f: Fix early line breaks before Latin punctuation in paragraphs with an East Asian run language.
+- b5f9eff: Refuse control removal in suggesting mode. Support Ctrl+Backspace and selection deletion for selected content-locked controls.
+- 29accef: Select adjacent content-locked controls before deletion, and refuse removal when the control itself is locked. Fixes #1299
+- 68ee15c: Render equation structures with control properties and preserve those properties on save. Fixes #1306
+- aaebb18: A font that is not available now falls back to a face of the same kind (serif, sans-serif, or monospace), and the editor draws that text with the same face it measures, including with a fixed font configuration such as `defaultFonts`.
+- d92a3ac: Align text separately on each side of floating pictures and honor largest-side wrapping. Fixes #1351
+- 05e53d3: Keep full-width punctuation pairs compressed when a full-width colon moves a line break.
+- 17a2495: Compress full-width punctuation pairs only within one line and restrict hanging punctuation to justified paragraphs. Fixes #1302
+- 7cd3776: Save long documents in short tasks and reuse unchanged paragraphs and table rows.
+- Updated dependencies: @docx-editor.dev/i18n@2.31.0
+
 ## 2.30.0
 
 ### Minor Changes

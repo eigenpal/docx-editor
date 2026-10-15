@@ -1,5 +1,15 @@
 # @docx-editor.dev/vue
 
+## 2.31.0
+
+### Minor Changes
+
+- f2b71d4: Add `useReviewRailMetrics` for React and Vue to position custom review columns.
+
+### Patch Changes
+
+- Updated dependencies: @docx-editor.dev/core@2.31.0, @docx-editor.dev/i18n@2.31.0
+
 ## 2.30.0
 
 ### Minor Changes

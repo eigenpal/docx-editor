@@ -1,5 +1,19 @@
 # @docx-editor.dev/pro
 
+## 2.31.0
+
+### Minor Changes
+
+- f2b71d4: Add `useReviewRailMetrics` for React and Vue to position custom review columns.
+- 73ae2fa: Require explicit WebRTC `signaling` settings as a security compatibility exception; configure your servers or explicitly select demo endpoints. Isolate each room's signaling connections. Fixes #1345
+
+### Patch Changes
+
+- ec393d3: Support undo and redo shortcuts with selected pictures. Close the context menu before requesting clipboard access.
+- aaebb18: A paragraph with a tracked formatting change now tints while the pointer is over it and while its review balloon is open, so you can see which paragraph the balloon describes.
+- a15181f: Preserve header text, fields, and pictures when removing or replacing a watermark.
+- Updated dependencies: @docx-editor.dev/core@2.31.0, @docx-editor.dev/react@2.31.0, @docx-editor.dev/vue@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @docx-editor.dev/docx-to-pdf
 
+## 2.31.0
+
+### Patch Changes
+
+- 02b31d7: Long documents with justified text, footnotes, tables, and SimSun text now break lines and pages more accurately. PDF export now completes long documents and uses installed Garamond and large CJK fonts.
+- 784b7d7: Preserve authored vector line caps and round or bevel joins in SVG and PDF output.
+- Updated dependencies: @docx-editor.dev/core@2.31.0, @docx-editor.dev/fonts-cjk@2.31.0, @docx-editor.dev/fonts@2.31.0
+
 ## 2.30.0
 
 ### Minor Changes

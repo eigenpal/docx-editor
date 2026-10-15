@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.31.0
+
+### Patch Changes
+
+- 2c318e3: Translate the equation popover messages that explain why an equation cannot be changed with linear editing or in suggesting mode.
+
 ## 2.30.0
 
 ### Minor Changes

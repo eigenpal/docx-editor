@@ -1,5 +1,19 @@
 # @docx-editor.dev/editor-api
 
+## 2.31.0
+
+### Minor Changes
+
+- dbb88d0: Add `Paragraph.search()`, collection property loads through `items/<property>`, and diagnostics for removed automation targets.
+- fc603b3: Add `runtime.preview(callback)` to preview edits before committing them as one undo step or discarding them.
+- 9e8bf15: Add `Range.revisions` and methods to retrieve revisions and ranges by review item key.
+- 62d7df3: Allow supported tracked edits inside another author’s pending text and report specific refusal reasons. Collaboration rejects unsupported revision overlaps.
+
+### Patch Changes
+
+- a15181f: Preserve undo and redo history when a preview rebase refuses changed document content.
+- Updated dependencies: @docx-editor.dev/core@2.31.0
+
 ## 2.30.0
 
 ### Patch Changes
