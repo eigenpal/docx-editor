@@ -9,6 +9,24 @@ import { open, paragraphsOf, roots } from './support/protocol.ts';
 import { storeEditDiagnosticCode } from '../diagnostics.ts';
 import { TARGET_REMOVED } from '../target-removed.ts';
 import type { AutomationBatchResponse } from '../protocol.ts';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { createHandleTable } from '../handles.ts';
+import { createBatchPlanner } from '../plan.ts';
+import { documentReads } from '../reads.ts';
+import { SERVER_AUTOMATION_CAPABILITIES } from '../server-host.ts';
+
+/** A planner over a real package, with a handle table the test can mint handles in. */
+function plannerFor(bytes: Uint8Array) {
+  const opened = readOoxmlPackage(bytes);
+  if (!opened.ok) throw new Error(opened.reason);
+  const handles = createHandleTable();
+  const planner = createBatchPlanner({
+    handles,
+    reads: documentReads(opened.package),
+    capabilities: SERVER_AUTOMATION_CAPABILITIES,
+  });
+  return { handles, planner };
+}
 
 function refusedDetail(response: AutomationBatchResponse): { code: string; detail?: string } {
   for (const result of response.results) {
@@ -84,5 +102,29 @@ describe('a handle that never named a valid target', () => {
     ]) {
       expect(storeEditDiagnosticCode(detail)).not.toBe('edit.stale-target');
     }
+  });
+});
+
+describe('the planner marks removed bookmarks and lists with the dedicated token', () => {
+  const ONE = richDocx({ body: '<w:p><w:r><w:t>one</w:t></w:r></w:p>' });
+
+  test('a bookmark the story no longer declares', () => {
+    const { handles, planner } = plannerFor(ONE);
+    const bookmark = handles.bookmark('gone', { kind: 'body' });
+    const planned = planner.plan({ op: 'getBookmarkRange', bookmark });
+    expect(planned).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-handle', detail: TARGET_REMOVED },
+    });
+  });
+
+  test('a list whose number the story no longer uses', () => {
+    const { handles, planner } = plannerFor(ONE);
+    const list = handles.list('99', { kind: 'body' });
+    const planned = planner.plan({ op: 'getListParagraphs', list });
+    expect(planned).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-handle', detail: TARGET_REMOVED },
+    });
   });
 });

@@ -2287,7 +2287,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range in this document');
         const span = spanOfReviewRange(found.reads, range);
-        // The comment still exists, so reading again answers the same range: no stale-target.
+        // The comment object still exists, so this refusal is not a stale target.
         if (!span)
           return refuse('invalid-handle', 'that comment’s range is no longer in the story');
         return query({ kind: 'span', span });
