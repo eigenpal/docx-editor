@@ -200,7 +200,7 @@ describe('DocxEditor.Navigation', () => {
       </DocxEditorRoot>
     );
     const tabs = [...container.querySelectorAll('[role="tab"]')];
-    expect(tabs.map((tab) => tab.textContent)).toEqual(['Headings', 'Find', 'Go to']);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Headings', 'Find', 'Bookmarks']);
     expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('false');
   });

@@ -747,21 +747,31 @@
     "tabs": {
       "find": "查找",
       "headings": "标题",
-      "goto": "定位"
+      "goto": "书签"
     },
     "title": "导航",
     "goTo": {
-      "tabTitle": "定位 ({shortcut})",
+      "tabTitle": "定位到书签 ({shortcut})",
       "label": "书签",
-      "placeholder": "输入书签名",
+      "placeholder": "搜索书签",
       "listAriaLabel": "书签",
-      "go": "定位",
+      "enterHint": "按 Enter 键转到突出显示的书签。",
       "notFound": "没有名为“{name}”的书签。",
       "failed": "无法显示该书签。",
       "typeName": "请输入书签名，或从列表中选择一个。",
       "empty": "此文档没有书签。",
+      "emptyHint": "选择文本，然后选择“插入”>“书签”为其命名。",
+      "add": "添加书签…",
       "noMatches": "没有匹配的书签。",
+      "atCaret": "包含光标",
       "places": {
+        "header": "页眉",
+        "footer": "页脚",
+        "footnote": "脚注",
+        "endnote": "尾注"
+      },
+      "groups": {
+        "body": "正文",
         "header": "页眉",
         "footer": "页脚",
         "footnote": "脚注",

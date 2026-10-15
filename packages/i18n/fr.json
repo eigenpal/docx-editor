@@ -747,25 +747,35 @@
     "tabs": {
       "find": "Rechercher",
       "headings": "Titres",
-      "goto": "Atteindre"
+      "goto": "Signets"
     },
     "title": "Navigation",
     "goTo": {
-      "tabTitle": "Atteindre ({shortcut})",
+      "tabTitle": "Atteindre un signet ({shortcut})",
       "label": "Signet",
-      "placeholder": "Saisissez un nom de signet",
+      "placeholder": "Rechercher des signets",
       "listAriaLabel": "Signets",
-      "go": "Atteindre",
+      "enterHint": "Appuyez sur Entrée pour atteindre le signet en surbrillance.",
       "notFound": "Aucun signet ne s’appelle « {name} ».",
       "failed": "Le signet n’a pas pu être affiché.",
       "typeName": "Saisissez un nom de signet ou choisissez-en un dans la liste.",
       "empty": "Ce document ne contient aucun signet.",
+      "emptyHint": "Sélectionnez du texte, puis choisissez Insertion > Signet pour le nommer.",
+      "add": "Ajouter un signet…",
       "noMatches": "Aucun signet ne correspond.",
+      "atCaret": "Contient le curseur",
       "places": {
         "header": "En-tête",
         "footer": "Pied de page",
         "footnote": "Note de bas de page",
         "endnote": "Note de fin"
+      },
+      "groups": {
+        "body": "Texte principal",
+        "header": "En-têtes",
+        "footer": "Pieds de page",
+        "footnote": "Notes de bas de page",
+        "endnote": "Notes de fin"
       }
     }
   },

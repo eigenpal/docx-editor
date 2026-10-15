@@ -68,7 +68,7 @@ export interface SurfaceBookmarkDeps {
   /** Jump; with `orShow`, a story that cannot be opened is only scrolled to (`'shown'`). */
   readonly goToPosition: (
     position: { paragraphId: string; offset: number },
-    options?: { readonly orShow?: boolean }
+    options?: { readonly orShow?: boolean; readonly center?: boolean }
   ) => boolean | 'shown';
   readonly setSelection: (selection: SemanticSelection) => void;
   /** Settle pending input and layout before the marks change. */
@@ -351,7 +351,8 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       if (!entry) return false;
       const { start, end } = entry.record;
       // A header, footer or note the document cannot open (read-only) is shown, not entered.
-      const went = deps.goToPosition(start, { orShow: true });
+      // Centered, as a Find result is: a jump to the top edge lands under the chrome there.
+      const went = deps.goToPosition(start, { orShow: true, center: true });
       if (!went) return false;
       if (went === true) deps.setSelection({ anchor: start, head: end });
       return true;

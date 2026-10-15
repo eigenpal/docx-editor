@@ -747,21 +747,31 @@
     "tabs": {
       "find": "Temukan",
       "headings": "Judul",
-      "goto": "Buka"
+      "goto": "Penanda"
     },
     "title": "Navigasi",
     "goTo": {
-      "tabTitle": "Buka ({shortcut})",
+      "tabTitle": "Buka penanda ({shortcut})",
       "label": "Penanda",
-      "placeholder": "Masukkan nama penanda",
+      "placeholder": "Cari penanda",
       "listAriaLabel": "Penanda",
-      "go": "Buka",
+      "enterHint": "Tekan Enter untuk membuka penanda yang disorot.",
       "notFound": "Tidak ada penanda bernama “{name}”.",
       "failed": "Penanda tidak dapat ditampilkan.",
       "typeName": "Ketik nama penanda, atau pilih satu dari daftar.",
       "empty": "Dokumen ini tidak memiliki penanda.",
+      "emptyHint": "Pilih teks, lalu pilih Sisipkan > Penanda untuk menamainya.",
+      "add": "Tambahkan penanda…",
       "noMatches": "Tidak ada penanda yang cocok.",
+      "atCaret": "Berisi kursor",
       "places": {
+        "header": "Header",
+        "footer": "Footer",
+        "footnote": "Catatan kaki",
+        "endnote": "Catatan akhir"
+      },
+      "groups": {
+        "body": "Teks utama",
         "header": "Header",
         "footer": "Footer",
         "footnote": "Catatan kaki",

@@ -747,25 +747,35 @@
     "tabs": {
       "find": "Localizar",
       "headings": "Títulos",
-      "goto": "Ir para"
+      "goto": "Indicadores"
     },
     "title": "Navegação",
     "goTo": {
-      "tabTitle": "Ir para ({shortcut})",
+      "tabTitle": "Ir para um indicador ({shortcut})",
       "label": "Indicador",
-      "placeholder": "Digite o nome de um indicador",
+      "placeholder": "Pesquisar indicadores",
       "listAriaLabel": "Indicadores",
-      "go": "Ir para",
+      "enterHint": "Pressione Enter para ir ao indicador realçado.",
       "notFound": "Nenhum indicador se chama “{name}”.",
       "failed": "Não foi possível mostrar o indicador.",
       "typeName": "Digite o nome de um indicador ou escolha um na lista.",
       "empty": "Este documento não tem indicadores.",
+      "emptyHint": "Selecione o texto e escolha Inserir > Indicador para nomeá-lo.",
+      "add": "Adicionar um indicador…",
       "noMatches": "Nenhum indicador corresponde.",
+      "atCaret": "Contém o cursor",
       "places": {
         "header": "Cabeçalho",
         "footer": "Rodapé",
         "footnote": "Nota de rodapé",
         "endnote": "Nota de fim"
+      },
+      "groups": {
+        "body": "Texto principal",
+        "header": "Cabeçalhos",
+        "footer": "Rodapés",
+        "footnote": "Notas de rodapé",
+        "endnote": "Notas de fim"
       }
     }
   },

@@ -77,11 +77,12 @@ export interface SurfaceNavigation {
   /** Snap to a semantic position using layout geometry, then place the caret there. */
   /**
    * With `orShow`, a story that cannot be opened is scrolled to without moving the caret into
-   * it, and the answer is `'shown'`.
+   * it, and the answer is `'shown'`. With `center`, the target is centered in the viewport
+   * unless it is already well inside it, so it never lands under chrome at the top edge.
    */
   goToPosition(
     position: { paragraphId: string; offset: number },
-    options?: { readonly orShow?: boolean }
+    options?: GoToPositionOptions
   ): boolean | 'shown';
   /**
    * Scroll a bookmark into view and place the caret at it. Answers false for a name no
@@ -107,6 +108,25 @@ function pageInView(layout: SemanticLayout, element: HTMLElement | null, scale: 
 /** How much room to leave above a jump target, so it does not land flush against the edge. */
 const JUMP_MARGIN_PX = 24;
 
+/** Options of {@link SurfaceNavigation.goToPosition}. */
+export interface GoToPositionOptions {
+  readonly orShow?: boolean;
+  readonly center?: boolean;
+}
+
+/**
+ * The scroll offset that shows a target at `y` (scroll-container pixels). Centered, a target
+ * already in the middle band of the viewport stays put; otherwise it lands in the middle.
+ * Not centered, it lands one margin below the top edge, as a link jump does.
+ */
+function jumpScrollTop(element: HTMLElement, y: number, center: boolean): number {
+  if (!center) return Math.max(0, y - JUMP_MARGIN_PX);
+  const view = element.clientHeight;
+  const top = element.scrollTop;
+  if (y >= top + view * 0.2 && y <= top + view * 0.8) return top;
+  return Math.max(0, y - view / 2);
+}
+
 export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation {
   const { pagesLayer } = deps;
 
@@ -130,7 +150,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
 
   const goToPosition = (
     position: { paragraphId: string; offset: number },
-    options?: { readonly orShow?: boolean }
+    options?: GoToPositionOptions
   ): boolean | 'shown' => {
     // Geometry from the LAYOUT, not the DOM. The target of a cross-document jump is normally
     // on a virtualized page with no DOM at all, so `scrollIntoView` would resolve exactly the
@@ -158,7 +178,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     // header, footer or note box otherwise. The scroll container measures the whole sheet stack.
     const sheetY = storyContentBox(page, position.paragraphId).y + caret.y;
     if (element) {
-      element.scrollTop = Math.max(0, sheetY * deps.scale() - JUMP_MARGIN_PX);
+      element.scrollTop = jumpScrollTop(element, sheetY * deps.scale(), options?.center === true);
       deps.onScrolled?.();
     }
     if (!entered) return 'shown';

@@ -535,7 +535,7 @@
     "tabs": {
       "headings": "見出し",
       "find": "検索",
-      "goto": "ジャンプ"
+      "goto": "ブックマーク"
     },
     "headings": {
       "noHeadings": "見出しがありません。文書に見出しを追加すると、ここに表示されます。"
@@ -558,17 +558,27 @@
       "totalTruncated": "{total, plural, other {# 件以上}}"
     },
     "goTo": {
-      "tabTitle": "ジャンプ ({shortcut})",
+      "tabTitle": "ブックマークへジャンプ ({shortcut})",
       "label": "ブックマーク",
-      "placeholder": "ブックマーク名を入力",
+      "placeholder": "ブックマークを検索",
       "listAriaLabel": "ブックマーク",
-      "go": "ジャンプ",
+      "enterHint": "Enter キーを押すと、強調表示されたブックマークへ移動します。",
       "notFound": "「{name}」という名前のブックマークはありません。",
       "failed": "ブックマークを表示できませんでした。",
       "typeName": "ブックマーク名を入力するか、一覧から選択してください。",
       "empty": "この文書にはブックマークがありません。",
+      "emptyHint": "テキストを選択し、[挿入] > [ブックマーク] で名前を付けます。",
+      "add": "ブックマークを追加…",
       "noMatches": "一致するブックマークはありません。",
+      "atCaret": "カーソルを含む",
       "places": {
+        "header": "ヘッダー",
+        "footer": "フッター",
+        "footnote": "脚注",
+        "endnote": "文末脚注"
+      },
+      "groups": {
+        "body": "本文",
         "header": "ヘッダー",
         "footer": "フッター",
         "footnote": "脚注",

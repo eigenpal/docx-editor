@@ -747,25 +747,35 @@
     "tabs": {
       "find": "Bul",
       "headings": "Başlıklar",
-      "goto": "Git"
+      "goto": "Yer işaretleri"
     },
     "title": "Gezinti",
     "goTo": {
-      "tabTitle": "Git ({shortcut})",
+      "tabTitle": "Yer işaretine git ({shortcut})",
       "label": "Yer işareti",
-      "placeholder": "Bir yer işareti adı girin",
+      "placeholder": "Yer işaretlerinde ara",
       "listAriaLabel": "Yer işaretleri",
-      "go": "Git",
+      "enterHint": "Vurgulanan yer işaretine gitmek için Enter tuşuna basın.",
       "notFound": "“{name}” adlı yer işareti yok.",
       "failed": "Yer işareti gösterilemedi.",
       "typeName": "Bir yer işareti adı yazın veya listeden birini seçin.",
       "empty": "Bu belgede yer işareti yok.",
+      "emptyHint": "Metin seçin, ardından adlandırmak için Ekle > Yer İşareti’ni seçin.",
+      "add": "Yer işareti ekle…",
       "noMatches": "Eşleşen yer işareti yok.",
+      "atCaret": "İmleci içerir",
       "places": {
         "header": "Üst bilgi",
         "footer": "Alt bilgi",
         "footnote": "Dipnot",
         "endnote": "Son not"
+      },
+      "groups": {
+        "body": "Ana metin",
+        "header": "Üst bilgiler",
+        "footer": "Alt bilgiler",
+        "footnote": "Dipnotlar",
+        "endnote": "Son notlar"
       }
     }
   },

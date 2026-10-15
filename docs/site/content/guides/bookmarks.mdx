@@ -20,15 +20,18 @@ A bookmark name starts with a letter. It holds only letters, digits, and undersc
 
 ## Find and go to bookmarks
 
-The navigation pane has a **Go to** tab for bookmarks. Open it from the pane's tab strip, click **Insert** > **Go To Bookmark…** in the menu bar, or press <kbd>Ctrl</kbd>+<kbd>G</kbd> (<kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>G</kbd> on macOS) while the document has focus. The tab does the following:
+The navigation pane has a **Bookmarks** tab that goes to a bookmark. Open it from the pane's tab strip, click **Insert** > **Go To Bookmark…** in the menu bar, or press <kbd>Ctrl</kbd>+<kbd>G</kbd> (<kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>G</kbd> on macOS) while the document has focus. The tab does the following:
 
-- Lists the document's bookmarks, sorted by **Name** or by **Location**, as the Bookmark dialog does. Numbers in names sort by value, so `Section2` comes before `Section10`.
+- Lists the document's bookmarks under a **Bookmarks** label with their count, sorted by **Name** or by **Location**, as the Bookmark dialog does. Numbers in names sort by value, so `Section2` comes before `Section10`.
+- Groups the list by place when sorted by location: **Main text**, **Headers**, **Footers**, **Footnotes**, and **Endnotes**. Sorted by name, a bookmark that is not in the main text shows its place after its name.
+- Shows a bookmark icon for a bookmark that marks text, an I-beam for one that marks a point, and a dot for the bookmark that contains the cursor.
 - Shows hidden bookmarks when you select **Hidden bookmarks**.
-- Names the place of a bookmark that is not in the main text: **Header**, **Footer**, **Footnote**, or **Endnote**.
-- Filters the list as you type. Names that start with what you typed come first.
-- Moves through the list with the arrow keys. <kbd>Enter</kbd> or **Go to** jumps to the highlighted bookmark, the one named exactly as typed, or the first one in the list.
+- Filters the list as you type, and shows the matching part of each name in bold. Names that start with what you typed come first.
+- Moves through the list with the arrow keys. <kbd>Enter</kbd> or a click jumps to the highlighted bookmark, the one named exactly as typed, or the first one in the list.
 
-A jump selects the bookmark's text, opens the header, footer, or note that holds it, and scrolls it into view. The document then takes focus, so you can type at the bookmark. If no bookmark has the typed name, the tab says so. <kbd>Esc</kbd> closes the pane. The list follows the document, so bookmarks that you or a collaborator add or delete appear and disappear.
+If the document has no bookmarks, the tab explains how to add one and offers **Add a bookmark…**, which opens the Bookmark dialog.
+
+A jump selects the bookmark's text, opens the header, footer, or note that holds it, and scrolls it into view. The document then takes focus, so you can type at the bookmark. If no bookmark has the typed name, the tab says so. <kbd>Esc</kbd> clears the search. With nothing typed, <kbd>Esc</kbd> closes the pane. The list follows the document, so bookmarks that you or a collaborator add or delete appear and disappear.
 
 In a document open for viewing, a jump selects a bookmark in the main text. A bookmark in a header, footer, or note is scrolled into view, and the caret stays where it was, because viewing does not open those regions.
 
@@ -41,7 +44,7 @@ editor.exec({ type: 'openGoTo' });
 editor.exec({ type: 'goToBookmark', name: 'Intro' });
 ```
 
-To build your own Go to UI, use `useGoToBookmark()` in React or Vue. It returns the typed text, the matching rows, the highlighted row, `move(delta)`, and `go(name?)`. To show your own UI for `openGoTo`, register it with `editor.setGoToChrome({ onRequest })`. Ctrl+G (Cmd+Option+G on macOS) in the document then opens your UI, because the shortcut sends `openGoTo`.
+To build your own Go To UI, use `useGoToBookmark()` in React or Vue. It returns the typed text, the matching rows, the highlighted row, `move(delta)`, and `go(name?)`. To show your own UI for `openGoTo`, register it with `editor.setGoToChrome({ onRequest })`. Ctrl+G (Cmd+Option+G on macOS) in the document then opens your UI, because the shortcut sends `openGoTo`.
 
 In a document script, go to a bookmark the Office.js way:
 

@@ -61,7 +61,9 @@ export function findKeyShortcuts(resolvedLabel: string): string {
  * An opener in the pages layer (after Ctrl/Cmd+F from the text) goes back through the
  * editor, which restores the caret without scrolling: the pages layer is the whole document
  * tall, and a plain `focus()` scrolls to its top. Any other opener, and the disc, take focus
- * with `preventScroll`. With neither, the editor.
+ * with `preventScroll`. An opener that has gone away (a menu row, removed when its menu
+ * closed) hands focus to the editor: the document is what the reader came from. With
+ * neither, the editor.
  */
 export function returnFocus(
   opener: HTMLElement | null,
@@ -71,6 +73,10 @@ export function returnFocus(
   if (opener?.isConnected) {
     if (focusEditor && opener.closest('.docx-pages')) focusEditor();
     else opener.focus({ preventScroll: true });
+    return;
+  }
+  if (opener && focusEditor) {
+    focusEditor();
     return;
   }
   if (disc) disc.focus({ preventScroll: true });

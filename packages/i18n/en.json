@@ -535,7 +535,7 @@
     "tabs": {
       "headings": "Headings",
       "find": "Find",
-      "goto": "Go to"
+      "goto": "Bookmarks"
     },
     "headings": {
       "noHeadings": "No headings found. Add headings to your document to see them here."
@@ -558,21 +558,31 @@
       "totalTruncated": "{total, plural, other {#+ results}}"
     },
     "goTo": {
-      "tabTitle": "Go to ({shortcut})",
+      "tabTitle": "Go to a bookmark ({shortcut})",
       "label": "Bookmark",
-      "placeholder": "Enter a bookmark name",
+      "placeholder": "Search bookmarks",
       "listAriaLabel": "Bookmarks",
-      "go": "Go to",
+      "enterHint": "Press Enter to go to the highlighted bookmark.",
       "notFound": "No bookmark is named “{name}”.",
       "failed": "The bookmark could not be shown.",
       "typeName": "Type a bookmark name, or pick one from the list.",
       "empty": "This document has no bookmarks.",
+      "emptyHint": "Select text, then choose Insert > Bookmark to name it.",
+      "add": "Add a bookmark…",
       "noMatches": "No bookmarks match.",
+      "atCaret": "Contains the cursor",
       "places": {
         "header": "Header",
         "footer": "Footer",
         "footnote": "Footnote",
         "endnote": "Endnote"
+      },
+      "groups": {
+        "body": "Main text",
+        "header": "Headers",
+        "footer": "Footers",
+        "footnote": "Footnotes",
+        "endnote": "Endnotes"
       }
     }
   },

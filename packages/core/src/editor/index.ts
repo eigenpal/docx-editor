@@ -610,8 +610,11 @@ export {
   bookmarkDialogInitialName,
   bookmarkDialogNameState,
   bookmarkDialogRows,
+  goToBookmarkGroups,
+  goToBookmarkMatch,
   goToBookmarkRows,
   goToBookmarkTarget,
   type BookmarkDialogNameState,
+  type GoToBookmarkGroup,
   type BookmarkSortOrder,
 } from './bookmark-dialog-model.ts';

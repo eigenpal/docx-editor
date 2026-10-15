@@ -16,7 +16,7 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation.tsx';
-import { isGoToShortcut } from '../src/editor/navigation/navigation-keys.ts';
+import { isGoToShortcut, returnFocus } from '../src/editor/navigation/navigation-keys.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -27,25 +27,29 @@ const mark = (id: number, name: string, text: string) =>
   `<w:bookmarkStart w:id="${id}" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="${id}"/>`;
 
-const SOURCE = zipSync({
-  '[Content_Types].xml': strToU8(
-    `<Types xmlns="${CT}">` +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '</Types>'
-  ),
-  '_rels/.rels': strToU8(
-    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-  ),
-  'word/document.xml': strToU8(
-    `<w:document xmlns:w="${W}"><w:body>` +
-      `<w:p>${mark(1, 'Intro', 'Opening')}</w:p>` +
-      `<w:p>${mark(2, 'Section10', 'Tenth')}</w:p>` +
-      `<w:p>${mark(3, 'Section2', 'Second')}</w:p>` +
-      `<w:p>${mark(4, '_Toc1', 'Contents')}</w:p>` +
-      '</w:body></w:document>'
-  ),
-});
+const docx = (body: string) =>
+  zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+
+const SOURCE = docx(
+  `<w:p>${mark(1, 'Intro', 'Opening')}</w:p>` +
+    `<w:p>${mark(2, 'Section10', 'Tenth')}</w:p>` +
+    `<w:p>${mark(3, 'Section2', 'Second')}</w:p>` +
+    `<w:p>${mark(4, '_Toc1', 'Contents')}</w:p>`
+);
+const NO_BOOKMARKS = docx('<w:p><w:r><w:t>Plain</w:t></w:r></w:p>');
 
 afterEach(cleanup);
 
@@ -56,12 +60,16 @@ async function settle() {
 }
 
 function mount(
-  options: { mode?: 'view'; navigation?: Parameters<typeof DocxEditorNavigation>[0] } = {}
+  options: {
+    mode?: 'view';
+    navigation?: Parameters<typeof DocxEditorNavigation>[0];
+    document?: Uint8Array;
+  } = {}
 ) {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
-      document={SOURCE}
+      document={options.document ?? SOURCE}
       {...(options.mode ? { mode: options.mode } : {})}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
@@ -126,7 +134,9 @@ describe('Go to bookmark in the navigation pane', () => {
     expect(ctrlG(pages).defaultPrevented).toBe(true);
     expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('true');
     expect(q(container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('true');
-    expect(q(container, '#docx-nav-tab-goto').getAttribute('title')).toBe('Go to (Ctrl+G)');
+    expect(q(container, '#docx-nav-tab-goto').getAttribute('title')).toBe(
+      'Go to a bookmark (Ctrl+G)'
+    );
     expect(q(container, '#docx-nav-tab-goto').getAttribute('aria-keyshortcuts')).toBe('Control+G');
     expect(document.activeElement).toBe(nameBox(container));
   });
@@ -139,6 +149,20 @@ describe('Go to bookmark in the navigation pane', () => {
     // Cmd+G alone is the browser's find-next on macOS.
     expect(isGoToShortcut(event({ metaKey: true }), true)).toBe(false);
     expect(isGoToShortcut(event({ ctrlKey: true, shiftKey: true }), false)).toBe(false);
+  });
+
+  test('closing hands focus to the document when the opener went away (a menu row)', () => {
+    const disc = document.createElement('button');
+    document.body.append(disc);
+    let toEditor = 0;
+    // A menu row that opened the pane is gone once its menu closed.
+    returnFocus(document.createElement('div'), disc, () => (toEditor += 1));
+    expect(toEditor).toBe(1);
+    // Opened from the disc, focus goes back to the disc.
+    returnFocus(null, disc, () => (toEditor += 1));
+    expect(toEditor).toBe(1);
+    expect(document.activeElement).toBe(disc);
+    disc.remove();
   });
 
   test('the openGoTo command opens the tab, and a pane without the shortcut leaves Ctrl+G', async () => {
@@ -181,7 +205,9 @@ describe('Go to bookmark in the navigation pane', () => {
     await key(input, 'ArrowDown');
     await key(input, 'ArrowDown');
     const active = input.getAttribute('aria-activedescendant')!;
-    expect(container.querySelector(`[id="${active}"]`)?.textContent).toBe('Section10');
+    expect(container.querySelector(`[id="${active}"] .docx-nav__result-text`)?.textContent).toBe(
+      'Section10'
+    );
     await key(input, 'Enter');
     expect(selectedText(editor())).toBe('1:0-5');
     expect(input.contains(document.activeElement)).toBe(false);
@@ -237,7 +263,9 @@ describe('Go to bookmark in the navigation pane', () => {
     await key(input, 'ArrowDown');
     await key(input, 'ArrowDown');
     const highlighted = () =>
-      container.querySelector(`[id="${input.getAttribute('aria-activedescendant')}"]`)?.textContent;
+      container.querySelector(
+        `[id="${input.getAttribute('aria-activedescendant')}"] .docx-nav__result-text`
+      )?.textContent;
     expect(highlighted()).toBe('Section2');
     // A bookmark appears above the highlighted row; the highlight stays on Section2.
     await act(async () => {
@@ -282,5 +310,52 @@ describe('Go to bookmark in the navigation pane', () => {
     });
     await settle();
     expect(queries).toBe(0);
+  });
+
+  test('Escape clears the search first, then closes the pane', async () => {
+    const { container } = mount({ navigation: { defaultOpen: true, defaultTab: 'goto' } });
+    await settle();
+    const input = nameBox(container);
+    input.focus();
+    await type(input, 'sec');
+    await key(input, 'Escape');
+    expect(input.value).toBe('');
+    expect(rowNames(container)).toEqual(['Intro', 'Section2', 'Section10']);
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('true');
+    await key(input, 'Escape');
+    expect(q(container, '.docx-nav').getAttribute('data-open')).toBe('false');
+  });
+
+  test('labels the list with its count, marks the match, and groups by place', async () => {
+    const { container } = mount({ navigation: { defaultOpen: true, defaultTab: 'goto' } });
+    await settle();
+    expect(q(container, '.docx-nav__goto-heading').textContent).toBe('Bookmarks3');
+    const input = nameBox(container);
+    await type(input, 'sec');
+    const matches = [...container.querySelectorAll('.docx-nav__goto-match')];
+    expect(matches.map((node) => node.textContent)).toEqual(['Sec', 'Sec']);
+    expect(container.querySelector('.docx-nav__goto-enter')).toBeNull();
+    await key(input, 'ArrowDown');
+    expect(container.querySelector('.docx-nav__goto-enter')).not.toBeNull();
+    await act(async () => {
+      fireEvent.click(container.querySelectorAll('.docx-nav__segment-input')[1]!);
+    });
+    const groups = [...container.querySelectorAll('[role="listbox"] [role="group"]')];
+    expect(
+      groups.map((group) => group.querySelector('.docx-nav__goto-group-label')?.textContent)
+    ).toEqual(['Main text']);
+  });
+
+  test('a document without bookmarks explains how to add one', async () => {
+    const { container } = mount({
+      document: NO_BOOKMARKS,
+      navigation: { defaultOpen: true, defaultTab: 'goto' },
+    });
+    await settle();
+    expect(q(container, '.docx-nav__goto-empty-title').textContent).toBe(
+      'This document has no bookmarks.'
+    );
+    expect(q(container, '.docx-nav__goto-add').textContent).toBe('Add a bookmark…');
+    expect(container.querySelector('[role="listbox"]')).toBeNull();
   });
 });

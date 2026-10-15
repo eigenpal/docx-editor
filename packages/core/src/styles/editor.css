@@ -5949,7 +5949,6 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-nav__tab:focus-visible,
 .docx-editor .docx-nav__stepper:focus-visible,
 .docx-editor .docx-nav__heading:focus-visible,
-.docx-editor .docx-nav__goto-button:focus-visible,
 .docx-editor .docx-nav__result:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
@@ -6994,21 +6993,185 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
-/* ── Go to ───────────────────────────────────────────────────────────────── */
+/* ── Bookmarks (Go to) ─────────────────────────────────────────────────────
+ * Used from the keyboard many times a day, so nothing here animates. The keyboard's active
+ * row and a hovered row look different, hover applies to a fine pointer only, and a press
+ * shows as a background change on :active.
+ */
+
+.docx-editor .docx-nav__goto-enter {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--doc-border-light);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  flex: none;
+  padding-inline: 2px;
+}
+
+.docx-editor .docx-nav__segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 6px;
+  background: var(--doc-bg-hover);
+}
+
+.docx-editor .docx-nav__segment {
+  position: relative;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--doc-text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.docx-editor .docx-nav__segment[data-checked] {
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  box-shadow: 0 1px 2px var(--doc-shadow-subtle);
+}
+
+.docx-editor .docx-nav__segment:has(.docx-nav__segment-input:focus-visible) {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+/* The native radio keeps the arrow keys and the accessible state; only its dot is hidden. */
+.docx-editor .docx-nav__segment-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.docx-editor .docx-nav__goto-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: none;
+  padding-inline: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-count {
+  font-weight: 400;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-count::before {
+  content: '\00B7';
+  margin-inline-end: 6px;
+}
+
+.docx-editor .docx-nav__goto-message {
+  flex: none;
+  margin: 0;
+  padding-inline: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-message:empty {
+  display: none;
+}
+
+/* Room below the last row: floating controls at the bottom of the window cover it otherwise. */
+.docx-editor .docx-nav__goto-list {
+  padding-block-end: 64px;
+  scroll-padding-block-end: 64px;
+}
+
+.docx-editor .docx-nav__goto-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.docx-editor .docx-nav__goto-group + .docx-nav__goto-group {
+  margin-block-start: 8px;
+}
+
+.docx-editor .docx-nav__goto-group-label {
+  padding: 4px 8px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--doc-text-subtle);
+}
 
 .docx-editor .docx-nav__goto-row {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--doc-text);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-nav__goto-row:hover {
+    background: var(--doc-bg-hover);
+  }
+}
+
+.docx-editor .docx-nav__goto-row--active,
+.docx-editor .docx-nav__goto-row--active:hover {
+  background: var(--doc-primary-light);
+}
+
+.docx-editor .docx-nav__goto-row:active {
+  background: var(--doc-border-light);
+}
+
+.docx-editor .docx-nav__goto-icon {
+  display: flex;
+  flex: none;
+  color: var(--doc-primary);
 }
 
 .docx-editor .docx-nav__goto-row > .docx-nav__result-text {
   display: block;
+  flex: 1;
   min-width: 0;
+  overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.docx-editor .docx-nav__goto-match {
+  font-weight: 600;
+}
+
+/* The bookmark the caret is in. */
+.docx-editor .docx-nav__goto-here {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--doc-primary);
 }
 
 .docx-editor .docx-nav__goto-place {
@@ -7017,29 +7180,62 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text-subtle);
 }
 
-.docx-editor .docx-nav__goto-message {
-  font-weight: 400;
+.docx-editor .docx-nav__goto-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 12px;
+  text-align: center;
+}
+
+.docx-editor .docx-nav__goto-empty-icon {
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-empty-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--doc-text);
+}
+
+.docx-editor .docx-nav__goto-empty-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--doc-text-muted);
 }
 
-.docx-editor .docx-nav__goto-button {
-  flex: none;
+.docx-editor .docx-nav__goto-add {
+  margin-block-start: 6px;
   height: 28px;
   padding-inline: 12px;
   border: 1px solid var(--doc-border-input);
   border-radius: 4px;
-  background: var(--doc-bg-input);
+  background: var(--doc-surface);
   font: inherit;
   font-size: 13px;
   color: var(--doc-text);
   cursor: pointer;
 }
 
-.docx-editor .docx-nav__goto-button:hover:not(:disabled) {
-  background: var(--doc-bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .docx-editor .docx-nav__goto-add:hover:not(:disabled) {
+    background: var(--doc-bg-hover);
+  }
 }
 
-.docx-editor .docx-nav__goto-button:disabled {
+.docx-editor .docx-nav__goto-add:active:not(:disabled) {
+  background: var(--doc-border-light);
+}
+
+.docx-editor .docx-nav__goto-add:focus-visible {
+  outline: 2px solid var(--doc-focus-ring);
+  outline-offset: 1px;
+}
+
+.docx-editor .docx-nav__goto-add:disabled {
   opacity: 0.5;
   cursor: default;
 }

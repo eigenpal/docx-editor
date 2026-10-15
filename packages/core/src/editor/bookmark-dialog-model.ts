@@ -7,7 +7,7 @@ import {
   isHiddenBookmarkName,
   type BookmarkNameProblem,
 } from '@docx-editor.dev/core/store';
-import type { BookmarkSummary } from '../contracts/editor-bookmarks.ts';
+import type { BookmarkPlace, BookmarkSummary } from '../contracts/editor-bookmarks.ts';
 
 /**
  * How the Bookmark dialog orders its list: by name, or by where each bookmark is.
@@ -77,6 +77,50 @@ export function goToBookmarkTarget(
   const key = bookmarkNameKey(query.trim());
   if (key.length === 0) return null;
   return bookmarks.find((bookmark) => bookmarkNameKey(bookmark.name) === key) ?? offered[0] ?? null;
+}
+
+/**
+ * Where the typed text sits in a bookmark name, compared without case, for showing the match.
+ * Null when the text is empty or the name does not contain it.
+ *
+ * @public
+ */
+export function goToBookmarkMatch(
+  name: string,
+  query: string
+): { readonly start: number; readonly end: number } | null {
+  const needle = bookmarkNameKey(query.trim());
+  const key = bookmarkNameKey(name);
+  // A lowercase form of another length cannot be mapped back onto the name.
+  if (needle.length === 0 || key.length !== name.length) return null;
+  const start = key.indexOf(needle);
+  return start < 0 ? null : { start, end: start + needle.length };
+}
+
+/**
+ * One section of a Go To list sorted by location: the rows of one place, each with its index
+ * in the full list.
+ *
+ * @public
+ */
+export interface GoToBookmarkGroup {
+  readonly place: BookmarkPlace;
+  readonly rows: readonly { readonly row: BookmarkSummary; readonly index: number }[];
+}
+
+const PLACE_ORDER: readonly BookmarkPlace[] = ['body', 'header', 'footer', 'footnote', 'endnote'];
+
+/**
+ * The rows of a Go To list grouped by place: the main text, then headers, footers, footnotes
+ * and endnotes. Places with no row are left out. Rows keep their order within a place.
+ *
+ * @public
+ */
+export function goToBookmarkGroups(rows: readonly BookmarkSummary[]): readonly GoToBookmarkGroup[] {
+  return PLACE_ORDER.map((place) => ({
+    place,
+    rows: rows.flatMap((row, index) => (row.place === place ? [{ row, index }] : [])),
+  })).filter((group) => group.rows.length > 0);
 }
 
 /**

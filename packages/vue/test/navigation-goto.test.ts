@@ -21,35 +21,43 @@ const mark = (id: number, name: string, text: string) =>
   `<w:bookmarkStart w:id="${id}" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="${id}"/>`;
 
-const SOURCE = zipSync({
-  '[Content_Types].xml': strToU8(
-    `<Types xmlns="${CT}">` +
-      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '</Types>'
-  ),
-  '_rels/.rels': strToU8(
-    `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
-  ),
-  'word/document.xml': strToU8(
-    `<w:document xmlns:w="${W}"><w:body>` +
-      `<w:p>${mark(1, 'Intro', 'Opening')}</w:p>` +
-      `<w:p>${mark(2, 'Section10', 'Tenth')}</w:p>` +
-      `<w:p>${mark(3, 'Section2', 'Second')}</w:p>` +
-      `<w:p>${mark(4, '_Toc1', 'Contents')}</w:p>` +
-      '</w:body></w:document>'
-  ),
-});
+const docx = (body: string) =>
+  zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+
+const SOURCE = docx(
+  `<w:p>${mark(1, 'Intro', 'Opening')}</w:p>` +
+    `<w:p>${mark(2, 'Section10', 'Tenth')}</w:p>` +
+    `<w:p>${mark(3, 'Section2', 'Second')}</w:p>` +
+    `<w:p>${mark(4, '_Toc1', 'Contents')}</w:p>`
+);
+const NO_BOOKMARKS = docx('<w:p><w:r><w:t>Plain</w:t></w:r></w:p>');
 
 const mounted: MountedEditor[] = [];
 afterEach(() => {
   for (const view of mounted.splice(0)) view.unmount();
 });
 
-function mountPane(props: Record<string, unknown> = {}, rootProps: Record<string, unknown> = {}) {
+function mountPane(
+  props: Record<string, unknown> = {},
+  rootProps: Record<string, unknown> = {},
+  source: Uint8Array = SOURCE
+) {
   const view = mountEditorTree(
     () => [],
-    SOURCE,
+    source,
     () => [h(DocxEditorNavigation, props)],
     undefined,
     rootProps
@@ -106,7 +114,9 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     expect((await ctrlG(pages)).defaultPrevented).toBe(true);
     expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('true');
     expect(q(view.container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('true');
-    expect(q(view.container, '#docx-nav-tab-goto').getAttribute('title')).toBe('Go to (Ctrl+G)');
+    expect(q(view.container, '#docx-nav-tab-goto').getAttribute('title')).toBe(
+      'Go to a bookmark (Ctrl+G)'
+    );
     expect(document.activeElement).toBe(nameBox(view.container));
   });
 
@@ -145,7 +155,9 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     await key(input, 'ArrowDown');
     await key(input, 'ArrowDown');
     const active = input.getAttribute('aria-activedescendant')!;
-    expect(view.container.querySelector(`[id="${active}"]`)?.textContent).toBe('Section10');
+    expect(
+      view.container.querySelector(`[id="${active}"] .docx-nav__result-text`)?.textContent
+    ).toBe('Section10');
     await key(input, 'Enter');
     await flush();
     expect(selectedText(view.editor())).toBe('1:0-5');
@@ -195,8 +207,9 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     await key(input, 'ArrowDown');
     await key(input, 'ArrowDown');
     const highlighted = () =>
-      view.container.querySelector(`[id="${input.getAttribute('aria-activedescendant')}"]`)
-        ?.textContent;
+      view.container.querySelector(
+        `[id="${input.getAttribute('aria-activedescendant')}"] .docx-nav__result-text`
+      )?.textContent;
     expect(highlighted()).toBe('Section2');
     const editor = view.editor();
     const paragraphId = editor.surface!.session.paragraphIds()[0]!;
@@ -222,5 +235,48 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     expect(message(view.container)).toBe('Type a bookmark name, or pick one from the list.');
     await type(input, 'zzz');
     expect(input.getAttribute('aria-controls')).toBeNull();
+  });
+
+  test('Escape clears the search first, then closes the pane', async () => {
+    const view = mountPane({ defaultOpen: true, defaultTab: 'goto' });
+    await flush();
+    const input = nameBox(view.container);
+    input.focus();
+    await type(input, 'sec');
+    await key(input, 'Escape');
+    expect(input.value).toBe('');
+    expect(rowNames(view.container)).toEqual(['Intro', 'Section2', 'Section10']);
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('true');
+    await key(input, 'Escape');
+    expect(q(view.container, '.docx-nav').getAttribute('data-open')).toBe('false');
+  });
+
+  test('labels the list with its count, marks the match, and groups by place', async () => {
+    const view = mountPane({ defaultOpen: true, defaultTab: 'goto' });
+    await flush();
+    expect(q(view.container, '.docx-nav__goto-heading').textContent).toBe('Bookmarks3');
+    const input = nameBox(view.container);
+    await type(input, 'sec');
+    const matches = [...view.container.querySelectorAll('.docx-nav__goto-match')];
+    expect(matches.map((node) => node.textContent)).toEqual(['Sec', 'Sec']);
+    expect(view.container.querySelector('.docx-nav__goto-enter')).toBeNull();
+    await key(input, 'ArrowDown');
+    expect(view.container.querySelector('.docx-nav__goto-enter')).not.toBeNull();
+    (view.container.querySelectorAll('.docx-nav__segment-input')[1] as HTMLElement).click();
+    await nextTick();
+    const groups = [...view.container.querySelectorAll('[role="listbox"] [role="group"]')];
+    expect(
+      groups.map((group) => group.querySelector('.docx-nav__goto-group-label')?.textContent)
+    ).toEqual(['Main text']);
+  });
+
+  test('a document without bookmarks explains how to add one', async () => {
+    const view = mountPane({ defaultOpen: true, defaultTab: 'goto' }, {}, NO_BOOKMARKS);
+    await flush();
+    expect(q(view.container, '.docx-nav__goto-empty-title').textContent).toBe(
+      'This document has no bookmarks.'
+    );
+    expect(q(view.container, '.docx-nav__goto-add').textContent).toBe('Add a bookmark…');
+    expect(view.container.querySelector('[role="listbox"]')).toBeNull();
   });
 });

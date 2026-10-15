@@ -535,7 +535,7 @@
     "tabs": {
       "headings": "Títulos",
       "find": "Buscar",
-      "goto": "Ir a"
+      "goto": "Marcadores"
     },
     "headings": {
       "noHeadings": "No se encontraron títulos. Añade títulos al documento para verlos aquí."
@@ -558,21 +558,31 @@
       "totalTruncated": "{total, plural, other {#+ resultados}}"
     },
     "goTo": {
-      "tabTitle": "Ir a ({shortcut})",
+      "tabTitle": "Ir a un marcador ({shortcut})",
       "label": "Marcador",
-      "placeholder": "Escriba el nombre de un marcador",
+      "placeholder": "Buscar marcadores",
       "listAriaLabel": "Marcadores",
-      "go": "Ir a",
+      "enterHint": "Presione Entrar para ir al marcador resaltado.",
       "notFound": "Ningún marcador se llama «{name}».",
       "failed": "No se pudo mostrar el marcador.",
       "typeName": "Escriba el nombre de un marcador o elija uno de la lista.",
       "empty": "Este documento no tiene marcadores.",
+      "emptyHint": "Seleccione texto y elija Insertar > Marcador para asignarle un nombre.",
+      "add": "Agregar un marcador…",
       "noMatches": "Ningún marcador coincide.",
+      "atCaret": "Contiene el cursor",
       "places": {
         "header": "Encabezado",
         "footer": "Pie de página",
         "footnote": "Nota al pie",
         "endnote": "Nota al final"
+      },
+      "groups": {
+        "body": "Texto principal",
+        "header": "Encabezados",
+        "footer": "Pies de página",
+        "footnote": "Notas al pie",
+        "endnote": "Notas al final"
       }
     }
   },

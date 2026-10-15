@@ -747,25 +747,35 @@
     "tabs": {
       "find": "Znajdź",
       "headings": "Nagłówki",
-      "goto": "Przejdź do"
+      "goto": "Zakładki"
     },
     "title": "Nawigacja",
     "goTo": {
-      "tabTitle": "Przejdź do ({shortcut})",
+      "tabTitle": "Przejdź do zakładki ({shortcut})",
       "label": "Zakładka",
-      "placeholder": "Wpisz nazwę zakładki",
+      "placeholder": "Szukaj zakładek",
       "listAriaLabel": "Zakładki",
-      "go": "Przejdź do",
+      "enterHint": "Naciśnij Enter, aby przejść do wyróżnionej zakładki.",
       "notFound": "Brak zakładki o nazwie „{name}”.",
       "failed": "Nie można wyświetlić zakładki.",
       "typeName": "Wpisz nazwę zakładki lub wybierz ją z listy.",
       "empty": "Ten dokument nie ma zakładek.",
+      "emptyHint": "Zaznacz tekst, a następnie wybierz Wstaw > Zakładka, aby go nazwać.",
+      "add": "Dodaj zakładkę…",
       "noMatches": "Brak pasujących zakładek.",
+      "atCaret": "Zawiera kursor",
       "places": {
         "header": "Nagłówek",
         "footer": "Stopka",
         "footnote": "Przypis dolny",
         "endnote": "Przypis końcowy"
+      },
+      "groups": {
+        "body": "Tekst główny",
+        "header": "Nagłówki",
+        "footer": "Stopki",
+        "footnote": "Przypisy dolne",
+        "endnote": "Przypisy końcowe"
       }
     }
   },

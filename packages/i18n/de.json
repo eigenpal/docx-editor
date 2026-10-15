@@ -747,25 +747,35 @@
     "tabs": {
       "find": "Suchen",
       "headings": "Überschriften",
-      "goto": "Gehe zu"
+      "goto": "Textmarken"
     },
     "title": "Navigation",
     "goTo": {
-      "tabTitle": "Gehe zu ({shortcut})",
+      "tabTitle": "Gehe zu Textmarke ({shortcut})",
       "label": "Textmarke",
-      "placeholder": "Textmarkennamen eingeben",
+      "placeholder": "Textmarken durchsuchen",
       "listAriaLabel": "Textmarken",
-      "go": "Gehe zu",
+      "enterHint": "Drücken Sie die Eingabetaste, um zur markierten Textmarke zu wechseln.",
       "notFound": "Keine Textmarke heißt „{name}“.",
       "failed": "Die Textmarke konnte nicht angezeigt werden.",
       "typeName": "Geben Sie einen Textmarkennamen ein, oder wählen Sie einen aus der Liste.",
       "empty": "Dieses Dokument enthält keine Textmarken.",
+      "emptyHint": "Markieren Sie Text, und wählen Sie dann Einfügen > Textmarke, um ihn zu benennen.",
+      "add": "Textmarke hinzufügen…",
       "noMatches": "Keine passenden Textmarken.",
+      "atCaret": "Enthält den Cursor",
       "places": {
         "header": "Kopfzeile",
         "footer": "Fußzeile",
         "footnote": "Fußnote",
         "endnote": "Endnote"
+      },
+      "groups": {
+        "body": "Haupttext",
+        "header": "Kopfzeilen",
+        "footer": "Fußzeilen",
+        "footnote": "Fußnoten",
+        "endnote": "Endnoten"
       }
     }
   },

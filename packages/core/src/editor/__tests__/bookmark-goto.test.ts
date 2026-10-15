@@ -5,7 +5,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import type { BookmarkSummary } from '../../contracts/editor-bookmarks.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
-import { goToBookmarkRows, goToBookmarkTarget } from '../bookmark-dialog-model.ts';
+import {
+  goToBookmarkGroups,
+  goToBookmarkMatch,
+  goToBookmarkRows,
+  goToBookmarkTarget,
+} from '../bookmark-dialog-model.ts';
 import { commandForSlot, toolbarCommandState } from '../toolbar-commands.ts';
 
 const editors: DocxEditorInstance[] = [];
@@ -112,6 +117,29 @@ describe('the Go To name box', () => {
     expect(goToBookmarkTarget(all, '_toc1', [])?.name).toBe('_Toc1');
     expect(goToBookmarkTarget(all, 'nowhere', [])).toBeNull();
     expect(goToBookmarkTarget(all, '  ', offered)).toBeNull();
+  });
+
+  test('finds the match in a name without case, and groups rows by place in order', () => {
+    expect(goToBookmarkMatch('Section10', ' sec ')).toEqual({ start: 0, end: 3 });
+    expect(goToBookmarkMatch('Section10', 'TION')).toEqual({ start: 3, end: 7 });
+    expect(goToBookmarkMatch('Section10', 'zz')).toBeNull();
+    expect(goToBookmarkMatch('Section10', '')).toBeNull();
+    const placed = [
+      { ...summary('Foot', 0), place: 'footer' as const },
+      { ...summary('Body', 1) },
+      { ...summary('Head', 2), place: 'header' as const },
+      { ...summary('Body2', 3) },
+    ];
+    expect(
+      goToBookmarkGroups(placed).map((group) => [
+        group.place,
+        group.rows.map(({ row, index }) => `${row.name}@${index}`),
+      ])
+    ).toEqual([
+      ['body', ['Body@1', 'Body2@3']],
+      ['header', ['Head@2']],
+      ['footer', ['Foot@0']],
+    ]);
   });
 });
 
