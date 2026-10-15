@@ -1196,9 +1196,8 @@ export type TreeOpRejection =
    */
   | 'package-invariant'
   /**
-   * A package edit found a different package from the one it was planned against: an id or
-   * part name it allocated is taken, or a definition it addresses changed. Nothing was
-   * applied. A batch plans and commits in one call, so this marks an engine defect.
+   * A package edit refused the package it was given, for example because an id or part name it
+   * expected to allocate is taken or a definition it addresses changed. Nothing was applied.
    */
   | 'package-changed'
   /** No revision in this part carries the addressed `(id, author, date)` triple. */

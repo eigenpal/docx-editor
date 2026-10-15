@@ -178,7 +178,7 @@ try {
 | `RuntimeDisposed` | Create a new runtime |
 | `StaleDocument` | Start a fresh run, read again, and reconsider the proposed change |
 | `DocumentUnavailable` | Wait for the owning editor to attach a document, then start a new run |
-| `GeneralException` | Report the error and inspect the target; do not silently discard document structure |
+| `GeneralException` | Read `error.debugInfo.innerError` and act on its code; for `edit.internal-invariant`, report the code with the engine version and do not retry the write unchanged |
 
 `DocxEditorError` exposes `code`, optional `target`, and optional resource or revision metadata. `DocxEditorErrorInit` accepts the same fields.
 

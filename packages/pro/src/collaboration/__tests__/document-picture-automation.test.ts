@@ -230,12 +230,30 @@ describe('concurrent deletion', () => {
         const paragraphs = context.document.body.paragraphs;
         paragraphs.load('items');
         await context.sync();
-        paragraphs.items[1]!.getRange('Content').delete();
+        paragraphs.items[1]!.delete();
         await context.sync();
       });
       state.resume();
-      const saved = await expectConverged(state, 1);
-      expect(saved.documentXml).not.toContain('Second paragraph');
+      state.flush();
+      const [left, right] = await Promise.all([state.alice.save(), state.bob.save()]);
+      const [leftPictures, rightPictures] = [savedPictures(left), savedPictures(right)];
+      // The deletion wins: the paragraph and the drawing in it are gone on both replicas.
+      expect(rightPictures.documentXml).toBe(leftPictures.documentXml);
+      expect(leftPictures.documentXml).not.toContain('Second paragraph');
+      expect(leftPictures.docPrIds).toEqual([]);
+      // The media part and its relationship stay, as they do for any deleted picture, so an
+      // undo can restore the drawing. Both replicas keep the same pair, and the file reopens.
+      expect(rightPictures.media).toEqual(leftPictures.media);
+      expect([...rightPictures.imageTargets]).toEqual([...leftPictures.imageTargets]);
+      expect(leftPictures.media).toEqual(
+        [...leftPictures.imageTargets.values()].map((target) => `word/${target}`)
+      );
+      const reopened = await DocxEditor.createServer(left);
+      try {
+        expect(await pictureWidths(reopened)).toEqual([]);
+      } finally {
+        reopened.dispose();
+      }
     } finally {
       state.close();
     }

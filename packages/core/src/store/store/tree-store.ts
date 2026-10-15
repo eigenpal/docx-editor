@@ -160,6 +160,10 @@ export interface TransactionContext {
    * The edit is a pure function of the working package, so a rejected transaction discards it
    * with everything else. Returning the SAME package is a no-op, not a failure — a primitive
    * that finds nothing to do says so that way.
+   *
+   * To refuse, throw `PackageEditRefusal` (see `package-edit-refusal.ts`): the transaction is
+   * refused with its reason, `package-changed` by default, and nothing is applied. Any other
+   * throw escapes `transact` as a crash, so never throw a plain `Error` to say no.
    */
   applyPackage(edit: (pkg: OoxmlPackage) => OoxmlPackage): boolean;
   /** The selection to restore when this entry is undone. */
