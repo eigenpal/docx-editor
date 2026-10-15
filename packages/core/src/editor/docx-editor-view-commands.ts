@@ -106,8 +106,18 @@ export function createEditorViews(host: {
     }),
     /** `openBookmarkDialog` and `openGoTo`, answered before any document gate; else null. */
     dialog(command: EditorCommand, run: boolean): ExecResult | null {
-      if (command.type === 'openGoTo')
-        return bookmarkDialogResult(popupChrome.goTo, host.destroyed(), run, 'Go To view');
+      if (command.type === 'openGoTo') {
+        const goTo = popupChrome.goTo;
+        const fromShortcut = command.fromShortcut === true;
+        if (fromShortcut && goTo.canOpen() && !goTo.shortcutOn() && !host.destroyed())
+          return { ok: false, code: 'unsupported', reason: 'the Go To shortcut is turned off' };
+        return bookmarkDialogResult(
+          fromShortcut ? { canOpen: goTo.canOpen, open: goTo.openFromShortcut } : goTo,
+          host.destroyed(),
+          run,
+          'Go To view'
+        );
+      }
       if (command.type !== 'openBookmarkDialog') return null;
       return bookmarkDialogResult(popupChrome.bookmarkDialog, host.destroyed(), run);
     },

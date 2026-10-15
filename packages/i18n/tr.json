@@ -58,7 +58,9 @@
     "insertTextBox": "Metin Kutusu",
     "bookmark": "Yer işareti…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Yer işaretine git…"
+    "goToBookmark": "Yer işaretine git…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "Yer işareti",
       "placeholder": "Yer işaretlerinde ara",
       "listAriaLabel": "Yer işaretleri",
+      "countFiltered": "{total} içinden {shown}",
       "enterHint": "Vurgulanan yer işaretine gitmek için Enter tuşuna basın.",
       "notFound": "“{name}” adlı yer işareti yok.",
       "failed": "Yer işareti gösterilemedi.",

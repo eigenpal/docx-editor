@@ -58,7 +58,9 @@
     "insertTextBox": "תיבת טקסט",
     "bookmark": "סימנייה…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "מעבר לסימניה…"
+    "goToBookmark": "מעבר לסימניה…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "סימניה",
       "placeholder": "חיפוש סימניות",
       "listAriaLabel": "סימניות",
+      "countFiltered": "{shown} מתוך {total}",
       "enterHint": "הקש Enter כדי לעבור לסימניה המסומנת.",
       "notFound": "אין סימניה בשם \"{name}\".",
       "failed": "לא ניתן היה להציג את הסימניה.",

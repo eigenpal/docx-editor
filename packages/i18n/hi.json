@@ -58,7 +58,9 @@
     "insertTextBox": "टेक्स्ट बॉक्स",
     "bookmark": "बुकमार्क…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "बुकमार्क पर जाएं…"
+    "goToBookmark": "बुकमार्क पर जाएं…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "बुकमार्क",
       "placeholder": "बुकमार्क खोजें",
       "listAriaLabel": "बुकमार्क",
+      "countFiltered": "{total} में से {shown}",
       "enterHint": "हाइलाइट किए गए बुकमार्क पर जाने के लिए Enter दबाएं।",
       "notFound": "“{name}” नाम का कोई बुकमार्क नहीं है।",
       "failed": "बुकमार्क दिखाया नहीं जा सका।",

@@ -58,7 +58,9 @@
     "insertTextBox": "Kotak Teks",
     "bookmark": "Penanda…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Buka penanda…"
+    "goToBookmark": "Buka penanda…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "Penanda",
       "placeholder": "Cari penanda",
       "listAriaLabel": "Penanda",
+      "countFiltered": "{shown} dari {total}",
       "enterHint": "Tekan Enter untuk membuka penanda yang disorot.",
       "notFound": "Tidak ada penanda bernama “{name}”.",
       "failed": "Penanda tidak dapat ditampilkan.",

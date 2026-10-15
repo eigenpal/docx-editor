@@ -142,9 +142,14 @@ export function useNavigationFocus(
           ? 'goto'
           : null;
     if (!tab || !ownsShortcutTarget(event.target, rootRef.value, viewport.value)) return;
+    // Go To goes through the editor as the shortcut does: a host's own Go To UI on top
+    // answers it, and one that turned its shortcut off leaves the chord to the browser.
+    const current = editor.value;
+    if (tab === 'goto' && current?.can({ type: 'openGoTo' }).ok) {
+      if (current.exec({ type: 'openGoTo', fromShortcut: true }).ok) event.preventDefault();
+      return;
+    }
     event.preventDefault();
-    // Go To goes through the editor, so a host's own Go To UI on top answers it.
-    if (tab === 'goto' && editor.value?.exec({ type: 'openGoTo' }).ok) return;
     const active = rootRef.value?.ownerDocument.activeElement;
     openTab(tab, isHTMLElementNode(active) ? active : null);
   };

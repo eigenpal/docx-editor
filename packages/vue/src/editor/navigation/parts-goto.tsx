@@ -277,7 +277,16 @@ export const NavigationGoTo = defineComponent({
           {!noBookmarks && (
             <div class="docx-nav__goto-heading">
               <span id={labelId}>{t('navigation.goTo.listAriaLabel')}</span>
-              <span class="docx-nav__goto-count">{rows.length}</span>
+              <span class="docx-nav__goto-count">
+                {query.trim().length > 0
+                  ? t('navigation.goTo.countFiltered', {
+                      shown: rows.length,
+                      total: goTo.bookmarks.value.filter(
+                        (row) => goTo.showHidden.value || !row.hidden
+                      ).length,
+                    })
+                  : rows.length}
+              </span>
             </div>
           )}
 

@@ -58,7 +58,9 @@
     "insertTextBox": "Textfeld",
     "bookmark": "Textmarke…",
     "bookmarkShortcut": "Strg+Umschalt+F5",
-    "goToBookmark": "Gehe zu Textmarke…"
+    "goToBookmark": "Gehe zu Textmarke…",
+    "goToBookmarkShortcut": "Strg+G",
+    "goToBookmarkShortcutApple": "Strg+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "Textmarke",
       "placeholder": "Textmarken durchsuchen",
       "listAriaLabel": "Textmarken",
+      "countFiltered": "{shown} von {total}",
       "enterHint": "Drücken Sie die Eingabetaste, um zur markierten Textmarke zu wechseln.",
       "notFound": "Keine Textmarke heißt „{name}“.",
       "failed": "Die Textmarke konnte nicht angezeigt werden.",

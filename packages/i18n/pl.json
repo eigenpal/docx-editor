@@ -58,7 +58,9 @@
     "insertTextBox": "Pole tekstowe",
     "bookmark": "Zakładka…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Przejdź do zakładki…"
+    "goToBookmark": "Przejdź do zakładki…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "Zakładka",
       "placeholder": "Szukaj zakładek",
       "listAriaLabel": "Zakładki",
+      "countFiltered": "{shown} z {total}",
       "enterHint": "Naciśnij Enter, aby przejść do wyróżnionej zakładki.",
       "notFound": "Brak zakładki o nazwie „{name}”.",
       "failed": "Nie można wyświetlić zakładki.",

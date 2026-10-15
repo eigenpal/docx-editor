@@ -262,7 +262,14 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
       {!noBookmarks && (
         <div className="docx-nav__goto-heading">
           <span id={labelId}>{t('navigation.goTo.listAriaLabel')}</span>
-          <span className="docx-nav__goto-count">{goTo.rows.length}</span>
+          <span className="docx-nav__goto-count">
+            {goTo.query.trim().length > 0
+              ? t('navigation.goTo.countFiltered', {
+                  shown: goTo.rows.length,
+                  total: goTo.bookmarks.filter((row) => goTo.showHidden || !row.hidden).length,
+                })
+              : goTo.rows.length}
+          </span>
         </div>
       )}
 

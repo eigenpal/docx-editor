@@ -80,8 +80,12 @@ export interface EditorBookmarkCommands {
    * Open the host's Go To UI, the Go to tab of `DocxEditor.Navigation`, the request its
    * shortcut (Ctrl+G, Cmd+Option+G on macOS) sends. Allowed in a read-only document. Refused
    * with `unsupported` while no host shows one. To jump without UI, run `goToBookmark`.
+   *
+   * `fromShortcut: true` asks as the shortcut does: also refused with `unsupported` when the
+   * Go To UI turned its shortcut off (`GoToChromeHandlers.shortcut`). Chrome that forwards the
+   * chord sends it, and a menu asks `can` with it before it shows the shortcut.
    */
-  openGoTo: Record<never, never>;
+  openGoTo: { readonly fromShortcut?: boolean };
   /**
    * Open the Bookmark dialog the host registered, the same request the Insert menu and
    * Ctrl/Cmd+Shift+F5 send. Allowed in a read-only document, where Go To still works.

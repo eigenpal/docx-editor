@@ -37,7 +37,7 @@ In a document open for viewing, a jump selects a bookmark in the main text. A bo
 
 ### Open Go to from code
 
-To open the tab from your own control, run the `openGoTo` command. It fails with `unsupported` while no navigation pane is mounted. The `insert.goToBookmark` menu slot runs the same command, so the menu row is disabled while no navigation pane is mounted. To jump without any UI, run `goToBookmark`. It fails with `notFound` when no bookmark has the name:
+To open the tab from your own control, run the `openGoTo` command. It fails with `unsupported` while no navigation pane is mounted. The `insert.goToBookmark` menu slot runs the same command, so the menu row is disabled while no navigation pane is mounted. The menu row shows the Go To shortcut while the shortcut opens Go To. If your Go To UI registers with `shortcut: false`, the shortcut is left to the browser everywhere in the editor, and `{ type: 'openGoTo', fromShortcut: true }` is refused with `unsupported`. To jump without any UI, run `goToBookmark`. It fails with `notFound` when no bookmark has the name:
 
 ```ts
 editor.exec({ type: 'openGoTo' });

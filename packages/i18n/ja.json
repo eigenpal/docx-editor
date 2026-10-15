@@ -90,7 +90,9 @@
     "insertTextBox": "テキスト ボックス",
     "bookmark": "ブックマーク…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "ブックマークへジャンプ…"
+    "goToBookmark": "ブックマークへジャンプ…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "toc": {
     "refresh": "目次の更新",
@@ -562,6 +564,7 @@
       "label": "ブックマーク",
       "placeholder": "ブックマークを検索",
       "listAriaLabel": "ブックマーク",
+      "countFiltered": "{total} 件中 {shown} 件",
       "enterHint": "Enter キーを押すと、強調表示されたブックマークへ移動します。",
       "notFound": "「{name}」という名前のブックマークはありません。",
       "failed": "ブックマークを表示できませんでした。",

@@ -222,6 +222,27 @@ describe('Go To in the editor', () => {
     expect(opened).toBe(1);
   });
 
+  test('openGoTo from the shortcut is refused while the Go To UI turned its shortcut off', () => {
+    const editor = mount();
+    let opened = 0;
+    editor.setGoToChrome({ onRequest: () => (opened += 1) });
+    expect(editor.can({ type: 'openGoTo', fromShortcut: true }).ok).toBe(true);
+    // A host UI on top that keeps the chord for the browser.
+    const off = editor.setGoToChrome({ onRequest: () => (opened += 10), shortcut: false });
+    expect(editor.exec({ type: 'openGoTo', fromShortcut: true })).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'the Go To shortcut is turned off',
+    });
+    expect(opened).toBe(0);
+    // Without the flag, as from a menu row, the UI still opens.
+    expect(editor.exec({ type: 'openGoTo' }).ok).toBe(true);
+    expect(opened).toBe(10);
+    off();
+    expect(editor.exec({ type: 'openGoTo', fromShortcut: true }).ok).toBe(true);
+    expect(opened).toBe(11);
+  });
+
   test('openGoTo opens the registered Go To UI, also read-only, and is refused without one', () => {
     const editor = mount('view');
     expect(editor.can({ type: 'openGoTo' })).toEqual({

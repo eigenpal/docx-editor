@@ -45,7 +45,7 @@ import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
 import { MenuTableGrid } from './menu-flyouts';
 import { MenuWatermark } from './menu-watermark';
-import { MenuBookmark } from './menu-bookmark';
+import { MenuBookmark, MenuGoToBookmarkRow } from './menu-bookmark';
 
 export { MenuTableGrid, type MenuTableGridProps } from './menu-flyouts';
 
@@ -759,6 +759,7 @@ export function MenuEntry({ entry, children }: { entry: ChromeMenuEntry; childre
   if (entry.slot === 'paragraph.dialog') return <MenuParagraphDialog />;
   if (entry.slot === 'insert.watermark') return <MenuWatermark />;
   if (entry.slot === 'insert.bookmark') return <MenuBookmark />;
+  if (entry.slot === 'insert.goToBookmark') return <MenuGoToBookmarkRow />;
   if (entry.slot === 'image.insert') return <MenuImageInsert />;
   if (entry.picker === 'tableGrid') return <MenuTablePicker entry={entry} />;
   return (

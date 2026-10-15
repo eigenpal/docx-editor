@@ -815,7 +815,9 @@ export interface EditorBookmarkCommands {
         name: string;
     };
     openBookmarkDialog: Record<never, never>;
-    openGoTo: Record<never, never>;
+    openGoTo: {
+        readonly fromShortcut?: boolean;
+    };
     toggleBookmarks: Record<never, never>;
 }
 

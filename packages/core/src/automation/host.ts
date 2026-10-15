@@ -106,6 +106,16 @@ function refuse(
   };
 }
 
+/** The index of the `nth` select operation in a batch: the one a failed selection came from. */
+function nthSelect(operations: readonly AutomationOperation[], nth: number): number {
+  let seen = -1;
+  const index = operations.findIndex(
+    (operation) =>
+      (operation.op === 'selectSpan' || operation.op === 'selectBookmark') && ++seen === nth
+  );
+  return index < 0 ? 0 : index;
+}
+
 export function createAutomationHost(composition: AutomationHostComposition): AutomationHost {
   const { port } = composition;
   const capabilities = Object.freeze({ ...composition.capabilities });
@@ -403,6 +413,22 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     }
     const post = readsOf(after);
     const settled = planner.settle(post);
+    if (!settled.ok && settled.selection !== undefined) {
+      // The caret could not be placed. Writes in the same batch HAVE committed, so the answer
+      // says so (`changed`, the new revision) and names the select: re-read, never replay.
+      tracking = stagedTracking;
+      const failed = refuse(
+        operations,
+        nthSelect(operations, settled.selection),
+        automationError(
+          'unsupported-capability',
+          'the host could not place the selection',
+          'selection'
+        ),
+        port.revision()
+      );
+      return { ...failed, changed };
+    }
     if (!settled.ok) {
       return refuse(
         operations,

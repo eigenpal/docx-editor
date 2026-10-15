@@ -58,7 +58,9 @@
     "insertTextBox": "文本框",
     "bookmark": "书签…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "定位到书签…"
+    "goToBookmark": "定位到书签…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "书签",
       "placeholder": "搜索书签",
       "listAriaLabel": "书签",
+      "countFiltered": "{shown}/{total}",
       "enterHint": "按 Enter 键转到突出显示的书签。",
       "notFound": "没有名为“{name}”的书签。",
       "failed": "无法显示该书签。",

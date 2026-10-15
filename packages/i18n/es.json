@@ -90,7 +90,9 @@
     "insertTextBox": "Cuadro de texto",
     "bookmark": "Marcador…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Ir a marcador…"
+    "goToBookmark": "Ir a marcador…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "toc": {
     "refresh": "Actualizar tabla de contenido",
@@ -562,6 +564,7 @@
       "label": "Marcador",
       "placeholder": "Buscar marcadores",
       "listAriaLabel": "Marcadores",
+      "countFiltered": "{shown} de {total}",
       "enterHint": "Presione Entrar para ir al marcador resaltado.",
       "notFound": "Ningún marcador se llama «{name}».",
       "failed": "No se pudo mostrar el marcador.",

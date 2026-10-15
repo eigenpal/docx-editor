@@ -90,7 +90,9 @@
     "insertTextBox": "Text Box",
     "bookmark": "Bookmark…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Go To Bookmark…"
+    "goToBookmark": "Go To Bookmark…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "toc": {
     "refresh": "Refresh table of contents",
@@ -562,6 +564,7 @@
       "label": "Bookmark",
       "placeholder": "Search bookmarks",
       "listAriaLabel": "Bookmarks",
+      "countFiltered": "{shown} of {total}",
       "enterHint": "Press Enter to go to the highlighted bookmark.",
       "notFound": "No bookmark is named “{name}”.",
       "failed": "The bookmark could not be shown.",

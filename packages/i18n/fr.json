@@ -58,7 +58,9 @@
     "insertTextBox": "Zone de texte",
     "bookmark": "Signet…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Atteindre le signet…"
+    "goToBookmark": "Atteindre le signet…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "Signet",
       "placeholder": "Rechercher des signets",
       "listAriaLabel": "Signets",
+      "countFiltered": "{shown} sur {total}",
       "enterHint": "Appuyez sur Entrée pour atteindre le signet en surbrillance.",
       "notFound": "Aucun signet ne s’appelle « {name} ».",
       "failed": "Le signet n’a pas pu être affiché.",

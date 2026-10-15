@@ -257,6 +257,7 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     expect(q(view.container, '.docx-nav__goto-heading').textContent).toBe('Bookmarks3');
     const input = nameBox(view.container);
     await type(input, 'sec');
+    expect(q(view.container, '.docx-nav__goto-heading').textContent).toBe('Bookmarks2 of 3');
     const matches = [...view.container.querySelectorAll('.docx-nav__goto-match')];
     expect(matches.map((node) => node.textContent)).toEqual(['Sec', 'Sec']);
     expect(view.container.querySelector('.docx-nav__goto-enter')).toBeNull();
@@ -268,6 +269,18 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     expect(
       groups.map((group) => group.querySelector('.docx-nav__goto-group-label')?.textContent)
     ).toEqual(['Main text']);
+  });
+
+  test('a host Go To UI with its shortcut off keeps Ctrl+G from the pane and chrome too', async () => {
+    const view = mountPane({ defaultOpen: true, defaultTab: 'find' });
+    await flush();
+    let opened = 0;
+    view.editor().setGoToChrome({ onRequest: () => (opened += 1), shortcut: false });
+    expect((await ctrlG(q(view.container, '.docx-nav'))).defaultPrevented).toBe(false);
+    const scroller = q(view.container, '.docx-editor__scroll-container');
+    expect((await ctrlG(scroller)).defaultPrevented).toBe(false);
+    expect(opened).toBe(0);
+    expect(q(view.container, '#docx-nav-tab-goto').getAttribute('aria-selected')).toBe('false');
   });
 
   test('a document without bookmarks explains how to add one', async () => {

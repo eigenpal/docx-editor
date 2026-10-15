@@ -58,7 +58,9 @@
     "insertTextBox": "Caixa de texto",
     "bookmark": "Indicador…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Ir para indicador…"
+    "goToBookmark": "Ir para indicador…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "formattingBar": {
     "groups": {
@@ -755,6 +757,7 @@
       "label": "Indicador",
       "placeholder": "Pesquisar indicadores",
       "listAriaLabel": "Indicadores",
+      "countFiltered": "{shown} de {total}",
       "enterHint": "Pressione Enter para ir ao indicador realçado.",
       "notFound": "Nenhum indicador se chama “{name}”.",
       "failed": "Não foi possível mostrar o indicador.",

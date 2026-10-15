@@ -205,7 +205,9 @@ export interface BatchPlanner {
    */
   settle(
     post: AutomationPackageReads
-  ): { readonly ok: true } | { readonly ok: false; readonly detail: string };
+  ):
+    | { readonly ok: true }
+    | { readonly ok: false; readonly detail: string; readonly selection?: number };
 }
 
 function error(code: AutomationErrorCode, message: string, detail?: string): AutomationError {
@@ -2900,13 +2902,13 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       // exactly. "Should" is the reason for the check: if it does not — a planner bug, an op with
       // an effect this file did not model — the right outcome is that no caret moves, not that one
       // moves to a position that has stopped meaning what it meant.
-      for (const selection of selections) {
+      for (const [index, selection] of selections.entries()) {
         const story = post.story(selection.range.start.story);
         if (!story || !placeable(selection.range, story)) continue;
-        // A selection the host could not place refuses a batch that only selects. With writes
-        // in the batch it cannot: they have committed, and a refusal would invite a replay.
-        if (host.select?.(selection.range, selection.mode) === false && !commandPolicy.hasCommands)
-          return { ok: false, detail: 'the host could not place the selection' };
+        // A selection the host could not place is refused, never reported as done. `selection`
+        // names which one, so the host can say whether the batch's writes committed first.
+        if (host.select?.(selection.range, selection.mode) === false)
+          return { ok: false, detail: 'the host could not place the selection', selection: index };
       }
       return { ok: true };
     },

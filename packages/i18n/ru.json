@@ -58,7 +58,9 @@
     "review": "Рецензирование",
     "bookmark": "Закладка…",
     "bookmarkShortcut": "Ctrl+Shift+F5",
-    "goToBookmark": "Перейти к закладке…"
+    "goToBookmark": "Перейти к закладке…",
+    "goToBookmarkShortcut": "Ctrl+G",
+    "goToBookmarkShortcutApple": "Ctrl+Alt+G"
   },
   "toc": {
     "refresh": "Обновить оглавление",
@@ -896,6 +898,7 @@
       "label": "Закладка",
       "placeholder": "Поиск закладок",
       "listAriaLabel": "Закладки",
+      "countFiltered": "{shown} из {total}",
       "enterHint": "Нажмите Enter, чтобы перейти к выделенной закладке.",
       "notFound": "Нет закладки с именем «{name}».",
       "failed": "Не удалось показать закладку.",

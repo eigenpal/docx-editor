@@ -132,6 +132,52 @@ describe('Range.select on a bookmark range', () => {
     expect(parts.some((name) => /header/.test(name))).toBe(false);
   });
 
+  test('a select the editor cannot place rejects the sync, also after a write', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: docx(p('Hello world') + p('Other')) });
+    editors.push(editor);
+    // The editor refuses to place any selection: the last gate, after planning passed.
+    const exec = editor.exec.bind(editor);
+    editor.exec = ((command: Parameters<typeof exec>[0]) =>
+      command.type === 'setSelection'
+        ? { ok: false, code: 'unsupported', reason: 'refused for the test' }
+        : exec(command)) as typeof exec;
+    const runtime = DocxEditorBrowser.createBrowser(editor);
+    const attempt = async (write: boolean) => {
+      let code: string | null = null;
+      try {
+        await runtime.run(async (context) => {
+          const found = context.document.body.search('world');
+          found.load('items');
+          await context.sync();
+          // A write to another paragraph, so the batch itself plans cleanly.
+          if (write) context.document.body.paragraphs.getLast().insertText('!', 'End');
+          found.items[0]!.select();
+          await context.sync();
+        });
+      } catch (error) {
+        if (isDocxEditorError(error)) code = error.code;
+        else throw error;
+      }
+      return code;
+    };
+    try {
+      expect(await attempt(false)).toBe('NotSupported');
+      // With a write in the same sync: the write has committed, and the sync still rejects.
+      expect(await attempt(true)).toBe('NotSupported');
+      const text = await runtime.run(async (context) => {
+        const body = context.document.body;
+        body.load('text');
+        await context.sync();
+        return body.text;
+      });
+      expect(text).toContain('Other!');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('a server runtime refuses select with NotSupported', async () => {
     const runtime = await DocxEditor.createServer(WITH_STORY_BOOKMARKS);
     let code: string | null = null;

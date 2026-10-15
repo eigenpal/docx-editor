@@ -61,6 +61,8 @@ function createRequestChrome(changed: (() => void) | undefined) {
       request?.();
       return request !== undefined;
     },
+    /** Whether the current UI takes its shortcut: false when it turned it off. */
+    shortcutOn: (): boolean => stack.current().shortcut !== false,
     /** The keyboard's request: refused when the current UI turned its shortcut off. */
     openFromShortcut(): boolean {
       if (stack.current().shortcut === false) return false;
