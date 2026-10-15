@@ -6,9 +6,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // An edit that moves many pages may finish its later pages in the background. A remote edit
 // that arrives during that pass drops it and lays out again, so both participants must still
 // converge on the same package and on a cold layout after concurrent edits, undo, and redo.
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { setDeferredLayoutForTest } from '../../../../core/src/editor/surface-deferred-layout.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
@@ -17,19 +18,29 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 const harness = createPeerHarness('deferred-layout-room', { offlineEditing: true });
 type Editor = ReturnType<typeof createDocxEditor>;
 const editors: Editor[] = [];
+const containers: HTMLElement[] = [];
+let restoreDeferredLayout: () => void;
+beforeEach(() => {
+  restoreDeferredLayout = setDeferredLayoutForTest(1, 0);
+});
 afterEach(() => {
   for (const editor of editors.splice(0)) editor.destroy();
-  for (const scroller of document.querySelectorAll('.docx-editor__scroll-container'))
-    scroller.remove();
+  for (const container of containers.splice(0)) container.parentElement?.remove();
+  restoreDeferredLayout();
   harness.cleanup();
 });
 
 function body(): string {
   const parts: string[] = [];
-  for (let index = 0; index < 4000; index += 1) {
+  for (let index = 0; index < 160; index += 1) {
     parts.push(`<w:p><w:r><w:t>Paragraph ${index}</w:t></w:r></w:p>`);
   }
-  return parts.join('') + '<w:sectPr/>';
+  // Short pages exercise the real background path without thousands of tree nodes.
+  return (
+    parts.join('') +
+    '<w:sectPr><w:pgSz w:w="12240" w:h="4000"/>' +
+    '<w:pgMar w:top="720" w:bottom="720" w:left="1440" w:right="1440"/></w:sectPr>'
+  );
 }
 
 function linesOf(editor: Editor): string {
@@ -65,6 +76,7 @@ function scrolledContainer(): HTMLElement {
   scroller.className = 'docx-editor__scroll-container';
   Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 1000 });
   const container = document.createElement('div');
+  containers.push(container);
   scroller.append(container);
   document.body.append(scroller);
   return container;
@@ -73,7 +85,11 @@ function scrolledContainer(): HTMLElement {
 /** Wait for any background pass to publish the cold layout. */
 async function settled(editor: Editor, cold: string): Promise<string> {
   const until = Date.now() + 10_000;
-  while (Date.now() < until && linesOf(editor) !== cold) {
+  const container = containers[editors.indexOf(editor)]!;
+  while (
+    Date.now() < until &&
+    (container.hasAttribute('data-docx-layout-pending') || linesOf(editor) !== cold)
+  ) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   return linesOf(editor);
@@ -104,6 +120,9 @@ test('a remote edit during a background pass still converges on a cold layout', 
     for (const editor of [alice, bob]) {
       const cold = coldLinesOf(editor);
       expect(await settled(editor, cold)).toBe(cold);
+      expect(containers[editors.indexOf(editor)]!.hasAttribute('data-docx-layout-pending')).toBe(
+        false
+      );
     }
   };
   const split = (editor: Editor, index: number, offset: number) => {
@@ -116,18 +135,29 @@ test('a remote edit during a background pass still converges on a cold layout', 
   };
 
   await converged();
+  expect(alice.surface!.layout().pages.length).toBeGreaterThan(12);
   // Alice moves every later page; Bob's edit reaches her before her pass finishes.
   split(alice, 0, 4);
-  split(bob, 1, 3);
-  sync();
-  split(alice, 2, 2);
+  expect(containers[0]!.hasAttribute('data-docx-layout-pending')).toBe(true);
+  const interruptedRevision = alice.surface!.session.packageRevision();
+  const pendingChanges = spyOn(containers[0]!, 'toggleAttribute');
+  try {
+    split(bob, 1, 3);
+    sync();
+    expect(alice.surface!.session.packageRevision()).toBeGreaterThan(interruptedRevision);
+    split(alice, 2, 2);
+    // The next edit retires the older pass before any background task runs.
+    expect(pendingChanges.mock.calls).toContainEqual(['data-docx-layout-pending', false]);
+  } finally {
+    pendingChanges.mockRestore();
+  }
   sync();
   await converged();
 
   // Concurrent: Bob deletes a later paragraph's text while Alice moves the pages again.
   split(alice, 0, 2);
-  const later = bob.surface!.session.paragraphIds()[2000]!;
-  const next = bob.surface!.session.paragraphIds()[2001]!;
+  const later = bob.surface!.session.paragraphIds()[80]!;
+  const next = bob.surface!.session.paragraphIds()[81]!;
   bob.surface!.setSelection({
     anchor: { paragraphId: later, offset: 0 },
     head: { paragraphId: next, offset: 0 },
