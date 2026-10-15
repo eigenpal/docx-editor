@@ -6,6 +6,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { BookmarkSummary } from '../../contracts/editor-bookmarks.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { goToBookmarkRows, goToBookmarkTarget } from '../bookmark-dialog-model.ts';
+import { commandForSlot, toolbarCommandState } from '../toolbar-commands.ts';
 
 const editors: DocxEditorInstance[] = [];
 afterEach(() => {
@@ -178,8 +179,12 @@ describe('Go To in the editor', () => {
       code: 'unsupported',
       reason: 'no Go To view is registered',
     });
+    // The Insert menu row runs the same command, so it follows the registration.
+    expect(commandForSlot('insert.goToBookmark')).toEqual({ type: 'openGoTo' });
+    expect(toolbarCommandState(editor, 'insert.goToBookmark').enabled).toBe(false);
     let opened = 0;
     const off = editor.setGoToChrome({ onRequest: () => (opened += 1) });
+    expect(toolbarCommandState(editor, 'insert.goToBookmark').enabled).toBe(true);
     expect(editor.exec({ type: 'openGoTo' })).toEqual({ ok: true, changed: false });
     expect(opened).toBe(1);
     // Read-only: a footer bookmark is shown; the footer is not opened for editing.
