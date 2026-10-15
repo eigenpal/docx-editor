@@ -5,10 +5,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // `items/<property>` load paths: a collection's members and one of their properties in one sync.
 //
-// The item reads have to describe the document at the place the load was queued. These tests
-// hold that line for read-only batches, for writes queued before or after the load, and for the
-// one order that cannot be answered inside one atomic commit, which is refused before anything
-// is sent.
+// Item reads follow the rule every read in a sync follows: they report the document as it was
+// before that sync's writes, wherever the load sits in the queue. These tests cover the accepted
+// path forms, read-only syncs, syncs with writes before and after the load, empty and windowed
+// collections, tracked collections in a later run, and the paths that are refused.
 
 import { describe, expect, test } from 'bun:test';
 import { createRuntime } from '../runtime.ts';
@@ -168,6 +168,59 @@ describe('what an items path refuses, at the load call', () => {
         expect.objectContaining({ code: 'InvalidArgument', target: 'document.body.items/text' })
       );
     });
+    runtime.dispose();
+  });
+
+  test('an empty result loads no items and sends no item reads', async () => {
+    const spy = spyHost(openHost(THREE));
+    const runtime = createRuntime({ host: spy.host, save: true });
+    const items = await runtime.run(async (context) => {
+      const results = context.document.body.search('absent');
+      results.load('items/text');
+      spy.reset();
+      await context.sync();
+      return results.items;
+    });
+    expect(items).toEqual([]);
+    expect(spy.requests).toHaveLength(1);
+    runtime.dispose();
+  });
+
+  test('a tracked collection loads items/ paths in a later run', async () => {
+    const runtime = createRuntime({ host: openHost(THREE), save: true });
+    const held = await runtime.run(async (context) => {
+      // A collection is addressed through its owner, so the owner is tracked with it.
+      const body = context.document.body;
+      const collection = body.paragraphs;
+      context.trackedObjects.add([body, collection]);
+      return { body, collection };
+    });
+    const texts = await runtime.run([held.body, held.collection], async (context) => {
+      const paragraphs = held.collection;
+      paragraphs.load('items/text');
+      await context.sync();
+      return paragraphs.items.map((item) => item.text);
+    });
+    expect(texts).toEqual(['one', 'two', 'three']);
+    runtime.dispose();
+  });
+
+  test('top and skip apply to the pieces a split answered before their item reads', async () => {
+    const runtime = createRuntime({ host: openHost(docx(p('a,b,c'))), save: true });
+    const texts = await runtime.run(async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load();
+      await context.sync();
+      const pieces = paragraphs.items[0]!.split([',']);
+      expect(() => pieces.load({ select: 'items', top: 1 })).toThrowError(
+        expect.objectContaining({ code: 'NotImplemented' })
+      );
+      await context.sync();
+      pieces.load({ select: 'items/text', top: 1, skip: 1 });
+      await context.sync();
+      return pieces.items.map((item) => item.text);
+    });
+    expect(texts).toEqual(['b,']);
     runtime.dispose();
   });
 

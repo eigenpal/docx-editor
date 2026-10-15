@@ -1,4 +1,5 @@
 import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
+import { TARGET_REMOVED } from './target-removed.ts';
 import { planShapes } from './plan-shapes.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
@@ -213,6 +214,8 @@ function error(code: AutomationErrorCode, message: string, detail?: string): Aut
 function refuse(code: AutomationErrorCode, message: string, detail?: string): PlannedOperation {
   return { ok: false, error: error(code, message, detail) };
 }
+/** A handle whose object an edit, a peer, or an undo removed: reading again finds a fresh one. */
+const removed = (message: string) => refuse('invalid-handle', message, TARGET_REMOVED);
 
 const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
@@ -1259,7 +1262,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const control = contentControlReadOf(reads, target.nodeId);
     const node = contentControlNodeOf(reads, target.nodeId);
     if (!control || !node) {
-      return refuse('invalid-handle', 'this document no longer holds that content control');
+      return removed('this document no longer holds that content control');
     }
     return { reads, control, node };
   };
@@ -1973,8 +1976,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             'that is not a furniture variant',
             String(operation.variant)
           );
-        if (!packageReads.sections()[target.index])
-          return refuse('invalid-handle', 'that section no longer exists');
+        if (!packageReads.sections()[target.index]) return removed('that section no longer exists');
         return query({ kind: 'handle', handle: handles.body(story) });
       }
 
@@ -2299,8 +2301,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range in this document');
         const span = spanOfReviewRange(found.reads, range);
-        if (!span)
-          return refuse('invalid-handle', 'that comment’s range is no longer in the story');
+        if (!span) return removed('that comment’s range is no longer in the story');
         return query({ kind: 'span', span });
       }
 
@@ -2416,7 +2417,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const [first] = found.item.item.ranges;
         if (!first) return refuse('invalid-handle', 'that change covers no characters');
         const span = spanOfReviewRange(found.reads, first);
-        if (!span) return refuse('invalid-handle', 'that change’s range is no longer in the story');
+        if (!span) return removed('that change’s range is no longer in the story');
         return query({ kind: 'span', span });
       }
 

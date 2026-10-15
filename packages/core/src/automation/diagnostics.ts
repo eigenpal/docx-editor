@@ -6,6 +6,7 @@
  * Only the RESULT of a lookup leaves the engine. A raw reason can be a sentence, and a package
  * `detail` can name parts of the file, so neither is ever copied into a diagnostic.
  */
+import { TARGET_REMOVED } from './target-removed.ts';
 import type {
   ByteSizeBucket,
   CountBucket,
@@ -88,7 +89,15 @@ type HostRejectionToken =
   | 'collaboration-session-not-ready'
   | 'collaboration-session-not-attached'
   | 'collaboration-session-destroyed'
-  | 'collaboration-text-limit';
+  | 'collaboration-text-limit'
+  // Automation handles whose object an edit removed. See `target-removed.ts`.
+  | typeof TARGET_REMOVED
+  | 'paragraph-not-in-body'
+  | 'no-such-story'
+  | 'cell-not-in-story'
+  | 'deleted-table-object'
+  | 'missing-parent-table'
+  | 'missing-table-story';
 
 /** Exhaustive over the store and story reasons, like {@link OPEN_CODES}. */
 const STORE_EDIT_CODES: Readonly<
@@ -132,6 +141,15 @@ const STORE_EDIT_CODES: Readonly<
   typeMismatch: 'edit.invalid-argument',
   invalidArgs: 'edit.invalid-argument',
   'unknown-paragraph': 'edit.stale-target',
+  // A handle the document no longer resolves: an edit, a peer, or an undo removed or merged
+  // its object. A handle that never named a valid target keeps its own reason, or none.
+  [TARGET_REMOVED]: 'edit.stale-target',
+  'paragraph-not-in-body': 'edit.stale-target',
+  'no-such-story': 'edit.stale-target',
+  'cell-not-in-story': 'edit.stale-target',
+  'deleted-table-object': 'edit.stale-target',
+  'missing-parent-table': 'edit.stale-target',
+  'missing-table-story': 'edit.stale-target',
   'not-a-paragraph': 'edit.stale-target',
   'unknown-block': 'edit.stale-target',
   'not-a-block': 'edit.stale-target',

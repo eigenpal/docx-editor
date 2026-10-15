@@ -100,7 +100,9 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
    * The members this collection was loaded with.
    *
    * `PropertyNotLoaded` until a `load(...)` has been synced: a collection that answered `[]`
-   * before it had been read would be indistinguishable from an empty document.
+   * before it had been read would be indistinguishable from an empty document. Name an item
+   * property with an `items/` path, such as `load('items/text')`, to load it on every member in
+   * the same sync.
    */
   get items(): readonly T[] {
     return this.loadedProperty<readonly T[]>('items');
@@ -139,18 +141,22 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     const label = `${this.path.label}.items`;
     // Already answered by the command that made this collection: there is nothing to ask for, and
     // asking anyway would send a second operation the consumer did not write.
-    if (listing === null) {
-      if (itemSelect.length === 0) return;
-      // The members are known once the command has answered. Loading their properties then is an
-      // ordinary read in queue order. Before that, the read would have to run inside the command's
-      // own sync, after any later write in it, so it is refused rather than answered from a
-      // different document state.
-      if (!this.#answer) fail({ code: 'NotImplemented', target: label });
-      for (const item of this.items) item.load(itemSelect);
-      return;
-    }
     const skip = request.skip ?? 0;
     const top = request.top;
+    const windowed = request.skip !== undefined || top !== undefined;
+    if (listing === null) {
+      if (itemSelect.length === 0 && !windowed) return;
+      // The members are known once the command has answered. A window and item properties then
+      // apply to that answer, and the item loads are ordinary reads in queue order. Before that,
+      // the reads would have to run inside the command's own sync, after any later write in it,
+      // so they are refused rather than answered from a different document state.
+      const answer = this.#answer;
+      if (!answer) fail({ code: 'NotImplemented', target: label });
+      const members = this.#members(answer.value, answer.label, skip, top);
+      this.setLoadedProperty('items', members);
+      if (itemSelect.length > 0) for (const item of members) item.load(itemSelect);
+      return;
+    }
     this.enqueue({
       sort: 'read',
       label,

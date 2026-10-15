@@ -510,7 +510,7 @@
     },
     {
       "uid": "OfficeExtension.LoadOption#select",
-      "note": "Collections accept items/<property> paths in load(...) strings, arrays, and select. collection.load('text') is treated as collection.load('items/text'). Items and the selected item properties load in the same context.sync(). As with every read in a sync, item properties report the document from before that sync's writes. Only one navigation level is supported: deeper paths such as items/font/bold, and navigation paths on objects that are not collections, refuse with InvalidArgument and name the path in target. Item paths on the range collection that Paragraph#split returns are available after the split's sync; before it, they refuse with NotImplemented. The object form with boolean property flags and $all is not accepted; use select."
+      "note": "Collections accept items/<property> paths in load(...) strings, arrays, and select. collection.load('text') is treated as collection.load('items/text'). Items and the selected item properties load in the same context.sync(). As with every read in a sync, item properties report the document from before that sync's writes. Only one navigation level is supported: deeper paths such as items/font/bold, and navigation paths on objects that are not collections, refuse with InvalidArgument and name the path in target. On the range collection that Paragraph#split returns, item paths, top, and skip apply to the split's answer after its sync; before it, they refuse with NotImplemented. The object form with boolean property flags and $all is not accepted; use select."
     },
     {
       "uid": "OfficeExtension.LoadOption#expand",

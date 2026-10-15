@@ -125,7 +125,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.unmapped-change':
     'The browser changed the page in a way the editor could not express as a document edit, so the change was undone.',
   'edit.stale-target':
-    'The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry.',
+    'The operation addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry.',
   'edit.invalid-argument':
     'The command arguments are not valid for this target. Check the command type and its fields.',
   'edit.resource-limit':

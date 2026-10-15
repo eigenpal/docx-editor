@@ -90,12 +90,7 @@ export function hostFailure(
 ): DocxEditorError {
   const code = HOST_CODES[error.code] ?? 'GeneralException';
   const stale = code === 'StaleDocument';
-  // A handle the host cannot resolve names an object the document no longer holds: an edit in
-  // another run, a peer, or an undo removed or merged it. Say so even when the host's detail
-  // has no public code of its own.
-  const diagnostic =
-    (error.detail === undefined ? null : storeEditDiagnosticCode(error.detail)) ??
-    (error.code === 'invalid-handle' ? 'edit.stale-target' : null);
+  const diagnostic = error.detail === undefined ? null : storeEditDiagnosticCode(error.detail);
   const failure = new DocxEditorError({
     code,
     ...(diagnostic === null ? {} : { diagnostic }),

@@ -290,8 +290,8 @@ export class Paragraph extends ModelObject implements PromisedItem {
   /**
    * Every occurrence of `searchText` in this paragraph, as ranges, in reading order.
    *
-   * Takes the same options as `Body.search`. The handle is read when the batch is planned, so a
-   * paragraph from `getFirst()` can be searched in the same `sync()` that finds it.
+   * Takes the same options as `Body.search`. You can search a paragraph from `getFirst()` in the
+   * same `context.sync()` that finds it.
    */
   search(searchText: string, searchOptions?: SearchOptions): RangeCollection {
     const target = `${this.path.label}.search`;

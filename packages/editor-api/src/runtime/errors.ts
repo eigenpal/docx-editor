@@ -39,9 +39,9 @@ export type DocxEditorErrorCode =
    * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
    * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
    * is terminal. GONE: the document no longer holds the object, because an edit removed or merged
-   * it; `debugInfo.innerError.code` is then `edit.stale-target`. One code because from a
-   * consumer's side all three are "this object cannot be used here"; the message names each
-   * cause, because the fix for one is not the fix for the others.
+   * it; `debugInfo.innerError.code` is then `edit.stale-target` and the message says so. One
+   * code because from a consumer's side all three are "this object cannot be used here"; the
+   * message says which one, because the fix for one is not the fix for the others.
    */
   | 'InvalidObjectPath'
   /** The object still belongs to a run that has not finished, so it cannot be handed over. */
@@ -97,9 +97,8 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the property has not been loaded. Call load(...) and await context.sync() before reading it.',
   ValueNotLoaded: 'the result has not been filled in yet. Await context.sync() before reading it.',
   InvalidObjectPath:
-    'the object cannot be addressed. The object may no longer exist in the document; read it ' +
-    'again. Await context.sync() after creating an object with an edit. Keep proxies within ' +
-    'their run, or use context.trackedObjects.add(...) before the run ends.',
+    'the object cannot be addressed. Await context.sync() after creating an object with an edit. ' +
+    'Keep proxies within their run, or use context.trackedObjects.add(...) before the run ends.',
   ObjectInUse:
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
@@ -120,6 +119,21 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
   DocumentUnavailable: 'the document is not available right now.',
   GeneralException: 'the document could not complete the request.',
 });
+
+/**
+ * The message for `InvalidObjectPath` when the host reports that the object is gone. Fixed, like
+ * every other message, so it names no document content.
+ */
+const REMOVED_OBJECT_MESSAGE =
+  'the object no longer exists in the document. An edit removed or merged it. Read the ' +
+  'document again to get a fresh object.';
+
+/** The fixed message for an error, from its code and the diagnostic the engine gave. */
+function messageOf(code: DocxEditorErrorCode, diagnostic: DiagnosticCode | undefined): string {
+  return code === 'InvalidObjectPath' && diagnostic === 'edit.stale-target'
+    ? REMOVED_OBJECT_MESSAGE
+    : MESSAGES[code];
+}
 
 /**
  * The fields a {@link DocxEditorError} is constructed from.
@@ -249,7 +263,8 @@ export class DocxEditorError extends Error {
   readonly debugInfo: DocxEditorDebugInfo;
 
   constructor(init: DocxEditorErrorInit) {
-    const message = init.target ? `${MESSAGES[init.code]} (${init.target})` : MESSAGES[init.code];
+    const base = messageOf(init.code, init.diagnostic);
+    const message = init.target ? `${base} (${init.target})` : base;
     super(message);
     this.name = 'DocxEditorError';
     this.code = init.code;
@@ -291,8 +306,8 @@ export function isDocxEditorError(value: unknown): value is DocxEditorError {
 }
 
 /** The message this runtime uses for a code, for tests that assert nothing else is thrown. */
-export function messageFor(code: DocxEditorErrorCode): string {
-  return MESSAGES[code];
+export function messageFor(code: DocxEditorErrorCode, diagnostic?: DiagnosticCode): string {
+  return messageOf(code, diagnostic);
 }
 
 export function fail(init: DocxEditorErrorInit): never {

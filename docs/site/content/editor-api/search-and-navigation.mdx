@@ -30,6 +30,7 @@ const found = await runtime.run(async (context) => {
 ```ts
 const matches = await runtime.run(async (context) => {
   const firstParagraph = context.document.body.paragraphs.getFirst();
+  // The options, such as matchCase, apply within this paragraph only.
   const results = firstParagraph.search('Effective Date', { matchCase: true });
   results.load('items/text');
   await context.sync();

@@ -84,7 +84,11 @@ export function planShapes(
     const range = resolveSpanRef(operation.span, handles, reads);
     const story = storyOfSpanRef(operation.span, handles, reads);
     if (!range.ok || !story.ok)
-      return refuse('invalid-handle', 'that range no longer exists', 'span');
+      return refuse(
+        'invalid-handle',
+        'that range no longer exists',
+        !range.ok ? range.detail : !story.ok ? story.detail : undefined
+      );
     const listing = reads.shapes(story.value.story);
     if (!listing.ok)
       return refuse(
