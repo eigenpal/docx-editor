@@ -749,7 +749,7 @@
   },
   "Word.Document#deleteBookmark": {
     "status": "partial",
-    "notes": "Searches the main text, then headers, footers, and notes, and removes the first bookmark with the name, compared without case. The text stays. A missing name changes nothing. The write commits in that bookmark's story, so it cannot share a sync with writes to another story."
+    "notes": "Searches the main text, then headers, footers, and notes, and removes the first bookmark with the name, compared without case. The text stays. A missing name changes nothing. The removal joins the batch's transaction in any story, so it can share a sync with writes to another story."
   },
   "Word.Document#getBookmarkRange": {
     "status": "partial",

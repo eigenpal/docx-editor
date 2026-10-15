@@ -1613,16 +1613,22 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'getBookmarkRangeByName':
       case 'insertBookmark':
       case 'deleteBookmark':
-        return planBookmarks(operation, handles, packageReads, (story, paragraphIds) => {
-          const plan = planFor(story);
-          return (
-            pinWrite(plan) ??
-            [...new Set(paragraphIds)].reduce<PlannedOperation | null>(
-              (refusal, id) => refusal ?? claim(plan, id),
-              null
-            )
-          );
-        });
+        return planBookmarks(
+          operation,
+          handles,
+          packageReads,
+          (story, paragraphIds) => {
+            const plan = planFor(story);
+            return (
+              pinWrite(plan) ??
+              [...new Set(paragraphIds)].reduce<PlannedOperation | null>(
+                (refusal, id) => refusal ?? claim(plan, id),
+                null
+              )
+            );
+          },
+          () => writeStory?.reads.story ?? null
+        );
       case 'insertBreak':
         return planBreakOperation(
           operation,

@@ -117,7 +117,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Lookups by name search the main text first, then headers, footers, and notes. `getBookmarkRange` fails with `ItemNotFound` when no bookmark has the name, and `deleteBookmark` changes nothing.
+Lookups by name search the main text first, then headers, footers, and notes. `getBookmarkRange` fails with `ItemNotFound` when no bookmark has the name, and `deleteBookmark` changes nothing. `deleteBookmark` and `Bookmark.delete` can share a `context.sync()` with edits in another story: the removal is part of the same transaction.
 
 `Range.getBookmarks` answers a bookmark when it shares text with the range. A point bookmark counts when it is inside the range or at its start. An empty range answers the bookmark around it. Pass `includeAdjacent` to add bookmarks that only touch the range, and `includeHidden` to add names that start with an underscore.
 

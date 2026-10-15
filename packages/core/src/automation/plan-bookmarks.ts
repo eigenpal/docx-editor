@@ -6,6 +6,8 @@
 // then each section's headers and footers, then the notes, and the first bookmark that declares
 // the name, in any case, answers. Adding a name that another story declares moves it: the write
 // commits in the target story and removes the name from the other part in the same transaction.
+// Deleting one in a story the batch does not write into is a package edit of that transaction
+// too, so a batch can delete bookmarks anywhere and still edit one story.
 
 import { bookmarkNameKey, bookmarkNameProblem } from '../store/package/bookmark-names.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
@@ -136,12 +138,16 @@ export function bookmarkInRange(
   return same(bookmark.end, range.start) || same(bookmark.start, range.end);
 }
 
-/** Plan a bookmark operation. `admit` pins the batch's write story and claims paragraphs. */
+/**
+ * Plan a bookmark operation. `admit` pins the batch's write story and claims paragraphs;
+ * `pinned` names the story the batch already writes into, or null.
+ */
 export function planBookmarks(
   operation: BookmarkOperation,
   handles: AutomationHandleTable,
   reads: AutomationPackageReads,
-  admit: (story: AutomationStoryReads, paragraphIds: readonly string[]) => PlannedOperation | null
+  admit: (story: AutomationStoryReads, paragraphIds: readonly string[]) => PlannedOperation | null,
+  pinned: () => AutomationStoryId | null = () => null
 ): PlannedOperation {
   if (operation.op === 'getBookmarks') {
     const resolved = resolveSpanRef(operation.scope, handles, reads);
@@ -293,6 +299,22 @@ export function planBookmarks(
   // Deleting a name nothing declares is what the caller asked for already. Answered as a read,
   // so it pins no write story and never conflicts with the batch's writes elsewhere.
   if (!found) return query(APPLIED);
+  // Outside the story the batch writes into, or before any write, the markers leave their part
+  // as a package edit of the same transaction. It pins no story, so a delete can share a sync
+  // with writes anywhere. Removing markers moves no text offset, so it claims no paragraph.
+  const writing = pinned();
+  if (writing === null || storyKey(writing) !== storyKey(found.story.story)) {
+    const partName = found.story.part.name;
+    const name = found.bookmark.name;
+    return {
+      ok: true,
+      kind: 'command',
+      ops: [],
+      story: writing ?? found.story.story,
+      packageEdits: [(pkg: OoxmlPackage) => withoutBookmarkInPart(pkg, partName, name)],
+      answer: () => APPLIED,
+    };
+  }
   const refusal = admit(found.story, [
     found.bookmark.start.paragraphId,
     found.bookmark.end.paragraphId,

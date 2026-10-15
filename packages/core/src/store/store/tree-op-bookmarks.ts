@@ -223,6 +223,7 @@ export function withoutBookmarkInPart(
   const part = pkg.parts.get(partName);
   if (!part) return pkg;
   const result = applyBookmarkOp(part, { op: 'deleteBookmark', name });
+  // A delete refuses only a name the part does not declare, which is already the result.
   return result.ok ? withPart(pkg, result.part) : pkg;
 }
 

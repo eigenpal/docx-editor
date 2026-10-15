@@ -8,6 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // save and reopen where the document's shape changed.
 
 import { describe, expect, test } from 'bun:test';
+import { strFromU8, unzipSync } from 'fflate';
 import { isDocxEditorError } from '../../runtime/errors.ts';
 import { DocxEditor } from '../../index.ts';
 import type { DocxEditorServerRuntime } from '../../runtime/runtime.ts';
@@ -276,6 +277,33 @@ describe('Document bookmarks by name', () => {
     expect(xml).not.toContain('w:name="rng"');
     expect(xml).toContain('tuv');
     expect(xml).toContain('w:name="pt"');
+  });
+
+  test('deleteBookmark shares a sync with an edit in another story, in either order', async () => {
+    for (const deleteFirst of [true, false]) {
+      const runtime = await serverRuntime(WITH_BOOKMARKED_STORIES);
+      await runtime.run(async (context) => {
+        const sections = context.document.sections;
+        sections.load('items');
+        await context.sync();
+        const header = sections.items[0]!.getHeader('Primary');
+        await context.sync();
+        const found = header.search('header');
+        found.load('items');
+        await context.sync();
+        if (deleteFirst) context.document.deleteBookmark('first');
+        found.items[0]!.insertText(' line', 'End');
+        if (!deleteFirst) context.document.deleteBookmark('first');
+        await context.sync();
+      });
+      const parts = unzipSync(await runtime.save());
+      const main = strFromU8(parts['word/document.xml'] as Uint8Array);
+      const header = strFromU8(parts['word/header1.xml'] as Uint8Array);
+      expect(main).not.toContain('w:name="First"');
+      expect(main).toContain('>first<');
+      expect(header).toContain(' line');
+      expect(header).toContain('w:name="Duplicate"');
+    }
   });
 
   test('Bookmark.delete removes the bookmark a collection named', async () => {
