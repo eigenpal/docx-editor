@@ -34,12 +34,14 @@ export type DocxEditorErrorCode =
   /** A `ClientResult` value was read before the sync that fills it. */
   | 'ValueNotLoaded'
   /**
-   * The object cannot be addressed, in either of the two ways that happens.
+   * The object cannot be addressed, in one of three ways.
    *
    * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
    * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
-   * is terminal. One code because from a consumer's side both are "this object cannot be used
-   * here"; the message says which one, because the fix for one is not the fix for the other.
+   * is terminal. GONE: the document no longer holds the object, because an edit removed or merged
+   * it; `debugInfo.innerError.code` is then `edit.stale-target`. One code because from a
+   * consumer's side all three are "this object cannot be used here"; the message names each
+   * cause, because the fix for one is not the fix for the others.
    */
   | 'InvalidObjectPath'
   /** The object still belongs to a run that has not finished, so it cannot be handed over. */
@@ -95,8 +97,9 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the property has not been loaded. Call load(...) and await context.sync() before reading it.',
   ValueNotLoaded: 'the result has not been filled in yet. Await context.sync() before reading it.',
   InvalidObjectPath:
-    'the object cannot be addressed. Await context.sync() after creating an object with an edit. ' +
-    'Keep proxies within their run, or use context.trackedObjects.add(...) before the run ends.',
+    'the object cannot be addressed. The object may no longer exist in the document; read it ' +
+    'again. Await context.sync() after creating an object with an edit. Keep proxies within ' +
+    'their run, or use context.trackedObjects.add(...) before the run ends.',
   ObjectInUse:
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
