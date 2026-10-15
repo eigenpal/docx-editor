@@ -103,7 +103,14 @@ export abstract class ClientObject implements RuntimeManagedObject {
     this.#loading = true;
     try {
       this.requireUsablePath();
-      this.onLoad(resolveLoadOption(option, this.#path.label));
+      const request = resolveLoadOption(option, this.#path.label);
+      // An `items/` path selects properties of a collection's members. Anything that is not a
+      // collection has no members, so the path names nothing this object can load.
+      const item = request.itemSelect[0];
+      if (item !== undefined && !this.loadsItemPaths) {
+        fail({ code: 'InvalidArgument', target: `${this.#path.label}.items/${item}` });
+      }
+      this.onLoad(request);
       return this;
     } finally {
       this.#loading = false;
@@ -112,6 +119,11 @@ export abstract class ClientObject implements RuntimeManagedObject {
 
   /** What this kind of object does with a resolved load request. */
   protected abstract onLoad(request: ResolvedLoadOptions): void;
+
+  /** @internal Whether `load(...)` accepts `items/<property>` paths. Only collections do. */
+  protected get loadsItemPaths(): boolean {
+    return false;
+  }
 
   /** @internal This object's address, or the placeholder standing in until a sync resolves it. */
   protected get path(): ObjectPath {

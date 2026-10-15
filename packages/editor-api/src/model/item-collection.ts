@@ -117,28 +117,79 @@ export abstract class ItemCollection<T extends ClientObject> extends ClientObjec
     for (const edge of waiting) this.#settleEdge(edge, value);
   }
 
+  /** @internal Collections accept `items/<property>` paths. */
+  protected override get loadsItemPaths(): boolean {
+    return true;
+  }
+
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected onLoad(request: ResolvedLoadOptions): void {
-    selectedProperties(request, ['items'], this.path.label);
+    // A collection has one property of its own. Any other name is a property of each item, the
+    // same as its `items/` path.
+    const itemSelect = [
+      ...new Set([...request.select.filter((name) => name !== 'items'), ...request.itemSelect]),
+    ];
+    selectedProperties(
+      { ...request, select: request.select.filter((name) => name === 'items') },
+      ['items'],
+      this.path.label
+    );
+    if (itemSelect.length > 0) this.#checkItemSelect(itemSelect);
     const listing = this.path.isPending ? undefined : this.listing();
+    const label = `${this.path.label}.items`;
     // Already answered by the command that made this collection: there is nothing to ask for, and
     // asking anyway would send a second operation the consumer did not write.
-    if (listing === null) return;
-    const label = `${this.path.label}.items`;
+    if (listing === null) {
+      if (itemSelect.length === 0) return;
+      // The members are known once the command has answered. Loading their properties then is an
+      // ordinary read in queue order. Before that, the read would have to run inside the command's
+      // own sync, after any later write in it, so it is refused rather than answered from a
+      // different document state.
+      if (!this.#answer) fail({ code: 'NotImplemented', target: label });
+      for (const item of this.items) item.load(itemSelect);
+      return;
+    }
     const skip = request.skip ?? 0;
     const top = request.top;
     this.enqueue({
       sort: 'read',
       label,
+      ...(itemSelect.length > 0 ? { continues: true } : {}),
       plan: () => {
         const resolved = listing ?? this.listing();
         if (!resolved) fail({ code: 'InvalidObjectPath', target: this.path.label });
         return resolved;
       },
       settle: (value) => {
-        this.setLoadedProperty('items', this.#members(value, label, skip, top));
+        const members = this.#members(value, label, skip, top);
+        this.setLoadedProperty('items', members);
+        if (itemSelect.length === 0) return;
+        this.internals.queue.continuing(() => {
+          for (const item of members) item.load(itemSelect);
+        });
       },
     });
+  }
+
+  /**
+   * Refuse an item property this collection's members do not have, at the `load` call.
+   *
+   * A member that does not exist yet answers the question: it runs the same selection a real
+   * member runs, and what it queues is discarded. Checking here, not when the listing answers,
+   * reports the refusal at the call the consumer wrote, before anything is sent.
+   */
+  #checkItemSelect(itemSelect: readonly string[]): void {
+    const probe = this.promised(`${this.path.label}.items`, false);
+    const queued = this.internals.queue.collect(() => {
+      try {
+        probe.load(itemSelect);
+      } catch (error) {
+        // Only a refused name is this check's answer. A member that is not addressed yet can
+        // refuse for that reason alone, and a real member will not.
+        if ((error as { code?: unknown }).code === 'InvalidArgument') throw error;
+      }
+    });
+    for (const action of queued) action.dispose?.();
   }
 
   /** One member, by which end of the collection it is at. */
