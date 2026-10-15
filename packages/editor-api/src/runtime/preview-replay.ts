@@ -16,13 +16,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // may differ, and endpoint offsets, which pair instead: an edit earlier in a paragraph shifts
 // where the same words sit. That is what keeps a replay from ever being blind: a search that
 // finds a different number of matches, text that reads differently, or a paragraph that would
-// pair two ways refuses the commit instead of editing something else.
+// pair two ways refuses the commit instead of editing something else. Before each write batch,
+// the text of every span and paragraph it overwrites is read on both hosts and must match, so a
+// rebase never strikes or reformats words a peer added there after the preview was taken.
 
 import type {
   AutomationBatchRequest,
   AutomationBatchResponse,
+  AutomationHandle,
   AutomationOperation,
 } from '@docx-editor.dev/core/automation';
+import { isAutomationCommand } from '@docx-editor.dev/core/automation';
 import { hostFailure } from './batch.ts';
 import { DocxEditorError } from './errors.ts';
 
@@ -32,12 +36,74 @@ export interface PreviewEntry {
   readonly response: AutomationBatchResponse;
   /** The fork's revision when the batch was sent. */
   readonly before: number;
+  /**
+   * What the batch's writes were about to overwrite, read from the fork just before them:
+   * replayed first, and required to read the same on the live host.
+   */
+  readonly guards?: {
+    readonly request: AutomationBatchRequest;
+    readonly response: AutomationBatchResponse;
+  };
+}
+
+const isHandle = (value: unknown): value is AutomationHandle =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { kind?: unknown }).kind === 'string' &&
+  typeof (value as { ref?: unknown }).ref === 'string';
+
+/**
+ * Reads of the content `operations` overwrite: the text of every span a command names, and of
+ * every paragraph it names whole. A replay compares them before it writes, so a rebase never
+ * overwrites words the preview did not show, whatever form the command addressed them in.
+ * Insertion points are not guarded: an insertion overwrites nothing.
+ *
+ * @internal
+ */
+export function contentGuards(operations: readonly AutomationOperation[]): AutomationOperation[] {
+  const guards: AutomationOperation[] = [];
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) return value.forEach(walk);
+    if (value === null || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    if (isEndpoint(value)) return;
+    const keys = Object.keys(record);
+    const wholeSpan =
+      keys.length === 1 &&
+      (keys[0] === 'paragraph' || keys[0] === 'body') &&
+      isHandle(record[keys[0]]);
+    const endpointSpan =
+      typeof record.start === 'object' &&
+      record.start !== null &&
+      isEndpoint(record.start) &&
+      typeof record.end === 'object' &&
+      record.end !== null &&
+      isEndpoint(record.end);
+    if (wholeSpan || endpointSpan) {
+      guards.push({
+        op: 'getSpanText',
+        span: (endpointSpan ? { start: record.start, end: record.end } : value) as never,
+        projection: 'model',
+      });
+      return;
+    }
+    if (isHandle(value) && value.kind === 'paragraph') {
+      guards.push({ op: 'getText', target: value, projection: 'model' });
+      return;
+    }
+    Object.values(record).forEach(walk);
+  };
+  for (const operation of operations) {
+    if (isAutomationCommand(operation) && operation.op !== 'setChangeTrackingMode') walk(operation);
+  }
+  return guards;
 }
 
 /** Reads whose answer each host mints for itself, so their values are not compared. */
 const HOST_MINTED_READS: ReadonlySet<string> = new Set([
   'getRevisionDate',
   'getCommentDate',
+  'getCommentId',
   'getParagraphId',
 ]);
 
@@ -72,6 +138,16 @@ export function replayPreview(
       // A refused batch wrote nothing and minted nothing in the fork: there is nothing to replay.
       if (!entry.response.ok) continue;
       pairs.revision(entry.before, target.revision());
+      if (entry.guards) {
+        const read = target.execute(
+          pairs.translate(entry.guards.request) as AutomationBatchRequest
+        );
+        if (read === null || read.ok !== entry.guards.response.ok) throw new Divergence();
+        if (read.results.length !== entry.guards.response.results.length) throw new Divergence();
+        entry.guards.response.results.forEach((result, index) =>
+          pairs.agree(result, read.results[index], false)
+        );
+      }
       const answer = target.execute(pairs.translate(entry.request) as AutomationBatchRequest);
       if (answer === null) throw new Divergence();
       if (!answer.ok) {
@@ -133,8 +209,6 @@ class Pairs {
   readonly #revisions = new Map<number, number>();
   /** Fork endpoint (ref, offset, readAt) to live offset. */
   readonly #offsets = new Map<string, number>();
-  /** Per fork paragraph ref, how far the live paragraph's offsets sit from the fork's. */
-  readonly #shift = new Map<string, number>();
 
   constructor(forkBase: number, liveBase: number) {
     this.#revisions.set(forkBase, liveBase);
@@ -214,17 +288,17 @@ class Pairs {
     const known = this.#offsets.get(key);
     if (known !== undefined && known !== live) throw new Divergence();
     this.#offsets.set(key, live);
-    this.#shift.set(fork.paragraph.ref, live - fork.offset);
   }
 
   /**
-   * The live offset for a request endpoint: the one its read answered or, for an endpoint the
-   * caller derived from one, the shift its paragraph has. Unshifted for a paragraph never read.
+   * The live offset for a request endpoint: the one its read answered. An endpoint stamped with
+   * a revision that no answer paired is a divergence; one built by hand, with no stamp, keeps
+   * its offset, and the content guards check what a write at it would overwrite.
    */
   #liveOffset(fork: EndpointShape): number {
-    return (
-      this.#offsets.get(endpointKey(fork)) ??
-      fork.offset + (this.#shift.get(fork.paragraph.ref) ?? 0)
-    );
+    const paired = this.#offsets.get(endpointKey(fork));
+    if (paired !== undefined) return paired;
+    if (fork.readAt !== undefined) throw new Divergence();
+    return fork.offset;
   }
 }

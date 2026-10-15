@@ -7243,7 +7243,7 @@ p.docx-review__refused {
     .docx-content-control-menu,
     .docx-equation-popup,
     .docx-hyperlink-popup
-  ) {
+  ):not(.docx-preview-surface *) {
   display: none;
 }
 

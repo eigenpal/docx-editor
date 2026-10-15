@@ -33,7 +33,7 @@ import type {
 } from '@docx-editor.dev/core/automation';
 import { isAutomationCommand } from '@docx-editor.dev/core/automation';
 import { DocxEditorError, fail } from './errors.ts';
-import { replayPreview, type PreviewEntry } from './preview-replay.ts';
+import { contentGuards, replayPreview, type PreviewEntry } from './preview-replay.ts';
 import type { RequestContext } from './request-context.ts';
 
 /**
@@ -99,9 +99,10 @@ export interface CommitPreviewOptions {
    * When the live document moved after the preview began, replay the preview on the current
    * document instead of refusing. Ranges follow the text they name, so an edit elsewhere, even
    * earlier in the same paragraph, rebases. The replay still refuses with `StaleDocument`, and
-   * writes nothing, when a replayed read answers differently: a search finds a different number
-   * of matches, or text the preview read now reads otherwise. Omitted or false, any move
-   * refuses.
+   * writes nothing, when a replayed read answers differently or a write would overwrite text
+   * that changed: a search finds a different number of matches, text the preview read now
+   * reads otherwise, or the range, paragraph, or span a write replaces or formats holds other
+   * text. Omitted or false, any move refuses.
    */
   readonly rebase?: boolean;
 }
@@ -166,7 +167,7 @@ export interface DocumentPreview<T = void> {
    *   (`expectedRevision` and `actualRevision` say from where to where). Nothing is written and
    *   the preview stays open: call `commit({ rebase: true })` or `discard()`.
    * - `StaleDocument` from `commit({ rebase: true })` when a replayed read answers differently
-   *   (`edit.preview-diverged`). Nothing stays written, and the preview ends.
+   *   or a write would overwrite changed text (`edit.preview-diverged`). Nothing stays written, and the preview ends.
    * - `PreviewEnded` when the preview was already committed, discarded, or ended by a remount.
    * - Any refusal the live document gives a replayed batch, such as a collaboration session
    *   that is not ready. Replayed writes before it are undone as one step, and the preview ends.
@@ -330,8 +331,15 @@ function recordingHost(fork: AutomationHost, log: PreviewEntry[]): AutomationHos
         };
       }
       const before = fork.revision();
+      // What the writes are about to overwrite, read first, so the commit can check the live
+      // document still reads the same there.
+      const guarded = contentGuards(operations);
+      const guards =
+        guarded.length > 0
+          ? { request: { operations: guarded }, response: fork.execute({ operations: guarded }) }
+          : undefined;
       const response = fork.execute(request);
-      log.push({ request, response, before });
+      log.push({ request, response, before, ...(guards ? { guards } : {}) });
       return response;
     },
   };

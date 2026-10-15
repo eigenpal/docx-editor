@@ -92,6 +92,11 @@ export function showPreviewOver(
     holder.remove();
     return null;
   }
+  // The surface makes its container the containing block of its overlays with
+  // `position: relative`, which would drop the holder into the flow after the live pages.
+  // Absolute again, so it lies over them.
+  holder.style.position = 'absolute';
+  place();
   const active = doc.activeElement as HTMLElement | null;
   const refocus = active && container.contains(active) ? active : null;
   // A hidden element cannot keep focus, and a focused live page would take keys meant for no one.

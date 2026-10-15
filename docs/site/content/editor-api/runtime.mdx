@@ -167,7 +167,7 @@ A preview follows these rules:
 - **Commit never re-runs the callback.** It replays the batches the callback sent, in order, inside one editor history group. Every read in the replay must answer what it answered in the preview, so a replay never edits text the preview did not see.
 - **Tracking mode.** A tracking mode the callback sets stays set on the runtime after `commit()`, as it does after `run()`. `discard()` discards it with the preview.
 
-If the live document moved, `commit()` rejects with `StaleDocument`, writes nothing, and keeps the preview open. To apply the preview to the current document, call `commit({ rebase: true })`. Ranges follow the text they name, so an edit elsewhere, even earlier in the same paragraph, rebases. The rebase refuses with `StaleDocument`, and writes nothing, if a replayed read answers differently: a search finds a different number of matches, or text the preview read now reads otherwise. `debugInfo.innerError.code` is then `edit.preview-diverged`:
+If the live document moved, `commit()` rejects with `StaleDocument`, writes nothing, and keeps the preview open. To apply the preview to the current document, call `commit({ rebase: true })`. Ranges follow the text they name, so an edit elsewhere, even earlier in the same paragraph, rebases. The rebase refuses with `StaleDocument`, and writes nothing, if a replayed read answers differently, or if a write would overwrite text that changed: a search finds a different number of matches, text the preview read now reads otherwise, or the range, paragraph, or span a write replaces or formats holds other text. `debugInfo.innerError.code` is then `edit.preview-diverged`:
 
 ```ts
 try {
@@ -193,6 +193,7 @@ A commit that fails during the replay undoes what it replayed as one step and en
 | Another preview is open on the editor | `PreviewActive` | `edit.preview-active` |
 | No document is mounted | `DocumentUnavailable` | None |
 | A write the preview cannot show | `NotSupported` from `context.sync()` | `edit.preview-unsupported` |
+| A write the live editor refuses: a protected range, a generated table of contents, a collaboration session that is not ready, or a comment outside the body | The same error `run()` gives, from `context.sync()` | The live reason, such as `edit.protected-content` or `edit.unsupported-story` |
 | The callback throws | The same error | Unchanged |
 
 A preview shows text edits, paragraph inserts, splits, and deletions, font, paragraph, and style formatting, comments, line breaks, and tracked-change proposals and decisions. Text edits work in headers, footers, and notes too; `reveal()` finds only body paragraphs. A preview refuses tables, pictures, shapes, fields, lists, hyperlinks, content controls, creating or deleting headers, footers, and notes, page setup, page and section breaks, and selection changes. It also refuses what `run()` would refuse on the live editor, such as a protected range, a generated table of contents, or a comment outside the body, so a preview never shows what its commit would refuse. Use `runtime.capabilities.preview` to check whether a runtime offers previews.
