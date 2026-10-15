@@ -150,7 +150,7 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="edit-operation-unsupported" />`edit.operation-unsupported` | This editing API operation or option is not supported by this runtime or host. Check the compatibility notes for the member you called. |
 | <a id="edit-unsupported-story" />`edit.unsupported-story` | This part of the document, such as a header, a footer or a note, does not support this edit. |
 | <a id="edit-unmapped-change" />`edit.unmapped-change` | The browser changed the page in a way the editor could not express as a document edit, so the change was undone. |
-| <a id="edit-stale-target" />`edit.stale-target` | The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and reconsider the edit before you retry. |
+| <a id="edit-stale-target" />`edit.stale-target` | The edit addresses content that no longer exists, usually after a remote or undone change. Read the document again and reconsider the edit before you retry. The editing API reports this code with `InvalidObjectPath` when a held object no longer exists in the document. |
 | <a id="edit-invalid-argument" />`edit.invalid-argument` | The command arguments are not valid for this target. Check the command type and its fields. |
 | <a id="edit-resource-limit" />`edit.resource-limit` | The edit would exceed a size or nesting limit. Split the change into smaller edits. |
 | <a id="edit-refresh-in-progress" />`edit.refresh-in-progress` | An external document refresh is in progress. Retry the edit after the refresh completes. |

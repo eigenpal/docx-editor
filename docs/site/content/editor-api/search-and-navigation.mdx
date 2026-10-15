@@ -11,7 +11,7 @@ Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `
 
 ## Search and inspect matches
 
-`Body.search(searchText, options?)` and `Range.search(searchText, options?)` accept `SearchOptions`. Load collection membership, then load text on its ranges:
+`Body.search(searchText, options?)`, `Paragraph.search(searchText, options?)`, and `Range.search(searchText, options?)` accept `SearchOptions`. Load the matches and their text in one sync with an `items/` path:
 
 ```ts
 const found = await runtime.run(async (context) => {
@@ -19,11 +19,21 @@ const found = await runtime.run(async (context) => {
     matchCase: false,
     matchWholeWord: true,
   });
-  matches.load('items');
-  await context.sync();
-  for (const match of matches.items) match.load('text');
+  matches.load('items/text');
   await context.sync();
   return matches.items.map((match) => match.text);
+});
+```
+
+`Paragraph.search()` returns matches inside that paragraph only. You can search a paragraph from `getFirst()` or `getLast()` in the same sync that finds it:
+
+```ts
+const matches = await runtime.run(async (context) => {
+  const firstParagraph = context.document.body.paragraphs.getFirst();
+  const results = firstParagraph.search('Effective Date', { matchCase: true });
+  results.load('items/text');
+  await context.sync();
+  return results.items.map((match) => match.text);
 });
 ```
 

@@ -167,6 +167,8 @@ export abstract class ClientObject implements RuntimeManagedObject {
     load(option?: LoadOption): this;
     // @internal
     protected loadedProperty<T>(name: string): T;
+    // @internal
+    protected get loadsItemPaths(): boolean;
     protected abstract onLoad(request: ResolvedLoadOptions): void;
     // @internal
     protected get path(): ObjectPath;
@@ -475,12 +477,14 @@ export type DocxEditorErrorCode =
 /** A `ClientResult` value was read before the sync that fills it. */
 | 'ValueNotLoaded'
 /**
-* The object cannot be addressed, in either of the two ways that happens.
+* The object cannot be addressed, in one of three ways.
 *
 * NOT YET: an item accessor answers a proxy the read that names it has not answered for, and it
 * becomes usable at the next `sync()`. NOT ANY MORE: its run ended and nothing tracked it, which
-* is terminal. One code because from a consumer's side both are "this object cannot be used
-* here"; the message says which one, because the fix for one is not the fix for the other.
+* is terminal. GONE: the document no longer holds the object, because an edit removed or merged
+* it; `debugInfo.innerError.code` is then `edit.stale-target`. One code because from a
+* consumer's side all three are "this object cannot be used here"; the message names each
+* cause, because the fix for one is not the fix for the others.
 */
 | 'InvalidObjectPath'
 /** The object still belongs to a run that has not finished, so it cannot be handed over. */
@@ -1094,6 +1098,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set readingOrder(value: ParagraphReadingOrder);
     get rightIndent(): number;
     set rightIndent(value: number);
+    search(searchText: string, searchOptions?: SearchOptions): RangeCollection;
     get shapes(): ShapeCollection;
     get spaceAfter(): number;
     set spaceAfter(value: number);

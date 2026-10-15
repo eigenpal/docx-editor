@@ -58,6 +58,19 @@ const snapshot = await runtime.run(async (context) => {
 
 This follows Microsoft's [split-loop and correlated-objects guidance](https://learn.microsoft.com/en-us/office/dev/add-ins/concepts/correlated-objects-pattern). Bound model input and member-property loads. The collection's `items` load still enumerates its members; slicing the array does not paginate the collection on the server.
 
+To load members and one of their properties in one sync, use an `items/` path and bound the collection with `top`:
+
+```ts
+const snapshot = await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load({ select: 'items/text', top: 40 });
+  await context.sync();
+  return paragraphs.items.map((paragraph) => paragraph.text);
+});
+```
+
+`collection.load('text')` means the same as `collection.load('items/text')`. Only one navigation level works: `items/font/bold` and `font/bold` fail with `InvalidArgument`.
+
 Supported read-derived proxies can share one `sync()` with their edits. For example, `body.getRange().insertText(text, 'Replace')` and `table.getCell(0, 0).value = text` resolve their reads before one atomic write transaction. This can use extra read-only transport calls. Every phase uses the same revision; concurrent changes cause `StaleDocument`.
 
 Proxies returned by insertions require a completed `sync()` before dependent operations. Do not configure a newly inserted table, image, list, or text range before that sync. If a prerequisite fails, the runtime commits no queued writes. Completed prerequisite reads can remain loaded after a later command fails.
@@ -124,7 +137,7 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | Code | Next action |
 | --- | --- |
 | `PropertyNotLoaded` | Load the named property and await sync before reading it. |
-| `InvalidObjectPath` | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run. |
+| `InvalidObjectPath` | Sync before using a newly returned proxy, or acquire a fresh proxy in a new run. `debugInfo.innerError.code` `edit.stale-target` means the document no longer holds the object; read again. |
 | `StaleDocument` | Search again, reconsider the model proposal, then write. |
 | `ConflictingChanges` | Separate edits that claim the same paragraph and reconsider anchors between commits. |
 | `NotSupported` | Check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |

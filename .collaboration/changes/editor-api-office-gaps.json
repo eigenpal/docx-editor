@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Paragraphs had no search method, collections refused items/ load paths, and a removed held object gave no specific reason.",
+  "after": "Paragraph.search reads matches in one paragraph, collections load item properties through items/ paths in one sync, and an unresolved handle reports edit.stale-target.",
+  "reason": "The editing API adds read operations and an error diagnostic only. It uses existing search and read operations, adds no shared fields, and leaves the collaboration format and write operations unchanged.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-item-paths.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-paragraph-search.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-failures.test.ts"
+  ],
+  "changeset": "editor-api-office-gaps",
+  "migration": null
+}
