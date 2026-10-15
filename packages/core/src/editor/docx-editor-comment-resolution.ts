@@ -135,7 +135,12 @@ export function setReviewCommentResolved(
     return { ok: false, code: 'unsupported', reason: deps.proReviewReason };
   }
   if (deps.editingMode === 'viewing') {
-    return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+    // Refused THROUGH the surface, as a card accept is, so it is recorded and reported once.
+    const refused = deps.surface?.commitReviewOps(
+      () => ({ committed: false, reason: 'the document is open for viewing' }),
+      'comment-resolve'
+    );
+    return reviewWriteRefusal(refused ?? 'the document is open for viewing', '');
   }
   // Comment keys do not depend on pairing; the unpaired read keeps each reply's own parent.
   const placements = deps.placements({ pairReplacements: false });

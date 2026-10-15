@@ -115,14 +115,23 @@ const EXPECTED: Record<Cause, { readonly code: string; readonly reason: string }
   viewing: { code: 'locked', reason: 'the document is open for viewing' },
   refresh: { code: 'unsupported', reason: REFRESH_WRITE_REFUSAL },
 };
+const DIAGNOSTIC: Record<Cause, string> = {
+  viewing: 'edit.read-only',
+  refresh: 'edit.refresh-in-progress',
+};
 
 describe.each(['viewing', 'refresh'] as const)('review writes refused by %s', (cause) => {
   test.each(WRITES)('%s names the cause and changes nothing', (_name, write) => {
     const state = refusedEditor(cause);
     try {
       const revision = state.editor.surface!.session.packageRevision();
+      state.diagnostics.length = 0;
       expect(write(state)).toMatchObject({ ok: false, ...EXPECTED[cause] });
       expect(state.editor.surface!.session.packageRevision()).toBe(revision);
+      // Reported exactly once, under the cause's own code.
+      const rejected = state.diagnostics.filter((event) => event.kind === 'edit.rejected');
+      const codes: unknown[] = rejected.map((event) => ('code' in event ? event.code : null));
+      expect(codes).toEqual([DIAGNOSTIC[cause]]);
     } finally {
       state.close();
     }

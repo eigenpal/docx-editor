@@ -3099,9 +3099,9 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  /** The refusal (the refresh when the guard skips `run`), or null: landed or a no-op. */
+  /** The refusal (the refresh, reported, when the guard skips `run`), or null: landed or no-op. */
   function commit(...args: Parameters<typeof commitNow>): string | null {
-    if (refreshWriteBlocked(container)) return REFRESH_WRITE_REFUSAL;
+    if (refreshWriteBlocked(container)) return refuse(REFRESH_WRITE_REFUSAL);
     const finish = beginSurfaceCommit(container);
     try {
       return commitNow(...args);
