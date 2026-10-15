@@ -141,6 +141,7 @@ describe('what an items path refuses, at the load call', () => {
     ['a path that is not items', 'font/bold', 'document.body.paragraphs.font/bold'],
     ['an empty item property', 'items/', 'document.body.paragraphs'],
     ['a property items do not have', 'items/nope', 'document.body.paragraphs.items.nope'],
+    ['a navigation property of the items', 'items/font', 'document.body.paragraphs.items.font'],
   ];
 
   for (const [what, option, target] of refusals) {

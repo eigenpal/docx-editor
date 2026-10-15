@@ -343,11 +343,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!item) {
       return {
         ok: false,
-        planned: refuse(
-          'invalid-handle',
-          'this document no longer holds that comment',
-          target.commentId
-        ),
+        planned: removed('this document no longer holds that comment'),
       };
     }
     return { ok: true, reads, item };
@@ -380,11 +376,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!item) {
       return {
         ok: false,
-        planned: refuse(
-          'invalid-handle',
-          'this document no longer holds that tracked change',
-          target.revisionId
-        ),
+        planned: removed('this document no longer holds that tracked change'),
       };
     }
     return { ok: true, reads, item };
@@ -1206,8 +1198,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = packageReads.story(target.story);
     if (!reads) return refuse('invalid-handle', 'that story is not in this document');
     const found = listReads(reads).find((list) => list.numId === target.numId);
-    if (!found)
-      return refuse('invalid-handle', 'this story numbers nothing with that list', target.numId);
+    if (!found) return removed('this story numbers nothing with that list');
     return { ok: true, plan: planFor(reads), list: found };
   };
 
@@ -1523,12 +1514,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const reads = packageReads.story(target.story);
     if (!reads) return refuse('invalid-handle', 'that story is not in this document');
     const bookmark = bookmarkIn(reads, target.name);
-    if (!bookmark)
-      return refuse(
-        'invalid-handle',
-        'this document no longer declares that bookmark',
-        target.name
-      );
+    if (!bookmark) return removed('this document no longer declares that bookmark');
     const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
       story: reads.story,
       paragraphId: marker.paragraphId,
@@ -2301,7 +2287,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!range || found.item.orphaned)
           return refuse('invalid-handle', 'that comment has no range in this document');
         const span = spanOfReviewRange(found.reads, range);
-        if (!span) return removed('that comment’s range is no longer in the story');
+        // The comment still exists, so reading again answers the same range: no stale-target.
+        if (!span)
+          return refuse('invalid-handle', 'that comment’s range is no longer in the story');
         return query({ kind: 'span', span });
       }
 
@@ -2417,7 +2405,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const [first] = found.item.item.ranges;
         if (!first) return refuse('invalid-handle', 'that change covers no characters');
         const span = spanOfReviewRange(found.reads, first);
-        if (!span) return removed('that change’s range is no longer in the story');
+        if (!span) return refuse('invalid-handle', 'that change’s range is no longer in the story');
         return query({ kind: 'span', span });
       }
 

@@ -23,7 +23,7 @@ import { messageFor } from '../errors.ts';
 import { createRuntime } from '../runtime.ts';
 import type { RequestContext } from '../request-context.ts';
 import { openHost, stubHost } from './support/hosts.ts';
-import { docx, p } from './support/docx.ts';
+import { commentedDocx, docx, p } from './support/docx.ts';
 
 const TWO = docx(`${p('one')}${p('two')}`);
 
@@ -54,11 +54,12 @@ async function holdSecond(runtime: Pick<Runtime, 'run'>) {
 
 async function expectRemoved(
   runtime: Pick<Runtime, 'run'>,
-  proxies: readonly (ClientObject & { load(option: string): unknown })[]
+  proxies: readonly (ClientObject & { load(option: string): unknown })[],
+  property = 'text'
 ) {
   for (const proxy of proxies) {
     const failure = await runtime.run(proxy, async (context: RequestContext) => {
-      proxy.load('text');
+      proxy.load(property);
       return caught(context.sync());
     });
     expect(failure).toMatchObject({
@@ -95,6 +96,49 @@ describe('an object an edit removed', () => {
       await context.sync();
     });
     await expectRemoved(runtime, [held.second, held.range]);
+    runtime.dispose();
+  });
+
+  test('a comment deleted by another run', async () => {
+    const runtime = createRuntime({ host: openHost(commentedDocx()), save: true });
+    const comment = await runtime.run(async (context) => {
+      const comments = context.document.body.getComments();
+      comments.load('items');
+      await context.sync();
+      const first = comments.items[0]!;
+      context.trackedObjects.add(first);
+      return first;
+    });
+    await runtime.run(async (context) => {
+      const comments = context.document.body.getComments();
+      comments.load('items');
+      await context.sync();
+      comments.items[0]!.delete();
+      await context.sync();
+    });
+    await expectRemoved(runtime, [comment], 'authorName');
+    runtime.dispose();
+  });
+
+  test('a tracked change accepted by another run', async () => {
+    const tracked = docx(
+      '<w:p><w:r><w:t xml:space="preserve">keep </w:t></w:r>' +
+        '<w:ins w:id="2" w:author="Ada"><w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+    );
+    const runtime = createRuntime({ host: openHost(tracked), save: true });
+    const revision = await runtime.run(async (context) => {
+      const revisions = context.document.body.revisions;
+      revisions.load('items');
+      await context.sync();
+      const first = revisions.items[0]!;
+      context.trackedObjects.add(first);
+      return first;
+    });
+    await runtime.run(async (context) => {
+      context.document.body.revisions.acceptAll();
+      await context.sync();
+    });
+    await expectRemoved(runtime, [revision], 'author');
     runtime.dispose();
   });
 

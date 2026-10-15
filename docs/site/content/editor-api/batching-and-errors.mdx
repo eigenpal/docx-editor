@@ -61,7 +61,7 @@ On a collection, a property name without the `items/` prefix means the same thin
 | `load()` | Load the object's default selection; prefer explicit names |
 | `expand` | Reserved; nonempty values fail with `InvalidArgument` |
 
-`top` and `skip` require nonnegative integers and apply to collections. Unknown properties and options fail explicitly. Only one level of navigation works. Deeper paths such as `items/font/bold`, and paths on objects that are not collections such as `font/bold`, fail with `InvalidArgument` and name the path in `target`. Load `paragraph.font` or another navigation object directly.
+`top` and `skip` require nonnegative integers and apply to collections. Unknown properties and options fail explicitly. Only one level of navigation works. Deeper paths such as `items/font/bold`, and paths on objects that are not collections such as `font/bold`, fail with `InvalidArgument` and name the path in `target`. `items/<navigation property>` such as `items/font` also fails; load `font` on each item. Load `paragraph.font` or another navigation object directly.
 
 Item properties follow the same rule as other loads: in a sync that also writes, they report the document from before the writes. The range collection that `Paragraph.split()` returns accepts `items/` paths, `top`, and `skip` after the split's sync. Before that sync, such a load fails with `NotImplemented`.
 
