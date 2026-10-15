@@ -244,6 +244,11 @@ export class CommentReplyCollection extends HandleCollection<CommentReply> {
 }
 
 // @public
+export interface CommitPreviewOptions {
+    readonly rebase?: boolean;
+}
+
+// @public
 export class ContentControl extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): ContentControl;
@@ -419,9 +424,10 @@ export interface DocumentLimits {
 
 // @public
 export interface DocumentPreview {
-    commit(): Promise<void>;
+    commit(options?: CommitPreviewOptions): Promise<void>;
     discard(): void;
-    onStatusChange(listener: (status: DocumentPreviewStatus) => void): () => void;
+    onStatusChanged(listener: (status: DocumentPreviewStatus) => void): () => void;
+    reveal(): boolean;
     readonly status: DocumentPreviewStatus;
 }
 

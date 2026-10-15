@@ -1517,12 +1517,13 @@ export interface EditorPreviewFork {
     readonly ended: boolean;
     readonly host: AutomationHost;
     onEnd(listener: () => void): () => void;
+    reveal(): boolean;
     show(): boolean;
     readonly shown: boolean;
 }
 
 // @internal
-export type EditorPreviewRefusal = 'no-document' | 'viewing' | 'suggesting' | 'blocked' | 'preview-active';
+export type EditorPreviewRefusal = 'no-document' | 'viewing' | 'blocked' | 'composing' | 'preview-active';
 
 // @public
 export interface EditorWindow {
