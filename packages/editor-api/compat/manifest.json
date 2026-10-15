@@ -54,7 +54,10 @@
         "paragraphs",
         "sections",
         "revisions",
-        "properties"
+        "properties",
+        "deleteBookmark",
+        "getBookmarkRange",
+        "getBookmarkRangeOrNullObject"
       ]
     },
     "Body": {
@@ -89,7 +92,9 @@
         "insertText",
         "insertParagraph",
         "search",
-        "select"
+        "select",
+        "insertBookmark",
+        "getBookmarks"
       ]
     },
     "Paragraph": {
@@ -153,7 +158,7 @@
       "members": ["level"]
     },
     "Bookmark": {
-      "members": ["name", "range", "select"]
+      "members": ["name", "range", "select", "delete"]
     },
     "BookmarkCollection": {
       "members": ["items"]
@@ -372,10 +377,6 @@
     {
       "uid": "Word.Bookmark#end",
       "reason": "See Word.Bookmark#start."
-    },
-    {
-      "uid": "Word.Bookmark#delete",
-      "reason": "Removing a bookmark means deleting its marker PAIR (w:bookmarkStart plus the w:bookmarkEnd carrying the same w:id) as one transaction, and the canonical op vocabulary has no operation that removes a bookmark marker. Authoring one is store-lane work; a delete() that removed one half would leave the document with an unclosed bookmark, which Word treats as running to the end of the story."
     },
     {
       "uid": "Word.Comment#authorEmail",

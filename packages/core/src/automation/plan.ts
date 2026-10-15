@@ -1,5 +1,6 @@
 import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
 import { planShapes } from './plan-shapes.ts';
+import { planBookmarks } from './plan-bookmarks.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -104,13 +105,7 @@ import { BODY_STORY, storyKey, type AutomationStoryId } from './stories.ts';
 import { isStoryId } from './stories.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { authorableHyperlinkTarget } from '../store/package/hyperlink-part.ts';
-import {
-  bookmarkIn,
-  bookmarkReads,
-  linkTarget,
-  linksInParagraph,
-  type AutomationLinkRead,
-} from './links.ts';
+import { bookmarkIn, linkTarget, linksInParagraph, type AutomationLinkRead } from './links.ts';
 import { listReads, membershipIn, MAX_LIST_LEVEL, type AutomationListRead } from './lists.ts';
 import { pageSetupProperties } from './sections.ts';
 import { projectedSearchSpans } from './search.ts';
@@ -1600,6 +1595,21 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           const plan = planFor(story);
           return pinWrite(plan) ?? claim(plan, paragraphId);
         });
+      case 'getBookmarks':
+      case 'getBookmarkNames':
+      case 'getBookmarkRangeByName':
+      case 'insertBookmark':
+      case 'deleteBookmark':
+        return planBookmarks(operation, handles, packageReads, (story, paragraphIds) => {
+          const plan = planFor(story);
+          return (
+            pinWrite(plan) ??
+            [...new Set(paragraphIds)].reduce<PlannedOperation | null>(
+              (refusal, id) => refusal ?? claim(plan, id),
+              null
+            )
+          );
+        });
       case 'insertBreak':
         return planBreakOperation(
           operation,
@@ -2179,35 +2189,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planSetHyperlink(planFor(story), resolved.value, operation.target);
-      }
-
-      case 'getBookmarks': {
-        const resolved = resolveSpanRef(operation.scope, handles, packageReads);
-        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        const story = storyOfSpanRef(operation.scope, handles, packageReads);
-        if (!story.ok) return refuse(story.code, 'that span is not a place', story.detail);
-        const reads = story.value;
-        const scope = resolved.value;
-        const covered = scope === null ? null : new Set(spanParagraphIds(scope, reads));
-        const overlapping = bookmarkReads(reads).filter((bookmark) => {
-          if (!covered) return false;
-          // Overlap, not containment: a range that starts inside a bookmark and ends past it has
-          // that bookmark, which is what Word's own range collection answers.
-          if (!covered.has(bookmark.start.paragraphId) && !covered.has(bookmark.end.paragraphId))
-            return false;
-          if (scope === null) return false;
-          const startsAfter =
-            bookmark.start.paragraphId === scope.end.paragraphId &&
-            bookmark.start.offset > scope.end.offset;
-          const endsBefore =
-            bookmark.end.paragraphId === scope.start.paragraphId &&
-            bookmark.end.offset < scope.start.offset;
-          return !startsAfter && !endsBefore;
-        });
-        return query({
-          kind: 'handles',
-          handles: overlapping.map((bookmark) => handles.bookmark(bookmark.name, reads.story)),
-        });
       }
 
       case 'getBookmarkName': {

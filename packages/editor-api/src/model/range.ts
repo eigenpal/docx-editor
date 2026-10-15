@@ -55,6 +55,7 @@ import { ModelObject } from './model-object.ts';
 import { Paragraph } from './paragraph.ts';
 import { Comment } from './review.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
+import { clientResult, type ClientResult } from '../runtime/client-result.ts';
 
 /**
  * A stretch of a story: two endpoints, each a paragraph and a UTF-16 offset.
@@ -187,6 +188,69 @@ export class Range extends ModelObject implements PromisedItem {
       () => ({ op: 'getBookmarks', scope: { start: span.start, end: span.end } })
     );
     return this.#bookmarks;
+  }
+
+  /**
+   * Add a bookmark around this range, or at its position when the range is empty.
+   *
+   * Names compare without case. A bookmark with the same name in this story moves here; one in
+   * another story (a header, a footer, or a note) is refused with `NotSupported`, so the
+   * document never holds two bookmarks with one name. A name starts with a letter, or with an
+   * underscore for a hidden bookmark, holds only letters, digits and underscores, and has at
+   * most 40 characters; any other name is refused with `InvalidArgument`. Bookmarks are not
+   * revisions, so with `TrackMineOnly` the markers are written directly.
+   *
+   * @example
+   * ```ts
+   * const range = context.document.body.paragraphs.getFirst().getRange();
+   * range.insertBookmark('Intro');
+   * await context.sync();
+   * ```
+   */
+  insertBookmark(name: string): void {
+    const target = `${this.path.label}.insertBookmark`;
+    if (typeof name !== 'string' || name.length === 0) fail({ code: 'InvalidArgument', target });
+    this.requireUsablePath();
+    this.command('insertBookmark', () => ({ op: 'insertBookmark', span: this.#span(), name }));
+  }
+
+  /**
+   * The names of the bookmarks in or overlapping this range, in document order.
+   *
+   * A range holds a bookmark when the two share text, and a point bookmark when the point is
+   * inside the range or at its start. An empty range holds the bookmarks around it. Pass
+   * `includeAdjacent` to add bookmarks that only touch the range at one end, and
+   * `includeHidden` to add hidden bookmarks, whose names start with an underscore.
+   *
+   * @example
+   * ```ts
+   * const names = range.getBookmarks(true, false);
+   * await context.sync();
+   * console.log(names.value);
+   * ```
+   */
+  getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]> {
+    const target = `${this.path.label}.getBookmarks`;
+    if (
+      (includeHidden !== undefined && typeof includeHidden !== 'boolean') ||
+      (includeAdjacent !== undefined && typeof includeAdjacent !== 'boolean')
+    )
+      fail({ code: 'InvalidArgument', target });
+    const { result, fill } = clientResult<string[]>(target);
+    this.read(
+      target,
+      () => ({
+        op: 'getBookmarkNames',
+        scope: this.#span(),
+        includeHidden: includeHidden === true,
+        includeAdjacent: includeAdjacent === true,
+      }),
+      (value) => {
+        if (value.kind !== 'texts') fail({ code: 'GeneralException', target });
+        fill([...value.texts]);
+      }
+    );
+    return result;
   }
 
   /** Every occurrence of `searchText` inside this range, as ranges. */

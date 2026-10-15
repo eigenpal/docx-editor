@@ -28,6 +28,7 @@ const SUPPORTED_MANIFEST_SCHEMA_VERSION = 1;
  */
 const ALLOWLISTED_SUPPORT_TYPES = new Set([
   'ClientRequestContext',
+  'ClientResult',
   'SelectionMode',
   'HeaderFooterType',
 ]);

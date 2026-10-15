@@ -225,6 +225,8 @@ export type AutomationValue =
   | { readonly kind: 'handle'; readonly handle: AutomationHandle }
   | { readonly kind: 'handles'; readonly handles: readonly AutomationHandle[] }
   | { readonly kind: 'text'; readonly text: string }
+  /** Several strings, in document order: the names of the bookmarks a range holds. */
+  | { readonly kind: 'texts'; readonly texts: readonly string[] }
   | { readonly kind: 'span'; readonly span: AutomationSpan }
   | { readonly kind: 'spans'; readonly spans: readonly AutomationSpan[] }
   /**

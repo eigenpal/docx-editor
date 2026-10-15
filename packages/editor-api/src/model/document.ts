@@ -13,6 +13,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import {
   ObjectPath,
   fail,
+  hydratedSpans,
   internalsOf,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -25,6 +26,7 @@ import { ModelObject } from './model-object.ts';
 import { NoteItemCollection } from './notes.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
+import { Range } from './range.ts';
 
 /** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
 export { ChangeTrackingMode } from './editing-enums.ts';
@@ -235,6 +237,69 @@ export class Document extends ModelObject {
       noteKind: 'endnote',
     }));
     return this.#endnotes;
+  }
+
+  /**
+   * Delete the bookmark with this name, compared without case, from whichever story declares
+   * it. The text stays. A name no bookmark has changes nothing.
+   *
+   * @example
+   * ```ts
+   * context.document.deleteBookmark('Intro');
+   * await context.sync();
+   * ```
+   */
+  deleteBookmark(name: string): void {
+    const target = `${this.path.label}.deleteBookmark`;
+    if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
+    const document = this.path.handle();
+    this.command('deleteBookmark', () => ({
+      op: 'deleteBookmark',
+      target: { document, name },
+    }));
+  }
+
+  /**
+   * The range of the bookmark with this name, compared without case. The main text is searched
+   * first, then headers, footers and notes. `ItemNotFound` at the sync when no bookmark has the
+   * name.
+   *
+   * @example
+   * ```ts
+   * const range = context.document.getBookmarkRange('Intro');
+   * range.load('text');
+   * await context.sync();
+   * ```
+   */
+  getBookmarkRange(name: string): Range {
+    return this.#bookmarkRange(name, 'getBookmarkRange', false);
+  }
+
+  /** Like {@link Document.getBookmarkRange}, but a missing bookmark answers a null object. */
+  getBookmarkRangeOrNullObject(name: string): Range {
+    return this.#bookmarkRange(name, 'getBookmarkRangeOrNullObject', true);
+  }
+
+  #bookmarkRange(name: string, accessor: string, nullable: boolean): Range {
+    const target = `${this.path.label}.${accessor}`;
+    if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
+    const document = this.path.handle();
+    const found = Range.promised(this.context, target, nullable);
+    this.read(
+      target,
+      () => ({ op: 'getBookmarkRangeByName', document, name }),
+      (value) => {
+        const spans = hydratedSpans(value, target);
+        const span = spans[0];
+        if (!span) {
+          if (!nullable) fail({ code: 'ItemNotFound', target });
+          found.hydrateNull();
+          return;
+        }
+        found.hydrateAddress({ kind: 'span', span });
+      }
+    );
+    return found;
   }
 
   /** @internal Plan the read this object's `load(...)` asked for. */

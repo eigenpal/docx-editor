@@ -64,6 +64,9 @@
  *     `compat/manifest.json`'s `omissions`: this member is intentionally
  *     *not* selected for exact conformance against the reference, precisely
  *     because it is a deliberate simplification, not a faithful mirror.
+ *   - `ClientResult`: the box a queued method such as `Range#getBookmarks`
+ *     returns, declared with its `value` only so the selected members that
+ *     return one can be compared against the reference.
  */
 export declare namespace DocxEditor {
   export type SelectionMode = 'Select' | 'Start' | 'End';
@@ -93,6 +96,11 @@ export declare namespace DocxEditor {
   export class ClientObject {
     context: ClientRequestContext;
     isNullObject: boolean;
+  }
+
+  /** A value a queued method answers, readable after the next `sync()`. */
+  export class ClientResult<T> {
+    readonly value: T;
   }
 
   /** Document information categories. Only DocumentProperties removal is supported. @public */
@@ -152,6 +160,9 @@ export declare namespace DocxEditor {
     readonly paragraphs: ParagraphCollection;
     readonly revisions: RevisionCollection;
     readonly sections: SectionCollection;
+    deleteBookmark(name: string): void;
+    getBookmarkRange(name: string): Range;
+    getBookmarkRangeOrNullObject(name: string): Range;
   }
 
   export class DocumentProperties {
@@ -196,6 +207,8 @@ export declare namespace DocxEditor {
     readonly paragraphs: ParagraphCollection;
     style: string;
     readonly text: string;
+    getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;
+    insertBookmark(name: string): void;
     insertComment(commentText: string): Comment;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(
@@ -297,12 +310,12 @@ export declare namespace DocxEditor {
   // bookmarks
   // ---------------------------------------------------------------------
 
-  // `start`, `end` and `delete` are deliberately ABSENT: the first two are the document-wide
-  // character offsets already de-selected on `Range`, and nothing in the engine removes a bookmark's
-  // marker pair. See `compat/manifest.json`.
+  // `start` and `end` are deliberately ABSENT: they are the document-wide character offsets
+  // already de-selected on `Range`. See `compat/manifest.json`.
   export class Bookmark {
     readonly name: string;
     readonly range: Range;
+    delete(): void;
     select(): void;
   }
 
