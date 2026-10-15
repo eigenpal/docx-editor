@@ -7,7 +7,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // itself with. The React twin is `../react/useReviewRailMetrics.ts`.
 
 import {
+  computed,
   inject,
+  onScopeDispose,
   shallowRef,
   toValue,
   watch,
@@ -17,12 +19,22 @@ import {
   type ShallowRef,
 } from 'vue';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
+import {
+  REVIEW_PANE_GUTTER,
+  ReviewRailContext,
+  useDocxEditor,
+  useEditorState,
+  useReviewGutter,
+} from '@docx-editor.dev/vue';
 import {
   INITIAL_REVIEW_RAIL_METRICS,
+  isCompactReviewColumn,
   observeReviewRailMetrics,
+  reviewRailPlacementProblem,
   sameReviewRailMetrics,
+  warnReviewRailMetrics,
   type RenderScaleSource,
+  type ReviewRailGeometry,
   type ReviewRailMetrics,
 } from '../review/rail-metrics.ts';
 
@@ -51,8 +63,8 @@ export interface ReviewRailMetricsBinding {
  */
 export function bindReviewRailMetrics(
   binding: ReviewRailMetricsBinding
-): Readonly<ShallowRef<ReviewRailMetrics>> {
-  const metrics = shallowRef<ReviewRailMetrics>(INITIAL_REVIEW_RAIL_METRICS);
+): Readonly<ShallowRef<ReviewRailGeometry>> {
+  const metrics = shallowRef<ReviewRailGeometry>(INITIAL_REVIEW_RAIL_METRICS);
   watch(
     [binding.rail, binding.editor, binding.trackScroll, binding.remeasure],
     ([rail, editor, trackScroll], _previous, onCleanup) => {
@@ -80,6 +92,14 @@ export interface UseReviewRailMetricsOptions {
    * scrolling, and only when the page is wider than the viewport. Default: `false`.
    */
   readonly trackScroll?: boolean;
+  /**
+   * With a `railRef`, reserve the review gutter beside the page for your column, as
+   * `DocxEditorReview` does. The viewport then shifts the page left while the pane is open,
+   * and the comment controls in the toolbar and the context menu appear. Set `false` when
+   * a mounted `DocxEditorReview` already reserves it, or when your column overlays the page.
+   * Default: `true`.
+   */
+  readonly reserveGutter?: boolean;
 }
 
 /** The review column's geometry for Vue hosts. @public */
@@ -88,7 +108,11 @@ export interface UseReviewRailMetricsReturn {
   readonly metrics: Readonly<Ref<ReviewRailMetrics>>;
 }
 
-const selectZoom = (snapshot: EditorSnapshot) => snapshot.zoom;
+const selectRemeasure = (snapshot: EditorSnapshot) =>
+  `${snapshot.zoom}|${snapshot.isLoading}|${snapshot.isOpening ?? false}`;
+const selectLoaded = (snapshot: EditorSnapshot) =>
+  !snapshot.isLoading && !snapshot.isOpening && snapshot.parseError === null;
+const selectPaneOpen = (snapshot: EditorSnapshot) => snapshot.reviewPaneOpen ?? true;
 
 /**
  * The review column's geometry in CSS pixels: what converts review anchors and stacked
@@ -98,51 +122,120 @@ const selectZoom = (snapshot: EditorSnapshot) => snapshot.zoom;
  * `<DocxEditorReview :preset="false">`, to read the packaged rail's own measurement. Those
  * children render inside the rail element, which already sits at `left`.
  *
- * Pass `railRef` to measure your own column instead. The element must be absolutely
- * positioned inside `DocxEditor.Viewport`, so that its offset parent is the editor's scroll
- * container. The value updates when the zoom, the window size, the page count, or the
- * reserved review gutter changes. It works in a pop-out window or an iframe, because it
- * observes the element's own window.
+ * Pass `railRef`, a template ref or a getter, to measure your own column instead. Give the
+ * element `position: absolute` and render it directly inside `DocxEditor.Viewport` with no
+ * positioned element in between: its offset parent must be the scroll container that holds
+ * the pages. Development builds warn once when it is not. The column reserves the review
+ * gutter unless `reserveGutter` is `false`.
+ *
+ * The value updates when the zoom, the window size, the page count, the document load,
+ * content above the pages, or the reserved review gutter changes. It works in a pop-out
+ * window or an iframe, because it observes the element's own window.
  *
  * @example Position custom cards
  * ```vue
  * <script setup lang="ts">
  * import { ref } from 'vue';
- * import { useReview, useReviewRailMetrics, useStackedReviewPositions } from '@docx-editor.dev/pro/vue';
+ * import {
+ *   useReview,
+ *   useReviewRailMetrics,
+ *   useStackedReviewPositions,
+ * } from '@docx-editor.dev/pro/vue';
  *
+ * const props = defineProps<{ heights: ReadonlyMap<string, number> }>();
  * const railRef = ref<HTMLElement | null>(null);
  * const { metrics } = useReviewRailMetrics(railRef);
  * const { items } = useReview();
- * const positions = useStackedReviewPositions(items, heights, () => ({ scale: metrics.value.scale }));
- * const topOf = (key: string) => metrics.value.top + (positions.value.get(key) ?? 0) * metrics.value.scale;
+ * const positions = useStackedReviewPositions(items, () => props.heights, () => ({
+ *   scale: metrics.value.scale,
+ * }));
+ * const topOf = (key: string) =>
+ *   metrics.value.top + (positions.value.get(key) ?? 0) * metrics.value.scale;
  * </script>
+ *
+ * <template>
+ *   <div
+ *     ref="railRef"
+ *     :style="{
+ *       position: 'absolute',
+ *       top: '0px',
+ *       left: `${metrics.left ?? 0}px`,
+ *       visibility: metrics.left === null ? 'hidden' : 'visible',
+ *     }"
+ *   >
+ *     <MyCard
+ *       v-for="item in items"
+ *       :key="item.key"
+ *       :item="item"
+ *       :style="{ position: 'absolute', top: `${topOf(item.key)}px` }"
+ *     />
+ *   </div>
+ * </template>
  * ```
  *
  * @public
  */
 export function useReviewRailMetrics(
-  railRef?: Ref<HTMLElement | null> | null,
+  railRef?: MaybeRefOrGetter<HTMLElement | null> | null,
   options?: MaybeRefOrGetter<UseReviewRailMetricsOptions | undefined>
 ): UseReviewRailMetricsReturn {
-  if (!railRef) {
-    return { metrics: inject(ReviewRailMetricsKey, shallowRef(INITIAL_REVIEW_RAIL_METRICS)) };
+  const provided = inject(ReviewRailMetricsKey, null);
+  if (railRef === undefined || railRef === null) {
+    if (!provided) {
+      warnReviewRailMetrics(
+        'called without a railRef outside DocxEditorReview, so it returns the initial ' +
+          'value. Pass a ref to your column element, or call it inside DocxEditorReview.'
+      );
+    }
+    return { metrics: provided ?? shallowRef(INITIAL_REVIEW_RAIL_METRICS) };
   }
+  const element = computed(() => toValue(railRef) ?? null);
   const editorRef = useDocxEditor();
-  const zoom = useEditorState(selectZoom);
-  const measured = bindReviewRailMetrics({
-    rail: () => railRef.value,
+  const remeasure = useEditorState(selectRemeasure);
+  const loaded = useEditorState(selectLoaded);
+  const paneOpen = useEditorState(selectPaneOpen);
+  const gutter = useReviewGutter();
+  const registry = inject(ReviewRailContext, null);
+
+  // Keyed on the option alone: registering replaces the registry's value (its count
+  // changes), so watching that value too re-registered on every registration.
+  let unregister: (() => void) | undefined;
+  watch(
+    () => toValue(options)?.reserveGutter ?? true,
+    (reserve) => {
+      unregister?.();
+      unregister = reserve ? registry?.value.register() : undefined;
+    },
+    { immediate: true }
+  );
+  onScopeDispose(() => unregister?.());
+
+  const geometry = bindReviewRailMetrics({
+    rail: () => element.value,
     editor: () => editorRef.value,
     trackScroll: () => toValue(options)?.trackScroll ?? false,
-    remeasure: () => zoom.value,
+    remeasure: () => remeasure.value,
   });
-  // An element that unmounts leaves no column to place against.
-  const metrics = shallowRef<ReviewRailMetrics>(INITIAL_REVIEW_RAIL_METRICS);
   watch(
-    [measured, () => railRef.value],
-    ([value, rail]) => {
-      metrics.value = rail ? value : INITIAL_REVIEW_RAIL_METRICS;
+    [element, loaded],
+    ([rail, ready]) => {
+      if (!rail || !ready) return;
+      const problem = reviewRailPlacementProblem(rail);
+      if (problem) warnReviewRailMetrics(problem);
     },
-    { immediate: true, flush: 'sync' }
+    { flush: 'post', immediate: true }
+  );
+  const metrics = computed<ReviewRailMetrics>(() =>
+    element.value
+      ? {
+          ...geometry.value,
+          compact: isCompactReviewColumn(
+            paneOpen.value,
+            gutter.value.inlineEnd,
+            REVIEW_PANE_GUTTER
+          ),
+        }
+      : INITIAL_REVIEW_RAIL_METRICS
   );
   return { metrics };
 }

@@ -112,6 +112,7 @@ import {
 } from './review-rail-parts.tsx';
 import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 import { bindReviewRailMetrics, ReviewRailMetricsKey } from './useReviewRailMetrics.ts';
+import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 
 function takeRoot(key: string, fallback: VNode, parts: Record<string, VNode>): VNode {
   if (!(key in parts)) return fallback;
@@ -252,11 +253,12 @@ const ReviewRoot = defineComponent({
     const open = computed(() => reviewHook.paneOpen.value);
     const gutter = useReviewGutter();
     const measuredGutterEnd = ref<number | null>(null);
-    const compact = computed(
-      () =>
-        open.value &&
-        (measuredGutterEnd.value ?? gutter.value.inlineEnd) > 0 &&
-        (measuredGutterEnd.value ?? gutter.value.inlineEnd) < REVIEW_PANE_GUTTER
+    const compact = computed(() =>
+      isCompactReviewColumn(
+        open.value,
+        measuredGutterEnd.value ?? gutter.value.inlineEnd,
+        REVIEW_PANE_GUTTER
+      )
     );
     const expanded = computed(() => open.value && !compact.value);
 
@@ -355,7 +357,10 @@ const ReviewRoot = defineComponent({
         measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
       },
     });
-    provide(ReviewRailMetricsKey, metrics);
+    provide(
+      ReviewRailMetricsKey,
+      computed(() => ({ ...metrics.value, compact: compact.value }))
+    );
 
     let dismissCleanup: (() => void) | undefined;
     watch(

@@ -15,7 +15,7 @@ import {
   observeReviewRailMetrics,
   sameReviewRailMetrics,
   type RenderScaleSource,
-  type ReviewRailMetrics,
+  type ReviewRailGeometry,
 } from '../review/rail-metrics.ts';
 
 export { COMPACT_CARD_WIDTH } from '../review/rail-metrics.ts';
@@ -47,8 +47,8 @@ export function useRailMetrics(
   remeasure: unknown,
   mounted: boolean,
   trackScroll = false
-): ReviewRailMetrics {
-  const [metrics, setMetrics] = useState<ReviewRailMetrics>(INITIAL_REVIEW_RAIL_METRICS);
+): ReviewRailGeometry {
+  const [metrics, setMetrics] = useState<ReviewRailGeometry>(INITIAL_REVIEW_RAIL_METRICS);
   useEffect(() => {
     const rail = railRef.current;
     if (!editor || !rail) return undefined;

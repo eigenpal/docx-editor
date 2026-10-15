@@ -5,8 +5,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The shared rail measurement both adapters and the public hook read.
 
-import { describe, expect, test } from 'bun:test';
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import {
+  BANNER_HEIGHT,
+  EXPECTED_AT_100,
+  installRailGeometry,
+  insertBanner,
+  railGeometry,
+} from './review-rail-metrics-harness.ts';
+import type { ReviewRailGeometry } from '../review/rail-metrics.ts';
+import {
+  isCompactReviewColumn,
   measureReviewRailMetrics,
   observeReviewRailMetrics,
   sameReviewRailMetrics,
@@ -46,7 +58,9 @@ function fakeRail(options: {
     clientWidth: 1400,
     ...options.container,
     getBoundingClientRect: () => options.containerRect ?? { top: 40, left: 20, right: 1420 },
-    querySelector: (selector: string) => (selector === '.docx-paginated-surface' ? surface : null),
+    children: [] as unknown[],
+    querySelector: (selector: string) =>
+      selector.startsWith('.docx-paginated-surface') ? surface : null,
     addEventListener: (type: string, listener: () => void) => listeners.set(type, listener),
     removeEventListener: (type: string) => listeners.delete(type),
   };
@@ -93,6 +107,10 @@ describe('measureReviewRailMetrics', () => {
 
   test('compares every field', () => {
     const base = { scale: 1, top: 2, left: 3, compactCardLeft: 4 };
+    expect(isCompactReviewColumn(true, 32, 316)).toBe(true);
+    expect(isCompactReviewColumn(true, 316, 316)).toBe(false);
+    expect(isCompactReviewColumn(false, 32, 316)).toBe(false);
+    expect(isCompactReviewColumn(true, 0, 316)).toBe(false);
     expect(sameReviewRailMetrics(base, { ...base })).toBe(true);
     expect(sameReviewRailMetrics(base, { ...base, compactCardLeft: null })).toBe(false);
   });
@@ -157,5 +175,100 @@ describe('observeReviewRailMetrics', () => {
     stop();
     expect(disconnected).toBe(2);
     expect(listeners.has('scroll')).toBe(false);
+  });
+});
+
+describe('observeReviewRailMetrics in a DOM', () => {
+  let restore: () => void = () => {};
+  beforeAll(() => {
+    restore = installRailGeometry();
+  });
+  afterAll(() => restore());
+  afterEach(() => {
+    document.body.replaceChildren();
+    railGeometry.surfaceRight = 1116;
+  });
+
+  /** A scroll container holding a column, and optionally the placeholder and the pages. */
+  function scene(options: { placeholder?: boolean; content?: boolean }) {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    if (options.placeholder) {
+      const loading = document.createElement('div');
+      loading.className = 'docx-editor docx-editor__loading';
+      const placeholder = document.createElement('div');
+      placeholder.className = 'docx-paginated-surface docx-editor__loading-surface';
+      loading.append(placeholder);
+      scroller.append(loading);
+    }
+    const mount = document.createElement('div');
+    mount.className = 'docx-content-mount';
+    if (options.content) {
+      const surface = document.createElement('div');
+      surface.className = 'docx-paginated-surface';
+      mount.append(surface);
+    }
+    const column = document.createElement('div');
+    column.style.position = 'absolute';
+    scroller.append(mount, column);
+    document.body.append(scroller);
+    const seen: ReviewRailGeometry[] = [];
+    const stop = observeReviewRailMetrics(column, { getRenderScale: () => 96 / 72 }, (next) =>
+      seen.push(next)
+    );
+    return { scroller, mount, column, seen, stop };
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+  test('ignores the loading placeholder and binds to the pages once they mount', async () => {
+    const { scroller, mount, seen, stop } = scene({ placeholder: true });
+    try {
+      // Only the placeholder exists: nothing to place against yet.
+      expect(seen.at(-1)?.left).toBeNull();
+      const surface = document.createElement('div');
+      surface.className = 'docx-paginated-surface';
+      mount.append(surface);
+      // The surface lands inside the content mount, not as a container child, so the swap
+      // is seen when the placeholder leaves.
+      scroller.firstElementChild!.remove();
+      await settle();
+      expect(seen.at(-1)).toMatchObject({ top: EXPECTED_AT_100.top, left: EXPECTED_AT_100.left });
+    } finally {
+      stop();
+    }
+  });
+
+  test('measures the pages, not the placeholder, while both exist', () => {
+    const { seen, stop } = scene({ placeholder: true, content: true });
+    try {
+      expect(seen.at(-1)).toMatchObject({ top: EXPECTED_AT_100.top, left: EXPECTED_AT_100.left });
+    } finally {
+      stop();
+    }
+  });
+
+  test('follows a banner that appears above the pages', async () => {
+    const { scroller, seen, stop } = scene({ content: true });
+    try {
+      expect(seen.at(-1)?.top).toBe(EXPECTED_AT_100.top);
+      insertBanner(scroller);
+      await settle();
+      expect(seen.at(-1)?.top).toBe(EXPECTED_AT_100.top + BANNER_HEIGHT);
+    } finally {
+      stop();
+    }
+  });
+
+  test('re-measures when the container style changes', async () => {
+    const { scroller, seen, stop } = scene({ content: true });
+    try {
+      railGeometry.surfaceRight = 1016;
+      scroller.style.setProperty('--docx-review-gutter', '316px');
+      await settle();
+      expect(seen.at(-1)?.left).toBe(EXPECTED_AT_100.left - 100);
+    } finally {
+      stop();
+    }
   });
 });

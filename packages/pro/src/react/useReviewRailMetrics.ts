@@ -8,8 +8,20 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { createContext, useContext, useEffect, useMemo, useState, type RefObject } from 'react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
-import { INITIAL_REVIEW_RAIL_METRICS, type ReviewRailMetrics } from '../review/rail-metrics.ts';
+import {
+  REVIEW_PANE_GUTTER,
+  ReviewRailContext,
+  useDocxEditor,
+  useEditorState,
+  useReviewGutter,
+} from '@docx-editor.dev/react';
+import {
+  INITIAL_REVIEW_RAIL_METRICS,
+  isCompactReviewColumn,
+  reviewRailPlacementProblem,
+  warnReviewRailMetrics,
+  type ReviewRailMetrics,
+} from '../review/rail-metrics.ts';
 import { useRailMetrics } from './use-rail-geometry.ts';
 
 /**
@@ -25,9 +37,22 @@ export interface UseReviewRailMetricsOptions {
    * scrolling, and only when the page is wider than the viewport. Default: `false`.
    */
   readonly trackScroll?: boolean;
+  /**
+   * With a `railRef`, reserve the review gutter beside the page for your column, as
+   * `DocxEditorReview` does. The viewport then shifts the page left while the pane is open,
+   * and the comment controls in the toolbar and the context menu appear. Set `false` when
+   * a mounted `DocxEditorReview` already reserves it, or when your column overlays the page.
+   * Default: `true`.
+   */
+  readonly reserveGutter?: boolean;
 }
 
-const selectZoom = (snapshot: EditorSnapshot) => snapshot.zoom;
+/** One string, so an unrelated snapshot change does not re-render the caller. */
+const selectRemeasure = (snapshot: EditorSnapshot) =>
+  `${snapshot.zoom}|${snapshot.isLoading}|${snapshot.isOpening ?? false}`;
+const selectLoaded = (snapshot: EditorSnapshot) =>
+  !snapshot.isLoading && !snapshot.isOpening && snapshot.parseError === null;
+const selectPaneOpen = (snapshot: EditorSnapshot) => snapshot.reviewPaneOpen ?? true;
 
 /**
  * The review column's geometry in CSS pixels: what converts review anchors and stacked
@@ -37,26 +62,41 @@ const selectZoom = (snapshot: EditorSnapshot) => snapshot.zoom;
  * `<DocxEditorReview preset={false}>`, to read the packaged rail's own measurement. Those
  * children render inside the rail element, which already sits at `left`.
  *
- * Pass `railRef` to measure your own column instead. The element must be absolutely
- * positioned inside `DocxEditor.Viewport`, so that its offset parent is the editor's scroll
- * container. The value updates when the zoom, the window size, the page count, or the
- * reserved review gutter changes. It works in a pop-out window or an iframe, because it
- * observes the element's own window.
+ * Pass `railRef` to measure your own column instead. Attach the ref to an element that
+ * the calling component renders, give it `position: absolute`, and render it directly
+ * inside `DocxEditor.Viewport` with no positioned element in between: its offset parent
+ * must be the scroll container that holds the pages. Development builds warn once when it
+ * is not. The column reserves the review gutter unless `reserveGutter` is `false`.
+ *
+ * The value updates when the zoom, the window size, the page count, the document load,
+ * content above the pages, or the reserved review gutter changes. It works in a pop-out
+ * window or an iframe, because it observes the element's own window.
  *
  * @example Position custom cards
  * ```tsx
- * function MyColumn() {
+ * function MyColumn({ heights }: { heights: ReadonlyMap<string, number> }) {
  *   const railRef = useRef<HTMLDivElement>(null);
  *   const metrics = useReviewRailMetrics(railRef);
  *   const { items } = useReview();
  *   const positions = useStackedReviewPositions(items, heights, { scale: metrics.scale });
  *   return (
- *     <div ref={railRef} style={{ position: 'absolute', top: 0, left: metrics.left ?? 0 }}>
+ *     <div
+ *       ref={railRef}
+ *       style={{
+ *         position: 'absolute',
+ *         top: 0,
+ *         left: metrics.left ?? 0,
+ *         visibility: metrics.left === null ? 'hidden' : 'visible',
+ *       }}
+ *     >
  *       {items.map((item) => (
  *         <MyCard
  *           key={item.key}
  *           item={item}
- *           style={{ top: metrics.top + (positions.get(item.key) ?? 0) * metrics.scale }}
+ *           style={{
+ *             position: 'absolute',
+ *             top: metrics.top + (positions.get(item.key) ?? 0) * metrics.scale,
+ *           }}
  *         />
  *       ))}
  *     </div>
@@ -71,25 +111,49 @@ export function useReviewRailMetrics(
   options?: UseReviewRailMetricsOptions
 ): ReviewRailMetrics {
   const provided = useContext(ReviewRailMetricsContext);
+  const registry = useContext(ReviewRailContext);
   const editor = useDocxEditor();
-  const zoom = useEditorState(selectZoom);
+  const remeasure = useEditorState(selectRemeasure);
+  const loaded = useEditorState(selectLoaded);
+  const paneOpen = useEditorState(selectPaneOpen);
+  const gutter = useReviewGutter();
+  const refMode = railRef !== undefined && railRef !== null;
+  const reserve = refMode && (options?.reserveGutter ?? true);
+  useEffect(() => (reserve ? registry?.register() : undefined), [registry, reserve]);
   // A ref object does not notify when its element mounts, so check it after every commit
   // and re-bind only when the element itself changed. The updater returns the previous
   // state when nothing changed, so React bails out and the effect cannot loop.
   const [element, setElement] = useState<HTMLElement | null>(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs after every commit by design
+  // eslint-disable-next-line react/exhaustive-deps -- runs after every commit by design
   useEffect(() => {
     const next = railRef?.current ?? null;
     setElement((previous) => (previous === next ? previous : next));
   });
   const elementRef = useMemo(() => ({ current: element }), [element]);
-  const measured = useRailMetrics(
-    railRef ? editor : null,
+  const geometry = useRailMetrics(
+    refMode ? editor : null,
     elementRef,
-    zoom,
+    remeasure,
     element !== null,
     options?.trackScroll ?? false
   );
-  if (railRef) return element ? measured : INITIAL_REVIEW_RAIL_METRICS;
+  // Wrong placement fails silently otherwise: the column renders, at the wrong place.
+  useEffect(() => {
+    if (!refMode) {
+      if (!provided) {
+        warnReviewRailMetrics(
+          'called without a railRef outside DocxEditorReview, so it returns the initial ' +
+            'value. Pass a ref to your column element, or call it inside DocxEditorReview.'
+        );
+      }
+      return;
+    }
+    if (!element || !loaded) return;
+    const problem = reviewRailPlacementProblem(element);
+    if (problem) warnReviewRailMetrics(problem);
+  }, [refMode, provided, element, loaded]);
+  const compact = isCompactReviewColumn(paneOpen, gutter.inlineEnd, REVIEW_PANE_GUTTER);
+  const measured = useMemo(() => ({ ...geometry, compact }), [geometry, compact]);
+  if (refMode) return element ? measured : INITIAL_REVIEW_RAIL_METRICS;
   return provided ?? INITIAL_REVIEW_RAIL_METRICS;
 }

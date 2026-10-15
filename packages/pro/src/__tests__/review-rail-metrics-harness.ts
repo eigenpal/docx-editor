@@ -41,18 +41,29 @@ export const COMMENTED_SOURCE = zipSync({
   ),
 });
 
-/** The painted surface: 100px below the container's top, its right edge at x = 1116. */
-const SURFACE_RECT = { top: 140, left: 300, right: 1116, bottom: 1140 };
-/** Everything else, including the scroll container. */
-const FRAME_RECT = { top: 40, left: 20, right: 1420, bottom: 1040 };
-const CLIENT_WIDTH = 1400;
+/**
+ * The adjustable part of the layout. Defaults: the page's right edge at x = 1116 and a
+ * 1400px-wide scroll container, which affords a full review column.
+ */
+export const railGeometry = { surfaceRight: 1116, clientWidth: 1400 };
 
-/** The metrics both adapters must report at 100% zoom for this geometry. */
+/** The scroll container's rect. Everything outside the surface reports this too. */
+const FRAME_RECT = { top: 40, left: 20, right: 1420, bottom: 1040 };
+/** The loading placeholder sits somewhere else entirely, so binding to it shows. */
+const LOADING_RECT = { top: 400, left: 0, right: 500, bottom: 900 };
+/** How far a `.test-banner` inside the scroll container pushes the pages down. */
+export const BANNER_HEIGHT = 50;
+
+/** The class every scroll container (`DocxEditor.Viewport`) carries in both adapters. */
+const SCROLLER = 'docx-editor__scroll-container';
+
+/** The metrics both adapters must report at 100% zoom for the default geometry. */
 export const EXPECTED_AT_100 = {
   scale: 96 / 72,
-  top: SURFACE_RECT.top - FRAME_RECT.top,
-  left: SURFACE_RECT.right - FRAME_RECT.left + 16,
-  compactCardLeft: CLIENT_WIDTH - (SURFACE_RECT.right - FRAME_RECT.left + 16) - 300 - 12,
+  top: 140 - FRAME_RECT.top,
+  left: 1116 - FRAME_RECT.left + 16,
+  compactCardLeft: 1400 - (1116 - FRAME_RECT.left + 16) - 300 - 12,
+  compact: false,
 } as const;
 
 function rect(box: { top: number; left: number; right: number; bottom: number }): DOMRect {
@@ -66,27 +77,61 @@ function rect(box: { top: number; left: number; right: number; bottom: number })
   } as DOMRect;
 }
 
-/** Install the geometry; returns the restore function. */
+function surfaceRect(surface: HTMLElement) {
+  const scroller = surface.closest(`.${SCROLLER}`);
+  const top = 140 + (scroller?.querySelector('.test-banner') ? BANNER_HEIGHT : 0);
+  return { top, left: 300, right: railGeometry.surfaceRight, bottom: top + 1000 };
+}
+
+/**
+ * Install the geometry; returns the restore function.
+ *
+ * `offsetParent` follows the real rule closely enough for these tests: an element inside a
+ * scroll container is positioned against it (the container is `position: relative`), and
+ * anything else falls back to its parent.
+ */
 export function installRailGeometry(): () => void {
   const proto = HTMLElement.prototype;
   const saved = (['clientWidth', 'offsetParent', 'getBoundingClientRect'] as const).map(
     (key) => [key, Object.getOwnPropertyDescriptor(proto, key)] as const
   );
-  Object.defineProperty(proto, 'clientWidth', { configurable: true, get: () => CLIENT_WIDTH });
+  railGeometry.surfaceRight = 1116;
+  railGeometry.clientWidth = 1400;
+  // happy-dom holds each MutationObserver's delivery function only through a `WeakRef`, so
+  // a garbage collection mid-test silently stops an observer that is still connected. A
+  // strong stand-in keeps the observers these tests depend on alive.
+  const NativeWeakRef = globalThis.WeakRef;
+  globalThis.WeakRef = class<T extends object> {
+    readonly #target: T;
+    constructor(target: T) {
+      this.#target = target;
+    }
+    deref(): T {
+      return this.#target;
+    }
+  } as unknown as WeakRefConstructor;
+  Object.defineProperty(proto, 'clientWidth', {
+    configurable: true,
+    get: () => railGeometry.clientWidth,
+  });
   Object.defineProperty(proto, 'offsetParent', {
     configurable: true,
     get(this: HTMLElement) {
-      return this.parentElement;
+      if (!this.isConnected) return null;
+      return this.parentElement?.closest(`.${SCROLLER}`) ?? this.parentElement;
     },
   });
   Object.defineProperty(proto, 'getBoundingClientRect', {
     configurable: true,
     writable: true,
     value(this: HTMLElement) {
-      return rect(this.classList.contains('docx-paginated-surface') ? SURFACE_RECT : FRAME_RECT);
+      if (this.classList.contains('docx-editor__loading-surface')) return rect(LOADING_RECT);
+      if (this.classList.contains('docx-paginated-surface')) return rect(surfaceRect(this));
+      return rect(FRAME_RECT);
     },
   });
   return () => {
+    globalThis.WeakRef = NativeWeakRef;
     for (const [key, descriptor] of saved) {
       if (descriptor) Object.defineProperty(proto, key, descriptor);
       else delete (proto as unknown as Record<string, unknown>)[key];
@@ -94,8 +139,16 @@ export function installRailGeometry(): () => void {
   };
 }
 
+/** Insert a banner above the pages, as a host's notice inside the viewport would be. */
+export function insertBanner(scroller: Element): HTMLElement {
+  const banner = scroller.ownerDocument.createElement('div');
+  banner.className = 'test-banner';
+  scroller.insertBefore(banner, scroller.firstChild);
+  return banner;
+}
+
 /** Parse the metrics a probe wrote into `data-metrics`. */
-export function readMetrics(node: Element | null): Record<string, number | null> | null {
+export function readMetrics(node: Element | null): Record<string, number | boolean | null> | null {
   const raw = node?.getAttribute('data-metrics');
-  return raw ? (JSON.parse(raw) as Record<string, number | null>) : null;
+  return raw ? (JSON.parse(raw) as Record<string, number | boolean | null>) : null;
 }

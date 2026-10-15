@@ -557,7 +557,7 @@ Install `@docx-editor.dev/pro` and import these APIs from `@docx-editor.dev/pro/
 - `useReviewItem()` returns the item for the active review card context.
 - `useReviewAuthor(author)` returns the resolved author style, inside or outside the review rail.
 - `useStackedReviewPositions(items, heights, options?)` calculates card positions without overlap. An item with `isActive: true` stays at its own anchor. It returns each card's top in layout points. Multiply by `scale` and add the rail's top offset to position a card in CSS pixels.
-- `useReviewRailMetrics(railRef?, options?)` returns `{ metrics }`. Use `metrics.value.scale` and `metrics.value.top` to convert anchors and stacked positions to CSS pixels. Omit `railRef` inside `DocxEditorReview` to read the packaged rail's values.
+- `useReviewRailMetrics(railRef?, options?)` returns `{ metrics }`. Use `metrics.value.scale` and `metrics.value.top` to convert anchors and stacked positions to CSS pixels, and `metrics.value.compact` to choose the narrow layout. Omit `railRef` inside `DocxEditorReview` to read the packaged rail's values. For placement rules and a complete column, see [Place custom cards](/docs/2.x/pro/tracked-changes#place-custom-cards).
 
 The package also exports `DocxEditorReview`. Mount it inside `DocxEditor.Viewport`, beside `DocxEditor.Content`.
 

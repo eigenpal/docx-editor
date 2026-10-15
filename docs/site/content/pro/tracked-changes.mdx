@@ -315,55 +315,215 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 | Value | Meaning |
 | --- | --- |
 | `scale` | CSS pixels per layout point, including zoom. |
-| `top` | CSS pixels from the top of the scroll container's content to the first page. |
-| `left` | The column's left edge, 16 pixels right of the page, or `null` before layout. |
-| `compactCardLeft` | A 300-pixel card's `left` that keeps it inside a narrow viewport, or `null`. |
+| `top` | CSS pixels from the scroll container's top padding edge to the first page. Content above the pages is included. |
+| `left` | CSS pixels from the scroll container's left padding edge to the column, 16 pixels right of the page. `null` before layout. |
+| `compact` | `true` when the pane is open but the viewport is too narrow for a full column. |
+| `compactCardLeft` | The `left` of a 300-pixel card, relative to the column, that keeps the card inside a narrow viewport. `null` before layout. |
 
 A card's CSS `top` is `metrics.top + position * metrics.scale`. To stack cards without overlap, pass their measured heights in CSS pixels to `useStackedReviewPositions(items, heights, { gap, scale: metrics.scale })`. An item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
 
 Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. Your children render inside the rail element, which already sits at `left`.
 
-For a column of your own, pass a ref to an element that is absolutely positioned inside `DocxEditor.Viewport`. The values update when the zoom, the window size, the page count, or the reserved review gutter changes. They also work when the editor is in a pop-out window or an iframe.
+For a column of your own, pass a ref to the column element. The column must meet these conditions:
 
-The following example places one card per review item:
+- The component that calls the hook renders the element.
+- The element has `position: absolute`.
+- The element is a child of `DocxEditor.Viewport`, with no positioned element in between. Its offset parent must be the scroll container that holds the pages.
+- While `left` is `null`, the element uses `visibility: hidden`, not `display: none`.
+
+Development builds print one warning when a condition fails. The column reserves the review gutter beside the page, as `DocxEditorReview` does, so the page moves left while the pane is open. Reserving the gutter also shows the **Add comment** controls in the toolbar and the context menu. If a mounted `DocxEditorReview` already reserves the gutter, or your column covers the page, pass `{ reserveGutter: false }`.
+
+The values update when the zoom, the window size, the page count, the document load, content above the pages, or the reserved gutter changes. They also work when the editor is in a pop-out window or an iframe.
+
+The following React example renders a complete column. It measures each card with a `ResizeObserver`, stacks the cards, and shows only the active card in compact mode:
 
 ```tsx
-import { useRef } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import {
+  reviewModule,
   useReview,
   useReviewRailMetrics,
   useStackedReviewPositions,
+  type ReviewItemView,
 } from '@docx-editor.dev/pro/react';
 
-const NO_HEIGHTS = new Map<string, number>();
+const MODULES = [reviewModule()];
+
+function MeasuredCard(props: {
+  item: ReviewItemView;
+  top: number;
+  left?: number;
+  onHeight: (key: string, height: number) => void;
+}) {
+  const { item, top, left = 0, onHeight } = props;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return undefined;
+    const observer = new ResizeObserver(() => onHeight(item.key, node.offsetHeight));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [item.key, onHeight]);
+  return (
+    <div
+      ref={ref}
+      className="my-review-card"
+      style={{ position: 'absolute', top, left, width: 300 }}
+    >
+      <strong>{item.author}</strong>
+      <p>{item.text}</p>
+    </div>
+  );
+}
 
 function MyReviewColumn() {
   const railRef = useRef<HTMLDivElement>(null);
   const metrics = useReviewRailMetrics(railRef);
   const { items } = useReview();
-  // Pass measured card heights instead of NO_HEIGHTS to stack the cards.
-  const positions = useStackedReviewPositions(items, NO_HEIGHTS, {
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
+  const onHeight = useRef((key: string, height: number) =>
+    setHeights((previous) =>
+      previous.get(key) === height ? previous : new Map(previous).set(key, height)
+    )
+  ).current;
+  const positions = useStackedReviewPositions(items, heights, {
+    gap: 8,
     scale: metrics.scale,
   });
+  const topOf = (item: ReviewItemView) =>
+    metrics.top + (positions.get(item.key) ?? item.anchorY ?? 0) * metrics.scale;
+
+  let cards: ReactNode;
+  if (metrics.compact) {
+    // Too narrow for a column: float only the active card inside the viewport.
+    const active = items.find((item) => item.isActive);
+    cards = active ? (
+      <MeasuredCard
+        item={active}
+        top={metrics.top + (active.anchorY ?? 0) * metrics.scale}
+        left={metrics.compactCardLeft ?? 0}
+        onHeight={onHeight}
+      />
+    ) : null;
+  } else {
+    cards = items.map((item) => (
+      <MeasuredCard key={item.key} item={item} top={topOf(item)} onHeight={onHeight} />
+    ));
+  }
 
   return (
-    <div ref={railRef} style={{ position: 'absolute', top: 0, left: metrics.left ?? 0 }}>
-      {items.map((item) => (
-        <MyCard
-          key={item.key}
-          item={item}
-          style={{
-            position: 'absolute',
-            top: metrics.top + (positions.get(item.key) ?? 0) * metrics.scale,
-          }}
-        />
-      ))}
+    <div
+      ref={railRef}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: metrics.left ?? 0,
+        visibility: metrics.left === null ? 'hidden' : 'visible',
+      }}
+    >
+      {cards}
     </div>
+  );
+}
+
+export function Reviewer({ bytes }: { bytes: Uint8Array }) {
+  return (
+    <DocxEditor.Root document={bytes} modules={MODULES} author="Jess Lin">
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <MyReviewColumn />
+      </DocxEditor.Viewport>
+    </DocxEditor.Root>
   );
 }
 ```
 
-In Vue, `useReviewRailMetrics(railRef)` returns `{ metrics }`, where `metrics` is a ref.
+In Vue, `useReviewRailMetrics(railRef)` returns `{ metrics }`, where `metrics` is a ref. The following component is the Vue version of the column. Mount it inside `DocxEditor.Viewport`, after `DocxEditor.Content`:
+
+```vue
+<script setup lang="ts">
+import { computed, onBeforeUpdate, onUnmounted, ref } from 'vue';
+import {
+  useReview,
+  useReviewRailMetrics,
+  useStackedReviewPositions,
+  type ReviewItemView,
+} from '@docx-editor.dev/pro/vue';
+
+const railRef = ref<HTMLElement | null>(null);
+const { metrics } = useReviewRailMetrics(railRef);
+const { items } = useReview();
+const heights = ref<ReadonlyMap<string, number>>(new Map());
+const positions = useStackedReviewPositions(items, heights, () => ({
+  gap: 8,
+  scale: metrics.value.scale,
+}));
+
+// Measure every rendered card; the observer reports each height change.
+const observer = new ResizeObserver((entries) => {
+  const next = new Map(heights.value);
+  for (const entry of entries) {
+    const key = (entry.target as HTMLElement).dataset.key;
+    if (key) next.set(key, (entry.target as HTMLElement).offsetHeight);
+  }
+  heights.value = next;
+});
+const observe = (node: unknown) => {
+  if (node instanceof HTMLElement) observer.observe(node);
+};
+onBeforeUpdate(() => observer.disconnect());
+onUnmounted(() => observer.disconnect());
+
+const activeItem = computed(() => items.value.find((item) => item.isActive));
+const topOf = (item: ReviewItemView) =>
+  metrics.value.top + (positions.value.get(item.key) ?? item.anchorY ?? 0) * metrics.value.scale;
+</script>
+
+<template>
+  <div
+    ref="railRef"
+    :style="{
+      position: 'absolute',
+      top: '0px',
+      left: `${metrics.left ?? 0}px`,
+      visibility: metrics.left === null ? 'hidden' : 'visible',
+    }"
+  >
+    <template v-if="metrics.compact">
+      <!-- Too narrow for a column: float only the active card inside the viewport. -->
+      <div
+        v-if="activeItem"
+        :ref="observe"
+        :data-key="activeItem.key"
+        class="my-review-card"
+        :style="{
+          position: 'absolute',
+          top: `${metrics.top + (activeItem.anchorY ?? 0) * metrics.scale}px`,
+          left: `${metrics.compactCardLeft ?? 0}px`,
+          width: '300px',
+        }"
+      >
+        <strong>{{ activeItem.author }}</strong>
+        <p>{{ activeItem.text }}</p>
+      </div>
+    </template>
+    <template v-else>
+      <div
+        v-for="item in items"
+        :key="item.key"
+        :ref="observe"
+        :data-key="item.key"
+        class="my-review-card"
+        :style="{ position: 'absolute', top: `${topOf(item)}px`, width: '300px' }"
+      >
+        <strong>{{ item.author }}</strong>
+        <p>{{ item.text }}</p>
+      </div>
+    </template>
+  </div>
+</template>
+```
 
 ### Activate and reveal items
 

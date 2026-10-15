@@ -74,6 +74,7 @@ import type { ReviewProps } from './review-types.ts';
 import { stackRailCards } from '../review/rail-stack.ts';
 import { ReviewContext, ReviewItemContext, type ReviewRailValue } from './review-context.ts';
 import { ReviewRailMetricsContext } from './useReviewRailMetrics.ts';
+import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 import {
   COLLAPSED_CARD_HEIGHT,
   COLLAPSE_DISPLACEMENT_PX,
@@ -212,7 +213,7 @@ function ReviewRoot({
   // is 0 for one render while this rail's own registration is still in flight; that frame
   // keeps the expanded presentation rather than flashing markers.
   const gutter = useReviewGutter();
-  const compact = open && gutter.inlineEnd > 0 && gutter.inlineEnd < REVIEW_PANE_GUTTER;
+  const compact = isCompactReviewColumn(open, gutter.inlineEnd, REVIEW_PANE_GUTTER);
   const expanded = open && !compact;
 
   // The engine's rule, applied before this rail's own filters. The engine decides whether the
@@ -312,6 +313,8 @@ function ReviewRoot({
   // half of the rail, in `use-rail-geometry.ts`.
   const metrics = useRailMetrics(editor, railRef, items, !documentAbsent && !hidden, compact);
   const window_ = useRailWindow(editor, railRef, !documentAbsent && !hidden);
+  // What `useReviewRailMetrics()` reads inside the rail: the geometry plus the presentation.
+  const railMetrics = useMemo(() => ({ ...metrics, compact }), [metrics, compact]);
 
   // Clicking the canvas AROUND the page closes the open item. The caret decides everything
   // else, but a click on the grey moves no caret, so nothing else would ever put a card away.
@@ -660,7 +663,7 @@ function ReviewRoot({
   return (
     <ResolvedDisclosureProvider items={items}>
       <ReviewContext.Provider value={value}>
-        <ReviewRailMetricsContext.Provider value={metrics}>
+        <ReviewRailMetricsContext.Provider value={railMetrics}>
           {asChild && isValidElement(children) ? (
             // The child becomes the rail ELEMENT and keeps its own children; the rail's content
             // is appended after them. Two earlier shapes were wrong: rendering `children` alone
