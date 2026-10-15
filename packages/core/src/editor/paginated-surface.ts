@@ -18,7 +18,12 @@ import { createDrawingGestures } from './surface-drawing-gestures.ts';
 import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
-import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
+import {
+  REFRESH_WRITE_REFUSAL,
+  refreshRefusedCommit,
+  refreshWriteBlocked,
+  registerRefreshComposition,
+} from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { browserInputPending } from './surface-input-pending.ts';
@@ -2893,7 +2898,7 @@ export function mountPaginatedSurface(
     // The PROTECTION write is document-wide, so neither the view nor where the caret happens
     // to sit has anything to say about it. Without the second exemption a caret parked in a
     // table of contents refused it with a reason about the table of contents.
-    if (refreshWriteBlocked(container)) return 'An external document refresh is in progress.';
+    if (refreshWriteBlocked(container)) return REFRESH_WRITE_REFUSAL;
     const protectionWrite = isDocumentProtectionBatch(ops);
     if (editingMode === 'view' && !protectionWrite) return VIEWING_REFUSAL;
     if (
@@ -5219,12 +5224,7 @@ export function mountPaginatedSurface(
       // Automation shares edit gates and repainting but retains its capture policy.
       // Its explicit story remains independent of the reader's active story. A commit the
       // refresh guard skips never runs the thunk below, so the default is that refusal.
-      let result: ReturnType<TreeDocxSession['applyTreeOps']> = {
-        committed: false,
-        rejected: true,
-        opCount: 0,
-        reason: 'An external document refresh is in progress.',
-      };
+      let result: ReturnType<TreeDocxSession['applyTreeOps']> = refreshRefusedCommit();
       const story = scope ?? BODY_STORY;
       commit(
         () => {

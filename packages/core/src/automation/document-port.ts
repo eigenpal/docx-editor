@@ -99,10 +99,11 @@ export interface AutomationDocumentPort {
   /**
    * The collaboration actor this owner's commits mint ids under, or undefined when it has none.
    *
-   * The host plans a batch under the same actor. A planner previews package allocations (a
-   * picture's `wp:docPr/@id`, relationship id and media part name) and the commit makes them
-   * again; with a collaboration actor bound only at the commit, the commit draws from the
-   * actor's id stripe and the preview does not, so the commit refused its own plan.
+   * Return exactly the actor that `apply` binds for its transaction (`TransactOptions.actorId`
+   * or `runWithTransactionActor`). The host plans each operation under it, because a planner
+   * previews package allocations (a picture's `wp:docPr/@id`, relationship id and media part
+   * name) that the commit then makes again. A different actor makes those commits refuse as
+   * `package-changed`.
    */
   readonly allocationActor?: () => string | undefined;
   /** False when concurrent character insertion cannot retain tracked replacement coverage. */

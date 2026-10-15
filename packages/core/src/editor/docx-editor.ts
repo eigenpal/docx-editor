@@ -4,7 +4,7 @@ import { surfaceFieldResultsScope } from './field-results-scope.ts';
 import { createRevisionMarkupState } from './revision-markup-state.ts';
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
-import { refreshWriteBlocked } from './refresh-write-guard.ts';
+import { REFRESH_WRITE_REFUSAL, refreshWriteBlocked } from './refresh-write-guard.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
@@ -1879,7 +1879,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return {
           ok: false,
           code: 'unsupported',
-          reason: 'An external document refresh is in progress.',
+          reason: REFRESH_WRITE_REFUSAL,
         };
       // A command inside the yield window addresses the just-loaded document: mount now.
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
@@ -1982,7 +1982,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return {
           ok: false,
           code: 'unsupported',
-          reason: 'An external document refresh is in progress.',
+          reason: REFRESH_WRITE_REFUSAL,
         };
       if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.canOpen();
       const historyRefusal = historyGroups.gate(command, options);

@@ -15,6 +15,7 @@ import { createBrowserAutomationHost } from '../automation-host.ts';
 import type { AutomationHandle, AutomationHost } from '../../automation/index.ts';
 import { storeEditDiagnosticCode } from '../../automation/diagnostics.ts';
 import { setRefreshWriteGuard } from '../refresh-write-guard.ts';
+import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -274,5 +275,29 @@ describe('an external document refresh', () => {
     const failure = response.results[0] as { error: { detail?: string } };
     expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.refresh-in-progress');
     expect(editor.surface!.session.packageRevision()).toBe(before);
+  });
+
+  test('a comment written during an external refresh names the refresh', () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      document: TWO_PARAGRAPHS,
+      modules: [stubReviewModule()],
+    });
+    const host = createBrowserAutomationHost(editor);
+    const { paragraphs } = handles(host);
+    const before = editor.surface!.session.packageRevision();
+    setRefreshWriteGuard(container, true);
+    const response = host.execute({
+      operations: [
+        { op: 'insertComment', span: { paragraph: paragraphs[0]! }, text: 'Note', author: 'Ann' },
+      ],
+    });
+    setRefreshWriteGuard(container, false);
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe('edit.refresh-in-progress');
+    expect(editor.surface!.session.packageRevision()).toBe(before);
+    editor.destroy();
   });
 });
