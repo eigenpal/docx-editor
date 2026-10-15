@@ -270,7 +270,8 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     if (!untracked || plan.ops.length === 0 || deps.cellSelection()) return plan;
     const { from, to } = orderedRange();
     if (from.paragraphId === to.paragraphId) return plan;
-    const part = session.partFor(deps.storyScope()) ?? session.part();
+    // A pure ancestry read: `partOfNodeId`, never `partFor`, which would retain a story store.
+    const part = partOfNodeId(session, from.paragraphId) ?? session.part();
     const drops = enclosedBookmarkDeletions(part, from, to, deps.paragraphOrder());
     return drops.length === 0 ? plan : { ...plan, ops: [...drops, ...plan.ops] };
   }
