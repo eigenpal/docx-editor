@@ -90,10 +90,16 @@ const LARGE_SOURCE = zipSync({
   'word/media/filler.bin': compressibleText(1024 * 1024),
 });
 
-/** Past the yield threshold AND long enough that the open lays its pages out in slices. */
+/**
+ * Past the yield threshold AND long enough that the open lays its pages out in slices: well
+ * over the 64 blocks laid out at mount. Kept small, because every paragraph is real layout
+ * work, and a slow runner must still finish the whole open inside the waits below.
+ */
+const SLICED_PARAGRAPHS = 600;
+
 function slicedSource(): Uint8Array {
   const paragraphs: string[] = [];
-  for (let index = 0; index < 3000; index += 1) {
+  for (let index = 0; index < SLICED_PARAGRAPHS; index += 1) {
     paragraphs.push(`<w:p><w:r><w:t>Sliced paragraph ${index}</w:t></w:r></w:p>`);
   }
   return zipSync({
@@ -518,11 +524,16 @@ describe('DocxEditor.Loading', () => {
 
     await waitFor(() => expect(places).toContain('first page'), { timeout: 20_000 });
     expect(places[0]).toBe('screen');
-    await waitFor(() => expect(view.container.querySelector(LOADING)).toBeNull(), {
-      timeout: 20_000,
-    });
-    expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
-    expect(view.container.querySelector('.mine')).toBeNull();
+    // The screen yields at the first painted page, but the first-page indicator stays until the
+    // last slice lands. Wait for that end state, not for the screen alone.
+    await waitFor(
+      () => {
+        expect(view.container.querySelector(LOADING)).toBeNull();
+        expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();
+        expect(view.container.querySelector('.mine')).toBeNull();
+      },
+      { timeout: 20_000 }
+    );
   });
 
   test('className is appended after the load-bearing class, not instead of it', () => {
