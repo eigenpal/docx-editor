@@ -4,7 +4,7 @@ const messages = {
   'collaborationDemo.title': 'Peer-to-peer collaboration proof',
   'collaborationDemo.subtitle': 'Run this page on two machines and open the same room link.',
   'collaborationDemo.name': 'Display name',
-  'collaborationDemo.room': 'Room ID or link',
+  'collaborationDemo.room': 'Full room link, including #collab=',
   'collaborationDemo.create': 'Create room',
   'collaborationDemo.join': 'Join room',
   'collaborationDemo.share': 'Share this join link',
