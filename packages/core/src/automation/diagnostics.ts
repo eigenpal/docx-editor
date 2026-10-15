@@ -114,6 +114,7 @@ const STORE_EDIT_CODES: Readonly<
   'automation-structural-tracking-unsupported': 'edit.tracked-structure-unsupported',
   'unsupported-revision': 'edit.revision-unsupported',
   'unknown-revision': 'edit.stale-target',
+  'package-changed': 'edit.stale-target',
   'resource-limit': 'edit.resource-limit',
   'fragment-too-deep': 'edit.resource-limit',
   'fragment-resource-budget': 'edit.resource-limit',

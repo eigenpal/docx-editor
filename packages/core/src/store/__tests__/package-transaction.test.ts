@@ -26,6 +26,7 @@ import {
   type OoxmlPackage,
   type OoxmlPart,
 } from '../index.ts';
+import { PackageEditRefusal } from '../store/package-edit-refusal.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const FIXTURE = resolve(
@@ -234,6 +235,45 @@ describe('the store commits many parts as one transaction', () => {
         (rel) => rel.rawTarget === 'commentsExtended.xml'
       )
     ).toBe(true);
+  });
+
+  test('a refusing package edit refuses the whole transaction as package-changed', () => {
+    const pkg = fixture();
+    const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);
+    const paragraphId = firstParagraphId(store.part);
+    const changes: number[] = [];
+    store.subscribe((change) => changes.push(change.toRevision));
+
+    const result = store.transact((ctx) => {
+      ctx.apply({ op: 'insertText', paragraphId, offset: 0, text: 'X' });
+      expect(
+        ctx.applyPackage(() => {
+          throw new PackageEditRefusal('allocation moved');
+        })
+      ).toBe(false);
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'package-changed',
+      detail: 'allocation moved',
+    });
+    expect(store.package).toBe(pkg);
+    expect(changes).toHaveLength(0);
+    expect(store.historyDepth).toBe(0);
+  });
+
+  test('any other throw from a package edit still escapes', () => {
+    const pkg = fixture();
+    const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);
+    expect(() =>
+      store.transact((ctx) => {
+        ctx.applyPackage(() => {
+          throw new Error('bug');
+        });
+      })
+    ).toThrow('bug');
+    expect(store.package).toBe(pkg);
   });
 
   test('one undo reverses every part the transaction touched', () => {

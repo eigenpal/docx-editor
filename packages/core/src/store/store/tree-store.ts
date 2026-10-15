@@ -29,6 +29,7 @@ import { validatePackageInvariants } from '../package/package-edit.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { documentProtectionRefusal, lifecycleProtectionRefusal } from './forms-protection.ts';
 import { isCommentPackageEdit } from './comment-package-edit.ts';
+import { isPackageEditRefusal } from './package-edit-refusal.ts';
 import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import {
   formsProtectionRefusal,
@@ -677,7 +678,14 @@ export class TreeDocumentStore {
         // here for the same reason a non-property op drops it.
         revisionIdOfGroup.clear();
         resetRevisionCounters();
-        const next = edit(working);
+        let next: OoxmlPackage;
+        try {
+          next = edit(working);
+        } catch (error) {
+          if (!isPackageEditRefusal(error)) throw error;
+          failure = { reason: 'package-changed', detail: error.detail };
+          return false;
+        }
         if (next === working) return true;
         for (const [name, part] of next.parts) {
           if (working.parts.get(name) !== part) touched.add(name);

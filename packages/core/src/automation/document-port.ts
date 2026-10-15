@@ -96,6 +96,15 @@ export interface AutomationDocumentPort {
   readonly localChangeTracking?: true;
   /** True when a live collaboration session replicates package edits. */
   readonly collaborative?: () => boolean;
+  /**
+   * The collaboration actor this owner's commits mint ids under, or undefined when it has none.
+   *
+   * The host plans a batch under the same actor. A planner previews package allocations (a
+   * picture's `wp:docPr/@id`, relationship id and media part name) and the commit makes them
+   * again; with a collaboration actor bound only at the commit, the commit draws from the
+   * actor's id stripe and the preview does not, so the commit refused its own plan.
+   */
+  readonly allocationActor?: () => string | undefined;
   /** False when concurrent character insertion cannot retain tracked replacement coverage. */
   readonly trackedRangeReplacement?: () => boolean;
   /** The owner UI requires edits to be tracked even when this automation runtime is Off. */

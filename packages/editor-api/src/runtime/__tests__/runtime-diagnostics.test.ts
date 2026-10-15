@@ -10,6 +10,7 @@ import { expect, test } from 'bun:test';
 import type { EditorDiagnostic } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditor, isDocxEditorError } from '../../index.ts';
 import { docx, p } from './support/docx.ts';
+import { hostFailure } from '../batch.ts';
 
 const SECRET = 'Confidential settlement terms';
 const sample = docx(p(SECRET) + p('Second clause.'));
@@ -181,4 +182,20 @@ test('a refused batch carries the engine reason behind its public code', async (
   } finally {
     runtime.dispose();
   }
+});
+
+test('a package that moved under a commit refuses as a stale target with a retry hint', () => {
+  const error = hostFailure(
+    {
+      code: 'transaction-refused',
+      message: 'the document changed while the batch was being committed',
+      detail: 'package-changed: picture allocation changed during the batch',
+    },
+    { target: 'document.body.insertInlinePictureFromBase64' }
+  );
+  expect(error.code).toBe('GeneralException');
+  expect(error.debugInfo.innerError).toMatchObject({ code: 'edit.stale-target' });
+  expect(error.debugInfo.innerError!.message).toContain('Read the document again');
+  // The engine detail never reaches the consumer.
+  expect(JSON.stringify(error.debugInfo)).not.toContain('allocation');
 });

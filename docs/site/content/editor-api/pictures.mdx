@@ -38,6 +38,8 @@ await runtime.run(async (context) => {
 
 The runtime validates the image format and bytes. The runtime rejects unsupported formats and invalid image bytes. The API adds package media resources through its document transaction.
 
+The same code works on a collaborative runtime, from `DocxEditor.createCollaborative()` or from `DocxEditor.createBrowser()` over an editor in a collaboration session. The picture, its media part, and its relationship replicate to every participant. Pictures that two participants insert at the same time keep distinct identifiers.
+
 ## Read picture properties
 
 Load the collection, then load individual properties:
@@ -75,6 +77,8 @@ When aspect locking applies, changing one dimension preserves the ratio. If aspe
 ## Handle errors
 
 Newly inserted pictures need sync before resizing, loading, or deleting them. Edits can fail if the target is protected, unsupported, or contains pending revisions. The runtime's tracking mode does not support image insertion, removal, or formatting. A failed write batch applies none of its document changes. Earlier successful syncs remain committed.
+
+If the document changes while a batch commits, the runtime refuses the batch with `GeneralException`, and `error.debugInfo.innerError.code` is `edit.stale-target`. Read the document again, then run the batch again.
 
 For another picture variant, prepare supported PNG or JPEG bytes before insertion. This API does not expose cropping, rotation, replacement-by-URL, or floating-picture positioning methods.
 

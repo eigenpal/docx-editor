@@ -5103,6 +5103,12 @@ export type TreeOpRejection = 'unknown-op' | 'unknown-paragraph' | 'not-a-paragr
 * pointing at a part nobody created, or a part with no declared content type.
 */
 | 'package-invariant'
+/**
+* A package edit found a different package from the one it was planned against: an id or
+* part name it allocated is taken, or a definition it addresses changed. Nothing was
+* applied. Read the document again and retry.
+*/
+| 'package-changed'
 /** No revision in this part carries the addressed `(id, author, date)` triple. */
 | 'unknown-revision'
 /**

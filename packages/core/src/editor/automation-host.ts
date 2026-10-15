@@ -206,6 +206,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
         ? layoutProjectionOf(editor.surface.revisionDisplayMode())
         : DEFAULT_FORMATTING_DISPLAY_MODE,
     collaborative: () => !!editor.surface?.collaborationSession(),
+    allocationActor: () => editor.surface?.collaborationSession()?.identity.actorId,
     trackedRangeReplacement: () => !editor.surface?.collaborationSession(),
     replacementLanding: (paragraphId, start, end) =>
       editor.surface?.replacementLanding(paragraphId, start, end) ?? null,

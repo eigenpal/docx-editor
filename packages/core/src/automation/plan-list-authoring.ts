@@ -1,3 +1,4 @@
+import { PackageEditRefusal } from '../store/store/package-edit-refusal.ts';
 import { isProposedList } from './tracked-list.ts';
 import { withPart } from '../store/package/ooxml-package.ts';
 import {
@@ -115,7 +116,7 @@ export function planListAuthoring(
             operation.level,
             operation.format
           );
-          if (!updated) throw new Error('list definition changed during transaction');
+          if (!updated) throw new PackageEditRefusal('list definition changed during transaction');
           return updated;
         },
       ],
@@ -156,7 +157,7 @@ export function planListAuthoring(
           // the read-only preview; both the paragraph and returned handle use the committed ID.
           const created = createAutomationList(current);
           const part = created?.pkg.parts.get(story.part.name);
-          if (!created || !part) throw new Error('cannot create numbering definition');
+          if (!created || !part) throw new PackageEditRefusal('cannot create numbering definition');
           const applied = applyTreeOp(part, {
             op: 'setListNumbering',
             paragraphId,
@@ -166,7 +167,7 @@ export function planListAuthoring(
               ? { revision: { author: trackingAuthor, date: new Date().toISOString() } }
               : {}),
           });
-          if (!applied.ok) throw new Error('cannot number this paragraph');
+          if (!applied.ok) throw new PackageEditRefusal('cannot number this paragraph');
           committedId = created.numId;
           return withPart(created.pkg, applied.part);
         },

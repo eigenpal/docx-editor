@@ -23,6 +23,7 @@ import {
   type LocalTrackingState,
 } from './change-tracking.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { runWithTransactionActor } from '../store/package/actor-scoped-ids.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
 import { createBatchPlanner, type PlannedOperation } from './plan.ts';
@@ -72,6 +73,12 @@ function storeTransactionError(reason: string): AutomationError {
     return automationError(
       'unsupported-capability',
       'this edit requires a supported review mode',
+      reason
+    );
+  if (reason === 'package-changed' || reason.startsWith('package-changed:'))
+    return automationError(
+      'transaction-refused',
+      'the document changed while the batch was being committed; nothing was applied, so read the document again and retry',
       reason
     );
   const unsupported =
@@ -439,7 +446,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
   const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
     executing += 1;
     try {
-      return executeBatch(request);
+      // Plan and commit under ONE actor. See `AutomationDocumentPort.allocationActor`.
+      return runWithTransactionActor(port.allocationActor?.(), () => executeBatch(request));
     } finally {
       executing -= 1;
       if (executing === 0 && pendingEvent) {

@@ -1,4 +1,5 @@
-// Headless `applyLifecycle` must bind the collaboration actor before minting furniture `rId`s.
+// Headless writes must bind the collaboration actor before minting ids: furniture `rId`s in
+// `applyLifecycle`, and the ids a scripted picture insert plans and then commits.
 //
 // `apply` and the comment/custom-node entries wrap in `runWithTransactionActor`. The
 // lifecycle path used to call `store.applyLifecycleOp` bare, so two hosts creating a header
@@ -19,6 +20,10 @@ import { createAutomationHost } from '../host.ts';
 import { SERVER_AUTOMATION_CAPABILITIES } from '../server-host.ts';
 import { handleAt, handlesAt, roots } from './support/protocol.ts';
 import { packageStorePort } from '../server-host.ts';
+import type { AutomationDocumentPort } from '../document-port.ts';
+import { storeEditDiagnosticCode } from '../diagnostics.ts';
+import { allocateDrawingPropertyId } from '../../store/package/drawing-package-edit.ts';
+import { projectDrawingsInPart } from '../../store/package/drawing-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -106,4 +111,51 @@ test('startNewList returns the actor-allocated ID used by the committed paragrap
     return id;
   });
   expect(created[0]).not.toEqual(created[1]);
+});
+
+// #1348. The planner previews a picture's `docPr` id, relationship and media part, and the
+// commit allocates them again. Planned outside the actor, the preview took the dense sequence
+// while the commit took the actor's stripe, and the commit refused its own plan.
+describe('insertInlinePicture under a collaboration actor', () => {
+  const PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  function insertPicture(port: AutomationDocumentPort) {
+    const host = createAutomationHost({ port, capabilities: SERVER_AUTOMATION_CAPABILITIES });
+    const { body } = roots(host);
+    const paragraph = handlesAt(
+      host.execute({ operations: [{ op: 'getParagraphs', body }] }),
+      0
+    )[0]!;
+    return host.execute({
+      operations: [
+        { op: 'insertInlinePicture', span: { paragraph }, base64: PNG, location: 'End' },
+      ],
+    });
+  }
+
+  test('commits the actor-striped allocation the planner previewed', () => {
+    const { port, store } = portFor('alice');
+    const expected = allocateDrawingPropertyId(store.currentPackage(), 'alice');
+    if (!expected.ok) throw new Error('no expected id');
+    expect(insertPicture(port).ok).toBe(true);
+    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
+    expect(projectDrawingsInPart(main).map((drawing) => drawing.docPrId)).toEqual([expected.id]);
+  });
+
+  test('refuses with a typed error when the commit allocates differently', () => {
+    const { port, store } = portFor('alice');
+    const before = store.currentPackage();
+    const revision = port.revision();
+    // Plan under one actor, commit under another: the drawing would name ids it does not own.
+    const response = insertPicture({ ...port, allocationActor: () => 'bob' });
+    expect(response.ok).toBe(false);
+    const failure = response.results.find((result) => result.status === 'error');
+    if (failure?.status !== 'error') throw new Error('expected a refusal');
+    expect(failure.error.code).toBe('transaction-refused');
+    expect(failure.error.detail).toStartWith('package-changed');
+    expect(storeEditDiagnosticCode(failure.error.detail!)).toBe('edit.stale-target');
+    expect(store.currentPackage()).toBe(before);
+    expect(port.revision()).toBe(revision);
+  });
 });
