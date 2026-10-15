@@ -1,3 +1,6 @@
+// The external-refresh write guard, and the surface's write-refusal reasons it is the home of:
+// the refresh sentence and the placeholder for a write that refused without saying why.
+
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 
 /** Why a write is refused while an external document refresh holds the guard. */

@@ -22,6 +22,10 @@ import {
   REFRESH_WRITE_REFUSAL,
   setRefreshWriteGuard,
 } from '../../../core/src/editor/refresh-write-guard.ts';
+import {
+  stubCollaborationModule,
+  stubCollaborationSession,
+} from '../../../core/src/editor/__tests__/collaboration-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -40,7 +44,7 @@ const COMMENTS =
   `<w:comment w:id="7" w:author="Ada Lovelace" w:initials="AL" w:date="2026-03-04T05:06:07Z">` +
   `<w:p><w:r><w:t>Is this the right clause?</w:t></w:r></w:p></w:comment>`;
 
-function docx(): Uint8Array {
+function docx(body = BODY, comments = COMMENTS): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -54,9 +58,9 @@ function docx(): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="rIdC" Type="${COMMENTS_REL}" Target="comments.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body>${BODY}</w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
-    'word/comments.xml': strToU8(`<w:comments xmlns:w="${W}">${COMMENTS}</w:comments>`),
+    'word/comments.xml': strToU8(`<w:comments xmlns:w="${W}">${comments}</w:comments>`),
   });
 }
 
@@ -154,6 +158,87 @@ describe('a refused review write leaves the reader where they were', () => {
       });
     } finally {
       state.close();
+    }
+  });
+});
+
+describe('a collaboration session that is not ready', () => {
+  test.each(WRITES.filter(([name]) => name !== 'resolveAllReviewChanges'))(
+    '%s names the session state and reports it once',
+    (_name, write) => {
+      const diagnostics: EditorDiagnostic[] = [];
+      const session = stubCollaborationSession({
+        gateOperations: () => 'collaboration-session-not-ready',
+      });
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: docx(),
+        author: 'Grace Hopper',
+        modules: [
+          reviewModule(),
+          stubCollaborationModule(session),
+          { id: 'observer', onDiagnostic: (event: EditorDiagnostic) => diagnostics.push(event) },
+        ],
+      });
+      try {
+        const items = editor.getReviewItems({ pairReplacements: false });
+        const state = {
+          editor,
+          comment: items.find((item) => item.kind === 'comment')!.key,
+          revision: items.find((item) => item.kind === 'revision')!.key,
+          diagnostics,
+          close: () => undefined,
+        };
+        editor.surface!.selectAll();
+        const revision = editor.surface!.session.packageRevision();
+        diagnostics.length = 0;
+        expect(write(state)).toMatchObject({
+          ok: false,
+          code: 'unsupported',
+          reason: 'collaboration-session-not-ready',
+        });
+        expect(editor.surface!.session.packageRevision()).toBe(revision);
+        const rejected = diagnostics.filter((event) => event.kind === 'edit.rejected');
+        expect(rejected).toHaveLength(1);
+        expect(rejected[0]).toMatchObject({ code: 'edit.collaboration-not-ready' });
+      } finally {
+        editor.destroy();
+      }
+    }
+  );
+});
+
+describe('deleting a comment that another comment covers', () => {
+  const NESTED =
+    `<w:p><w:commentRangeStart w:id="1"/><w:r><w:t xml:space="preserve">outer </w:t></w:r>` +
+    `<w:commentRangeStart w:id="2"/><w:r><w:t>inner</w:t></w:r><w:commentRangeEnd w:id="2"/>` +
+    `<w:r><w:commentReference w:id="2"/></w:r><w:commentRangeEnd w:id="1"/>` +
+    `<w:r><w:commentReference w:id="1"/></w:r></w:p>`;
+  const NESTED_COMMENTS =
+    `<w:comment w:id="1" w:author="Ada" w:date="2026-03-04T05:06:07Z"><w:p><w:r><w:t>Outer</w:t></w:r></w:p></w:comment>` +
+    `<w:comment w:id="2" w:author="Ada" w:date="2026-03-04T05:06:08Z"><w:p><w:r><w:t>Inner</w:t></w:r></w:p></w:comment>`;
+
+  test('leaves the covering card free to open', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(NESTED, NESTED_COMMENTS),
+      author: 'Grace Hopper',
+      modules: [reviewModule()],
+    });
+    try {
+      const comments = () =>
+        editor
+          .getReviewItems({ pairReplacements: false })
+          .filter((item) => item.kind === 'comment');
+      const inner = comments().find((item) => item.kind === 'comment' && item.text === 'Inner')!;
+      const outer = comments().find((item) => item.kind === 'comment' && item.text === 'Outer')!;
+      expect(editor.setActiveReviewItem(inner.key).ok).toBe(true);
+      expect(editor.deleteReviewItem(inner.key)).toEqual({ ok: true, changed: true });
+      // The caret is still inside the outer comment, which nobody dismissed.
+      expect(comments().map((item) => item.key)).toEqual([outer.key]);
+      expect(comments()[0]!.isActive).toBe(true);
+    } finally {
+      editor.destroy();
     }
   });
 });

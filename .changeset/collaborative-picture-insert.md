@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Insert inline pictures with `insertInlinePictureFromBase64` on collaborative document API runtimes, and report a refused picture, list, header, footer, or document property commit as a `DocxEditorError` instead of a plain `Error`. A scripted edit during an external document refresh is refused instead of succeeding without a change, and refused comments, replies, review decisions, and custom nodes name the refresh, viewing, or collaboration reason instead of a generic sentence. Fixes #1348
+Insert inline pictures with `insertInlinePictureFromBase64` on collaborative document API runtimes, and report a refused picture, list, header, footer, or document property commit as a `DocxEditorError` instead of a plain `Error`. Refused scripted edits, comments, replies, and review decisions now name their cause instead of a generic sentence or a silent no-op: an external document refresh, viewing or read-only protection (with code `locked` instead of `unsupported` or `notFound`), or the collaboration session. Fixes #1348

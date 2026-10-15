@@ -66,13 +66,6 @@ import { onPageClose } from './page-close.ts';
 import { setCommandReporter } from './command-reporting.ts';
 import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts';
 
-/** Diagnostic codes of the gates that refuse a write before it runs. */
-const WRITE_GATE_CODES: ReadonlySet<string> = new Set([
-  'edit.refresh-in-progress',
-  'edit.read-only',
-  'edit.collaboration-not-ready',
-]);
-
 /** Commands the facade answers itself, before the command classifier sees them. */
 const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'insertImage',
@@ -441,9 +434,13 @@ export function createEditorDiagnostics(options: EditorDiagnosticsOptions) {
         }
         // Inside `exec`, the command reports for itself.
         if (result.ok || execDepth > 0) return result;
-        // A gate that refused the write (a refresh, a collaboration session) is not the revision's
-        // fault, so it reports as a rejection with its own code, not as a skipped change.
-        const gated = WRITE_GATE_CODES.has(diagnosticCodeOfRefusal(result.reason, result.code));
+        // A gate that refused the write before it ran is not the revision's fault, so it is no
+        // skipped change. The surface already reported a collaboration gate it ran; an external
+        // refresh skipped the commit, so only this wrapper can report that one. (Viewing answers
+        // `locked`, which never reaches here.)
+        const gate: EditDiagnosticCode = diagnosticCodeOfRefusal(result.reason, result.code);
+        if (gate === 'edit.collaboration-not-ready') return result;
+        const gated = gate === 'edit.refresh-in-progress';
         if (result.code === 'notFound' || (result.code === 'unsupported' && item && !gated)) {
           // Read only on this failure path: the planner's preflight names the exact condition.
           const described = item ? describe(item, action) : {};

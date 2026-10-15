@@ -2492,14 +2492,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (item.kind !== 'comment') {
         return { ok: false, code: 'unsupported', reason: 'a custom node card cannot be deleted' };
       }
-      // An active key naming an item the queue no longer holds leaves the rail with nothing to
-      // draw and a band painted over text that has no card, so the open card is dismissed
-      // first — but ONLY when it is this one. `dismissActiveReview` acts on whatever the caret
-      // is in, and the delete button keeps the caret exactly where it was, so deleting a
-      // comment further down the page closed the card the reader was replying in and threw
-      // the draft away with it. Read now, applied only once the delete lands: a refused delete
-      // leaves the card, and the draft in it, open.
-      const wasActive = activeReviewKeyNow() === key;
+      // Nothing is dismissed. Activation reads the live queue, by caret and by pin, so a deleted
+      // card cannot stay active. Dismissing first closed the open card and its draft even when
+      // the delete was refused, and `dismissActiveReview` acts on whatever the caret is in, so
+      // dismissing after it closed whichever other card covers the caret.
       let deleted = false;
       const refused = surface.commitReviewOps(() => {
         const note = noteHomeOf(item);
@@ -2512,7 +2508,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { committed: deleted };
       }, 'comment-delete');
       if (!deleted) return reviewWriteRefusal(refused, 'the comment could not be deleted');
-      if (wasActive) surface.dismissActiveReview();
       bump();
       return { ok: true, changed: true };
     },
