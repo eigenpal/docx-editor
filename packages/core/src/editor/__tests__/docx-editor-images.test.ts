@@ -73,6 +73,12 @@ function inlinePictureDocument(
     readonly behindDoc?: '0' | '1';
     /** Put the drawing in the FIRST run, so its anchor coincides with the mount-time caret. */
     readonly drawingFirst?: boolean;
+    /** Paragraph properties for the paragraph that holds the drawing. */
+    readonly pPr?: string;
+    /** The inline drawing's `wp:cNvGraphicFramePr` element. */
+    readonly graphicFramePr?: string;
+    /** Paragraphs before the one that holds the drawing. */
+    readonly before?: string;
   } = {}
 ): Uint8Array {
   const embed = options.embed ?? 'rIdImage';
@@ -99,7 +105,7 @@ function inlinePictureDocument(
       : `<wp:inline distT="0" distB="0" distL="0" distR="0">` +
         '<wp:extent cx="914400" cy="914400"/>' +
         `<wp:docPr ${docPr}/>` +
-        '<wp:cNvGraphicFramePr/>' +
+        (options.graphicFramePr ?? '<wp:cNvGraphicFramePr/>') +
         `<a:graphic xmlns:a="${A}"><a:graphicData uri="${graphicDataUri}">` +
         '<pic:pic xmlns:pic="' +
         PIC +
@@ -113,7 +119,7 @@ function inlinePictureDocument(
     : `<w:r><w:t>before</w:t></w:r><w:r><w:drawing>${drawingInner}</w:drawing></w:r><w:r><w:t>after</w:t></w:r>`;
   const body =
     `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
-    `<w:body><w:p>${runs}</w:p></w:body></w:document>`;
+    `<w:body>${options.before ?? ''}<w:p>${options.pPr ?? ''}${runs}</w:p></w:body></w:document>`;
 
   return zipSync({
     '[Content_Types].xml': strToU8(
@@ -677,4 +683,107 @@ describe('inserting a picture while one is selected', () => {
         editor.destroy();
       }
     });
+});
+
+describe('changing the wrap of an inline picture', () => {
+  const centered = () =>
+    inlinePictureDocument({
+      before: '<w:p><w:r><w:t>Heading</w:t></w:r></w:p>',
+      pPr: '<w:pPr><w:spacing w:before="240"/><w:jc w:val="center"/></w:pPr>',
+    });
+
+  function selectDrawingIn(editor: DocxEditorInstance, paragraphIndex: number): void {
+    const paragraphId = editor.surface!.session.paragraphIds()[paragraphIndex]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 6 },
+      head: { paragraphId, offset: 6 },
+    });
+  }
+
+  test('the wrap control is enabled for an inline picture', async () => {
+    const editor = mountEditor(centered());
+    selectDrawingIn(editor, 1);
+    await settleDrawingResources(editor);
+    const image = editor.snapshot().image;
+    expect(image?.kind).toBe('inline');
+    expect(image?.canChangeWrap).toBe(true);
+    expect(toolbarCommandState(editor, 'image.wrap').enabled).toBe(true);
+    expect(editor.can({ type: 'setImageWrapType', target: 'square' })).toEqual({ ok: true });
+  });
+
+  for (const target of ['square', 'tight', 'topAndBottom', 'behind', 'inFront'] as const)
+    test(`${target} floats the picture where it was and undo restores it`, async () => {
+      const editor = mountEditor(centered());
+      selectDrawingIn(editor, 1);
+      await settleDrawingResources(editor);
+      const before = selectedDrawingOverlayTargetOf(editor.surface)!;
+      expect(before.kind).toBe('inline');
+      // Centered on the line, below the first paragraph: not the default 0, 0 place.
+      expect(before.x).toBeGreaterThan(100);
+      expect(before.y).toBeGreaterThan(20);
+
+      const result = editor.exec({ type: 'setImageWrapType', target });
+      expect(result).toEqual({ ok: true, changed: true });
+      const image = editor.snapshot().image!;
+      expect(image.kind).toBe('anchored');
+      expect(image.wrap).toBe(target);
+      expect(image.position).toMatchObject({
+        mode: 'frame',
+        relativeToH: 'margin',
+        relativeToV: 'paragraph',
+      });
+      const after = selectedDrawingOverlayTargetOf(editor.surface)!;
+      expect(after.kind).toBe('anchored');
+      expect(after.x).toBeCloseTo(before.x, 1);
+      expect(after.y).toBeCloseTo(before.y, 1);
+
+      editor.exec({ type: 'undo' });
+      selectDrawingIn(editor, 1);
+      expect(editor.snapshot().image?.kind).toBe('inline');
+      expect(selectedDrawingOverlayTargetOf(editor.surface)!.x).toBeCloseTo(before.x, 1);
+    });
+
+  test('the properties dialog command floats the picture where it was', async () => {
+    const editor = mountEditor(centered());
+    selectDrawingIn(editor, 1);
+    await settleDrawingResources(editor);
+    const before = selectedDrawingOverlayTargetOf(editor.surface)!;
+    const result = editor.exec({ type: 'setImageProperties', wrap: 'square', alt: 'Moved' });
+    expect(result).toEqual({ ok: true, changed: true });
+    const after = selectedDrawingOverlayTargetOf(editor.surface)!;
+    expect(after.kind).toBe('anchored');
+    expect(after.x).toBeCloseTo(before.x, 1);
+    expect(after.y).toBeCloseTo(before.y, 1);
+    expect(editor.snapshot().image?.description).toBe('Moved');
+  });
+
+  test('a floated picture returns inline, and floats again where it was', async () => {
+    const editor = mountEditor(centered());
+    selectDrawingIn(editor, 1);
+    await settleDrawingResources(editor);
+    const before = selectedDrawingOverlayTargetOf(editor.surface)!;
+    expect(editor.exec({ type: 'setImageWrapType', target: 'square' }).ok).toBe(true);
+    expect(editor.exec({ type: 'setImageWrapType', target: 'inline' }).ok).toBe(true);
+    selectDrawingIn(editor, 1);
+    expect(editor.snapshot().image?.kind).toBe('inline');
+    expect(editor.exec({ type: 'setImageWrapType', target: 'tight' }).ok).toBe(true);
+    const after = selectedDrawingOverlayTargetOf(editor.surface)!;
+    expect(after.x).toBeCloseTo(before.x, 1);
+    expect(after.y).toBeCloseTo(before.y, 1);
+  });
+
+  test('a move-locked inline picture still refuses a wrap change', async () => {
+    const editor = mountEditor(
+      inlinePictureDocument({
+        graphicFramePr:
+          '<wp:cNvGraphicFramePr><a:graphicFrameLocks noMove="1"/></wp:cNvGraphicFramePr>',
+      })
+    );
+    selectInlineDrawing(editor);
+    await settleDrawingResources(editor);
+    const image = editor.snapshot().image!;
+    expect(image.locks.move).toBe(true);
+    expect(image.canChangeWrap).toBe(false);
+    expect(editor.can({ type: 'setImageWrapType', target: 'square' }).ok).toBe(false);
+  });
 });

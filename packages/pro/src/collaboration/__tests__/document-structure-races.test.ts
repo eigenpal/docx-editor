@@ -332,6 +332,108 @@ describe('image races', () => {
   });
 });
 
+describe('inline picture float races', () => {
+  /** What the editor sends when a wrap change floats an inline picture in place. */
+  function floatInPlace(
+    drawingNodeId: string,
+    wrap: 'square' | 'tight',
+    horizontalEmu: number
+  ): TreeDocOp[] {
+    return [
+      { op: 'setDrawingWrap', drawingNodeId, wrap },
+      {
+        op: 'positionDrawing',
+        drawingNodeId,
+        position: {
+          mode: 'frame',
+          horizontalEmu,
+          verticalEmu: 12_700,
+          relativeToH: 'margin',
+          relativeToV: 'paragraph',
+        },
+      },
+    ];
+  }
+
+  function inlinePicture(peer: Peer): { drawing: OoxmlNode; paragraph: OoxmlNode } {
+    for (const paragraph of nodes(peer, 'p')) {
+      let drawing: OoxmlNode | null = null;
+      walk(paragraph, (node) => {
+        if (drawing || node.kind !== 'drawing') return;
+        let inline = false;
+        walk(
+          node,
+          (child) => (inline ||= child.kind !== 'textValue' && child.localName === 'inline')
+        );
+        if (inline) drawing = node;
+      });
+      if (drawing) return { drawing, paragraph };
+    }
+    throw new Error('no inline picture');
+  }
+
+  test('floating an inline picture while a peer types in its paragraph keeps both', async () => {
+    const pair = await harness.pair(SAMPLE);
+    const { drawing, paragraph } = inlinePicture(pair.alice);
+    const anchorsBefore = nodes(pair.alice, 'anchor').length;
+    pair.pause();
+    harness.apply(pair.alice, floatInPlace(drawing.id, 'square', 914_400));
+    harness.apply(pair.bob, [
+      { op: 'insertText', paragraphId: paragraph.id, offset: 0, text: 'Q' },
+    ]);
+    pair.resume();
+    harness.expectConverged(pair.alice, pair.bob);
+    expect(nodes(pair.bob, 'anchor')).toHaveLength(anchorsBefore + 1);
+    expect(
+      nodeText(paragraphIn(nodes(pair.bob, 'p').find((p) => p.id === paragraph.id)!))
+    ).toStartWith('Q');
+    const late = await harness.join(pair.alice, 'late');
+    harness.expectConverged(pair.alice, late);
+  });
+
+  test('two peers float one inline picture differently: one placement on every replica', async () => {
+    const pair = await harness.pair(SAMPLE);
+    const { drawing } = inlinePicture(pair.alice);
+    const anchorsBefore = nodes(pair.alice, 'anchor').length;
+    pair.pause();
+    harness.apply(pair.alice, floatInPlace(drawing.id, 'square', 914_400));
+    harness.apply(pair.bob, floatInPlace(drawing.id, 'tight', 1_828_800));
+    pair.resume();
+    for (const peer of [pair.alice, pair.bob]) {
+      expect(peer.room.session.statusSnapshot().reason?.code).toBeUndefined();
+    }
+    harness.expectConverged(pair.alice, pair.bob);
+    expect(nodes(pair.alice, 'anchor')).toHaveLength(anchorsBefore + 1);
+  });
+
+  test('deleting an inline picture while a peer floats it converges on the deletion', async () => {
+    const pair = await harness.pair(SAMPLE);
+    const before = nodes(pair.alice, 'drawing').length;
+    const { drawing } = inlinePicture(pair.alice);
+    pair.pause();
+    harness.apply(pair.alice, [{ op: 'deleteDrawing', drawingNodeId: drawing.id }]);
+    harness.apply(pair.bob, floatInPlace(drawing.id, 'square', 914_400));
+    pair.resume();
+    harness.expectConverged(pair.alice, pair.bob);
+    expect(nodes(pair.alice, 'drawing')).toHaveLength(before - 1);
+  });
+
+  test('undoing a float after a peer typed in the paragraph keeps the typing', async () => {
+    const { alice, bob } = await harness.pair(SAMPLE);
+    const { drawing, paragraph } = inlinePicture(alice);
+    const anchorsBefore = nodes(alice, 'anchor').length;
+    harness.apply(alice, floatInPlace(drawing.id, 'square', 914_400));
+    harness.apply(bob, [{ op: 'insertText', paragraphId: paragraph.id, offset: 0, text: 'Q' }]);
+    expect(alice.room.session.undo()).toBe(true);
+    expect(alice.room.session.statusSnapshot().reason?.code).toBeUndefined();
+    harness.expectConverged(alice, bob);
+    expect(nodes(bob, 'anchor')).toHaveLength(anchorsBefore);
+    expect(nodeText(paragraphIn(nodes(bob, 'p').find((p) => p.id === paragraph.id)!))).toStartWith(
+      'Q'
+    );
+  });
+});
+
 describe('text box races', () => {
   test('two moves of one floating drawing, both undone, leave a valid position', async () => {
     const { alice, bob } = await harness.pair(TEXT_BOX);
