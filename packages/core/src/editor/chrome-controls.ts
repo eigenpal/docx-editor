@@ -674,6 +674,13 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
+        // Opens the Bookmark dialog; the dialog supplies the name.
+        id: 'bookmark',
+        labelKey: 'toolbar.bookmark',
+        paths: GENERATED_ICON_PATHS['bookmark'],
+        state: { kind: 'command' },
+      },
+      {
         // Opens the Watermark dialog; the dialog supplies the command's values.
         id: 'watermark',
         labelKey: 'toolbar.watermark',
@@ -764,6 +771,7 @@ export type ChromeSlotId =
   | 'review.comments'
   | 'review.addComment'
   | 'review.paragraphMarks'
+  | 'review.bookmarks'
   | 'review.protectDocument'
   | 'review.simpleMarkup'
   | 'review.allMarkup'
@@ -807,6 +815,7 @@ export type ChromeSlotId =
   | 'insert.sectionBreakNextPage'
   | 'insert.sectionBreakContinuous'
   | 'insert.toc'
+  | 'insert.bookmark'
   | 'insert.watermark';
 
 /**
@@ -988,6 +997,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
         ],
       },
       { kind: 'item', slot: 'insert.toc' },
+      { kind: 'item', slot: 'insert.bookmark', shortcutKey: 'toolbar.bookmarkShortcut' },
       { kind: 'item', slot: 'insert.watermark' },
     ],
   },
@@ -1016,6 +1026,7 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'review.rejectAllChanges' },
       { kind: 'separator' },
       { kind: 'item', slot: 'review.paragraphMarks' },
+      { kind: 'item', slot: 'review.bookmarks' },
       { kind: 'separator' },
       { kind: 'item', slot: 'review.protectDocument' },
     ],

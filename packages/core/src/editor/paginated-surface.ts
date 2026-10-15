@@ -256,6 +256,7 @@ import {
   type LayoutDocumentViewOptions,
 } from '../layout/document-layout-coordinator.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
+import { createSurfaceBookmarks } from './surface-bookmarks.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
@@ -451,6 +452,7 @@ export function mountPaginatedSurface(
   const highlightLayer = overlaySheet(mountDocument, 'docx-text-highlight-overlay');
   let highlightPainter: SurfaceOverlayPainter | null = null;
   const remoteSelectionLayer = overlaySheet(mountDocument, 'docx-remote-selection-overlay');
+  const bookmarkLayer = overlaySheet(mountDocument, 'docx-bookmark-overlay');
   const tableFurnitureLayer = overlaySheet(mountDocument, 'docx-table-furniture', false);
 
   container.style.position = 'relative';
@@ -458,6 +460,7 @@ export function mountPaginatedSurface(
     pagesLayer,
     tableFurnitureLayer,
     commentLayer,
+    bookmarkLayer,
     highlightLayer,
     remoteSelectionLayer,
     overlayLayer
@@ -1106,6 +1109,21 @@ export function mountPaginatedSurface(
     flushPendingInputAndLayout,
     () => render(false)
   );
+  // Declared before the first paint, like `paragraphMarks`: `render` paints its marks.
+  const bookmarks = createSurfaceBookmarks({
+    session: gatedSession,
+    storyScope,
+    orderedRange: () => orderedRange(),
+    writeRefusal: () => writeRefusal(true),
+    commit: (run, selectionAfter) => commit(run, selectionAfter),
+    goToPosition: (position) => navigation.goToPosition(position),
+    setSelection: (next) => setSelection(next),
+    repaint: () => {
+      flushPendingInputAndLayout();
+      render(false);
+    },
+    initiallyShown: options.showBookmarks === true,
+  });
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
@@ -2693,7 +2711,14 @@ export function mountPaginatedSurface(
     container.style.width = `${materializedExtent.width * scale}px`;
     container.style.height = `${materializedExtent.height * scale}px`;
     sizeOverlaySheets(
-      [overlayLayer, commentLayer, highlightLayer, remoteSelectionLayer, tableFurnitureLayer],
+      [
+        overlayLayer,
+        commentLayer,
+        bookmarkLayer,
+        highlightLayer,
+        remoteSelectionLayer,
+        tableFurnitureLayer,
+      ],
       `${materializedExtent.width * scale}px`,
       `${materializedExtent.height * scale}px`
     );
@@ -2706,6 +2731,14 @@ export function mountPaginatedSurface(
     renderOverlay();
     renderRemoteSelections();
     renderCommentHighlights(true);
+    bookmarks.paint({
+      layer: bookmarkLayer,
+      layout: currentLayout,
+      scale,
+      measurer,
+      ...(materializedSet ? { pages: materializedSet } : {}),
+      ...(materializedExtent ? { pageOffsetX: materializedExtent.pageOffsetX } : {}),
+    });
     paintHighlights();
     // The surface may only now have been wrapped in its viewport, so the size watcher
     // re-resolves its target here rather than trusting what existed at mount.
@@ -5477,6 +5510,7 @@ export function mountPaginatedSurface(
     },
 
     navigation,
+    bookmarkEditing: bookmarks,
 
     bookmarks: () => session.bookmarks(),
 

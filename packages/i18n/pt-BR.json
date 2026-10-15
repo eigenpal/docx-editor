@@ -55,7 +55,9 @@
     "printNoViewer": "Este navegador não pode imprimir arquivos PDF a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
     "printLoadFailed": "O PDF não foi carregado para impressão. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
     "printRefused": "O navegador não permitiu a impressão a partir da página. Selecione Abrir PDF e imprima pelo visualizador de PDF.",
-    "insertTextBox": "Caixa de texto"
+    "insertTextBox": "Caixa de texto",
+    "bookmark": "Indicador…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "Pincel de formatação (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Mostrar quebras de parágrafo",
     "label": "Controles de formatação",
-    "addComment": "Adicionar comentário"
+    "addComment": "Adicionar comentário",
+    "showBookmarks": "Mostrar indicadores"
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -371,6 +374,25 @@
       "direction": "Direção",
       "directionLtr": "Da esquerda para a direita",
       "directionRtl": "Da direita para a esquerda"
+    },
+    "bookmark": {
+      "title": "Indicador",
+      "name": "Nome do indicador",
+      "list": "Indicadores",
+      "empty": "Este documento não tem indicadores.",
+      "sortBy": "Classificar por",
+      "sortName": "Nome",
+      "sortLocation": "Local",
+      "showHidden": "Indicadores ocultos",
+      "add": "Adicionar",
+      "delete": "Excluir",
+      "goTo": "Ir para",
+      "nameEmpty": "Digite um nome de indicador.",
+      "nameTooLong": "Um nome de indicador tem no máximo 40 caracteres.",
+      "nameInvalidStart": "Um nome de indicador começa com uma letra.",
+      "nameInvalidCharacter": "Use apenas letras, dígitos e sublinhados.",
+      "nameExists": "Já existe um indicador com este nome. Adicionar o move para a seleção.",
+      "refused": "Não foi possível alterar o indicador."
     }
   },
   "comments": {

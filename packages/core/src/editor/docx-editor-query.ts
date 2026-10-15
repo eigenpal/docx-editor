@@ -66,6 +66,8 @@ export function queryEditorDocument<K extends keyof EditorQueries>(
       return tableContextOf(surface) as EditorQueryResults[K];
     case 'watermark':
       return watermarkQueryOf(surface) as EditorQueryResults[K];
+    case 'bookmarks':
+      return (surface?.bookmarkEditing.list() ?? []) as unknown as EditorQueryResults[K];
     default:
       // splitCellConfig and pageContent are nullable and underived.
       return null as EditorQueryResults[K];

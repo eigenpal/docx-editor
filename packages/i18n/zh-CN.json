@@ -55,7 +55,9 @@
     "printNoViewer": "此浏览器无法从页面打印 PDF 文件。请选择“打开 PDF”，然后从 PDF 查看器打印。",
     "printLoadFailed": "未能加载要打印的 PDF。请选择“打开 PDF”，然后从 PDF 查看器打印。",
     "printRefused": "浏览器不允许从页面打印。请选择“打开 PDF”，然后从 PDF 查看器打印。",
-    "insertTextBox": "文本框"
+    "insertTextBox": "文本框",
+    "bookmark": "书签…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "格式刷 (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "显示段落标记",
     "label": "格式设置控件",
-    "addComment": "添加批注"
+    "addComment": "添加批注",
+    "showBookmarks": "显示书签"
   },
   "alignment": {
     "alignLeft": "左对齐",
@@ -371,6 +374,25 @@
       "direction": "方向",
       "directionLtr": "从左到右",
       "directionRtl": "从右到左"
+    },
+    "bookmark": {
+      "title": "书签",
+      "name": "书签名",
+      "list": "书签",
+      "empty": "此文档没有书签。",
+      "sortBy": "排序依据",
+      "sortName": "名称",
+      "sortLocation": "位置",
+      "showHidden": "隐藏书签",
+      "add": "添加",
+      "delete": "删除",
+      "goTo": "定位",
+      "nameEmpty": "请输入书签名。",
+      "nameTooLong": "书签名最多包含 40 个字符。",
+      "nameInvalidStart": "书签名以字母开头。",
+      "nameInvalidCharacter": "只能使用字母、数字和下划线。",
+      "nameExists": "已存在同名书签。添加会将其移到所选内容。",
+      "refused": "无法更改书签。"
     }
   },
   "comments": {

@@ -115,6 +115,8 @@ export interface PaginatedSurfaceOptions {
   /** Show paragraph-end furniture without changing document content. */
   readonly showParagraphMarks?: boolean;
   readonly onToggleParagraphMarks?: () => void;
+  /** Show bracket marks at bookmarks. Paint-level; the document does not change. */
+  readonly showBookmarks?: boolean;
   /**
    * How tracked changes are coloured: by AUTHOR (the default), by kind, or by author with
    * host-pinned colours. A paint-level option like {@link fieldShading}: it changes no
@@ -191,6 +193,8 @@ export interface PaginatedSurfaceOptions {
    * rather than doing something surprising with it.
    */
   readonly onRequestHyperlink?: () => void;
+  /** Ctrl/Cmd+Shift+F5: open the host's bookmark dialog. Absent leaves the key alone. */
+  readonly onRequestBookmark?: () => void;
   /** Return true when host chrome handles this session. */
   readonly onRequestTextFormField?: (
     session: import('./text-form-field-session.ts').TextFormFieldDialogSession

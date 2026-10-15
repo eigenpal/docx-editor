@@ -219,6 +219,12 @@ export interface HyperlinkChromeHandlers {
   readonly onRequest?: () => void;
 }
 
+/** Host chrome for bookmarks. */
+export interface BookmarkChromeHandlers {
+  /** Ctrl/Cmd+Shift+F5: open the bookmark dialog for the selection. */
+  readonly onRequest?: () => void;
+}
+
 /** Host chrome that edits a clicked Office Math equation. */
 export interface EquationChromeHandlers {
   readonly onPopover?: (activation: EquationActivation) => void;
@@ -268,6 +274,11 @@ export interface DocxEditorInstance extends Editor {
    * command needs.
    */
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+  /**
+   * Wire the host's bookmark dialog to Ctrl/Cmd+Shift+F5. Returns an unsubscribe that
+   * restores whatever was registered before, like {@link DocxEditorInstance.setHyperlinkChrome}.
+   */
+  setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
   /**
    * Register local revision settings chrome. Disposal cancels its active sessions.
    * Manual renderers take priority over fallback renderers. Pass null to use native chrome

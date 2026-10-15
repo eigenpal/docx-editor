@@ -55,7 +55,9 @@
     "printNoViewer": "Bu tarayıcı sayfadan PDF dosyalarını yazdıramaz. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
     "printLoadFailed": "PDF yazdırılmak üzere yüklenemedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
     "printRefused": "Tarayıcı sayfadan yazdırmaya izin vermedi. PDF'yi aç seçeneğini seçin, ardından PDF görüntüleyicisinden yazdırın.",
-    "insertTextBox": "Metin Kutusu"
+    "insertTextBox": "Metin Kutusu",
+    "bookmark": "Yer işareti…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "Biçim boyacısı (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Paragraf sonlarını göster",
     "label": "Biçimlendirme denetimleri",
-    "addComment": "Açıklama ekle"
+    "addComment": "Açıklama ekle",
+    "showBookmarks": "Yer işaretlerini göster"
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -371,6 +374,25 @@
       "direction": "Yön",
       "directionLtr": "Soldan sağa",
       "directionRtl": "Sağdan sola"
+    },
+    "bookmark": {
+      "title": "Yer işareti",
+      "name": "Yer işareti adı",
+      "list": "Yer işaretleri",
+      "empty": "Bu belgede yer işareti yok.",
+      "sortBy": "Sıralama ölçütü",
+      "sortName": "Ad",
+      "sortLocation": "Konum",
+      "showHidden": "Gizli yer işaretleri",
+      "add": "Ekle",
+      "delete": "Sil",
+      "goTo": "Git",
+      "nameEmpty": "Bir yer işareti adı girin.",
+      "nameTooLong": "Yer işareti adı en fazla 40 karakterdir.",
+      "nameInvalidStart": "Yer işareti adı bir harfle başlar.",
+      "nameInvalidCharacter": "Yalnızca harf, rakam ve alt çizgi kullanın.",
+      "nameExists": "Bu adla bir yer işareti var. Ekle, onu seçime taşır.",
+      "refused": "Yer işareti değiştirilemedi."
     }
   },
   "comments": {

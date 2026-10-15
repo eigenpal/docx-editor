@@ -218,19 +218,14 @@ import {
   suggestingModeRefusal,
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
-import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 import { initialsOfAuthor, normalizeEditorAuthor } from './docx-editor-author.ts';
 import {
   createDocxEditorHostConfigState,
   liveHostConfigSetters,
 } from './docx-editor-host-config.ts';
-import type {
-  DocxEditorConfig,
-  DocxEditorInstance,
-  EquationChromeHandlers,
-  HyperlinkChromeHandlers,
-} from './docx-editor-types.ts';
+import type { DocxEditorConfig, DocxEditorInstance } from './docx-editor-types.ts';
 export type {
+  BookmarkChromeHandlers,
   DocxEditorConfig,
   DocxEditorInstance,
   EquationChromeHandlers,
@@ -397,8 +392,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
   const popupChrome = createEditorPopupChrome();
-  const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
-  const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
   let destroyed = false;
 
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
@@ -506,6 +499,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const paragraphMarks = createEditorParagraphMarks((visible) => {
     surface?.setShowParagraphMarks(visible);
+    bump();
+    emitSelectionChange();
+  });
+  const bookmarkMarks = createEditorParagraphMarks((visible) => {
+    surface?.bookmarkEditing.setShown(visible);
     bump();
     emitSelectionChange();
   });
@@ -644,6 +642,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       scale: scaleOf(),
       showParagraphMarks: paragraphMarks.get(),
       onToggleParagraphMarks: paragraphMarks.toggle,
+      showBookmarks: bookmarkMarks.get(),
       // What a run with no authored font is REPORTED as, matching what it is measured
       // as (`resolveFont`'s fallback below) — so a blank document's font box reads
       // "Calibri", not an em-dash.
@@ -682,14 +681,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...configSurfaceOptions(config),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
-      // Read through the holder rather than captured: the popover mounts AFTER the editor
-      // exists (the provider-first shape), and a document that reloads must not leave the
-      // host's chrome wired to the surface it replaced.
-      onHyperlinkPopover: (activation) => hyperlinkChrome.current().onPopover?.(activation),
       ...popupChrome.surfaceOptions,
-      onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onHostMoved: followHost,
-      onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
         if (reviewPaneOpen || !reviewPane.opensOnTrackedChange()) return;
         reviewPaneOpen = true;
@@ -1218,6 +1211,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewPaneOpen,
       reviewPane: reviewPane.current(),
       showParagraphMarks: paragraphMarks.get(),
+      showBookmarks: bookmarkMarks.get(),
       documentProtection: protection.state(),
       revisionMarkup: revisionMarkupState.current(),
       reviewDisplayMode:
@@ -1776,9 +1770,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
 
     ...popupChrome.setters,
-    setHyperlinkChrome: hyperlinkChrome.push,
-
-    setEquationChrome: equationChrome.push,
 
     stateVersion: () => stateVersion,
 
@@ -1921,8 +1912,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
-      if (command.type === 'toggleParagraphMarks') {
-        paragraphMarks.toggle();
+      if (command.type === 'toggleParagraphMarks' || command.type === 'toggleBookmarks') {
+        (command.type === 'toggleBookmarks' ? bookmarkMarks : paragraphMarks).toggle();
         return { ok: true, changed: false };
       }
       if (command.type === 'toggleReviewPane') {
@@ -2068,6 +2059,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // stays honest-false until its derivation exists.
     isActive(command) {
       if (command.type === 'toggleParagraphMarks') return paragraphMarks.get();
+      if (command.type === 'toggleBookmarks') return bookmarkMarks.get();
       if (command.type === 'toggleDocumentProtection') return protection.isActive();
       if (command.type === 'setReviewDisplayMode') return reviewDisplayMode === command.mode;
       if (command.type === 'toggleReviewPane') return reviewPaneOpen;

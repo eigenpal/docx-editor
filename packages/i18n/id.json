@@ -55,7 +55,9 @@
     "printNoViewer": "Browser ini tidak dapat mencetak file PDF dari halaman. Pilih Buka PDF, lalu cetak dari penampil PDF.",
     "printLoadFailed": "PDF tidak dapat dimuat untuk dicetak. Pilih Buka PDF, lalu cetak dari penampil PDF.",
     "printRefused": "Browser tidak mengizinkan pencetakan dari halaman. Pilih Buka PDF, lalu cetak dari penampil PDF.",
-    "insertTextBox": "Kotak Teks"
+    "insertTextBox": "Kotak Teks",
+    "bookmark": "Penanda…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "Pewarna Format (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Tampilkan pemisah paragraf",
     "label": "Kontrol pemformatan",
-    "addComment": "Tambahkan komentar"
+    "addComment": "Tambahkan komentar",
+    "showBookmarks": "Tampilkan penanda"
   },
   "alignment": {
     "alignLeft": "Rata Kiri",
@@ -371,6 +374,25 @@
       "direction": "Arah",
       "directionLtr": "Kiri ke kanan",
       "directionRtl": "Kanan ke kiri"
+    },
+    "bookmark": {
+      "title": "Penanda",
+      "name": "Nama penanda",
+      "list": "Penanda",
+      "empty": "Dokumen ini tidak memiliki penanda.",
+      "sortBy": "Urutkan menurut",
+      "sortName": "Nama",
+      "sortLocation": "Lokasi",
+      "showHidden": "Penanda tersembunyi",
+      "add": "Tambah",
+      "delete": "Hapus",
+      "goTo": "Buka",
+      "nameEmpty": "Masukkan nama penanda.",
+      "nameTooLong": "Nama penanda berisi paling banyak 40 karakter.",
+      "nameInvalidStart": "Nama penanda dimulai dengan huruf.",
+      "nameInvalidCharacter": "Gunakan hanya huruf, angka, dan garis bawah.",
+      "nameExists": "Penanda dengan nama ini sudah ada. Tambah memindahkannya ke pilihan.",
+      "refused": "Penanda tidak dapat diubah."
     }
   },
   "comments": {

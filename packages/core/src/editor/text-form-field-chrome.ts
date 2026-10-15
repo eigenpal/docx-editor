@@ -1,6 +1,12 @@
 import type { ContentControlWidgetSession, InvalidTextFormFieldSession } from './popup-sessions.ts';
 import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
+import type {
+  BookmarkChromeHandlers,
+  EquationChromeHandlers,
+  HyperlinkChromeHandlers,
+} from './docx-editor-types.ts';
+import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 
 /**
  * Manual renderers take priority over automatic adapter fallbacks in either mount order.
@@ -53,8 +59,18 @@ export function createSessionChrome<Session extends { signal: AbortSignal; cance
 /** Own Field Options sessions independently of surface replacement. */
 export const createTextFormFieldChrome = () => createSessionChrome<TextFormFieldDialogSession>();
 
-/** Facade wiring shared by the three core-owned popup session families. */
+/**
+ * Facade wiring for host chrome: the three core-owned popup session families, and the
+ * hyperlink, equation and bookmark handlers.
+ *
+ * The handlers are read through their holders rather than captured: chrome mounts AFTER the
+ * editor exists (the provider-first shape), and a document that reloads must not leave the
+ * host's chrome wired to the surface it replaced.
+ */
 export function createEditorPopupChrome() {
+  const hyperlink = createChromeHandlerStack<HyperlinkChromeHandlers>({});
+  const equation = createChromeHandlerStack<EquationChromeHandlers>({});
+  const bookmark = createChromeHandlerStack<BookmarkChromeHandlers>({});
   const text = createTextFormFieldChrome();
   // Checkbox and picture presses reach only renderers that ask for them: a pop-up renderer
   // written before those sessions existed keeps working, and the engine toggles the box or
@@ -71,11 +87,22 @@ export function createEditorPopupChrome() {
       onRequestTextFormField: text.request,
       onRequestContentControlWidget: widget.request,
       onRequestInvalidTextFormField: invalid.request,
+      onHyperlinkPopover: (
+        activation: Parameters<NonNullable<HyperlinkChromeHandlers['onPopover']>>[0]
+      ) => hyperlink.current().onPopover?.(activation),
+      onRequestHyperlink: () => hyperlink.current().onRequest?.(),
+      onEquationPopover: (
+        activation: Parameters<NonNullable<EquationChromeHandlers['onPopover']>>[0]
+      ) => equation.current().onPopover?.(activation),
+      onRequestBookmark: () => bookmark.current().onRequest?.(),
     },
     setters: {
       setTextFormFieldChrome: text.register,
       setContentControlWidgetChrome: widget.register,
       setInvalidTextFormFieldChrome: invalid.register,
+      setHyperlinkChrome: hyperlink.push,
+      setEquationChrome: equation.push,
+      setBookmarkChrome: bookmark.push,
     },
   };
 }

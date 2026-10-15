@@ -11,6 +11,7 @@ export function canEditorViewCommand(
   if (
     command.type !== 'toggleReviewPane' &&
     command.type !== 'toggleParagraphMarks' &&
+    command.type !== 'toggleBookmarks' &&
     command.type !== 'setEditingMode'
   )
     return null;
@@ -21,7 +22,10 @@ export function canEditorViewCommand(
   return { ok: true };
 }
 
-/** Per-editor paragraph-mark preference, independent of the document and its history. */
+/**
+ * A per-editor view toggle, independent of the document and its history: paragraph marks and
+ * bookmark marks.
+ */
 export function createEditorParagraphMarks(onChange: (visible: boolean) => void) {
   let visible = false;
   return {

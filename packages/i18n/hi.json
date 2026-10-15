@@ -55,7 +55,9 @@
     "printNoViewer": "यह ब्राउज़र पृष्ठ से PDF फ़ाइलें प्रिंट नहीं कर सकता। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
     "printLoadFailed": "प्रिंट के लिए PDF लोड नहीं हुआ। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
     "printRefused": "ब्राउज़र ने पृष्ठ से प्रिंट की अनुमति नहीं दी। PDF खोलें चुनें, फिर PDF व्यूअर से प्रिंट करें।",
-    "insertTextBox": "टेक्स्ट बॉक्स"
+    "insertTextBox": "टेक्स्ट बॉक्स",
+    "bookmark": "बुकमार्क…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "फ़ॉर्मेट पेंटर (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "अनुच्छेद विराम दिखाएँ",
     "label": "स्वरूपण नियंत्रण",
-    "addComment": "टिप्पणी जोड़ें"
+    "addComment": "टिप्पणी जोड़ें",
+    "showBookmarks": "बुकमार्क दिखाएँ"
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -371,6 +374,25 @@
       "direction": "दिशा",
       "directionLtr": "बाएँ से दाएँ",
       "directionRtl": "दाएँ से बाएँ"
+    },
+    "bookmark": {
+      "title": "बुकमार्क",
+      "name": "बुकमार्क का नाम",
+      "list": "बुकमार्क",
+      "empty": "इस दस्तावेज़ में कोई बुकमार्क नहीं है।",
+      "sortBy": "इसके अनुसार क्रमबद्ध करें",
+      "sortName": "नाम",
+      "sortLocation": "स्थान",
+      "showHidden": "छिपे हुए बुकमार्क",
+      "add": "जोड़ें",
+      "delete": "हटाएँ",
+      "goTo": "पर जाएँ",
+      "nameEmpty": "बुकमार्क का नाम दर्ज करें।",
+      "nameTooLong": "बुकमार्क के नाम में अधिकतम 40 वर्ण होते हैं।",
+      "nameInvalidStart": "बुकमार्क का नाम किसी अक्षर से शुरू होता है।",
+      "nameInvalidCharacter": "केवल अक्षर, अंक और अंडरस्कोर का उपयोग करें।",
+      "nameExists": "इस नाम का बुकमार्क मौजूद है। जोड़ें उसे चयन पर ले जाता है।",
+      "refused": "बुकमार्क बदला नहीं जा सका।"
     }
   },
   "comments": {

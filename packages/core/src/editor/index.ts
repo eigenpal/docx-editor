@@ -233,6 +233,7 @@ export {
   type DocxEditorConfig,
   type EquationChromeHandlers,
   type HyperlinkChromeHandlers,
+  type BookmarkChromeHandlers,
 } from './docx-editor.ts';
 // `DocxEditorInstance.fontMeasurement()` returns it, so the lane that exports the instance
 // has to export the answer too.
@@ -589,3 +590,11 @@ export {
   watermarkShapeBox,
   type WatermarkSize,
 } from './watermark-geometry.ts';
+
+/** The Bookmark dialog's list order and name rules, shared by the React and Vue dialogs. */
+export {
+  bookmarkDialogNameState,
+  bookmarkDialogRows,
+  type BookmarkDialogNameState,
+  type BookmarkSortOrder,
+} from './bookmark-dialog-model.ts';

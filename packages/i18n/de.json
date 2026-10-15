@@ -55,7 +55,9 @@
     "printNoViewer": "Dieser Browser kann PDF-Dateien nicht von der Seite aus drucken. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
     "printLoadFailed": "Die PDF-Datei konnte zum Drucken nicht geladen werden. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
     "printRefused": "Der Browser hat das Drucken von der Seite aus nicht zugelassen. Wählen Sie „PDF öffnen“ und drucken Sie anschließend im PDF-Anzeigeprogramm.",
-    "insertTextBox": "Textfeld"
+    "insertTextBox": "Textfeld",
+    "bookmark": "Textmarke…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "Format übertragen (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Absatzmarken anzeigen",
     "label": "Formatierungssteuerelemente",
-    "addComment": "Kommentar hinzufügen"
+    "addComment": "Kommentar hinzufügen",
+    "showBookmarks": "Textmarken anzeigen"
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -371,6 +374,25 @@
       "direction": "Richtung",
       "directionLtr": "Von links nach rechts",
       "directionRtl": "Von rechts nach links"
+    },
+    "bookmark": {
+      "title": "Textmarke",
+      "name": "Name der Textmarke",
+      "list": "Textmarken",
+      "empty": "Dieses Dokument enthält keine Textmarken.",
+      "sortBy": "Sortieren nach",
+      "sortName": "Name",
+      "sortLocation": "Ort",
+      "showHidden": "Ausgeblendete Textmarken",
+      "add": "Hinzufügen",
+      "delete": "Löschen",
+      "goTo": "Gehe zu",
+      "nameEmpty": "Geben Sie einen Namen für die Textmarke ein.",
+      "nameTooLong": "Ein Textmarkenname hat höchstens 40 Zeichen.",
+      "nameInvalidStart": "Ein Textmarkenname beginnt mit einem Buchstaben.",
+      "nameInvalidCharacter": "Verwenden Sie nur Buchstaben, Ziffern und Unterstriche.",
+      "nameExists": "Eine Textmarke mit diesem Namen ist vorhanden. „Hinzufügen“ verschiebt sie zur Auswahl.",
+      "refused": "Die Textmarke konnte nicht geändert werden."
     }
   },
   "comments": {

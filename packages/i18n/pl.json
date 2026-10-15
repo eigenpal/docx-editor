@@ -55,7 +55,9 @@
     "printNoViewer": "Ta przeglądarka nie może drukować plików PDF z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
     "printLoadFailed": "Nie udało się wczytać pliku PDF do drukowania. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
     "printRefused": "Przeglądarka nie zezwoliła na drukowanie z tej strony. Wybierz „Otwórz PDF”, a następnie wydrukuj plik z przeglądarki PDF.",
-    "insertTextBox": "Pole tekstowe"
+    "insertTextBox": "Pole tekstowe",
+    "bookmark": "Zakładka…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "Malarz formatów (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Pokaż znaki akapitu",
     "label": "Elementy sterujące formatowaniem",
-    "addComment": "Dodaj komentarz"
+    "addComment": "Dodaj komentarz",
+    "showBookmarks": "Pokaż zakładki"
   },
   "alignment": {
     "alignLeft": "Wyrównaj do lewej",
@@ -371,6 +374,25 @@
       "direction": "Kierunek",
       "directionLtr": "Od lewej do prawej",
       "directionRtl": "Od prawej do lewej"
+    },
+    "bookmark": {
+      "title": "Zakładka",
+      "name": "Nazwa zakładki",
+      "list": "Zakładki",
+      "empty": "Ten dokument nie ma zakładek.",
+      "sortBy": "Sortuj według",
+      "sortName": "Nazwa",
+      "sortLocation": "Położenie",
+      "showHidden": "Ukryte zakładki",
+      "add": "Dodaj",
+      "delete": "Usuń",
+      "goTo": "Przejdź do",
+      "nameEmpty": "Wpisz nazwę zakładki.",
+      "nameTooLong": "Nazwa zakładki ma najwyżej 40 znaków.",
+      "nameInvalidStart": "Nazwa zakładki zaczyna się od litery.",
+      "nameInvalidCharacter": "Używaj tylko liter, cyfr i podkreśleń.",
+      "nameExists": "Zakładka o tej nazwie już istnieje. Dodaj przenosi ją do zaznaczenia.",
+      "refused": "Nie udało się zmienić zakładki."
     }
   },
   "comments": {

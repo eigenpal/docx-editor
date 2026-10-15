@@ -87,7 +87,9 @@
     "printRefused": "ブラウザーがこのページからの印刷を許可しませんでした。「PDF を開く」を選択し、PDF ビューアーから印刷してください。",
     "printNoViewer": "このブラウザーでは、ページから PDF を印刷できません。「PDF を開く」を選択し、PDF ビューアーから印刷してください。",
     "printPdfMissing": "印刷には PDF 変換を使用します。Node.js サーバーに @docx-editor.dev/docx-to-pdf をインストールし、menu.exporters.pdf を設定してください。",
-    "insertTextBox": "テキスト ボックス"
+    "insertTextBox": "テキスト ボックス",
+    "bookmark": "ブックマーク…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "toc": {
     "refresh": "目次の更新",
@@ -139,7 +141,8 @@
     "more": "その他",
     "unavailableInPreview": "このプレビュー版では使用できません",
     "paragraphMarks": "段落記号の表示",
-    "addComment": "コメントを追加"
+    "addComment": "コメントを追加",
+    "showBookmarks": "ブックマークを表示"
   },
   "alignment": {
     "alignLeft": "左揃え",
@@ -407,6 +410,25 @@
       "tabMixed": "選択した段落のタブ位置は統一されていません。",
       "mixed": "複数の値",
       "notShown": "ここには表示されません"
+    },
+    "bookmark": {
+      "title": "ブックマーク",
+      "name": "ブックマーク名",
+      "list": "ブックマーク",
+      "empty": "この文書にはブックマークがありません。",
+      "sortBy": "並べ替え",
+      "sortName": "名前",
+      "sortLocation": "位置",
+      "showHidden": "隠しブックマーク",
+      "add": "追加",
+      "delete": "削除",
+      "goTo": "ジャンプ",
+      "nameEmpty": "ブックマーク名を入力してください。",
+      "nameTooLong": "ブックマーク名は 40 文字以内です。",
+      "nameInvalidStart": "ブックマーク名は文字で始まります。",
+      "nameInvalidCharacter": "文字、数字、アンダースコアのみを使用してください。",
+      "nameExists": "この名前のブックマークは既にあります。追加すると選択範囲に移動します。",
+      "refused": "ブックマークを変更できませんでした。"
     }
   },
   "comments": {

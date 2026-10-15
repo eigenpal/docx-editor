@@ -87,7 +87,9 @@
     "printRefused": "The browser did not allow printing from the page. Select Open PDF, then print from the PDF viewer.",
     "printNoViewer": "This browser cannot print PDF files from the page. Select Open PDF, then print from the PDF viewer.",
     "printPdfMissing": "Printing uses PDF conversion. Install @docx-editor.dev/docx-to-pdf on your Node.js server and configure menu.exporters.pdf.",
-    "insertTextBox": "Text Box"
+    "insertTextBox": "Text Box",
+    "bookmark": "Bookmark…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "toc": {
     "refresh": "Refresh table of contents",
@@ -139,7 +141,8 @@
     "addComment": "Add comment",
     "more": "More",
     "unavailableInPreview": "Not available in this preview build",
-    "paragraphMarks": "Show paragraph breaks"
+    "paragraphMarks": "Show paragraph breaks",
+    "showBookmarks": "Show bookmarks"
   },
   "alignment": {
     "alignLeft": "Align Left",
@@ -407,6 +410,25 @@
       "tabMixed": "The selected paragraphs have different tab stops.",
       "mixed": "Mixed",
       "notShown": "Not shown here"
+    },
+    "bookmark": {
+      "title": "Bookmark",
+      "name": "Bookmark name",
+      "list": "Bookmarks",
+      "empty": "This document has no bookmarks.",
+      "sortBy": "Sort by",
+      "sortName": "Name",
+      "sortLocation": "Location",
+      "showHidden": "Hidden bookmarks",
+      "add": "Add",
+      "delete": "Delete",
+      "goTo": "Go To",
+      "nameEmpty": "Enter a bookmark name.",
+      "nameTooLong": "A bookmark name has at most 40 characters.",
+      "nameInvalidStart": "A bookmark name starts with a letter.",
+      "nameInvalidCharacter": "Use only letters, digits, and underscores.",
+      "nameExists": "A bookmark with this name exists. Add moves it to the selection.",
+      "refused": "The bookmark could not be changed."
     }
   },
   "comments": {

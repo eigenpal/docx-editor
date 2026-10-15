@@ -87,6 +87,15 @@ export const REVIEW_CHROME_GROUP = {
       state: { kind: 'command' },
     },
     {
+      // Bracket marks at bookmarks; presentation only, like paragraph marks.
+      id: 'bookmarks',
+      shape: 'icon',
+      labelKey: 'formattingBar.showBookmarks',
+      defaultToolbar: false,
+      paths: GENERATED_ICON_PATHS['bookmarks'],
+      state: { kind: 'command' },
+    },
+    {
       // Word's Protect Document (Restrict Editing on Windows), reduced to the one restriction
       // this row applies: filling in forms. The label says so, because the row offers no
       // choice of restriction and one click makes ordinary prose untypable. Pressed while the

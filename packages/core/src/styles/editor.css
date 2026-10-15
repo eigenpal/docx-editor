@@ -185,6 +185,8 @@
      part of the revision ramp: a field is not a pending decision. Kept light enough that a
      contents page dense with them still reads as text. Never printed. */
   --doc-field-shading: rgba(0, 0, 0, 0.09);
+  /* Bracket marks at bookmarks when "Show bookmarks" is on. A neutral grey, never printed. */
+  --doc-bookmark-mark: #808080;
   /* A tracked FORMAT change: the words are unchanged, so it takes neither the insertion nor
      the deletion colour — grey says "the appearance is the decision". The wash plus a faint
      dotted rule make the range findable (it is the hover balloon's target); both are quiet
@@ -404,6 +406,7 @@
   --doc-revision-format: #9fb3bf;
   /* Painted on the sheet, outside the content-box inversion, so this value is the ink. */
   --doc-review-change-bar: #9e9e9e;
+  --doc-bookmark-mark: #9e9e9e;
   --doc-review-change-bar-simple: #f0524a;
   --doc-text: #e8e8e8; /* primary text */
   --doc-text-muted: #a0a0a0; /* secondary text */
@@ -886,10 +889,37 @@ a.docx-hyperlink:focus-visible {
   background: color-mix(in srgb, var(--doc-primary) 6%, var(--doc-page-bg-rendered));
 }
 
+/* Bookmark marks: a bracket at a bookmark's start and end, an I-beam at a point bookmark.
+ * Painted in an overlay sheet beside the pages from layout geometry, so they never take part
+ * in selection, hit testing or the caret, and they are never part of an export or a print.
+ * The line runs the height of the text line; the serifs are the bracket's arms. */
+.docx-bookmark-mark {
+  box-sizing: border-box;
+  border: 0 solid var(--doc-bookmark-mark);
+}
+
+.docx-bookmark-mark--start {
+  border-width: 1px 0 1px 1px;
+}
+
+.docx-bookmark-mark--end {
+  border-width: 1px 1px 1px 0;
+}
+
+.docx-bookmark-mark--point {
+  border-width: 1px 0;
+  background: linear-gradient(var(--doc-bookmark-mark), var(--doc-bookmark-mark)) center / 1px 100%
+    no-repeat;
+}
+
+@media print {
+  .docx-bookmark-overlay {
+    display: none;
+  }
+}
+
 /* Non-editable elements within editor */
 .docx-list-marker,
-.docx-bookmark-start,
-.docx-bookmark-end,
 .docx-field,
 .docx-drawing-placeholder,
 .docx-shape-placeholder,

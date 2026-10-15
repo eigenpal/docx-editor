@@ -55,7 +55,9 @@
     "printNoViewer": "Ce navigateur ne peut pas imprimer de fichiers PDF depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
     "printLoadFailed": "Le PDF n’a pas pu être chargé pour l’impression. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
     "printRefused": "Le navigateur a refusé l’impression depuis la page. Sélectionnez « Ouvrir le PDF », puis imprimez depuis le lecteur PDF.",
-    "insertTextBox": "Zone de texte"
+    "insertTextBox": "Zone de texte",
+    "bookmark": "Signet…",
+    "bookmarkShortcut": "Ctrl+Shift+F5"
   },
   "formattingBar": {
     "groups": {
@@ -103,7 +105,8 @@
     "formatPainterShortcut": "Reproduire la mise en forme (Ctrl+Alt+C, Ctrl+Alt+V)",
     "paragraphMarks": "Afficher les marques de paragraphe",
     "label": "Commandes de mise en forme",
-    "addComment": "Ajouter un commentaire"
+    "addComment": "Ajouter un commentaire",
+    "showBookmarks": "Afficher les signets"
   },
   "alignment": {
     "alignLeft": "Aligner à gauche",
@@ -371,6 +374,25 @@
       "direction": "Orientation",
       "directionLtr": "De gauche à droite",
       "directionRtl": "De droite à gauche"
+    },
+    "bookmark": {
+      "title": "Signet",
+      "name": "Nom du signet",
+      "list": "Signets",
+      "empty": "Ce document ne contient aucun signet.",
+      "sortBy": "Trier par",
+      "sortName": "Nom",
+      "sortLocation": "Emplacement",
+      "showHidden": "Signets masqués",
+      "add": "Ajouter",
+      "delete": "Supprimer",
+      "goTo": "Atteindre",
+      "nameEmpty": "Saisissez un nom de signet.",
+      "nameTooLong": "Un nom de signet compte au plus 40 caractères.",
+      "nameInvalidStart": "Un nom de signet commence par une lettre.",
+      "nameInvalidCharacter": "Utilisez uniquement des lettres, des chiffres et des traits de soulignement.",
+      "nameExists": "Un signet porte déjà ce nom. Ajouter le déplace vers la sélection.",
+      "refused": "Le signet n’a pas pu être modifié."
     }
   },
   "comments": {

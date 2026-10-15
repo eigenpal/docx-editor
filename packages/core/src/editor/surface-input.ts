@@ -102,6 +102,8 @@ export function createKeyDownHandler(
      * rather than doing something surprising.
      */
     readonly onRequestHyperlink?: () => void;
+    /** Ctrl/Cmd+Shift+F5 opens the host's bookmark dialog; absent leaves the key alone. */
+    readonly onRequestBookmark?: () => void;
     readonly onToggleParagraphMarks?: () => void;
     /** @internal */
     readonly onToggleFieldCodes?: () => void;
@@ -120,6 +122,18 @@ export function createKeyDownHandler(
     // drops focus from the pages once they stop being editable; a browser that keeps it would
     // walk an invisible caret, and the toolbar would follow it. Writes refuse on their own.
     if (surface.editingMode() === 'view' && keyMovesSelection(event)) return;
+    if (
+      event.key === 'F5' &&
+      event.shiftKey &&
+      (event.ctrlKey || event.metaKey) &&
+      !event.altKey &&
+      !event.isComposing &&
+      hooks.onRequestBookmark
+    ) {
+      event.preventDefault();
+      hooks.onRequestBookmark();
+      return;
+    }
     // macOS delivers Fn+Option+F9 as Alt+F9; Fn is handled by the keyboard.
     if (
       event.key === 'F9' &&
