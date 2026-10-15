@@ -760,7 +760,7 @@
       "failed": "Nie można wyświetlić zakładki.",
       "typeName": "Wpisz nazwę zakładki lub wybierz ją z listy.",
       "empty": "Ten dokument nie ma zakładek.",
-      "emptyHint": "Zaznacz tekst, a następnie wybierz Wstaw > Zakładka, aby go nazwać.",
+      "emptyHint": "Zaznacz tekst, a następnie dodaj zakładkę, aby go nazwać.",
       "add": "Dodaj zakładkę…",
       "noMatches": "Brak pasujących zakładek.",
       "atCaret": "Zawiera kursor",

@@ -119,6 +119,28 @@ describe('the Go To name box', () => {
     expect(goToBookmarkTarget(all, '  ', offered)).toBeNull();
   });
 
+  test('sorted by location, rows follow the place groups so the arrow keys match the screen', () => {
+    const placed = [
+      { ...summary('Sec1', 0) },
+      { ...summary('HeadA', 1), place: 'header' as const },
+      { ...summary('Foot', 2), place: 'footer' as const },
+      { ...summary('SecH', 3), place: 'header' as const },
+      { ...summary('MySec', 4) },
+    ];
+    const names = (query: string) =>
+      goToBookmarkRows(placed, { query, sortBy: 'location', showHidden: false }).map(
+        (row) => row.name
+      );
+    // Starts-first inside a place, never across places.
+    expect(names('sec')).toEqual(['Sec1', 'MySec', 'SecH']);
+    // Interleaved parts: the headers stay together.
+    expect(names('')).toEqual(['Sec1', 'MySec', 'HeadA', 'SecH', 'Foot']);
+    const rows = goToBookmarkRows(placed, { query: '', sortBy: 'location', showHidden: false });
+    expect(
+      goToBookmarkGroups(rows).flatMap((group) => group.rows.map(({ index }) => index))
+    ).toEqual([0, 1, 2, 3, 4]);
+  });
+
   test('finds the match in a name without case, and groups rows by place in order', () => {
     expect(goToBookmarkMatch('Section10', ' sec ')).toEqual({ start: 0, end: 3 });
     expect(goToBookmarkMatch('Section10', 'TION')).toEqual({ start: 3, end: 7 });

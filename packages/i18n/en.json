@@ -567,7 +567,7 @@
       "failed": "The bookmark could not be shown.",
       "typeName": "Type a bookmark name, or pick one from the list.",
       "empty": "This document has no bookmarks.",
-      "emptyHint": "Select text, then choose Insert > Bookmark to name it.",
+      "emptyHint": "Select text, then add a bookmark to name it.",
       "add": "Add a bookmark…",
       "noMatches": "No bookmarks match.",
       "atCaret": "Contains the cursor",

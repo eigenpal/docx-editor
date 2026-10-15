@@ -760,7 +760,7 @@
       "failed": "Die Textmarke konnte nicht angezeigt werden.",
       "typeName": "Geben Sie einen Textmarkennamen ein, oder wählen Sie einen aus der Liste.",
       "empty": "Dieses Dokument enthält keine Textmarken.",
-      "emptyHint": "Markieren Sie Text, und wählen Sie dann Einfügen > Textmarke, um ihn zu benennen.",
+      "emptyHint": "Markieren Sie Text, und fügen Sie dann eine Textmarke hinzu, um ihn zu benennen.",
       "add": "Textmarke hinzufügen…",
       "noMatches": "Keine passenden Textmarken.",
       "atCaret": "Enthält den Cursor",

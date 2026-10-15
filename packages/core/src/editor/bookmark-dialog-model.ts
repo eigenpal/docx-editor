@@ -35,10 +35,15 @@ export function bookmarkDialogRows(
     : [...rows].sort((a, b) => NAME_ORDER.compare(a.name, b.name) || a.order - b.order);
 }
 
+/** The order of the places on a Go To list sorted by location. */
+const PLACE_ORDER: readonly BookmarkPlace[] = ['body', 'header', 'footer', 'footnote', 'endnote'];
+
 /**
  * The bookmarks a Go To name box offers for what was typed: those whose name contains it,
  * compared without case, in the dialog's order. Names that start with it come first. An empty
- * query offers every row.
+ * query offers every row. Sorted by location, the rows are in the order
+ * {@link goToBookmarkGroups} shows them: by place first, so moving through the list follows
+ * the screen.
  *
  * @public
  */
@@ -52,15 +57,20 @@ export function goToBookmarkRows(
 ): readonly BookmarkSummary[] {
   const rows = bookmarkDialogRows(bookmarks, options);
   const needle = bookmarkNameKey(options.query.trim());
-  if (needle.length === 0) return rows;
-  const starts: BookmarkSummary[] = [];
-  const contains: BookmarkSummary[] = [];
-  for (const row of rows) {
-    const key = bookmarkNameKey(row.name);
-    if (key.startsWith(needle)) starts.push(row);
-    else if (key.includes(needle)) contains.push(row);
+  let offered: readonly BookmarkSummary[] = rows;
+  if (needle.length > 0) {
+    const starts: BookmarkSummary[] = [];
+    const contains: BookmarkSummary[] = [];
+    for (const row of rows) {
+      const key = bookmarkNameKey(row.name);
+      if (key.startsWith(needle)) starts.push(row);
+      else if (key.includes(needle)) contains.push(row);
+    }
+    offered = [...starts, ...contains];
   }
-  return [...starts, ...contains];
+  if (options.sortBy !== 'location') return offered;
+  // Stable: within a place, the order above stays.
+  return [...offered].sort((a, b) => PLACE_ORDER.indexOf(a.place) - PLACE_ORDER.indexOf(b.place));
 }
 
 /**
@@ -109,8 +119,6 @@ export interface GoToBookmarkGroup {
   /** The section's rows, each with its index in the full list (the one the highlight uses). */
   readonly rows: readonly { readonly row: BookmarkSummary; readonly index: number }[];
 }
-
-const PLACE_ORDER: readonly BookmarkPlace[] = ['body', 'header', 'footer', 'footnote', 'endnote'];
 
 /**
  * The rows of a Go To list grouped by place: the main text, then headers, footers, footnotes

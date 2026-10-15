@@ -567,7 +567,7 @@
       "failed": "No se pudo mostrar el marcador.",
       "typeName": "Escriba el nombre de un marcador o elija uno de la lista.",
       "empty": "Este documento no tiene marcadores.",
-      "emptyHint": "Seleccione texto y elija Insertar > Marcador para asignarle un nombre.",
+      "emptyHint": "Seleccione texto y agregue un marcador para asignarle un nombre.",
       "add": "Agregar un marcador…",
       "noMatches": "Ningún marcador coincide.",
       "atCaret": "Contiene el cursor",

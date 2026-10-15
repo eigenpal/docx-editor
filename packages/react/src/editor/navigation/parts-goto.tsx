@@ -189,7 +189,7 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
           value={goTo.query}
           placeholder={t('navigation.goTo.placeholder')}
           aria-label={t('navigation.goTo.label')}
-          aria-describedby={hintId}
+          aria-describedby={active ? hintId : undefined}
           aria-expanded={goTo.rows.length > 0}
           aria-controls={goTo.rows.length > 0 ? listId : undefined}
           aria-autocomplete="list"

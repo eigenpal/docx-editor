@@ -760,7 +760,7 @@
       "failed": "Le signet n’a pas pu être affiché.",
       "typeName": "Saisissez un nom de signet ou choisissez-en un dans la liste.",
       "empty": "Ce document ne contient aucun signet.",
-      "emptyHint": "Sélectionnez du texte, puis choisissez Insertion > Signet pour le nommer.",
+      "emptyHint": "Sélectionnez du texte, puis ajoutez un signet pour le nommer.",
       "add": "Ajouter un signet…",
       "noMatches": "Aucun signet ne correspond.",
       "atCaret": "Contient le curseur",

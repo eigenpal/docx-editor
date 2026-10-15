@@ -760,7 +760,7 @@
       "failed": "Penanda tidak dapat ditampilkan.",
       "typeName": "Ketik nama penanda, atau pilih satu dari daftar.",
       "empty": "Dokumen ini tidak memiliki penanda.",
-      "emptyHint": "Pilih teks, lalu pilih Sisipkan > Penanda untuk menamainya.",
+      "emptyHint": "Pilih teks, lalu tambahkan penanda untuk menamainya.",
       "add": "Tambahkan penanda…",
       "noMatches": "Tidak ada penanda yang cocok.",
       "atCaret": "Berisi kursor",

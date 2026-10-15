@@ -760,7 +760,7 @@
       "failed": "Yer işareti gösterilemedi.",
       "typeName": "Bir yer işareti adı yazın veya listeden birini seçin.",
       "empty": "Bu belgede yer işareti yok.",
-      "emptyHint": "Metin seçin, ardından adlandırmak için Ekle > Yer İşareti’ni seçin.",
+      "emptyHint": "Metin seçin, ardından adlandırmak için bir yer işareti ekleyin.",
       "add": "Yer işareti ekle…",
       "noMatches": "Eşleşen yer işareti yok.",
       "atCaret": "İmleci içerir",

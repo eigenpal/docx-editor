@@ -760,7 +760,7 @@
       "failed": "Não foi possível mostrar o indicador.",
       "typeName": "Digite o nome de um indicador ou escolha um na lista.",
       "empty": "Este documento não tem indicadores.",
-      "emptyHint": "Selecione o texto e escolha Inserir > Indicador para nomeá-lo.",
+      "emptyHint": "Selecione o texto e adicione um indicador para nomeá-lo.",
       "add": "Adicionar um indicador…",
       "noMatches": "Nenhum indicador corresponde.",
       "atCaret": "Contém o cursor",

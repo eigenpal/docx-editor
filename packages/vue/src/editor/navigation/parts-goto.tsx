@@ -200,7 +200,7 @@ export const NavigationGoTo = defineComponent({
               value={query}
               placeholder={t('navigation.goTo.placeholder')}
               aria-label={t('navigation.goTo.label')}
-              aria-describedby={hintId}
+              aria-describedby={activeIndex >= 0 ? hintId : undefined}
               aria-expanded={rows.length > 0}
               aria-controls={rows.length > 0 ? listId : undefined}
               aria-autocomplete="list"
