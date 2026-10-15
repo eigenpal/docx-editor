@@ -65,8 +65,9 @@ export interface PositionalTab {
  */
 export interface FieldAtomMarker {
   /**
-   * A REF cross-reference with no nested field: its result is the target's text or number,
-   * which pagination never changes, so a justified line may treat it as an ordinary word.
+   * A plain REF cross-reference with no nested field (not PAGEREF or NOTEREF): its result,
+   * the target's text or number, never changes with pagination, so a justified line may treat
+   * it as an ordinary word.
    */
   readonly fixedResult?: true;
   /**

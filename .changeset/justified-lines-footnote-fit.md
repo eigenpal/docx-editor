@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 '@docx-editor.dev/docx-to-pdf': patch
 ---
 

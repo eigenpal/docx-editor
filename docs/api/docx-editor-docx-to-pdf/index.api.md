@@ -165,12 +165,13 @@ export class PdfEncodingError extends Error {
 }
 
 // @public
-export interface PdfExportOptions extends Omit<OpenFontBackedDocumentForExportOptions, 'fonts' | 'measurer' | 'producer' | 'reuseAcrossRevisions'> {
+export interface PdfExportOptions extends Omit<OpenFontBackedDocumentForExportOptions, 'fonts' | 'measurer' | 'producer' | 'reuseAcrossRevisions' | 'fontShaping'> {
     readonly comments?: boolean;
     readonly displayMode?: ReviewDisplayMode;
     readonly documentLigatures?: boolean;
     readonly fallbackFonts?: PdfFontsSource;
     readonly fidelityPolicy?: 'strict' | 'best-effort';
+    readonly fontShaping?: FontShapingOptions;
     readonly fonts?: PdfFontsSource;
     readonly lastResortFonts?: PdfFontsSource;
     readonly maxOutputBytes?: number;

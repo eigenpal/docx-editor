@@ -12,13 +12,13 @@ const paragraph = (text: string) =>
 const edges = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
 
 /** Three one-line rows with 0.5pt rules on every edge and no cell margins. */
-function table() {
+function table(lastRowLines = 1) {
   const parsed = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr>
     <w:tblBorders>${edges.map((edge) => `<w:${edge} w:val="single" w:sz="4"/>`).join('')}</w:tblBorders>
     <w:tblCellMar>${['top', 'bottom', 'left', 'right'].map((s) => `<w:${s} w:w="0" w:type="dxa"/>`).join('')}</w:tblCellMar>
     </w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>
-    ${['One', 'Two', 'Three'].map((text) => `<w:tr><w:tc>${paragraph(text)}</w:tc></w:tr>`).join('')}
+    ${['One', 'Two', 'Three'].map((text, index) => `<w:tr><w:tc>${index === 2 ? Array.from({ length: lastRowLines }, (_, line) => paragraph(`${text}${line}`)).join('') : paragraph(text)}</w:tc></w:tr>`).join('')}
     </w:tbl></w:body></w:document>`,
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
@@ -26,8 +26,8 @@ function table() {
   return parsed.part;
 }
 
-function firstPageRows(height: number): string[] {
-  const result = layoutSemanticDocument(table(), 0, {
+function firstPageRows(height: number, lastRowLines = 1): string[] {
+  const result = layoutSemanticDocument(table(lastRowLines), 0, {
     measurer: createFixedMeasurer(5, 12),
     session: createLayoutSession(),
     geometry: { width: 150, height, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
@@ -55,5 +55,7 @@ test('a row that ends the page needs room for its closing border', () => {
 });
 
 test('a row followed on the page by another row keeps its place', () => {
-  expect(firstPageRows(38)).toEqual(['One', 'Two', 'Three']);
+  expect(firstPageRows(38)).toEqual(['One', 'Two', 'Three0']);
+  // A two-line row that may split opens on the page, so the row above does not end it.
+  expect(firstPageRows(38, 2)).toEqual(['One', 'Two', 'Three0']);
 });

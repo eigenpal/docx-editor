@@ -46,9 +46,8 @@ export function terminalBorderPlanAt(at: TerminalRowAt): TerminalBorderPlan | un
 }
 
 /**
- * Room below a fitting row in which its closing border is checked. Wider than the widest
- * compound border (thick-thin-thick rules reach about 18pt) and narrower than any row that
- * could follow, so a row with more room never ends the page here.
+ * Room below a fitting row in which its closing border is checked: as wide as the widest
+ * compound border (thick-thin-thick rules reach about 18pt). With more room the border fits.
  */
 const CLOSING_EDGE_BAND_PT = 18;
 
@@ -141,6 +140,8 @@ export function sameTerminalContent(a: TableRowFragmentRecord, b: TableRowFragme
 /**
  * Whether `next` places at least its opening below `top`, before `bottom`: whole, or, for a
  * row that may split, its first line in every cell. Then the row above does not end the page.
+ * Keeps inside the next row's cells (`w:keepLines`) are not read here; such a row may still
+ * move whole, and the row above then keeps its ordinary placement.
  */
 export function rowFollowsBelow(
   next: SemanticTableRow | undefined,

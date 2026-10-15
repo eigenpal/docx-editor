@@ -103,6 +103,9 @@ test('a hard break, trailing tab, or page field after or as the last word keeps 
     '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:br/></w:r>',
     '<w:r><w:t xml:space="preserve">aa bb cc </w:t><w:tab/></w:r>',
     runs(['aa bb ']) + `<w:fldSimple w:instr="PAGE"><w:r><w:t>cc</w:t></w:r></w:fldSimple>`,
+    // A page reference and a note reference can change width after the line is decided.
+    runs(['aa bb ']) + ref('cc').replace(' REF bm1 ', ' PAGEREF bm1 '),
+    runs(['aa bb ']) + ref('cc').replace(' REF bm1 ', ' NOTEREF bm1 '),
   ]) {
     const result = modern(paragraph(xml));
     expect(content(result)[0]).toBe('aa bb');

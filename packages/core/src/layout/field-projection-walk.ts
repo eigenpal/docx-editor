@@ -70,6 +70,7 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
 import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-accessibility.ts';
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
+import { plainRefSpec } from './field-ref-parse.ts';
 import { fieldProjectionSpansOf } from './field-projection-spans.ts';
 import { markSavedResultPieces, savedSimpleResultLink } from './field-saved-result.ts';
 import {
@@ -270,7 +271,9 @@ export function unmergedPiecesOfParagraphForDisplay(
         fieldAtom: {
           formField,
           ...(formControl ? { formControl } : {}),
-          ...(pending?.refSpec && !pending.hasNestedField ? { fixedResult: true as const } : {}),
+          ...(pending?.refSpec && !pending.hasNestedField && plainRefSpec(pending.refSpec)
+            ? { fixedResult: true as const }
+            : {}),
         },
       };
       return carriedMemo;

@@ -53,6 +53,11 @@ for (const jc of ['left', 'center', 'right']) {
   });
 }
 
+test('a grid far wider than the text column settles with its outer rules inside it', () => {
+  // Preferred cell widths spread over the text column; the outer box then fills it exactly.
+  expect(total(grid([4000, 4000, 4000], ['a', 'b', 'c'], 'left'))).toBeCloseTo(465, 6);
+});
+
 test('typing into a cell lays out like a cold pass', () => {
   let part = source([4000, 4360, 1000], ['a', 'b', 'x'], 'left');
   const session = createLayoutSession();
