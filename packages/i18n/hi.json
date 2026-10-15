@@ -137,7 +137,9 @@
     "addSpaceBefore": "अनुच्छेद से पहले स्थान जोड़ें",
     "removeSpaceAfter": "अनुच्छेद के बाद स्थान हटाएँ",
     "removeSpaceBefore": "अनुच्छेद से पहले स्थान हटाएँ",
-    "options": "पंक्ति रिक्ति विकल्प…"
+    "options": "पंक्ति रिक्ति विकल्प…",
+    "exactlyPoints": "बिल्कुल {value} pt",
+    "atLeastPoints": "कम से कम {value} pt"
   },
   "styles": {
     "selectAriaLabel": "पैराग्राफ शैली चुनें",

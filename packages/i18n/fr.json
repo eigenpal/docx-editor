@@ -137,7 +137,9 @@
     "addSpaceBefore": "Ajouter un espace avant le paragraphe",
     "removeSpaceAfter": "Supprimer l'espace après le paragraphe",
     "removeSpaceBefore": "Supprimer l'espace avant le paragraphe",
-    "options": "Options d’interligne…"
+    "options": "Options d’interligne…",
+    "exactlyPoints": "Fixe {value} pt",
+    "atLeastPoints": "Au moins {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Sélectionner le type de paragraphe",

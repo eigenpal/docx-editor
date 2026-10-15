@@ -7521,9 +7521,10 @@ export function useToolbarLabel(): (key: string) => string;
 // @public (undocumented)
 export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string;
 
-// @public (undocumented)
+// @public
 export function useTranslation(): {
     catalogue: ShallowRef<LocaleStrings>;
+    lang: string;
     t: TFunction;
 };
 

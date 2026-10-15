@@ -3438,9 +3438,10 @@ export function useToolbarLabel(): (key: string) => string;
 // @public
 export function useToolbarLabelFor(t: ToolbarTranslate | undefined): (key: string) => string;
 
-// @public (undocumented)
+// @public
 export function useTranslation(): {
     catalogue: LocaleStrings;
+    lang: string;
     t: TFunction;
 };
 

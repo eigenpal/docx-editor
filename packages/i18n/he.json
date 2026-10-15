@@ -137,7 +137,9 @@
     "addSpaceBefore": "הוסף רווח לפני פסקה",
     "removeSpaceAfter": "הסר רווח אחרי פסקה",
     "removeSpaceBefore": "הסר רווח לפני פסקה",
-    "options": "אפשרויות מרווח בין שורות…"
+    "options": "אפשרויות מרווח בין שורות…",
+    "exactlyPoints": "מדויק {value} נק'",
+    "atLeastPoints": "לפחות {value} נק'"
   },
   "styles": {
     "selectAriaLabel": "בחר סגנון פסקה",

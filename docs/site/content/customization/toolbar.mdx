@@ -92,6 +92,35 @@ Application groups without a priority move before built-in groups. Built-in grou
 
 `useFontFamily()` returns `value`, `options`, `isEnabled`, and `setValue`. `useParagraphStyle()` returns the same members with document paragraph styles as options. A `null` value can mean a mixed selection. Do not display it as a selected document value.
 
+For a line-spacing menu of your own, pass the snapshot's `formatting.lineSpacing` to `lineSpacingMenuRows()` from `@docx-editor.dev/core/editor`. Each row has `selected` for the spacing in force and the `command` to execute. The selected row has a `null` command, because it is already in force. A spacing that matches no preset gets its own selected row, and a mixed selection selects no row. A paragraph that states no line spacing reads as single spacing. `lineSpacingMenuRowLabel()` builds the visible label in the active language. The following React example lists the rows:
+
+```tsx
+import { lineSpacingMenuRowLabel, lineSpacingMenuRows } from '@docx-editor.dev/core/editor';
+import {
+  useDocxEditor,
+  useEditorState,
+  useTranslation,
+  type TranslationKey,
+} from '@docx-editor.dev/react';
+
+function MyLineSpacingMenu() {
+  const editor = useDocxEditor();
+  const { t, lang } = useTranslation();
+  const current = useEditorState((s) => s.formatting?.lineSpacing ?? null);
+  return lineSpacingMenuRows(current).map((row) => (
+    <button
+      key={`${row.spacing.rule}:${row.spacing.value}`}
+      role="menuitemradio"
+      aria-checked={row.selected}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => row.command && editor?.exec(row.command)}
+    >
+      {lineSpacingMenuRowLabel(row, (key) => t(key as TranslationKey), lang)}
+    </button>
+  ));
+}
+```
+
 Use `useEditorCommand` for command controls. It returns `execute`, `isActive`, `isEnabled`, and `disabledReason`. The engine checks the command before execution. Display a refusal reason when a command becomes unavailable. Preserve the document selection on pointer presses, as the example explains.
 
 ## React and Vue reference

@@ -1,0 +1,15 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The line-spacing menu ticked no row when the spacing came from defaults or matched no preset, and the tick had no visible mark.",
+  "after": "The menu shows a visible check on the spacing in force and adds a ticked row for a spacing no preset matches.",
+  "reason": "Only the local formatting read and the menu rendering change. No operation, shared document state, or synchronization message changes.",
+  "tests": [
+    "packages/core/src/editor/__tests__/line-spacing-menu.test.ts",
+    "packages/core/src/editor/__tests__/paragraph-cascade-reads.test.ts",
+    "packages/react/test/toolbar-line-spacing.test.tsx",
+    "packages/vue/test/chrome-composition.test.ts"
+  ],
+  "changeset": "line-spacing-menu-current-value",
+  "migration": null
+}

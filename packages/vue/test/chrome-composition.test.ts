@@ -111,6 +111,48 @@ function openContextMenu(container: HTMLElement): MouseEvent {
 }
 
 describe('DocxEditorToolbar composition', () => {
+  test('the line-spacing menu ticks the spacing in force, even one no preset matches', async () => {
+    const view = mountEditorTree(() => h(DocxEditorToolbar));
+    await flush();
+    const root = view.container.querySelector<HTMLElement>('[data-slot="list.lineSpacing"]')!;
+    const rowsWhenOpen = async () => {
+      root.querySelector<HTMLButtonElement>('[aria-haspopup]')!.click();
+      await flush();
+      const rows = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+      const texts = rows.map((row) => row.textContent);
+      rows.find((row) => row.hasAttribute('data-selected'))?.click();
+      await flush();
+      return texts;
+    };
+    try {
+      view.editor().surface!.selectAll();
+      await flush();
+      // The fixture has no styles part, so the application defaults' multiple is in force;
+      // it is no preset, so it joins the list in order.
+      expect(await rowsWhenOpen()).toEqual(['1.0', '1.15', '1.16✓', '1.5', '2.0', '2.5', '3.0']);
+
+      view.editor().exec({ type: 'setLineSpacing', rule: 'atLeast', value: 14 });
+      await flush();
+      expect(await rowsWhenOpen()).toEqual([
+        'At least 14 pt✓',
+        '1.0',
+        '1.15',
+        '1.5',
+        '2.0',
+        '2.5',
+        '3.0',
+      ]);
+      // Picking the ticked row only closed the menu.
+      expect(root.querySelector('[role="menu"]')).toBeNull();
+      expect(view.editor().snapshot().formatting?.lineSpacing).toEqual({
+        rule: 'atLeast',
+        value: 14,
+      });
+    } finally {
+      view.unmount();
+    }
+  });
+
   test('Escape closes the More panel before the header scope or the format painter', async () => {
     globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
     const view = mountEditorTree(() => h(DocxEditorToolbar), POPUP_ESCAPE_SOURCE);

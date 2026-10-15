@@ -137,7 +137,9 @@
     "addSpaceBefore": "Adicionar espaço antes do parágrafo",
     "removeSpaceAfter": "Remover espaço depois do parágrafo",
     "removeSpaceBefore": "Remover espaço antes do parágrafo",
-    "options": "Opções de espaçamento entre linhas…"
+    "options": "Opções de espaçamento entre linhas…",
+    "exactlyPoints": "Exatamente {value} pt",
+    "atLeastPoints": "Pelo menos {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Selecionar estilo de parágrafo",

@@ -495,6 +495,13 @@ export {
   type ToolbarValueSlot,
   type ToolbarSlotValue,
 } from './toolbar-values.ts';
+export {
+  LINE_SPACING_PRESETS,
+  lineSpacingMenuRowLabel,
+  lineSpacingMenuRows,
+  type LineSpacingMenuRow,
+  type LineSpacingMenuValue,
+} from './line-spacing-menu.ts';
 
 export { createDocumentRefresh, DocumentRefreshError } from './document-refresh.ts';
 export { HIGHLIGHT_REFRESH_MS, watchHighlights } from './watch-highlights.ts';

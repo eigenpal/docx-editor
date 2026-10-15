@@ -253,9 +253,9 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
   if (slotId === 'styles.style') {
     return { type: 'setParagraphStyle', styleId: value as string };
   }
-  // The line-spacing picker's value is a MULTIPLE (Word's 1.0 / 1.15 / 1.5 / 2.0 menu).
-  // `exact` and `atLeast` are the paragraph dialog's, not a one-number dropdown's, so a
-  // host that wants them builds `setLineSpacing` itself.
+  // The slot's one-number value is a MULTIPLE (the 1.0 / 1.15 / 1.5 / 2.0 menu). `exact`
+  // and `atLeast` need a rule beside the number, so a host that sets them builds
+  // `setLineSpacing` itself, as each `lineSpacingMenuRows` row's `spacing` already is.
   if (slotId === 'list.lineSpacing') {
     return { type: 'setLineSpacing', rule: 'multiple', value: value as number };
   }

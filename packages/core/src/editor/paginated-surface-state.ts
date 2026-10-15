@@ -45,7 +45,8 @@ export interface SurfaceFormatting {
   /**
    * `w:spacing`'s line rule and its value: LINES for `multiple`, points for the other two
    * (`w:line` is 240ths of a line under `auto` and twentieths of a point otherwise).
-   * Null when the selection's paragraphs disagree, or state no line spacing at all.
+   * The effective value: a paragraph whose cascade states none reads as single spacing
+   * (`multiple`, 1). Null when the selection's paragraphs disagree.
    */
   readonly lineSpacing: {
     readonly rule: 'multiple' | 'exact' | 'atLeast';

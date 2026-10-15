@@ -173,7 +173,9 @@
     "removeSpaceBefore": "Remove space before paragraph",
     "addSpaceAfter": "Add space after paragraph",
     "removeSpaceAfter": "Remove space after paragraph",
-    "options": "Line spacing options…"
+    "options": "Line spacing options…",
+    "exactlyPoints": "Exactly {value} pt",
+    "atLeastPoints": "At least {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Select paragraph style",

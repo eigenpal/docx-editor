@@ -12,6 +12,7 @@ import { createApp, defineComponent, h, nextTick, ref, type VNode } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
@@ -310,7 +311,8 @@ describe('the Vue Paragraph dialog', () => {
       expect(formatting?.spaceBeforePt).toBe(18);
       // The line spacing the box merely SHOWED was never authored, so the paragraph still
       // takes it from the cascade rather than carrying a value of its own.
-      expect(formatting?.lineSpacing ?? null).toBeNull();
+      expect(formatting?.lineSpacing).toEqual({ rule: 'multiple', value: 1 });
+      expect(serializeOoxmlPart(editor().surface!.session.part())).not.toContain('w:line=');
     } finally {
       app.unmount();
     }

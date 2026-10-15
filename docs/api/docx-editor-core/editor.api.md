@@ -2132,6 +2132,30 @@ export function isTextNode(value: unknown): value is Text;
 // @public
 export function layoutPointsToCssPixels(points: number, paintScale: number): number;
 
+// @public
+export const LINE_SPACING_PRESETS: readonly number[];
+
+// @public
+export interface LineSpacingMenuRow {
+    readonly command: Extract<EditorCommand, {
+        type: 'setLineSpacing';
+    }> | null;
+    readonly labelKey: 'lineSpacing.exactlyPoints' | 'lineSpacing.atLeastPoints' | null;
+    readonly preset: boolean;
+    readonly selected: boolean;
+    readonly spacing: LineSpacingMenuValue;
+    readonly text: string;
+}
+
+// @public
+export function lineSpacingMenuRowLabel(row: LineSpacingMenuRow, label: (key: string) => string, locale?: string): string;
+
+// @public
+export function lineSpacingMenuRows(current: SurfaceFormatting['lineSpacing']): readonly LineSpacingMenuRow[];
+
+// @public
+export type LineSpacingMenuValue = NonNullable<SurfaceFormatting['lineSpacing']>;
+
 // @internal
 export function listenForPopupEscape(options: PopupEscapeOptions): () => void;
 

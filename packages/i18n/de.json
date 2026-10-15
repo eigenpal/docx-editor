@@ -137,7 +137,9 @@
     "addSpaceBefore": "Abstand vor Absatz hinzufügen",
     "removeSpaceAfter": "Abstand nach Absatz entfernen",
     "removeSpaceBefore": "Abstand vor Absatz entfernen",
-    "options": "Zeilenabstandsoptionen…"
+    "options": "Zeilenabstandsoptionen…",
+    "exactlyPoints": "Genau {value} pt",
+    "atLeastPoints": "Mindestens {value} pt"
   },
   "styles": {
     "selectAriaLabel": "Absatzformatvorlage auswählen",

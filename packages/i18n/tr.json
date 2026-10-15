@@ -137,7 +137,9 @@
     "addSpaceBefore": "Paragraftan önce boşluk ekle",
     "removeSpaceAfter": "Paragraftan sonraki boşluğu kaldır",
     "removeSpaceBefore": "Paragraftan önceki boşluğu kaldır",
-    "options": "Satır aralığı seçenekleri…"
+    "options": "Satır aralığı seçenekleri…",
+    "exactlyPoints": "Tam {value} nk",
+    "atLeastPoints": "En az {value} nk"
   },
   "styles": {
     "selectAriaLabel": "Paragraf stili seç",

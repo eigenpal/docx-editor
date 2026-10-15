@@ -173,7 +173,9 @@
     "removeSpaceBefore": "Quitar espacio antes del párrafo",
     "addSpaceAfter": "Añadir espacio después del párrafo",
     "removeSpaceAfter": "Quitar espacio después del párrafo",
-    "options": "Opciones de interlineado…"
+    "options": "Opciones de interlineado…",
+    "exactlyPoints": "Exacto {value} pto",
+    "atLeastPoints": "Mínimo {value} pto"
   },
   "styles": {
     "selectAriaLabel": "Seleccionar estilo de párrafo",

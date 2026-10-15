@@ -577,7 +577,7 @@ For optional development feedback, subscribe with `useEditorEvent('historyDiagno
 | `useContextMenuTarget()` | Returns the element that received the last context-menu action. |
 | `useOpenFailure(options?)` | Returns the refused open, its packaged message, and `dismiss`, for your own toast or banner. See [Handle files that do not open](/docs/2.x/guides/open-failures). |
 | `useNavigationPane(options?)` | Provides navigation-pane open state, width, and whether the open pane covers the page (`overlay`). |
-| `useTranslation()` | Returns `{ t }` for the active locale catalog. |
+| `useTranslation()` | Returns `{ t, catalogue, lang }` for the active locale catalog. |
 | `useChromeTranslate(overrides?)` | Returns a catalog resolver that checks an override `Map` first. |
 | `useFonts(source, ...fragments)` | Builds a stable `FontResolver`. See the [Fonts guide](/docs/2.x/guides/fonts). |
 | `useNotePropertiesState()` | Provides note-numbering properties for the current scope. |

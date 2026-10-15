@@ -31,9 +31,13 @@ export function LocaleProvider({ i18n, children }: LocaleProviderProps) {
   );
 }
 
-export function useTranslation(): { t: TFunction; catalogue: LocaleStrings } {
+/**
+ * The active catalogue's `t()`, the catalogue itself, and its language tag (`_lang`, `en`
+ * by default), which formats numbers the way the strings around them read.
+ */
+export function useTranslation(): { t: TFunction; catalogue: LocaleStrings; lang: string } {
   const strings = useContext(LocaleContext);
   const lang = useContext(LangContext);
   const t = useMemo(() => createT(strings, lang), [strings, lang]);
-  return { t, catalogue: strings };
+  return { t, catalogue: strings, lang };
 }

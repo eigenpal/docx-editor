@@ -137,7 +137,9 @@
     "addSpaceBefore": "Dodaj odstęp przed akapitem",
     "removeSpaceAfter": "Usuń odstęp po akapicie",
     "removeSpaceBefore": "Usuń odstęp przed akapitem",
-    "options": "Opcje interlinii…"
+    "options": "Opcje interlinii…",
+    "exactlyPoints": "Dokładnie {value} pkt",
+    "atLeastPoints": "Co najmniej {value} pkt"
   },
   "styles": {
     "selectAriaLabel": "Wybierz styl akapitu",
