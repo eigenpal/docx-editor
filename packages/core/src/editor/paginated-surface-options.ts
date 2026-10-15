@@ -199,6 +199,8 @@ export interface PaginatedSurfaceOptions {
    * request; when none did, or when this is absent, the key is left to the browser.
    */
   readonly onRequestBookmark?: () => boolean;
+  /** Ctrl+G (Cmd+Option+G on macOS): open the host's Go To UI; answers whether chrome took it. */
+  readonly onRequestGoTo?: () => boolean;
   /**
    * The host's Show bookmarks options, read on every paint. `onChange` names the repaint to
    * run when the host changes them.

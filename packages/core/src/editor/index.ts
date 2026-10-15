@@ -162,7 +162,7 @@ export {
   trailingGapCost,
   type BarRoomInput,
 } from './toolbar-measure.ts';
-export { chordLetter } from './chord-letter.ts';
+export { chordLetter, isGoToChord } from './chord-letter.ts';
 export { tableCommandState } from './docx-editor-derive.ts';
 export {
   applyTableChromePick,

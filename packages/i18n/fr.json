@@ -754,6 +754,8 @@
       "listAriaLabel": "Signets",
       "go": "Atteindre",
       "notFound": "Aucun signet ne s’appelle « {name} ».",
+      "failed": "Le signet n’a pas pu être affiché.",
+      "typeName": "Saisissez un nom de signet ou choisissez-en un dans la liste.",
       "empty": "Ce document ne contient aucun signet.",
       "noMatches": "Aucun signet ne correspond.",
       "places": {

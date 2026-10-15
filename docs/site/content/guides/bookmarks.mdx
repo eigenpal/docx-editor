@@ -41,13 +41,12 @@ editor.exec({ type: 'openGoTo' });
 editor.exec({ type: 'goToBookmark', name: 'Intro' });
 ```
 
-To build your own Go to UI, use `useGoToBookmark()` in React or Vue. It returns the typed text, the matching rows, the highlighted row, `move(delta)`, and `go(name?)`. To show your own UI for `openGoTo`, register it with `editor.setGoToChrome({ onRequest })`.
+To build your own Go to UI, use `useGoToBookmark()` in React or Vue. It returns the typed text, the matching rows, the highlighted row, `move(delta)`, and `go(name?)`. To show your own UI for `openGoTo`, register it with `editor.setGoToChrome({ onRequest })`. Ctrl+G (Cmd+Option+G on macOS) in the document then opens your UI, because the shortcut sends `openGoTo`.
 
 In a document script, go to a bookmark the Office.js way:
 
 ```ts
 const range = context.document.getBookmarkRangeOrNullObject('Intro');
-range.load('text');
 await context.sync();
 if (!range.isNullObject) {
   range.select();

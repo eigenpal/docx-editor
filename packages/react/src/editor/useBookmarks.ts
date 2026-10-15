@@ -33,7 +33,11 @@ export interface UseBookmarksReturn {
 const NOT_READY: ExecResult = { ok: false, code: 'unsupported', reason: 'editor is not ready' };
 const NONE: readonly BookmarkSummary[] = Object.freeze([]);
 
-function sameBookmarks(a: readonly BookmarkSummary[], b: readonly BookmarkSummary[]): boolean {
+/** Whether two bookmark lists say the same. @internal */
+export function sameBookmarks(
+  a: readonly BookmarkSummary[],
+  b: readonly BookmarkSummary[]
+): boolean {
   return (
     a.length === b.length &&
     a.every(
@@ -43,7 +47,9 @@ function sameBookmarks(a: readonly BookmarkSummary[], b: readonly BookmarkSummar
         bookmark.story === b[index]!.story &&
         bookmark.empty === b[index]!.empty &&
         bookmark.atSelection === b[index]!.atSelection &&
-        bookmark.duplicates === b[index]!.duplicates
+        bookmark.duplicates === b[index]!.duplicates &&
+        bookmark.hidden === b[index]!.hidden &&
+        bookmark.place === b[index]!.place
     )
   );
 }

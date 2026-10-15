@@ -181,4 +181,40 @@ describe('Go to bookmark in the navigation pane (Vue)', () => {
     await key(input, 'Enter');
     expect(selectedText(view.editor())).toBe('2:0-6');
   });
+
+  test('the highlight follows its bookmark when the rows move, and Home and End jump', async () => {
+    const view = mountPane({ defaultOpen: true, defaultTab: 'goto' });
+    await flush();
+    const input = nameBox(view.container);
+    await key(input, 'ArrowDown');
+    await key(input, 'ArrowDown');
+    const highlighted = () =>
+      view.container.querySelector(`[id="${input.getAttribute('aria-activedescendant')}"]`)
+        ?.textContent;
+    expect(highlighted()).toBe('Section2');
+    const editor = view.editor();
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 2 },
+    });
+    editor.exec({ type: 'insertBookmark', name: 'Above' });
+    await flush();
+    expect(rowNames(view.container)).toEqual(['Above', 'Intro', 'Section2', 'Section10']);
+    expect(highlighted()).toBe('Section2');
+    await key(input, 'End');
+    expect(highlighted()).toBe('Section10');
+    await key(input, 'Home');
+    expect(highlighted()).toBe('Above');
+  });
+
+  test('Enter with nothing typed asks for a name', async () => {
+    const view = mountPane({ defaultOpen: true, defaultTab: 'goto' });
+    await flush();
+    const input = nameBox(view.container);
+    await key(input, 'Enter');
+    expect(message(view.container)).toBe('Type a bookmark name, or pick one from the list.');
+    await type(input, 'zzz');
+    expect(input.getAttribute('aria-controls')).toBeNull();
+  });
 });

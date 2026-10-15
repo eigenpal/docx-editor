@@ -754,6 +754,8 @@
       "listAriaLabel": "Zakładki",
       "go": "Przejdź do",
       "notFound": "Brak zakładki o nazwie „{name}”.",
+      "failed": "Nie można wyświetlić zakładki.",
+      "typeName": "Wpisz nazwę zakładki lub wybierz ją z listy.",
       "empty": "Ten dokument nie ma zakładek.",
       "noMatches": "Brak pasujących zakładek.",
       "places": {

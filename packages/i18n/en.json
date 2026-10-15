@@ -561,6 +561,8 @@
       "listAriaLabel": "Bookmarks",
       "go": "Go to",
       "notFound": "No bookmark is named “{name}”.",
+      "failed": "The bookmark could not be shown.",
+      "typeName": "Type a bookmark name, or pick one from the list.",
       "empty": "This document has no bookmarks.",
       "noMatches": "No bookmarks match.",
       "places": {

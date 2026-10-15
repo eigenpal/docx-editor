@@ -87,7 +87,7 @@ export function createBookmarkChrome(host: BookmarkChromeHost = {}) {
     reportError: (error) => host.error?.(error),
   };
   return {
-    surfaceOptions: { onRequestBookmark: dialog.open, bookmarkMarks },
+    surfaceOptions: { onRequestBookmark: dialog.open, onRequestGoTo: goTo.open, bookmarkMarks },
     /** The `openBookmarkDialog` command: open the host's dialog, if a host shows one. */
     bookmarkDialog: dialog,
     /** The `openGoTo` command: open the host's Go To UI, if a host shows one. */

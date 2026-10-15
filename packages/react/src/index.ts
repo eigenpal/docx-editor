@@ -169,6 +169,7 @@ export {
   type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
   type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
   type UseGoToBookmarkReturn,
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,

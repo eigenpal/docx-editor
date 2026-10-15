@@ -18,6 +18,7 @@
 // only ever with the sanitized projection, never with an authored target.
 
 import { caretAt, type SemanticLayout } from '@docx-editor.dev/core/layout';
+import { storyContentBox } from './surface-bookmarks.ts';
 import { sanitizeHref } from '../store/package/sinks.ts';
 import type { BookmarkIndex } from '@docx-editor.dev/core/store';
 import type { SurfaceHyperlink } from './surface-hyperlinks.ts';
@@ -95,6 +96,14 @@ export interface SurfaceNavigation {
   destroy(): void;
 }
 
+/** The index of the first page whose bottom is below the scroll container's top. */
+function pageInView(layout: SemanticLayout, element: HTMLElement | null, scale: number): number {
+  if (!element) return 0;
+  const top = element.scrollTop;
+  const page = layout.pages.find((entry) => (entry.box.y + entry.box.height) * scale > top);
+  return page?.index ?? 0;
+}
+
 /** How much room to leave above a jump target, so it does not land flush against the edge. */
 const JUMP_MARGIN_PX = 24;
 
@@ -133,15 +142,21 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     const entered = !deps.enterStoryFor || deps.enterStoryFor(position.paragraphId);
     if (!entered && !options?.orShow) return false;
     const layout = deps.layout();
-    const caret = caretAt(layout, position);
+    const element = scroller();
+    // A header or footer repeats on every page: show the copy on the page in view, not the
+    // first one, when the story was not opened.
+    const caret = caretAt(
+      layout,
+      position,
+      entered ? undefined : { preferredPageIndex: pageInView(layout, element, deps.scale()) }
+    );
     if (!caret) return false;
     const page = layout.pages[caret.pageIndex];
     if (!page) return false;
 
-    // The caret is published in PAGE-CONTENT coordinates; the scroll container measures the
-    // whole sheet stack, so the page's own origin has to be added back.
-    const sheetY = page.box.y + (page.contentBox.y - page.box.y) + caret.y;
-    const element = scroller();
+    // The caret is published relative to its story's box: the content box for the body, the
+    // header, footer or note box otherwise. The scroll container measures the whole sheet stack.
+    const sheetY = storyContentBox(page, position.paragraphId).y + caret.y;
     if (element) {
       element.scrollTop = Math.max(0, sheetY * deps.scale() - JUMP_MARGIN_PX);
       deps.onScrolled?.();

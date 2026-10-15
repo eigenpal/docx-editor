@@ -176,9 +176,9 @@ export interface BatchPlannerHost {
   /** Where a tracked replacement lands — see `AutomationDocumentPort.replacementLanding`. */
   readonly replacementLanding?: (paragraphId: string, start: number, end: number) => number | null;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
-  readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
-  /** Why the host cannot select in a story now — see `AutomationDocumentPort.selectRefusal`. */
-  readonly selectRefusal?: (story: AutomationStoryId) => string | null;
+  readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => boolean;
+  /** Why the host cannot select there now — see `AutomationDocumentPort.selectRefusal`. */
+  readonly selectRefusal?: (story: AutomationStoryId, paragraphId: string) => string | null;
 }
 
 export interface BatchPlanner {
@@ -1496,7 +1496,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       return refuse('unsupported-capability', 'this host has no reader to move', 'selection');
     if (mode !== 'select' && mode !== 'start' && mode !== 'end')
       return refuse('unknown-operation', 'that is not a selection mode', String(mode));
-    const refusal = host.selectRefusal?.(reads.story);
+    const refusal = host.selectRefusal?.(reads.story, range.start.paragraphId);
     if (refusal) return refuse('unsupported-capability', refusal, 'selection');
     // Selecting is applied after the transaction, so a batch that also EDITS one of the
     // paragraphs the selection covers would place a caret using coordinates the edit moved.
@@ -2903,7 +2903,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       for (const selection of selections) {
         const story = post.story(selection.range.start.story);
         if (!story || !placeable(selection.range, story)) continue;
-        host.select?.(selection.range, selection.mode);
+        if (host.select?.(selection.range, selection.mode) === false)
+          return { ok: false, detail: 'the host could not place the selection' };
       }
       return { ok: true };
     },

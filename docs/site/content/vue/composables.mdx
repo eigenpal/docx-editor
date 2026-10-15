@@ -316,7 +316,7 @@ const goTo = useGoToBookmark();
 </template>
 ```
 
-`go(name?)` jumps to `name`, or else to the highlighted row, the bookmark named exactly as typed, or the first row. It returns the command result. Write `sortBy.value` and `showHidden.value` to choose the order and whether hidden bookmarks are offered. Each row's `place` says whether the bookmark is in the body, a header, a footer, a footnote, or an endnote.
+`go(name?)` jumps to `name`, or else to the highlighted row, the bookmark named exactly as typed, or the first row. It returns the command result. Call `setSortBy()` and `setShowHidden()` to choose the order and whether hidden bookmarks are offered. Pass `{ enabled: () => isOpen.value }` to read the document only while your UI is shown. Each row's `place` says whether the bookmark is in the body, a header, a footer, a footnote, or an endnote.
 
 ## `useParagraphFormat`
 

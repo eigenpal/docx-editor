@@ -1,4 +1,5 @@
 import { layoutProjectionOf } from '../layout/revision-projection.ts';
+import { caretAt } from '@docx-editor.dev/core/layout';
 import {
   paginationSnapshotOf,
   paginationContextFor,
@@ -343,24 +344,28 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     // canonical focus-independent path that installs the logical selection and reveals its head
     // from layout geometry. That keeps virtualized pages viable: the target usually has no DOM
     // node to measure yet, and the reveal materializes it on the way.
-    selectRefusal(story) {
+    selectRefusal(story, paragraphId) {
       if (story.kind === 'body') return null;
-      return editor.surface?.editingMode() === 'view'
-        ? 'a read-only editor does not open a header, footer or note to select in it'
-        : null;
+      const surface = editor.surface;
+      if (surface?.editingMode() === 'view')
+        return 'a read-only editor does not open a header, footer or note to select in it';
+      // A header, footer or note opens where it is laid out; one no page shows cannot be.
+      if (surface && !caretAt(surface.layout(), { paragraphId, offset: 0 }))
+        return 'that header, footer or note is not shown on any page';
+      return null;
     },
     select(range, mode) {
       const surface = editor.surface;
-      if (!surface) return;
+      if (!surface) return false;
       const anchor = mode === 'end' ? range.end : range.start;
       const head = mode === 'start' ? range.start : range.end;
-      editor.exec({
+      return editor.exec({
         type: 'setSelection',
         range: {
           anchor: { paragraphId: anchor.paragraphId, offset: anchor.offset },
           head: { paragraphId: head.paragraphId, offset: head.offset },
         },
-      });
+      }).ok;
     },
     // The EDITOR's change event, not the session's: the facade re-subscribes to each new
     // session across a remount, so a subscription taken here survives one.

@@ -131,6 +131,7 @@ export {
   useNavigationPane,
   useNavigationShift,
   type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
   type UseGoToBookmarkReturn,
   type NavigationShiftInput,
   type NavigationTabValue,

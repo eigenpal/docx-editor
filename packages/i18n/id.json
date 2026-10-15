@@ -754,6 +754,8 @@
       "listAriaLabel": "Penanda",
       "go": "Buka",
       "notFound": "Tidak ada penanda bernama “{name}”.",
+      "failed": "Penanda tidak dapat ditampilkan.",
+      "typeName": "Ketik nama penanda, atau pilih satu dari daftar.",
       "empty": "Dokumen ini tidak memiliki penanda.",
       "noMatches": "Tidak ada penanda yang cocok.",
       "places": {

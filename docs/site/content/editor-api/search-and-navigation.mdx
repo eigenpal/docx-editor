@@ -150,7 +150,6 @@ To go to a bookmark by name, read its range with `getBookmarkRangeOrNullObject`,
 ```ts
 await runtime.run(async (context) => {
   const range = context.document.getBookmarkRangeOrNullObject('Intro');
-  range.load('text');
   await context.sync();
   if (range.isNullObject) return;
   range.select();

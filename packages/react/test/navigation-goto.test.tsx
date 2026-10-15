@@ -224,4 +224,58 @@ describe('Go to bookmark in the navigation pane', () => {
     await key(input, 'Enter');
     expect(selectedText(editor())).toBe('2:0-6');
   });
+
+  test('the highlight follows its bookmark when the rows move, and Home and End jump', async () => {
+    const { container, editor } = mount({ navigation: { defaultOpen: true, defaultTab: 'goto' } });
+    await settle();
+    const input = nameBox(container);
+    await key(input, 'ArrowDown');
+    await key(input, 'ArrowDown');
+    const highlighted = () =>
+      container.querySelector(`[id="${input.getAttribute('aria-activedescendant')}"]`)?.textContent;
+    expect(highlighted()).toBe('Section2');
+    // A bookmark appears above the highlighted row; the highlight stays on Section2.
+    await act(async () => {
+      const surface = editor().surface!;
+      const paragraphId = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId, offset: 0 },
+        head: { paragraphId, offset: 2 },
+      });
+      editor().exec({ type: 'insertBookmark', name: 'Above' });
+    });
+    await settle();
+    expect(rowNames(container)).toEqual(['Above', 'Intro', 'Section2', 'Section10']);
+    expect(highlighted()).toBe('Section2');
+    await key(input, 'End');
+    expect(highlighted()).toBe('Section10');
+    await key(input, 'Home');
+    expect(highlighted()).toBe('Above');
+  });
+
+  test('Enter with nothing typed asks for a name; a closed pane reads no bookmarks', async () => {
+    const { container, editor } = mount({ navigation: { defaultOpen: true, defaultTab: 'goto' } });
+    await settle();
+    const input = nameBox(container);
+    await key(input, 'Enter');
+    expect(message(container)).toBe('Type a bookmark name, or pick one from the list.');
+    expect(input.getAttribute('aria-controls')).not.toBeNull();
+    await type(input, 'zzz');
+    expect(input.getAttribute('aria-controls')).toBeNull();
+    // Closed, the pane stops reading: a bookmark added now is listed only once it reopens.
+    await act(async () => {
+      fireEvent.click(q(container, '.docx-nav__close'));
+    });
+    let queries = 0;
+    const query = editor().query.bind(editor());
+    editor().query = ((command: Parameters<typeof query>[0]) => {
+      if (command.type === 'bookmarks') queries += 1;
+      return query(command);
+    }) as typeof query;
+    await act(async () => {
+      editor().exec({ type: 'insertText', text: 'x' });
+    });
+    await settle();
+    expect(queries).toBe(0);
+  });
 });

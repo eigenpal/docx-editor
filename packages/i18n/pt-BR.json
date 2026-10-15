@@ -754,6 +754,8 @@
       "listAriaLabel": "Indicadores",
       "go": "Ir para",
       "notFound": "Nenhum indicador se chama “{name}”.",
+      "failed": "Não foi possível mostrar o indicador.",
+      "typeName": "Digite o nome de um indicador ou escolha um na lista.",
       "empty": "Este documento não tem indicadores.",
       "noMatches": "Nenhum indicador corresponde.",
       "places": {

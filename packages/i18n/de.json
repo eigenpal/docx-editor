@@ -754,6 +754,8 @@
       "listAriaLabel": "Textmarken",
       "go": "Gehe zu",
       "notFound": "Keine Textmarke heißt „{name}“.",
+      "failed": "Die Textmarke konnte nicht angezeigt werden.",
+      "typeName": "Geben Sie einen Textmarkennamen ein, oder wählen Sie einen aus der Liste.",
       "empty": "Dieses Dokument enthält keine Textmarken.",
       "noMatches": "Keine passenden Textmarken.",
       "places": {

@@ -16,6 +16,7 @@ import { DocxEditor as DocxEditorBrowser } from '../../browser.ts';
 import { DocxEditor } from '../../index.ts';
 import { isDocxEditorError } from '../errors.ts';
 import { WITH_STORY_BOOKMARKS } from '../../model/__tests__/support/documents.ts';
+import { docx, p } from './support/docx.ts';
 
 const editors: DocxEditorInstance[] = [];
 afterEach(() => {
@@ -40,7 +41,6 @@ async function goTo(editor: DocxEditorInstance, name: string): Promise<boolean> 
   try {
     return await runtime.run(async (context) => {
       const range = context.document.getBookmarkRangeOrNullObject(name);
-      range.load('text');
       await context.sync();
       if (range.isNullObject) return false;
       range.select();
@@ -98,6 +98,38 @@ describe('Range.select on a bookmark range', () => {
     }
     expect(code).toBe('NotSupported');
     expect(selected(editor).scope).toBe('body');
+  });
+
+  test('a select cannot share a sync with a write that creates a header', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: docx(p('Hello world')) });
+    editors.push(editor);
+    const runtime = DocxEditorBrowser.createBrowser(editor);
+    let code: string | null = null;
+    try {
+      await runtime.run(async (context) => {
+        const found = context.document.body.search('world');
+        found.load('items');
+        const section = context.document.sections.getFirst();
+        await context.sync();
+        const header = section.getHeader('Primary');
+        await context.sync();
+        // Creating a header commits alone, so a selection in the same sync is refused, and
+        // the whole batch with it: nothing is written and the caret stays.
+        header.insertText('Created', 'Replace');
+        found.items[0]!.select();
+        await context.sync();
+      });
+    } catch (error) {
+      if (isDocxEditorError(error)) code = error.code;
+      else throw error;
+    } finally {
+      runtime.dispose();
+    }
+    expect(code).toBe('ConflictingChanges');
+    const parts = [...editor.surface!.session.currentPackage()!.parts.keys()];
+    expect(parts.some((name) => /header/.test(name))).toBe(false);
   });
 
   test('a server runtime refuses select with NotSupported', async () => {

@@ -2,64 +2,102 @@
 // `DocxEditor.Navigation` is built on it; call it to drive a Go To UI of your own.
 //
 // The list is the `bookmarks` query, so it follows every change to the document, a
-// collaborator's included. The jump is the `goToBookmark` command: it selects the bookmark's
-// text in whichever story holds it and scrolls it into view, in a read-only document too.
+// collaborator's included. It is read only while `enabled`: a closed pane does not walk the
+// document on every keystroke. The jump is the `goToBookmark` command: it selects the
+// bookmark's text in whichever story holds it and scrolls it into view, in a read-only
+// document too.
 
 import { computed, shallowRef, type ComputedRef, type ShallowRef } from 'vue';
-import type { BookmarkSummary, ExecResult } from '@docx-editor.dev/core/contracts/editor';
+import type {
+  BookmarkSummary,
+  EditorSnapshot,
+  ExecResult,
+} from '@docx-editor.dev/core/contracts/editor';
 import {
   goToBookmarkRows,
   goToBookmarkTarget,
   type BookmarkSortOrder,
 } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from '../context';
-import { useBookmarks } from '../useBookmarks';
+import { useEditorState } from '../useEditorState';
+import { sameBookmarks } from '../useBookmarks';
 
-/** Why a Go To jump did not happen. @public */
-export type GoToBookmarkProblem = 'empty' | 'notFound';
+/**
+ * Why a Go To jump did not happen: nothing was typed, no bookmark has the name, or the editor
+ * refused the jump for another reason (it is not ready, or the story could not be shown).
+ *
+ * @public
+ */
+export type GoToBookmarkProblem = 'empty' | 'notFound' | 'failed';
+
+/** How `useGoToBookmark` is configured. @public */
+export interface UseGoToBookmarkOptions {
+  /**
+   * Whether to read the document's bookmarks. Defaults to `true`. Return `false` while your UI
+   * is hidden: the list is then empty and the document is not read on each change.
+   */
+  readonly enabled?: () => boolean;
+}
 
 /** What `useGoToBookmark` returns. @public */
 export interface UseGoToBookmarkReturn {
-  /** The text in the name box. Writing it puts the highlight back on the first row. */
+  /** The text in the name box. Use `setQuery` to change it. */
   readonly query: Readonly<ShallowRef<string>>;
+  /** Change the text. The highlight goes back to none. */
   readonly setQuery: (query: string) => void;
-  readonly sortBy: ShallowRef<BookmarkSortOrder>;
+  readonly sortBy: Readonly<ShallowRef<BookmarkSortOrder>>;
+  readonly setSortBy: (sortBy: BookmarkSortOrder) => void;
   /** Whether hidden bookmarks (names starting with an underscore) are offered. */
-  readonly showHidden: ShallowRef<boolean>;
+  readonly showHidden: Readonly<ShallowRef<boolean>>;
+  readonly setShowHidden: (showHidden: boolean) => void;
   /** The bookmarks offered for the query: names that start with it first. */
   readonly rows: ComputedRef<readonly BookmarkSummary[]>;
-  /** Every bookmark the document declares, hidden ones included. */
+  /** Every bookmark the document declares, hidden ones included. Empty while disabled. */
   readonly bookmarks: Readonly<ShallowRef<readonly BookmarkSummary[]>>;
-  /** Index into `rows` of the highlighted row, or -1 when none is. */
+  /**
+   * Index into `rows` of the highlighted row, or -1 when none is. The highlight follows its
+   * bookmark when rows move, and clears when that bookmark goes away.
+   */
   readonly activeIndex: ComputedRef<number>;
   /** Move the highlight by `delta` rows, wrapping at either end. */
   readonly move: (delta: number) => void;
+  /** Highlight the row at `index` of `rows`, or none with -1. */
   readonly setActiveIndex: (index: number) => void;
   /**
    * Jump to `name`, or else to what the name box means: the highlighted row, the bookmark
-   * named exactly as typed, or the first row offered. Answers the `goToBookmark` result; a
-   * name no bookmark has refuses with `notFound` and sets `problem`.
+   * named exactly as typed, or the first row offered. Answers the `goToBookmark` result and
+   * sets `problem` when it is refused.
    */
   readonly go: (name?: string) => ExecResult;
   /** Why the last jump did not happen, or null. Cleared when the query changes. */
   readonly problem: Readonly<ShallowRef<GoToBookmarkProblem | null>>;
+  /** The name the last refused jump asked for, for a message. Empty when nothing was typed. */
+  readonly problemName: Readonly<ShallowRef<string>>;
 }
 
 const NOT_READY: ExecResult = { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+const NONE: readonly BookmarkSummary[] = Object.freeze([]);
 
 /**
  * Go To for bookmarks: filter by name, move through the offered rows, and jump.
  *
  * @public
  */
-export function useGoToBookmark(): UseGoToBookmarkReturn {
+export function useGoToBookmark(options: UseGoToBookmarkOptions = {}): UseGoToBookmarkReturn {
   const editorRef = useDocxEditor();
-  const { bookmarks } = useBookmarks();
+  const enabled = options.enabled ?? (() => true);
+  const bookmarks = useEditorState(
+    (_snapshot: EditorSnapshot): readonly BookmarkSummary[] =>
+      enabled() ? (editorRef.value?.query({ type: 'bookmarks' }) ?? NONE) : NONE,
+    sameBookmarks
+  );
   const query = shallowRef('');
   const sortBy = shallowRef<BookmarkSortOrder>('name');
   const showHidden = shallowRef(false);
-  const highlight = shallowRef(-1);
+  // The highlighted bookmark's name, not its index: rows move when a collaborator edits.
+  const highlight = shallowRef<string | null>(null);
   const problem = shallowRef<GoToBookmarkProblem | null>(null);
+  const problemName = shallowRef('');
 
   const rows = computed(() =>
     goToBookmarkRows(bookmarks.value, {
@@ -68,21 +106,33 @@ export function useGoToBookmark(): UseGoToBookmarkReturn {
       showHidden: showHidden.value,
     })
   );
-  // A highlight past the end (a bookmark went away) falls back to none.
-  const activeIndex = computed(() => (highlight.value < rows.value.length ? highlight.value : -1));
+  const activeIndex = computed(() =>
+    highlight.value === null ? -1 : rows.value.findIndex((row) => row.name === highlight.value)
+  );
 
   const setQuery = (next: string) => {
     query.value = next;
-    highlight.value = -1;
+    highlight.value = null;
     problem.value = null;
+  };
+  const setSortBy = (next: BookmarkSortOrder) => {
+    sortBy.value = next;
+    highlight.value = null;
+  };
+  const setShowHidden = (next: boolean) => {
+    showHidden.value = next;
+    highlight.value = null;
   };
 
   const move = (delta: number) => {
-    const count = rows.value.length;
-    if (count === 0) return;
-    const current = highlight.value;
-    const from = current < 0 || current >= count ? (delta > 0 ? -1 : 0) : current;
-    highlight.value = (from + delta + count) % count;
+    const list = rows.value;
+    if (list.length === 0) return;
+    const current = activeIndex.value;
+    const from = current < 0 ? (delta > 0 ? -1 : 0) : current;
+    highlight.value = list[(from + delta + list.length) % list.length]!.name;
+  };
+  const setActiveIndex = (index: number) => {
+    highlight.value = rows.value[index]?.name ?? null;
   };
 
   const go = (name?: string): ExecResult => {
@@ -93,11 +143,14 @@ export function useGoToBookmark(): UseGoToBookmarkReturn {
       rows.value[activeIndex.value]?.name ??
       goToBookmarkTarget(bookmarks.value, query.value, rows.value)?.name;
     if (target === undefined || target.trim().length === 0) {
-      problem.value = query.value.trim().length === 0 ? 'empty' : 'notFound';
+      const typed = query.value.trim();
+      problem.value = typed.length === 0 ? 'empty' : 'notFound';
+      problemName.value = typed;
       return { ok: false, code: 'notFound', reason: 'no bookmark is named that' };
     }
     const result = editor.exec({ type: 'goToBookmark', name: target });
-    problem.value = result.ok ? null : 'notFound';
+    problem.value = result.ok ? null : result.code === 'notFound' ? 'notFound' : 'failed';
+    problemName.value = result.ok ? '' : target;
     return result;
   };
 
@@ -105,15 +158,16 @@ export function useGoToBookmark(): UseGoToBookmarkReturn {
     query,
     setQuery,
     sortBy,
+    setSortBy,
     showHidden,
+    setShowHidden,
     rows,
     bookmarks,
     activeIndex,
     move,
-    setActiveIndex: (index: number) => {
-      highlight.value = index;
-    },
+    setActiveIndex,
     go,
     problem,
+    problemName,
   };
 }

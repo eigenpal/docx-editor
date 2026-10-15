@@ -18,6 +18,7 @@ export {
 export {
   useGoToBookmark,
   type GoToBookmarkProblem,
+  type UseGoToBookmarkOptions,
   type UseGoToBookmarkReturn,
 } from './useGoToBookmark';
 export {

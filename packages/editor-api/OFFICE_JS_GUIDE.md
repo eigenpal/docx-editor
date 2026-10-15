@@ -258,7 +258,6 @@ Go to a bookmark with the standard calls: `getBookmarkRangeOrNullObject(name)`, 
 ```ts
 await runtime.run(async (context) => {
   const range = context.document.getBookmarkRangeOrNullObject('Intro');
-  range.load('text');
   await context.sync();
   if (range.isNullObject) return;
   range.select();

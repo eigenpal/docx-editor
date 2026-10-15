@@ -256,7 +256,7 @@ import {
   type LayoutDocumentViewOptions,
 } from '../layout/document-layout-coordinator.ts';
 import { createSurfaceCaret } from './surface-caret.ts';
-import { createSurfaceBookmarks } from './surface-bookmarks.ts';
+import { createSurfaceBookmarks, storyContentBox } from './surface-bookmarks.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
@@ -5066,9 +5066,9 @@ export function mountPaginatedSurface(
       if (!caret) return false;
       const page = currentLayout.pages.find((entry) => entry.index === caret.pageIndex);
       if (!page) return false;
-      // 'nearest' by default: callers reveal on every activation, and a target already in
-      // view must not yank the viewport.
-      return scrollToContentY(page.contentBox.y + caret.y, caret.height, {
+      // 'nearest' by default; a header, footer or note line measures from its own story box.
+      const y = storyContentBox(page, position.paragraphId).y + caret.y;
+      return scrollToContentY(y, caret.height, {
         block: 'nearest',
         ...options,
       });

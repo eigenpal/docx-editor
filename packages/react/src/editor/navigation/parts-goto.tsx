@@ -38,11 +38,12 @@ const PLACE_KEYS: Record<Exclude<BookmarkPlace, 'body'>, string> = {
 export function NavigationGoTo({ className, style }: NavigationPartProps): ReactElement {
   const { pane, intents, t } = useNavigationContext('GoTo');
   const editor = useDocxEditor();
-  const goTo = useGoToBookmark();
+  const hidden = pane.tab !== 'goto';
+  // The document's bookmarks are read only while this tab is on screen.
+  const goTo = useGoToBookmark({ enabled: pane.open && !hidden });
   const documentAbsent = useEditorState(selectDocumentAbsent);
   const listId = useId();
   const optionId = (index: number) => `${listId}-option-${index}`;
-  const hidden = pane.tab !== 'goto';
 
   const jump = (name?: string) => {
     if (!goTo.go(name).ok) return;
@@ -57,6 +58,10 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       goTo.move(event.key === 'ArrowDown' ? 1 : -1);
+    } else if ((event.key === 'Home' || event.key === 'End') && goTo.activeIndex >= 0) {
+      // Home and End move the caret in the text until a row is highlighted.
+      event.preventDefault();
+      goTo.setActiveIndex(event.key === 'Home' ? 0 : goTo.rows.length - 1);
     } else if (event.key === 'Enter') {
       event.preventDefault();
       jump();
@@ -65,14 +70,18 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
 
   const message =
     goTo.problem === 'notFound'
-      ? t('navigation.goTo.notFound', { name: goTo.query.trim() })
-      : goTo.bookmarks.length === 0
-        ? documentAbsent
-          ? ''
-          : t('navigation.goTo.empty')
-        : goTo.rows.length === 0
-          ? t('navigation.goTo.noMatches')
-          : '';
+      ? t('navigation.goTo.notFound', { name: goTo.problemName })
+      : goTo.problem === 'failed'
+        ? t('navigation.goTo.failed')
+        : goTo.problem === 'empty'
+          ? t('navigation.goTo.typeName')
+          : goTo.bookmarks.length === 0
+            ? documentAbsent
+              ? ''
+              : t('navigation.goTo.empty')
+            : goTo.rows.length === 0
+              ? t('navigation.goTo.noMatches')
+              : '';
   const active = goTo.activeIndex >= 0 ? optionId(goTo.activeIndex) : undefined;
 
   return (
@@ -94,7 +103,7 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
           placeholder={t('navigation.goTo.placeholder')}
           aria-label={t('navigation.goTo.label')}
           aria-expanded={goTo.rows.length > 0}
-          aria-controls={listId}
+          aria-controls={goTo.rows.length > 0 ? listId : undefined}
           aria-autocomplete="list"
           aria-activedescendant={active}
           autoComplete="off"
@@ -133,7 +142,7 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
         <button
           type="button"
           className="docx-nav__goto-button"
-          disabled={goTo.bookmarks.length === 0}
+          disabled={goTo.rows.length === 0}
           onClick={() => jump()}
         >
           {t('navigation.goTo.go')}
@@ -159,7 +168,6 @@ export function NavigationGoTo({ className, style }: NavigationPartProps): React
               )}
               // Keep focus in the name box: a press on a row must not blur it first.
               onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => goTo.setActiveIndex(index)}
               onClick={() => jump(row.name)}
             >
               <span className="docx-nav__result-text">{row.name}</span>

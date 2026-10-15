@@ -754,6 +754,8 @@
       "listAriaLabel": "Yer işaretleri",
       "go": "Git",
       "notFound": "“{name}” adlı yer işareti yok.",
+      "failed": "Yer işareti gösterilemedi.",
+      "typeName": "Bir yer işareti adı yazın veya listeden birini seçin.",
       "empty": "Bu belgede yer işareti yok.",
       "noMatches": "Eşleşen yer işareti yok.",
       "places": {

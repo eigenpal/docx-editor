@@ -417,6 +417,22 @@ function noteOnPage(
   return undefined;
 }
 
+/**
+ * The box a line's caret geometry is measured from on `page`: the header, footer or note that
+ * holds the paragraph there, else the page's content box.
+ */
+export function storyContentBox(
+  page: SurfaceOverlayFrame['layout']['pages'][number],
+  paragraphId: string
+): LayoutBox {
+  for (const story of [page.header, page.footer]) {
+    if (!story) continue;
+    const fragments = paragraphFragmentsOfBlocks(story.fragments);
+    if (fragments.some((fragment) => fragment.paragraphId === paragraphId)) return story.box;
+  }
+  return noteOnPage(page, paragraphId)?.box ?? page.contentBox;
+}
+
 /** Caret geometry per layout: one layout object per revision, released with it. */
 const placementCache = new WeakMap<object, Map<string, CaretGeometry | null>>();
 

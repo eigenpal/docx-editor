@@ -754,6 +754,8 @@
       "listAriaLabel": "书签",
       "go": "定位",
       "notFound": "没有名为“{name}”的书签。",
+      "failed": "无法显示该书签。",
+      "typeName": "请输入书签名，或从列表中选择一个。",
       "empty": "此文档没有书签。",
       "noMatches": "没有匹配的书签。",
       "places": {

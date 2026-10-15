@@ -149,6 +149,28 @@ describe('Go To in the editor', () => {
     });
   });
 
+  test('Ctrl+G in the document sends openGoTo to the registered UI', () => {
+    const editor = mount();
+    let opened = 0;
+    editor.setGoToChrome({ onRequest: () => (opened += 1) });
+    const pages = document.body.lastElementChild!.querySelector<HTMLElement>('.docx-pages')!;
+    const press = (init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'g',
+        bubbles: true,
+        cancelable: true,
+        ...init,
+      });
+      pages.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(press({ ctrlKey: true })).toBe(true);
+    expect(opened).toBe(1);
+    // Shift is someone else's chord.
+    expect(press({ ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(opened).toBe(1);
+  });
+
   test('openGoTo opens the registered Go To UI, also read-only, and is refused without one', () => {
     const editor = mount('view');
     expect(editor.can({ type: 'openGoTo' })).toEqual({

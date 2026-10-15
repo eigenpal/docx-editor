@@ -561,6 +561,8 @@
       "listAriaLabel": "Marcadores",
       "go": "Ir a",
       "notFound": "Ningún marcador se llama «{name}».",
+      "failed": "No se pudo mostrar el marcador.",
+      "typeName": "Escriba el nombre de un marcador o elija uno de la lista.",
       "empty": "Este documento no tiene marcadores.",
       "noMatches": "Ningún marcador coincide.",
       "places": {

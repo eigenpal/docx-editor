@@ -6,6 +6,7 @@
 import {
   chordLetter,
   editorInstanceScope,
+  isGoToChord,
   hostWindowOf,
   isDomNode,
   isElementNode,
@@ -29,16 +30,11 @@ export function isFindShortcut(event: KeyboardEvent, apple = isApplePlatform()):
 }
 
 /**
- * Ctrl+G, or Cmd+Option+G on Apple platforms, opens Go To. F5 is not used: browsers reload on
- * it. Cmd+G alone is left to the browser's find-next on macOS.
+ * Ctrl+G, or Cmd+Option+G on Apple platforms, opens Go To: the engine's own chord, so the
+ * pane and the engine keymap agree. The pages send it as the `openGoTo` command; this catches
+ * it with focus in the pane or the editor's chrome.
  */
-export function isGoToShortcut(event: KeyboardEvent, apple = isApplePlatform()): boolean {
-  if (event.shiftKey || event.isComposing) return false;
-  if (apple) {
-    if (!event.metaKey || !event.altKey || event.ctrlKey) return false;
-  } else if (!event.ctrlKey || event.metaKey || event.altKey) return false;
-  return chordLetter(event) === 'g';
-}
+export const isGoToShortcut = isGoToChord;
 
 /** The shortcut label a resolver shows for Go To: `Ctrl+G`, or `Ctrl+Alt+G` (Cmd+Option+G). */
 export function goToShortcutLabel(apple = isApplePlatform()): string {
