@@ -3898,6 +3898,24 @@ export interface TextFormFieldDialogSession {
 }
 
 // @public
+export interface TextMatch {
+    // (undocumented)
+    readonly blockId: string;
+    // (undocumented)
+    readonly contextAfter?: string;
+    readonly contextBefore?: string;
+    // (undocumented)
+    readonly length: number;
+    readonly paragraphIndex: number;
+    readonly runIndex: number;
+    // (undocumented)
+    readonly runOffset: number;
+    readonly scope?: ViewScope;
+    readonly start: number;
+    readonly text: string;
+}
+
+// @public
 export interface TextMeasurer {
     caretAdvances?(text: string, style: ResolvedRunStyle): readonly number[] | undefined;
     hasResolvedFont?(style: ResolvedRunStyle): boolean;

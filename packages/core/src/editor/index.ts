@@ -566,6 +566,8 @@ export type {
   ScrollToAnchorOptions,
   HistoryGroup,
   HistoryGroupOptions,
+  // What `findMatches` returns and `selectMatch`/`replaceMatch` take.
+  TextMatch,
 } from '../contracts/editor.ts';
 
 export { runChromeExport, ChromeExportError } from './chrome-export.ts';
