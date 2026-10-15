@@ -46,7 +46,7 @@ const fixture = zipDocument(
   }
 );
 
-async function peer(name: string, host?: { ydoc: Y.Doc }) {
+async function peer(name: string, host?: { ydoc: Y.Doc }, source: Uint8Array = fixture) {
   const ydoc = new Y.Doc();
   const awareness = new Awareness(ydoc);
   if (host) Y.applyUpdate(ydoc, Y.encodeStateAsUpdate(host.ydoc));
@@ -55,7 +55,7 @@ async function peer(name: string, host?: { ydoc: Y.Doc }) {
     awareness,
     documentId: 'api-range-revisions',
     identity: { actorId: name, name },
-    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: fixture },
+    bootstrap: host ? { kind: 'join' } : { kind: 'create', document: source },
   });
   const container = document.createElement('div');
   document.body.append(container);
@@ -258,6 +258,57 @@ test('pair and comment keys from one replica resolve on another', async () => {
     expect(b.editor.getReviewItems({ placement: false }).map((item) => item.key)).not.toContain(
       pair.key
     );
+  } finally {
+    b.destroy();
+    a.destroy();
+  }
+});
+
+const nestedFixture = zipDocument(
+  `<w:p>${run('lead ')}<w:ins w:id="5" w:author="Ada">${run('alpha ')}` +
+    `<w:del w:id="6" w:author="Grace"><w:r><w:delText>beta</w:delText></w:r></w:del></w:ins>` +
+    `${run(' tail')}</w:p>`
+);
+
+test('a card change accepted by key resolves alone while another replica edits the nested change', async () => {
+  const a = await peer('Alice', undefined, nestedFixture);
+  const b = await peer('Bob', a);
+  try {
+    const outer = b.editor
+      .getReviewItems({ placement: false })
+      .find((item) => item.kind === 'revision' && item.author === 'Ada')!;
+    await b.runtime.run(async (context) => {
+      const [inside] = await search(context, 'bet');
+      inside!.insertText('X', 'End');
+      await context.sync();
+    });
+    await a.runtime.run(async (context) => {
+      getReviewItemRevisions(context, outer.key).acceptAll();
+      await context.sync();
+    });
+    sync(a, b);
+    await converged(a, b);
+    expect(await bodyText(b)).toBe('lead alpha betaX tail');
+    expect(revisionTexts(a)).toEqual(['beta']);
+    expect(
+      b.editor
+        .getReviewItems({ placement: false })
+        .filter((item) => item.kind === 'revision')
+        .map((item) => item.author)
+    ).toEqual(['Grace']);
+    const reopened = await ServerDocxEditor.createServer(new Uint8Array(await b.editor.save()));
+    try {
+      await reopened.run(async (context) => {
+        const revisions = context.document.body.revisions;
+        revisions.load('items');
+        await context.sync();
+        for (const revision of revisions.items) revision.load('author');
+        await context.sync();
+        expect(revisions.items.map((revision) => revision.author)).toEqual(['Grace']);
+      });
+    } finally {
+      reopened.dispose();
+    }
   } finally {
     b.destroy();
     a.destroy();

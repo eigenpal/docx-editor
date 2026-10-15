@@ -149,6 +149,78 @@ describe('what a range decision covers', () => {
   });
 });
 
+describe('changes nested inside another change', () => {
+  // Ada's insertion holds Grace's deletion of "beta" and Bob's deletion of "gamma".
+  const NESTED = docx(
+    para(
+      run('lead '),
+      '<w:ins w:id="5" w:author="Ada">' +
+        run('alpha ') +
+        '<w:del w:id="6" w:author="Grace"><w:r><w:delText>beta</w:delText></w:r></w:del>' +
+        run(' mid ') +
+        '<w:del w:id="7" w:author="Bob"><w:r><w:delText>gamma</w:delText></w:r></w:del></w:ins>',
+      run(' tail')
+    )
+  );
+
+  async function byAuthor(context: RequestContext) {
+    const revisions = context.document.body.revisions;
+    revisions.load('items');
+    await context.sync();
+    for (const revision of revisions.items) revision.load('author');
+    await context.sync();
+    const of = (name: string) => revisions.items.find((revision) => revision.author === name)!;
+    return { ada: of('Ada'), grace: of('Grace') };
+  }
+
+  test('rejecting a range over part of the group removes the nested changes with it', async () => {
+    const xml = await withRuntime(NESTED, async (context) => {
+      const [match] = await find(context, 'beta');
+      match!.revisions.load('items');
+      await context.sync();
+      expect(match!.revisions.items).toHaveLength(2);
+      match!.revisions.rejectAll();
+      await context.sync();
+      expect(await pending(context)).toBe(0);
+    });
+    expect(xml).not.toContain('alpha');
+    expect(xml).not.toContain('gamma');
+  });
+
+  test('accepting a range over part of the group leaves the other nested change pending', async () => {
+    const xml = await withRuntime(NESTED, async (context) => {
+      const [match] = await find(context, 'beta');
+      match!.revisions.acceptAll();
+      await context.sync();
+      expect(await pending(context)).toBe(1);
+    });
+    expect(xml).not.toContain('beta');
+    expect(xml).toContain('w:author="Bob"');
+  });
+
+  test('a nested change removed by an earlier rejection refuses a contrary decision', async () => {
+    const xml = await withRuntime(NESTED, async (context) => {
+      const { ada, grace } = await byAuthor(context);
+      ada.reject();
+      grace.accept();
+      expect(await failure(context.sync())).toBe('ConflictingChanges');
+      expect(await pending(context)).toBe(3);
+    });
+    expect(xml).toContain('w:author="Ada"');
+  });
+
+  test('a nested change removed by an earlier rejection is skipped by the same decision', async () => {
+    const xml = await withRuntime(NESTED, async (context) => {
+      const { ada, grace } = await byAuthor(context);
+      ada.reject();
+      grace.reject();
+      await context.sync();
+      expect(await pending(context)).toBe(0);
+    });
+    expect(xml).not.toContain('alpha');
+  });
+});
+
 describe('paragraph marks', () => {
   const MARK = docx(
     '<w:p><w:pPr><w:rPr><w:ins w:id="8" w:author="Grace"/></w:rPr></w:pPr>' +

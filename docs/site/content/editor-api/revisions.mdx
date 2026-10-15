@@ -190,6 +190,7 @@ On a range collection, `acceptAll()` and `rejectAll()` resolve every change the 
 
 - A change that the range covers in part resolves whole, including its characters outside the range.
 - Structural changes that `items` omits, such as a complete tracked row, resolve too.
+- If the range overlaps only part of a group of nested changes, only the overlapped changes resolve, and the others stay pending. Changes inside text that the decision removes, such as a rejected insertion, go with that text.
 - If one of the changes is read-only or can't resolve, the sync fails with `NotImplemented` and nothing changes.
 - If two decisions in one sync reach the same change, the later one skips it. Contrary decisions on one change fail with `ConflictingChanges`.
 

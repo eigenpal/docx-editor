@@ -22,6 +22,7 @@ import {
   isReplacementPair,
   parseReviewItemKey,
   reviewItemKey,
+  revisionSiteNodeIdsOf,
   type ReviewCommentItem,
   type ReviewRange,
   type ReviewRevisionItem,
@@ -37,6 +38,7 @@ import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/co
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { nestedTextDecisionOps } from './revision-nested-text.ts';
+import { parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { revisionItemsInStory, revisionReads } from './review.ts';
 import {
   resolveSpanRef,
@@ -128,7 +130,10 @@ export function planKeyedDecision(
         'a tracked change in that decision cannot be resolved',
         skipped[0]?.reason
       );
-    ops = nested;
+    ops = nested.ops;
+    // A change whose content the decision removes is decided with it: a later rejection of it
+    // has nothing left to do, and a later acceptance would keep words that are gone.
+    for (const key of nested.removed) ledger.decided.set(key, 'reject');
   } else {
     for (const entry of decision.result.resolved) ledger.decided.set(entry.key, action);
   }
@@ -136,19 +141,58 @@ export function planKeyedDecision(
   return { ok: true, kind: 'command', story: reads.story, ops, answer: () => APPLIED };
 }
 
-/** Each pending item resolved alone as a nested text decision, or null when one cannot be. */
+/** Whether a decision on this change removes its content: a rejected insertion, an accepted deletion. */
+function removesContent(item: ReviewRevisionItem, action: Action): boolean {
+  return action === 'reject' ? item.revisionKind === 'insert' : item.revisionKind === 'delete';
+}
+
+/**
+ * Each pending item resolved alone as a nested text decision, or null when one cannot be.
+ *
+ * Every op is planned from the state before the batch, so an item nested inside content that
+ * another pending item removes is dropped rather than resolved: its sites go with that content.
+ * `removed` names every change of the story that the decision removes that way.
+ */
 function nestedDecisionOps(
   reads: AutomationStoryReads,
   items: readonly ReviewRevisionItem[],
   action: Action
-): readonly TreeDocOp[] | null {
+): { readonly ops: readonly TreeDocOp[]; readonly removed: readonly string[] } | null {
+  const removing = new Set<string>();
+  for (const item of items) {
+    if (removesContent(item, action))
+      for (const id of revisionSiteNodeIdsOf(item)) removing.add(id);
+  }
+  const insideRemoved = (item: ReviewRevisionItem): boolean => {
+    const sites = revisionSiteNodeIdsOf(item);
+    return (
+      sites.length > 0 &&
+      sites.every((id) => {
+        for (
+          let node = parentNodeOf(reads.part, id);
+          node;
+          node = parentNodeOf(reads.part, node.id)
+        )
+          if (removing.has(node.id)) return true;
+        return false;
+      })
+    );
+  };
+  const removed = removing.size
+    ? revisionItemsInStory(reads).filter(insideRemoved).map(reviewItemKey)
+    : [];
+  const gone = new Set(removed);
   const ops: TreeDocOp[] = [];
   for (const item of items) {
+    if (gone.has(reviewItemKey(item))) continue;
     const own = nestedTextDecisionOps(reads, item, action);
     if (own.length === 0) return null;
     for (const op of own) ops.push(op);
   }
-  return ops;
+  return {
+    ops,
+    removed: removed.filter((key) => !items.some((item) => reviewItemKey(item) === key)),
+  };
 }
 
 interface Position {
