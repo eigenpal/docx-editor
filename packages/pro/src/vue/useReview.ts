@@ -372,8 +372,8 @@ function useReviewOfInternal(
  * An entry with `isActive: true` stays at its own anchor, and the entries before it move up.
  * Anchors are in layout points. Measured heights are in CSS pixels, so pass `scale` to add them.
  *
- * Returns each card's top in layout points. Multiply by `scale` and add the rail's top offset
- * to position a card in CSS pixels.
+ * Returns each card's top in layout points. `useReviewRailMetrics` supplies `scale` and the
+ * pixel offset of the first page: a card's CSS `top` is `metrics.top + position * metrics.scale`.
  *
  * @public
  */

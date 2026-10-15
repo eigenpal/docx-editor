@@ -147,6 +147,7 @@
         "CommentMarkerStyle",
         "ReviewPartProps",
         "ReviewProps",
+        "ReviewRailMetrics",
         "ResolvedReviewPane",
         "ScrollPlacement",
         "UseCollaborationStatusReturn",
@@ -156,6 +157,7 @@
         "UseDocumentCollaborationConnectOptions",
         "UseDocumentCollaborationOptions",
         "UseDocumentCollaborationReturn",
+        "UseReviewRailMetricsOptions",
         "UseReviewReturn",
         "activatedCustomNodeOf",
         "collaborationModule",
@@ -170,6 +172,7 @@
         "useReviewAuthor",
         "useReviewItem",
         "useReviewOf",
+        "useReviewRailMetrics",
         "useStackedReviewPositions",
         "ReviewWriteAction",
         "ReviewWriteRefusal"
@@ -177,7 +180,8 @@
       "deferredInVue": {},
       "vueExclusive": {
         "UseCollaborationParticipantsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the participants array directly, so only Vue exports this type.",
-        "UseCollaborationSessionReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the session directly, so only Vue exports this type."
+        "UseCollaborationSessionReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the session directly, so only Vue exports this type.",
+        "UseReviewRailMetricsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the metrics directly, so only Vue exports this type."
       }
     },
     "reviewParts": {
@@ -211,6 +215,8 @@
       "vueExclusive": {}
     },
     "memberCheckedInterfaces": [
+      "ReviewRailMetrics",
+      "UseReviewRailMetricsOptions",
       "CollaborationAvatarProps",
       "CollaborationRootSource",
       "CollaborationAvatarRenderProps",

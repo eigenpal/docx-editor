@@ -308,15 +308,62 @@ A reply to a revision creates a comment over its range. Its `parentRevisionId` l
 
 `readOnly` means the engine cannot resolve that item. Hide **Accept** and **Reject** in custom cards. Packaged actions remain visible but disabled in viewing mode.
 
-### Position custom cards
+### Place custom cards
 
-If you set `preset={false}` on the sidebar or render your own rail, use `useStackedReviewPositions(items, heights, { gap, scale })` to stack cards without overlap:
+`anchorY` and stacked positions are layout points from the top of the first page. `useReviewRailMetrics()` returns the values that convert them to CSS pixels:
 
-- Pass the review items as they are. An item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
-- Pass the measured card heights in CSS pixels.
-- Pass `editor.getRenderScale()` as `scale`.
+| Value | Meaning |
+| --- | --- |
+| `scale` | CSS pixels per layout point, including zoom. |
+| `top` | CSS pixels from the top of the scroll container's content to the first page. |
+| `left` | The column's left edge, 16 pixels right of the page, or `null` before layout. |
+| `compactCardLeft` | A 300-pixel card's `left` that keeps it inside a narrow viewport, or `null`. |
 
-The hook returns each card's top in layout points, measured from the top of the first page. Multiply each value by `scale` and add the rail's top offset to position a card in CSS pixels.
+A card's CSS `top` is `metrics.top + position * metrics.scale`. To stack cards without overlap, pass their measured heights in CSS pixels to `useStackedReviewPositions(items, heights, { gap, scale: metrics.scale })`. An item with `isActive: true` stays at its own anchor, and the cards before it move up to make room.
+
+Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. Your children render inside the rail element, which already sits at `left`.
+
+For a column of your own, pass a ref to an element that is absolutely positioned inside `DocxEditor.Viewport`. The values update when the zoom, the window size, the page count, or the reserved review gutter changes. They also work when the editor is in a pop-out window or an iframe.
+
+The following example places one card per review item:
+
+```tsx
+import { useRef } from 'react';
+import {
+  useReview,
+  useReviewRailMetrics,
+  useStackedReviewPositions,
+} from '@docx-editor.dev/pro/react';
+
+const NO_HEIGHTS = new Map<string, number>();
+
+function MyReviewColumn() {
+  const railRef = useRef<HTMLDivElement>(null);
+  const metrics = useReviewRailMetrics(railRef);
+  const { items } = useReview();
+  // Pass measured card heights instead of NO_HEIGHTS to stack the cards.
+  const positions = useStackedReviewPositions(items, NO_HEIGHTS, {
+    scale: metrics.scale,
+  });
+
+  return (
+    <div ref={railRef} style={{ position: 'absolute', top: 0, left: metrics.left ?? 0 }}>
+      {items.map((item) => (
+        <MyCard
+          key={item.key}
+          item={item}
+          style={{
+            position: 'absolute',
+            top: metrics.top + (positions.get(item.key) ?? 0) * metrics.scale,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+In Vue, `useReviewRailMetrics(railRef)` returns `{ metrics }`, where `metrics` is a ref.
 
 ### Activate and reveal items
 

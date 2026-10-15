@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The review rail measured its own geometry in each adapter and kept it private.",
+  "after": "One shared module measures the review rail geometry, and useReviewRailMetrics exposes it in React and Vue.",
+  "reason": "The change reads DOM layout for review chrome only. Shared document state, awareness, and operation formats do not change.",
+  "tests": [
+    "packages/pro/src/__tests__/review-rail-metrics.test.ts",
+    "packages/pro/src/__tests__/review-rail-metrics-react.test.tsx",
+    "packages/pro/src/__tests__/review-rail-metrics-vue.test.ts"
+  ],
+  "changeset": "review-rail-metrics",
+  "migration": null
+}
