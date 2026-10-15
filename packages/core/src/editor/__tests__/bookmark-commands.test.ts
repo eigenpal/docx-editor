@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { docx } from './paginated-surface-fixtures.ts';
+import { strToU8, zipSync } from 'fflate';
 import {
   bookmarkDialogInitialName,
   bookmarkDialogNameState,
@@ -126,7 +127,51 @@ describe('bookmark commands', () => {
   });
 });
 
+/** A body with one footnote whose text holds a bookmark. */
+function footnoteDocx(): Uint8Array {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/footnotes.xml': strToU8(
+      `<w:footnotes xmlns:w="${W}"><w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
+        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>' +
+        '<w:footnote w:id="1"><w:p><w:r><w:t xml:space="preserve">Note </w:t></w:r><w:bookmarkStart w:id="7" w:name="inNote"/>' +
+        '<w:r><w:t>text</w:t></w:r><w:bookmarkEnd w:id="7"/></w:p></w:footnote></w:footnotes>'
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body><w:p><w:r><w:t>Alpha</w:t></w:r>` +
+        '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r></w:p>' +
+        '<w:sectPr/></w:body></w:document>'
+    ),
+  });
+}
+
 describe('show bookmarks', () => {
+  test('marks bookmarks in footnotes, and the query names their story', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: footnoteDocx() });
+    editors.push(editor);
+    expect(editor.query({ type: 'bookmarks' })).toMatchObject([{ name: 'inNote', story: 'note' }]);
+    editor.exec({ type: 'toggleBookmarks' });
+    const marks = [...container.querySelectorAll<HTMLElement>('.docx-bookmark-mark')];
+    expect(marks.map((mark) => mark.className.split('--')[1])).toEqual(['start', 'end']);
+    expect(editor.exec({ type: 'goToBookmark', name: 'innote' }).ok).toBe(true);
+  });
+
   test('the toggle paints brackets for visible bookmarks and an I-beam at a point', () => {
     const { editor, container } = mount(SAMPLE);
     expect(editor.snapshot().showBookmarks).toBe(false);

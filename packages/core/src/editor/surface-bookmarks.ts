@@ -11,7 +11,7 @@
 // pages. Nothing is added to the editable DOM, so selection mapping, hit testing and the caret
 // never see the marks, and they are never part of the document, its export or its print.
 // Hidden bookmarks (names starting with an underscore) are not shown. Marks are painted for
-// bookmarks in the main text.
+// bookmarks in the main text and in footnotes and endnotes.
 
 import { caretAt } from '@docx-editor.dev/core/layout';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
@@ -238,10 +238,10 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
         frame.layer.replaceChildren();
         return;
       }
-      const body = deps.session.part();
       const marks: BookmarkMark[] = [];
-      for (const record of recordsOf(body)) {
-        if (record.hidden) continue;
+      for (const { record, scope } of located()) {
+        // A header or footer paints on every page that repeats it, from one story.
+        if (record.hidden || scope.kind === 'headerFooter') continue;
         const point =
           record.start.paragraphId === record.end.paragraphId &&
           record.start.offset === record.end.offset;
