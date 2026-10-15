@@ -9,6 +9,7 @@ import type { StyleSpanRecord } from './semantic-records.ts';
 import { clipInlineDrawingRecordVertically, type InlineDrawingRecord } from './drawing-layout.ts';
 import { topAndBottomSkipBeforeLine, type ExclusionZone } from './drawing-exclusion.ts';
 import type { ModelRange } from './field-pieces.ts';
+import type { WrapSegment } from './line-wrap-passages.ts';
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 
 export interface PendingLine {
@@ -72,8 +73,19 @@ export interface PendingLine {
    * beside it, not between the page margins, and stretches a justified line to the float's
    * near edge rather than through it. Absent when no float shortens the line, when the line
    * steps over a float into a later passage, or when the passage is the whole measure.
+   * `contentEnd` marks a line whose pen stepped over a float without placing anything past it.
    */
-  wrapSegment?: { readonly start: number; readonly end: number };
+  wrapSegment?: WrapSegment;
+  /**
+   * The float passages a line that steps over a float holds content in, left to right, in
+   * paragraph-local coordinates. The first starts where the line's content begins.
+   *
+   * Each part of such a line aligns INSIDE its own passage: centred text is centred beside the
+   * float on each side, and right-aligned text ends at each passage's right edge. Aligning the
+   * line as one block moved the text before the float onto the picture. Absent on a line that
+   * one passage holds whole, which {@link wrapSegment} describes.
+   */
+  wrapPassages?: readonly { readonly start: number; readonly end: number }[];
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
   /** Revisions a resolved view answered on this line; see {@link LineRecord.changeSites}. */
@@ -435,6 +447,9 @@ export function frozenLine(line: PendingLine): PendingLine {
       : {}),
     ...(line.firstLineOffset ? { firstLineOffset: line.firstLineOffset } : {}),
     ...(line.wrapSegment ? { wrapSegment: Object.freeze({ ...line.wrapSegment }) } : {}),
+    ...(line.wrapPassages
+      ? { wrapPassages: Object.freeze(line.wrapPassages.map((passage) => Object.freeze(passage))) }
+      : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),
     ...(line.changeSites ? { changeSites: Object.freeze(line.changeSites) } : {}),
   }) as PendingLine;

@@ -713,8 +713,10 @@ export function splitBidiTrailingWhitespace(
       range: { ...span.range, end: span.range.start + from },
       box: { ...span.box, width: span.box.width - width },
     };
+    // The tail sits right after the text, so a float's jump stays on the text piece only.
+    const { wrapAdvanceBefore: _jump, ...rest } = span;
     const tailSpan = {
-      ...span,
+      ...rest,
       text: tail,
       range: { ...span.range, start: span.range.start + from },
       box: { ...span.box, x: span.box.x + span.box.width - width, width },
