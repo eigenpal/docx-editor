@@ -12,6 +12,7 @@ import type { CollaborationSession } from '@docx-editor.dev/pro/react';
 import { exampleText as t } from '../../shared/example-text';
 import {
   createCollaborationRoomId,
+  DEMO_SIGNALING_ENDPOINTS,
   validateRoomId,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
 import type { UseWebrtcCollaborationReturn } from '@docx-editor.dev/pro/react/webrtc';
@@ -258,6 +259,8 @@ export function CollaborationControl({
           kind === 'create'
             ? { kind: 'create', document: new Uint8Array(await editor.save()) }
             : { kind: 'join' },
+        // Demo only. Production rooms pass their own signaling URLs and TURN servers.
+        signaling: DEMO_SIGNALING_ENDPOINTS,
         ...(secret ? { password: secret } : {}),
       });
       if (failure) {

@@ -46,8 +46,13 @@ export interface UseWebrtcCollaborationConnectOptions {
    * {@link CreateDocumentCollaborationOptions.offlineEditing}.
    */
   readonly offlineEditing?: boolean;
-  /** Signaling server URLs. Omitted, the room uses the public demo endpoints and warns once. */
-  readonly signaling?: readonly string[];
+  /**
+   * Signaling server URLs that introduce peers to each other. There is no default. Pass your
+   * own URLs in production, `DEMO_SIGNALING_ENDPOINTS` for demos, or `[]` to connect only
+   * tabs of the same browser. A connect without this value resolves with a `transport`
+   * failure before any connection opens.
+   */
+  readonly signaling: readonly string[];
   /** STUN and TURN servers for the peer connections. Pass TURN servers in production. */
   readonly iceServers?: readonly RTCIceServer[];
   /** Signaling encryption key. Every peer passes the same value. */
