@@ -832,6 +832,9 @@ export function getReviewItemRange(context: RequestContext, key: string): Range_
 export function getReviewItemRangeOrNullObject(context: RequestContext, key: string): Range_2;
 
 // @public
+export function getReviewItemRevisions(context: RequestContext, key: string): RevisionCollection;
+
+// @public
 export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
 
 // @public
@@ -1321,6 +1324,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle): RevisionCollection;
+    // @internal
+    static ofReviewKey(context: RequestContext, label: string, owner: ObjectPath, key: string): RevisionCollection;
     // @internal
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;

@@ -1,4 +1,4 @@
-// Review reads narrowed to a stretch of a story, and review-queue keys resolved to a stretch.
+// Review reads and decisions narrowed to a stretch of a story or to one review-queue key.
 //
 // A RANGE ASKS BY POSITION. `getRevisions` with a span answers the listed decisions of that
 // span's story whose characters the span overlaps, in the same order and with the same handles
@@ -6,15 +6,36 @@
 // Positions are model offsets: the runtime's text view changes what a range's text reads, never
 // which decisions sit inside it.
 //
-// A REVIEW KEY IS THE QUEUE'S NAME FOR A DECISION. The editor's review queue keys every card as
-// `${kind}-${id}`, and a paired replacement as `revision-replace:${deletion}+${insertion}`. This
-// file finds the item a key names by asking every story for its own items, the same membership
-// the listings use, and answers the stretch that covers all of the item's ranges. A key naming
-// nothing answers no stretch rather than a refusal, so a caller can choose a null object.
+// A REVIEW KEY IS THE QUEUE'S NAME FOR A DECISION (`reviewItemKey`, `parseReviewItemKey`). The
+// item is found in its part, then placed in the story its first paragraph belongs to, and only
+// accepted when that story's own membership holds it too. A paired key must name a deletion
+// and an insertion the queue itself would pair. A key naming nothing answers no stretch and no
+// members rather than a refusal, so a caller can choose a null object.
+//
+// DECISIONS IN ONE BATCH SHARE A LEDGER. Each decision is planned against the state before the
+// batch, so two scoped decisions that reach the same change would both target its sites and the
+// second would fail as stale. The ledger records what earlier decisions resolved; a later
+// decision drops those keys, and a contrary decision on one of them refuses.
 
 import { planRevisionBatch } from '../store/store/revision-batch.ts';
-import { reviewItemKey, type ReviewRange } from '../store/store/review-items.ts';
-import { commentReads, revisionItemsInStory, revisionReads } from './review.ts';
+import {
+  isReplacementPair,
+  parseReviewItemKey,
+  reviewItemKey,
+  type ReviewCommentItem,
+  type ReviewRange,
+  type ReviewRevisionItem,
+} from '../store/store/review-items.ts';
+import { revisionItemsOf, commentItemsOf } from '../store/store/review-reads.ts';
+import {
+  commentAnchorsOfStory,
+  commentsOfPart,
+  threadStateOfPart,
+  type CommentThreadState,
+} from '../store/store/comment-reads.ts';
+import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { revisionItemsInStory, revisionReads } from './review.ts';
 import {
   resolveSpanRef,
   spanValue,
@@ -22,16 +43,17 @@ import {
   storyOfSpanRef,
   type ResolvedRange,
 } from './spans.ts';
-import { sharesItsPart, type AutomationShapeOwnerStory } from './stories.ts';
+import { sharesItsPart, type AutomationStoryId } from './stories.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import type { AutomationErrorCode, AutomationSpan, AutomationValue } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 
-const PAIR_PREFIX = 'replace:';
 /** A reply chain is walked to its anchored head; the file already broke any cycle. */
 const MAX_THREAD_DEPTH = 64;
+
+const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
 function refuse(code: AutomationErrorCode, message: string, detail?: string): PlannedOperation {
   return {
@@ -42,6 +64,69 @@ function refuse(code: AutomationErrorCode, message: string, detail?: string): Pl
 
 function query(value: AutomationValue): PlannedOperation {
   return { ok: true, kind: 'query', value };
+}
+
+type Action = 'accept' | 'reject';
+
+/** What the decisions earlier in one batch resolved. One per batch planner. */
+export interface RevisionDecisionLedger {
+  /** Store review keys an earlier decision resolved, with the action it took. */
+  readonly decided: Map<string, Action>;
+  /** Whether an earlier decision resolved a whole story. */
+  whole: boolean;
+}
+
+export function createRevisionDecisionLedger(): RevisionDecisionLedger {
+  return { decided: new Map(), whole: false };
+}
+
+/**
+ * Plan accepting or rejecting exactly these store keys, as one decision in the batch.
+ *
+ * Refuses the whole decision when any of them cannot be resolved, and when an earlier decision
+ * in the batch took the contrary action on one of them or resolved the whole story.
+ */
+export function planKeyedDecision(
+  reads: AutomationStoryReads,
+  keys: readonly string[],
+  action: Action,
+  ledger: RevisionDecisionLedger,
+  pin: (story: AutomationStoryReads) => PlannedOperation | null
+): PlannedOperation {
+  const conflict = pin(reads);
+  if (conflict) return conflict;
+  if (ledger.whole)
+    return refuse('conflicting-operations', 'an earlier decision resolved the whole story');
+  const pending: string[] = [];
+  for (const key of keys) {
+    const earlier = ledger.decided.get(key);
+    if (earlier === undefined) pending.push(key);
+    else if (earlier !== action)
+      return refuse('conflicting-operations', 'an earlier decision took the contrary action');
+  }
+  if (pending.length === 0)
+    return { ok: true, kind: 'command', story: reads.story, ops: [], answer: () => APPLIED };
+  const decision = planRevisionBatch(
+    reads.part,
+    action,
+    pending,
+    sharesItsPart(reads.story) ? reads.root : undefined
+  );
+  if (decision.result.skipped.length > 0)
+    return refuse(
+      'unsupported-revision',
+      'a tracked change in that decision cannot be resolved',
+      decision.result.skipped[0]?.reason
+    );
+  for (const entry of decision.result.resolved) ledger.decided.set(entry.key, action);
+  for (const key of pending) ledger.decided.set(key, action);
+  return {
+    ok: true,
+    kind: 'command',
+    story: reads.story,
+    ops: decision.ops,
+    answer: () => APPLIED,
+  };
 }
 
 interface Position {
@@ -73,163 +158,133 @@ function overlaps(reads: AutomationStoryReads, scope: ResolvedRange, range: Revi
     : compare(start, high) < 0 && compare(end, low) > 0;
 }
 
-/** The listed decisions of a span's story that the span overlaps, in document order. */
-function revisionsInScope(reads: AutomationStoryReads, scope: ResolvedRange | null) {
+/** Every decision of a span's story the span overlaps, readOnly and structural ones included. */
+function itemsInScope(
+  reads: AutomationStoryReads,
+  scope: ResolvedRange | null
+): readonly ReviewRevisionItem[] {
   if (scope === null) return [];
-  return revisionReads(reads).filter((revision) =>
-    revision.item.ranges.some((range) => overlaps(reads, scope, range))
+  return revisionItemsInStory(reads).filter((item) =>
+    item.ranges.some((range) => overlaps(reads, scope, range))
   );
 }
 
-type ScopedListing = Extract<AutomationOperation, { readonly op: 'getRevisions' }>;
-
-/** Plan `getRevisions`: a whole story by its body handle, or the decisions a span overlaps. */
-export function planRevisionListing(
-  operation: ScopedListing,
-  handles: AutomationHandleTable,
-  packageReads: AutomationPackageReads
-): PlannedOperation {
-  if ('body' in operation) {
-    const story = storyOfHandle(operation.body, 'body', handles, packageReads);
-    if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
-    const reads = story.value;
-    return query({
-      kind: 'handles',
-      handles: revisionReads(reads).map((item) => handles.revision(item.id, reads.story)),
-    });
-  }
-  const scope = resolveSpanRef(operation.scope, handles, packageReads);
-  if (!scope.ok) return refuse(scope.code, 'that span is not a place', scope.detail);
-  const story = storyOfSpanRef(operation.scope, handles, packageReads);
-  if (!story.ok) return refuse(story.code, 'that span names no story', story.detail);
-  const reads = story.value;
-  return query({
-    kind: 'handles',
-    handles: revisionsInScope(reads, scope.value).map((item) =>
-      handles.revision(item.id, reads.story)
-    ),
-  });
-}
-
-type ScopedDecision = Extract<
-  AutomationOperation,
-  { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions'; readonly scope: unknown }
->;
-
-/**
- * Accept or reject exactly the decisions a span's listing holds, as one transaction.
- *
- * Refuses the whole decision when any member cannot be resolved, as the story-wide form does,
- * rather than resolving part of what the caller asked for.
- */
-export function planScopedRevisionDecision(
-  operation: ScopedDecision,
-  handles: AutomationHandleTable,
-  packageReads: AutomationPackageReads,
-  pin: (story: AutomationStoryReads) => PlannedOperation | null
-): PlannedOperation {
-  const scope = resolveSpanRef(operation.scope, handles, packageReads);
-  if (!scope.ok) return refuse(scope.code, 'that span is not a place', scope.detail);
-  const story = storyOfSpanRef(operation.scope, handles, packageReads);
-  if (!story.ok) return refuse(story.code, 'that span names no story', story.detail);
-  const reads = story.value;
-  const keys = revisionsInScope(reads, scope.value).map((revision) => reviewItemKey(revision.item));
-  const conflict = pin(reads);
-  if (conflict) return conflict;
-  if (keys.length === 0)
-    return { ok: true, kind: 'command', story: reads.story, ops: [], answer: () => APPLIED };
-  const decision = planRevisionBatch(
-    reads.part,
-    operation.op === 'acceptAllRevisions' ? 'accept' : 'reject',
-    keys,
-    sharesItsPart(reads.story) ? reads.root : undefined
-  );
-  if (decision.result.skipped.length > 0)
-    return refuse(
-      'unsupported-revision',
-      'a tracked change in that span cannot be resolved',
-      decision.result.skipped[0]?.reason
-    );
+/** The listed (typed) members among `items`, as handles in story order. */
+function listedHandles(
+  reads: AutomationStoryReads,
+  items: readonly ReviewRevisionItem[],
+  handles: AutomationHandleTable
+): AutomationValue {
+  const ids = new Set(items.map((item) => item.id));
   return {
-    ok: true,
-    kind: 'command',
-    story: reads.story,
-    ops: decision.ops,
-    answer: () => APPLIED,
+    kind: 'handles',
+    handles: revisionReads(reads)
+      .filter((revision) => ids.has(revision.id))
+      .map((revision) => handles.revision(revision.id, reads.story)),
   };
 }
 
-const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
-
-/** Every story the document holds: body, declared furniture, notes, then text boxes. */
-function* everyStory(packageReads: AutomationPackageReads): Generator<AutomationStoryReads> {
-  const owners: AutomationShapeOwnerStory[] = [];
-  if (packageReads.body) {
-    yield packageReads.body;
-    owners.push({ kind: 'body' });
-  }
+/** The parts that can hold review items: the main part, declared furniture, and notes parts. */
+function reviewParts(packageReads: AutomationPackageReads): readonly OoxmlPart[] {
+  const parts = new Map<string, OoxmlPart>();
+  const add = (reads: AutomationStoryReads | null) => {
+    if (reads && !parts.has(reads.part.name)) parts.set(reads.part.name, reads.part);
+  };
+  add(packageReads.body);
   const sections = packageReads.sections().length;
   for (let sectionIndex = 0; sectionIndex < sections; sectionIndex += 1) {
     for (const slot of packageReads.furniture(sectionIndex)) {
-      // An inherited slot is an earlier section's part, already asked.
-      if (!slot.declared) continue;
-      const id: AutomationShapeOwnerStory = {
-        kind: slot.kind,
-        sectionIndex,
-        variant: slot.variant,
-      };
-      const reads = packageReads.story(id);
-      if (!reads) continue;
-      yield reads;
-      owners.push(id);
+      if (slot.declared)
+        add(packageReads.story({ kind: slot.kind, sectionIndex, variant: slot.variant }));
     }
   }
   for (const noteKind of ['footnote', 'endnote'] as const) {
     const listing = packageReads.noteIds(noteKind);
-    if (!listing.ok) continue;
-    for (const noteId of listing.ids) {
-      const reads = packageReads.story({ kind: 'note', noteKind, noteId });
-      if (reads) yield reads;
-    }
+    const first = listing.ok ? listing.ids[0] : undefined;
+    if (first !== undefined) add(packageReads.story({ kind: 'note', noteKind, noteId: first }));
   }
-  for (const owner of owners) {
-    const listing = packageReads.shapes(owner);
-    if (!listing.ok) continue;
-    for (const shape of listing.shapes) {
-      if (!shape.textboxRoot) continue;
-      const reads = packageReads.story({ kind: 'textbox', owner, shapeId: shape.id });
-      if (reads) yield reads;
-    }
-  }
+  return [...parts.values()];
 }
 
-/** The ranges a revision key names in one story, or null when the story holds no such item. */
-function revisionRangesIn(reads: AutomationStoryReads, id: string): readonly ReviewRange[] | null {
-  const items = revisionItemsInStory(reads);
-  if (!id.startsWith(PAIR_PREFIX)) return items.find((item) => item.id === id)?.ranges ?? null;
-  const halves = id.slice(PAIR_PREFIX.length);
-  for (const deletion of items) {
-    if (deletion.revisionKind !== 'delete' || !halves.startsWith(`${deletion.id}+`)) continue;
-    const insertionId = halves.slice(deletion.id.length + 1);
-    const insertion = items.find(
-      (item) => item.revisionKind === 'insert' && item.id === insertionId
-    );
-    if (insertion) return [...deletion.ranges, ...insertion.ranges];
+/** The story that holds a paragraph, as reads. */
+function storyReadsOf(
+  packageReads: AutomationPackageReads,
+  paragraphId: string | undefined
+): AutomationStoryReads | null {
+  if (paragraphId === undefined) return null;
+  const id: AutomationStoryId | null = packageReads.storyOf(paragraphId);
+  return id ? packageReads.story(id) : null;
+}
+
+/** A tracked change a key names: its store items (two for a pair) and the story they are in. */
+interface KeyedRevisions {
+  readonly reads: AutomationStoryReads;
+  readonly items: readonly ReviewRevisionItem[];
+}
+
+function revisionItemsOfKey(
+  packageReads: AutomationPackageReads,
+  key: string
+): KeyedRevisions | null {
+  const parsed = parseReviewItemKey(key);
+  if (!parsed || (parsed.kind !== 'revision' && parsed.kind !== 'replacement')) return null;
+  const halves = parsed.kind === 'replacement' ? parsed.halves : '';
+  for (const part of reviewParts(packageReads)) {
+    const all = revisionItemsOf(part);
+    let found: readonly ReviewRevisionItem[] | null = null;
+    if (parsed.kind === 'revision') {
+      const item = all.find((each) => each.id === parsed.id);
+      if (item) found = [item];
+    } else {
+      for (const deletion of all) {
+        if (!halves.startsWith(`${deletion.id}+`)) continue;
+        const insertionId = halves.slice(deletion.id.length + 1);
+        const insertion = all.find((each) => each.id === insertionId);
+        if (insertion && isReplacementPair(deletion, insertion)) {
+          found = [deletion, insertion];
+          break;
+        }
+      }
+    }
+    if (!found) continue;
+    const reads = storyReadsOf(packageReads, found[0]!.ranges[0]?.start.paragraphId);
+    if (!reads) return null;
+    // The story's own membership decides, as it does for listings: a text box's change is
+    // placed by its sites, and a note shares its part with every other note.
+    const members = new Set(revisionItemsInStory(reads).map((item) => item.id));
+    return found.every((item) => members.has(item.id)) ? { reads, items: found } : null;
   }
   return null;
 }
 
-/** The anchored range of a comment, or of the thread head a reply answers. */
-function commentRangeIn(
-  pkg: NonNullable<AutomationPackageReads['package']>,
-  reads: AutomationStoryReads,
+/** The anchored range of a comment, or of the thread head a reply answers, with its story. */
+function commentRangeOfKey(
+  packageReads: AutomationPackageReads,
   id: string
-): readonly ReviewRange[] | null {
-  const comments = commentReads(pkg, reads);
-  let item = comments.byId(id);
+): { readonly reads: AutomationStoryReads; readonly range: ReviewRange } | null {
+  const pkg = packageReads.package;
+  const body = packageReads.body;
+  if (!pkg || !body) return null;
+  const commentsPart = pkg.parts.get(commentPartNameOf(pkg, body.part.name));
+  if (!commentsPart) return null;
+  const extended = pkg.parts.get(commentsExtendedPartNameOf(pkg, body.part.name));
+  const threadState: ReadonlyMap<string, CommentThreadState> = extended
+    ? threadStateOfPart(extended)
+    : new Map<string, CommentThreadState>();
+  const anchors: ReturnType<typeof commentAnchorsOfStory> = [];
+  for (const part of reviewParts(packageReads)) {
+    for (const anchor of commentAnchorsOfStory(part)) anchors.push(anchor);
+  }
+  const items = commentItemsOf(commentsOfPart(commentsPart), anchors, threadState);
+  const byId = new Map<string, ReviewCommentItem>(items.map((item) => [item.id, item]));
+  let item = byId.get(id);
   for (let depth = 0; item && depth <= MAX_THREAD_DEPTH; depth += 1) {
-    if (item.range) return item.orphaned ? [] : [item.range];
-    item = item.parentId === undefined ? null : comments.byId(item.parentId);
+    if (item.range) {
+      if (item.orphaned) return null;
+      const reads = storyReadsOf(packageReads, item.range.start.paragraphId);
+      return reads && reads.has(item.range.end.paragraphId) ? { reads, range: item.range } : null;
+    }
+    item = item.parentId === undefined ? undefined : byId.get(item.parentId);
   }
   return null;
 }
@@ -260,34 +315,109 @@ function coveringSpan(
   return spanValue({ start: { ...low, story }, end: { ...high, story } }, handles);
 }
 
+function validKey(key: unknown): PlannedOperation | null {
+  return typeof key === 'string' && key.length > 0
+    ? null
+    : refuse('unsupported-content', 'a review item key is nonempty text');
+}
+
 /**
  * Plan `getReviewItemRange`: the stretch a review-queue key names, as zero or one spans.
  *
- * Revision and comment keys resolve. A key naming nothing, an item with no place in a story, or
- * an orphaned comment answers no span.
+ * Revision, paired replacement, and comment keys resolve. A key naming nothing, an item with no
+ * place in a story, or an orphaned comment answers no span.
  */
 export function planReviewItemRange(
   key: unknown,
   handles: AutomationHandleTable,
   packageReads: AutomationPackageReads
 ): PlannedOperation {
-  if (typeof key !== 'string' || key.length === 0)
-    return refuse('unsupported-content', 'a review item key is nonempty text');
-  const pkg = packageReads.package;
-  if (pkg === null) return refuse('document-unavailable', 'this host holds no document');
-  const kind = key.startsWith('revision-')
-    ? 'revision'
-    : key.startsWith('comment-')
-      ? 'comment'
-      : null;
-  if (kind === null) return query({ kind: 'spans', spans: [] });
-  const id = key.slice(kind.length + 1);
-  for (const reads of everyStory(packageReads)) {
-    const ranges =
-      kind === 'revision' ? revisionRangesIn(reads, id) : commentRangeIn(pkg, reads, id);
-    if (ranges === null) continue;
-    const span = ranges.length === 0 ? null : coveringSpan(reads, ranges, handles);
-    return query({ kind: 'spans', spans: span ? [span] : [] });
+  const invalid = validKey(key);
+  if (invalid) return invalid;
+  if (packageReads.package === null)
+    return refuse('document-unavailable', 'this host holds no document');
+  const parsed = parseReviewItemKey(key as string);
+  let span: AutomationSpan | null = null;
+  if (parsed?.kind === 'comment') {
+    const found = commentRangeOfKey(packageReads, parsed.id);
+    span = found ? coveringSpan(found.reads, [found.range], handles) : null;
+  } else {
+    const found = revisionItemsOfKey(packageReads, key as string);
+    const ranges = found?.items.flatMap((item) => item.ranges) ?? [];
+    span = found && ranges.length > 0 ? coveringSpan(found.reads, ranges, handles) : null;
   }
-  return query({ kind: 'spans', spans: [] });
+  return query({ kind: 'spans', spans: span ? [span] : [] });
+}
+
+type Listing = Extract<AutomationOperation, { readonly op: 'getRevisions' }>;
+
+/** Plan `getRevisions`: a whole story, the decisions a span overlaps, or one key's own. */
+export function planRevisionListing(
+  operation: Listing,
+  handles: AutomationHandleTable,
+  packageReads: AutomationPackageReads
+): PlannedOperation {
+  if ('body' in operation) {
+    const story = storyOfHandle(operation.body, 'body', handles, packageReads);
+    if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
+    const reads = story.value;
+    return query({
+      kind: 'handles',
+      handles: revisionReads(reads).map((item) => handles.revision(item.id, reads.story)),
+    });
+  }
+  if ('key' in operation) {
+    const invalid = validKey(operation.key);
+    if (invalid) return invalid;
+    const found = revisionItemsOfKey(packageReads, operation.key);
+    return query(
+      found ? listedHandles(found.reads, found.items, handles) : { kind: 'handles', handles: [] }
+    );
+  }
+  const scope = resolveSpanRef(operation.scope, handles, packageReads);
+  if (!scope.ok) return refuse(scope.code, 'that span is not a place', scope.detail);
+  const story = storyOfSpanRef(operation.scope, handles, packageReads);
+  if (!story.ok) return refuse(story.code, 'that span names no story', story.detail);
+  return query(listedHandles(story.value, itemsInScope(story.value, scope.value), handles));
+}
+
+type NarrowDecision = Extract<
+  AutomationOperation,
+  { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions' }
+> &
+  ({ readonly scope: unknown } | { readonly key: unknown });
+
+/**
+ * Accept or reject the decisions a span overlaps or a key names, as one transaction.
+ *
+ * Covers every overlapping decision, structural ones absent from the listing included, and
+ * refuses the whole decision when any of them is read-only or cannot be resolved. A key that
+ * names nothing refuses rather than reporting a decision nobody could make.
+ */
+export function planNarrowRevisionDecision(
+  operation: NarrowDecision,
+  handles: AutomationHandleTable,
+  packageReads: AutomationPackageReads,
+  pin: (story: AutomationStoryReads) => PlannedOperation | null,
+  ledger: RevisionDecisionLedger
+): PlannedOperation {
+  const action: Action = operation.op === 'acceptAllRevisions' ? 'accept' : 'reject';
+  let target: KeyedRevisions;
+  if ('key' in operation) {
+    const invalid = validKey(operation.key);
+    if (invalid) return invalid;
+    const found = revisionItemsOfKey(packageReads, operation.key as string);
+    if (!found) return refuse('invalid-handle', 'that review item is not in this document');
+    target = found;
+  } else {
+    const scopeRef = operation.scope as Extract<Listing, { scope: unknown }>['scope'];
+    const scope = resolveSpanRef(scopeRef, handles, packageReads);
+    if (!scope.ok) return refuse(scope.code, 'that span is not a place', scope.detail);
+    const story = storyOfSpanRef(scopeRef, handles, packageReads);
+    if (!story.ok) return refuse(story.code, 'that span names no story', story.detail);
+    target = { reads: story.value, items: itemsInScope(story.value, scope.value) };
+  }
+  if (target.items.some((item) => item.readOnly))
+    return refuse('unsupported-revision', 'a tracked change in that decision is read-only');
+  return planKeyedDecision(target.reads, target.items.map(reviewItemKey), action, ledger, pin);
 }

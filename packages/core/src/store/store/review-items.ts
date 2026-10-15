@@ -322,6 +322,58 @@ export function reviewItemKey(item: ReviewItem): string {
   return `${item.kind}-${item.id}`;
 }
 
+/** Store revision ids start with their kind and a dash, so this prefix cannot collide. */
+export const REPLACEMENT_PAIR_ID_PREFIX = 'replace:';
+
+/** The id a paired replacement item carries for its deletion and insertion halves. */
+export function replacementPairId(deletionId: string, insertionId: string): string {
+  return `${REPLACEMENT_PAIR_ID_PREFIX}${deletionId}+${insertionId}`;
+}
+
+/**
+ * Whether a deletion and the insertion after it read as one replacement: the same author,
+ * review state and nesting, and the deletion ends exactly where the insertion starts.
+ */
+export function isReplacementPair(
+  deletion: ReviewRevisionItem,
+  insertion: ReviewRevisionItem
+): boolean {
+  const end = deletion.ranges[deletion.ranges.length - 1];
+  const start = insertion.ranges[0];
+  return (
+    deletion.revisionKind === 'delete' &&
+    insertion.revisionKind === 'insert' &&
+    deletion.author === insertion.author &&
+    deletion.readOnly === insertion.readOnly &&
+    deletion.nesting === insertion.nesting &&
+    end !== undefined &&
+    start !== undefined &&
+    end.partName === start.partName &&
+    end.end.paragraphId === start.start.paragraphId &&
+    end.end.offset === start.start.offset
+  );
+}
+
+/** What a review key names, or null for text no review queue produces. */
+export type ParsedReviewItemKey =
+  | { readonly kind: 'revision' | 'comment' | 'custom'; readonly id: string }
+  | { readonly kind: 'replacement'; readonly id: string; readonly halves: string };
+
+/**
+ * Split a key from {@link reviewItemKey} into its kind and id. A paired replacement keeps its
+ * joined halves, because the store ids on either side of `+` can themselves contain `+`.
+ */
+export function parseReviewItemKey(key: string): ParsedReviewItemKey | null {
+  const dash = key.indexOf('-');
+  if (dash <= 0) return null;
+  const kind = key.slice(0, dash);
+  const id = key.slice(dash + 1);
+  if (id.length === 0) return null;
+  if (kind === 'revision' && id.startsWith(REPLACEMENT_PAIR_ID_PREFIX))
+    return { kind: 'replacement', id, halves: id.slice(REPLACEMENT_PAIR_ID_PREFIX.length) };
+  return kind === 'revision' || kind === 'comment' || kind === 'custom' ? { kind, id } : null;
+}
+
 /** Every range a decision touches. One card can cover several, in different paragraphs. */
 export function reviewItemRanges(item: ReviewItem): readonly ReviewRange[] {
   if (item.kind === 'revision') return item.ranges;

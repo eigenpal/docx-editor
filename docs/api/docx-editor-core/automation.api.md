@@ -771,6 +771,14 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly scope: AutomationSpanRef;
 }
 /**
+* The listed tracked changes a review-queue key names: one, or the two halves of a paired
+* replacement. A key naming nothing answers no handles.
+*/
+| {
+    readonly key: string;
+    readonly op: 'getRevisions';
+}
+/**
 * The stretch a review-queue key names: `revision-<id>`, a paired `revision-replace:<a>+<b>`,
 * or `comment-<id>`. Answers `spans` holding one span covering every range of the item, or no
 * span when the key names nothing this document holds.
@@ -850,8 +858,9 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly op: 'rejectAllRevisions';
 }
 /**
-* Accept or reject exactly the changes the span-scoped `getRevisions` lists, as one
-* transaction. Refused whole when any of them cannot be resolved.
+* Accept or reject every change a span overlaps, or the changes a review-queue key names, as
+* one transaction. Structural changes absent from listings are included. Refused whole when
+* any of them is read-only or cannot be resolved, and when the key names nothing.
 */
 | {
     readonly op: 'acceptAllRevisions';
@@ -859,6 +868,12 @@ export type AutomationOperation = AutomationAuthoringOperation | {
 } | {
     readonly op: 'rejectAllRevisions';
     readonly scope: AutomationSpanRef;
+} | {
+    readonly key: string;
+    readonly op: 'acceptAllRevisions';
+} | {
+    readonly key: string;
+    readonly op: 'rejectAllRevisions';
 }
 /**
 * Put the reader's selection on a span. Requires the `selection` capability, so a headless

@@ -53,7 +53,11 @@ export type {
 } from './locations.ts';
 export { Paragraph, type ParagraphAlignment, type ParagraphReadingOrder } from './paragraph.ts';
 export { Range } from './range.ts';
-export { getReviewItemRange, getReviewItemRangeOrNullObject } from './review-items.ts';
+export {
+  getReviewItemRange,
+  getReviewItemRangeOrNullObject,
+  getReviewItemRevisions,
+} from './review-items.ts';
 export type { SearchOptions } from './search-options.ts';
 
 export {

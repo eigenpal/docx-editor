@@ -199,9 +199,14 @@ export class Range extends ModelObject implements PromisedItem {
    * which changes are listed. A change partly inside the range is listed whole. A replacement
    * stored as a deletion followed by an insertion lists as two members.
    *
-   * On this collection, `acceptAll()` and `rejectAll()` resolve exactly the listed changes, and
-   * refuse the whole sync when one of them cannot be resolved. `resolve()` and `setAuthor()`
-   * refuse with `NotSupported`; use the story's collection for them.
+   * On this collection, `acceptAll()` and `rejectAll()` resolve every change the range overlaps,
+   * structural changes absent from `items` included, and a partly covered change resolves whole.
+   * They refuse the whole sync when one of those changes is read-only or cannot be resolved.
+   * `resolve()` and `setAuthor()` refuse with `NotSupported`; use the story's collection.
+   *
+   * A range can overlap changes nobody meant to decide: a change nested inside another, or one
+   * by another author beside it. To decide the change a review card shows, use
+   * `getReviewItemRevisions`.
    *
    * @example Accept every change in a search result
    * ```ts

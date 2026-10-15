@@ -93,7 +93,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `CommentCollection`, `CommentReplyCollection` | `getFirst` | [Comments](/docs/2.x/editor-api/comments) |
 | `Revision` | `author`, `date`, `type`, `range`, `accept`, `reject` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `RevisionCollection` | `resolve`, `setAuthor`, `acceptAll`, `rejectAll` | [Tracked changes](/docs/2.x/editor-api/revisions) |
-| `getReviewItemRange`, `getReviewItemRangeOrNullObject` | DocxEditor functions that return the range a review item `key` covers | [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
+| `getReviewItemRevisions`, `getReviewItemRange`, `getReviewItemRangeOrNullObject` | DocxEditor functions that return the changes a review item `key` names, or the range it covers | [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
 | `ChangeTrackingMode`, `RevisionTextView`, `RevisionType` | Runtime tracking modes, read views, and published revision types | [Tracked changes](/docs/2.x/editor-api/revisions) |
 
 ## Distinguish host extensions from Office.js compatibility

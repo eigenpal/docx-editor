@@ -94,6 +94,7 @@ export {
   type SelectionMode,
   getReviewItemRange,
   getReviewItemRangeOrNullObject,
+  getReviewItemRevisions,
 } from '../model/index.ts';
 export { ClientObject } from './client-object.ts';
 export { ClientResult } from './client-result.ts';

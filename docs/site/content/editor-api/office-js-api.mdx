@@ -101,11 +101,11 @@ These common members extend the Office.js-compatible subset.
 | `Comment.text` and `CommentReply.text` | Read comment text without replacing the comment body. |
 | `Paragraph.uniqueLocalId` | Reads the paragraph identity for the active runtime. |
 | `Paragraph.readingOrder` | Sets and reads the direction the paragraph reads in. Office.js has no paragraph direction member. |
-| `getReviewItemRange()` and `getReviewItemRangeOrNullObject()` | Return the range a review item `key` covers, so a review panel can reach the same change through `Range.revisions`. Office.js has no review queue. |
+| `getReviewItemRevisions()`, `getReviewItemRange()`, and `getReviewItemRangeOrNullObject()` | Return the changes a review item `key` names, or the range it covers, so a review panel can act on the same item through the object model. Office.js has no review queue. |
 
 `Body.bookmarks` and `Body.revisions` only cover that body's story. They do not combine the main body, headers, footers, and notes.
 
-`Range.revisions` lists the changes the range overlaps in its own story. On that collection, `acceptAll()` and `rejectAll()` resolve only the listed changes, and `resolve()` and `setAuthor()` refuse with `NotSupported`.
+`Range.revisions` lists the changes the range overlaps in its own story. On that collection, `acceptAll()` and `rejectAll()` resolve every overlapping change whole, including structural changes that `items` omits, and fail if one of them is read-only. `resolve()` and `setAuthor()` refuse with `NotSupported`.
 
 The review item functions are infrastructure, not members of the Office-shaped classes. They take the request context and a key from `editor.getReviewItems()` or `useReview().items`. For more information, see [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items).
 

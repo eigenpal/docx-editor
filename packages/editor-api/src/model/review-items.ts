@@ -7,16 +7,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //
 // A review surface lists cards by `key` (`editor.getReviewItems()`, `useReview().items`); this
 // object model reaches tracked changes through ranges and collections. These functions turn one
-// key into the `Range` its item covers, so a caller continues with standard members:
-// `getReviewItemRange(context, item.key).revisions`.
+// key into the revisions its card stands for, or into the `Range` its item covers.
 //
 // INFRASTRUCTURE, NOT AN OFFICE MEMBER. Office.js has no review queue and no key for a revision,
-// so this lives beside the object model as a free function rather than as a method on `Document`
-// or `RevisionCollection`. It follows the `get…` / `get…OrNullObject` convention so a stale key
-// reads the way any other missing item does.
+// so these live beside the object model as free functions rather than as methods on `Document`
+// or `RevisionCollection`. The range lookup follows the `get…` / `get…OrNullObject` convention so
+// a stale key reads the way any other missing item does.
 
 import { Range } from './range.ts';
+import { RevisionCollection } from './review.ts';
 import {
+  ObjectPath,
   fail,
   hydratedSpans,
   internalsOf,
@@ -24,17 +25,28 @@ import {
   type RequestContext,
 } from '../runtime/model-support.ts';
 
-function reviewItemRange(context: RequestContext, key: string, nullable: boolean): Range {
-  const target = nullable ? 'getReviewItemRangeOrNullObject' : 'getReviewItemRange';
+/** The context's internals after the checks every bridge call makes at the call. */
+function admitted(
+  context: RequestContext,
+  key: string,
+  target: string,
+  refused: readonly string[]
+): ContextInternals {
   const internals =
     typeof context === 'object' && context !== null
       ? (internalsOf(context) as ContextInternals | undefined)
       : undefined;
   if (!internals) fail({ code: 'InvalidArgument', target });
   if (typeof key !== 'string' || key.length === 0) fail({ code: 'InvalidArgument', target });
-  // A custom node's card has no tracked change or comment behind it.
-  if (key.startsWith('custom-')) fail({ code: 'NotSupported', target });
+  if (refused.some((prefix) => key.startsWith(prefix))) fail({ code: 'NotSupported', target });
   internals.assertUsable(target);
+  return internals;
+}
+
+function reviewItemRange(context: RequestContext, key: string, nullable: boolean): Range {
+  const target = nullable ? 'getReviewItemRangeOrNullObject' : 'getReviewItemRange';
+  // A custom node's card has no tracked change or comment behind it.
+  const internals = admitted(context, key, target, ['custom-']);
   const found = Range.promised(context, target, nullable);
   internals.queue.push({
     sort: 'read',
@@ -51,17 +63,63 @@ function reviewItemRange(context: RequestContext, key: string, nullable: boolean
 }
 
 /**
+ * The tracked changes a review card stands for, by the key the editor's review queue gives it.
+ *
+ * Pass the `key` of a revision item from `editor.getReviewItems()` or `useReview().items`. The
+ * collection holds that change only, or the deletion and the insertion of a paired replacement.
+ * Unlike {@link Range.revisions} on the card's range, it never holds a nested or adjacent change
+ * by another author.
+ *
+ * A key that names nothing in the document, such as one whose change was already resolved,
+ * loads an empty collection, and `acceptAll()` or `rejectAll()` on it refuses with
+ * `InvalidObjectPath`. A comment or custom node key refuses with `NotSupported` at the call.
+ * `resolve()` and `setAuthor()` refuse with `NotSupported` on this collection.
+ *
+ * This is a DocxEditor addition. Office.js has no review queue and no key for a revision.
+ *
+ * @param context - The request context of the current `run()`.
+ * @param key - The review item's `key`.
+ * @returns The change or changes that the key names.
+ *
+ * @example Accept the change a review card shows
+ * ```ts
+ * import { getReviewItemRevisions } from '@docx-editor.dev/editor-api/browser';
+ *
+ * const key = item.key; // From useReview().items or editor.getReviewItems().
+ * await runtime.run(async (context) => {
+ *   getReviewItemRevisions(context, key).acceptAll();
+ *   await context.sync();
+ * });
+ * ```
+ *
+ * @public
+ */
+export function getReviewItemRevisions(context: RequestContext, key: string): RevisionCollection {
+  const target = 'getReviewItemRevisions';
+  const internals = admitted(context, key, target, ['custom-', 'comment-']);
+  return RevisionCollection.ofReviewKey(
+    context,
+    target,
+    ObjectPath.of('document', internals.roots().document),
+    key
+  );
+}
+
+/**
  * The range a review item covers, by the key the editor's review queue gives it.
  *
  * Pass the `key` of an item from `editor.getReviewItems()` or `useReview().items`. A tracked
  * change resolves to the characters it covers. A paired replacement key resolves to one range
  * over both its deletion and its insertion. A comment or reply resolves to the range its thread
- * is anchored to. The range is a snapshot like any other, so read it in the same run as the key.
+ * is anchored to. The range is a snapshot like any other.
  *
- * Read {@link Range.revisions} on the result to reach the tracked changes as `Revision` objects.
- * A key that names nothing in the document, such as one whose change was already accepted,
- * fails the sync with `ItemNotFound`. Use {@link getReviewItemRangeOrNullObject} to test for that
- * instead. A custom node's key refuses with `NotSupported` at the call.
+ * To act on the card's own change, use {@link getReviewItemRevisions}. {@link Range.revisions} on
+ * this range also lists nested or adjacent changes that the range overlaps.
+ *
+ * A key that names nothing in the document, such as one whose change was already accepted, or a
+ * comment with no anchor in the document, fails the sync with `ItemNotFound`. Use
+ * {@link getReviewItemRangeOrNullObject} to test for that instead. A custom node's key refuses
+ * with `NotSupported` at the call.
  *
  * This is a DocxEditor addition. Office.js has no review queue and no key for a revision.
  *
@@ -69,17 +127,16 @@ function reviewItemRange(context: RequestContext, key: string, nullable: boolean
  * @param key - The review item's `key`.
  * @returns A range that becomes addressable at the next `context.sync()`.
  *
- * @example Accept the change a review card shows
+ * @example Read the words a comment card is about
  * ```ts
  * import { getReviewItemRange } from '@docx-editor.dev/editor-api/browser';
  *
- * await runtime.run(async (context) => {
- *   const revisions = getReviewItemRange(context, item.key).revisions;
- *   revisions.load('items/type,items/author');
+ * const key = item.key; // From useReview().items or editor.getReviewItems().
+ * const text = await runtime.run(async (context) => {
+ *   const range = getReviewItemRange(context, key);
+ *   range.load('text');
  *   await context.sync();
- *
- *   for (const revision of revisions.items) revision.accept();
- *   await context.sync();
+ *   return range.text;
  * });
  * ```
  *
@@ -105,8 +162,9 @@ export function getReviewItemRange(context: RequestContext, key: string): Range 
  * ```ts
  * import { getReviewItemRangeOrNullObject } from '@docx-editor.dev/editor-api/browser';
  *
+ * const key = item.key; // From useReview().items or editor.getReviewItems().
  * await runtime.run(async (context) => {
- *   const range = getReviewItemRangeOrNullObject(context, item.key);
+ *   const range = getReviewItemRangeOrNullObject(context, key);
  *   range.load('text');
  *   await context.sync();
  *

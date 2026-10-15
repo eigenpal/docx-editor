@@ -284,7 +284,7 @@ The range that a tracked `insertText()` returns names your own pending insertion
 
 ## Review changes in a range
 
-Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members, then decide on each one, or call `acceptAll()` or `rejectAll()` to resolve exactly the listed changes:
+Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story, including a nested change or another author's change beside it. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members and decide on each one:
 
 ```ts
 await runtime.run(async (context) => {
@@ -310,9 +310,9 @@ await runtime.run(async (context) => {
 });
 ```
 
-`resolve()` and `setAuthor()` refuse with `NotSupported` on a range collection. Use the story's `body.revisions` for them.
+`acceptAll()` and `rejectAll()` on a range collection resolve every change the range overlaps, whole, including structural changes that `items` omits. They fail with `NotImplemented` when one of those changes is read-only. Two decisions in one sync that reach one change resolve it once; contrary decisions fail with `ConflictingChanges`. `resolve()` and `setAuthor()` refuse with `NotSupported` on a range collection. Use the story's `body.revisions` for them.
 
-A browser review panel identifies cards by `key`. Pass the key to the DocxEditor function `getReviewItemRange(context, key)` to get the range the card covers, then read its `revisions`. Use `getReviewItemRangeOrNullObject(context, key)` when another reviewer can resolve the change first. Do not match cards to revisions by text.
+A browser review panel identifies cards by `key`. Pass the key to the DocxEditor function `getReviewItemRevisions(context, key)` to decide the card's own change, or the two halves of a paired replacement. `getReviewItemRange(context, key)` returns the range that a card covers; use `getReviewItemRangeOrNullObject(context, key)` when another reviewer can resolve the change first. Do not match cards to revisions by text.
 
 ## Set paragraph direction
 
