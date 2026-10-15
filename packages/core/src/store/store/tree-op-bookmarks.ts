@@ -6,8 +6,9 @@
 //
 // NAMES ARE CASE-INSENSITIVE AND UNIQUE. Adding a name the part already declares, in any case,
 // moves that bookmark: the old pair goes and the new one takes the name as written. Uniqueness
-// across the parts of a package is the caller's half (the editor deletes the name from the
-// other stories in the same package transaction), because a tree op addresses one part.
+// across the parts of a package is the caller's half, because a tree op addresses one part:
+// the editor and the automation API remove the name from the other part in the same package
+// transaction (`withoutBookmarkInPart`), so the move is one undo step.
 //
 // A bookmark is not a revision. Its markers carry no author and no date, so adding or removing
 // one in suggesting mode writes the markers directly, the way a reviewer's bookmark is added.
@@ -20,7 +21,9 @@ import {
 } from '../package/ooxml-edit.ts';
 import type { EditOptions } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
+import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { bookmarkNameKey, bookmarkNameProblem } from '../package/bookmark-names.ts';
+import { listBookmarks } from '../package/bookmark-list.ts';
 import { bookmarkPairNodes } from '../package/toc-build.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { nextBookmarkId } from './tree-op-bookmark-ids.ts';
@@ -205,6 +208,60 @@ export function applyBookmarkOp(
       impact: 'text-local',
     },
   };
+}
+
+/**
+ * The package with every bookmark of this name removed from one part, for moving a name out
+ * of another story inside the same transaction. The package is unchanged when that part does
+ * not declare the name.
+ */
+export function withoutBookmarkInPart(
+  pkg: OoxmlPackage,
+  partName: string,
+  name: string
+): OoxmlPackage {
+  const part = pkg.parts.get(partName);
+  if (!part) return pkg;
+  const result = applyBookmarkOp(part, { op: 'deleteBookmark', name });
+  return result.ok ? withPart(pkg, result.part) : pkg;
+}
+
+/**
+ * The `deleteBookmark` ops for the bookmarks an untracked deletion of `from`..`to` encloses,
+ * for a deletion that crosses paragraphs. `order` lists the part's paragraph ids in document
+ * order. A range bookmark goes when the deletion covers it edge to edge; a point bookmark goes
+ * when it is strictly inside. Applied before the text ops, so they find nothing left to drop.
+ */
+export function enclosedBookmarkDeletions(
+  part: OoxmlPart,
+  from: BookmarkOpPosition,
+  to: BookmarkOpPosition,
+  order: readonly string[]
+): readonly DeleteBookmarkOp[] {
+  const index = new Map(order.map((id, position) => [id, position]));
+  const key = (position: BookmarkOpPosition) =>
+    [index.get(position.paragraphId) ?? -1, position.offset] as const;
+  const compare = (a: BookmarkOpPosition, b: BookmarkOpPosition) => {
+    const [ap, ao] = key(a);
+    const [bp, bo] = key(b);
+    return ap === bp ? ao - bo : ap - bp;
+  };
+  if (!index.has(from.paragraphId) || !index.has(to.paragraphId)) return [];
+  const ops: DeleteBookmarkOp[] = [];
+  const seen = new Set<string>();
+  for (const record of listBookmarks(part)) {
+    if (!index.has(record.start.paragraphId) || !index.has(record.end.paragraphId)) continue;
+    const point = compare(record.start, record.end) === 0;
+    const enclosed = point
+      ? compare(from, record.start) < 0 && compare(record.start, to) < 0
+      : compare(from, record.start) <= 0 && compare(record.end, to) <= 0;
+    // One op per name: a delete removes every pair of its name, so a second would refuse.
+    if (enclosed && !seen.has(bookmarkNameKey(record.name))) {
+      seen.add(bookmarkNameKey(record.name));
+      ops.push({ op: 'deleteBookmark', name: record.name });
+    }
+  }
+  return ops;
 }
 
 /** The paragraph a node sits in, or null for a marker between blocks. */

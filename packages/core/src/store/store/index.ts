@@ -202,10 +202,12 @@ export {
   type SetLegacyCheckboxOp,
 } from './legacy-checkbox-fields.ts';
 export { type InsertBuildingBlockOp } from './building-block-insert.ts';
-export type {
-  BookmarkOpPosition,
-  DeleteBookmarkOp,
-  InsertBookmarkOp,
+export {
+  enclosedBookmarkDeletions,
+  withoutBookmarkInPart,
+  type BookmarkOpPosition,
+  type DeleteBookmarkOp,
+  type InsertBookmarkOp,
 } from './tree-op-bookmarks.ts';
 export { materializeGlossaryPlaceholders } from './placeholder-materialize.ts';
 

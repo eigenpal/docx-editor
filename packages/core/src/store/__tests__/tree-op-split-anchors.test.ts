@@ -215,14 +215,26 @@ describe('a split places zero-length content by its position', () => {
     expect(shapeOf(tail)).toEqual(['r']);
   });
 
-  test('a range that STARTS at the caret opens in the tail', () => {
+  test('a bookmark that STARTS at the caret keeps its start in the head', () => {
+    // A bookmark's markers stay in the first paragraph: the bookmark then covers the new
+    // paragraph mark and all of the text it covered before.
     const part = load(
       '<w:p><w:r><w:t>alpha</w:t></w:r><w:bookmarkStart w:id="7" w:name="rest"/>' +
         '<w:r><w:t> beta</w:t></w:r><w:bookmarkEnd w:id="7"/></w:p>'
     );
     const [head, tail] = halves(part, nodeById(part, '/word/document.xml#0.0.0').id, 5);
+    expect(shapeOf(head)).toEqual(['r', 'bookmarkStart#7']);
+    expect(shapeOf(tail)).toEqual(['r', 'bookmarkEnd#7']);
+  });
+
+  test('a comment range that STARTS at the caret opens in the tail', () => {
+    const part = load(
+      '<w:p><w:r><w:t>alpha</w:t></w:r><w:commentRangeStart w:id="7"/>' +
+        '<w:r><w:t> beta</w:t></w:r><w:commentRangeEnd w:id="7"/></w:p>'
+    );
+    const [head, tail] = halves(part, nodeById(part, '/word/document.xml#0.0.0').id, 5);
     expect(shapeOf(head)).toEqual(['r']);
-    expect(shapeOf(tail)).toEqual(['bookmarkStart#7', 'r', 'bookmarkEnd#7']);
+    expect(shapeOf(tail)).toEqual(['commentRangeStart#7', 'r', 'commentRangeEnd#7']);
   });
 
   test('a join keeps every marker in order (the mirror case, already right)', () => {

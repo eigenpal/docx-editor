@@ -260,6 +260,29 @@ describe('typing at bookmark markers', () => {
   });
 });
 
+describe('breaks and Enter at bookmark markers', () => {
+  const at = (op: TreeDocOp) => shape(apply(load(SAMPLE), op));
+
+  test('a line break or tab at a start joins the bookmark, at an end stays outside', () => {
+    expect(at({ op: 'insertHardBreak', paragraphId: P, offset: 4 })).toContain(
+      '[rng:1<w:r><w:br/>'
+    );
+    expect(at({ op: 'insertHardBreak', paragraphId: P, offset: 7 })).toContain('1]<w:r><w:br/>');
+    expect(at({ op: 'insertTab', paragraphId: P, offset: 4 })).toContain('[rng:1<w:r><w:tab/>');
+  });
+
+  test('Enter keeps every bookmark marker at the split in the first paragraph', () => {
+    const split = (offset: number) =>
+      at({ op: 'splitParagraph', paragraphId: P, offset }).split('||');
+    // At a start: the bookmark starts at the end of the first paragraph.
+    expect(split(4)[0]).toMatch(/\[rng:1\|?$/);
+    // At an end: the bookmark stays closed around its text.
+    expect(split(7)[0]).toMatch(/1\]\|?$/);
+    // At a point bookmark: the point stays before the new paragraph mark.
+    expect(split(12)[0]).toMatch(/\[pt:22\]\|?$/);
+  });
+});
+
 describe('deleting around bookmark markers', () => {
   const remove = (start: number, end: number) =>
     listBookmarks(apply(load(SAMPLE), { op: 'deleteText', paragraphId: P, start, end })).map(

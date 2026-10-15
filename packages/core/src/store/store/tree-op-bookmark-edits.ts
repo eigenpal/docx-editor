@@ -10,6 +10,8 @@
 // The insertion path appends to the run before the offset, which puts the text in front of the
 // markers. So the markers that sat at the offset are moved back to it afterwards.
 //
+// Pressing Enter at a marker keeps the marker in the first paragraph (`tree-op-split-markers.ts`).
+//
 // An untracked deletion removes the bookmarks it encloses:
 //
 //   - a range bookmark goes when the deletion covers its whole range, edges included;
@@ -17,8 +19,9 @@
 //     deletion only touches it.
 //
 // A bookmark the deletion only partly covers keeps the text that is left. A tracked deletion
-// removes nothing yet, so it keeps every bookmark. Only markers inside the edited paragraph
-// take part: a bookmark that crosses a paragraph boundary keeps its markers.
+// removes nothing yet, so it keeps every bookmark. This op sees one paragraph: a deletion
+// across paragraphs removes the bookmarks it encloses through the editor's range deletion
+// (`enclosedBookmarkDeletions`), which plans `deleteBookmark` ops beside its text ops.
 
 import { findNode, insertChildren, removeNode, type EditOptions } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
@@ -154,8 +157,9 @@ function dropEnclosedBookmarks(
 }
 
 /**
- * Apply an op, then apply the bookmark rules for typing and deleting. Ops other than
- * `insertText` and an untracked `deleteText`, and paragraphs without bookmarks, pass through.
+ * Apply an op, then apply the bookmark rules for typing and deleting. The insert rule covers
+ * text, tabs, breaks, pictures and pasted content; the delete rule covers an untracked
+ * `deleteText`. Other ops, and paragraphs without bookmarks, pass through.
  */
 export function withBookmarkEditRules(
   part: OoxmlPart,
@@ -163,7 +167,14 @@ export function withBookmarkEditRules(
   options: EditOptions | undefined,
   apply: () => TreeOpResult
 ): TreeOpResult {
-  if (op.op === 'insertText') {
+  if (
+    op.op === 'insertText' ||
+    op.op === 'insertTab' ||
+    op.op === 'insertHardBreak' ||
+    op.op === 'insertPageBreak' ||
+    op.op === 'insertDrawing' ||
+    op.op === 'insertFragment'
+  ) {
     if (!touchesBookmarks(part, op.paragraphId)) return apply();
     return keepMarkersBeforeInsertion(part, apply(), op.paragraphId, op.offset, options);
   }
