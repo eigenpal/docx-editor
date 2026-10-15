@@ -7,6 +7,7 @@ import type {
 import type { ExecResult } from '../contracts/types.ts';
 import type { ReviewCommentItem, ReviewItem } from '../layout/index.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { reviewWriteRefusal } from './review-write-refusal.ts';
 
 interface CommentResolutionDeps {
   readonly reviewEnabled: boolean;
@@ -169,15 +170,13 @@ export function setReviewCommentResolved(
   // truncation or malformed metadata must refuse even when the root already matches.
   let ok = false;
   let changed = false;
-  deps.surface.commitReviewOps(() => {
+  const refused = deps.surface.commitReviewOps(() => {
     const revision = deps.surface!.session.packageRevision();
     ok = deps.surface!.session.setCommentResolved(thread.id, resolved);
     changed = ok && deps.surface!.session.packageRevision() !== revision;
     return { committed: changed };
   }, 'comment-resolve');
-  if (!ok) {
-    return { ok: false, code: 'notFound', reason: 'the comment could not be resolved' };
-  }
+  if (!ok) return reviewWriteRefusal(refused, 'the comment could not be resolved', 'notFound');
   if (changed) deps.bump();
   return { ok: true, changed };
 }

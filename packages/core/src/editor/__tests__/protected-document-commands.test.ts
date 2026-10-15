@@ -134,7 +134,12 @@ test('#844: comments-only permits commenting while read-only refuses it', async 
     expect(result.ok).toBe(permitted);
     if (!permitted) {
       expect(editor.snapshot().editingMode).toBe('viewing');
-      expect(result).toMatchObject({ ok: false, code: 'unsupported' });
+      // The surface's own refusal, as every viewing refusal answers, not a generic sentence.
+      expect(result).toMatchObject({
+        ok: false,
+        code: 'locked',
+        reason: 'the document is open for viewing',
+      });
       expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(false);
     }
     expect(surface.session.bodyText()).toBe('tracked');
