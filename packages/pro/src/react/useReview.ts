@@ -17,7 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // rather than from measuring painted DOM, which would put the sidebar a repaint behind the
 // document and break outright during pagination.
 
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useSyncExternalStore } from 'react';
 import type {
   Editor,
   ReviewActivationOptions,
@@ -32,7 +32,7 @@ import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react'
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
 import {
-  reviewWriteRefusalOf,
+  reviewRefusalStore,
   type ReviewWriteAction,
   type ReviewWriteRefusal,
 } from '../review/review-refusal.ts';
@@ -241,15 +241,16 @@ export interface UseReviewReturn {
   /**
    * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
    *
-   * Set by a refused write and cleared by the next one that lands, and by any change to the
-   * document, the editing mode or the author filter, so it never outlives its cause. The
-   * packaged cards show it as a sentence; a custom card reads `key` to place it and `code`,
-   * the public diagnostic code, to word it.
+   * Shared by every `useReview()` over the same editor, so a custom card sees a refusal the
+   * packaged rail recorded. Set by a refused write and cleared by the next one that lands, and
+   * by a change to the document, the editing mode, editability, the collaboration status or
+   * the author filter. A caret move keeps it. The packaged cards show it as a sentence; a
+   * custom card reads `key` to place it and `code`, the public diagnostic code, to word it.
    *
    * @example
    * ```tsx
    * const { lastRefusal } = useReview();
-   * if (lastRefusal?.code === 'edit.refresh-in-progress') showToast('Try again in a moment');
+   * return lastRefusal?.key === item.key ? <p role="status">{lastRefusal.code}</p> : null;
    * ```
    */
   readonly lastRefusal: ReviewWriteRefusal | null;
@@ -306,20 +307,21 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     () => 'none'
   );
 
-  // Kept with the `version` it was refused at, and shown only while that holds: a refusal is
-  // about one moment of the document, and a refresh that finished or a mode that changed
-  // leaves nothing for the reader to act on.
-  const [refusal, setRefusal] = useState<{
-    readonly refusal: ReviewWriteRefusal;
-    readonly version: string;
-  } | null>(null);
-  const lastRefusal = refusal && refusal.version === version ? refusal.refusal : null;
+  // One store per EDITOR, so every hook over it, the packaged rail's included, sees the same
+  // refusal. The store clears it once the state it was refused in changes.
+  const subscribeRefusal = useCallback(
+    (onChange: () => void) =>
+      editor ? reviewRefusalStore(editor).subscribe(onChange) : () => undefined,
+    [editor]
+  );
+  const lastRefusal = useSyncExternalStore(
+    subscribeRefusal,
+    () => (editor ? reviewRefusalStore(editor).get() : null),
+    () => null
+  );
   const settle = useCallback(
-    (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
-      const refused = reviewWriteRefusalOf(action, key, result);
-      setRefusal(refused && editor ? { refusal: refused, version: reviewVersionOf(editor) } : null);
-      return result.ok;
-    },
+    (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean =>
+      editor ? reviewRefusalStore(editor).record(action, key, result) : result.ok,
     [editor]
   );
 

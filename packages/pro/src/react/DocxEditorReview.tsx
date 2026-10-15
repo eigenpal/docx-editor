@@ -99,6 +99,7 @@ import {
   ReviewEmpty,
   ReviewReject,
   ReviewRefusal,
+  ReviewRefusalAnnouncer,
   ReviewReopen,
   ReviewReplies,
   ReviewReply,
@@ -686,7 +687,8 @@ function ReviewRoot({
                   </>
                 )
               ) : null,
-              affordances
+              affordances,
+              <ReviewRefusalAnnouncer key="refusal-live" />
             )}
           </Slot>
         ) : (
@@ -698,6 +700,7 @@ function ReviewRoot({
             ) : null}
             {body}
             {affordances}
+            <ReviewRefusalAnnouncer />
           </aside>
         )}
       </ReviewContext.Provider>

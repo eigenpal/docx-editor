@@ -8,7 +8,7 @@ import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
 import {
-  reviewWriteRefusalOf,
+  reviewRefusalStore,
   type ReviewWriteAction,
   type ReviewWriteRefusal,
 } from '../review/review-refusal.ts';
@@ -112,8 +112,10 @@ export interface UseReviewReturn {
   /**
    * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
    *
-   * Cleared by the next write that lands and by any change to the document, the editing mode or
-   * the author filter. The packaged cards show it as a sentence; a custom card reads `key` to
+   * Shared by every `useReview()` over the same editor, so a custom card sees a refusal the
+   * packaged rail recorded. Cleared by the next write that lands and by a change to the
+   * document, the editing mode, editability, the collaboration status or the author filter; a
+   * caret move keeps it. The packaged cards show it as a sentence; a custom card reads `key` to
    * place it and `code`, the public diagnostic code, to word it.
    */
   readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;
@@ -242,24 +244,27 @@ function useReviewOfInternal(
     return editor.setActiveReviewItem(key, options).ok;
   };
 
-  // Kept with the review state it was refused at, and shown only while that holds.
-  const refusalRef = shallowRef<{
-    readonly refusal: ReviewWriteRefusal;
-    readonly version: string;
-  } | null>(null);
+  // One store per EDITOR, so every hook over it, the packaged rail's included, sees the same
+  // refusal. The store clears it once the state it was refused in changes.
+  const refusalRef = shallowRef<ReviewWriteRefusal | null>(null);
+  watch(
+    () => editorRef.value,
+    (editor, _previous, onCleanup) => {
+      if (!editor) {
+        refusalRef.value = null;
+        return;
+      }
+      const store = reviewRefusalStore(editor);
+      refusalRef.value = store.get();
+      onCleanup(store.subscribe(() => (refusalRef.value = store.get())));
+    },
+    { immediate: true, flush: 'sync' }
+  );
   const settle = (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
-    const refused = reviewWriteRefusalOf(action, key, result);
     const editor = editorRef.value;
-    refusalRef.value =
-      refused && editor ? { refusal: refused, version: reviewRevisionKey(editor) } : null;
-    return result.ok;
+    return editor ? reviewRefusalStore(editor).record(action, key, result) : result.ok;
   };
-  const lastRefusal = computed((): ReviewWriteRefusal | null => {
-    touch();
-    const held = refusalRef.value;
-    const editor = editorRef.value;
-    return held && editor && held.version === reviewRevisionKey(editor) ? held.refusal : null;
-  });
+  const lastRefusal = computed((): ReviewWriteRefusal | null => refusalRef.value);
 
   const accept = (item: ReviewItemView): boolean => {
     const editor = editorRef.value;

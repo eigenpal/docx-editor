@@ -17,7 +17,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { strToU8, zipSync } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
-import { DocxEditorReview } from '../react/index.ts';
+import { DocxEditorReview, useReview } from '../react/index.ts';
 import { reviewModule } from '../index.ts';
 import {
   stubCollaborationModule,
@@ -46,16 +46,23 @@ const TRACKED = zipSync({
 
 afterEach(() => cleanup());
 
-test('a refused accept names its cause on the card until the state changes', async () => {
-  const session = stubCollaborationSession({
-    gateOperations: () => 'collaboration-session-not-ready',
-  });
+const notReady = () =>
+  stubCollaborationSession({ gateOperations: () => 'collaboration-session-not-ready' });
+const WAITING = 'Waiting for the shared session. Try again in a moment.';
+
+/** A custom component with its OWN `useReview()`, beside the packaged rail. */
+function CustomProbe() {
+  const { lastRefusal } = useReview();
+  return <output data-testid="custom-probe">{lastRefusal?.code ?? ''}</output>;
+}
+
+function mount() {
   let instance: DocxEditorInstance | null = null;
   const view = render(
     <DocxEditorRoot
       document={TRACKED}
       author="Grace Hopper"
-      modules={[reviewModule(), stubCollaborationModule(session)]}
+      modules={[reviewModule(), stubCollaborationModule(notReady())]}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}
@@ -64,22 +71,62 @@ test('a refused accept names its cause on the card until the state changes', asy
         <DocxEditorContent />
         <DocxEditorReview />
       </DocxEditorViewport>
+      <CustomProbe />
     </DocxEditorRoot>
   );
+  return { view, editor: () => instance! };
+}
+
+test('a refused accept names its cause on the card until the state changes', async () => {
+  const { view, editor } = mount();
   expect(view.queryByTestId('review-refusal')).toBeNull();
 
   await act(async () => {
     fireEvent.click(view.getByTestId('review-accept'));
   });
   const notice = view.getByTestId('review-refusal');
-  expect(notice.textContent).toBe('Waiting for the shared session. Try again in a moment.');
-  expect(notice.getAttribute('role')).toBe('alert');
+  expect(notice.textContent).toBe(WAITING);
   expect(notice.dataset.refusalCode).toBe('edit.collaboration-not-ready');
+  // Visual only inside the role="button" card; the rail's live region announces it.
+  expect(notice.getAttribute('aria-hidden')).toBe('true');
+  expect(view.getByTestId('review-refusal-live').textContent).toBe(WAITING);
+  // Another component's own hook sees the same refusal.
+  expect(view.getByTestId('custom-probe').textContent).toBe('edit.collaboration-not-ready');
   // The change is still there to accept once the session is ready.
   expect(view.getAllByTestId('review-card')).toHaveLength(1);
 
+  // A caret move is not a change of cause.
   await act(async () => {
-    instance!.exec({ type: 'setEditingMode', mode: 'viewing' });
+    editor().surface!.selectAll();
+  });
+  expect(view.getByTestId('review-refusal').textContent).toBe(WAITING);
+
+  await act(async () => {
+    editor().exec({ type: 'setEditingMode', mode: 'viewing' });
   });
   expect(view.queryByTestId('review-refusal')).toBeNull();
+  expect(view.getByTestId('review-refusal-live').textContent).toBe('');
+  expect(view.getByTestId('custom-probe').textContent).toBe('');
+});
+
+test('a refused reply names its cause in the reply line', async () => {
+  const { view, editor } = mount();
+  const revision = editor()
+    .getReviewItems({ pairReplacements: false })
+    .find((item) => item.kind === 'revision')!;
+  await act(async () => {
+    editor().setActiveReviewItem(revision.key);
+  });
+  const input = view.getByTestId('review-reply-input') as HTMLInputElement;
+  await act(async () => {
+    fireEvent.change(input, { target: { value: 'Looks right' } });
+  });
+  await act(async () => {
+    fireEvent.click(view.getByTestId('review-reply-submit'));
+  });
+  expect(view.getByTestId('review-reply-refused').textContent).toBe(WAITING);
+  // The reply line owns this one; the card does not repeat it.
+  expect(view.queryByTestId('review-refusal')).toBeNull();
+  // Recorded in the editor's store like any other refused write.
+  expect(view.getByTestId('custom-probe').textContent).toBe('edit.collaboration-not-ready');
 });

@@ -100,6 +100,7 @@ import {
   ReviewEmpty,
   ReviewReject,
   ReviewRefusal,
+  ReviewRefusalAnnouncer,
   ReviewReopen,
   ReviewReplies,
   ReviewReply,
@@ -866,6 +867,7 @@ const ReviewRoot = defineComponent({
         ...(props.preset || 'Balloon' in rootParts
           ? [takeRoot('Balloon', h(ReviewBalloon), rootParts)]
           : []),
+        h(ReviewRefusalAnnouncer),
       ] as VNodeArrayChildren;
       const child = asChildHost;
       if (!child) return h('aside', shared, content);

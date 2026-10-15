@@ -33,7 +33,7 @@ import {
 } from './review-shared.ts';
 import { authorCardStyle } from './review-author-styles.ts';
 import { SEND_ICON, icon } from './review-icons.tsx';
-import { reviewRefusalLabelKey, reviewWriteRefusalOf } from '../review/review-refusal.ts';
+import { reviewRefusalLabelKey, reviewRefusalStore } from '../review/review-refusal.ts';
 import type { EditDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
 
 interface ComposePartDeps {
@@ -58,6 +58,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         const t = deps.useLabel();
         const text = ref('');
         const refused = ref(false);
+        // Taken when the comment is refused, so the sentence holds still while it shows.
+        const refusedCode = ref<EditDiagnosticCode | undefined>(undefined);
+        const editorRef = useDocxEditor();
         const fieldId = useReviewStableId('draft');
         let measuredBy: ReviewRailValue['measure'] | null = null;
 
@@ -82,6 +85,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           if (readOnly || text.value.trim().length === 0) return;
           const landed = review.comment(text.value.trim());
           refused.value = !landed;
+          const editor = editorRef.value;
+          refusedCode.value =
+            landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code;
           if (landed) {
             text.value = '';
             endDraft();
@@ -190,14 +196,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
                         ? h(
                             'span',
                             { class: 'docx-review__refused', role: 'alert' },
-                            t(
-                              reviewRefusalLabelKey(
-                                rail.value.review.lastRefusal?.action === 'comment'
-                                  ? rail.value.review.lastRefusal.code
-                                  : undefined,
-                                'review.commentRefused'
-                              )
-                            )
+                            t(reviewRefusalLabelKey(refusedCode.value, 'review.commentRefused'))
                           )
                         : null,
                     ]
@@ -227,12 +226,15 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       const text = (input?.value ?? draft.value).trim();
       const live = entry ? (byId.get(entry.id) ?? entry) : null;
       if (!live || readOnly || text.length === 0) return;
-      const result = editorRef.value?.replyToReviewItem(live.key, text);
-      const landed = result ? result.ok : review.reply(live, text);
+      const editor = editorRef.value;
+      const result = editor?.replyToReviewItem(live.key, text);
+      // Recorded in the editor's refusal store, as the hook's own `reply` records it.
+      const landed =
+        editor && result
+          ? reviewRefusalStore(editor).record('reply', live.key, result)
+          : review.reply(live, text);
       refused.value = !landed;
-      refusedCode.value = result
-        ? reviewWriteRefusalOf('reply', live.key, result)?.code
-        : undefined;
+      refusedCode.value = landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code;
       if (landed) {
         draft.value = '';
         if (input) input.value = '';

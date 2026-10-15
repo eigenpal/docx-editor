@@ -7,7 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { Fragment, useContext, useId, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { Slot, useTranslation } from '@docx-editor.dev/react';
+import { Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/react';
 import type { ReviewItemView } from './useReview.ts';
 import type { ReviewActionProps, ReviewPartProps } from './review-types.ts';
 import { ReviewItemContext, useRail, useReviewLabel } from './review-context.ts';
@@ -19,7 +19,7 @@ import { ResolvedCommentCard, createCommentResolutionParts } from './review-comm
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { revisionItemLabel } from './review-labels.ts';
-import { reviewRefusalLabelKey } from '../review/review-refusal.ts';
+import { reviewRefusalLabelKey, reviewRefusalStore } from '../review/review-refusal.ts';
 
 export const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useReview: () => useRail().review,
@@ -250,9 +250,12 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
 /**
  * Why the card's last action did not land, when the editor refused it: an external refresh,
  * viewing, protection, or a collaboration session that is not ready. Absent otherwise. A
- * refused reply is shown by the reply line instead. @public
+ * refused reply is shown by the reply line instead.
+ *
+ * Visual only: the card is a `role="button"`, which hides a live region inside it, so the
+ * rail announces the same sentence from its own live region. @public
  */
-export function ReviewRefusal({ className, hidden }: ReviewPartProps) {
+export function ReviewRefusal({ className, asChild, hidden, children }: ReviewPartProps) {
   const { review } = useRail();
   const entry = useContext(ReviewItemContext);
   const t = useReviewLabel();
@@ -260,18 +263,41 @@ export function ReviewRefusal({ className, hidden }: ReviewPartProps) {
   if (hidden || !entry || !refusal || refusal.key !== entry.key || refusal.action === 'reply') {
     return null;
   }
+  const shared = {
+    className: `docx-review__refused${className ? ` ${className}` : ''}`,
+    'aria-hidden': true as const,
+    'data-testid': 'review-refusal',
+    'data-refusal-code': refusal.code,
+  };
+  if (asChild) return <Slot {...shared}>{children}</Slot>;
   return (
-    <p
-      className={`docx-review__refused${className ? ` ${className}` : ''}`}
-      role="alert"
-      data-testid="review-refusal"
-      data-refusal-code={refusal.code}
-    >
-      {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
-    </p>
+    <p {...shared}>{children ?? t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}</p>
   );
 }
 ReviewRefusal.docxReviewPart = 'Refusal' as const;
+
+/**
+ * The rail's live region for a refused card action, so a screen reader hears the cause.
+ *
+ * Re-keyed per refusal, so the same refusal twice is announced twice. Replies and new comments
+ * are announced by their own boxes, which are forms rather than buttons.
+ */
+export function ReviewRefusalAnnouncer() {
+  const { review } = useRail();
+  const editor = useDocxEditor();
+  const t = useReviewLabel();
+  const refusal = review.lastRefusal;
+  const announced = refusal && refusal.action !== 'reply' && refusal.action !== 'comment';
+  return (
+    <span className="docx-editor-sr-only" aria-live="polite" data-testid="review-refusal-live">
+      {announced ? (
+        <span key={editor ? reviewRefusalStore(editor).sequence() : 0}>
+          {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 /** The author's initials, in their colour. @public */
 export function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {

@@ -427,13 +427,15 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const gate = ready();
     if (!gate.ok) return gate;
     if (deps.viewing()) {
-      deps
+      // The surface's own answer: a refresh holding the guard is reported, and answered, as
+      // the refresh rather than as viewing.
+      const refused = deps
         .surface()!
         .commitReviewOps(
           () => ({ committed: false, reason: 'the document is open for viewing' }),
           'revision-resolve'
         );
-      return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
+      return reviewWriteRefusal(refused, 'the document is open for viewing', 'locked');
     }
     const protectedWrite = commandProtectionRefusal(
       { type: 'resolveAllReviewChanges', action },

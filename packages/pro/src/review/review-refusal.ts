@@ -11,7 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // answer to a boolean, so a card's button did nothing and said nothing.
 
 import { diagnosticCodeOfRefusal } from '@docx-editor.dev/core';
-import type { EditDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
+import type { EditDiagnosticCode, Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { ExecResult } from '@docx-editor.dev/core/contracts/types';
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 
@@ -76,4 +76,106 @@ export function reviewRefusalLabelKey(
     default:
       return fallback;
   }
+}
+
+/**
+ * The editor state a refusal is about. A change to any part of it means the cause may be gone:
+ * the document changed (a refresh replaced it, a peer's edit arrived), the editing mode or
+ * editability changed (a refresh ended, viewing was left), the collaboration session changed
+ * state, or the author filter changed. A caret move is not in it, so a notice survives the
+ * reader clicking around.
+ */
+function refusalStateKey(editor: Editor): string {
+  const snapshot = editor.snapshot();
+  return [
+    editor.getDocumentHandle().revision,
+    editor.getEditingMode(),
+    snapshot.editable,
+    snapshot.collaborationStatus,
+    JSON.stringify(snapshot.hiddenReviewAuthors ?? []),
+  ].join(':');
+}
+
+/** The last refused review write of one editor, shared by every review hook over it. */
+export interface ReviewRefusalStore {
+  /** The held refusal, or null. */
+  get(): ReviewWriteRefusal | null;
+  /** Rises with every recorded refusal, so the same refusal twice is still two events. */
+  sequence(): number;
+  /** Record a write's result: hold its refusal, or clear the held one when it landed. */
+  record(action: ReviewWriteAction, key: string | null, result: ExecResult): boolean;
+  /** Called when the held refusal is set or cleared. */
+  subscribe(listener: () => void): () => void;
+}
+
+const stores = new WeakMap<Editor, ReviewRefusalStore>();
+
+/**
+ * The refusal store of `editor`, created on first use.
+ *
+ * Per EDITOR, not per hook call: a custom card that reads `useReview().lastRefusal` must see a
+ * refusal that the packaged rail's own Accept, or another component's hook, recorded.
+ */
+export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
+  const existing = stores.get(editor);
+  if (existing) return existing;
+  let held: { readonly refusal: ReviewWriteRefusal; readonly at: string } | null = null;
+  let count = 0;
+  const listeners = new Set<() => void>();
+  let detach: (() => void) | null = null;
+  const notify = (): void => {
+    for (const listener of [...listeners]) listener();
+  };
+  // Editor events are watched only while a refusal is held and someone is listening: an idle
+  // store adds nothing to the editor's listener lists.
+  const sync = (): void => {
+    const wanted = held !== null && listeners.size > 0;
+    if (wanted && !detach) {
+      // Every event the review hooks re-derive on. A mode switch can arrive without `change`,
+      // and the key leaves the caret out, so a selection event alone never clears it.
+      const offChange = editor.on('change', recheck);
+      const offSelection = editor.on('selectionChange', recheck);
+      const offError = editor.on('error', recheck);
+      detach = () => {
+        offChange();
+        offSelection();
+        offError();
+      };
+    } else if (!wanted && detach) {
+      detach();
+      detach = null;
+    }
+  };
+  // The cause is gone once the state it was refused in changes. Cleared then, not only on the
+  // next write, so a notice never outlives its cause.
+  function recheck(): void {
+    if (held && held.at !== refusalStateKey(editor)) {
+      held = null;
+      sync();
+      notify();
+    }
+  }
+  const store: ReviewRefusalStore = {
+    get: () => held?.refusal ?? null,
+    sequence: () => count,
+    record(action, key, result) {
+      const refusal = reviewWriteRefusalOf(action, key, result);
+      if (refusal) count += 1;
+      const changed = refusal !== null || held !== null;
+      held = refusal ? { refusal, at: refusalStateKey(editor) } : null;
+      sync();
+      if (changed) notify();
+      return result.ok;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      sync();
+      return () => {
+        listeners.delete(listener);
+        sync();
+      };
+    },
+  };
+  stores.set(editor, store);
+  return store;
 }

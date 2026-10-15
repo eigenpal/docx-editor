@@ -14,7 +14,9 @@ import { COMPACT_CARD_WIDTH } from './use-rail-geometry.ts';
 import { authorCardStyle } from './review-author-styles.ts';
 import { SEND_ICON, icon } from './review-icons.tsx';
 import { initialsOf } from './review-shared.ts';
-import { reviewRefusalLabelKey, type ReviewWriteRefusal } from '../review/review-refusal.ts';
+import { reviewRefusalLabelKey, reviewRefusalStore } from '../review/review-refusal.ts';
+import type { EditDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
+import { useDocxEditor } from '@docx-editor.dev/react';
 
 interface ComposePartDeps {
   readonly useRail: () => {
@@ -22,7 +24,6 @@ interface ComposePartDeps {
       readonly comment: (text: string, author?: string) => boolean;
       readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
       readonly setActive: (key: string | null) => boolean;
-      readonly lastRefusal: ReviewWriteRefusal | null;
     };
     readonly endDraft: () => void;
     readonly measure: (node: HTMLElement | null, key: string) => void;
@@ -59,6 +60,9 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const t = deps.useLabel();
     const [text, setText] = useState('');
     const [refused, setRefused] = useState(false);
+    // Taken when the write is refused, so the sentence holds still while it shows.
+    const [refusedCode, setRefusedCode] = useState<EditDiagnosticCode | undefined>(undefined);
+    const editor = useDocxEditor();
     const fieldRef = useRef<HTMLInputElement | null>(null);
     const fieldId = useId();
 
@@ -75,11 +79,12 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       if (readOnly || text.trim().length === 0) return;
       const landed = review.comment(text.trim());
       setRefused(!landed);
+      setRefusedCode(landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code);
       if (landed) {
         setText('');
         endDraft();
       }
-    }, [readOnly, text, review, endDraft]);
+    }, [readOnly, text, review, endDraft, editor]);
 
     if (hidden) return null;
     return (
@@ -163,12 +168,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
             </div>
             {refused ? (
               <span className="docx-review__refused" role="alert">
-                {t(
-                  reviewRefusalLabelKey(
-                    review.lastRefusal?.action === 'comment' ? review.lastRefusal.code : undefined,
-                    'review.commentRefused'
-                  )
-                )}
+                {t(reviewRefusalLabelKey(refusedCode, 'review.commentRefused'))}
               </span>
             ) : null}
           </form>
@@ -183,13 +183,17 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const { review, readOnly } = deps.useRail();
     const [draft, setDraft] = useState('');
     const [refused, setRefused] = useState(false);
+    // Taken when the reply is refused, so the sentence holds still while it shows.
+    const [refusedCode, setRefusedCode] = useState<EditDiagnosticCode | undefined>(undefined);
+    const editor = useDocxEditor();
     const submit = useCallback(() => {
       if (!entry || readOnly || draft.trim().length === 0) return;
       const landed = review.reply(entry, draft.trim());
       setRefused(!landed);
+      setRefusedCode(landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code);
       if (landed) setDraft('');
-    }, [entry, readOnly, draft, review]);
-    return { key: entry?.key ?? null, draft, setDraft, refused, setRefused, submit };
+    }, [entry, readOnly, draft, review, editor]);
+    return { draft, setDraft, refused, setRefused, refusedCode, submit };
   }
 
   /**
@@ -206,16 +210,11 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     readonly className?: string;
     readonly onCancel?: () => void;
   }) {
-    const { review, readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useRail();
+    const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useRail();
     const t = deps.useLabel();
     const fieldId = useId();
     const { draft, setDraft, refused, setRefused, submit } = state;
-    // The cause the editor named for this line's refused reply, when it named one.
-    const refusal = review.lastRefusal;
-    const refusedLabel = reviewRefusalLabelKey(
-      refusal?.action === 'reply' && refusal.key === state.key ? refusal.code : undefined,
-      'review.replyRefused'
-    );
+    const refusedLabel = reviewRefusalLabelKey(state.refusedCode, 'review.replyRefused');
     const avatarUrl = draftAuthorInfo?.style?.avatarUrl;
     return (
       <form

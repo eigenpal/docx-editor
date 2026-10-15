@@ -343,7 +343,9 @@ Editing and suggesting modes allow thread-state changes. Resolution changes meta
 
 An action can be refused after the reader clicks it. For example, an external document refresh can be in progress, or a collaboration session can still be connecting. The packaged card then shows the cause under its summary with `<DocxEditorReview.Refusal />`. The reply line and the comment box show the cause of their own refused writes.
 
-In a custom card, read `lastRefusal` from `useReview()`. It names the refused `action`, the card `key` (`null` for a new comment), and the public diagnostic `code`. The next action that lands clears it. A change to the document, the editing mode, or the author filter also clears it.
+In a custom card, read `lastRefusal` from `useReview()`. Every `useReview()` over the same editor shares it, so a custom card also sees a refusal that the packaged rail recorded. It names the refused `action`, the card `key` (`null` for a new comment), and the public diagnostic `code`. The next action that lands clears it. A change to the document, the editing mode, editability, the collaboration status, or the author filter also clears it. A caret move does not.
+
+The packaged notice is visual, because a card is a button for assistive technology. The rail announces the same sentence in its own live region.
 
 | `code`                         | Cause                                         |
 | ------------------------------ | --------------------------------------------- |

@@ -878,12 +878,15 @@ export const DocxEditorReview: {
         } | null;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Refusal: vue.DefineComponent<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
     }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        asChild: BooleanConstructor;
         className: StringConstructor;
         hidden: BooleanConstructor;
     }>> & Readonly<{}>, {
+        asChild: boolean;
         hidden: boolean;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Reject: vue.DefineComponent<vue.ExtractPropTypes<{

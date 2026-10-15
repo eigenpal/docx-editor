@@ -140,7 +140,8 @@ export function setReviewCommentResolved(
       () => ({ committed: false, reason: 'the document is open for viewing' }),
       'comment-resolve'
     );
-    return reviewWriteRefusal(refused ?? 'the document is open for viewing', '');
+    const viewing = 'the document is open for viewing';
+    return reviewWriteRefusal(refused ?? viewing, viewing, 'locked');
   }
   // Comment keys do not depend on pairing; the unpaired read keeps each reply's own parent.
   const placements = deps.placements({ pairReplacements: false });

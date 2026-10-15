@@ -17,7 +17,7 @@ import {
   type VNode,
 } from 'vue';
 import { isDomNode, hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
-import { Slot, useTranslation } from '@docx-editor.dev/vue';
+import { Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/vue';
 import {
   ACCEPT_ICON,
   DELETE_ICON,
@@ -27,7 +27,7 @@ import {
   reviewBadge,
 } from './review-icons.tsx';
 import { revisionItemLabel } from './review-labels.ts';
-import { reviewRefusalLabelKey } from '../review/review-refusal.ts';
+import { reviewRefusalLabelKey, reviewRefusalStore } from '../review/review-refusal.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
@@ -312,13 +312,16 @@ export const ReviewReject = createActionPart(
 /**
  * Why the card's last action did not land, when the editor refused it: an external refresh,
  * viewing, protection, or a collaboration session that is not ready. Absent otherwise. A
- * refused reply is shown by the reply line instead. @public
+ * refused reply is shown by the reply line instead.
+ *
+ * Visual only: the card is a `role="button"`, which hides a live region inside it, so the
+ * rail announces the same sentence from its own live region. @public
  */
 export const ReviewRefusal = markPart(
   defineComponent({
     name: 'ReviewRefusal',
-    props: { className: String, hidden: Boolean },
-    setup(props) {
+    props: { className: String, hidden: Boolean, asChild: Boolean },
+    setup(props, { slots }) {
       const rail = useRail();
       const entryRef = useReviewItem();
       const t = useReviewLabel();
@@ -327,14 +330,16 @@ export const ReviewRefusal = markPart(
         const refusal = rail.value.review.lastRefusal;
         if (props.hidden || !entry || !refusal) return null;
         if (refusal.key !== entry.key || refusal.action === 'reply') return null;
+        const shared = {
+          class: `docx-review__refused${props.className ? ` ${props.className}` : ''}`,
+          'aria-hidden': true as const,
+          'data-testid': 'review-refusal',
+          'data-refusal-code': refusal.code,
+        };
+        if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return (
-          <p
-            class={`docx-review__refused${props.className ? ` ${props.className}` : ''}`}
-            role="alert"
-            data-testid="review-refusal"
-            data-refusal-code={refusal.code}
-          >
-            {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+          <p {...shared}>
+            {slots.default?.() ?? t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
           </p>
         );
       };
@@ -342,6 +347,35 @@ export const ReviewRefusal = markPart(
   }),
   'Refusal'
 );
+
+/**
+ * The rail's live region for a refused card action, so a screen reader hears the cause.
+ *
+ * Re-keyed per refusal, so the same refusal twice is announced twice. Replies and new comments
+ * are announced by their own boxes, which are forms rather than buttons.
+ */
+export const ReviewRefusalAnnouncer = defineComponent({
+  name: 'ReviewRefusalAnnouncer',
+  setup() {
+    const rail = useRail();
+    const editorRef = useDocxEditor();
+    const t = useReviewLabel();
+    return () => {
+      const refusal = rail.value.review.lastRefusal;
+      const editor = editorRef.value;
+      const announced = refusal && refusal.action !== 'reply' && refusal.action !== 'comment';
+      return (
+        <span class="docx-editor-sr-only" aria-live="polite" data-testid="review-refusal-live">
+          {announced ? (
+            <span key={editor ? reviewRefusalStore(editor).sequence() : 0}>
+              {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+            </span>
+          ) : null}
+        </span>
+      );
+    };
+  },
+});
 
 /** @public */
 export const ReviewDelete = markPart(
