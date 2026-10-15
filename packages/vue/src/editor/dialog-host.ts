@@ -23,9 +23,10 @@ import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
-type DialogKind = 'pageSetup' | 'paragraph' | 'watermark';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
 function createHost(config: () => DocxEditorPopups | undefined) {
   const target = shallowRef<HTMLElement | null>(null);
@@ -126,6 +127,15 @@ export const DialogHost = defineComponent({
       },
       { immediate: true }
     );
+    // Ctrl/Cmd+Shift+F5 opens the Bookmark dialog where this host mounts dialogs.
+    watch(
+      [editor, host.target],
+      ([value, target], _old, onCleanup) => {
+        if (!value || !target) return;
+        onCleanup(value.setBookmarkChrome({ onRequest: () => host.open('bookmark') }));
+      },
+      { immediate: true }
+    );
     watch(
       [editor, host.target, () => p.popups?.revisionMarkup === false],
       ([value, target, disabled], _old, onCleanup) => {
@@ -176,6 +186,11 @@ export const DialogHost = defineComponent({
               ? p.popups?.watermark
                 ? renderPopup(p.popups.watermark, { open: true, onClose: host.close })
                 : h(DocxEditorWatermarkDialog, { open: true, onClose: host.close })
+              : null,
+            host.active.value === 'bookmark' && p.popups?.bookmark !== false
+              ? p.popups?.bookmark
+                ? renderPopup(p.popups.bookmark, { open: true, onClose: host.close })
+                : h(DocxEditorBookmarkDialog, { open: true, onClose: host.close })
               : null,
             host.revisionSession.value && p.popups?.revisionMarkup !== false
               ? p.popups?.revisionMarkup

@@ -12,9 +12,9 @@
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 76,
-    "chromeCommandWired": 43,
-    "chromeProbe": 7,
+    "chromeSlots": 78,
+    "chromeCommandWired": 44,
+    "chromeProbe": 8,
     "acceptedRunProperties": 19,
     "acceptedParagraphProperties": 13,
     "insertableContentControlTypes": 5,
@@ -1324,6 +1324,7 @@
       "review.acceptAllChanges",
       "review.rejectAllChanges",
       "review.paragraphMarks",
+      "review.bookmarks",
       "review.protectDocument",
       "review.comments",
       "review.addComment",
@@ -1361,6 +1362,7 @@
       "insert.sectionBreakNextPage",
       "insert.sectionBreakContinuous",
       "insert.toc",
+      "insert.bookmark",
       "insert.watermark"
     ],
     "commandWired": [
@@ -1393,6 +1395,7 @@
       "review.acceptAllChanges",
       "review.rejectAllChanges",
       "review.paragraphMarks",
+      "review.bookmarks",
       "review.protectDocument",
       "review.comments",
       "contentControl.remove",
@@ -1415,6 +1418,7 @@
       "table.insert",
       "paragraph.dialog",
       "file.pageSetup",
+      "insert.bookmark",
       "insert.watermark"
     ],
     "unwiredCommandShaped": [
@@ -1436,6 +1440,7 @@
       "review.previousChange",
       "review.nextChange",
       "review.paragraphMarks",
+      "review.bookmarks",
       "review.comments",
       "review.authors",
       "file.open",
