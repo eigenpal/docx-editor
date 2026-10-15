@@ -2292,27 +2292,29 @@ export interface DocxEditorAuthorStyleProps extends RevisionAuthorStyle {
 // @public
 export const DocxEditorBookmarkDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
-        children: PropType<DocxEditorChildren>;
-        className: {
-            default: undefined;
-            type: StringConstructor;
+        readonly children: PropType<DocxEditorChildren>;
+        readonly className: {
+            readonly default: undefined;
+            readonly type: StringConstructor;
         };
-        onClose: {
-            required: true;
-            type: PropType<() => void>;
+        readonly onClose: {
+            readonly required: true;
+            readonly type: PropType<() => void>;
         };
-        open: {
-            required: true;
-            type: BooleanConstructor;
+        readonly open: {
+            readonly required: true;
+            readonly type: BooleanConstructor;
         };
-        preset: {
-            default: boolean;
-            type: BooleanConstructor;
+        readonly preset: {
+            readonly default: true;
+            readonly type: BooleanConstructor;
         };
-        style: PropType<CSSProperties>;
-    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
-        className: string;
-        preset: boolean;
+        readonly style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        readonly className: string;
+        readonly preset: boolean;
     }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
         B: {};
         C: {};
@@ -2321,53 +2323,57 @@ export const DocxEditorBookmarkDialog: {
         M: {};
         P: {};
     }, Readonly<vue.ExtractPropTypes<{
-        children: PropType<DocxEditorChildren>;
-        className: {
-            default: undefined;
-            type: StringConstructor;
+        readonly children: PropType<DocxEditorChildren>;
+        readonly className: {
+            readonly default: undefined;
+            readonly type: StringConstructor;
         };
-        onClose: {
-            required: true;
-            type: PropType<() => void>;
+        readonly onClose: {
+            readonly required: true;
+            readonly type: PropType<() => void>;
         };
-        open: {
-            required: true;
-            type: BooleanConstructor;
+        readonly open: {
+            readonly required: true;
+            readonly type: BooleanConstructor;
         };
-        preset: {
-            default: boolean;
-            type: BooleanConstructor;
+        readonly preset: {
+            readonly default: true;
+            readonly type: BooleanConstructor;
         };
-        style: PropType<CSSProperties>;
-    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
-        className: string;
-        preset: boolean;
+        readonly style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, {
+        readonly className: string;
+        readonly preset: boolean;
     }>;
     __isFragment?: never;
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
-    children: PropType<DocxEditorChildren>;
-    className: {
-        default: undefined;
-        type: StringConstructor;
+    readonly children: PropType<DocxEditorChildren>;
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
     };
-    onClose: {
-        required: true;
-        type: PropType<() => void>;
+    readonly onClose: {
+        readonly required: true;
+        readonly type: PropType<() => void>;
     };
-    open: {
-        required: true;
-        type: BooleanConstructor;
+    readonly open: {
+        readonly required: true;
+        readonly type: BooleanConstructor;
     };
-    preset: {
-        default: boolean;
-        type: BooleanConstructor;
+    readonly preset: {
+        readonly default: true;
+        readonly type: BooleanConstructor;
     };
-    style: PropType<CSSProperties>;
-}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
-    className: string;
-    preset: boolean;
+    readonly style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    readonly className: string;
+    readonly preset: boolean;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     Apply: vue.DefineComponent<DialogPartProps>;
     Body: vue.DefineComponent<DialogPartProps>;

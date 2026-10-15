@@ -674,8 +674,8 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly op: 'getBookmarkRangeByName';
 }
 /**
-* Add a bookmark around a span, or at a point. A bookmark the story already declares under
-* the same name, compared without case, moves here. Refused when another story declares it.
+* Add a bookmark around a span, or at a point. A bookmark any story declares under the same
+* name, compared without case, moves here in the same write.
 */
 | {
     readonly name: string;

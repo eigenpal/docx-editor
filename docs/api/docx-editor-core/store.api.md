@@ -1333,6 +1333,9 @@ export interface EmbeddedFont {
 }
 
 // @public
+export function enclosedBookmarkDeletions(part: OoxmlPart, from: BookmarkOpPosition, to: BookmarkOpPosition, order: readonly string[]): readonly DeleteBookmarkOp[];
+
+// @public
 export interface EncodedEnvelope {
     // (undocumented)
     readonly byteLength: number;
@@ -5490,6 +5493,9 @@ export function withExportedCustomNodes(pkg: OoxmlPackage, request: CustomNodeEx
 
 // @public
 export function withNewPart(pkg: OoxmlPackage, partName: string, root: OoxmlElement, contentType: string): OoxmlPackage;
+
+// @public
+export function withoutBookmarkInPart(pkg: OoxmlPackage, partName: string, name: string): OoxmlPackage;
 
 // @public
 export function withoutCustomXmlDataPart(pkg: OoxmlPackage, storyPartName: string, namespaceUri: string): WithoutPartResult;

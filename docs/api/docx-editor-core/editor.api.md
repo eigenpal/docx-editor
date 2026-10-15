@@ -2507,7 +2507,7 @@ export interface PaginatedSurfaceOptions {
     readonly onHostMoved?: (document: Document) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRejection?: (reason: string) => void;
-    readonly onRequestBookmark?: () => void;
+    readonly onRequestBookmark?: () => boolean;
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestHyperlink?: () => void;
