@@ -18,12 +18,8 @@ import { createDrawingGestures } from './surface-drawing-gestures.ts';
 import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
-import {
-  REFRESH_REFUSED_COMMIT,
-  REFRESH_WRITE_REFUSAL,
-  refreshWriteBlocked,
-  registerRefreshComposition,
-} from './refresh-write-guard.ts';
+import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
+import { REFRESH_REFUSED_COMMIT, REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { browserInputPending } from './surface-input-pending.ts';
@@ -5148,7 +5144,7 @@ export function mountPaginatedSurface(
       flushPendingInputAndLayout();
       const caretParagraph = selection.head.paragraphId;
       const beforeText = textOf(caretParagraph);
-      return commit(
+      const ran = commit(
         // Reported as a RESULT, not a boolean: `commit` reads the refusal reason off it, and
         // a boolean made every refused accept clear `lastRejection` instead of setting it.
         () => {
@@ -5217,6 +5213,7 @@ export function mountPaginatedSurface(
           return clampedToDocument(editingLayout(), order, mapped);
         }
       );
+      return ran ? lastRejection : REFRESH_WRITE_REFUSAL;
     },
 
     revisionDisplayMode: reviewDisplayMode,

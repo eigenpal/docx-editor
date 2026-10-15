@@ -663,14 +663,14 @@ export interface PaginatedSurface {
    * the caret past the end of the paragraph — after which every keystroke was refused with
    * `offset-out-of-range` until the user happened to click somewhere else.
    *
-   * Returns false when an external refresh holds the write guard and `run` never ran. When it
-   * returns true and `run` did not run either, a gate (viewing, collaboration) refused the write
-   * and recorded why as `state().lastRejection`.
+   * Returns null when the write committed, and otherwise why it did not: the external refresh
+   * when the write guard skipped the commit, a gate's reason (viewing, collaboration) when
+   * `run` never ran, or the reason `run` reported. The same reason becomes `lastRejection`.
    */
   commitReviewOps(
     run: () => { readonly committed: boolean; readonly reason?: unknown },
     intent?: ReviewWriteIntent
-  ): boolean;
+  ): string | null;
   /**
    * The layout as last PUBLISHED, without forcing pending work.
    *

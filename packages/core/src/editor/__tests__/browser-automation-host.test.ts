@@ -300,6 +300,34 @@ describe('an external document refresh', () => {
     editor.destroy();
   });
 
+  // A custom-node write has no review gate in front of the surface, so it reaches both of the
+  // surface's skip reasons: the refresh guard and the viewing gate.
+  test.each([
+    ['an external refresh', 'edit.refresh-in-progress'],
+    ['viewing', 'edit.read-only'],
+  ] as const)('a custom node refused by %s names it', (cause, code) => {
+    const { host, container, editor } = mount();
+    const { paragraphs } = handles(host);
+    const before = editor.surface!.session.packageRevision();
+    if (cause === 'viewing') editor.surface!.setEditingMode('view');
+    else setRefreshWriteGuard(container, true);
+    const response = host.execute({
+      operations: [
+        {
+          op: 'insertCustomNode',
+          at: { paragraph: paragraphs[0]!, at: 'end' },
+          tag: 'citation',
+          text: '(Smith 2024)',
+        },
+      ],
+    });
+    setRefreshWriteGuard(container, false);
+    expect(response.ok).toBe(false);
+    const failure = response.results[0] as { error: { detail?: string } };
+    expect(storeEditDiagnosticCode(failure.error.detail ?? '')).toBe(code);
+    expect(editor.surface!.session.packageRevision()).toBe(before);
+  });
+
   test('a comment written during an external refresh names the refresh', () => {
     const container = document.createElement('div');
     const editor = createDocxEditor({

@@ -2212,7 +2212,7 @@ export interface PaginatedSurface {
     commitReviewOps(run: () => {
         readonly committed: boolean;
         readonly reason?: unknown;
-    }, intent?: ReviewWriteIntent): boolean;
+    }, intent?: ReviewWriteIntent): string | null;
     readonly contentControls: ContentControlOps;
     // (undocumented)
     convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
