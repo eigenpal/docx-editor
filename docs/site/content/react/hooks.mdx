@@ -295,6 +295,39 @@ function BookmarkList() {
 
 The list has one entry per name. If collaborators left copies of a name, `duplicates` on its entry counts them. To keep the first and remove the copies, call `keepFirst(name)`. The selection does not move.
 
+## `useGoToBookmark`
+
+Use `useGoToBookmark` to build a Go to UI of your own, as the **Go to** tab of the navigation pane does. It filters the document's bookmarks by the typed name, keeps a highlighted row, and jumps with the `goToBookmark` command. Call it inside `DocxEditor.Root`:
+
+```tsx
+import { useGoToBookmark } from '@docx-editor.dev/react';
+
+function GoToBox() {
+  const goTo = useGoToBookmark();
+  return (
+    <div>
+      <input
+        value={goTo.query}
+        onChange={(event) => goTo.setQuery(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') goTo.move(1);
+          if (event.key === 'ArrowUp') goTo.move(-1);
+          if (event.key === 'Enter') goTo.go();
+        }}
+      />
+      {goTo.problem === 'notFound' && <p>No bookmark has that name.</p>}
+      <ul>
+        {goTo.rows.map((row) => (
+          <li key={row.name}>{row.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+`go(name?)` jumps to `name`, or else to the highlighted row, the bookmark named exactly as typed, or the first row. It returns the command result. `sortBy`, `showHidden`, and their setters choose the order and whether hidden bookmarks are offered. Each row's `place` says whether the bookmark is in the body, a header, a footer, a footnote, or an endnote.
+
 ## `useParagraphFormat`
 
 Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step:

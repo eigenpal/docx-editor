@@ -143,6 +143,23 @@ if (runtime.capabilities.selection) {
 
 Selection requires an attached browser document. The API does not expose `Document.getSelection()` or a separate range scrolling method.
 
+### Go to a bookmark
+
+To go to a bookmark by name, read its range with `getBookmarkRangeOrNullObject`, then select it. A name that no bookmark has answers a null object:
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.getBookmarkRangeOrNullObject('Intro');
+  range.load('text');
+  await context.sync();
+  if (range.isNullObject) return;
+  range.select();
+  await context.sync();
+});
+```
+
+`select()` works for a bookmark in the main text, a header, a footer, or a note. The editor opens that region first, so the selection and the editing region agree. A read-only editor selects in the main text and fails with `NotSupported` for any other region. Selecting writes nothing, so it can share a sync with edits in another region.
+
 ## Next steps
 
 See [API member directory](/docs/2.x/editor-api/reference) for the public navigation surface.

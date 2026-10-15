@@ -18,6 +18,45 @@ Open the dialog from **Insert** > **Bookmark**, or press Ctrl+Shift+F5 (Cmd+Shif
 
 A bookmark name starts with a letter. It holds only letters, digits, and underscores, and has at most 40 characters. The dialog explains why a name cannot be used. Names compare without case, so `Intro` and `INTRO` are the same bookmark: adding a name that exists moves that bookmark to the selection.
 
+## Find and go to bookmarks
+
+The navigation pane has a **Go to** tab for bookmarks. Open it from the pane's tab strip, or press <kbd>Ctrl</kbd>+<kbd>G</kbd> (<kbd>Cmd</kbd>+<kbd>Option</kbd>+<kbd>G</kbd> on macOS) while the document has focus. The tab does the following:
+
+- Lists the document's bookmarks, sorted by **Name** or by **Location**, as the Bookmark dialog does. Numbers in names sort by value, so `Section2` comes before `Section10`.
+- Shows hidden bookmarks when you select **Hidden bookmarks**.
+- Names the place of a bookmark that is not in the main text: **Header**, **Footer**, **Footnote**, or **Endnote**.
+- Filters the list as you type. Names that start with what you typed come first.
+- Moves through the list with the arrow keys. <kbd>Enter</kbd> or **Go to** jumps to the highlighted bookmark, the one named exactly as typed, or the first one in the list.
+
+A jump selects the bookmark's text, opens the header, footer, or note that holds it, and scrolls it into view. The document then takes focus, so you can type at the bookmark. If no bookmark has the typed name, the tab says so. <kbd>Esc</kbd> closes the pane. The list follows the document, so bookmarks that you or a collaborator add or delete appear and disappear.
+
+In a document open for viewing, a jump selects a bookmark in the main text. A bookmark in a header, footer, or note is scrolled into view, and the caret stays where it was, because viewing does not open those regions.
+
+### Open Go to from code
+
+To open the tab from your own control, run the `openGoTo` command. It fails with `unsupported` while no navigation pane is mounted. To jump without any UI, run `goToBookmark`. It fails with `notFound` when no bookmark has the name:
+
+```ts
+editor.exec({ type: 'openGoTo' });
+editor.exec({ type: 'goToBookmark', name: 'Intro' });
+```
+
+To build your own Go to UI, use `useGoToBookmark()` in React or Vue. It returns the typed text, the matching rows, the highlighted row, `move(delta)`, and `go(name?)`. To show your own UI for `openGoTo`, register it with `editor.setGoToChrome({ onRequest })`.
+
+In a document script, go to a bookmark the Office.js way:
+
+```ts
+const range = context.document.getBookmarkRangeOrNullObject('Intro');
+range.load('text');
+await context.sync();
+if (!range.isNullObject) {
+  range.select();
+  await context.sync();
+}
+```
+
+`range.select()` opens the story that holds the bookmark. A read-only editor selects in the main text, and refuses a header, footer, or note with `NotSupported`. A server runtime has no reader, so it refuses `select()` with `NotSupported`.
+
 ## Show bookmarks
 
 Select **Review** > **Show bookmarks** to paint a gray bracket just before the first character and just after the last character of each bookmark, and an I-beam at a bookmark that marks a point. The marks show bookmarks in the main text, headers, footers, footnotes, and endnotes. A bookmark in a header or footer is marked on every page that shows that header or footer. Hidden bookmarks are not shown.

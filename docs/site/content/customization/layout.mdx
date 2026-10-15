@@ -34,17 +34,18 @@ Give the viewport a bounded height. In a flex or grid layout, set `min-height: 0
 | --- | --- | --- |
 | `defaultOpen` | Boolean | `false`; initial uncontrolled state. |
 | `open`, `onOpenChange` | Boolean and callback | Controlled open state. Accept callback changes in application state. |
-| `defaultTab` | `headings`, `find` | `headings`; initial uncontrolled tab. |
+| `defaultTab` | `headings`, `find`, `goto` | `headings`; initial uncontrolled tab. |
 | `tab`, `onTabChange` | Tab and callback | Controlled active tab. |
 | `paneWidth` | Pixels | `280`; panel width. |
 | `toggle` | Boolean or part props | `true`; use `false` to remove the collapsed toggle. |
 | `searchHighlight` | `all`, `active`, `none` | `all`; marks matches while Find is open. |
 | `findShortcut` | Boolean | `true`; opens Find with Ctrl+F or Cmd+F inside the editor. |
+| `goToShortcut` | Boolean | `true`; opens Go to with Ctrl+G, or Cmd+Option+G on macOS, inside the editor. |
 | `t` | Label resolver | Uses the root translator and locale catalog. |
 | `className`, `style` | CSS overrides | Style the navigation region. |
 | `children` | Named parts | Replaces the default navigation composition. |
 
-The navigation parts include `Toggle`, `Header`, `Title`, `Close`, `Tabs`, `Tab`, `Headings`, and `Find`. Use `useNavigationPane`, `useDocumentOutline`, and `useDocumentSearch` for a custom navigation interface. The navigation pane preserves its search query when closed. On narrow viewports, it overlays the page and closes after a heading or search result selection.
+The navigation parts include `Toggle`, `Header`, `Title`, `Close`, `Tabs`, `Tab`, `Headings`, `Find`, and `GoTo`. Use `useNavigationPane`, `useDocumentOutline`, `useDocumentSearch`, and `useGoToBookmark` for a custom navigation interface. The navigation pane preserves its search query when closed. On narrow viewports, it overlays the page and closes after a heading or search result selection.
 
 ### Zoom and responsive layout
 
