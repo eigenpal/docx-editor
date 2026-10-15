@@ -913,6 +913,7 @@
     "refusedViewing": "ドキュメントは閲覧用に開かれています。",
     "refusedProtected": "ドキュメントのこの部分は保護されています。",
     "refusedCollaboration": "共有セッションを待っています。しばらくしてからもう一度お試しください。",
+    "refusedSessionEnded": "共有セッションが終了しました。レビューを続けるにはドキュメントを再読み込みしてください。",
     "actionRefused": "この変更を行えませんでした",
     "showPane": "コメントの表示",
     "resolved": "解決済み",

@@ -922,6 +922,7 @@
     "refusedViewing": "The document is open for viewing.",
     "refusedProtected": "This part of the document is protected.",
     "refusedCollaboration": "Waiting for the shared session. Try again in a moment.",
+    "refusedSessionEnded": "The shared session ended. Reload the document to keep reviewing.",
     "actionRefused": "Could not make this change",
     "showPane": "Show comments",
     "resolved": "Resolved",

@@ -805,6 +805,7 @@
     "refusedViewing": "O documento está aberto para visualização.",
     "refusedProtected": "Esta parte do documento está protegida.",
     "refusedCollaboration": "Aguardando a sessão compartilhada. Tente novamente em instantes.",
+    "refusedSessionEnded": "A sessão compartilhada terminou. Recarregue o documento para continuar a revisão.",
     "actionRefused": "Não foi possível fazer esta alteração",
     "showPane": "Mostrar comentários",
     "structural": "Estrutura do documento alterada",

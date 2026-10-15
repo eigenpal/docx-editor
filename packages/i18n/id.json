@@ -805,6 +805,7 @@
     "refusedViewing": "Dokumen dibuka untuk dilihat.",
     "refusedProtected": "Bagian dokumen ini dilindungi.",
     "refusedCollaboration": "Menunggu sesi bersama. Coba lagi sebentar lagi.",
+    "refusedSessionEnded": "Sesi bersama telah berakhir. Muat ulang dokumen untuk melanjutkan peninjauan.",
     "actionRefused": "Tidak dapat membuat perubahan ini",
     "showPane": "Tampilkan komentar",
     "structural": "Struktur dokumen diubah",

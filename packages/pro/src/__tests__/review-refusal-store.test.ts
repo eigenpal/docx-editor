@@ -48,6 +48,7 @@ test('one store per editor holds the refusal for every reader', () => {
     key: 'k1',
     code: 'edit.collaboration-not-ready',
     sequence: 1,
+    final: false,
   });
   store.record('accept', 'k1', { ok: true, changed: true });
   expect(store.get()).toBeNull();
@@ -99,7 +100,7 @@ test('a refusal held while nobody listened is rechecked after subscribe', async 
   off();
 });
 
-test('a session moving between not-ready states keeps the refusal', () => {
+test('any collaboration status change is a point to retry at', () => {
   const { editor, state, emit } = fakeEditor();
   state.collaboration = 'initializing';
   const store = reviewRefusalStore(editor);
@@ -107,9 +108,15 @@ test('a session moving between not-ready states keeps the refusal', () => {
   store.record('accept', 'k1', REFUSED);
   state.collaboration = 'disconnected';
   emit('change');
-  expect(store.get()).not.toBeNull();
-  state.collaboration = 'ready';
-  emit('change');
   expect(store.get()).toBeNull();
   off();
+});
+
+test('a refusal from an ended session is final', () => {
+  const { editor } = fakeEditor();
+  const store = reviewRefusalStore(editor);
+  store.record('accept', 'k1', { ...REFUSED, reason: 'collaboration-session-destroyed' });
+  expect(store.get()).toMatchObject({ code: 'edit.collaboration-not-ready', final: true });
+  store.record('accept', 'k1', REFUSED);
+  expect(store.get()!.final).toBe(false);
 });

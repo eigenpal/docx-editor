@@ -145,8 +145,12 @@ Subscribe to an editor event for the component lifetime:
 ```ts
 import { useEditorEvent } from '@docx-editor.dev/vue';
 
-useEditorEvent('selectionChange', () => {
-  panelOpen.value = false;
+// `selectionChange` also fires for other state that moves without a document change, such
+// as the collaboration status, so compare the selection itself.
+let lastSelection: unknown = null;
+useEditorEvent('selectionChange', (snapshot) => {
+  if (snapshot.selection !== lastSelection) panelOpen.value = false;
+  lastSelection = snapshot.selection;
 });
 useEditorEvent('change', (change) => {
   void autosave(change.revision);

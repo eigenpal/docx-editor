@@ -354,7 +354,7 @@ While `DocxEditorReview` is mounted, it announces every refused review action in
 | `edit.protected-content`       | Document protection does not allow the change |
 | `edit.collaboration-not-ready` | The collaboration session is not ready yet    |
 
-For every code, see [Diagnostics](/docs/2.x/guides/diagnostics#edit).
+When the collaboration session has ended, `lastRefusal.final` is `true`. Retrying cannot help then, and the packaged notice asks the reader to reload the document. For every code, see [Diagnostics](/docs/2.x/guides/diagnostics#edit).
 
 This example shows the cause under a custom card:
 

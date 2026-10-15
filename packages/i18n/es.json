@@ -913,6 +913,7 @@
     "refusedViewing": "El documento está abierto para su visualización.",
     "refusedProtected": "Esta parte del documento está protegida.",
     "refusedCollaboration": "Esperando la sesión compartida. Inténtalo de nuevo en un momento.",
+    "refusedSessionEnded": "La sesión compartida terminó. Vuelve a cargar el documento para seguir revisando.",
     "actionRefused": "No se pudo realizar este cambio",
     "showPane": "Mostrar comentarios",
     "resolved": "Resuelto",

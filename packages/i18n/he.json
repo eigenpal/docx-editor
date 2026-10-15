@@ -805,6 +805,7 @@
     "refusedViewing": "המסמך פתוח לצפייה.",
     "refusedProtected": "חלק זה של המסמך מוגן.",
     "refusedCollaboration": "ממתין לסשן המשותף. נסו שוב בעוד רגע.",
+    "refusedSessionEnded": "הסשן המשותף הסתיים. טענו מחדש את המסמך כדי להמשיך בבדיקה.",
     "actionRefused": "לא ניתן לבצע את השינוי הזה",
     "showPane": "הצג הערות",
     "structural": "מבנה המסמך שונה",

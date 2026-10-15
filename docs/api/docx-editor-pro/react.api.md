@@ -440,6 +440,7 @@ export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 're
 export interface ReviewWriteRefusal {
     readonly action: ReviewWriteAction;
     readonly code: EditDiagnosticCode;
+    readonly final: boolean;
     readonly key: string | null;
     readonly sequence: number;
 }

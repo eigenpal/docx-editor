@@ -338,7 +338,8 @@ export const ReviewRefusal = markPart(
         if (props.asChild) return <Slot {...shared}>{{ default: () => slots.default?.() }}</Slot>;
         return (
           <p {...shared}>
-            {slots.default?.() ?? t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+            {slots.default?.() ??
+              t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused', refusal.final))}
           </p>
         );
       };
@@ -365,7 +366,13 @@ export const ReviewRefusalAnnouncer = defineComponent({
         <span class="docx-editor-sr-only" aria-live="polite" data-testid="review-refusal-live">
           {refusal ? (
             <span key={refusal.sequence}>
-              {t(reviewRefusalLabelKey(refusal.code, reviewRefusalFallbackKey(refusal.action)))}
+              {t(
+                reviewRefusalLabelKey(
+                  refusal.code,
+                  reviewRefusalFallbackKey(refusal.action),
+                  refusal.final
+                )
+              )}
             </span>
           ) : null}
         </span>

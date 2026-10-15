@@ -46,6 +46,11 @@ export interface ReviewWriteRefusal {
    * live announcement on it to announce a repeat.
    */
   readonly sequence: number;
+  /**
+   * True when retrying cannot help: the collaboration session ended, so the document must be
+   * opened again before it takes another review write.
+   */
+  readonly final: boolean;
 }
 
 /** The refusal behind a write's result, or null when the write landed. */
@@ -56,17 +61,21 @@ export function reviewWriteRefusalOf(
   sequence: number
 ): ReviewWriteRefusal | null {
   if (result.ok) return null;
-  return { action, key, code: diagnosticCodeOfRefusal(result.reason, result.code), sequence };
+  const code = diagnosticCodeOfRefusal(result.reason, result.code);
+  const final = result.reason === 'collaboration-session-destroyed';
+  return { action, key, code, sequence, final };
 }
 
 /**
  * The review author filter as a comparable key. The review hooks re-derive when it changes,
  * and a held refusal is about the filter it was refused under.
  */
-export function reviewAuthorFilterKey(editor: Editor): string {
-  const snapshot = (
+export function reviewAuthorFilterKey(
+  editor: Editor,
+  snapshot = (
     editor as Editor & { snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] } }
-  ).snapshot?.();
+  ).snapshot?.()
+): string {
   return JSON.stringify(snapshot?.hiddenReviewAuthors ?? []);
 }
 
@@ -79,8 +88,10 @@ export function reviewAuthorFilterKey(editor: Editor): string {
  */
 export function reviewRefusalLabelKey(
   code: EditDiagnosticCode | undefined,
-  fallback: TranslationKey
+  fallback: TranslationKey,
+  final = false
 ): TranslationKey {
+  if (final) return 'review.refusedSessionEnded';
   switch (code) {
     case 'edit.refresh-in-progress':
       return 'review.refusedRefresh';
@@ -115,10 +126,10 @@ function refusalStateKey(editor: Editor): string {
     editor.getDocumentHandle().revision,
     editor.getEditingMode(),
     snapshot.editable,
-    // Whether the session takes writes, not its raw status: a refusal for a session that is
-    // not ready stays while it moves between not-ready states, and clears once it can write.
-    snapshot.collaborationStatus === 'ready' || snapshot.collaborationStatus === 'inactive',
-    reviewAuthorFilterKey(editor),
+    // The raw status. Which statuses take writes is the session's rule, not this module's, so
+    // any change is a point to retry at; a write still blocked records its cause again.
+    snapshot.collaborationStatus,
+    reviewAuthorFilterKey(editor, snapshot),
   ].join(':');
 }
 

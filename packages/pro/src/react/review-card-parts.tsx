@@ -270,7 +270,9 @@ export function ReviewRefusal({ className, asChild, hidden, children }: ReviewPa
   };
   if (asChild) return <Slot {...shared}>{children}</Slot>;
   return (
-    <p {...shared}>{children ?? t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}</p>
+    <p {...shared}>
+      {children ?? t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused', refusal.final))}
+    </p>
   );
 }
 ReviewRefusal.docxReviewPart = 'Refusal' as const;
@@ -290,7 +292,13 @@ export function ReviewRefusalAnnouncer() {
     <span className="docx-editor-sr-only" aria-live="polite" data-testid="review-refusal-live">
       {refusal ? (
         <span key={refusal.sequence}>
-          {t(reviewRefusalLabelKey(refusal.code, reviewRefusalFallbackKey(refusal.action)))}
+          {t(
+            reviewRefusalLabelKey(
+              refusal.code,
+              reviewRefusalFallbackKey(refusal.action),
+              refusal.final
+            )
+          )}
         </span>
       ) : null}
     </span>

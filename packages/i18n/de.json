@@ -805,6 +805,7 @@
     "refusedViewing": "Das Dokument ist zum Anzeigen geöffnet.",
     "refusedProtected": "Dieser Teil des Dokuments ist geschützt.",
     "refusedCollaboration": "Warten auf die gemeinsame Sitzung. Versuchen Sie es gleich noch einmal.",
+    "refusedSessionEnded": "Die gemeinsame Sitzung wurde beendet. Laden Sie das Dokument neu, um weiter zu prüfen.",
     "actionRefused": "Diese Änderung konnte nicht vorgenommen werden",
     "showPane": "Kommentare anzeigen",
     "structural": "Dokumentstruktur geändert",
