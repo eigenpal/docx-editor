@@ -30,7 +30,7 @@ import {
 import { closingCellSpacingPt } from './table-cell-spacing.ts';
 import { vMergePlanFor } from './table-vmerge-plan.ts';
 import {
-  closingEdgeOverflowHeight,
+  closingEdgePt,
   terminalBorderPlanAt,
   type TerminalRowAt,
 } from './table-terminal-border-plan.ts';
@@ -646,17 +646,21 @@ export function* paginateTableInFlowSteps(
       if (rows.length === 0 && clearance.clear(clearance.pending)) admitSpans(bodyRowIndex, row);
     }
 
-    const terminalAt = (): TerminalRowAt =>
-      [structure, row, tableLeft, flow.cursorY, contentHeight(), rowDeps()] as const;
+    const terminalAt = (): TerminalRowAt => ({
+      structure,
+      row,
+      left: tableLeft,
+      top: flow.cursorY,
+      bottom: contentHeight(),
+      deps: rowDeps(),
+    });
     // The room a row that ends the page needs below it for its own closing border.
     let closingEdge = 0;
     const tryTerminalFit = (): void => {
       if (terminalDeps || isContinuation || heldByOpenSpan) return;
       if (naturalHeight <= contentHeight() - flow.cursorY + 0.001) {
-        const [next, below] = [bodyRows[bodyRowIndex + 1], flow.cursorY + naturalHeight];
-        const fits = (room: number) => !!next && rowHeightOf(next, below) <= room;
-        const closed = closingEdgeOverflowHeight(terminalAt(), naturalHeight, fits);
-        closingEdge = closed === undefined ? 0 : closed - naturalHeight;
+        const next = bodyRows[bodyRowIndex + 1];
+        closingEdge = closingEdgePt(terminalAt(), naturalHeight, next, tableDeps, rowHeightOf);
         return;
       }
       const plan = terminalBorderPlanAt(terminalAt());

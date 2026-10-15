@@ -17,3 +17,9 @@ test('an explicit shaping limit wins', () => {
     maxFontBytes: 1024,
   });
 });
+
+test('an empty shaping object keeps the PDF export default', () => {
+  expect(exportFontShaping({ fontShaping: {} })).toEqual({
+    maxFontBytes: PDF_MAX_SHAPING_FONT_BYTES,
+  });
+});

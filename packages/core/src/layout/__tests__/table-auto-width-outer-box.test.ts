@@ -1,5 +1,8 @@
 import { expect, test } from 'bun:test';
-import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import { applyTreeOp } from '../../store/store/tree-ops.ts';
+import { createLayoutSession } from '../layout-session.ts';
+import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { TableFragmentRecord } from '../semantic-records.ts';
 
@@ -7,7 +10,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const edges = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'];
 
 /** An automatic-width table with 3pt rules whose grid fills the 468pt text column. */
-function grid(columns: readonly number[], texts: readonly string[], jc: string) {
+function source(columns: readonly number[], texts: readonly string[], jc: string) {
   const cells = columns
     .map(
       (width, index) =>
@@ -23,10 +26,13 @@ function grid(columns: readonly number[], texts: readonly string[], jc: string) 
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!parsed.ok) throw new Error(parsed.reason);
-  const layout = layoutSemanticDocument(parsed.part, 1, {
-    measurer: createFixedMeasurer(6, 14),
-    compatibilityMode: 15,
-  });
+  return parsed.part;
+}
+
+const options = { measurer: createFixedMeasurer(6, 14), compatibilityMode: 15 };
+
+function grid(columns: readonly number[], texts: readonly string[], jc: string) {
+  const layout = layoutSemanticDocument(source(columns, texts, jc), 1, options);
   const table = layout.pages[0]!.fragments.find(
     (fragment): fragment is TableFragmentRecord => fragment.kind === 'table'
   )!;
@@ -46,3 +52,33 @@ for (const jc of ['left', 'center', 'right']) {
     expect(total(grid([4000, 4360, 1000], ['a', 'b', 'x'.repeat(16)], jc))).toBeCloseTo(465, 6);
   });
 }
+
+test('typing into a cell lays out like a cold pass', () => {
+  let part = source([4000, 4360, 1000], ['a', 'b', 'x'], 'left');
+  const session = createLayoutSession();
+  const cache = createParagraphLayoutCache();
+  let layout = layoutSemanticDocument(part, 1, { ...options, session, cache });
+  const table = layout.pages[0]!.fragments.find(
+    (fragment): fragment is TableFragmentRecord => fragment.kind === 'table'
+  )!;
+  const block = table.rows[0]!.cells[2]!.blocks[0]!;
+  if (block.kind !== 'paragraph') throw new Error('expected a paragraph');
+  // Each character widens the third column until its word no longer fits the grid.
+  for (let index = 0; index < 20; index++) {
+    const edit = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: block.paragraphId,
+      offset: 1 + index,
+      text: 'x',
+    });
+    if (!edit.ok) throw new Error(edit.reason);
+    part = edit.part;
+    layout = layoutSemanticDocument(part, 2 + index, { ...options, session, cache });
+    const cold = readOoxmlPart(serializeOoxmlPart(part), {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    });
+    if (!cold.ok) throw new Error(cold.reason);
+    expect(layout.pages).toEqual(layoutSemanticDocument(cold.part, 1, options).pages);
+  }
+});

@@ -908,12 +908,16 @@ export function autofitColumnWidthsPt(
         view.depth ?? 0
       );
   if (spread || (!widens && !sizedByContent)) {
+    // A grid that fills the text column gives way by its outer rule, never further.
+    const rule = structure.autoOuterRulePt ?? 0;
+    const settledPt = cellWidths.reduce((sum, width) => sum + width, 0);
+    const shrinkTo = Math.max(availableFor(roomWidthPt), settledPt - rule);
     const widths = spread
       ? sameOrComputed(structure, spread)
-      : structure.autoOuterRulePt
+      : rule > 0
         ? sameOrComputed(
             structure,
-            widenAutofitColumns(cellWidths, minimumsNow, availableFor(roomWidthPt), Infinity, true)
+            widenAutofitColumns(cellWidths, minimumsNow, shrinkTo, Infinity, true)
           )
         : structure.columnWidthsPt;
     byStructure.set(structure, { contentWidthPt, widths });

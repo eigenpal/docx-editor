@@ -270,7 +270,7 @@ export function unmergedPiecesOfParagraphForDisplay(
         fieldAtom: {
           formField,
           ...(formControl ? { formControl } : {}),
-          ...(pending?.kind === null && !formField ? { fixedResult: true as const } : {}),
+          ...(pending?.refSpec && !pending.hasNestedField ? { fixedResult: true as const } : {}),
         },
       };
       return carriedMemo;

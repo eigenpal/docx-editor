@@ -4,6 +4,7 @@ import { lastRowContentDeps } from './table-fragment-content-insets.ts';
 import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import { readOnlyBreakCache } from './paragraph-cache-peek.ts';
 import { layoutRowFragment, type TableFlowDeps } from './semantic-table-layout.ts';
+import { probeRowFragmentProgress } from './table-row-progress-probe.ts';
 import {
   MAX_TABLE_COLUMNS,
   type SemanticTableRow,
@@ -29,41 +30,50 @@ export function prepareTerminalBorderPlan(
   return measured && !measured.overflows ? measured.plan : undefined;
 }
 
-/** A row's placement: its table, the row, the table's left edge, its top, the page bottom. */
-export type TerminalRowAt = readonly [
-  SemanticTableStructure,
-  SemanticTableRow,
-  number,
-  number,
-  number,
-  TableFlowDeps,
-];
+/** Where a row is being placed: its table, the row, the table's left edge, its top, the bottom. */
+export interface TerminalRowAt {
+  readonly structure: SemanticTableStructure;
+  readonly row: SemanticTableRow;
+  readonly left: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly deps: TableFlowDeps;
+}
 
 /** {@link prepareTerminalBorderPlan} for a placement held as one value. */
 export function terminalBorderPlanAt(at: TerminalRowAt): TerminalBorderPlan | undefined {
-  return prepareTerminalBorderPlan(at[0], at[1], at[2], at[3], at[4], at[5]);
+  return prepareTerminalBorderPlan(at.structure, at.row, at.left, at.top, at.bottom, at.deps);
 }
 
-/** Room below a fitting row in which its closing border is checked: compound rules included. */
+/**
+ * Room below a fitting row in which its closing border is checked. Wider than the widest
+ * compound border (thick-thin-thick rules reach about 18pt) and narrower than any row that
+ * could follow, so a row with more room never ends the page here.
+ */
 const CLOSING_EDGE_BAND_PT = 18;
 
 /**
- * The height a row that fits at `naturalHeight` must count instead: a row that ends its page
- * closes it with its own bottom border, which must fit above `bottom` too. Undefined when
- * the row fits that way, keeps the edge it already has, or a following row fits below it
- * (`nextFits`), so it does not end the page.
+ * The extra room a row that fits at `naturalHeight` needs because it ends its page: a row that
+ * ends the page closes it with its own bottom border, which must fit above the bottom too.
+ * 0 when that border fits, when the row keeps the edge it already has, or when `next` places
+ * at least its opening below it, so the row does not end the page.
  */
-export function closingEdgeOverflowHeight(
+export function closingEdgePt(
   at: TerminalRowAt,
   naturalHeight: number,
-  nextFits: (room: number) => boolean
-): number | undefined {
-  const [structure, row, left, top, bottom, deps] = at;
-  const room = bottom - top - naturalHeight;
-  if (room < -0.001 || room > CLOSING_EDGE_BAND_PT) return undefined;
-  const measured = measureTerminalRow(structure, row, left, top, bottom, deps);
-  if (!measured?.overflows || nextFits(room)) return undefined;
-  return measured.plan.height;
+  next: SemanticTableRow | undefined,
+  nextDeps: TableFlowDeps,
+  heightOf: (row: SemanticTableRow, top: number) => number
+): number {
+  const room = at.bottom - at.top - naturalHeight;
+  if (room < -0.001 || room > CLOSING_EDGE_BAND_PT) return 0;
+  const measured = measureTerminalRow(at.structure, at.row, at.left, at.top, at.bottom, at.deps);
+  if (!measured?.overflows) return 0;
+  const below = at.top + naturalHeight;
+  const follows = rowFollowsBelow(next, at.structure, at.left, below, at.bottom, nextDeps, (row) =>
+    heightOf(row, below)
+  );
+  return follows ? 0 : Math.max(0, measured.plan.height - naturalHeight);
 }
 
 function measureTerminalRow(
@@ -126,4 +136,35 @@ export function sameTerminalContent(a: TableRowFragmentRecord, b: TableRowFragme
       })
     );
   });
+}
+
+/**
+ * Whether `next` places at least its opening below `top`, before `bottom`: whole, or, for a
+ * row that may split, its first line in every cell. Then the row above does not end the page.
+ */
+export function rowFollowsBelow(
+  next: SemanticTableRow | undefined,
+  structure: SemanticTableStructure,
+  left: number,
+  top: number,
+  bottom: number,
+  deps: TableFlowDeps,
+  heightOf: (row: SemanticTableRow) => number
+): boolean {
+  if (!next) return false;
+  if (heightOf(next) <= bottom - top + 0.001) return true;
+  if (next.cantSplit || next.height.rule === 'exact') return false;
+  return probeRowFragmentProgress(
+    next,
+    structure.columnWidthsPt,
+    left,
+    top,
+    bottom,
+    false,
+    0,
+    deps,
+    [],
+    structure.cellSpacingPt,
+    { requireEveryCell: true }
+  );
 }

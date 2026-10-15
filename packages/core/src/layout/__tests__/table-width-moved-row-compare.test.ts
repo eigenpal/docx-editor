@@ -138,6 +138,7 @@ test('compound, thick and dashed rules with each page keeping its own bottom edg
   // the next page, so every moved row compares like the full walk (`typeBurst` checks it).
   typeBurst(part, paragraphAt(part, 16, 0), 'bottom ');
   expect(comparisons.accepted).toBeGreaterThan(0);
+  expect(comparisons.refused).toBe(0);
 });
 
 test('mixed cell rules override the table rules on some rows', () => {

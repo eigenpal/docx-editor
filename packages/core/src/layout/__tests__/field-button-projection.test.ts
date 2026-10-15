@@ -75,7 +75,7 @@ describe('a complex MACROBUTTON field', () => {
     expect(pieces.map((piece) => piece.text)).toEqual(['A', 'Click Here', 'B']);
     const button = pieces[1]!;
     expect(button).toMatchObject({ start: 1, end: 2, projected: true });
-    expect(button.fieldAtom).toEqual({ formField: false, fixedResult: true });
+    expect(button.fieldAtom).toEqual({ formField: false });
     expect(pieces[2]).toMatchObject({ start: 2, end: 3 });
   });
 

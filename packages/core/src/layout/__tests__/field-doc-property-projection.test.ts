@@ -100,7 +100,7 @@ describe('a complex document-property field with no cached result', () => {
       );
       expect(pieces.map((piece) => piece.text)).toEqual(['A', value, 'B']);
       expect(pieces[1]).toMatchObject({ start: 1, end: 2, projected: true });
-      expect(pieces[1]!.fieldAtom).toEqual({ formField: false, fixedResult: true });
+      expect(pieces[1]!.fieldAtom).toEqual({ formField: false });
     });
   }
 

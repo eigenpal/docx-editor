@@ -1,4 +1,5 @@
 import { cachedTableStructure } from './table-structure-cache.ts';
+import { tableHasHidableRevisions } from './table-revision-markup.ts';
 import {
   revisionCellMetadata,
   wmlRevisionChild,
@@ -413,7 +414,7 @@ export function readTableStructure(
   if (!autofit || !base || (base.layoutFixed && depth === 0)) return base;
   // Deleted and inserted content sizes the columns in every view.
   const markupStructure =
-    displayMode === 'all-markup'
+    displayMode === 'all-markup' || !tableHasHidableRevisions(table)
       ? undefined
       : readTableStructure(
           table,

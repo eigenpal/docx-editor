@@ -10,6 +10,7 @@ import {
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
+import { applyTreeOp } from '../../store/store/tree-ops.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -24,7 +25,7 @@ const run = (text: string) => `<w:r><w:rPr><w:sz w:val="22"/></w:rPr>${text}</w:
 const p = (text: string, after = 0, height = LINE) =>
   `<w:p><w:pPr><w:spacing w:before="0" w:after="${after * 20}" w:line="${height * 20}" w:lineRule="exact"/></w:pPr>${run(text)}</w:p>`;
 
-function layout(body: string) {
+function load(body: string) {
   const entries = {
     '[Content_Types].xml': `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>`,
     '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`,
@@ -41,9 +42,9 @@ function layout(body: string) {
   const fn = resolveFootnoteProperties(undefined, undefined);
   const en = resolveEndnoteProperties(undefined, undefined);
   const measurer = createFixedMeasurer(5, LINE);
-  return layoutSemanticDocument(part, 1, {
+  const options = (session = createLayoutSession()) => ({
     measurer,
-    session: createLayoutSession(),
+    session,
     notes: {
       footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
       endnotesPart: null,
@@ -55,6 +56,12 @@ function layout(body: string) {
       producer: 'footnote-space-after-fit-test',
     },
   });
+  return { part, options };
+}
+
+function layout(body: string) {
+  const { part, options } = load(body);
+  return layoutSemanticDocument(part, 1, options());
 }
 
 const pageOf = (pages: readonly PageRecord[], text: string): number =>
@@ -98,4 +105,33 @@ describe('space after above a footnote area', () => {
     ).pages;
     expect(pageOf(pages, 'Closing')).toBe(0);
   });
+});
+
+test('a retained session matches a cold pass as a citing paragraph grows', () => {
+  // The citing opening paragraph wraps as it grows and pushes the closing paragraph down
+  // across its space-after threshold above the note area.
+  const doc = load(
+    p('<w:t xml:space="preserve">Opening </w:t><w:footnoteReference w:id="1"/>') +
+      p('<w:t>Spacer</w:t>', 0, AREA_TOP - 20 - 2 * LINE) +
+      p('<w:t>Closing</w:t>', 10) +
+      p('<w:t>Next</w:t>')
+  );
+  let part = doc.part;
+  const session = createLayoutSession();
+  let result = layoutSemanticDocument(part, 1, doc.options(session));
+  const opening = result.pages[0]!.fragments[0]!;
+  if (opening.kind !== 'paragraph') throw new Error('expected a paragraph');
+  for (let index = 0; index < 50; index++) {
+    const edit = applyTreeOp(part, {
+      op: 'insertText',
+      paragraphId: opening.paragraphId,
+      offset: index,
+      text: 'w',
+    });
+    if (!edit.ok) throw new Error(edit.reason);
+    part = edit.part;
+    result = layoutSemanticDocument(part, 2 + index, doc.options(session));
+    expect(result.pages).toEqual(layoutSemanticDocument(part, 2 + index, doc.options()).pages);
+  }
+  expect(pageOf(result.pages, 'Closing')).toBe(1);
 });

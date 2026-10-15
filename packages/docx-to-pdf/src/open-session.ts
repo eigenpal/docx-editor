@@ -31,11 +31,14 @@ const bundledFonts = packagedFonts({
 /** Per-face shaping ceiling for PDF export, below the engine's 64 MiB hard maximum. */
 export const PDF_MAX_SHAPING_FONT_BYTES = 40 * 1024 * 1024;
 
-/** The caller's shaping limits, or the PDF export default. */
+/** The caller's shaping limits, with the PDF export default for any limit left out. */
 export function exportFontShaping(
   options: Pick<SessionOptions, 'fontShaping'>
 ): NonNullable<SessionOptions['fontShaping']> {
-  return options.fontShaping ?? { maxFontBytes: PDF_MAX_SHAPING_FONT_BYTES };
+  return {
+    ...options.fontShaping,
+    maxFontBytes: options.fontShaping?.maxFontBytes ?? PDF_MAX_SHAPING_FONT_BYTES,
+  };
 }
 
 /** The export options that shape the session, without the ones that shape the PDF. */

@@ -192,7 +192,7 @@ import {
   layoutSemanticDocumentWithNotes,
   notesReserveContextKey,
 } from './note-pagination.ts';
-import { pageHoldsFootnoteReference } from './note-area-fit.ts';
+import { closingSpaceAfterPt } from './note-area-fit.ts';
 import { passProducerOf } from './pass-producer.ts';
 import { documentProjectionProducer } from './document-property-context.ts';
 
@@ -681,6 +681,7 @@ function* layoutBlocksPass(
     // IS the previous section's last sheet: both passes read the same document slot, so
     // every flow sharing the sheet stops above the same note area.
     contentHeightOf(pageBottomReserves?.get(pageIndexStart + index) ?? 0, index);
+  const noteReserveHere = () => pageBottomReserves?.get(pageIndexStart + pages.length);
   /** The same band with the footnote reserve ignored — the table paginator's recovery. */
   const unreservedContentHeight = (): number => contentHeightOf(0);
 
@@ -2223,6 +2224,8 @@ function* layoutBlocksPass(
     // Place the lines, fragmenting at page boundaries.
     let fragmentIndex = 0;
     let pending: LineRecord[] = [];
+    const closingAfter = (line: PendingLine): number =>
+      closingSpaceAfterPt(noteReserveHere(), pageFragments, pending, line, spacing.after);
     let fragmentStart = lines[0]?.start ?? 0;
     let fragmentBefore = appliedBefore;
     // Reserved above the FIRST fragment only: a paragraph continued onto the next page opens
@@ -2505,11 +2508,7 @@ function* layoutBlocksPass(
       // Spacing-after stays out of the fit budget (see the firstTail note above): it moves
       // where the NEXT paragraph starts, never whether this line fits, and it clips at the
       // page boundary rather than carrying over. Above a footnote area it must fit too.
-      const noteArea =
-        isLastLine &&
-        (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0) > 0 &&
-        pageHoldsFootnoteReference(pageFragments, pending, pendingLine);
-      const tail = isLastLine ? borderExtent + (noteArea ? spacing.after : 0) : 0;
+      const tail = isLastLine ? borderExtent + closingAfter(pendingLine) : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
         if (paragraphHasAnchors && paragraphAnchorOrigin === null && fragmentIndex === 0) {

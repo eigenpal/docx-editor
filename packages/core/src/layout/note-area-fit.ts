@@ -25,9 +25,33 @@ export function pageHoldsFootnoteReference(
   line: SpannedLine
 ): boolean {
   if (citesFootnote(line) || pending.some(citesFootnote)) return true;
-  return fragments.some(
-    (fragment) => fragment.kind === 'paragraph' && fragment.lines.some(citesFootnote)
-  );
+  return fragments.some(fragmentCitesFootnote);
+}
+
+/** Fragments are immutable records, so each is scanned once per pass however often asked. */
+const fragmentCitations = new WeakMap<BlockFragmentRecord, boolean>();
+function fragmentCitesFootnote(fragment: BlockFragmentRecord): boolean {
+  let cites = fragmentCitations.get(fragment);
+  if (cites === undefined) {
+    cites = fragment.kind === 'paragraph' && fragment.lines.some(citesFootnote);
+    fragmentCitations.set(fragment, cites);
+  }
+  return cites;
+}
+
+/**
+ * The space after the body pass charges to a paragraph's closing line: the paragraph's
+ * space after on a page that has a note reserve and cites a footnote, else 0.
+ */
+export function closingSpaceAfterPt(
+  reservePt: number | undefined,
+  fragments: readonly BlockFragmentRecord[],
+  pending: readonly SpannedLine[],
+  line: SpannedLine,
+  spaceAfterPt: number
+): number {
+  if (spaceAfterPt <= 0 || (reservePt ?? 0) <= 0) return 0;
+  return pageHoldsFootnoteReference(fragments, pending, line) ? spaceAfterPt : 0;
 }
 
 /**
@@ -46,8 +70,7 @@ export function chargedSpaceAfterPt(page: PageRecord): number {
     }
   }
   if (last?.kind !== 'paragraph' || !last.paragraphEnd) return 0;
-  const cites = page.fragments.some(
-    (fragment) => fragment.kind === 'paragraph' && fragment.lines.some(citesFootnote)
-  );
-  return cites ? last.spacing.after : 0;
+  // No reserve check: this answer only matters while a hold-out sizes this page's reserve,
+  // and a page it holds always has one.
+  return page.fragments.some(fragmentCitesFootnote) ? last.spacing.after : 0;
 }
