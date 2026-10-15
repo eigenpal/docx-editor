@@ -2497,8 +2497,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // first — but ONLY when it is this one. `dismissActiveReview` acts on whatever the caret
       // is in, and the delete button keeps the caret exactly where it was, so deleting a
       // comment further down the page closed the card the reader was replying in and threw
-      // the draft away with it.
-      if (activeReviewKeyNow() === key) surface.dismissActiveReview();
+      // the draft away with it. Read now, applied only once the delete lands: a refused delete
+      // leaves the card, and the draft in it, open.
+      const wasActive = activeReviewKeyNow() === key;
       let deleted = false;
       const refused = surface.commitReviewOps(() => {
         const note = noteHomeOf(item);
@@ -2511,6 +2512,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { committed: deleted };
       }, 'comment-delete');
       if (!deleted) return reviewWriteRefusal(refused, 'the comment could not be deleted');
+      if (wasActive) surface.dismissActiveReview();
       bump();
       return { ok: true, changed: true };
     },

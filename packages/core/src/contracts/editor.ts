@@ -632,6 +632,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * Anchored to the RETAINED range when there is one, so a compose box that took focus does
    * not lose the words it is about — that is what retention exists for. Refused on a
    * collapsed caret: a comment with no range has nothing to point at, and Word writes none.
+   *
+   * A refused write names its cause, as every review write does: `code: 'locked'` with
+   * `'the document is open for viewing'` in viewing or under read-only protection, and
+   * `code: 'unsupported'` with the external refresh sentence or a collaboration reason token
+   * such as `'collaboration-session-not-ready'` (wait for the session, then retry). Branch on
+   * `diagnosticCodeOfRefusal(result.reason, result.code)`, not on the text.
    */
   addComment(text: string, author?: string): ExecResult;
 
@@ -707,6 +713,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    *
    * Refused for a card whose kind the engine cannot resolve structurally, which is why
    * `readOnly` is on the item — a surface should not offer the button in the first place.
+   * Other refusals name their cause, as {@link addComment} describes.
    */
   acceptReviewItem(key: string): ExecResult;
   rejectReviewItem(key: string): ExecResult;
@@ -716,7 +723,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    *
    * The thread state is written through the same package transaction as every other comment
    * mutation, so `commentsExtended.xml`, Undo and save/reopen cannot disagree. Repeating the
-   * state already on the item succeeds without adding an undo entry.
+   * state already on the item succeeds without adding an undo entry. A refusal names its cause,
+   * as {@link addComment} describes.
    */
   setCommentResolved(key: string, resolved: boolean): ExecResult;
 
@@ -733,7 +741,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * a surface can put one "remove this" affordance on every card instead of branching.
    *
    * Refused on a custom node's card, which is informational, and on a revision kind the engine
-   * cannot resolve — the same rule {@link rejectReviewItem} follows.
+   * cannot resolve — the same rule {@link rejectReviewItem} follows. Other refusals name their
+   * cause, as {@link addComment} describes, and leave the open card and its draft open.
    */
   deleteReviewItem(key: string): ExecResult;
 
@@ -747,6 +756,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * The author is AMBIENT — `DocxEditorConfig.author`, the way the rest of the authored commands
    * source it — and the argument overrides it for one call. `CT_Comment` makes `@w:author`
    * required, so a reply with neither is refused rather than written as an empty attribute.
+   * Other refusals name their cause, as {@link addComment} describes.
    */
   replyToReviewItem(key: string, text: string, author?: string): ExecResult;
   setActiveScope(scope: ViewScope): void;

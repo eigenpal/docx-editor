@@ -19,7 +19,7 @@ import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
-import { REFRESH_WRITE_REFUSAL } from './refresh-write-guard.ts';
+import { REFRESH_WRITE_REFUSAL, UNEXPLAINED_WRITE_REFUSAL } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { browserInputPending } from './surface-input-pending.ts';
@@ -3163,7 +3163,7 @@ export function mountPaginatedSurface(
       );
       const rejection = typeof result === 'boolean' || !result.rejected ? null : result;
       if (rejection) {
-        const raw = String(rejection.reason ?? 'rejected');
+        const raw = String(rejection.reason ?? UNEXPLAINED_WRITE_REFUSAL);
         rejected = lastRejection = refuse(writeRejectionReason(raw, session.settingsRoot()), raw);
       } else {
         lastRejection = null;
@@ -5288,8 +5288,8 @@ export function mountPaginatedSurface(
         { automation: true }
       );
       // Null only when the refresh guard skipped the commit before the thunk ran.
-      if (result) return result;
-      return { committed: false, rejected: true, opCount: 0, reason: refusal ?? 'rejected' };
+      const reason = refusal ?? UNEXPLAINED_WRITE_REFUSAL;
+      return result ?? { committed: false, rejected: true, opCount: 0, reason };
     },
 
     editingMode: () => editingMode,

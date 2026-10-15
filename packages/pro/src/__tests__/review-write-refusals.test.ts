@@ -15,7 +15,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import type { EditorDiagnostic } from '@docx-editor.dev/core/contracts/editor';
 import { reviewModule } from '../review/review-module.ts';
 import {
   REFRESH_WRITE_REFUSAL,
@@ -61,24 +62,30 @@ function docx(): Uint8Array {
 
 type Cause = 'viewing' | 'refresh';
 
-function refusedEditor(cause: Cause) {
+function refusedEditor(cause: Cause, beforeRefusal?: (editor: DocxEditorInstance) => void) {
   const container = document.createElement('div');
+  const diagnostics: EditorDiagnostic[] = [];
   const editor = createDocxEditor({
     container,
     document: docx(),
     author: 'Grace Hopper',
-    modules: [reviewModule()],
+    modules: [
+      reviewModule(),
+      { id: 'observer', onDiagnostic: (event: EditorDiagnostic) => diagnostics.push(event) },
+    ],
   });
   const items = editor.getReviewItems({ pairReplacements: false });
   const comment = items.find((item) => item.kind === 'comment')!.key;
   const revision = items.find((item) => item.kind === 'revision')!.key;
   editor.surface!.selectAll();
+  beforeRefusal?.(editor);
   if (cause === 'viewing') editor.setEditingMode('viewing');
   else setRefreshWriteGuard(container, true);
   return {
     editor,
     comment,
     revision,
+    diagnostics,
     close() {
       setRefreshWriteGuard(container, false);
       editor.destroy();
@@ -112,6 +119,39 @@ describe.each(['viewing', 'refresh'] as const)('review writes refused by %s', (c
       const revision = state.editor.surface!.session.packageRevision();
       expect(write(state)).toMatchObject({ ok: false, ...EXPECTED[cause] });
       expect(state.editor.surface!.session.packageRevision()).toBe(revision);
+    } finally {
+      state.close();
+    }
+  });
+});
+
+describe('a refused review write leaves the reader where they were', () => {
+  test('a refused delete keeps the open card, and the draft in it, open', () => {
+    let opened = '';
+    const state = refusedEditor('refresh', (editor) => {
+      opened = editor.getReviewItems({ pairReplacements: false })[0]!.key;
+      editor.setActiveReviewItem(opened);
+    });
+    try {
+      expect(state.editor.deleteReviewItem(opened)).toMatchObject({ ok: false });
+      const active = state.editor
+        .getReviewItems({ pairReplacements: false })
+        .find((item) => item.isActive);
+      expect(active?.key).toBe(opened);
+    } finally {
+      state.close();
+    }
+  });
+
+  test('an accept refused by the refresh reports the refresh, not an unsupported revision', () => {
+    const state = refusedEditor('refresh');
+    try {
+      state.editor.acceptReviewItem(state.revision);
+      const kinds = state.diagnostics.map((event) => event.kind);
+      expect(kinds).not.toContain('review.skipped');
+      expect(state.diagnostics.find((event) => event.kind === 'edit.rejected')).toMatchObject({
+        code: 'edit.refresh-in-progress',
+      });
     } finally {
       state.close();
     }
