@@ -170,7 +170,9 @@
         "useReviewAuthor",
         "useReviewItem",
         "useReviewOf",
-        "useStackedReviewPositions"
+        "useStackedReviewPositions",
+        "ReviewWriteAction",
+        "ReviewWriteRefusal"
       ],
       "deferredInVue": {},
       "vueExclusive": {
@@ -191,6 +193,7 @@
         "Empty",
         "List",
         "Markers",
+        "Refusal",
         "Reject",
         "Reopen",
         "Replies",
@@ -246,7 +249,8 @@
       "UseCollaborationStatusReturn",
       "UseDocumentCollaborationOptions",
       "UseDocumentCollaborationReturn",
-      "UseReviewReturn"
+      "UseReviewReturn",
+      "ReviewWriteRefusal"
     ],
     "interfaceMemberExceptions": {
       "CollaborationStatusNoticeProps": {

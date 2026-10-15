@@ -877,6 +877,15 @@ export const DocxEditorReview: {
             top: number;
         } | null;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Refusal: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+    }>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: StringConstructor;
+        hidden: BooleanConstructor;
+    }>> & Readonly<{}>, {
+        hidden: boolean;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Reject: vue.DefineComponent<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
         className: StringConstructor;
@@ -1139,6 +1148,16 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
+export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
+
+// @public
+export interface ReviewWriteRefusal {
+    readonly action: ReviewWriteAction;
+    readonly code: EditDiagnosticCode;
+    readonly key: string | null;
+}
+
+// @public
 export type RevisionDisplay = 'pane' | 'balloons';
 
 // @public
@@ -1227,6 +1246,7 @@ export interface UseReviewReturn {
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
     // (undocumented)
     readonly items: ComputedRef<readonly ReviewItemView[]>;
+    readonly lastRefusal: ComputedRef<ReviewWriteRefusal | null>;
     // (undocumented)
     readonly paneOpen: ComputedRef<boolean>;
     // (undocumented)

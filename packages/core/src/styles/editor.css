@@ -6616,6 +6616,11 @@ a.docx-hyperlink:focus-visible {
   font-size: 11px;
 }
 
+/* A refused card action names its cause under the card's summary. */
+p.docx-review__refused {
+  margin: 4px 0 0;
+}
+
 .docx-review__empty {
   padding: 12px;
   color: var(--doc-text-muted, #8a8f98);

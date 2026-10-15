@@ -98,6 +98,7 @@ import {
   ReviewDraft,
   ReviewEmpty,
   ReviewReject,
+  ReviewRefusal,
   ReviewReopen,
   ReviewReplies,
   ReviewReply,
@@ -724,6 +725,8 @@ export interface DocxEditorReviewNamespace {
   readonly Reopen: typeof ReviewReopen;
   /** Discard the card: delete a comment thread, or reject a tracked change. */
   readonly Delete: typeof ReviewDelete;
+  /** Why the card's last action was refused, when it was. Absent otherwise. */
+  readonly Refusal: typeof ReviewRefusal;
   readonly Replies: typeof ReviewReplies;
   readonly Reply: typeof ReviewReply;
   /** The collapsed rail: one marker per item, shown when the pane is closed. */
@@ -776,6 +779,7 @@ export const DocxEditorReview: DocxEditorReviewNamespace = Object.assign(ReviewR
   Resolve: ReviewResolve,
   Reopen: ReviewReopen,
   Delete: ReviewDelete,
+  Refusal: ReviewRefusal,
   Replies: ReviewReplies,
   Reply: ReviewReply,
   Markers: ReviewMarkers,

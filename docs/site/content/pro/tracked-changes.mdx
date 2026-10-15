@@ -274,7 +274,7 @@ The stylesheet shows delete controls on hover or keyboard focus. Cards without a
 
 `useReview()` returns the same data and actions as the packaged rail.
 
-React returns plain values from `useReview()`. Vue returns computed refs for `items`, `activeKey`, `ready`, `paneOpen`, `selectionAnchorY`, and `commentResolutionDisabledReason`. Vue templates unwrap these refs.
+React returns plain values from `useReview()`. Vue returns computed refs for `items`, `activeKey`, `ready`, `paneOpen`, `selectionAnchorY`, `commentResolutionDisabledReason`, and `lastRefusal`. Vue templates unwrap these refs.
 
 | Member                            | Behavior                                 |
 | --------------------------------- | ---------------------------------------- |
@@ -290,6 +290,7 @@ React returns plain values from `useReview()`. Vue returns computed refs for `it
 | `paneOpen`, `setPaneOpen`         | Read or change pane state                |
 | `ready`                           | `false` before a document loads          |
 | `commentResolutionDisabledReason` | Engine refusal for comment state actions |
+| `lastRefusal`                     | Why the last review action was refused   |
 
 Render `item.text` as text. The document controls this value. Do not render it as markup.
 

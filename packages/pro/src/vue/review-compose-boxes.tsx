@@ -33,6 +33,8 @@ import {
 } from './review-shared.ts';
 import { authorCardStyle } from './review-author-styles.ts';
 import { SEND_ICON, icon } from './review-icons.tsx';
+import { reviewRefusalLabelKey, reviewWriteRefusalOf } from '../review/review-refusal.ts';
+import type { EditDiagnosticCode } from '@docx-editor.dev/core/contracts/editor';
 
 interface ComposePartDeps {
   readonly useRail: () => ComputedRef<ReviewRailValue>;
@@ -188,7 +190,14 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
                         ? h(
                             'span',
                             { class: 'docx-review__refused', role: 'alert' },
-                            t('review.commentRefused')
+                            t(
+                              reviewRefusalLabelKey(
+                                rail.value.review.lastRefusal?.action === 'comment'
+                                  ? rail.value.review.lastRefusal.code
+                                  : undefined,
+                                'review.commentRefused'
+                              )
+                            )
                           )
                         : null,
                     ]
@@ -209,6 +218,8 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     const editorRef = useDocxEditor();
     const draft = ref('');
     const refused = ref(false);
+    // The cause the editor named for the refused reply, when it named one.
+    const refusedCode = ref<EditDiagnosticCode | undefined>(undefined);
     const submit = (root: ParentNode | null) => {
       const entry = entryRef();
       const { review, readOnly, byId } = rail.value;
@@ -216,15 +227,18 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       const text = (input?.value ?? draft.value).trim();
       const live = entry ? (byId.get(entry.id) ?? entry) : null;
       if (!live || readOnly || text.length === 0) return;
-      const landed =
-        editorRef.value?.replyToReviewItem(live.key, text).ok ?? review.reply(live, text);
+      const result = editorRef.value?.replyToReviewItem(live.key, text);
+      const landed = result ? result.ok : review.reply(live, text);
       refused.value = !landed;
+      refusedCode.value = result
+        ? reviewWriteRefusalOf('reply', live.key, result)?.code
+        : undefined;
       if (landed) {
         draft.value = '';
         if (input) input.value = '';
       }
     };
-    return { draft, refused, submit };
+    return { draft, refused, refusedCode, submit };
   }
 
   /**
@@ -346,7 +360,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         </button>
         {refused.value ? (
           <span class="docx-review__refused" role="alert" data-testid="review-reply-refused">
-            {t('review.replyRefused')}
+            {t(reviewRefusalLabelKey(state.refusedCode.value, 'review.replyRefused'))}
           </span>
         ) : null}
       </div>

@@ -14,6 +14,7 @@ import { COMPACT_CARD_WIDTH } from './use-rail-geometry.ts';
 import { authorCardStyle } from './review-author-styles.ts';
 import { SEND_ICON, icon } from './review-icons.tsx';
 import { initialsOf } from './review-shared.ts';
+import { reviewRefusalLabelKey, type ReviewWriteRefusal } from '../review/review-refusal.ts';
 
 interface ComposePartDeps {
   readonly useRail: () => {
@@ -21,6 +22,7 @@ interface ComposePartDeps {
       readonly comment: (text: string, author?: string) => boolean;
       readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
       readonly setActive: (key: string | null) => boolean;
+      readonly lastRefusal: ReviewWriteRefusal | null;
     };
     readonly endDraft: () => void;
     readonly measure: (node: HTMLElement | null, key: string) => void;
@@ -161,7 +163,12 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
             </div>
             {refused ? (
               <span className="docx-review__refused" role="alert">
-                {t('review.commentRefused')}
+                {t(
+                  reviewRefusalLabelKey(
+                    review.lastRefusal?.action === 'comment' ? review.lastRefusal.code : undefined,
+                    'review.commentRefused'
+                  )
+                )}
               </span>
             ) : null}
           </form>
@@ -182,7 +189,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       setRefused(!landed);
       if (landed) setDraft('');
     }, [entry, readOnly, draft, review]);
-    return { draft, setDraft, refused, setRefused, submit };
+    return { key: entry?.key ?? null, draft, setDraft, refused, setRefused, submit };
   }
 
   /**
@@ -199,10 +206,16 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
     readonly className?: string;
     readonly onCancel?: () => void;
   }) {
-    const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useRail();
+    const { review, readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = deps.useRail();
     const t = deps.useLabel();
     const fieldId = useId();
     const { draft, setDraft, refused, setRefused, submit } = state;
+    // The cause the editor named for this line's refused reply, when it named one.
+    const refusal = review.lastRefusal;
+    const refusedLabel = reviewRefusalLabelKey(
+      refusal?.action === 'reply' && refusal.key === state.key ? refusal.code : undefined,
+      'review.replyRefused'
+    );
     const avatarUrl = draftAuthorInfo?.style?.avatarUrl;
     return (
       <form
@@ -301,7 +314,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         </button>
         {refused ? (
           <span className="docx-review__refused" role="alert" data-testid="review-reply-refused">
-            {t('review.replyRefused')}
+            {t(refusedLabel)}
           </span>
         ) : null}
       </form>

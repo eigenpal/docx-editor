@@ -27,6 +27,7 @@ import {
   reviewBadge,
 } from './review-icons.tsx';
 import { revisionItemLabel } from './review-labels.ts';
+import { reviewRefusalLabelKey } from '../review/review-refusal.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
@@ -308,6 +309,40 @@ export const ReviewReject = createActionPart(
   (entry) => entry.kind === 'revision' && !entry.readOnly
 );
 
+/**
+ * Why the card's last action did not land, when the editor refused it: an external refresh,
+ * viewing, protection, or a collaboration session that is not ready. Absent otherwise. A
+ * refused reply is shown by the reply line instead. @public
+ */
+export const ReviewRefusal = markPart(
+  defineComponent({
+    name: 'ReviewRefusal',
+    props: { className: String, hidden: Boolean },
+    setup(props) {
+      const rail = useRail();
+      const entryRef = useReviewItem();
+      const t = useReviewLabel();
+      return () => {
+        const entry = entryRef.value;
+        const refusal = rail.value.review.lastRefusal;
+        if (props.hidden || !entry || !refusal) return null;
+        if (refusal.key !== entry.key || refusal.action === 'reply') return null;
+        return (
+          <p
+            class={`docx-review__refused${props.className ? ` ${props.className}` : ''}`}
+            role="alert"
+            data-testid="review-refusal"
+            data-refusal-code={refusal.code}
+          >
+            {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+          </p>
+        );
+      };
+    },
+  }),
+  'Refusal'
+);
+
 /** @public */
 export const ReviewDelete = markPart(
   defineComponent({
@@ -492,6 +527,7 @@ const ReviewCardPreset = defineComponent({
             ) : null}
           </div>
           {take('Summary', <ReviewSummary />)}
+          {take('Refusal', <ReviewRefusal />)}
           {take('Replies', <ReviewReplies />)}
           {take('Reply', <ReviewReply />)}
           {overrides.value.__extra}

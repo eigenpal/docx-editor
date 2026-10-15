@@ -19,6 +19,7 @@ import { ResolvedCommentCard, createCommentResolutionParts } from './review-comm
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { revisionItemLabel } from './review-labels.ts';
+import { reviewRefusalLabelKey } from '../review/review-refusal.ts';
 
 export const { ReviewResolve, ReviewReopen } = createCommentResolutionParts({
   useReview: () => useRail().review,
@@ -209,6 +210,7 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
         ) : null}
       </div>
       {take('Summary', <ReviewSummary />)}
+      {take('Refusal', <ReviewRefusal />)}
       {take('Replies', <ReviewReplies />)}
       {take('Reply', <ReviewReply />)}
       {overrides.__extra}
@@ -244,6 +246,32 @@ function partOverrides(children: ReactNode): Record<string, ReactNode> {
   if (extra.length > 0) found.__extra = extra;
   return found;
 }
+
+/**
+ * Why the card's last action did not land, when the editor refused it: an external refresh,
+ * viewing, protection, or a collaboration session that is not ready. Absent otherwise. A
+ * refused reply is shown by the reply line instead. @public
+ */
+export function ReviewRefusal({ className, hidden }: ReviewPartProps) {
+  const { review } = useRail();
+  const entry = useContext(ReviewItemContext);
+  const t = useReviewLabel();
+  const refusal = review.lastRefusal;
+  if (hidden || !entry || !refusal || refusal.key !== entry.key || refusal.action === 'reply') {
+    return null;
+  }
+  return (
+    <p
+      className={`docx-review__refused${className ? ` ${className}` : ''}`}
+      role="alert"
+      data-testid="review-refusal"
+      data-refusal-code={refusal.code}
+    >
+      {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+    </p>
+  );
+}
+ReviewRefusal.docxReviewPart = 'Refusal' as const;
 
 /** The author's initials, in their colour. @public */
 export function ReviewAvatar({ className, asChild, hidden, children }: ReviewPartProps) {

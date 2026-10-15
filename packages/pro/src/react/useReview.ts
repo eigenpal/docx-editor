@@ -17,7 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // rather than from measuring painted DOM, which would put the sidebar a repaint behind the
 // document and break outright during pagination.
 
-import { useCallback, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import type {
   Editor,
   ReviewActivationOptions,
@@ -27,9 +27,15 @@ import type {
   ReviewItemRevealEvent,
   ReviewItemRevealSource,
 } from '@docx-editor.dev/core/contracts/editor';
+import type { ExecResult } from '@docx-editor.dev/core/contracts/types';
 import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
+import {
+  reviewWriteRefusalOf,
+  type ReviewWriteAction,
+  type ReviewWriteRefusal,
+} from '../review/review-refusal.ts';
 
 export type { ReviewAdoptOptions };
 
@@ -110,6 +116,11 @@ export type ReviewItemView = ReviewItemPlacement;
 export type { ReviewActivationOptions, ScrollPlacement };
 /** The payload of the editor's `reviewItemReveal` event. The engine's own type, unchanged. */
 export type { ReviewItemRevealEvent, ReviewItemRevealSource };
+
+/** What the review state depends on: the queue, the editing mode and the author filter. */
+function reviewVersionOf(editor: Editor): string {
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
+}
 
 function reviewAuthorFilterKey(editor: Editor): string {
   const snapshot = (
@@ -227,6 +238,21 @@ export interface UseReviewReturn {
   readonly selectionAnchorY: number | null;
   /** Comment on the current selection. Reports whether it landed, like {@link reply}. */
   readonly comment: (text: string, author?: string) => boolean;
+  /**
+   * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
+   *
+   * Set by a refused write and cleared by the next one that lands, and by any change to the
+   * document, the editing mode or the author filter, so it never outlives its cause. The
+   * packaged cards show it as a sentence; a custom card reads `key` to place it and `code`,
+   * the public diagnostic code, to word it.
+   *
+   * @example
+   * ```tsx
+   * const { lastRefusal } = useReview();
+   * if (lastRefusal?.code === 'edit.refresh-in-progress') showToast('Try again in a moment');
+   * ```
+   */
+  readonly lastRefusal: ReviewWriteRefusal | null;
   /** Whether the pane shows cards. Engine state: the toolbar's comments button toggles it. */
   readonly paneOpen: boolean;
   /** Open or close the pane — the same toggle the toolbar button runs. */
@@ -276,11 +302,25 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     subscribe,
     // Editing mode is part of the public action state even when the queue itself is unchanged:
     // switching to viewing must disable Resolve/Reopen in a host-composed card immediately.
-    () =>
-      editor
-        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`
-        : 'none',
+    () => (editor ? reviewVersionOf(editor) : 'none'),
     () => 'none'
+  );
+
+  // Kept with the `version` it was refused at, and shown only while that holds: a refusal is
+  // about one moment of the document, and a refresh that finished or a mode that changed
+  // leaves nothing for the reader to act on.
+  const [refusal, setRefusal] = useState<{
+    readonly refusal: ReviewWriteRefusal;
+    readonly version: string;
+  } | null>(null);
+  const lastRefusal = refusal && refusal.version === version ? refusal.refusal : null;
+  const settle = useCallback(
+    (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
+      const refused = reviewWriteRefusalOf(action, key, result);
+      setRefusal(refused && editor ? { refusal: refused, version: reviewVersionOf(editor) } : null);
+      return result.ok;
+    },
+    [editor]
   );
 
   const items = useMemo<readonly ReviewItemView[]>(
@@ -335,17 +375,17 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const accept = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'revision' || item.readOnly) return false;
-      return editor.acceptReviewItem(item.key).ok;
+      return settle('accept', item.key, editor.acceptReviewItem(item.key));
     },
-    [editor]
+    [editor, settle]
   );
 
   const reject = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'revision' || item.readOnly) return false;
-      return editor.rejectReviewItem(item.key).ok;
+      return settle('reject', item.key, editor.rejectReviewItem(item.key));
     },
-    [editor]
+    [editor, settle]
   );
 
   const adopt = useCallback(
@@ -357,17 +397,17 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const resolve = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'comment') return false;
-      return editor.setCommentResolved(item.key, true).ok;
+      return settle('resolve', item.key, editor.setCommentResolved(item.key, true));
     },
-    [editor]
+    [editor, settle]
   );
 
   const reopen = useCallback(
     (item: ReviewItemView): boolean => {
       if (!editor || item.kind !== 'comment') return false;
-      return editor.setCommentResolved(item.key, false).ok;
+      return settle('reopen', item.key, editor.setCommentResolved(item.key, false));
     },
-    [editor]
+    [editor, settle]
   );
 
   const commentResolutionDisabledReason =
@@ -380,17 +420,17 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       // put a refusal in the console for a button a surface should not have drawn.
       if (item.kind === 'custom') return false;
       if (item.kind === 'revision' && item.readOnly) return false;
-      return editor.deleteReviewItem(item.key).ok;
+      return settle('remove', item.key, editor.deleteReviewItem(item.key));
     },
-    [editor]
+    [editor, settle]
   );
 
   const reply = useCallback(
     (item: ReviewItemView, text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
-      return editor.replyToReviewItem(item.key, text, author).ok;
+      return settle('reply', item.key, editor.replyToReviewItem(item.key, text, author));
     },
-    [editor]
+    [editor, settle]
   );
 
   const selectionAnchorY = useMemo(
@@ -403,9 +443,9 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
   const comment = useCallback(
     (text: string, author?: string): boolean => {
       if (text.trim().length === 0 || !editor) return false;
-      return editor.addComment(text, author).ok;
+      return settle('comment', null, editor.addComment(text, author));
     },
-    [editor]
+    [editor, settle]
   );
 
   const paneOpen = useMemo(
@@ -442,6 +482,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       reply,
       selectionAnchorY,
       comment,
+      lastRefusal,
       paneOpen,
       setPaneOpen,
       // Not merely "an editor exists": the instance is constructed before any bytes arrive,
@@ -468,6 +509,7 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
       reply,
       selectionAnchorY,
       comment,
+      lastRefusal,
       paneOpen,
       setPaneOpen,
       editor,
