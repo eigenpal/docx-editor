@@ -251,12 +251,12 @@ export class Document extends ModelObject {
    */
   deleteBookmark(name: string): void {
     const target = `${this.path.label}.deleteBookmark`;
-    if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
     const document = this.path.handle();
-    this.command('deleteBookmark', () => ({
-      op: 'deleteBookmark',
-      target: { document, name },
-    }));
+    // Checked when the batch is sent, so a bad name fails `context.sync()`, not the call.
+    this.command('deleteBookmark', () => {
+      if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
+      return { op: 'deleteBookmark', target: { document, name } };
+    });
   }
 
   /**
@@ -282,12 +282,14 @@ export class Document extends ModelObject {
 
   #bookmarkRange(name: string, accessor: string, nullable: boolean): Range {
     const target = `${this.path.label}.${accessor}`;
-    if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
     const document = this.path.handle();
     const found = Range.promised(this.context, target, nullable);
     this.read(
       target,
-      () => ({ op: 'getBookmarkRangeByName', document, name }),
+      () => {
+        if (typeof name !== 'string') fail({ code: 'InvalidArgument', target });
+        return { op: 'getBookmarkRangeByName', document, name };
+      },
       (value) => {
         const spans = hydratedSpans(value, target);
         const span = spans[0];

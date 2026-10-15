@@ -741,7 +741,7 @@
   },
   "Word.Range#insertBookmark": {
     "status": "partial",
-    "notes": "Names compare without case and follow the authoring rules: a letter or underscore first, then letters, digits, and underscores, at most 40 characters; other names refuse with InvalidArgument. Names are unique in the whole document: a same-name bookmark moves here, also from another story (header, footer, or note), in the same sync. With TrackMineOnly the markers are written directly, because bookmarks are not revisions."
+    "notes": "Names compare without case and follow the authoring rules: a letter or underscore first, then letters, digits, and underscores, at most 40 characters; other names fail context.sync() with InvalidArgument, and the batch writes nothing. The call itself does not throw, so an argument error reports at the sync like every other batch error. Names are unique in the whole document: a same-name bookmark moves here, also from another story (header, footer, or note), in the same sync. With TrackMineOnly the markers are written directly, because bookmarks are not revisions."
   },
   "Word.Range#getBookmarks": {
     "status": "partial",

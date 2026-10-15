@@ -97,7 +97,7 @@ These members follow the Office.js shape:
 | `Document.getBookmarkRangeOrNullObject(name)` | Like `getBookmarkRange`, but returns a null object for a missing name. |
 | `Document.deleteBookmark(name)` | Deletes the bookmark with that name. The text stays. |
 
-Names compare without case. A name starts with a letter, or with an underscore for a hidden bookmark. It holds only letters, digits, and underscores, and has at most 40 characters. Any other name fails with `InvalidArgument`.
+Names compare without case. A name starts with a letter, or with an underscore for a hidden bookmark. It holds only letters, digits, and underscores, and has at most 40 characters. Any other name makes `context.sync()` fail with `InvalidArgument`, and nothing in that batch is written. The call itself does not throw.
 
 The following example adds a bookmark, reads its text, and lists the bookmarks of a paragraph:
 

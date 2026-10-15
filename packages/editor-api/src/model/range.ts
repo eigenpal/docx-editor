@@ -194,10 +194,11 @@ export class Range extends ModelObject implements PromisedItem {
    * Add a bookmark around this range, or at its position when the range is empty.
    *
    * Names compare without case and are unique in the whole document. A bookmark with the same
-   * name moves here, also from another story (a header, a footer, or a note), in the same sync. A name starts with a letter, or with an
-   * underscore for a hidden bookmark, holds only letters, digits and underscores, and has at
-   * most 40 characters; any other name is refused with `InvalidArgument`. Bookmarks are not
-   * revisions, so with `TrackMineOnly` the markers are written directly.
+   * name moves here, also from another story (a header, a footer, or a note), in the same sync.
+   * A name starts with a letter, or with an underscore for a hidden bookmark, holds only
+   * letters, digits and underscores, and has at most 40 characters. Any other name fails
+   * `context.sync()` with `InvalidArgument`, and nothing in that batch is written. Bookmarks are
+   * not revisions, so with `TrackMineOnly` the markers are written directly.
    *
    * @example
    * ```ts
@@ -208,9 +209,12 @@ export class Range extends ModelObject implements PromisedItem {
    */
   insertBookmark(name: string): void {
     const target = `${this.path.label}.insertBookmark`;
-    if (typeof name !== 'string' || name.length === 0) fail({ code: 'InvalidArgument', target });
     this.requireUsablePath();
-    this.command('insertBookmark', () => ({ op: 'insertBookmark', span: this.#span(), name }));
+    // Checked when the batch is sent: a bad name fails `context.sync()`, not the call.
+    this.command('insertBookmark', () => {
+      if (typeof name !== 'string' || name.length === 0) fail({ code: 'InvalidArgument', target });
+      return { op: 'insertBookmark', span: this.#span(), name };
+    });
   }
 
   /**
@@ -230,20 +234,22 @@ export class Range extends ModelObject implements PromisedItem {
    */
   getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]> {
     const target = `${this.path.label}.getBookmarks`;
-    if (
-      (includeHidden !== undefined && typeof includeHidden !== 'boolean') ||
-      (includeAdjacent !== undefined && typeof includeAdjacent !== 'boolean')
-    )
-      fail({ code: 'InvalidArgument', target });
     const { result, fill } = clientResult<string[]>(target);
     this.read(
       target,
-      () => ({
-        op: 'getBookmarkNames',
-        scope: this.#span(),
-        includeHidden: includeHidden === true,
-        includeAdjacent: includeAdjacent === true,
-      }),
+      () => {
+        if (
+          (includeHidden !== undefined && typeof includeHidden !== 'boolean') ||
+          (includeAdjacent !== undefined && typeof includeAdjacent !== 'boolean')
+        )
+          fail({ code: 'InvalidArgument', target });
+        return {
+          op: 'getBookmarkNames',
+          scope: this.#span(),
+          includeHidden: includeHidden === true,
+          includeAdjacent: includeAdjacent === true,
+        };
+      },
       (value) => {
         if (value.kind !== 'texts') fail({ code: 'GeneralException', target });
         fill([...value.texts]);

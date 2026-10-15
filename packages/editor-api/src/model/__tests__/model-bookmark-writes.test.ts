@@ -162,6 +162,24 @@ describe('Range.insertBookmark', () => {
     expect(await mainXmlOf(runtime)).not.toContain('bookmarkStart');
   });
 
+  test('a bad name fails the sync, not the call, and the batch writes nothing', async () => {
+    const runtime = await serverRuntime(docx(p('Hello')));
+    const queued: string[] = [];
+    const code = await codeOf(() =>
+      runtime.run(async (context) => {
+        const range = context.document.body.getRange('Whole');
+        range.insertBookmark('Good');
+        range.insertBookmark('');
+        (context.document.deleteBookmark as (name: unknown) => void)(7);
+        queued.push('queued');
+        await context.sync();
+      })
+    );
+    expect(queued).toEqual(['queued']);
+    expect(code).toBe('InvalidArgument');
+    expect(await mainXmlOf(runtime)).not.toContain('bookmarkStart');
+  });
+
   test('moves a name another story declares, in the same sync', async () => {
     const runtime = await serverRuntime(WITH_BOOKMARKED_STORIES);
     await runtime.run(async (context) => {
