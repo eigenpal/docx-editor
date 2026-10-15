@@ -199,9 +199,12 @@ describe.each([
   });
 });
 
-describe('concurrent picture inserts', () => {
+describe.each([
+  ['headless', 'headless'],
+  ['browser', 'browser'],
+] as const)('concurrent picture inserts on %s and %s runtimes', (left, right) => {
   test('two replicas inserting from one snapshot keep distinct ids and media parts', async () => {
-    const state = await room(['headless', 'headless']);
+    const state = await room([left, right]);
     try {
       state.pause();
       await insertPicture(state.alice.runtime, 0, 20);
@@ -215,7 +218,9 @@ describe('concurrent picture inserts', () => {
       state.close();
     }
   });
+});
 
+describe('concurrent deletion', () => {
   test('a picture inserted while the peer deletes its paragraph converges', async () => {
     const state = await room(['headless', 'browser']);
     try {

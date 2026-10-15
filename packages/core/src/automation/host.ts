@@ -75,12 +75,6 @@ function storeTransactionError(reason: string): AutomationError {
       'this edit requires a supported review mode',
       reason
     );
-  if (reason === 'package-changed' || reason.startsWith('package-changed:'))
-    return automationError(
-      'transaction-refused',
-      'the document changed while the batch was being committed; nothing was applied, so read the document again and retry',
-      reason
-    );
   const unsupported =
     reason === 'unsupported-revision' || reason.startsWith('unsupported-revision:');
   return automationError(
@@ -204,6 +198,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         );
     }
 
+    const allocationActor = port.allocationActor?.();
     const planner = createBatchPlanner({
       handles,
       reads: start,
@@ -277,7 +272,10 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
         policy?.step ??
         trackPlannedChanges(
           operation,
-          planner.plan(operation, stagedTracking.author),
+          // Planned under the actor the commit binds. See `AutomationDocumentPort.allocationActor`.
+          runWithTransactionActor(allocationActor, () =>
+            planner.plan(operation, stagedTracking.author)
+          ),
           stagedTracking.author
         );
       if (policy) stagedTracking = policy.state;
@@ -446,8 +444,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
   const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
     executing += 1;
     try {
-      // Plan and commit under ONE actor. See `AutomationDocumentPort.allocationActor`.
-      return runWithTransactionActor(port.allocationActor?.(), () => executeBatch(request));
+      return executeBatch(request);
     } finally {
       executing -= 1;
       if (executing === 0 && pendingEvent) {

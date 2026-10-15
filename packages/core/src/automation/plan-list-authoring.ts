@@ -153,8 +153,8 @@ export function planListAuthoring(
       ops: [],
       packageEdits: [
         (current) => {
-          // Allocate inside the canonical actor transaction. Collaborative IDs can differ from
-          // the read-only preview; both the paragraph and returned handle use the committed ID.
+          // Allocate inside the canonical actor transaction, which the planner's preview shares;
+          // both the paragraph and the returned handle use the committed ID.
           const created = createAutomationList(current);
           const part = created?.pkg.parts.get(story.part.name);
           if (!created || !part) throw new PackageEditRefusal('cannot create numbering definition');
@@ -167,7 +167,10 @@ export function planListAuthoring(
               ? { revision: { author: trackingAuthor, date: new Date().toISOString() } }
               : {}),
           });
-          if (!applied.ok) throw new PackageEditRefusal('cannot number this paragraph');
+          // The commit numbers with the tracking revision the trial left out, so a refusal
+          // here is the paragraph's own and keeps its reason.
+          if (!applied.ok)
+            throw new PackageEditRefusal('cannot number this paragraph', applied.reason);
           committedId = created.numId;
           return withPart(created.pkg, applied.part);
         },

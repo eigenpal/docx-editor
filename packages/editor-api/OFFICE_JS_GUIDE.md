@@ -130,6 +130,7 @@ Use `isDocxEditorError(error)` and branch on `error.code`. `error.target` identi
 | `NotSupported` | Check the host, tracking mode, author, and operation against the [tracking subset](#tracking-subset). |
 | `NotImplemented` | Check the documented subset, including pending-revision boundaries. Reconsider the target; do not disable tracking. |
 | `InvalidArgument` | Validate the argument and consult the member's JSDoc. |
+| `GeneralException` | Read `error.debugInfo.innerError` and act on its code. `edit.internal-invariant` is an engine defect: report the code with the engine version, and do not retry the write unchanged. |
 
 ### Read why the engine refused
 

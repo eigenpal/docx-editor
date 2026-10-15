@@ -263,6 +263,18 @@ describe('the store commits many parts as one transaction', () => {
     expect(store.historyDepth).toBe(0);
   });
 
+  test('a refusing package edit can name its own reason', () => {
+    const pkg = fixture();
+    const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);
+    const result = store.transact((ctx) => {
+      ctx.applyPackage(() => {
+        throw new PackageEditRefusal('cannot number this paragraph', 'locked');
+      });
+    });
+    expect(result).toMatchObject({ ok: false, reason: 'locked' });
+    expect(store.package).toBe(pkg);
+  });
+
   test('any other throw from a package edit still escapes', () => {
     const pkg = fixture();
     const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);

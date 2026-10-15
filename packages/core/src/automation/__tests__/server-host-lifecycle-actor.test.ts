@@ -154,7 +154,7 @@ describe('insertInlinePicture under a collaboration actor', () => {
     if (failure?.status !== 'error') throw new Error('expected a refusal');
     expect(failure.error.code).toBe('transaction-refused');
     expect(failure.error.detail).toStartWith('package-changed');
-    expect(storeEditDiagnosticCode(failure.error.detail!)).toBe('edit.stale-target');
+    expect(storeEditDiagnosticCode(failure.error.detail!)).toBe('edit.internal-invariant');
     expect(store.currentPackage()).toBe(before);
     expect(port.revision()).toBe(revision);
   });

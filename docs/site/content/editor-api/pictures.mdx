@@ -78,8 +78,6 @@ When aspect locking applies, changing one dimension preserves the ratio. If aspe
 
 Newly inserted pictures need sync before resizing, loading, or deleting them. Edits can fail if the target is protected, unsupported, or contains pending revisions. The runtime's tracking mode does not support image insertion, removal, or formatting. A failed write batch applies none of its document changes. Earlier successful syncs remain committed.
 
-If the document changes while a batch commits, the runtime refuses the batch with `GeneralException`, and `error.debugInfo.innerError.code` is `edit.stale-target`. Read the document again, then run the batch again.
-
 For another picture variant, prepare supported PNG or JPEG bytes before insertion. This API does not expose cropping, rotation, replacement-by-URL, or floating-picture positioning methods.
 
 ## Next steps

@@ -184,18 +184,24 @@ test('a refused batch carries the engine reason behind its public code', async (
   }
 });
 
-test('a package that moved under a commit refuses as a stale target with a retry hint', () => {
-  const error = hostFailure(
-    {
-      code: 'transaction-refused',
-      message: 'the document changed while the batch was being committed',
-      detail: 'package-changed: picture allocation changed during the batch',
-    },
-    { target: 'document.body.insertInlinePictureFromBase64' }
-  );
-  expect(error.code).toBe('GeneralException');
-  expect(error.debugInfo.innerError).toMatchObject({ code: 'edit.stale-target' });
-  expect(error.debugInfo.innerError!.message).toContain('Read the document again');
-  // The engine detail never reaches the consumer.
-  expect(JSON.stringify(error.debugInfo)).not.toContain('allocation');
-});
+// A package edit that finds a package other than the one it planned against is an engine
+// defect, not a race: plan and commit run in one call. The server port appends the detail and
+// the browser port does not, so both shapes are checked.
+test.each(['package-changed: picture allocation changed during the batch', 'package-changed'])(
+  'a package-changed refusal (%s) reports an engine defect',
+  (detail) => {
+    const error = hostFailure(
+      {
+        code: 'transaction-refused',
+        message: 'the document store refused the transaction',
+        detail,
+      },
+      { target: 'document.body.insertInlinePictureFromBase64' }
+    );
+    expect(error.code).toBe('GeneralException');
+    expect(error.debugInfo.innerError).toMatchObject({ code: 'edit.internal-invariant' });
+    expect(error.debugInfo.innerError!.message).toContain('engine defect');
+    // The engine detail never reaches the consumer.
+    expect(JSON.stringify(error.debugInfo)).not.toContain('allocation');
+  }
+);
