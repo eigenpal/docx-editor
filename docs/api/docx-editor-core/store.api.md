@@ -1098,6 +1098,8 @@ export interface DefaultRecord {
 // @public
 export interface DeleteBookmarkOp {
     // (undocumented)
+    readonly keepFirst?: boolean;
+    // (undocumented)
     readonly name: string;
     // (undocumented)
     readonly op: 'deleteBookmark';

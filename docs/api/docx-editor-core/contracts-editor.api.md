@@ -807,6 +807,9 @@ export interface EditorBookmarkCommands {
     insertBookmark: {
         name: string;
     };
+    keepFirstBookmark: {
+        name: string;
+    };
     openBookmarkDialog: Record<never, never>;
     toggleBookmarks: Record<never, never>;
 }

@@ -15,7 +15,11 @@ export interface BookmarkChromeHost {
   readonly error?: (error: unknown) => void;
 }
 
-/** The surface's view of the mark options. */
+/**
+ * The surface's view of the mark options.
+ *
+ * @public
+ */
 export interface BookmarkMarkOptionsSource {
   readonly current: () => BookmarkMarkOptions;
   /** Name the repaint to run when the options change. One slot: a remount replaces it. */

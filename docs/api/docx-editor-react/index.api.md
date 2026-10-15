@@ -2990,6 +2990,7 @@ export interface UseBookmarksReturn {
     readonly goTo: (name: string) => ExecResult;
     readonly insert: (name: string) => ExecResult;
     readonly isWritable: boolean;
+    readonly keepFirst: (name: string) => ExecResult;
     readonly remove: (name: string) => ExecResult;
 }
 

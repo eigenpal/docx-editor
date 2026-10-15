@@ -243,6 +243,7 @@ export type {
   BookmarkMarkOptions,
   FontMeasurementState,
 } from './docx-editor-types.ts';
+export type { BookmarkMarkOptionsSource } from './bookmark-chrome.ts';
 // `DocxEditorConfig.fieldResults` takes it.
 export type { FieldResultsMode } from '../store/package/field-result-mode.ts';
 // `DocxEditorConfig.contentLockPolicy` takes it.

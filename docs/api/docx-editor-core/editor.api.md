@@ -118,6 +118,14 @@ export interface BookmarkMarkOptions {
 }
 
 // @public
+export interface BookmarkMarkOptionsSource {
+    // (undocumented)
+    readonly current: () => BookmarkMarkOptions;
+    readonly onChange: (repaint: (() => void) | null) => void;
+    readonly reportError: (error: unknown) => void;
+}
+
+// @public
 export type BookmarkSortOrder = 'name' | 'location';
 
 // @public
@@ -2501,10 +2509,7 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
-    readonly bookmarkMarks?: {
-        readonly current: () => BookmarkMarkOptions;
-        readonly onChange: (repaint: (() => void) | null) => void;
-    };
+    readonly bookmarkMarks?: BookmarkMarkOptionsSource;
     readonly collaborationModel?: CollaborationModuleContribution;
     readonly contentLockPolicy?: ContentLockPolicy;
     readonly defaultFontFamily?: string;
