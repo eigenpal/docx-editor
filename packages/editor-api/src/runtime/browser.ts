@@ -18,7 +18,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the DOM lib, which is what `__tests__/runtime-boundaries.test.ts` holds in place.
 
 import {
+  beginEditorPreview,
   createBrowserAutomationHost,
+  editorPreviewActive,
   reportAutomationException,
   reportAutomationRefusal,
   type DocxEditorInstance,
@@ -72,6 +74,13 @@ export function createBrowser(
       reportAutomationException(editor, error, trackedDuring(host, operations)),
     // The editor validates the handle at each batch: only its own open groups bind.
     historyGroups: { begin: (group) => host.beginHistoryGroupRun(group) },
+    // The editor forks and paints; the runtime records and replays. See `preview.ts`.
+    preview: {
+      begin: () => beginEditorPreview(editor),
+      active: () => editorPreviewActive(editor),
+      beginHistoryGroup: () => editor.beginHistoryGroup(),
+      undo: () => editor.exec({ type: 'undo' }).ok,
+    },
     ...(options.author === undefined ? {} : { author: options.author }),
     ...(options.revisionTextView === undefined
       ? {}

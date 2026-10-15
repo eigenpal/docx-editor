@@ -24,7 +24,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import type {
   AutomationBatchRequest,
-  AutomationCapabilities,
   AutomationHost,
   AutomationOperation,
 } from '@docx-editor.dev/core/automation';
@@ -46,7 +45,7 @@ import { TrackedObjects } from './tracked-objects.ts';
 /** What a context needs from the runtime that made it. */
 export interface RuntimeSession {
   readonly host: AutomationHost;
-  readonly capabilities: AutomationCapabilities;
+  readonly capabilities: DocumentCapabilities;
   /** Who a comment this runtime writes is recorded as, or absent when it may not write one. */
   readonly author?: string;
   /** Revision view used by standard Office-compatible text reads and searches. */

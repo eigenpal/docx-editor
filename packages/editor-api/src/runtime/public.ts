@@ -118,6 +118,12 @@ export type {
 } from './runtime.ts';
 export type { HistoryGroup, HistoryGroupOutcome } from '@docx-editor.dev/core/automation';
 export type {
+  CommitPreviewOptions,
+  DocumentPreview,
+  DocumentPreviewStatus,
+  PreviewCallback,
+} from './preview.ts';
+export type {
   CreateCollaborativeOptions,
   CreateServerOptions,
   ServerPaginationOptions,

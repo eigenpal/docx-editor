@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "The browser automation runtime can only write edits to the live document, so showing a proposed change in the page means writing it, which reaches collaboration peers and the undo history.",
+  "after": "runtime.preview(callback) runs the callback against a private fork of the current package and paints the fork over the live pages. The fork has no collaboration model and no shared history, so its operations never journal; its writes run under the live session's actor, so the ids it mints are the ids its commit mints. While the preview shows, local writes are refused, remote updates keep landing in the live session and mark the preview stale, and commit replays the recorded batches against the live session as one history group. A moved document refuses StaleDocument unless the commit rebases, and a rebase refuses when a replayed read answers differently.",
+  "reason": "No operation, snapshot, shared state, or protocol message changes. A commit produces the same operations as the equivalent run, in one shared undo item, and a replica without the change interoperates.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-preview.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-preview.test.ts"
+  ],
+  "changeset": "editor-api-preview",
+  "migration": null
+}

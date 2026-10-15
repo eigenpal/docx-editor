@@ -37,6 +37,38 @@ Use `insertText(text, 'Before' | 'After')` for insertion suggestions. Use `range
 
 The runtime's tracking setting does not change the browser editor UI mode. Read `document.changeTrackingMode` only after loading it. The mode persists across runs on that runtime. It does not change peers' tracking settings or save a document-wide tracking policy. Set `Off` explicitly only when your application intends permanent edits.
 
+## Preview a counter-proposal
+
+In the browser runtime, you can show a tracked replacement in the page before the user accepts it. Build it inside `runtime.preview()` instead of `runtime.run()`. The live document and collaboration peers see nothing until you call `commit()`:
+
+```ts
+const preview = await runtime.preview(async (context) => {
+  const matches = context.document.body.search('thirty (30) days', {
+    matchCase: true,
+  });
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose one deadline');
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  matches.items[0]!.insertText('forty-five (45) days', 'Replace');
+  await context.sync();
+});
+
+// The page shows the counter-proposal as a tracked change.
+preview.reveal();
+applyButton.onclick = async () => {
+  try {
+    await preview.commit({ rebase: true });
+  } catch (error) {
+    if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+    // Someone changed the clause. Read it again and preview again.
+  }
+};
+cancelButton.onclick = () => preview.discard();
+```
+
+`commit()` writes the tracked replacement as one undo step. It also keeps the tracking mode that the callback set on this runtime, as `run()` does. If a collaboration peer edits the document while the preview is open, `preview.status` becomes `stale`. With `rebase: true`, the commit applies the preview to the current document, and refuses with `StaleDocument` only if the edit changed the previewed clause. In suggesting mode, the preview and the commit write the same suggestions. For the full rules, see [Preview other wording before you write it](/docs/2.x/editor-api/runtime#preview-other-wording-before-you-write-it).
+
 ## Supported tracked edits
 
 `TrackMineOnly` supports these edits:

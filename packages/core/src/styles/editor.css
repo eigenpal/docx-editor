@@ -3070,7 +3070,7 @@ a.docx-hyperlink:focus-visible {
   position: relative;
   outline: none;
 }
-.docx-editor.dark .docx-paginated-surface .docx-page {
+.docx-editor.dark :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
   background: var(--doc-page-bg-rendered);
 }
 /* Paper is always white, whatever the screen theme. Without resetting the CONTENT
@@ -3085,7 +3085,7 @@ a.docx-hyperlink:focus-visible {
   .docx-editor.dark .docx-page-content [data-no-color-invert] {
     filter: none !important;
   }
-  .docx-paginated-surface .docx-page {
+  :is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
     background: #ffffff !important;
     color: #000000 !important;
     box-shadow: none !important;
@@ -3093,7 +3093,7 @@ a.docx-hyperlink:focus-visible {
     -webkit-print-color-adjust: exact;
   }
 }
-.docx-paginated-surface .docx-page {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-page {
   /* A rebuilt sheet must not invalidate style/layout/paint across hundreds of sibling pages. */
   contain: layout style paint;
   /* The TOKEN, not a literal. Dark mode sets `--doc-page-bg` to #ccc precisely so the
@@ -3112,7 +3112,7 @@ a.docx-hyperlink:focus-visible {
 }
 /* The caret and the TEXT highlight are the BROWSER's, so they follow real glyph shapes and
    per-line metrics instead of the uniform band a hand-drawn rectangle produces. */
-.docx-paginated-surface .docx-pages {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-pages {
   outline: none;
 }
 
@@ -3120,14 +3120,14 @@ a.docx-hyperlink:focus-visible {
  * between paragraphs and below the last one, not only over glyphs (where selectable
  * text already produces one). Anchored drawings live in sibling layers; inline
  * drawings opt back to the arrow on `.docx-drawing`. */
-.docx-paginated-surface .docx-page-content {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-page-content {
   cursor: text;
 }
 
 /* Inactive furniture: Word-like affordance that the band is enterable. Active band and
  * open-scope dimming live under `.docx-pages--hf-editing` so screen chrome never mutates
  * painted ink for print (print media resets opacity). */
-.docx-paginated-surface .docx-hf:not([data-docx-hf-active]),
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-hf:not([data-docx-hf-active]),
 .docx-pages .docx-hf:not([data-docx-hf-active]) {
   cursor: text;
 }
@@ -3368,13 +3368,13 @@ a.docx-hyperlink:focus-visible {
 /* The one highlight a native selection cannot express: a rectangle of table cells. Drawn on
    a sibling layer of the pages — never inside them, where the page painter would sweep it
    away and a keystroke could land in it. */
-.docx-paginated-surface .docx-selection-overlay {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-selection-overlay {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.docx-paginated-surface .docx-cell-selection-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-cell-selection-rect {
   background-color: var(--doc-cell-selection);
 }
 
@@ -3385,27 +3385,27 @@ a.docx-hyperlink:focus-visible {
  * that: the user's highlight did not change, only which element the browser thinks is
  * focused. A different colour here would read as a different KIND of selection.
  */
-.docx-paginated-surface .docx-retained-selection-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-retained-selection-rect {
   background-color: var(--doc-selection);
 }
 
 /* A native range has no glyph box for a paragraph mark or an empty line. */
-.docx-paginated-surface .docx-selection-mark-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-selection-mark-rect {
   background-color: var(--doc-selection);
 }
 
-.docx-paginated-surface .docx-remote-selection-rect {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-remote-selection-rect {
   background-color: color-mix(in srgb, var(--doc-remote-color, var(--doc-accent)) 28%, transparent);
   border-radius: 2px;
 }
 
-.docx-paginated-surface .docx-remote-caret {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-remote-caret {
   background-color: var(--doc-remote-color, var(--doc-accent));
   border-radius: 1px;
   box-shadow: 0 0 0 1px var(--doc-surface);
 }
 
-.docx-paginated-surface .docx-remote-caret-label {
+:is(.docx-paginated-surface, .docx-preview-surface) .docx-remote-caret-label {
   position: absolute;
   max-width: 180px;
   overflow: hidden;

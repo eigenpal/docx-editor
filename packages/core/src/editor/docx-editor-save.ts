@@ -1,4 +1,4 @@
-import { refreshWriteBlocked, setRefreshWriteGuard } from './refresh-write-guard.ts';
+import { refreshGuardSet, setRefreshWriteGuard } from './refresh-write-guard.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { editorError } from './docx-editor-support.ts';
 import { commitTextFormInput } from './surface-text-form-fields.ts';
@@ -81,7 +81,7 @@ function captureSurfaceSave<T>(
   assertLive();
   surface.refreshRefFieldResults();
   assertLive();
-  const guarded = refreshWriteBlocked(container);
+  const guarded = refreshGuardSet(container);
   setRefreshWriteGuard(container, true);
   try {
     return capture();

@@ -43,7 +43,9 @@ This maintenance command downloads the pinned npm tarball and verifies its integ
 
 ## DocxEditor additions
 
-Some public members have no Office.js equivalent, such as `RevisionCollection.resolve()` and `RevisionCollection.setAuthor()`. They are outside the manifest selection, the reports, and the conformance checks, so no score counts them. The public [Office.js API page](../../../docs/site/content/editor-api/office-js-api.mdx) lists them under common DocxEditor additions. Add a new addition there, never to `manifest.symbols`. If an addition fills a gap where Office.js has no member for the operation, also record the decision as an `omissions` entry, as `Word.Body#bookmarks` and `Word.Paragraph#readingOrder` do.
+Some public members have no Office.js equivalent, such as `RevisionCollection.resolve()`, `RevisionCollection.setAuthor()`, and the browser runtime's `preview()`. They are outside the manifest selection, the reports, and the conformance checks, so no score counts them. The public [Office.js API page](../../../docs/site/content/editor-api/office-js-api.mdx) lists them under common DocxEditor additions. Add a new addition there, never to `manifest.symbols`. If an addition fills a gap where Office.js has no member for the operation, also record the decision as an `omissions` entry, as `Word.Body#bookmarks` and `Word.Paragraph#readingOrder` do.
+
+Runtime infrastructure stays outside the editing scope too. `runtime.run(options, batch)` and `runtime.preview(batch)` belong to host setup, like host creation. Edits inside a preview callback are ordinary Office.js calls, and the report counts them the same as edits inside `run()`. A preview supports a subset of those edits; it refuses the rest with `NotSupported` rather than showing them differently from how they commit.
 
 ## Selected subset conformance
 

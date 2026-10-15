@@ -122,6 +122,85 @@ One undo reverts the rejection, the replacement, and the comment together. One r
 
 For the boundary rules that close a group, such as undo and ungrouped writes, see [Group a review decision](/docs/2.x/core#group-a-review-decision).
 
+### Preview other wording before you write it
+
+A review UI often needs to show a proposed change in the page before the user applies or cancels it. To show it, call `runtime.preview(callback)`. The callback gets an ordinary request context. Its reads and writes address a private copy of the document, and the page shows that copy over the live pages when the callback finishes:
+
+```ts
+// `runtime` is `DocxEditor.createBrowser(editor, { author: 'Reviewer' })`.
+const preview = await runtime.preview(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const range = context.document.body.search('thirty (30) days of receipt').getFirst();
+  range.insertText('forty-five (45) days of receipt', 'Replace');
+  await context.sync();
+});
+preview.reveal(); // Scroll to the first changed paragraph.
+
+// Later, when the user decides:
+if (accepted) await preview.commit();
+else preview.discard();
+```
+
+The live document, its undo history, and collaboration peers see nothing until `commit()`. `commit()` writes the preview as one undo step and ends it. `discard()` ends it without writing. The page then shows the live document again, with its selection, scroll position, and focus as they were.
+
+Build the preview from data you already have. The editor stays editable while the callback runs, so the callback must not wait for a model or a server. Ask the model first, then preview its answer:
+
+```ts
+// Do the slow work before the preview, not inside it.
+const proposal = await model.propose(clauseText);
+const preview = await runtime.preview(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const range = context.document.body.search(proposal.find).getFirst();
+  range.insertText(proposal.replace, 'Replace');
+  await context.sync();
+});
+```
+
+A preview follows these rules:
+
+- **One preview at a time.** A second `preview()` on the same editor, from any runtime, rejects with `PreviewActive`.
+- **The editor refuses document writes while a preview shows.** `editor.exec()` edits, typing, undo, and redo are refused, and `snapshot().editable` is `false`. A write from any runtime's `run()` rejects with `PreviewActive`. Zoom, paragraph marks, the review pane toggle, and selection keep working.
+- **Reads.** Reads from `run()` see the live document. Reads inside the preview callback see the preview.
+- **The review rail stays on the live document.** Review cards stay anchored to the live text, which is what a commit changes. Text highlights from `editor.setHighlights()` are hidden while the preview shows and come back when it ends.
+- **Suggesting mode.** If the editor is in suggesting mode, a write the callback makes with tracking off becomes a suggestion attributed to the editor's author. The preview and the commit write the same suggestion, as `run()` does.
+- **Status.** `preview.status` is `active`, `stale`, or `ended`. It becomes `stale` when the live document moves after the preview began, for example when a collaboration peer edits it. It becomes `ended` after `commit()` or `discard()`, when the runtime is disposed, or when the editor loads another document, detaches, or moves to another element. Subscribe with `preview.onStatusChanged(listener)`.
+- **Commit never re-runs the callback.** It replays the batches the callback sent, in order, inside one editor history group. Every read in the replay must answer what it answered in the preview, so a replay never edits text the preview did not see.
+- **Tracking mode.** A tracking mode the callback sets stays set on the runtime after `commit()`, as it does after `run()`. `discard()` discards it with the preview.
+
+If the live document moved, `commit()` rejects with `StaleDocument`, writes nothing, and keeps the preview open. To apply the preview to the current document, call `commit({ rebase: true })`. The rebase refuses with `StaleDocument`, and writes nothing, if the move changed text the preview read or wrote:
+
+```ts
+try {
+  await preview.commit();
+} catch (error) {
+  if (!isDocxEditorError(error) || error.code !== 'StaleDocument') throw error;
+  // Someone edited the document. Apply the preview to the current text,
+  // unless the edit touched the previewed clause.
+  await preview.commit({ rebase: true });
+}
+```
+
+A commit that fails during the replay undoes what it replayed as one step and ends the preview. If that undo fails too, the error is `GeneralException` with target `preview.rollback`. A commit after the preview ended rejects with `PreviewEnded`.
+
+`preview()` rejects, and shows nothing, in these cases. `debugInfo.innerError.code` names the reason:
+
+| Case | Error | `innerError.code` |
+| --- | --- | --- |
+| Server or collaborative runtime | `NotSupported`, target `preview` | None |
+| Editor open for viewing | `NotSupported`, target `preview` | `edit.read-only` |
+| External refresh in progress | `NotSupported`, target `preview` | `edit.refresh-in-progress` |
+| Input method composition in progress | `NotSupported`, target `preview` | `edit.preview-composing` |
+| Another preview is open on the editor | `PreviewActive` | `edit.preview-active` |
+| No document is mounted | `DocumentUnavailable` | None |
+| A write the preview cannot show | `NotSupported` from `context.sync()` | `edit.preview-unsupported` |
+| The callback throws | The same error | Unchanged |
+
+A preview shows text edits, paragraph inserts, splits, and deletions, font, paragraph, and style formatting, comments, line breaks, and tracked-change proposals and decisions. It refuses tables, pictures, shapes, fields, lists, hyperlinks, content controls, notes, headers and footers, page setup, page and section breaks, and selection changes. Use `runtime.capabilities.preview` to check whether a runtime offers previews.
+
+A preview paints with a second, view-only copy of the editor's pages. The first screen shows at once, and the rest lays out in short tasks, as the editor opens a long document. While the preview shows, it uses about as much memory as the open document, and it releases that memory when it ends.
+
+`preview()` is DocxEditor infrastructure. Office.js has no preview, and the edits inside the callback stay ordinary Office.js calls.
+
 ## Configure a host
 
 | Option | Hosts | Meaning |
@@ -146,6 +225,7 @@ Read `runtime.capabilities` or `context.capabilities` without calling `load()`. 
 | `save` | Yes | No |
 | `events` | Yes | Yes |
 | `selection`, `scrolling`, `layout` | No | Yes |
+| `preview` | No | Yes |
 
 Explicit server pagination does not give a server a browser selection or layout surface. The `events` flag does not provide a public event subscription API on the runtime. Capabilities do not guarantee write permission. Browser review writes also require the Pro review module and an editable document. Handle errors from the call or `sync()`.
 

@@ -82,6 +82,13 @@ export type DocxEditorErrorCode =
   | 'StaleDocument'
   /** The host is live but holds no document right now — an editor between mounts. */
   | 'DocumentUnavailable'
+  /**
+   * A preview is open over the editor, so it refuses this write or a second preview. Commit or
+   * discard the open preview first. Browser runtime only.
+   */
+  | 'PreviewActive'
+  /** The preview has ended — committed, discarded, or replaced by a remount — so it cannot commit. */
+  | 'PreviewEnded'
   /** The document refused the change, or answered something this runtime cannot use. */
   | 'GeneralException';
 
@@ -117,6 +124,9 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the document or a range changed after this context read it, so nothing was applied. ' +
     'The change can come from another writer or from an earlier sync of this context.',
   DocumentUnavailable: 'the document is not available right now.',
+  PreviewActive:
+    'a preview is open over the document. Commit or discard it before writing or opening another.',
+  PreviewEnded: 'the preview has ended. Start another preview to show other wording.',
   GeneralException: 'the document could not complete the request.',
 });
 

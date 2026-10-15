@@ -14,10 +14,11 @@ A declaration or enum value does not guarantee runtime support for every documen
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
 | `DocxEditor`, `DocxEditorNamespace` | `createServer`, `createCollaborative`; browser entry adds `createBrowser` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
-| `DocxEditorRuntime`, `DocxEditorServerRuntime` | `capabilities`, the three `run` overloads (callback, objects and callback, options and callback), `dispose`; server adds `save` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `DocxEditorRuntime`, `DocxEditorServerRuntime` | `capabilities`, the three `run` overloads (callback, objects and callback, options and callback), `preview` (browser runtime only), `dispose`; server adds `save` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `DocumentPreview`, `DocumentPreviewStatus`, `PreviewCallback`, `CommitPreviewOptions` | `status` (`active`, `stale`, `ended`), `commit` with optional `rebase`, `discard`, `reveal`, `onStatusChanged` | [Preview other wording before you write it](/docs/2.x/editor-api/runtime#preview-other-wording-before-you-write-it) |
 | `RunOptions`, `HistoryGroup`, `HistoryGroupOutcome` | `historyGroup` (browser runtime only), `previousObjects`; the editor history group handle's `state`, `lastOutcome`, and `end` | [Join an editor history group](/docs/2.x/editor-api/runtime#join-an-editor-history-group) |
 | `CreateServerOptions`, `CreateCollaborativeOptions`, `CreateBrowserOptions` | Author, revision view, host-specific parsing, modules, and pagination | [Runtime and setup](/docs/2.x/editor-api/runtime) |
-| `DocumentCapabilities` | `document`, `save`, `events`, `selection`, `scrolling`, `layout` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `DocumentCapabilities` | `document`, `save`, `events`, `selection`, `scrolling`, `layout`, `preview` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
 | `DocumentLimits`, `DocumentZipLimits`, `DocumentXmlLimits`, `EditorModule`, `RuntimeDiagnostic` | Input budgets, DOM-free module contributions, and the anonymous diagnostics a module with `onDiagnostic` receives | [Runtime and setup](/docs/2.x/editor-api/runtime) |
 | `ServerPaginationOptions` | `measurer`, optional `producer` | [Fields and pagination](/docs/2.x/editor-api/fields) |
 | `RequestContext`, `RunCallback` | `document`, `capabilities`, `trackedObjects`, `sync` and async callback result | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
@@ -99,7 +100,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 
 ## Distinguish host extensions from Office.js compatibility
 
-Host factories, runtime capabilities, input budgets, and collaboration setup are DocxEditor infrastructure. They do not represent Microsoft Office add-in APIs. Review item ranges, body-scoped bookmarks and revisions, document notes, typed control values, and nullable review dates include documented differences.
+Host factories, runtime capabilities, previews, input budgets, and collaboration setup are DocxEditor infrastructure. They do not represent Microsoft Office add-in APIs. Review item ranges, body-scoped bookmarks and revisions, document notes, typed control values, and nullable review dates include documented differences.
 
 ## External document refresh
 

@@ -403,6 +403,7 @@ export interface DocumentCapabilities {
     readonly document: boolean;
     readonly events: boolean;
     readonly layout: boolean;
+    readonly preview: boolean;
     readonly save: boolean;
     readonly scrolling: boolean;
     readonly selection: boolean;
@@ -415,6 +416,17 @@ export interface DocumentLimits {
     readonly xml?: DocumentXmlLimits;
     readonly zip?: DocumentZipLimits;
 }
+
+// @public
+export interface DocumentPreview {
+    commit(): Promise<void>;
+    discard(): void;
+    onStatusChange(listener: (status: DocumentPreviewStatus) => void): () => void;
+    readonly status: DocumentPreviewStatus;
+}
+
+// @public
+export type DocumentPreviewStatus = 'active' | 'stale' | 'ended';
 
 // @public
 export class DocumentProperties extends ModelObject {
@@ -527,6 +539,13 @@ export type DocxEditorErrorCode =
 | 'StaleDocument'
 /** The host is live but holds no document right now — an editor between mounts. */
 | 'DocumentUnavailable'
+/**
+* A preview is open over the editor, so it refuses this write or a second preview. Commit or
+* discard the open preview first. Browser runtime only.
+*/
+| 'PreviewActive'
+/** The preview has ended — committed, discarded, or replaced by a remount — so it cannot commit. */
+| 'PreviewEnded'
 /** The document refused the change, or answered something this runtime cannot use. */
 | 'GeneralException';
 
@@ -557,6 +576,7 @@ export interface DocxEditorNamespace {
 export interface DocxEditorRuntime {
     readonly capabilities: DocumentCapabilities;
     dispose(): void;
+    preview(callback: PreviewCallback): Promise<DocumentPreview>;
     run<T>(callback: RunCallback<T>): Promise<T>;
     run<T>(object: ClientObject | readonly ClientObject[], callback: RunCallback<T>): Promise<T>;
     run<T>(options: RunOptions, callback: RunCallback<T>): Promise<T>;
@@ -1158,6 +1178,9 @@ export type ParagraphInsertTextLocation = Extract<RangeInsertTextLocation, 'Repl
 
 // @public
 export type ParagraphReadingOrder = 'LeftToRight' | 'RightToLeft';
+
+// @public
+export type PreviewCallback = (context: RequestContext) => Promise<void>;
 
 // @public
 class Range_2 extends ModelObject implements PromisedItem {

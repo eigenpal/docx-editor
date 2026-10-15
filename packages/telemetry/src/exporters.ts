@@ -195,6 +195,8 @@ const EXPECTED_REFUSALS: ReadonlySet<string> = new Set([
   'edit.read-only',
   'edit.protected-content',
   'edit.refresh-in-progress',
+  'edit.preview-active',
+  'edit.preview-composing',
   'edit.collaboration-not-ready',
 ]);
 

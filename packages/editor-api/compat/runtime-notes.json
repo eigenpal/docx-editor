@@ -5,7 +5,7 @@
   },
   "Word.run": {
     "status": "different",
-    "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run. runtime.run(options, batch) is a DocxEditor extension with no Office.js equivalent: historyGroup joins an editor history group on the browser runtime only, and server and collaborative runtimes refuse it with NotSupported."
+    "notes": "Create a server or browser runtime, then use runtime.run(batch). The package does not export Word.run. runtime.run(options, batch) is a DocxEditor extension with no Office.js equivalent: historyGroup joins an editor history group on the browser runtime only, and server and collaborative runtimes refuse it with NotSupported. runtime.preview(batch) is also a DocxEditor extension: it runs the batch against a private copy shown in the page, refuses unsupported writes with NotSupported, and commits by replaying the recorded batches as one undo step. A moved document refuses with StaleDocument unless commit({ rebase: true }) is used, which still refuses when replayed reads answer differently."
   },
   "Word.SearchOptions#ignorePunct": {
     "status": "partial",

@@ -19,7 +19,7 @@ import { createTextboxEditing } from './surface-textbox-editing.ts';
 import { createCaretComplexScriptResolver } from './surface-complex-script.ts';
 import { setSurfaceAccessibleLabel } from './surface-accessibility.ts';
 import { refreshWriteBlocked, registerRefreshComposition } from './refresh-write-guard.ts';
-import { REFRESH_WRITE_REFUSAL, UNEXPLAINED_WRITE_REFUSAL } from './refresh-write-guard.ts';
+import { UNEXPLAINED_WRITE_REFUSAL, writeBlockReason } from './refresh-write-guard.ts';
 import { createLegacyDropdownInteraction } from './surface-legacy-dropdown.ts';
 import { listSeparatorEnter } from './list-separator-enter.ts';
 import { browserInputPending } from './surface-input-pending.ts';
@@ -95,7 +95,7 @@ import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/c
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
-import { isRevisionCapable, isTrackedEdit } from './surface-tracked-ops.ts';
+import { attributeTrackedOps, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import { openTreeSession, type TreeDocxSession } from '@docx-editor.dev/core/binding';
 import {
@@ -164,7 +164,6 @@ import { bindSurfaceViewport, type SurfaceViewportBinding } from './surface-view
 import { createSurfaceHostListeners } from './surface-host-listeners.ts';
 import { hostTimers, hostWindowOf } from './host-realm.ts';
 import { createSurfaceHosting } from './surface-host-move.ts';
-import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { reviewItemsAtSelection } from '../store/store/review-items.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { surfaceSelectionMarkRects } from './surface-selection-ops.ts';
@@ -2894,7 +2893,7 @@ export function mountPaginatedSurface(
     // The PROTECTION write is document-wide, so neither the view nor where the caret happens
     // to sit has anything to say about it. Without the second exemption a caret parked in a
     // table of contents refused it with a reason about the table of contents.
-    if (refreshWriteBlocked(container)) return REFRESH_WRITE_REFUSAL;
+    if (refreshWriteBlocked(container)) return writeBlockReason(container);
     const protectionWrite = isDocumentProtectionBatch(ops);
     if (editingMode === 'view' && !protectionWrite) return VIEWING_REFUSAL;
     if (
@@ -2975,66 +2974,9 @@ export function mountPaginatedSurface(
    * tracked text — a silent rewrite of another author's pending insertion (#495).
    */
 
-  /**
-   * Whether this op's tracked form is a PROPERTY CHANGE record.
-   *
-   * Asked because `w:doNotTrackFormatting` (§17.15.1.50) turns exactly those off: a document
-   * may ask for its formatting changes to be applied without a `w:rPrChange` while its text
-   * edits stay tracked. That is a producer instruction, so it gates the WRITE and never how an
-   * existing record is read.
-   *
-   * Read from the STORE's own table rather than restated here — the store shares one `@w:id`
-   * per wrapper name for the same set, and two lists of it would drift.
-   */
-  const isPropertyChangeOp = (op: TreeDocOp['op']): boolean =>
-    PROPERTY_CHANGE_WRAPPER_OF_OP.has(op);
-
   /** Whether this document wants its formatting changes recorded at all. */
   const formattingTracked = (): boolean =>
     markupSettings.current().trackFormatting && !session.trackingSettings().doNotTrackFormatting;
-  function attributeTrackedOps(
-    ops: readonly TreeDocOp[],
-    revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput,
-    trackFormatting: boolean
-  ): TreeDocOp[] {
-    return ops.flatMap((op): TreeDocOp[] => {
-      // Already-attributed ops pass through untouched — a caller that named an author keeps it.
-      if (isRevisionCapable(op)) {
-        if (!trackFormatting && isPropertyChangeOp(op.op)) return [op];
-        return [op.revision !== undefined ? op : { ...op, revision }];
-      }
-      // A SPLIT becomes a real split plus a proposed mark on the first paragraph: the text
-      // is already in two paragraphs, and what is being proposed is the break between them.
-      // §17.13.5 puts the new mark on the FIRST paragraph, and rejecting it runs the two
-      // back together.
-      // Paste cuts its pasted text into paragraphs with ONE op, so the proposal rides on the
-      // op itself: the store mints the paragraphs, so only the store can address their marks.
-      if (op.op === 'splitParagraphMany') return [{ ...op, revision }];
-      if (op.op === 'splitParagraph') {
-        return [
-          op,
-          {
-            op: 'setParagraphMarkRevision' as const,
-            paragraphId: op.paragraphId,
-            kind: 'ins' as const,
-            revision,
-          },
-        ];
-      }
-      // A JOIN becomes a proposal to remove the mark BETWEEN the paragraphs, which belongs
-      // to the first — and the paragraphs stay where they are. Joining them outright made
-      // rejecting restore the words but not the boundary, so the original was unrecoverable.
-      if (op.op === 'joinParagraphs') {
-        // Addressed by the SECOND paragraph: the mark being proposed away belongs to
-        // whichever paragraph precedes it, and a multi-paragraph delete emits a join per
-        // paragraph with `firstId` pinned to the group head — so naming the first stamped
-        // one paragraph N times and left the rest untouched.
-        return [{ op: 'proposeParagraphMerge' as const, paragraphId: op.secondId, revision }];
-      }
-      return [op];
-    });
-  }
-
   /**
    * The author this edit will be attributed to, or undefined when it lands untracked.
    *
@@ -3101,7 +3043,7 @@ export function mountPaginatedSurface(
 
   /** The refusal (the refresh, reported, when the guard skips `run`), or null: landed or no-op. */
   function commit(...args: Parameters<typeof commitNow>): string | null {
-    if (refreshWriteBlocked(container)) return refuse(REFRESH_WRITE_REFUSAL);
+    if (refreshWriteBlocked(container)) return refuse(writeBlockReason(container));
     const finish = beginSurfaceCommit(container);
     try {
       return commitNow(...args);

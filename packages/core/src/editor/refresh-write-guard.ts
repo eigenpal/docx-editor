@@ -7,16 +7,50 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 export const REFRESH_WRITE_REFUSAL = 'An external document refresh is in progress.';
 /** What the surface records for a write that refused without saying why. */
 export const UNEXPLAINED_WRITE_REFUSAL = 'rejected';
+/** Why every write is refused while a preview of other wording is open over the document. */
+export const PREVIEW_WRITE_REFUSAL = 'A preview is open. Commit or discard it before editing.';
 
 const guarded = new WeakSet<HTMLElement>();
+const previewing = new WeakSet<HTMLElement>();
 const compositions = new WeakMap<PaginatedSurface, () => boolean>();
-export const refreshWriteBlocked = (container: HTMLElement): boolean => guarded.has(container);
+/** Whether any guard refuses writes to the editor in `container`: a refresh or a preview. */
+export const refreshWriteBlocked = (container: HTMLElement): boolean =>
+  guarded.has(container) || previewing.has(container);
+/** Whether the refresh guard itself is set, ignoring a preview. Save restores exactly this. */
+export const refreshGuardSet = (container: HTMLElement): boolean => guarded.has(container);
+/** The refusal sentence for a blocked container. The refresh wins when both guards are set. */
+export const writeBlockReason = (container: HTMLElement): string =>
+  !guarded.has(container) && previewing.has(container)
+    ? PREVIEW_WRITE_REFUSAL
+    : REFRESH_WRITE_REFUSAL;
 export function setRefreshWriteGuard(container: HTMLElement, blocked: boolean): void {
   if (blocked) guarded.add(container);
   else guarded.delete(container);
+}
+/** Refuse every write to the editor in `container` while a preview is open over it. */
+export function setPreviewWriteGuard(container: HTMLElement, blocked: boolean): void {
+  if (blocked) previewing.add(container);
+  else previewing.delete(container);
 }
 export function registerRefreshComposition(surface: PaginatedSurface, read: () => boolean): void {
   compositions.set(surface, read);
 }
 export const refreshCompositionActive = (surface: PaginatedSurface): boolean =>
   compositions.get(surface)?.() ?? false;
+
+/** Commands that change neither the document nor its history: a preview leaves them working. */
+const PREVIEW_READ_ONLY_COMMANDS: ReadonlySet<string> = new Set([
+  'toggleReviewPane',
+  'toggleParagraphMarks',
+  'selectAll',
+  'setSelection',
+  'copyFormatting',
+]);
+/** Whether a preview, and nothing else, blocks `container`, and `command` writes nothing. */
+export const previewAllows = (
+  container: HTMLElement,
+  command: { readonly type: string }
+): boolean =>
+  !guarded.has(container) &&
+  previewing.has(container) &&
+  PREVIEW_READ_ONLY_COMMANDS.has(command.type);

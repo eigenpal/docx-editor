@@ -153,6 +153,30 @@ try {
 
 This option is DocxEditor infrastructure with no Office.js equivalent. Server and collaborative runtimes refuse it with `NotSupported`. A closed handle, or a handle from another editor, refuses with `InvalidArgument` and target `historyGroup` before the callback runs, and nothing is written. The whole run is one write of the group: after it finishes, `decision.lastOutcome` is `split` if any of its syncs split the group. Do not reuse a handle after `end()`; begin a new one.
 
+### Preview a change before the user accepts it
+
+In the browser runtime, `runtime.preview(callback)` shows the edits of a callback in the page without writing them. The callback uses the same Office.js calls as `run()`. Its reads see the preview, so write the callback as you would write the final edit. Call the model before the preview, not inside it: the editor stays editable while the callback runs.
+
+```ts
+const proposal = await model.propose(clauseText);
+const preview = await runtime.preview(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const ranges = context.document.body.search(proposal.find, {
+    matchCase: true,
+  });
+  ranges.load('items');
+  await context.sync();
+  if (ranges.items.length !== 1) throw new Error('Choose one deadline.');
+  ranges.items[0]!.insertText(proposal.replace, 'Replace');
+  await context.sync();
+});
+preview.reveal();
+// Keep the preview, not its proxies. Decide later:
+await preview.commit({ rebase: true }); // or preview.discard()
+```
+
+`commit()` replays the recorded batches as one undo step; it never runs the callback again. Every replayed read must answer what it answered in the preview. If the live document moved after the preview began, `commit()` refuses with `StaleDocument`, writes nothing, and keeps the preview. `commit({ rebase: true })` applies it to the current document and refuses only when the move changed text the preview read or wrote. On that refusal, read again and build a new preview; never replay the model's old edit. While a preview shows, the editor refuses document writes, and other runs refuse writes with `PreviewActive`. A preview refuses writes it cannot show, such as tables and pictures, with `NotSupported`. Server and collaborative runtimes refuse `preview()` with `NotSupported`. This method is DocxEditor infrastructure with no Office.js equivalent.
+
 ## Keep proxy lifetimes clear
 
 Keep document proxies within their `runtime.run()` callback. Return plain text or structured snapshots to the model, not `Range` or `Paragraph` objects. Do not retain a proxy in a job record or reuse it after its run finishes. Explicit tracked-object adoption exists for advanced cases; fresh reads are simpler for background workers.

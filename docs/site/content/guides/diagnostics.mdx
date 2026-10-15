@@ -157,6 +157,9 @@ Codes are stable. New codes can be added, but existing codes are never renamed. 
 | <a id="edit-invalid-argument" />`edit.invalid-argument` | The command arguments are not valid for this target. Check the command type and its fields. |
 | <a id="edit-resource-limit" />`edit.resource-limit` | The edit would exceed a size or nesting limit. Split the change into smaller edits. |
 | <a id="edit-refresh-in-progress" />`edit.refresh-in-progress` | An external document refresh is in progress. Retry the edit after the refresh completes. |
+| <a id="edit-preview-active" />`edit.preview-active` | A preview is open over the document, so the editor refuses writes and a second preview. Commit or discard the open preview, then retry. |
+| <a id="edit-preview-unsupported" />`edit.preview-unsupported` | A preview cannot show this operation, so nothing was shown. Write it with run() after the preview, or leave it out of the preview. |
+| <a id="edit-preview-composing" />`edit.preview-composing` | An input method composition is in progress, so no preview began. Retry after the composition ends. |
 | <a id="edit-collaboration-not-ready" />`edit.collaboration-not-ready` | The collaboration session is not ready to replicate edits, so this one was refused. Wait for the ready status, then retry; a destroyed session needs a rejoin. |
 | <a id="edit-collaboration-text-limit" />`edit.collaboration-text-limit` | One edit inserted more text than a collaboration session accepts at once. Insert the text in smaller parts. |
 | <a id="edit-internal-invariant" />`edit.internal-invariant` | The editor refused an edit to protect the document structure. This is an engine defect: report the code with the engine version. |

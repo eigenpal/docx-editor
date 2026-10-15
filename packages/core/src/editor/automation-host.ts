@@ -52,6 +52,7 @@ import {
   editorOwnsOpenHistoryGroup,
 } from './editor-history-group-registry.ts';
 import type { AutomationHistoryFrames } from './editor-history-groups.ts';
+import { editorPreviewActive, PREVIEW_WRITE_REFUSAL } from './editor-preview.ts';
 
 /**
  * One automation run inside a history group: every batch it executes is a frame of the
@@ -289,6 +290,8 @@ function sessionPort(
       requiresReview = false
     ): AutomationPortApplyResult {
       sync();
+      // A preview over the editor refuses every write until it is committed or discarded.
+      if (editorPreviewActive(editor)) return { ok: false, reason: PREVIEW_WRITE_REFUSAL };
       const surface = editor.surface;
       if (!surface) return { ok: false, reason: 'no-document' };
       // THROUGH THE SURFACE, NOT THE SESSION. `applyAutomationOps` is one gated transaction:
@@ -310,6 +313,7 @@ function sessionPort(
     },
     applyLifecycle(op: TreeDocOp): AutomationPortApplyResult {
       sync();
+      if (editorPreviewActive(editor)) return { ok: false, reason: PREVIEW_WRITE_REFUSAL };
       const surface = editor.surface;
       if (!surface) return { ok: false, reason: 'no-document' };
       // THE SAME SURFACE PATH. `applyTreeOps` routes a solitary lifecycle op to the package
@@ -323,6 +327,7 @@ function sessionPort(
       const surface = editor.surface;
       const session = sync();
       if (!surface || !session) return { ok: false, reason: 'no-document' };
+      if (editorPreviewActive(editor)) return { ok: false, reason: PREVIEW_WRITE_REFUSAL };
       if (writes.length === 0) return { ok: true, changed: false };
       // THE BODY'S COMMENTS, for as long as the session's comment lane is the body store's: the
       // scope is carried so this refuses a story it cannot write rather than silently commenting
@@ -400,6 +405,7 @@ function sessionPort(
       const surface = editor.surface;
       const live = sync();
       if (!surface || !live) return { ok: false, reason: 'no-document' };
+      if (editorPreviewActive(editor)) return { ok: false, reason: PREVIEW_WRITE_REFUSAL };
       // THE BODY's store, for as long as the session's payload lane is the body store's: the
       // scope is carried so this refuses a story it cannot write rather than quietly authoring
       // the node somewhere else.

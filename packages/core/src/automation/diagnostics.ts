@@ -86,6 +86,9 @@ type HostRejectionToken =
   | 'table-insert-refused'
   | 'table-of-contents-refused'
   | 'refresh-in-progress'
+  | 'preview-active'
+  | 'preview-operation-unsupported'
+  | 'preview-composition-active'
   | 'collaboration-session-not-ready'
   | 'collaboration-session-not-attached'
   | 'collaboration-session-destroyed'
@@ -182,6 +185,9 @@ const STORE_EDIT_CODES: Readonly<
   'table-insert-refused': 'edit.table-insert-refused',
   'table-of-contents-refused': 'edit.table-of-contents-refused',
   'refresh-in-progress': 'edit.refresh-in-progress',
+  'preview-active': 'edit.preview-active',
+  'preview-operation-unsupported': 'edit.preview-unsupported',
+  'preview-composition-active': 'edit.preview-composing',
   'collaboration-session-not-ready': 'edit.collaboration-not-ready',
   'collaboration-session-not-attached': 'edit.collaboration-not-ready',
   'collaboration-session-destroyed': 'edit.collaboration-not-ready',

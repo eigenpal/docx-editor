@@ -102,6 +102,7 @@ These common members extend the Office.js-compatible subset.
 | `Paragraph.uniqueLocalId` | Reads the paragraph identity for the active runtime. |
 | `Paragraph.readingOrder` | Sets and reads the direction the paragraph reads in. Office.js has no paragraph direction member. |
 | `getReviewItemRevisions()`, `getReviewItemRange()`, and `getReviewItemRangeOrNullObject()` | Return the changes a review item `key` names, or the range it covers, so a review panel can act on the same item through the object model. Office.js has no review queue. |
+| `DocxEditorRuntime.preview()` | Shows the edits of a callback in the page without writing them, then commits them as one undo step or discards them. Browser runtime only. Office.js has no preview. |
 
 `Body.bookmarks` and `Body.revisions` only cover that body's story. They do not combine the main body, headers, footers, and notes.
 

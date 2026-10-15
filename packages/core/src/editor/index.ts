@@ -252,6 +252,13 @@ export {
   type BrowserAutomationHost,
   type HistoryGroupRun,
 } from './automation-host.ts';
+// The fork a browser automation preview paints from. Internal to the editor-api runtime.
+export {
+  beginEditorPreview,
+  editorPreviewActive,
+  type EditorPreviewFork,
+  type EditorPreviewRefusal,
+} from './editor-preview.ts';
 export { reportAutomationException, reportAutomationRefusal } from './editor-diagnostics.ts';
 // The capability seam: what `createDocxEditor({ modules })` accepts and what a
 // capability package (the pro review module) implements.

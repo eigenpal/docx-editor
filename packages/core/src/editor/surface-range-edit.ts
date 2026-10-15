@@ -43,7 +43,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
-import { trackedInsertionLanding } from '../store/store/tree-op-tracked-adjacency.ts';
+import { trackedReplacementLanding } from './surface-tracked-ops.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import { findContentControl } from '../store/store/tree-op-nodes.ts';
@@ -340,20 +340,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     if (!paragraph || paragraph.kind !== 'paragraph') {
       return positionPastDeletion(deps.layout(), to).offset;
     }
-    const struck = { start: from.offset, end: to.offset };
-    const { past, landing } = trackedInsertionLanding(
-      paragraph,
-      struck,
-      to.offset,
-      author,
-      deps.trackedDate()
-    );
-    const retracted = retractedLengthOf(paragraph, from.offset, past, author);
-    // NOTHING STRUCK, nothing to land after: a zero-width range, or one covering only this
-    // author's own pending insertion, which retracts and writes no strike at all. The store
-    // then places at the aim, and so must this.
-    const strikes = past - from.offset > retracted;
-    return (strikes ? landing : past) - retracted;
+    return trackedReplacementLanding(paragraph, from.offset, to.offset, author, deps.trackedDate());
   }
 
   /**
