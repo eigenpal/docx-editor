@@ -121,7 +121,7 @@ Lookups by name search the main text first, then headers, footers, and notes. `g
 
 `Range.getBookmarks` answers a bookmark when it shares text with the range. A point bookmark counts when it is inside the range or at its start. An empty range answers the bookmark around it. Pass `includeAdjacent` to add bookmarks that only touch the range, and `includeHidden` to add names that start with an underscore.
 
-If you add a name that the same story uses, the bookmark moves. If another story uses the name, `insertBookmark` fails with `NotSupported`; delete the bookmark there first. Bookmarks are not revisions, so with `TrackMineOnly` the bookmark is written directly.
+If you add a name that the same story uses, the bookmark moves. If another story uses the name, `insertBookmark` moves the bookmark from that story in the same sync. Bookmarks are not revisions, so with `TrackMineOnly` the bookmark is written directly.
 
 ## Select a range in the browser
 

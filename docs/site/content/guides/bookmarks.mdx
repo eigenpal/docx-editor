@@ -26,19 +26,21 @@ The marks are a view setting. They do not change the document, its undo history,
 
 ## How editing treats bookmarks
 
-- Text you type at the start of a bookmark becomes part of it.
-- Text you type at the end of a bookmark stays outside it.
+- Text you type or paste at the start of a bookmark becomes part of it. A line break at the start also goes inside.
+- Text you type or paste at the end of a bookmark stays outside it. A line break or a new paragraph at the end also stays outside.
 - Text you type at a point bookmark goes after the point.
-- Deleting all of a bookmark's text removes the bookmark. Deleting part of it keeps the bookmark around the rest.
+- Typing over a selection that crosses the start of a bookmark puts the new text inside it. Typing over a selection that crosses its end puts the new text outside it.
+- Pressing Enter at the start of a bookmark, or at a point bookmark, keeps the start or the point in the first paragraph.
+- Deleting all of a bookmark's text removes the bookmark. Typing over all of it also removes it. Deleting part of it keeps the bookmark around the rest.
 - Deleting text that only touches a point bookmark keeps the bookmark.
-- A tracked deletion keeps every bookmark until you accept it.
-- A deletion across paragraphs keeps the bookmarks it encloses.
+- A deletion across paragraphs removes the bookmarks it encloses, including ones that span paragraphs, and shrinks the ones it crosses.
+- A tracked deletion keeps every bookmark. When you accept the deletion, the bookmark stays at the point where its text was.
 
 Bookmarks are not tracked changes. Adding or deleting one in suggesting mode writes the change directly.
 
 ## Use the editor commands
 
-The editor exposes the same operations as commands and a query. Each write is one undo step:
+The editor exposes the same operations as commands and a query. Each write is one undo step, including a move of a name from another story:
 
 ```ts
 editor.exec({ type: 'insertBookmark', name: 'Intro' });
@@ -51,7 +53,11 @@ const bookmarks = editor.query({ type: 'bookmarks' });
 
 The `bookmarks` query lists every bookmark, hidden ones included, in document order: the main text first, then headers, footers, and notes. Each entry has `name`, `hidden`, `story`, `order`, `empty`, and `atSelection`. `editor.snapshot().showBookmarks` says whether the marks are shown.
 
-`insertBookmark` refuses a name that breaks the naming rules with `invalidArgs`. `deleteBookmark` and `goToBookmark` refuse a name that no bookmark has with `notFound`. A document open for viewing refuses writes and still accepts `goToBookmark`.
+Bookmark names are unique in the whole document, across the main text, headers, footers, and notes. If another story has the name, `insertBookmark` moves the bookmark from that story. `insertBookmark` refuses a name that breaks the naming rules with `invalidArgs`. `deleteBookmark` and `goToBookmark` refuse a name that no bookmark has with `notFound`. A document open for viewing refuses writes and still accepts `goToBookmark`.
+
+## Bookmarks in collaboration
+
+Bookmark writes synchronize like other edits. If two people add the same name at different places while one of them is offline, both bookmarks remain after they reconnect. Every participant then reads the first one in document order: the list, **Go To**, and links all use it. The next add or delete of that name replaces or removes both.
 
 ## Build your own bookmark UI
 
@@ -63,4 +69,4 @@ To open your own dialog with Ctrl+Shift+F5, register it with `editor.setBookmark
 
 ## Use the document API
 
-The document API follows the Office.js shape: `Range.insertBookmark`, `Range.getBookmarks`, `Document.getBookmarkRange`, `Document.getBookmarkRangeOrNullObject`, `Document.deleteBookmark`, and `Bookmark.delete`. For details and limits, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
+The document API follows the Office.js shape: `Range.insertBookmark`, `Range.getBookmarks`, `Document.getBookmarkRange`, `Document.getBookmarkRangeOrNullObject`, `Document.deleteBookmark`, and `Bookmark.delete`. Replacing the text of a bookmark's range with `insertText(text, 'Replace')` removes the bookmark, as typing over it does. For details and limits, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).

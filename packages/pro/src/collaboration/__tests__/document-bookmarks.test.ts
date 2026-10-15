@@ -164,6 +164,31 @@ describe('concurrent edits around a bookmark converge', () => {
     expect(new Set(ids).size).toBe(2);
   });
 
+  test('two peers add one name offline: both pairs arrive, every replica reads the first', async () => {
+    const { alice, bob, pause, resume } = await peers.pair(zipDocument(BODY));
+    pause();
+    bookmarkWorld(alice, 'Same');
+    const second = peers.paragraphIdAt(bob, 1);
+    applyAs(bob, [
+      {
+        op: 'insertBookmark',
+        name: 'SAME',
+        start: { paragraphId: second, offset: 0 },
+        end: { paragraphId: second, offset: 6 },
+      },
+    ]);
+    resume();
+    peers.expectConverged(alice, bob);
+    // The merge keeps both pairs; listing and lookups answer the first in document order on
+    // every replica, so they agree on which bookmark the name means.
+    expect(names(alice)).toEqual(['Same']);
+    expect(names(bob)).toEqual(['Same']);
+    // The next write of the name settles it: a delete removes every pair it names.
+    applyAs(bob, [{ op: 'deleteBookmark', name: 'same' }]);
+    peers.expectConverged(alice, bob);
+    expect(names(alice)).toEqual([]);
+  });
+
   test('one peer deletes a bookmark while the other undoes adding it', async () => {
     const { alice, bob, pause, resume } = await peers.pair(zipDocument(BODY));
     bookmarkWorld(alice);
