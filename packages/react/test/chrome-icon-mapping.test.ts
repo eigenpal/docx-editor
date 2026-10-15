@@ -66,6 +66,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'insert.sectionPages': 'format_list_numbered',
   'insert.pageXofY': 'format_list_numbered',
   'review.paragraphMarks': 'format_paragraph',
+  'review.bookmarks': 'bookmarks',
   'review.protectDocument': 'lock',
   'review.simpleMarkup': 'visibility',
   'review.allMarkup': 'visibility',
@@ -95,6 +96,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'insert.sectionBreakNextPage': 'horizontal_rule',
   'insert.sectionBreakContinuous': 'border_horizontal',
   'insert.toc': 'toc',
+  'insert.bookmark': 'bookmark',
   'insert.watermark': 'branding_watermark',
 };
 

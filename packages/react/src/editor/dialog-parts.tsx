@@ -240,6 +240,7 @@ export function DialogFrame({
     | 'pageSetup'
     | 'paragraph'
     | 'watermark'
+    | 'bookmark'
     | 'textFormField'
     | 'invalidTextFormField'
     | 'imageInsertError'

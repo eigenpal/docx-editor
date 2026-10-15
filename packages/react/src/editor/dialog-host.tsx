@@ -11,9 +11,10 @@ import { useDocxEditor } from './context';
 import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 
-type DialogKind = 'pageSetup' | 'paragraph' | 'watermark';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark';
 interface DialogHost {
   readonly container: HTMLElement | null;
   readonly ownsPageSetup: boolean;
@@ -102,6 +103,19 @@ export function DialogProvider({
     setSession(null);
     setMarkupSession(null);
   }, [editor, generation]);
+  // Ctrl/Cmd+Shift+F5 opens the Bookmark dialog where this host mounts dialogs.
+  useEffect(() => {
+    if (!editor || !container) return;
+    return editor.setBookmarkChrome({
+      onRequest() {
+        if (popupsRef.current?.bookmark === false) return;
+        sessionRef.current?.cancel();
+        markupSessionRef.current?.cancel();
+        opener.current = container.ownerDocument.activeElement as HTMLElement | null;
+        setActive('bookmark');
+      },
+    });
+  }, [editor, container]);
   useEffect(() => {
     if (popups?.revisionMarkup === false) markupSessionRef.current?.cancel();
     if (popups?.textFormField === false) sessionRef.current?.cancel();
@@ -142,6 +156,12 @@ export function DialogProvider({
         renderPopup(popups.watermark, props)
       ) : (
         <DocxEditorWatermarkDialog {...props} />
+      )
+    ) : active === 'bookmark' && popups?.bookmark !== false ? (
+      popups?.bookmark ? (
+        renderPopup(popups.bookmark, props)
+      ) : (
+        <DocxEditorBookmarkDialog {...props} />
       )
     ) : markupSession && popups?.revisionMarkup !== false ? (
       popups?.revisionMarkup ? (

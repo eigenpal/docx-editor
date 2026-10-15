@@ -57,7 +57,9 @@ import type { TranslationKey } from '../../i18n';
 import { DocxEditorPageSetupDialog } from '../DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from '../DocxEditorWatermark';
+import { DocxEditorBookmarkDialog } from '../DocxEditorBookmark';
 import { MenuWatermark } from './menu-watermark';
+import { MenuBookmark } from './menu-bookmark';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 import { chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import {
@@ -277,6 +279,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
   const [pageSetupOpen, setPageSetupOpen] = useState(false);
   const [paragraphDialogOpen, setParagraphDialogOpen] = useState(false);
   const [watermarkDialogOpen, setWatermarkDialogOpen] = useState(false);
+  const [bookmarkDialogOpen, setBookmarkDialogOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -474,6 +477,17 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
                   )
                 )
               : setWatermarkDialogOpen(true)
+        : undefined,
+      onBookmarkDialog: editor
+        ? () =>
+            dialogs
+              ? dialogs.open(
+                  'bookmark',
+                  rootRef.current?.querySelector<HTMLElement>(
+                    '[data-menu="insert"] > [role="menuitem"]'
+                  )
+                )
+              : setBookmarkDialogOpen(true)
         : undefined,
       onReportIssue,
       reportIssue,
@@ -727,6 +741,10 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
         open={watermarkDialogOpen}
         onClose={() => setWatermarkDialogOpen(false)}
       />
+      <DocxEditorBookmarkDialog
+        open={bookmarkDialogOpen}
+        onClose={() => setBookmarkDialogOpen(false)}
+      />
     </MenuContext.Provider>
   );
 }
@@ -763,6 +781,7 @@ export interface DocxEditorMenuNamespace {
   readonly ImageInsert: typeof MenuImageInsert;
   /** Insert › Watermark, so a host can hide it or place it elsewhere by name. */
   readonly Watermark: typeof MenuWatermark;
+  readonly Bookmark: typeof MenuBookmark;
   /** Review > Markup Options > Reviewers. */
   readonly Reviewers: typeof MenuReviewers;
   /** Help › Report issue, so a host can drop it or point it elsewhere by name. */
@@ -801,6 +820,7 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
   Watermark: MenuWatermark,
+  Bookmark: MenuBookmark,
   Reviewers: MenuReviewers,
   ReportIssue: MenuReportIssue,
 });

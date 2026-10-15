@@ -7950,6 +7950,12 @@ a.docx-hyperlink:focus-visible {
   flex: none;
   width: 100%;
 }
+/* The Bookmark dialog's list: a native list box, tall enough for several names. */
+.docx-editor .docx-bookmark-dialog__list {
+  height: auto;
+  min-height: 10em;
+  padding: 2px;
+}
 .docx-editor .docx-dialog__input:where(:hover),
 .docx-editor .docx-dialog__select:where(:hover),
 .docx-editor .docx-dialog__textarea:where(:hover) {
