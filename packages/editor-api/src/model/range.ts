@@ -193,9 +193,8 @@ export class Range extends ModelObject implements PromisedItem {
   /**
    * Add a bookmark around this range, or at its position when the range is empty.
    *
-   * Names compare without case. A bookmark with the same name in this story moves here; one in
-   * another story (a header, a footer, or a note) is refused with `NotSupported`, so the
-   * document never holds two bookmarks with one name. A name starts with a letter, or with an
+   * Names compare without case and are unique in the whole document. A bookmark with the same
+   * name moves here, also from another story (a header, a footer, or a note), in the same sync. A name starts with a letter, or with an
    * underscore for a hidden bookmark, holds only letters, digits and underscores, and has at
    * most 40 characters; any other name is refused with `InvalidArgument`. Bookmarks are not
    * revisions, so with `TrackMineOnly` the markers are written directly.

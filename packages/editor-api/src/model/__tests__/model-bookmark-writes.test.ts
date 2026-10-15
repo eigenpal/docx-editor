@@ -161,21 +161,49 @@ describe('Range.insertBookmark', () => {
     expect(await mainXmlOf(runtime)).not.toContain('bookmarkStart');
   });
 
-  test('refuses a name another story declares', async () => {
+  test('moves a name another story declares, in the same sync', async () => {
     const runtime = await serverRuntime(WITH_BOOKMARKED_STORIES);
-    const before = await mainXmlOf(runtime);
-    expect(
-      await codeOf(() =>
-        runtime.run(async (context) => {
-          const sections = context.document.sections;
-          sections.load('items');
-          await context.sync();
-          sections.items[0]!.getHeader('Primary').getRange('Start').insertBookmark('First');
-          await context.sync();
-        })
-      )
-    ).toBe('NotSupported');
-    expect(await mainXmlOf(runtime)).toBe(before);
+    await runtime.run(async (context) => {
+      const sections = context.document.sections;
+      sections.load('items');
+      await context.sync();
+      const header = sections.items[0]!.getHeader('Primary');
+      await context.sync();
+      const found = header.search('header');
+      found.load('items');
+      await context.sync();
+      found.items[0]!.insertBookmark('first');
+      // A missing name changes nothing and does not stop the header write.
+      context.document.deleteBookmark('Missing');
+      await context.sync();
+    });
+    const reopened = await reopen(runtime);
+    expect(await mainXmlOf(reopened)).not.toContain('w:name="First"');
+    const headerNames = await reopened.run(async (context) => {
+      const sections = context.document.sections;
+      sections.load('items');
+      await context.sync();
+      const header = sections.items[0]!.getHeader('Primary');
+      await context.sync();
+      const bookmarks = header.bookmarks;
+      bookmarks.load('items');
+      await context.sync();
+      for (const bookmark of bookmarks.items) bookmark.load('name');
+      await context.sync();
+      return bookmarks.items.map((bookmark) => bookmark.name);
+    });
+    expect(headerNames).toContain('first');
+  });
+
+  test('replacing a bookmark range removes the bookmark with its text', async () => {
+    const runtime = await serverRuntime(SAMPLE);
+    await runtime.run(async (context) => {
+      context.document.getBookmarkRange('rng').insertText('ZZ', 'Replace');
+      await context.sync();
+    });
+    const xml = await mainXmlOf(runtime);
+    expect(xml).toContain('ZZ');
+    expect(xml).not.toContain('w:name="rng"');
   });
 
   test('writes directly with TrackMineOnly: a bookmark is not a revision', async () => {
@@ -188,6 +216,26 @@ describe('Range.insertBookmark', () => {
     const xml = await mainXmlOf(runtime);
     expect(xml).toContain('w:name="Tracked"');
     expect(xml).not.toContain('<w:ins');
+  });
+
+  test('moves a name from another story with TrackMineOnly, still without a revision', async () => {
+    const runtime = await DocxEditor.createServer(WITH_BOOKMARKED_STORIES, { author: 'Agent' });
+    await runtime.run(async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      const sections = context.document.sections;
+      sections.load('items');
+      await context.sync();
+      const header = sections.items[0]!.getHeader('Primary');
+      await context.sync();
+      const found = header.search('header');
+      found.load('items');
+      await context.sync();
+      found.items[0]!.insertBookmark('first');
+      await context.sync();
+    });
+    const xml = await mainXmlOf(runtime);
+    expect(xml).not.toContain('w:name="First"');
+    expect(xml).not.toContain('<w:del');
   });
 });
 

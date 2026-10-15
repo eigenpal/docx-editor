@@ -1,6 +1,7 @@
 import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
 import { planShapes } from './plan-shapes.ts';
 import { planBookmarks } from './plan-bookmarks.ts';
+import { enclosedBookmarkDeletions } from '../store/store/tree-op-bookmarks.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -666,6 +667,18 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       span: spanOf({ start, end: { ...start, offset: start.offset + text.length } }),
     });
     return { ok: true, kind: 'command', ops, story: plan.reads.story, answer };
+  };
+
+  /** An untracked replacement takes the bookmarks its old text enclosed, as typing over it does. */
+  const withEnclosedBookmarkDrops = (
+    planned: PlannedOperation,
+    reads: AutomationStoryReads,
+    range: ResolvedRange
+  ): PlannedOperation => {
+    if (!planned.ok || planned.kind !== 'command' || planned.relate) return planned;
+    if (host.replacementLanding?.(range.start.paragraphId, 0, 0) != null) return planned;
+    const drops = enclosedBookmarkDeletions(reads.part, range.start, range.end, reads.paragraphIds);
+    return drops.length === 0 ? planned : { ...planned, ops: [...drops, ...planned.ops] };
   };
 
   /**
@@ -1820,7 +1833,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           );
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
-        return planReplaceSpan(planFor(story), resolved.value, operation.text);
+        return withEnclosedBookmarkDrops(
+          planReplaceSpan(planFor(story), resolved.value, operation.text),
+          story,
+          resolved.value
+        );
       }
 
       case 'replaceStoryBlocks': {

@@ -4,11 +4,12 @@
 //
 // NAMES ARE CASE-INSENSITIVE AND DOCUMENT-WIDE. A lookup by name searches the main text first,
 // then each section's headers and footers, then the notes, and the first bookmark that declares
-// the name, in any case, answers. A write commits in ONE story, like every batch here: adding a
-// name that another story declares would have to delete it there in the same commit, so that
-// write is refused with `unsupported-capability` rather than leaving two bookmarks with one name.
+// the name, in any case, answers. Adding a name that another story declares moves it: the write
+// commits in the target story and removes the name from the other part in the same transaction.
 
 import { bookmarkNameKey, bookmarkNameProblem } from '../store/package/bookmark-names.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { withoutBookmarkInPart } from '../store/store/tree-op-bookmarks.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import { bookmarkReads, type AutomationBookmarkRead } from './links.ts';
@@ -233,13 +234,13 @@ export function planBookmarks(
     if (!story.ok) return refuse(story.code, 'that range is not a place', story.detail);
     const span = resolved.value;
     if (!span) return refuse('invalid-offset', 'this story holds no paragraph to bookmark');
+    // One name, one bookmark: a name another part declares leaves that part in the same
+    // transaction. Within one part the insert op moves it itself.
     const existing = findByName(reads, operation.name);
-    if (existing && storyKey(existing.story.story) !== storyKey(story.value.story))
-      return refuse(
-        'unsupported-capability',
-        'another story declares this bookmark name; delete it there first',
-        'bookmark-in-other-story'
-      );
+    const otherPart =
+      existing && existing.story.part.name !== story.value.part.name
+        ? existing.story.part.name
+        : null;
     const refusal = admit(story.value, [span.start.paragraphId, span.end.paragraphId]);
     if (refusal) return refusal;
     const op: TreeDocOp = {
@@ -253,6 +254,13 @@ export function planBookmarks(
       kind: 'command',
       ops: [op],
       story: story.value.story,
+      ...(otherPart
+        ? {
+            packageEdits: [
+              (pkg: OoxmlPackage) => withoutBookmarkInPart(pkg, otherPart, operation.name),
+            ],
+          }
+        : {}),
       answer: () => APPLIED,
     };
   }
@@ -282,9 +290,9 @@ export function planBookmarks(
       return refuse('unsupported-content', 'a bookmark name is a string');
     found = findByName(reads, target.name);
   }
-  // Deleting a name nothing declares is what the caller asked for already.
-  if (!found)
-    return { ok: true, kind: 'command', ops: [], story: BODY_STORY, answer: () => APPLIED };
+  // Deleting a name nothing declares is what the caller asked for already. Answered as a read,
+  // so it pins no write story and never conflicts with the batch's writes elsewhere.
+  if (!found) return query(APPLIED);
   const refusal = admit(found.story, [
     found.bookmark.start.paragraphId,
     found.bookmark.end.paragraphId,
