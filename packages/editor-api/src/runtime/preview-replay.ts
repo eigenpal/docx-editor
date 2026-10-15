@@ -94,7 +94,12 @@ export function contentGuards(operations: readonly AutomationOperation[]): Autom
     Object.values(record).forEach(walk);
   };
   for (const operation of operations) {
-    if (isAutomationCommand(operation) && operation.op !== 'setChangeTrackingMode') walk(operation);
+    if (!isAutomationCommand(operation) || operation.op === 'setChangeTrackingMode') continue;
+    // A decision by review-queue key names its changes by key: what it covers is the item's
+    // range, which must answer the same shape, at the same length, on both hosts.
+    const key = (operation as { readonly key?: unknown }).key;
+    if (typeof key === 'string') guards.push({ op: 'getReviewItemRange', key });
+    walk(operation);
   }
   return guards;
 }
@@ -263,6 +268,7 @@ class Pairs {
       if (!isEndpoint(other)) throw new Divergence();
       this.#pairOffset(fork, other.offset);
     }
+    this.#sameLength(fork as Record<string, unknown>, other);
     for (const [key, item] of Object.entries(fork)) {
       if (key === 'ref' && typeof item === 'string') {
         const paired = other[key];
@@ -271,6 +277,20 @@ class Pairs {
       } else if (key === 'readAt' || key === 'date' || (key === 'offset' && endpoint)) continue;
       else this.agree(item, other[key], minted);
     }
+  }
+
+  /**
+   * A span whose ends sit in one paragraph covers as many characters on the live host as in
+   * the fork: an edit before it shifts both ends alike, and an edit inside it is a divergence.
+   */
+  #sameLength(fork: Record<string, unknown>, live: Record<string, unknown>): void {
+    const [start, end, liveStart, liveEnd] = [fork.start, fork.end, live.start, live.end];
+    if (typeof start !== 'object' || start === null || !isEndpoint(start)) return;
+    if (typeof end !== 'object' || end === null || !isEndpoint(end)) return;
+    if (start.paragraph.ref !== end.paragraph.ref) return;
+    if (typeof liveStart !== 'object' || liveStart === null || !isEndpoint(liveStart)) return;
+    if (typeof liveEnd !== 'object' || liveEnd === null || !isEndpoint(liveEnd)) return;
+    if (liveEnd.offset - liveStart.offset !== end.offset - start.offset) throw new Divergence();
   }
 
   #pairRef(fork: string, live: string): void {

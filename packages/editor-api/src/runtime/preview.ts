@@ -268,7 +268,8 @@ export interface PreviewRuntime {
 
 /**
  * Commands a preview can show. Text, paragraphs, formatting, comments, and tracked-change
- * decisions; nothing that adds parts, tables, pictures, fields, lists, or content controls, and
+ * decisions, by span (`Range.revisions`) or by review-queue key, and every read, including
+ * `getReviewItemRange`; nothing that adds parts, tables, pictures, fields, lists, or content controls, and
  * nothing that moves a selection the preview does not have. Everything else is refused with
  * `NotSupported` rather than shown differently from how it would commit.
  */
