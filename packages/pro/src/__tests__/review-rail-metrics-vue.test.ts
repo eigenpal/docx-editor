@@ -14,6 +14,7 @@ import {
   computed,
   defineComponent,
   h,
+  inject,
   onMounted,
   onUnmounted,
   onUpdated,
@@ -21,8 +22,8 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { DocxEditorToolbar } from '@docx-editor.dev/vue';
-import { flush, waitFor } from './review-vue-harness.ts';
+import { DocxEditorToolbar, ReviewRailContext } from '@docx-editor.dev/vue';
+import { flush, selectAllWithPlacement, waitFor } from './review-vue-harness.ts';
 import {
   DocxEditorReview,
   useReview,
@@ -104,6 +105,28 @@ const CustomColumn = defineComponent({
           })
         )
       );
+  },
+});
+
+/** A custom column that serves comment drafts, as the guide describes. */
+const DraftingColumn = defineComponent({
+  name: 'DraftingColumn',
+  props: { onDraft: { type: Function as PropType<() => void>, required: true } },
+  setup(props) {
+    const registry = inject(ReviewRailContext, null);
+    let cleanup: (() => void) | undefined;
+    onMounted(() => {
+      const rail = registry?.value;
+      if (!rail) return;
+      const unregister = rail.register();
+      const release = rail.registerCommentDraft(() => props.onDraft());
+      cleanup = () => {
+        release();
+        unregister();
+      };
+    });
+    onUnmounted(() => cleanup?.());
+    return () => h(CustomColumn, { options: { reserveGutter: false } });
   },
 });
 
@@ -359,6 +382,25 @@ describe('useReviewRailMetrics (Vue)', () => {
         await waitFor(() => gutter() !== '');
         expect(gutter()).not.toBe('');
         expect(addComment(mounted.container)).toBeNull();
+      }
+    );
+  });
+
+  test('a column that registers a draft handler receives Add comment', async () => {
+    let drafts = 0;
+    await withMount(
+      () => h(DraftingColumn, { onDraft: () => drafts++ }),
+      async (mounted) => {
+        const button = () =>
+          mounted.container.querySelector(
+            '[data-slot="review.addComment"]'
+          ) as HTMLButtonElement | null;
+        await waitFor(() => button() !== null);
+        expect(button()).not.toBeNull();
+        await selectAllWithPlacement(mounted.editor());
+        await waitFor(() => button()?.disabled === false);
+        button()!.click();
+        expect(drafts).toBe(1);
       }
     );
   });

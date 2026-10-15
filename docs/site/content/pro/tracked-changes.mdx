@@ -337,7 +337,70 @@ While the column element is mounted, it reserves the review gutter beside the pa
 
 While the pane is closed, the viewport reserves only a narrow marker strip. Read `paneOpen` from `useReview()`, and render no cards, or small markers, while it is `false`.
 
-The reserved gutter does not show the **Add comment** controls in the toolbar and the context menu. Those controls open a comment draft in a review rail. To serve them from your own column, read `ReviewRailContext` from the adapter package. Call its `register()` to show the controls, and its `registerCommentDraft(handler)` to receive each request. Both return a cleanup function. `register()` also reserves the gutter, so pass `{ reserveGutter: false }` in that case.
+The reserved gutter does not show the **Add comment** controls in the toolbar and the context menu. Those controls open a comment draft in a review column. To serve them from your own column, read `ReviewRailContext` from the adapter package. Call its `register()` to show the controls, and its `registerCommentDraft(handler)` to receive each request. Both return a cleanup function. `register()` also reserves the gutter, so pass `{ reserveGutter: false }` in that case.
+
+The handler takes no arguments. It reads the selection from the editor with `getSelectionPlacement()` and `retainSelection()`, and opens the pane. A request counts as served as soon as a handler runs, even if the handler opens nothing. So register the handler only while your column can open a draft, and not in viewing mode.
+
+In React, register in an effect:
+
+```tsx
+import { useContext, useEffect } from 'react';
+import { ReviewRailContext, useDocxEditor, useEditorState } from '@docx-editor.dev/react';
+import { useReview } from '@docx-editor.dev/pro/react';
+
+function useCommentDrafts(openDraft: (anchorY: number) => void) {
+  const registry = useContext(ReviewRailContext);
+  const editor = useDocxEditor();
+  const viewing = useEditorState((state) => state.editingMode === 'viewing');
+  const { setPaneOpen } = useReview();
+  useEffect(() => {
+    if (!registry || !editor || viewing) return undefined;
+    const unregister = registry.register();
+    const release = registry.registerCommentDraft(() => {
+      const anchorY = editor.getSelectionPlacement()?.anchorY;
+      if (anchorY === undefined || !editor.retainSelection()) return;
+      setPaneOpen(true);
+      openDraft(anchorY);
+    });
+    return () => {
+      release();
+      unregister();
+    };
+  }, [registry, editor, viewing, setPaneOpen, openDraft]);
+}
+```
+
+In Vue, inject the registry. It is a ref, so read `.value`. This sketch registers on mount; also unregister while the document is in viewing mode:
+
+```ts
+import { inject, onMounted, onUnmounted } from 'vue';
+import { ReviewRailContext, useDocxEditor } from '@docx-editor.dev/vue';
+import { useReview } from '@docx-editor.dev/pro/vue';
+
+export function useCommentDrafts(openDraft: (anchorY: number) => void) {
+  const registry = inject(ReviewRailContext, null);
+  const editorRef = useDocxEditor();
+  const { setPaneOpen } = useReview();
+  let cleanup: (() => void) | undefined;
+  onMounted(() => {
+    const rail = registry?.value;
+    if (!rail) return;
+    const unregister = rail.register();
+    const release = rail.registerCommentDraft(() => {
+      const editor = editorRef.value;
+      const anchorY = editor?.getSelectionPlacement()?.anchorY;
+      if (!editor || anchorY === undefined || !editor.retainSelection()) return;
+      setPaneOpen(true);
+      openDraft(anchorY);
+    });
+    cleanup = () => {
+      release();
+      unregister();
+    };
+  });
+  onUnmounted(() => cleanup?.());
+}
+```
 
 The values update when the zoom, the window size, the page count, the document load, content above the pages, or the reserved gutter changes. They also work when the editor is in a pop-out window or an iframe.
 
@@ -503,6 +566,7 @@ function cardRef(key: string) {
         observer?.observe(element);
       } else {
         cards.delete(key);
+        cardRefs.delete(key);
       }
     };
     cardRefs.set(key, bind);

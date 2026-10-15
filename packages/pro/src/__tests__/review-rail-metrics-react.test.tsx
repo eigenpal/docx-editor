@@ -15,7 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { afterAll, afterEach, beforeAll, describe, expect, spyOn, test } from 'bun:test';
-import { useRef, type CSSProperties, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import {
   DocxEditorContent,
@@ -23,6 +23,7 @@ import {
   DocxEditorRoot,
   DocxEditorToolbar,
   DocxEditorViewport,
+  ReviewRailContext,
   useDocxEditor,
 } from '@docx-editor.dev/react';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
@@ -116,6 +117,21 @@ function CustomColumn({
       ))}
     </div>
   );
+}
+
+/** A custom column that serves comment drafts, as the guide describes. */
+function DraftingColumn({ onDraft }: { onDraft: () => void }) {
+  const registry = useContext(ReviewRailContext);
+  useEffect(() => {
+    if (!registry) return undefined;
+    const unregister = registry.register();
+    const release = registry.registerCommentDraft(onDraft);
+    return () => {
+      release();
+      unregister();
+    };
+  }, [registry, onDraft]);
+  return <CustomColumn options={{ reserveGutter: false }} />;
 }
 
 function tree(children: ReactNode, loading = false) {
@@ -243,6 +259,27 @@ describe('useReviewRailMetrics (React)', () => {
     );
     expect(scroller(view.container).style.getPropertyValue('--docx-review-gutter')).not.toBe('');
     expect(addComment(view.container)).toBeNull();
+  });
+
+  test('a column that registers a draft handler receives Add comment', async () => {
+    let drafts = 0;
+    const onDraft = () => {
+      drafts++;
+    };
+    const view = mount(<DraftingColumn onDraft={onDraft} />);
+    const button = () =>
+      view.container.querySelector('[data-slot="review.addComment"]') as HTMLButtonElement | null;
+    await waitFor(() => button() !== null);
+    expect(button()).not.toBeNull();
+    act(() => {
+      captured!.surface!.focus();
+      captured!.surface!.selectAll();
+    });
+    await waitFor(() => button()?.disabled === false);
+    act(() => {
+      button()!.click();
+    });
+    expect(drafts).toBe(1);
   });
 
   test('releases the gutter when the column unmounts', async () => {

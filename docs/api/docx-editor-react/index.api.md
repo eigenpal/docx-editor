@@ -2571,11 +2571,8 @@ export const ReviewRailContext: react.Context<ReviewRailRegistry | null>;
 export interface ReviewRailRegistry {
     readonly gutters?: number;
     readonly mounted: number;
-    // (undocumented)
     readonly register: () => () => void;
-    // (undocumented)
     readonly registerCommentDraft: (handler: () => void) => () => void;
-    // (undocumented)
     readonly requestCommentDraft: () => boolean;
     readonly reserveGutter?: () => () => void;
 }

@@ -276,10 +276,12 @@ export function warnReviewRailMetrics(message: string): void {
 }
 
 /**
- * A development build. The same rule as each adapter's private `lib/is-development.ts`;
- * no package both adapters and this one share exports it. Vite answers through `import.meta.env.DEV`; other bundlers and Node
- * through `process.env.NODE_ENV`, spelled exactly so a bundler can replace it. Where neither
- * answers, the build counts as production.
+ * A development build, by the same rule as each adapter's private `lib/is-development.ts`
+ * (no package that both adapters and this one share exports it). A boolean
+ * `import.meta.env.DEV` decides first. Otherwise a `process` global decides: any
+ * `NODE_ENV` other than `production`, unset included, is development. With neither, the
+ * build counts as production. `process.env.NODE_ENV` is spelled exactly, so a bundler can
+ * replace it.
  */
 function isDevelopment(): boolean {
   let dev: unknown;
