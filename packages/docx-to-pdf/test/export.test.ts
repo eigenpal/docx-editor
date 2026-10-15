@@ -110,7 +110,8 @@ test('strict fidelity refuses missing glyphs after optional font execution rejec
       new URL('../../core/src/layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url)
     )
   );
-  const oversized = new Uint8Array(16 * 1024 * 1024 + 1);
+  const { PDF_MAX_SHAPING_FONT_BYTES } = await import('../src/open-session.ts');
+  const oversized = new Uint8Array(PDF_MAX_SHAPING_FONT_BYTES + 1);
   oversized.set(data);
   const family = 'Optional oversized fallback';
   const rejected = createFontSource(oversized, { family, weight: 400, style: 'normal' });
