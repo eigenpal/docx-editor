@@ -1917,7 +1917,7 @@ export { FontUrlSource }
 export { generateRulerTicks }
 
 // @public
-export type GoToBookmarkProblem = 'empty' | 'notFound';
+export type GoToBookmarkProblem = 'empty' | 'notFound' | 'failed';
 
 // @public
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
@@ -3211,7 +3211,12 @@ export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigu
 export function useFonts(...origins: readonly FontOrigin[]): MarkedFontResolver;
 
 // @public
-export function useGoToBookmark(): UseGoToBookmarkReturn;
+export function useGoToBookmark(options?: UseGoToBookmarkOptions): UseGoToBookmarkReturn;
+
+// @public
+export interface UseGoToBookmarkOptions {
+    readonly enabled?: boolean;
+}
 
 // @public
 export interface UseGoToBookmarkReturn {
@@ -3220,9 +3225,9 @@ export interface UseGoToBookmarkReturn {
     readonly go: (name?: string) => ExecResult;
     readonly move: (delta: number) => void;
     readonly problem: GoToBookmarkProblem | null;
+    readonly problemName: string;
     readonly query: string;
     readonly rows: readonly BookmarkSummary[];
-    // (undocumented)
     readonly setActiveIndex: (index: number) => void;
     readonly setQuery: (query: string) => void;
     // (undocumented)

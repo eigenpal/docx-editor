@@ -5039,7 +5039,7 @@ export { FontUrlSource }
 export { generateRulerTicks }
 
 // @public
-export type GoToBookmarkProblem = 'empty' | 'notFound';
+export type GoToBookmarkProblem = 'empty' | 'notFound' | 'failed';
 
 // @public (undocumented)
 export type HeaderFooterState = Exclude<ReturnType<Editor['getHeaderFooterState']>, null>;
@@ -7271,7 +7271,12 @@ export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: rea
 export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): MarkedFontResolver;
 
 // @public
-export function useGoToBookmark(): UseGoToBookmarkReturn;
+export function useGoToBookmark(options?: MaybeRefOrGetter_2<UseGoToBookmarkOptions>): UseGoToBookmarkReturn;
+
+// @public
+export interface UseGoToBookmarkOptions {
+    readonly enabled?: boolean;
+}
 
 // @public
 export interface UseGoToBookmarkReturn {
@@ -7280,15 +7285,18 @@ export interface UseGoToBookmarkReturn {
     readonly go: (name?: string) => ExecResult;
     readonly move: (delta: number) => void;
     readonly problem: Readonly<ShallowRef<GoToBookmarkProblem | null>>;
+    readonly problemName: Readonly<ShallowRef<string>>;
     readonly query: Readonly<ShallowRef<string>>;
     readonly rows: ComputedRef<readonly BookmarkSummary[]>;
-    // (undocumented)
     readonly setActiveIndex: (index: number) => void;
-    // (undocumented)
     readonly setQuery: (query: string) => void;
-    readonly showHidden: ShallowRef<boolean>;
     // (undocumented)
-    readonly sortBy: ShallowRef<BookmarkSortOrder>;
+    readonly setShowHidden: (showHidden: boolean) => void;
+    // (undocumented)
+    readonly setSortBy: (sortBy: BookmarkSortOrder) => void;
+    readonly showHidden: Readonly<ShallowRef<boolean>>;
+    // (undocumented)
+    readonly sortBy: Readonly<ShallowRef<BookmarkSortOrder>>;
 }
 
 // @public (undocumented)

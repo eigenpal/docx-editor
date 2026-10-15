@@ -1774,6 +1774,7 @@ export function goToBookmarkTarget(bookmarks: readonly BookmarkSummary[], query:
 // @public
 export interface GoToChromeHandlers {
     readonly onRequest?: () => void;
+    readonly shortcut?: boolean;
 }
 
 // @public
@@ -2101,6 +2102,9 @@ export function isElementNode(value: unknown): value is Element;
 
 // @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
+
+// @public
+export function isGoToChord(event: KeyboardEvent, apple?: boolean): boolean;
 
 // @public
 export function isHTMLElementNode(value: unknown): value is HTMLElement;
@@ -2575,6 +2579,7 @@ export interface PaginatedSurfaceOptions {
     readonly onRequestBookmark?: () => boolean;
     // (undocumented)
     readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
+    readonly onRequestGoTo?: () => boolean;
     readonly onRequestHyperlink?: () => void;
     // (undocumented)
     readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;

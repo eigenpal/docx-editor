@@ -20,6 +20,7 @@ export const VUE_COMPOSABLES = [
   'useEditorValueCommand',
   'useFontFamily',
   'useFonts',
+  'useGoToBookmark',
   'useHeaderFooterState',
   'useHighlightAt',
   'useHighlights',

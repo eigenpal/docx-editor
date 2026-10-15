@@ -2608,6 +2608,7 @@ export type FurnitureVariant = 'default' | 'first' | 'even';
 // @public
 export interface GoToChromeHandlers {
     readonly onRequest?: () => void;
+    readonly shortcut?: boolean;
 }
 
 // @public
