@@ -1,3 +1,9 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+
 // Comments and replies written through the editing API record when they were written, as tracked
 // changes do: `Comment.creationDate` reads it back, and the saved file carries it as `w:date`.
 
