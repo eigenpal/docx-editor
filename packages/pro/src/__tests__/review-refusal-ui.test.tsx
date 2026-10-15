@@ -87,8 +87,8 @@ test('a refused accept names its cause on the card until the state changes', asy
   const notice = view.getByTestId('review-refusal');
   expect(notice.textContent).toBe(WAITING);
   expect(notice.dataset.refusalCode).toBe('edit.collaboration-not-ready');
-  // Visual only inside the role="button" card; the rail's live region announces it.
-  expect(notice.getAttribute('aria-hidden')).toBe('true');
+  // Plain text in the card; the rail's live region is what announces it.
+  expect(notice.getAttribute('role')).toBeNull();
   expect(view.getByTestId('review-refusal-live').textContent).toBe(WAITING);
   // Another component's own hook sees the same refusal.
   expect(view.getByTestId('custom-probe').textContent).toBe('edit.collaboration-not-ready');
@@ -127,6 +127,7 @@ test('a refused reply names its cause in the reply line', async () => {
   expect(view.getByTestId('review-reply-refused').textContent).toBe(WAITING);
   // The reply line owns this one; the card does not repeat it.
   expect(view.queryByTestId('review-refusal')).toBeNull();
-  // Recorded in the editor's store like any other refused write.
+  // Recorded in the editor's store like any other refused write, and announced by the rail.
   expect(view.getByTestId('custom-probe').textContent).toBe('edit.collaboration-not-ready');
+  expect(view.getByTestId('review-refusal-live').textContent).toBe(WAITING);
 });

@@ -41,16 +41,33 @@ export interface ReviewWriteRefusal {
   readonly key: string | null;
   /** The public diagnostic code, the same one `onDiagnostic` reports for the refusal. */
   readonly code: EditDiagnosticCode;
+  /**
+   * Rises with every refusal of this editor, so the same refusal twice still differs. Key a
+   * live announcement on it to announce a repeat.
+   */
+  readonly sequence: number;
 }
 
 /** The refusal behind a write's result, or null when the write landed. */
 export function reviewWriteRefusalOf(
   action: ReviewWriteAction,
   key: string | null,
-  result: ExecResult
+  result: ExecResult,
+  sequence = 0
 ): ReviewWriteRefusal | null {
   if (result.ok) return null;
-  return { action, key, code: diagnosticCodeOfRefusal(result.reason, result.code) };
+  return { action, key, code: diagnosticCodeOfRefusal(result.reason, result.code), sequence };
+}
+
+/**
+ * The review author filter as a comparable key. The review hooks re-derive when it changes,
+ * and a held refusal is about the filter it was refused under.
+ */
+export function reviewAuthorFilterKey(editor: Editor): string {
+  const snapshot = (
+    editor as Editor & { snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] } }
+  ).snapshot?.();
+  return JSON.stringify(snapshot?.hiddenReviewAuthors ?? []);
 }
 
 /**
@@ -78,6 +95,13 @@ export function reviewRefusalLabelKey(
   }
 }
 
+/** The packaged sentence for an action refused without a cause a reader can act on. */
+export function reviewRefusalFallbackKey(action: ReviewWriteAction): TranslationKey {
+  if (action === 'reply') return 'review.replyRefused';
+  if (action === 'comment') return 'review.commentRefused';
+  return 'review.actionRefused';
+}
+
 /**
  * The editor state a refusal is about. A change to any part of it means the cause may be gone:
  * the document changed (a refresh replaced it, a peer's edit arrived), the editing mode or
@@ -92,7 +116,7 @@ function refusalStateKey(editor: Editor): string {
     editor.getEditingMode(),
     snapshot.editable,
     snapshot.collaborationStatus,
-    JSON.stringify(snapshot.hiddenReviewAuthors ?? []),
+    reviewAuthorFilterKey(editor),
   ].join(':');
 }
 
@@ -100,10 +124,8 @@ function refusalStateKey(editor: Editor): string {
 export interface ReviewRefusalStore {
   /** The held refusal, or null. */
   get(): ReviewWriteRefusal | null;
-  /** Rises with every recorded refusal, so the same refusal twice is still two events. */
-  sequence(): number;
   /** Record a write's result: hold its refusal, or clear the held one when it landed. */
-  record(action: ReviewWriteAction, key: string | null, result: ExecResult): boolean;
+  record(action: ReviewWriteAction, key: string | null, result: ExecResult): void;
   /** Called when the held refusal is set or cleared. */
   subscribe(listener: () => void): () => void;
 }
@@ -157,19 +179,19 @@ export function reviewRefusalStore(editor: Editor): ReviewRefusalStore {
   }
   const store: ReviewRefusalStore = {
     get: () => held?.refusal ?? null,
-    sequence: () => count,
     record(action, key, result) {
-      const refusal = reviewWriteRefusalOf(action, key, result);
-      if (refusal) count += 1;
+      const refusal = reviewWriteRefusalOf(action, key, result, result.ok ? count : count + 1);
+      if (refusal) count = refusal.sequence;
       const changed = refusal !== null || held !== null;
       held = refusal ? { refusal, at: refusalStateKey(editor) } : null;
       sync();
       if (changed) notify();
-      return result.ok;
     },
     subscribe(listener) {
       listeners.add(listener);
       sync();
+      // A refusal held while nobody listened may be about a state that has since moved on.
+      recheck();
       return () => {
         listeners.delete(listener);
         sync();

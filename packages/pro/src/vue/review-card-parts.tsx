@@ -17,7 +17,7 @@ import {
   type VNode,
 } from 'vue';
 import { isDomNode, hostDocumentOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
-import { Slot, useDocxEditor, useTranslation } from '@docx-editor.dev/vue';
+import { Slot, useTranslation } from '@docx-editor.dev/vue';
 import {
   ACCEPT_ICON,
   DELETE_ICON,
@@ -27,7 +27,7 @@ import {
   reviewBadge,
 } from './review-icons.tsx';
 import { revisionItemLabel } from './review-labels.ts';
-import { reviewRefusalLabelKey, reviewRefusalStore } from '../review/review-refusal.ts';
+import { reviewRefusalFallbackKey, reviewRefusalLabelKey } from '../review/review-refusal.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
@@ -314,8 +314,8 @@ export const ReviewReject = createActionPart(
  * viewing, protection, or a collaboration session that is not ready. Absent otherwise. A
  * refused reply is shown by the reply line instead.
  *
- * Visual only: the card is a `role="button"`, which hides a live region inside it, so the
- * rail announces the same sentence from its own live region. @public
+ * Plain text, readable with the card: the rail's live region is what announces it, because a
+ * live region inside a `role="button"` card is not reliably announced. @public
  */
 export const ReviewRefusal = markPart(
   defineComponent({
@@ -332,7 +332,6 @@ export const ReviewRefusal = markPart(
         if (refusal.key !== entry.key || refusal.action === 'reply') return null;
         const shared = {
           class: `docx-review__refused${props.className ? ` ${props.className}` : ''}`,
-          'aria-hidden': true as const,
           'data-testid': 'review-refusal',
           'data-refusal-code': refusal.code,
         };
@@ -349,26 +348,24 @@ export const ReviewRefusal = markPart(
 );
 
 /**
- * The rail's live region for a refused card action, so a screen reader hears the cause.
+ * The rail's one live region for refused review writes, so a screen reader hears the cause of
+ * any of them: a card action, a reply, or a new comment, from the packaged parts or from a
+ * host's own controls over `useReview()`.
  *
- * Re-keyed per refusal, so the same refusal twice is announced twice. Replies and new comments
- * are announced by their own boxes, which are forms rather than buttons.
+ * Re-keyed per refusal, so the same refusal twice is announced twice.
  */
 export const ReviewRefusalAnnouncer = defineComponent({
   name: 'ReviewRefusalAnnouncer',
   setup() {
     const rail = useRail();
-    const editorRef = useDocxEditor();
     const t = useReviewLabel();
     return () => {
       const refusal = rail.value.review.lastRefusal;
-      const editor = editorRef.value;
-      const announced = refusal && refusal.action !== 'reply' && refusal.action !== 'comment';
       return (
         <span class="docx-editor-sr-only" aria-live="polite" data-testid="review-refusal-live">
-          {announced ? (
-            <span key={editor ? reviewRefusalStore(editor).sequence() : 0}>
-              {t(reviewRefusalLabelKey(refusal.code, 'review.actionRefused'))}
+          {refusal ? (
+            <span key={refusal.sequence}>
+              {t(reviewRefusalLabelKey(refusal.code, reviewRefusalFallbackKey(refusal.action)))}
             </span>
           ) : null}
         </span>

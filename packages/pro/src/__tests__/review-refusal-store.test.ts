@@ -40,15 +40,17 @@ const REFUSED = {
 
 test('one store per editor holds the refusal for every reader', () => {
   const { editor } = fakeEditor();
-  expect(reviewRefusalStore(editor)).toBe(reviewRefusalStore(editor));
-  expect(reviewRefusalStore(editor).record('accept', 'k1', REFUSED)).toBe(false);
-  expect(reviewRefusalStore(editor).get()).toEqual({
+  const store = reviewRefusalStore(editor);
+  expect(reviewRefusalStore(editor)).toBe(store);
+  store.record('accept', 'k1', REFUSED);
+  expect(store.get()).toEqual({
     action: 'accept',
     key: 'k1',
     code: 'edit.collaboration-not-ready',
+    sequence: 1,
   });
-  expect(reviewRefusalStore(editor).record('accept', 'k1', { ok: true, changed: true })).toBe(true);
-  expect(reviewRefusalStore(editor).get()).toBeNull();
+  store.record('accept', 'k1', { ok: true, changed: true });
+  expect(store.get()).toBeNull();
 });
 
 test('a change of state clears the refusal; a caret move does not', () => {
@@ -77,7 +79,17 @@ test('every refusal moves the sequence, so a repeat is announced again', () => {
   const { editor } = fakeEditor();
   const store = reviewRefusalStore(editor);
   store.record('accept', 'k1', REFUSED);
-  const first = store.sequence();
+  const first = store.get()!.sequence;
   store.record('accept', 'k1', REFUSED);
-  expect(store.sequence()).toBe(first + 1);
+  expect(store.get()!.sequence).toBe(first + 1);
+});
+
+test('a refusal held while nobody listened is rechecked on subscribe', () => {
+  const { editor, state } = fakeEditor();
+  const store = reviewRefusalStore(editor);
+  store.record('accept', 'k1', REFUSED);
+  state.mode = 'viewing';
+  const off = store.subscribe(() => undefined);
+  expect(store.get()).toBeNull();
+  off();
 });

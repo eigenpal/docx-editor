@@ -63,7 +63,7 @@ test('a refused accept names its cause on the card until the state changes', asy
     const notice = query(mounted.container, 'review-refusal')!;
     expect(notice.textContent).toBe(WAITING);
     expect(notice.dataset.refusalCode).toBe('edit.collaboration-not-ready');
-    expect(notice.getAttribute('aria-hidden')).toBe('true');
+    expect(notice.getAttribute('role')).toBeNull();
     expect(query(mounted.container, 'review-refusal-live')!.textContent).toBe(WAITING);
     expect(query(mounted.container, 'custom-probe')!.textContent).toBe(
       'edit.collaboration-not-ready'
@@ -105,10 +105,11 @@ test('a refused reply names its cause in the reply line', async () => {
     await waitFor(() => query(mounted.container, 'review-reply-refused') !== null);
     expect(query(mounted.container, 'review-reply-refused')!.textContent).toBe(WAITING);
     expect(query(mounted.container, 'review-refusal')).toBeNull();
-    // Recorded in the editor's store like any other refused write.
+    // Recorded in the editor's store like any other refused write, and announced by the rail.
     expect(query(mounted.container, 'custom-probe')!.textContent).toBe(
       'edit.collaboration-not-ready'
     );
+    expect(query(mounted.container, 'review-refusal-live')!.textContent).toBe(WAITING);
   } finally {
     mounted.unmount();
   }

@@ -32,6 +32,7 @@ import { notificationYieldsToTask, useDocxEditor } from '@docx-editor.dev/react'
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
 import {
+  reviewAuthorFilterKey,
   reviewRefusalStore,
   type ReviewWriteAction,
   type ReviewWriteRefusal,
@@ -120,15 +121,6 @@ export type { ReviewItemRevealEvent, ReviewItemRevealSource };
 /** What the review state depends on: the queue, the editing mode and the author filter. */
 function reviewVersionOf(editor: Editor): string {
   return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
-}
-
-function reviewAuthorFilterKey(editor: Editor): string {
-  const snapshot = (
-    editor as Editor & {
-      snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] };
-    }
-  ).snapshot?.();
-  return JSON.stringify(snapshot?.hiddenReviewAuthors ?? []);
 }
 
 /**
@@ -320,8 +312,10 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     () => null
   );
   const settle = useCallback(
-    (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean =>
-      editor ? reviewRefusalStore(editor).record(action, key, result) : result.ok,
+    (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
+      if (editor) reviewRefusalStore(editor).record(action, key, result);
+      return result.ok;
+    },
     [editor]
   );
 

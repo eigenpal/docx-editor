@@ -93,6 +93,15 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
             endDraft();
           }
         };
+        // The editor's store drops a refusal once its cause is gone; the notice goes with it.
+        watch(
+          () => rail.value.review.lastRefusal,
+          (refusal) => {
+            if (refusal || refusedCode.value === undefined) return;
+            refused.value = false;
+            refusedCode.value = undefined;
+          }
+        );
 
         return () => {
           if (props.hidden) return null;
@@ -195,7 +204,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
                       refused.value
                         ? h(
                             'span',
-                            { class: 'docx-review__refused', role: 'alert' },
+                            { class: 'docx-review__refused' },
                             t(reviewRefusalLabelKey(refusedCode.value, 'review.commentRefused'))
                           )
                         : null,
@@ -229,10 +238,8 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       const editor = editorRef.value;
       const result = editor?.replyToReviewItem(live.key, text);
       // Recorded in the editor's refusal store, as the hook's own `reply` records it.
-      const landed =
-        editor && result
-          ? reviewRefusalStore(editor).record('reply', live.key, result)
-          : review.reply(live, text);
+      if (editor && result) reviewRefusalStore(editor).record('reply', live.key, result);
+      const landed = editor && result ? result.ok : review.reply(live, text);
       refused.value = !landed;
       refusedCode.value = landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code;
       if (landed) {
@@ -240,6 +247,15 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
         if (input) input.value = '';
       }
     };
+    // The editor's store drops a refusal once its cause is gone; the notice goes with it.
+    watch(
+      () => rail.value.review.lastRefusal,
+      (refusal) => {
+        if (refusal || refusedCode.value === undefined) return;
+        refused.value = false;
+        refusedCode.value = undefined;
+      }
+    );
     return { draft, refused, refusedCode, submit };
   }
 
@@ -361,7 +377,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           {icon(SEND_ICON)}
         </button>
         {refused.value ? (
-          <span class="docx-review__refused" role="alert" data-testid="review-reply-refused">
+          <span class="docx-review__refused" data-testid="review-reply-refused">
             {t(reviewRefusalLabelKey(state.refusedCode.value, 'review.replyRefused'))}
           </span>
         ) : null}

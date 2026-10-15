@@ -8,6 +8,7 @@ import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue';
 import { adoptReviewItems, type ReviewAdoptOptions } from '../review/review-item-author.ts';
 import { stackReviewPositions } from '../review/rail-stack.ts';
 import {
+  reviewAuthorFilterKey,
   reviewRefusalStore,
   type ReviewWriteAction,
   type ReviewWriteRefusal,
@@ -36,14 +37,7 @@ function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T |
 }
 
 function reviewRevisionKey(editor: Editor): string {
-  const snapshot = (
-    editor as Editor & {
-      snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] };
-    }
-  ).snapshot?.();
-  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${JSON.stringify(
-    snapshot?.hiddenReviewAuthors ?? []
-  )}`;
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`;
 }
 
 /** @public */
@@ -262,7 +256,8 @@ function useReviewOfInternal(
   );
   const settle = (action: ReviewWriteAction, key: string | null, result: ExecResult): boolean => {
     const editor = editorRef.value;
-    return editor ? reviewRefusalStore(editor).record(action, key, result) : result.ok;
+    if (editor) reviewRefusalStore(editor).record(action, key, result);
+    return result.ok;
   };
   const lastRefusal = computed((): ReviewWriteRefusal | null => refusalRef.value);
 
