@@ -220,7 +220,9 @@ export class Range extends ModelObject implements PromisedItem {
    * text (`edit.tracked-deleted-text-only`); another author's paragraph mark, formatting, move, or
    * structural change, or a link or content control inside their insertion
    * (`edit.tracked-foreign-revision-unsupported`); and your own pending change, including a
-   * range a tracked write returned (`edit.tracked-own-pending-change`). Font and paragraph
+   * range a tracked write returned (`edit.tracked-own-pending-change`). In a collaboration
+   * session, strikes or new text inside another author's insertion, and new text right after
+   * it, refuse with `edit.tracked-foreign-revision-unsupported`. Font and paragraph
    * formatting support property revisions.
    * Empty text with `Replace` deletes the range; empty text at an insertion point is a no-op.
    * Agent tools that intend a replacement should validate non-empty model output first.

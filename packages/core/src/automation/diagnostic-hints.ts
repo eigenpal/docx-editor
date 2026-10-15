@@ -103,7 +103,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.tracked-deleted-text-only':
     'The tracked deletion or replacement covers only text that is already deleted, so nothing was applied. Include live text in the range, or insert next to the deleted text instead.',
   'edit.tracked-foreign-revision-unsupported':
-    "The tracked edit touches another author's pending paragraph mark, formatting, move, or structural change, so nothing was applied. Edit outside that change, or leave it for a person to review first.",
+    "The tracked edit touches another author's pending change in a way this editor cannot record: their paragraph mark, formatting, move, or structural change, a link or content control inside their insertion, or, in a collaboration session, text inside or right after their insertion. Nothing was applied. Edit outside that change, or leave it for a person to review first.",
   'edit.tracked-own-pending-change':
     'The tracked edit covers or borders your own pending change and would merge with that decision, so nothing was applied. Edit outside your pending change, or reject it and edit again.',
   'edit.picture-selected':

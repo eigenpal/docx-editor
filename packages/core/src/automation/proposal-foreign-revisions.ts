@@ -64,31 +64,53 @@ function coversLiveText(
   return cursor < end;
 }
 
+/** Why a tracked edit cannot touch another author's pending text revision. */
+export type ForeignTextRefusal = 'deleted-text-only' | 'collaborative-insertion';
+
 /**
- * Whether a tracked edit of `[start, end)` may touch or overlap `item`, which belongs to
- * another author.
+ * Why a tracked edit of `[start, end)` cannot touch or overlap `item`, which belongs to
+ * another author, or null when it can.
  *
  * Their inserted text, including the inserted half of a replacement, admits any edit. Their
  * struck text admits an insertion inside or at its edge, which the store places after or
  * beside the deletion, and a strike that also covers live text or the paragraph mark.
+ *
+ * In a collaboration session, an edit inside their inserted text refuses. Shared text keeps
+ * an insertion as an attribute of its characters, and a peer that accepts or rejects the
+ * insertion at the same time rewrites that attribute: a concurrent strike or new words inside
+ * it can lose the decision or reorder the words. New words right after it refuse as well:
+ * their shared characters restore its attribute after them, and a concurrent accept would
+ * hand that attribute to the text that follows. Edits before it and strikes beside it stay
+ * admitted.
  */
-export function admitsForeignTextRevision(
+export function foreignTextRefusal(
   story: AutomationStoryReads,
   items: readonly ReviewRevisionItem[],
   item: ReviewRevisionItem,
   paragraphId: string,
   start: number,
   end: number,
-  options: { readonly strikesMark?: boolean } = {}
-): boolean {
-  if (item.revisionKind === 'insert') return true;
-  if (item.revisionKind !== 'delete' && item.revisionKind !== 'replace') return false;
-  const struckContact = rangesIn(story, item, paragraphId).some(
+  options: { readonly strikesMark?: boolean; readonly collaborative?: boolean } = {}
+): ForeignTextRefusal | null {
+  const ranges = rangesIn(story, item, paragraphId);
+  if (
+    options.collaborative &&
+    ranges.some(
+      (range) =>
+        !range.struck &&
+        (start === end
+          ? range.start < start && start <= range.end
+          : start < range.end && end > range.start)
+    )
+  )
+    return 'collaborative-insertion';
+  if (item.revisionKind === 'insert') return null;
+  const struckContact = ranges.some(
     (range) => range.struck && start <= range.end && end >= range.start
   );
   // A range that also strikes this paragraph's mark changes more than the deleted text.
-  if (!struckContact || start === end || options.strikesMark) return true;
-  return coversLiveText(story, items, paragraphId, start, end);
+  if (!struckContact || start === end || options.strikesMark) return null;
+  return coversLiveText(story, items, paragraphId, start, end) ? null : 'deleted-text-only';
 }
 
 /**

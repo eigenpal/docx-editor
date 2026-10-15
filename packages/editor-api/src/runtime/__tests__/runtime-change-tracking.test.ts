@@ -575,3 +575,32 @@ test('replacing the range a tracked write returned names the own-pending rule', 
     r.dispose();
   }
 });
+
+test("one resolve call rejects both halves of another author's split insertion", async () => {
+  const r = await reviewer(counterpartyInsertion);
+  try {
+    await r.run(async (c) => {
+      c.document.changeTrackingMode = 'TrackMineOnly';
+      (await match(c, 'thirty')).insertText(' (or sixty)', 'After');
+      await c.sync();
+    });
+    await r.run(async (c) => {
+      const revisions = c.document.body.revisions;
+      revisions.load('items');
+      await c.sync();
+      for (const item of revisions.items) item.load('author');
+      await c.sync();
+      const theirs = revisions.items.filter((item) => item.author === 'Tailspin Legal');
+      // Their insertion is two revisions after the split, one on each side of the new words.
+      expect(theirs).toHaveLength(2);
+      const result = revisions.resolve('reject', theirs);
+      await c.sync();
+      expect(result.value.resolved).toHaveLength(2);
+      c.document.body.load('text');
+      await c.sync();
+      expect(c.document.body.text).toBe('Payment is due within  (or sixty).');
+    });
+  } finally {
+    r.dispose();
+  }
+});

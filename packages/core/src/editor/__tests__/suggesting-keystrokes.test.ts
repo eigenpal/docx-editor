@@ -849,3 +849,17 @@ describe("typing inside another author's insertion, in suggesting mode", () => {
     });
   });
 });
+
+test("typing inside a link within another author's insertion is refused, not nested", () => {
+  const linked =
+    '<w:p><w:ins w:id="1" w:author="Alan Turing" w:date="2026-01-01T00:00:00Z">' +
+    '<w:hyperlink w:anchor="target"><w:r><w:t>abcd</w:t></w:r></w:hyperlink></w:ins></w:p>';
+  withSurface(linked, (surface) => {
+    const before = serializeOoxmlPart(surface.session.part());
+    caretTo(surface, 0, 2);
+    surface.type('X');
+    // The link cannot split, and nested words would go with their proposal on reject.
+    expect(surface.state().lastRejection).not.toBeNull();
+    expect(serializeOoxmlPart(surface.session.part())).toBe(before);
+  });
+});

@@ -955,3 +955,25 @@ describe('a tracked page field', () => {
     if (!result.ok) expect(result.reason).toBe('invalid-property-value');
   });
 });
+
+describe("a tracked insertion inside a container within another author's insertion", () => {
+  for (const [name, opening, closing] of [
+    ['link', '<w:hyperlink w:anchor="target">', '</w:hyperlink>'],
+    ['content control', '<w:sdt><w:sdtPr/><w:sdtContent>', '</w:sdtContent></w:sdt>'],
+  ] as const) {
+    test(`refuses inside a ${name}, which cannot split`, () => {
+      const before = part(
+        `<w:p><w:ins w:id="1" w:author="Alan Turing">${opening}<w:r><w:t>abcd</w:t></w:r>${closing}</w:ins></w:p>`
+      );
+      const result = applyTreeOp(before, {
+        op: 'insertText',
+        paragraphId: paragraphId(before),
+        offset: 2,
+        text: 'XY',
+        revision: ADA,
+      });
+      // Nested inside their proposal, rejecting it would remove these words.
+      expect(result).toMatchObject({ ok: false, reason: 'unsupported-revision' });
+    });
+  }
+});

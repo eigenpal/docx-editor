@@ -10,7 +10,8 @@ import { isValidXmlText } from '../store/package/sinks.ts';
 import { parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { namedChild } from '../store/store/tree-op-nodes.ts';
 import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
-import { admitsForeignTextRevision } from './proposal-foreign-revisions.ts';
+import { foreignTextRefusal } from './proposal-foreign-revisions.ts';
+import type { EditDiagnosticCode } from './diagnostic-vocabulary.ts';
 
 type Proposal = Extract<
   AutomationOperation,
@@ -56,7 +57,11 @@ export function proposalRevisionError(
   allowOwnDeleted = false,
   ownEdgeAuthor?: string,
   // A tracked edit by this author may nest in other authors' pending text revisions.
-  tracked?: { readonly author: string; readonly strikesMark?: boolean }
+  tracked?: {
+    readonly author: string;
+    readonly strikesMark?: boolean;
+    readonly collaborative?: boolean;
+  }
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
   // individual sites and ranges, rather than discarding a group that spans note boundaries.
@@ -88,10 +93,8 @@ export function proposalRevisionError(
       item.author !== tracked.author &&
       ['insert', 'delete', 'replace'].includes(item.revisionKind)
     ) {
-      if (admitsForeignTextRevision(story, items, item, paragraphId, start, end, tracked))
-        return false;
-      foreignRule = 'deleted-text-only';
-      return true;
+      foreignRule = foreignTextRefusal(story, items, item, paragraphId, start, end, tracked);
+      return foreignRule !== null;
     }
     if (item.revisionKind === 'structural') {
       // Row/cell ranges locate review cards at the first paragraph's start. Their actual
@@ -147,18 +150,25 @@ export function proposalRevisionError(
 }
 
 /** Why a tracked edit cannot touch a pending revision. */
-type ProposalRevisionRule = 'deleted-text-only' | 'foreign-revision' | 'own-pending';
+type ProposalRevisionRule =
+  | 'deleted-text-only'
+  | 'collaborative-insertion'
+  | 'foreign-revision'
+  | 'own-pending';
 
 const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
   'deleted-text-only': 'a tracked deletion or replacement needs live text, not only deleted text',
+  'collaborative-insertion':
+    "in collaboration, a tracked edit cannot change text inside another author's pending insertion",
   'foreign-revision':
     "the edit touches another author's pending paragraph mark, formatting, move, or structure",
   'own-pending': "the edit would merge with or cover the author's own pending change",
 };
 
 /** Public diagnostic codes, which the editing API reports in `debugInfo.innerError`. */
-const RULE_CODES: Readonly<Record<ProposalRevisionRule, string>> = {
+const RULE_CODES: Readonly<Record<ProposalRevisionRule, EditDiagnosticCode>> = {
   'deleted-text-only': 'edit.tracked-deleted-text-only',
+  'collaborative-insertion': 'edit.tracked-foreign-revision-unsupported',
   'foreign-revision': 'edit.tracked-foreign-revision-unsupported',
   'own-pending': 'edit.tracked-own-pending-change',
 };

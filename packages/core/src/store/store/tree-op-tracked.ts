@@ -784,10 +784,11 @@ function applyTrackedInsertion(
   };
 
   const rebuilt = rebuild(paragraph.children, []);
-  let children = mergedRevisions(
-    mint,
-    wrappers.size ? liftedOutOfForeignInsertions(rebuilt, wrappers, revision.author, mint) : rebuilt
-  );
+  const lifted = wrappers.size
+    ? liftedOutOfForeignInsertions(rebuilt, wrappers, revision.author, mint)
+    : rebuilt;
+  if (!lifted) return { ok: false, reason: 'unsupported-revision', detail: 'foreign-insertion' };
+  let children = mergedRevisions(mint, lifted);
   if (!placed) {
     // An empty paragraph, or an offset at the very end with no run to hang it on.
     if (offset !== cursor.offset) {
