@@ -120,7 +120,15 @@ export function storyScopeOfNodeId(
   fallback: StoryScope
 ): StoryScope {
   const hash = nodeId?.indexOf('#') ?? -1;
-  const partName = hash === -1 ? '' : nodeId!.slice(0, hash);
+  return storyScopeOfPartName(session, hash === -1 ? '' : nodeId!.slice(0, hash), fallback);
+}
+
+/** The story a part holds: the body, a header or footer, or a notes part. */
+export function storyScopeOfPartName(
+  session: StoryScopeLookup,
+  partName: string,
+  fallback: StoryScope
+): StoryScope {
   if (partName.length === 0 || partName === session.part().name) return { kind: 'body' };
   for (const section of session.headerFooterResolutionBySection()) {
     for (const slots of [section.headers, section.footers]) {

@@ -3,8 +3,8 @@
 //
 // THE NAME IS DOCUMENT-WIDE. A bookmark can live in the body, a header, a footer or a note, and
 // one name means one bookmark across all of them. Adding a name that another story already
-// declares moves it: the other story's markers go first, in their own story transaction, and
-// the new pair is written in the story the selection is in.
+// declares moves it: the other story's markers are removed and the new pair is written in the
+// story the selection is in, in ONE transaction, so the move is one undo step.
 //
 // THE MARKS ARE FURNITURE. With "Show bookmarks" on, a gray bracket is painted at each visible
 // bookmark's start and end, and an I-beam at a point bookmark, in an overlay sheet BESIDE the
@@ -12,9 +12,11 @@
 // never see the marks, and they are never part of the document or its export. They print only
 // when the host asks (`BookmarkMarkOptions.print`). Hidden bookmarks (names starting with an
 // underscore) are not shown unless the host includes them. Marks are painted in the main text,
-// headers and footers (on every page that shows them), footnotes and endnotes.
+// headers and footers (on every page that shows them), footnotes and endnotes. The sheet
+// takes no pointer events, but a host can turn them on for one mark (a tooltip): a press on a
+// mark then never reaches the pages, so it cannot move the caret.
 
-import { caretAt } from '@docx-editor.dev/core/layout';
+import { caretAt, type CaretGeometry } from '@docx-editor.dev/core/layout';
 import type { SurfaceOverlayFrame } from './surface-overlay-sheet.ts';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 import {
@@ -32,7 +34,7 @@ import {
 import type { BookmarkStory, BookmarkSummary } from '../contracts/editor-bookmarks.ts';
 import type { BookmarkMarkInfo, BookmarkMarkOptions } from './docx-editor-types.ts';
 import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
-import { storyScopeOfNodeId, type StoryScopeLookup } from './surface-scope.ts';
+import { storyScopeOfPartName, type StoryScopeLookup } from './surface-scope.ts';
 
 /** What the bookmark lane reads from and writes through. */
 export interface SurfaceBookmarkDeps {
@@ -84,8 +86,12 @@ export interface SurfaceBookmarks {
   insertRefusal(name: string): string | null;
   /** Bookmark the selection under `name`, moving a bookmark that already has it. */
   insert(name: string): boolean;
-  /** Remove the bookmark with this name, compared without case. */
+  /** Remove the bookmark with this name, compared without case, and its copies. */
   remove(name: string): boolean;
+  /** Keep the first bookmark with this name and remove its copies, in one transaction. */
+  keepFirst(name: string): boolean;
+  /** Why a bookmark write cannot happen now, or null. */
+  writeRefusal(): string | null;
   /** Select the bookmark's range and scroll it into view. */
   goTo(name: string): boolean;
   /** Whether the marks are shown. */
@@ -140,22 +146,30 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     readonly scope: StoryScope;
     readonly partName: string;
   };
-  // Read once per package revision: the dialog and the marks ask on every render.
-  let cache: { readonly revision: number; readonly entries: readonly Located[] } | null = null;
+  // Read once per set of story parts: the dialog and the marks ask on every render. Keyed by
+  // the parts themselves, not a revision number, so a collaborator's edit that replaces a part
+  // is seen at once.
+  let cache: { readonly parts: readonly OoxmlPart[]; readonly entries: readonly Located[] } | null =
+    null;
   const located = (): readonly Located[] => {
-    const revision = deps.session.packageRevision();
-    if (cache?.revision === revision) return cache.entries;
+    const parts = deps.session.storyParts();
+    if (
+      cache?.parts.length === parts.length &&
+      cache.parts.every((part, index) => part === parts[index])
+    )
+      return cache.entries;
     const entries: Located[] = [];
-    for (const part of deps.session.storyParts()) {
+    for (const part of parts) {
       for (const record of recordsOf(part)) {
         entries.push({
           record,
-          scope: storyScopeOfNodeId(deps.session, record.startNodeId, { kind: 'body' }),
+          // From the part, not the node id: a collaborator's marker ids name no part.
+          scope: storyScopeOfPartName(deps.session, part.name, { kind: 'body' }),
           partName: part.name,
         });
       }
     }
-    cache = { revision, entries };
+    cache = { parts, entries };
     return entries;
   };
 
@@ -284,6 +298,36 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
         [...elsewhere].map((partName) => (pkg) => withoutBookmarkInPart(pkg, partName, name))
       );
     },
+    keepFirst(name) {
+      const first = find(name);
+      if (!first || deps.writeRefusal() !== null) return false;
+      const key = bookmarkNameKey(name);
+      const elsewhere = new Set(
+        located()
+          .filter(
+            (other) =>
+              bookmarkNameKey(other.record.name) === key && other.partName !== first.partName
+          )
+          .map((other) => other.partName)
+      );
+      const edits = [...elsewhere].map(
+        (partName) => (pkg: OoxmlPackage) => withoutBookmarkInPart(pkg, partName, name)
+      );
+      // Copies in the first's own part go by op, which keeps the first pair's nodes, so two
+      // collaborators who both do this remove the same nodes and converge on one bookmark.
+      if (first.record.copies > 1)
+        return write({ op: 'deleteBookmark', name, keepFirst: true }, first.scope, edits);
+      if (edits.length === 0) return false;
+      let committed = false;
+      deps.commit(() => {
+        committed = deps.session.applyTreeOps([], undefined, undefined, first.scope, {
+          packageEdits: edits,
+        }).committed;
+        return committed;
+      });
+      return committed;
+    },
+    writeRefusal: () => deps.writeRefusal(),
     goTo(name) {
       const entry = find(name);
       if (!entry) return false;
@@ -330,9 +374,30 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
           { ...info, edge: 'end', ...record.end, repeats }
         );
       }
-      paintBookmarkMarks(frame, marks, options.decorate);
+      paintBookmarkMarks(frame, marks, options.decorate, deps.options.bookmarkMarks?.reportError);
     },
   };
+}
+
+/** Caret geometry per layout: one layout object per revision, released with it. */
+const placementCache = new WeakMap<object, Map<string, CaretGeometry | null>>();
+
+const guardedSheets = new WeakSet<HTMLElement>();
+
+/**
+ * Keep a press on a mark from reaching the pages. Marks ignore the pointer unless a host turns
+ * it on for a tooltip; then a mousedown must not move the caret or the selection. A host form
+ * control placed in a mark keeps its default.
+ */
+function guardSheetPresses(sheet: HTMLElement): void {
+  if (guardedSheets.has(sheet)) return;
+  guardedSheets.add(sheet);
+  sheet.addEventListener('mousedown', (event) => {
+    const target = event.target as { readonly localName?: string } | null;
+    const name = target?.localName;
+    if (name === 'input' || name === 'select' || name === 'textarea') return;
+    event.preventDefault();
+  });
 }
 
 /**
@@ -344,19 +409,27 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
 export function paintBookmarkMarks(
   frame: Parameters<SurfaceBookmarks['paint']>[0],
   marks: readonly BookmarkMark[],
-  decorate?: BookmarkMarkOptions['decorate']
+  decorate?: BookmarkMarkOptions['decorate'],
+  onError?: (error: unknown) => void
 ): void {
   const { layer, layout, scale } = frame;
   const document = layer.ownerDocument;
+  guardSheetPresses(layer);
   layer.style.setProperty('--docx-bookmark-scale', String(scale));
   const painted: HTMLElement[] = [];
   const pageIndexes = frame.pages ? [...frame.pages] : layout.pages.map((_page, index) => index);
+  let placements = placementCache.get(layout);
+  if (!placements) placementCache.set(layout, (placements = new Map()));
+  const cached = placements;
   for (const mark of marks) {
     const position = { paragraphId: mark.paragraphId, offset: mark.offset };
     // A header or footer is laid out once and shown on each page that uses it, so its marks
-    // are placed once per painted page.
-    const at = (offset: number, pageIndex?: number) =>
-      caretAt(
+    // are placed once per painted page. Each answer is kept for this layout: a scroll that
+    // repaints the same layout asks again for the same places.
+    const at = (offset: number, pageIndex?: number) => {
+      const key = `${mark.paragraphId}:${offset}:${pageIndex ?? ''}`;
+      if (cached.has(key)) return cached.get(key)!;
+      const geometry = caretAt(
         layout,
         { paragraphId: mark.paragraphId, offset },
         {
@@ -364,11 +437,14 @@ export function paintBookmarkMarks(
           ...(pageIndex !== undefined ? { preferredPageIndex: pageIndex } : {}),
         }
       );
-    const placements = mark.repeats
+      cached.set(key, geometry);
+      return geometry;
+    };
+    const sites = mark.repeats
       ? pageIndexes.map((pageIndex) => at(position.offset, pageIndex))
       : [at(position.offset)];
     const placed = new Set<number>();
-    for (const geometry of placements) {
+    for (const geometry of sites) {
       if (!geometry || !(geometry.height > 0) || placed.has(geometry.pageIndex)) continue;
       if (frame.pages && !frame.pages.has(geometry.pageIndex)) continue;
       const page = layout.pages[geometry.pageIndex];
@@ -400,7 +476,12 @@ export function paintBookmarkMarks(
         story: mark.story,
         edge: mark.edge,
       };
-      element = decorate?.(element, info) ?? element;
+      // A host callback that throws keeps the default mark and does not stop the paint.
+      try {
+        element = decorate?.(element, info) ?? element;
+      } catch (error) {
+        onError?.(error);
+      }
       // Whatever came back is placed the same way and stays out of editing and selection.
       element.dataset.bookmarkName = mark.name;
       element.dataset.bookmarkHidden = String(mark.hidden);

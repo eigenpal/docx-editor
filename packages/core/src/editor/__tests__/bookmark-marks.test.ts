@@ -80,6 +80,46 @@ describe('bookmark mark options', () => {
     expect(titled.map((mark) => mark.title)).toEqual(['Zeta', 'Zeta']);
   });
 
+  test('a decorate callback that throws keeps the default mark and reports the error', () => {
+    const { editor, container } = mount(SAMPLE);
+    const errors: string[] = [];
+    editor.on('error', (error) => errors.push(`${error.code}: ${error.message}`));
+    editor.setBookmarkMarks({
+      decorate(element, mark) {
+        if (mark.edge === 'start') throw new Error('host bug');
+        element.classList.add('decorated');
+      },
+    });
+    editor.exec({ type: 'toggleBookmarks' });
+    expect(marksOf(container).map(describeMark)).toEqual([
+      'Zeta:start:false',
+      'Zeta:end:false',
+      'alpha:point:false',
+    ]);
+    expect(container.querySelectorAll('.decorated')).toHaveLength(2);
+    expect(errors).toEqual(['hostCallback: a bookmark mark callback failed: host bug']);
+    // The rest of the paint ran: the document still renders and edits.
+    expect(editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(true);
+  });
+
+  test('a press on a mark never reaches the pages; a host form control keeps it', () => {
+    const { editor, container } = mount(SAMPLE);
+    editor.setBookmarkMarks({
+      decorate(element, mark) {
+        element.style.pointerEvents = 'auto';
+        if (mark.edge === 'point') element.append(element.ownerDocument.createElement('input'));
+      },
+    });
+    editor.exec({ type: 'toggleBookmarks' });
+    const press = (target: Element) => {
+      const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      return event.defaultPrevented;
+    };
+    expect(press(marksOf(container)[0]!)).toBe(true);
+    expect(press(container.querySelector('.docx-bookmark-mark input')!)).toBe(false);
+  });
+
   test('print keeps the marks for the browser print only on request', () => {
     const { editor, container } = mount(SAMPLE);
     editor.exec({ type: 'toggleBookmarks' });
@@ -148,7 +188,13 @@ describe('openBookmarkDialog', () => {
       code: 'unsupported',
     });
     let opened = 0;
+    let published = 0;
+    editor.on('selectionChange', () => (published += 1));
+    const before = editor.snapshot();
     const off = editor.setBookmarkChrome({ onRequest: () => (opened += 1) });
+    // Chrome that reads `can` re-renders when a dialog registers.
+    expect(published).toBe(1);
+    expect(editor.snapshot()).not.toBe(before);
     expect(editor.can({ type: 'openBookmarkDialog' }).ok).toBe(true);
     expect(editor.exec({ type: 'openBookmarkDialog' })).toEqual({ ok: true, changed: false });
     expect(opened).toBe(1);
@@ -183,11 +229,29 @@ describe('bookmark copies', () => {
     expect([selection.anchor.offset, selection.head.offset]).toEqual([0, 3]);
   });
 
-  test('adding the name again at the first keeps it and removes the copy in one step', () => {
+  test('keepFirstBookmark removes the copy in one step and leaves the selection alone', () => {
     const { editor } = mount(COPIES);
-    editor.exec({ type: 'goToBookmark', name: 'Same' });
-    expect(editor.exec({ type: 'insertBookmark', name: 'Same' }).ok).toBe(true);
+    const surface = editor.surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 1 },
+      head: { paragraphId, offset: 1 },
+    });
+    expect(editor.can({ type: 'keepFirstBookmark', name: 'same' }).ok).toBe(true);
+    expect(editor.exec({ type: 'keepFirstBookmark', name: 'same' })).toEqual({
+      ok: true,
+      changed: true,
+    });
     expect(editor.query({ type: 'bookmarks' })).toMatchObject([{ name: 'Same', duplicates: 0 }]);
+    expect(surface.state().selection.head.offset).toBe(1);
+    // The first pair stayed: it still marks "one".
+    editor.exec({ type: 'goToBookmark', name: 'Same' });
+    const selection = surface.state().selection;
+    expect([selection.anchor.offset, selection.head.offset]).toEqual([0, 3]);
+    expect(editor.can({ type: 'keepFirstBookmark', name: 'Same' })).toMatchObject({
+      ok: false,
+      code: 'notFound',
+    });
     editor.exec({ type: 'undo' });
     expect(editor.query({ type: 'bookmarks' })).toMatchObject([{ name: 'Same', duplicates: 1 }]);
   });

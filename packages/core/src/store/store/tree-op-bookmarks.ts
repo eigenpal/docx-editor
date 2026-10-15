@@ -54,10 +54,15 @@ export interface InsertBookmarkOp {
 /**
  * Remove every marker pair that declares this name, compared without case. The name is the
  * one the file declares, so it is not held to the authoring rules.
+ *
+ * With `keepFirst`, remove only the copies: the pair `listBookmarks` answers for the name
+ * stays where it is. Refused when the part holds no copy. Two collaborators who both remove
+ * the copies remove the same nodes, so their edits converge on one bookmark.
  */
 export interface DeleteBookmarkOp {
   readonly op: 'deleteBookmark';
   readonly name: string;
+  readonly keepFirst?: boolean;
 }
 
 export type BookmarkTreeOp = InsertBookmarkOp | DeleteBookmarkOp;
@@ -113,6 +118,12 @@ function markerIdsNamed(part: OoxmlPart, name: string): readonly string[] {
   return [...starts, ...ends.filter((end) => ids.has(end.markerId)).map((end) => end.nodeId)];
 }
 
+/** The bookmark a name means in this part: the first, as `listBookmarks` answers. */
+function firstNamed(part: OoxmlPart, name: string) {
+  const key = bookmarkNameKey(name);
+  return listBookmarks(part).find((record) => bookmarkNameKey(record.name) === key);
+}
+
 /** Document order of two paragraphs in one part: negative when `a` comes first. */
 function paragraphOrder(part: OoxmlPart, a: string, b: string): number {
   if (a === b) return 0;
@@ -147,6 +158,8 @@ export function validateBookmarkOp(part: OoxmlPart, op: BookmarkTreeOp): TreeOpR
   // A delete names a bookmark the file declares, which may predate the authoring rules.
   if (op.op === 'deleteBookmark') {
     if (op.name.length === 0 || op.name.length > MAX_DELETED_NAME_LENGTH) return 'invalidArgs';
+    if (op.keepFirst !== undefined && typeof op.keepFirst !== 'boolean') return 'invalidArgs';
+    if (op.keepFirst) return (firstNamed(part, op.name)?.copies ?? 0) > 1 ? null : 'invalidArgs';
     return markerIdsNamed(part, op.name).length > 0 ? null : 'invalidArgs';
   }
   if (bookmarkNameProblem(op.name) !== null) return 'invalidArgs';
@@ -169,7 +182,9 @@ export function applyBookmarkOp(
   if (rejection) return { ok: false, reason: rejection };
   const dirty = new Set<string>();
   let current = part;
+  const kept = op.op === 'deleteBookmark' && op.keepFirst ? firstNamed(part, op.name) : undefined;
   for (const nodeId of markerIdsNamed(part, op.name)) {
+    if (nodeId === kept?.startNodeId || nodeId === kept?.endNodeId) continue;
     const paragraph = paragraphOf(current, nodeId);
     if (paragraph) dirty.add(paragraph);
     const removed = removeNode(current, nodeId, options);

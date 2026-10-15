@@ -461,6 +461,7 @@ export function execEditorCommand(
       return execSetWatermark(mounted, command.watermark);
     case 'insertBookmark':
     case 'deleteBookmark':
+    case 'keepFirstBookmark':
     case 'goToBookmark':
       return execBookmarkCommand(mounted, command);
     case 'insertPageField':

@@ -9,7 +9,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { collaborationModule } from '../collaboration-module.ts';
-import { createPeerHarness, zipDocument } from './document-peer-support.ts';
+import { createPeerHarness, R, REL, W, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -136,12 +136,63 @@ test('copies from an offline merge show on both editors, and Keep first converge
   expect(summary(alice)).toEqual([{ name: 'Same', duplicates: 1 }]);
   expect(summary(bob)).toEqual([{ name: 'Same', duplicates: 1 }]);
 
-  // Keep first, as the dialog does it: go to the first, add the name there again.
-  expect(bob.exec({ type: 'goToBookmark', name: 'same' }).ok).toBe(true);
-  expect(bob.exec({ type: 'insertBookmark', name: 'Same' }).ok).toBe(true);
+  // Both press Keep first while offline: each removes the same copy, so they converge on one.
+  peers.pause();
+  expect(alice.exec({ type: 'keepFirstBookmark', name: 'same' }).ok).toBe(true);
+  expect(bob.exec({ type: 'keepFirstBookmark', name: 'Same' }).ok).toBe(true);
+  peers.resume();
   converged();
   expect(summary(alice)).toEqual([{ name: 'Same', duplicates: 0 }]);
+  expect(summary(bob)).toEqual([{ name: 'Same', duplicates: 0 }]);
   expect(alice.exec({ type: 'goToBookmark', name: 'Same' }).ok).toBe(true);
   const selection = alice.surface!.state().selection;
   expect([selection.anchor.offset, selection.head.offset]).toEqual([6, 11]);
+});
+
+const HEADER_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml';
+const WITH_HEADER = zipDocument(
+  `${DOCUMENT}<w:sectPr><w:headerReference w:type="default" r:id="rIdH"/></w:sectPr>`,
+  {
+    overrides: `<Override PartName="/word/header1.xml" ContentType="${HEADER_TYPE}"/>`,
+    documentRels: `<Relationships xmlns="${REL}"><Relationship Id="rIdH" Type="${R}/header" Target="header1.xml"/></Relationships>`,
+    extraXml: {
+      'word/header1.xml': `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Head</w:t></w:r></w:p></w:hdr>`,
+    },
+  }
+);
+
+test('a name moved from the body into a header converges on both editors', async () => {
+  const peers = await harness.pair(WITH_HEADER);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({
+      container,
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    return editor;
+  }) as [Editor, Editor];
+  const converged = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    const left = alice.surface!.session.currentPackage();
+    const right = bob.surface!.session.currentPackage();
+    expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+  };
+  const stories = (editor: Editor) =>
+    editor.query({ type: 'bookmarks' }).map(({ name, story }) => `${name}:${story}`);
+
+  select(alice, 0, 6, 11);
+  expect(alice.exec({ type: 'insertBookmark', name: 'Moved' }).ok).toBe(true);
+  converged();
+  expect(bob.exec({ type: 'editHeaderFooter', position: 'header' }).ok).toBe(true);
+  expect(bob.snapshot().scope.kind).toBe('headerFooter');
+  expect(bob.exec({ type: 'insertBookmark', name: 'moved' }).ok).toBe(true);
+  expect(stories(bob)).toEqual(['moved:headerFooter']);
+  converged();
+  expect(stories(alice)).toEqual(['moved:headerFooter']);
+  expect(stories(bob)).toEqual(['moved:headerFooter']);
 });

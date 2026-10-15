@@ -2,7 +2,7 @@
   "impact": "compatible",
   "fields": [],
   "before": "Bookmarks were preserved and navigated, but no operation added or removed one.",
-  "after": "insertBookmark and deleteBookmark add and remove bookmark marker pairs, across stories in one transaction. Typing at a bookmark start lands inside it, at its end outside it, and an untracked deletion removes the bookmarks it encloses. Concurrent offline adds of one name keep both pairs; every replica reads the first, and the next add or delete of the name removes the copies.",
+  "after": "insertBookmark and deleteBookmark add and remove bookmark marker pairs, across stories in one transaction. Typing at a bookmark start lands inside it, at its end outside it, and an untracked deletion removes the bookmarks it encloses. Concurrent offline adds of one name keep both pairs; every replica reads the first, and keepFirstBookmark (deleteBookmark with keepFirst) removes the copies by node, so concurrent removals converge on one pair. Story lookups use the part name, so a collaborator's marker ids resolve to the right story.",
   "reason": "Both operations and the edit rules reduce to existing canonical tree primitives: marker nodes inserted, removed, and moved within a paragraph. The journal replicates those node changes without changing the shared format, and new marker ids are actor-striped. Show bookmarks is local view state.",
   "tests": [
     "packages/pro/src/collaboration/__tests__/document-bookmarks.test.ts",

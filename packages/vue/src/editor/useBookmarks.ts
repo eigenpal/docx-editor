@@ -22,6 +22,11 @@ export interface UseBookmarksReturn {
   readonly remove: (name: string) => ExecResult;
   /** Select the bookmark and scroll to it. */
   readonly goTo: (name: string) => ExecResult;
+  /**
+   * Keep the first bookmark with this name and remove its copies, which collaborators adding
+   * one name offline can leave. The selection does not move.
+   */
+  readonly keepFirst: (name: string) => ExecResult;
 }
 
 const NOT_READY: ExecResult = { ok: false, code: 'unsupported', reason: 'editor is not ready' };
@@ -68,5 +73,7 @@ export function useBookmarks(): UseBookmarksReturn {
     editorRef.value ? editorRef.value.exec({ type: 'deleteBookmark', name }) : NOT_READY;
   const goTo = (name: string): ExecResult =>
     editorRef.value ? editorRef.value.exec({ type: 'goToBookmark', name }) : NOT_READY;
-  return { bookmarks, isWritable, insert, remove, goTo };
+  const keepFirst = (name: string): ExecResult =>
+    editorRef.value ? editorRef.value.exec({ type: 'keepFirstBookmark', name }) : NOT_READY;
+  return { bookmarks, isWritable, insert, remove, goTo, keepFirst };
 }

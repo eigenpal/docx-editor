@@ -891,6 +891,7 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return { supported: true, mutating: true };
     case 'insertBookmark':
     case 'deleteBookmark':
+    case 'keepFirstBookmark':
     case 'goToBookmark':
       return typeof command.name === 'string' && command.name.length > 0
         ? { supported: true, mutating: command.type !== 'goToBookmark' }

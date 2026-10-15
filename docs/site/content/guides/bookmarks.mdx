@@ -84,7 +84,9 @@ const restore = editor.setBookmarkMarks({
 restore();
 ```
 
-A mark that receives pointer events can cover a few pixels of text, so keep the mark narrow if you turn them on.
+A mark that receives pointer events covers a few pixels of text. A press on a mark does not move the caret or the selection, so keep the mark narrow if you turn pointer events on. A form control that you put in a mark still receives its presses.
+
+If `decorate` throws, the editor keeps the default mark, paints the other marks, and reports the error as an `error` event with the code `hostCallback`.
 
 ## How editing treats bookmarks
 
@@ -125,7 +127,13 @@ Bookmark names are unique in the whole document, across the main text, headers, 
 
 Bookmark writes synchronize like other edits. If two people add the same name at different places while one of them is offline, both bookmarks remain after they reconnect. Every participant then uses the first one in document order: the list, **Go To**, links, and the marks all use it. The editor does not remove the copy by itself, because an automatic edit could remove a bookmark that someone placed on purpose.
 
-The copies are visible instead. The `duplicates` field of the `bookmarks` query counts them. When you pick the name in the Bookmark dialog, the dialog says how many other places use it and shows **Keep first**. **Keep first** adds the name again at the first bookmark, which removes every copy in one undo step. Deleting the name also removes every copy.
+The copies are visible instead. The `duplicates` field of the `bookmarks` query counts them. When you pick the name in the Bookmark dialog, the dialog says how many other places use it and shows **Keep first**. **Keep first** keeps the first bookmark and removes every copy in one undo step. It does not move the selection. If two people select **Keep first** at the same time, they remove the same copies, and both end with one bookmark. Deleting the name also removes every copy.
+
+To remove the copies from your own UI, run the `keepFirstBookmark` command. It fails with `notFound` when the name has no copies:
+
+```ts
+editor.exec({ type: 'keepFirstBookmark', name: 'Intro' });
+```
 
 ## Build your own bookmark UI
 

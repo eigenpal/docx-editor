@@ -99,7 +99,7 @@ const OpenBookmarkDialog = defineComponent({
   setup(props, { slots }) {
     const { t } = useTranslation();
     const currentGeneration = useDialogGeneration(() => props.open, props.onClose);
-    const { bookmarks, isWritable, insert, remove, goTo } = useBookmarks();
+    const { bookmarks, isWritable, insert, remove, goTo, keepFirst } = useBookmarks();
     // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
     const name = ref(bookmarkDialogInitialName(bookmarks.value));
     const sortBy = ref<BookmarkSortOrder>('name');
@@ -160,12 +160,10 @@ const OpenBookmarkDialog = defineComponent({
       if (result.ok) visited.value = true;
     };
 
-    // Adding the name again at the first bookmark keeps it and removes every copy, in one step.
     const handleKeepFirst = () => {
       const existing = nameState.value.existing;
       if (!existing || !isWritable.value) return;
-      const result = goTo(existing.name).ok ? insert(existing.name) : { ok: false };
-      refused.value = !result.ok;
+      refused.value = !keepFirst(existing.name).ok;
     };
 
     const setValue: UseBookmarkDialogReturn['setValue'] = (field, value) => {

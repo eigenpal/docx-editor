@@ -88,7 +88,7 @@ function OpenBookmarkDialog({
 }: DocxEditorBookmarkDialogProps): ReactElement | null {
   const { t } = useTranslation();
   const validDocument = useDialogDocument(open, onClose);
-  const { bookmarks, isWritable, insert, remove, goTo } = useBookmarks();
+  const { bookmarks, isWritable, insert, remove, goTo, keepFirst } = useBookmarks();
   // Opened inside a bookmark, the dialog names it, ready for Go To or Delete.
   const [name, setName] = useState(() => bookmarkDialogInitialName(bookmarks));
   const [sortBy, setSortBy] = useState<BookmarkSortOrder>('name');
@@ -147,13 +147,11 @@ function OpenBookmarkDialog({
     if (result.ok) setVisited(true);
   }, [nameState, goTo]);
 
-  // Adding the name again at the first bookmark keeps it and removes every copy, in one step.
   const handleKeepFirst = useCallback(() => {
     const existing = nameState.existing;
     if (!existing || !isWritable) return;
-    const result = goTo(existing.name).ok ? insert(existing.name) : { ok: false };
-    setRefused(!result.ok);
-  }, [nameState.existing, isWritable, goTo, insert]);
+    setRefused(!keepFirst(existing.name).ok);
+  }, [nameState.existing, isWritable, keepFirst]);
 
   const selected = nameState.existing?.name ?? '';
   // A list box with no matching value would show its first row as chosen; show none instead.

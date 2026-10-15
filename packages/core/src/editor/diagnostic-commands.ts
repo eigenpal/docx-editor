@@ -35,6 +35,7 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   exitHeaderFooter: true,
   insertBreak: true,
   goToBookmark: true,
+  keepFirstBookmark: true,
   insertBookmark: true,
   insertColumn: true,
   insertContentControl: true,

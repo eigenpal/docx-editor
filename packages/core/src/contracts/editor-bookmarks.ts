@@ -50,8 +50,18 @@ export interface EditorBookmarkCommands {
    * character other than a letter, a digit or an underscore, or has more than 40 characters.
    */
   insertBookmark: { name: string };
-  /** Remove the bookmark with this name, compared without case. The text stays. */
+  /**
+   * Remove the bookmark with this name, compared without case, and any copies of it in other
+   * places. The text stays.
+   */
   deleteBookmark: { name: string };
+  /**
+   * Keep the bookmark this name means, the first in document order, and remove its copies, in
+   * one undo step. The selection does not move. Collaborators who add one name while offline
+   * can leave copies; `BookmarkSummary.duplicates` counts them. Refused with `notFound` when
+   * the name has no copies.
+   */
+  keepFirstBookmark: { name: string };
   /** Select the bookmark's text, or put the caret at a point bookmark, and scroll to it. */
   goToBookmark: { name: string };
   /** Show or hide bracket marks at bookmarks. A view command: the document does not change. */

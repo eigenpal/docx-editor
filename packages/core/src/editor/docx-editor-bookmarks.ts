@@ -10,13 +10,14 @@ import { bookmarkNameRefusal } from './surface-bookmarks.ts';
 
 type BookmarkCommand = Extract<
   EditorCommand,
-  { type: 'insertBookmark' | 'deleteBookmark' | 'goToBookmark' }
+  { type: 'insertBookmark' | 'deleteBookmark' | 'keepFirstBookmark' | 'goToBookmark' }
 >;
 
 function isBookmarkCommand(command: EditorCommand): command is BookmarkCommand {
   return (
     command.type === 'insertBookmark' ||
     command.type === 'deleteBookmark' ||
+    command.type === 'keepFirstBookmark' ||
     command.type === 'goToBookmark'
   );
 }
@@ -40,6 +41,18 @@ export function bookmarkCommandRefusal(
   }
   if (!hasBookmark(surface, command.name)) {
     return { ok: false, code: 'notFound', reason: 'the document has no bookmark with that name' };
+  }
+  if (command.type === 'keepFirstBookmark') {
+    const key = bookmarkNameKey(command.name);
+    const entry = surface.bookmarkEditing
+      .list()
+      .find((bookmark) => bookmarkNameKey(bookmark.name) === key);
+    if (!entry?.duplicates)
+      return { ok: false, code: 'notFound', reason: 'the bookmark has no copies' };
+  }
+  if (command.type !== 'goToBookmark') {
+    const refusal = surface.bookmarkEditing.writeRefusal();
+    if (refusal) return { ok: false, code: 'locked', reason: refusal };
   }
   return null;
 }
@@ -75,7 +88,9 @@ export function execBookmarkCommand(
   const done =
     command.type === 'insertBookmark'
       ? surface.bookmarkEditing.insert(command.name)
-      : surface.bookmarkEditing.remove(command.name);
+      : command.type === 'keepFirstBookmark'
+        ? surface.bookmarkEditing.keepFirst(command.name)
+        : surface.bookmarkEditing.remove(command.name);
   return done
     ? { ok: true, changed: true }
     : {

@@ -23,6 +23,11 @@ export interface UseBookmarksReturn {
   readonly remove: (name: string) => ExecResult;
   /** Select the bookmark and scroll to it. */
   readonly goTo: (name: string) => ExecResult;
+  /**
+   * Keep the first bookmark with this name and remove its copies, which collaborators adding
+   * one name offline can leave. The selection does not move.
+   */
+  readonly keepFirst: (name: string) => ExecResult;
 }
 
 const NOT_READY: ExecResult = { ok: false, code: 'unsupported', reason: 'editor is not ready' };
@@ -81,8 +86,13 @@ export function useBookmarks(): UseBookmarksReturn {
       editor ? editor.exec({ type: 'goToBookmark', name }) : NOT_READY,
     [editor]
   );
+  const keepFirst = useCallback(
+    (name: string): ExecResult =>
+      editor ? editor.exec({ type: 'keepFirstBookmark', name }) : NOT_READY,
+    [editor]
+  );
   return useMemo(
-    () => ({ bookmarks, isWritable, insert, remove, goTo }),
-    [bookmarks, isWritable, insert, remove, goTo]
+    () => ({ bookmarks, isWritable, insert, remove, goTo, keepFirst }),
+    [bookmarks, isWritable, insert, remove, goTo, keepFirst]
   );
 }
