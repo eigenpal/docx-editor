@@ -252,6 +252,7 @@ export class TreeDocumentStore {
   private commitCounter = 0;
   private readonly undoStack: HistoryEntry[] = [];
   private readonly redoStack: HistoryEntry[] = [];
+  private pushCount = 0;
   private readonly subscribers = new Set<(change: TreeModelChange) => void>();
   private readonly historyLimit: number;
   /** See {@link TreeDocumentStoreOptions.settingsPart}. */
@@ -327,6 +328,14 @@ export class TreeDocumentStore {
   /** Retained entries — the unit `undo()` reverses, so tests can assert grouping. */
   get historyDepth(): number {
     return this.undoStack.length;
+  }
+  /**
+   * How many entries this store has ever pushed. Monotonic, unlike `historyDepth`, which
+   * stands still at the history limit because the oldest entry is shifted out.
+   * @internal
+   */
+  get historyPushCount(): number {
+    return this.pushCount;
   }
   get compositionActive(): boolean {
     return this.composition !== null;
@@ -918,7 +927,20 @@ export class TreeDocumentStore {
     return this.redoStack[this.redoStack.length - 1]?.selectionAfter ?? null;
   }
 
+  /**
+   * Remove the newest undo entry and answer its selections, for the package coordinator
+   * when a package history group absorbs the story pointer that entry belonged to.
+   * @internal
+   */
+  discardNewestUndoEntry(): Pick<HistoryEntry, 'selectionBefore' | 'selectionAfter'> | null {
+    const entry = this.undoStack.pop();
+    return entry
+      ? { selectionBefore: entry.selectionBefore, selectionAfter: entry.selectionAfter }
+      : null;
+  }
+
   private pushUndo(entry: HistoryEntry): void {
+    this.pushCount += 1;
     this.undoStack.push(entry);
     if (this.undoStack.length > this.historyLimit) this.undoStack.shift();
   }

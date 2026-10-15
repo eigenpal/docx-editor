@@ -176,9 +176,9 @@ export function setReviewCommentResolved(
   // truncation or malformed metadata must refuse even when the root already matches.
   let ok = false;
   let changed = false;
-  const refused = deps.surface.commitReviewOps(() => {
+  const refused = deps.surface.commitReviewOps((historyToken) => {
     const revision = deps.surface!.session.packageRevision();
-    ok = deps.surface!.session.setCommentResolved(thread.id, resolved);
+    ok = deps.surface!.session.setCommentResolved(thread.id, resolved, { historyToken });
     changed = ok && deps.surface!.session.packageRevision() !== revision;
     return { committed: changed };
   }, 'comment-resolve');

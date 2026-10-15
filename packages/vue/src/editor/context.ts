@@ -37,10 +37,44 @@ export function useEditorStateTick(): ShallowRef<number> {
 
 /** @public */
 export interface ReviewRailRegistry {
+  /**
+   * Review columns registered through `register`: the packaged rail, and any column that
+   * serves comment drafts. The Add comment controls in the toolbar and the context menu
+   * appear only while this is above zero.
+   */
   readonly mounted: number;
+  /**
+   * Register a review column that serves comment drafts. Also reserves the review gutter.
+   * Call it on mount, together with `registerCommentDraft`. Returns the unregister function.
+   */
   readonly register: () => () => void;
+  /**
+   * Claims registered through `reserveGutter`: columns that need the review gutter but
+   * serve no comment draft. The viewport reserves the gutter while `mounted + gutters` is
+   * above zero.
+   */
+  readonly gutters?: number;
+  /** Reserve the review gutter without showing comment controls. Returns the release. */
+  readonly reserveGutter?: () => () => void;
+  /**
+   * Receive the Add comment requests. The handler takes no arguments: it reads the
+   * selection's position with `getSelectionPlacement`, pins the selection with
+   * `retainSelection`, and opens the pane. Release the pin with `releaseSelection` when the
+   * draft closes or is cancelled. The most recently registered handler receives each request. Do not register
+   * while the column cannot open a draft, such as in viewing mode: a request counts as
+   * served once a handler runs. Returns the unregister function.
+   */
   readonly registerCommentDraft: (handler: () => void) => () => void;
+  /**
+   * Send an Add comment request to the latest handler. Returns `true` when a handler ran,
+   * even if it then opened nothing, and `false` when none is registered.
+   */
   readonly requestCommentDraft: () => boolean;
+}
+
+/** Whether anything under the Root claims the review gutter. @internal */
+export function claimsReviewGutter(registry: ReviewRailRegistry | null | undefined): boolean {
+  return (registry?.mounted ?? 0) + (registry?.gutters ?? 0) > 0;
 }
 
 /** @public */

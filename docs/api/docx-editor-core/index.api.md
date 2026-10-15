@@ -1607,8 +1607,9 @@ export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | '
 
 // @public
 export interface Editor extends EditorAnchorNavigation, EditorHighlights, EditorReviewHits {
-    acceptReviewItem(key: string): ExecResult;
-    addComment(text: string, author?: string): ExecResult;
+    acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
+    addComment(text: string, options?: HistoryGroupOptions): ExecResult;
+    addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
     beginHistoryGroup(): HistoryGroup;
     can(command: EditorCommand, options?: EditorExecOptions): CanResult;
     canExecuteImageCommand(command: Extract<EditorCommand, {
@@ -1616,7 +1617,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     }>, options?: {
         scope?: EditorScope;
     }): CanResult;
-    deleteReviewItem(key: string): ExecResult;
+    deleteReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     // (undocumented)
     destroy(): void;
     // (undocumented)
@@ -1742,13 +1743,13 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     } & EditorQueries[K], options?: {
         scope?: EditorScope;
     }): EditorQueryResults[K];
-    // (undocumented)
-    rejectReviewItem(key: string): ExecResult;
+    rejectReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
     relayout(options?: {
         sync?: boolean;
     }): void;
     releaseSelection(pin: SelectionPin): void;
-    replyToReviewItem(key: string, text: string, author?: string): ExecResult;
+    replyToReviewItem(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
+    replyToReviewItem(key: string, text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
     reportCustomNodeDiagnostic(diagnostic: unknown): void;
     retainSelection(): SelectionPin | null;
     save(): Promise<ArrayBuffer>;
@@ -1758,7 +1759,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
     setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
     // (undocumented)
     setActiveScope(scope: ViewScope): void;
-    setCommentResolved(key: string, resolved: boolean): ExecResult;
+    setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
     // (undocumented)
     setEditingMode(mode: DocumentEditingMode): ExecResult;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null, options?: {
@@ -2080,7 +2081,7 @@ export interface EditorEvents {
 }
 
 // @public
-export interface EditorExecOptions {
+export interface EditorExecOptions extends HistoryGroupOptions {
     readonly historyGroup?: HistoryGroup;
     readonly scope?: EditorScope;
 }
@@ -2738,6 +2739,7 @@ export interface HistoryGroup {
     // (undocumented)
     readonly [historyGroupBrand]: true;
     end(): void;
+    readonly lastOutcome: HistoryGroupOutcome | null;
     readonly state: 'open' | 'closed';
 }
 
@@ -2754,11 +2756,18 @@ export interface HistoryGroupBindingOptions {
 }
 
 // @public
+export interface HistoryGroupOptions {
+    readonly historyGroup?: HistoryGroup;
+}
+
+// @public
 export interface HistoryGroupOutcome {
     // (undocumented)
     readonly kind: 'started' | 'extended' | 'split' | 'none';
     // (undocumented)
-    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history' | 'package-unit' | 'composition';
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history'
+    /** @deprecated No longer reported: writes that span document parts now extend the group. */
+    | 'package-unit' | 'composition';
 }
 
 // @public

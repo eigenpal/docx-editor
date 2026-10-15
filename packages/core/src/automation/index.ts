@@ -169,3 +169,7 @@ export type {
   PerformanceDiagnosticCode,
   ReviewDiagnosticCode,
 } from './diagnostic-vocabulary.ts';
+
+// The editor's history group handle, by type only, so an automation runtime can name it
+// without depending on the editor lane.
+export type { HistoryGroup, HistoryGroupOutcome } from '../contracts/editor-scope.ts';

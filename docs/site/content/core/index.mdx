@@ -94,7 +94,7 @@ Typing uses short undo groups. A pause of at least 1 second starts a new group o
 - Undo and redo.
 - An edit to the same paragraph by a collaborator, by automation, or by another editor on the same document.
 
-Each Backspace, Delete, and Enter is its own undo step. Typing over a selection joins the text typed within the same time limits. Collaborative sessions group typing runs the same way. Separate editor deletion and formatting commands stay separate in collaborative sessions too. Undo restores the original text selection, including selections across paragraphs. Redo restores the final selection.
+Each Backspace, Delete, and Enter is its own undo step. Typing over a selection joins the text typed within the same time limits. Typing over a selection that removes a note reference or a whole comment is also one undo step, including the removed note or comment. Collaborative sessions group typing runs the same way. Separate editor deletion and formatting commands stay separate in collaborative sessions too. Undo restores the original text selection, including selections across paragraphs. Redo restores the final selection.
 
 Caret formatting has its own undo step. For example, type text, turn on **Bold**, and type more text. Undo removes the second text run, then undoes **Bold**, then removes the first text run. Caret formatting stays local to the editor and does not change the document until you type.
 
@@ -189,7 +189,15 @@ A handle belongs to one editor and mounted document. Loading a document, detachi
 
 #### Supported commands and history outcomes
 
-Grouping supports `toggleMark`, `setMarkAttr`, `setAlignment`, `setParagraphDirection`, `clearFormatting`, `setLineSpacing`, `setParagraphSpacing`, `setParagraphStyle`, and `setParagraphFormat`. Other command families reject `historyGroup` before changing the document. These include text and structural edits, images, hyperlinks, notes, header/footer lifecycle, review, protection, form fields, and content controls. Those commands can create undo entries that cover multiple document parts or apply changes asynchronously. Omit `historyGroup` to run them with their default history behavior.
+Grouping supports these `exec` commands:
+
+- Formatting: `toggleMark`, `setMarkAttr`, `setAlignment`, `setParagraphDirection`, `clearFormatting`, `setLineSpacing`, `setParagraphSpacing`, `setParagraphStyle`, and `setParagraphFormat`.
+- Tracked proposals: `proposeInsertion`, `proposeDeletion`, and `proposeReplacement`.
+- Review: `resolveAllReviewChanges` and `setReviewChangesAuthor`.
+
+The review methods `addComment`, `replyToReviewItem`, `setCommentResolved`, `deleteReviewItem`, `acceptReviewItem`, and `rejectReviewItem` take the same handle in their last `options` argument. `addComment` and `replyToReviewItem` also accept the options in place of the author, such as `editor.addComment(text, { historyGroup })`. For browser automation, pass it to `runtime.run({ historyGroup }, callback)`. For more information, see [Group a review decision](#group-a-review-decision).
+
+Other command families reject `historyGroup` before changing the document. These include typing, structural edits, images, hyperlinks, notes, header/footer lifecycle, protection, form fields, and content controls. Some of those commands apply changes asynchronously or through the typing buffer. Omit `historyGroup` to run them with their default history behavior.
 
 For supported commands, inspect `result.history?.kind`. A _story_ in this table is a document region, such as the body, a header, or a footnote.
 
@@ -197,7 +205,8 @@ For supported commands, inspect `result.history?.kind`. A _story_ in this table 
 | --- | --- |
 | First committed frame | `history.kind: 'started'` |
 | Further frame on the same open undo entry | `extended` |
-| Intervening write, another group, typing flush, or local story change | Next committed frame reports `split` |
+| Intervening write, another group, or typing flush | Next committed frame reports `split` |
+| Frame in another story, or a write that spans document parts | `extended`; the frames become one undo entry |
 | Undo or redo | Next committed frame starts a separate entry; `exec` undo/redo reports reason `undo-redo` |
 | Read-only command without a group, such as `selectAll` | Does not close the group |
 | Caret formatting changes the next typing format | Starts or extends a local undo entry |
@@ -208,7 +217,43 @@ For supported commands, inspect `result.history?.kind`. A _story_ in this table 
 
 The result describes the undo entry recorded for the command. An accepted call does not necessarily create an entry. Reapplying the same property value can report `changed: true` and `extended`. At a caret, formatting can set the format for subsequent typing and report `changed: false`. Its local undo entry still reports `started`, `extended`, or `split`.
 
-If composition or a transaction that spans document parts prevents grouping, the command reports `split` with reason `composition` or `package-unit`.
+If an IME composition prevents grouping, the command reports `split` with reason `composition`.
+
+#### Group a review decision
+
+A review decision often combines several writes: you resolve the other party's tracked changes, write a counter-proposal, and explain it in a comment. Pass one handle to each write, and the decision becomes one undo step and one redo step. The writes can mix `exec` commands, review methods, and browser automation runs.
+
+The following example rejects the other party's changes, replaces text through the browser runtime, and comments on the replacement. Each step checks its result:
+
+```ts
+// `keys` are the other party's change keys from `editor.getReviewItems()`.
+// `runtime` is `DocxEditor.createBrowser(editor, { author: 'Reviewer' })`.
+const decision = editor.beginHistoryGroup();
+try {
+  const resolved = editor.exec(
+    { type: 'resolveAllReviewChanges', action: 'reject', keys },
+    { historyGroup: decision }
+  );
+  if (!resolved.ok) throw new Error(resolved.reason);
+  await runtime.run({ historyGroup: decision }, async (context) => {
+    const ranges = context.document.body.search('30 days');
+    ranges.load('items');
+    await context.sync();
+    const target = ranges.items[0];
+    if (!target) throw new Error('The document has no "30 days" text.');
+    const replaced = target.insertText('45 days', 'Replace');
+    await context.sync();
+    replaced.insertComment('Counter-proposal: 45 days.');
+    await context.sync();
+  });
+} finally {
+  decision.end();
+}
+```
+
+Every `context.sync()` in the run joins the group. A run without the `historyGroup` option never joins an open group, so unrelated automation keeps its own undo steps. If the handle is closed or belongs to another editor when the run starts, `run` rejects with `InvalidArgument` and `target: 'historyGroup'`, and the callback does not run. If the handle closes during the run, the next `context.sync()` rejects with the same error and writes nothing. A run has no `ExecResult`, so its outcome is on the handle. The whole run counts as one write: after the callback finishes, read `decision.lastOutcome`. If any sync in the run split the group, the outcome is `split` and the editor emits one `historyDiagnostic` event. Server and collaborative runtimes have no editor history, so they reject the option with `NotSupported`.
+
+A review method that receives a closed handle, or a handle from another editor, returns `{ ok: false, code: 'unsupported' }` and changes nothing. Start a new group with `beginHistoryGroup()` after `end()`, a document load, or a detach.
 
 #### Diagnose unexpected boundaries
 
@@ -218,7 +263,7 @@ Subscribe to `historyDiagnostic` for optional development feedback. A `split` no
 
 #### Collaboration boundaries
 
-In a collaborative session, grouping affects undo for the session that makes the edits. Each collaborator keeps its own undo history. Grouped frames can extend one entry beyond the normal capture timeout. Ungrouped edits use the shared undo manager's timed capture behavior and can also share an undo entry. A story change can stay in one collaborative undo entry. Local store history splits the group at a story change.
+In a collaborative session, grouping affects undo for the session that makes the edits. Each collaborator keeps its own undo history. Grouped frames can extend one entry beyond the normal capture timeout. Ungrouped edits use the shared undo manager's timed capture behavior and can also share an undo entry. Review and comment writes are the exception: an ungrouped one is always its own undo entry, and never joins earlier typing. A grouped review decision is one collaborative undo entry, including its comments and story changes. Undoing it reverts only the deciding session's writes: an edit another collaborator made while the group was open stays in the document.
 
 A later local undo entry, undo, redo, or a rejected journal resets shared capture. The next frame that records history reports a split. A journal records one committed transaction. If a transaction changes no tracked shared state, it creates no shared undo entry. Commands that publish separate relationship journals, including external hyperlink insertion, reject the grouping option.
 

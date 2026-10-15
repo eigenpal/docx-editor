@@ -28,6 +28,7 @@ export {
   openTreeSession,
   PROJECTION_ORIGIN,
   type DocumentStyleEntry,
+  type PackageWriteOptions,
   type OpenTreeSessionResult,
   type TreeApplyOptions,
   type TreeApplyResult,

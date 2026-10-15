@@ -61,14 +61,11 @@ import { hasFormattingBalloon } from './review-balloon-anchor.ts';
 import {
   COLLAPSE_DISPLACEMENT_PX,
   COLLAPSED_CARD_HEIGHT,
-  COMPACT_CARD_INSET,
   COMPACT_CARD_WIDTH,
   COMPOSE_KEY,
   DEFAULT_CARD_HEIGHT,
-  INITIAL_METRICS,
   NO_PLACEMENT_REVIEW_QUERY,
   PAIRED_REVIEW_QUERY,
-  RAIL_GUTTER,
   RAIL_OVERSCAN,
   guardMousedown,
   idsOf,
@@ -78,7 +75,6 @@ import {
   selectDocumentReadOnly,
   selectPaneOpening,
   selectRevisionsIn,
-  type RailMetrics,
 } from './review-shared.ts';
 import {
   ReviewContextKey,
@@ -115,6 +111,8 @@ import {
   ReviewMarkers,
 } from './review-rail-parts.tsx';
 import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
+import { bindReviewRailMetrics, ReviewRailMetricsKey } from './useReviewRailMetrics.ts';
+import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 
 function takeRoot(key: string, fallback: VNode, parts: Record<string, VNode>): VNode {
   if (!(key in parts)) return fallback;
@@ -255,11 +253,12 @@ const ReviewRoot = defineComponent({
     const open = computed(() => reviewHook.paneOpen.value);
     const gutter = useReviewGutter();
     const measuredGutterEnd = ref<number | null>(null);
-    const compact = computed(
-      () =>
-        open.value &&
-        (measuredGutterEnd.value ?? gutter.value.inlineEnd) > 0 &&
-        (measuredGutterEnd.value ?? gutter.value.inlineEnd) < REVIEW_PANE_GUTTER
+    const compact = computed(() =>
+      isCompactReviewColumn(
+        open.value,
+        measuredGutterEnd.value ?? gutter.value.inlineEnd,
+        REVIEW_PANE_GUTTER
+      )
     );
     const expanded = computed(() => open.value && !compact.value);
 
@@ -342,96 +341,26 @@ const ReviewRoot = defineComponent({
     };
     const observeSlot = useReviewSlotSizing(measureHeight);
 
-    const metrics = ref<RailMetrics>(INITIAL_METRICS);
-    let metricsCleanup: (() => void) | undefined;
-    watch(
-      [editorRef, items, documentAbsent, () => props.hidden, railRef, compact],
-      () => {
-        metricsCleanup?.();
-        metricsCleanup = undefined;
-        const rail = railRef.value;
-        const editor = editorRef.value;
-        if (!editor || !rail || documentAbsent.value || props.hidden) return;
-        const parent = rail.offsetParent as HTMLElement | null;
-        const surface = parent?.querySelector<HTMLElement>('.docx-paginated-surface') ?? null;
-        // The rail's own window: a pop-out window measures, observes and animates there.
-        const win = hostWindowOf(rail);
-        const sync = (): void => {
-          if (parent) {
-            const reserved = Number.parseFloat(
-              win.getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
-            );
-            measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
-          } else {
-            measuredGutterEnd.value = null;
-          }
-          const box = surface && parent ? surface.getBoundingClientRect() : null;
-          const frame = box && parent ? parent.getBoundingClientRect() : null;
-          const left =
-            box && frame && parent
-              ? box.right - frame.left - parent.clientLeft + parent.scrollLeft + RAIL_GUTTER
-              : null;
-          const next: RailMetrics = {
-            scale: editor.getRenderScale(),
-            top:
-              box && frame && parent
-                ? box.top - frame.top - parent.clientTop + parent.scrollTop
-                : 0,
-            left,
-            compactCardLeft:
-              left === null || !parent
-                ? null
-                : parent.scrollLeft +
-                  parent.clientWidth -
-                  left -
-                  COMPACT_CARD_WIDTH -
-                  COMPACT_CARD_INSET,
-          };
-          const previous = metrics.value;
-          if (
-            previous.scale !== next.scale ||
-            previous.top !== next.top ||
-            previous.left !== next.left ||
-            previous.compactCardLeft !== next.compactCardLeft
-          ) {
-            metrics.value = next;
-          }
-        };
-        sync();
-        const observer = new win.ResizeObserver(sync);
-        if (parent) observer.observe(parent);
-        if (surface) observer.observe(surface);
-        const mutationObserver =
-          parent && typeof win.MutationObserver !== 'undefined'
-            ? new win.MutationObserver(sync)
-            : null;
-        mutationObserver?.observe(parent!, { attributes: true, attributeFilter: ['style'] });
-        if (!compact.value || !parent) {
-          metricsCleanup = () => {
-            mutationObserver?.disconnect();
-            observer.disconnect();
-          };
-          return;
-        }
-        let frameId = 0;
-        const onScroll = () => {
-          if (frameId !== 0) return;
-          frameId = win.requestAnimationFrame(() => {
-            frameId = 0;
-            sync();
-          });
-        };
-        parent.addEventListener('scroll', onScroll, { passive: true });
-        metricsCleanup = () => {
-          if (frameId !== 0) win.cancelAnimationFrame(frameId);
-          parent.removeEventListener('scroll', onScroll);
-          mutationObserver?.disconnect();
-          observer.disconnect();
-        };
+    // Where the rail sits, from the shared `../review/rail-metrics.ts`. The viewport's
+    // reserved gutter is read on the same pass, so `compact` follows a style change at once.
+    const metrics = bindReviewRailMetrics({
+      rail: () => (documentAbsent.value || props.hidden ? null : railRef.value),
+      editor: () => editorRef.value,
+      trackScroll: () => compact.value,
+      remeasure: () => items.value,
+      beforeMeasure: (parent) => {
+        const reserved = parent
+          ? Number.parseFloat(
+              hostWindowOf(parent).getComputedStyle(parent).getPropertyValue('--docx-review-gutter')
+            )
+          : Number.NaN;
+        measuredGutterEnd.value = Number.isFinite(reserved) ? reserved : null;
       },
-      { flush: 'post' }
+    });
+    provide(
+      ReviewRailMetricsKey,
+      computed(() => ({ ...metrics.value, compact: compact.value }))
     );
-    onUnmounted(() => metricsCleanup?.());
 
     let dismissCleanup: (() => void) | undefined;
     watch(

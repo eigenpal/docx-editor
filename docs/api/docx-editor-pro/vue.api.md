@@ -1151,6 +1151,15 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
+export interface ReviewRailMetrics {
+    readonly compact: boolean;
+    readonly compactCardLeft: number | null;
+    readonly left: number | null;
+    readonly scale: number;
+    readonly top: number;
+}
+
+// @public
 export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
 
 // @public
@@ -1237,6 +1246,20 @@ export function useReviewItem(): ComputedRef<ReviewItemView | null>;
 
 // @public (undocumented)
 export function useReviewOf(editorRef: Ref<Editor | null>, query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;
+
+// @public
+export function useReviewRailMetrics(railRef?: MaybeRefOrGetter<HTMLElement | null> | null, options?: MaybeRefOrGetter<UseReviewRailMetricsOptions | undefined>): UseReviewRailMetricsReturn;
+
+// @public
+export interface UseReviewRailMetricsOptions {
+    readonly reserveGutter?: boolean;
+    readonly trackScroll?: boolean;
+}
+
+// @public
+export interface UseReviewRailMetricsReturn {
+    readonly metrics: Readonly<Ref<ReviewRailMetrics>>;
+}
 
 // @public (undocumented)
 export interface UseReviewReturn {

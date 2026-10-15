@@ -14,7 +14,8 @@ A declaration or enum value does not guarantee runtime support for every documen
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
 | `DocxEditor`, `DocxEditorNamespace` | `createServer`, `createCollaborative`; browser entry adds `createBrowser` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
-| `DocxEditorRuntime`, `DocxEditorServerRuntime` | `capabilities`, both `run` overloads, `dispose`; server adds `save` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `DocxEditorRuntime`, `DocxEditorServerRuntime` | `capabilities`, the three `run` overloads (callback, objects and callback, options and callback), `dispose`; server adds `save` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
+| `RunOptions`, `HistoryGroup`, `HistoryGroupOutcome` | `historyGroup` (browser runtime only), `previousObjects`; the editor history group handle's `state`, `lastOutcome`, and `end` | [Join an editor history group](/docs/2.x/editor-api/runtime#join-an-editor-history-group) |
 | `CreateServerOptions`, `CreateCollaborativeOptions`, `CreateBrowserOptions` | Author, revision view, host-specific parsing, modules, and pagination | [Runtime and setup](/docs/2.x/editor-api/runtime) |
 | `DocumentCapabilities` | `document`, `save`, `events`, `selection`, `scrolling`, `layout` | [Runtime and setup](/docs/2.x/editor-api/runtime) |
 | `DocumentLimits`, `DocumentZipLimits`, `DocumentXmlLimits`, `EditorModule`, `RuntimeDiagnostic` | Input budgets, DOM-free module contributions, and the anonymous diagnostics a module with `onDiagnostic` receives | [Runtime and setup](/docs/2.x/editor-api/runtime) |

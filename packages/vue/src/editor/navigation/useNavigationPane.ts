@@ -126,7 +126,10 @@ export function useNavigationPane(
 
   const store = useNavigationLayoutStore();
   const viewport = useNavigationViewportElement();
-  const rail = inject(ReviewRailContext, shallowRef({ mounted: 0, register: () => () => {} }));
+  const rail = inject(
+    ReviewRailContext,
+    shallowRef<{ mounted: number; gutters?: number }>({ mounted: 0 })
+  );
   const geometry = useEditorState(selectPaneGeometry, samePageGeometry);
   const editor = useDocxEditor();
   const pageCount = useEditorState(selectPageCount);
@@ -146,6 +149,7 @@ export function useNavigationPane(
         openVal,
         () => geometry.value.reviewPaneOpen,
         () => rail.value.mounted,
+        () => rail.value.gutters,
         reviewGutter,
       ],
       (_values, _previous, onCleanup) => {

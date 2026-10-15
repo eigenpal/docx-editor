@@ -52,12 +52,15 @@ export {
   DocxEditorReview,
   useReviewAuthor,
   useReviewItem,
+  useReviewRailMetrics,
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
   type ReviewBalloonProps,
   type ReviewMarkersProps,
   type ReviewPartProps,
   type ReviewProps,
+  type ReviewRailMetrics,
+  type UseReviewRailMetricsOptions,
 } from './DocxEditorReview';
 export {
   DocxEditorCollaboration,

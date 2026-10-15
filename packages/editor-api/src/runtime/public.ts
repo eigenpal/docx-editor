@@ -111,7 +111,9 @@ export type {
   DocxEditorServerRuntime,
   RevisionTextView,
   RunCallback,
+  RunOptions,
 } from './runtime.ts';
+export type { HistoryGroup, HistoryGroupOutcome } from '@docx-editor.dev/core/automation';
 export type {
   CreateCollaborativeOptions,
   CreateServerOptions,

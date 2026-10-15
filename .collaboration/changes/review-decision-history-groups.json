@@ -1,0 +1,17 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A history group merges only commits on one story store. A comment, a bulk review resolution, or a lifecycle write pushes its own package undo pointer and splits the group, and review methods and browser automation runs cannot join a group.",
+  "after": "The package coordinator merges every frame of one group, story transactions and package writes alike, into one package undo pointer. Review writes, comment writes, custom-node writes, lifecycle ops and grouped browser automation runs carry the group token on their journals, so the shared undo manager keeps the whole decision in one item. An ungrouped review or comment write is its own shared undo item, as it already was in local history, instead of joining the capture window of earlier typing.",
+  "reason": "The group token stays process-local identity beside each journal, never on it, so operations, snapshots, shared state, and protocol messages are unchanged. Grouping only shapes each replica's own undo stack, and a replica without the change interoperates.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-history-groups-review.test.ts",
+    "packages/pro/src/collaboration/__tests__/history-group-capture.test.ts",
+    "packages/core/src/store/__tests__/package-history-groups.test.ts",
+    "packages/core/src/store/__tests__/history-groups.test.ts",
+    "packages/core/src/editor/__tests__/history-group-review.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-history-groups.test.ts"
+  ],
+  "changeset": "review-decision-history-groups",
+  "migration": null
+}

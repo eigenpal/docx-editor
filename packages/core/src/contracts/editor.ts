@@ -65,11 +65,18 @@ export type * from './editor-review.ts';
 export type { RevisionBatchResult } from '../store/store/revision-batch.ts';
 export type { RevisionAuthorResult } from '../store/store/revision-author-change.ts';
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
-import type { EditorExecOptions, EditorScope, HistoryGroup, ViewScope } from './editor-scope.ts';
+import type {
+  EditorExecOptions,
+  EditorScope,
+  HistoryGroup,
+  HistoryGroupOptions,
+  ViewScope,
+} from './editor-scope.ts';
 export type {
   EditorExecOptions,
   EditorScope,
   HistoryGroup,
+  HistoryGroupOptions,
   HistoryDiagnostic,
   HistoryGroupOutcome,
   ViewScope,
@@ -645,8 +652,19 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * `code: 'unsupported'` with the external refresh sentence or a collaboration reason token
    * such as `'collaboration-session-not-ready'` (wait for the session, then retry). Branch on
    * `diagnosticCodeOfRefusal(result.reason, result.code)`, not on the text.
+   *
+   * Pass `options.historyGroup` to make the comment part of a larger undo step, such as a
+   * review decision that also resolves changes. See {@link HistoryGroupOptions}.
+   *
+   * @example
+   * ```ts
+   * editor.addComment('Counter-proposal: 45 days.', { historyGroup: decision });
+   * editor.addComment('Approved.', 'Legal team', { historyGroup: decision });
+   * ```
    */
-  addComment(text: string, author?: string): ExecResult;
+  addComment(text: string, options?: HistoryGroupOptions): ExecResult;
+  /** {@link addComment} with an author for this call, overriding the configured author. */
+  addComment(text: string, author?: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Where a comment on the current selection would sit, in the same space as
@@ -722,8 +740,9 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * `readOnly` is on the item — a surface should not offer the button in the first place.
    * Other refusals name their cause, as {@link addComment} describes.
    */
-  acceptReviewItem(key: string): ExecResult;
-  rejectReviewItem(key: string): ExecResult;
+  acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
+  /** The rejecting half of {@link acceptReviewItem}, with the same rules and options. */
+  rejectReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Resolve or reopen the comment thread behind a review card.
@@ -733,7 +752,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * state already on the item succeeds without adding an undo entry. A refusal names its cause,
    * as {@link addComment} describes.
    */
-  setCommentResolved(key: string, resolved: boolean): ExecResult;
+  setCommentResolved(key: string, resolved: boolean, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Discard the item behind a card: the destructive half of the review verbs.
@@ -751,7 +770,7 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * cannot resolve — the same rule {@link rejectReviewItem} follows. Other refusals name their
    * cause, as {@link addComment} describes, and leave the open card and its draft open.
    */
-  deleteReviewItem(key: string): ExecResult;
+  deleteReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
 
   /**
    * Reply to a review item.
@@ -765,7 +784,14 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * required, so a reply with neither is refused rather than written as an empty attribute.
    * Other refusals name their cause, as {@link addComment} describes.
    */
-  replyToReviewItem(key: string, text: string, author?: string): ExecResult;
+  replyToReviewItem(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
+  /** {@link replyToReviewItem} with an author for this call, overriding the configured author. */
+  replyToReviewItem(
+    key: string,
+    text: string,
+    author?: string,
+    options?: HistoryGroupOptions
+  ): ExecResult;
   setActiveScope(scope: ViewScope): void;
   getActiveScope(): ViewScope;
 
@@ -1665,12 +1691,9 @@ export interface EditorSnapshot {
  * An error the engine raised, carrying a machine-readable `code` alongside the message.
  *
  * `code` is optional because an `Error` from deeper down (a parser, a codec) is surfaced as-is
- * rather than wrapped in a fabricated code. Codes the editor itself raises include:
- *
- * - `invalidTarget`: `attach` was given an element it cannot mount in.
- * - `unsupported`: a document or source the editor refuses to open.
- * - `hostCallback`: a host callback threw, such as a bookmark mark's `decorate`. The editor
- *   kept its default behavior and went on.
+ * rather than wrapped in a fabricated code. The editor's own codes: `invalidTarget` (`attach`
+ * cannot mount there), `unsupported` (a source it refuses to open), and `hostCallback` (a host
+ * callback such as a bookmark mark's `decorate` threw; the editor kept its default behavior).
  */
 export interface EditorError extends Error {
   readonly code?: string;

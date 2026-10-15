@@ -20,6 +20,8 @@ import { DocumentOpenDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { DocumentPartKind } from '@docx-editor.dev/core/automation';
 import { EditDiagnosticCode } from '@docx-editor.dev/core/automation';
 import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { HistoryGroup } from '@docx-editor.dev/core/automation';
+import { HistoryGroupOutcome } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorEntry } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorResult } from '@docx-editor.dev/core/automation';
 import { RevisionAuthorSkipReason } from '@docx-editor.dev/core/automation';
@@ -553,6 +555,7 @@ export interface DocxEditorRuntime {
     dispose(): void;
     run<T>(callback: RunCallback<T>): Promise<T>;
     run<T>(object: ClientObject | readonly ClientObject[], callback: RunCallback<T>): Promise<T>;
+    run<T>(options: RunOptions, callback: RunCallback<T>): Promise<T>;
 }
 
 // @public
@@ -831,6 +834,10 @@ export class Font extends ModelObject {
 
 // @public
 export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
+
+export { HistoryGroup }
+
+export { HistoryGroupOutcome }
 
 // @public
 export class InlinePicture extends ModelObject implements PromisedItem {
@@ -1333,6 +1340,12 @@ export type RevisionType = 'None' | 'Insert' | 'Delete' | 'Property' | 'Paragrap
 
 // @public
 export type RunCallback<T> = (context: RequestContext) => Promise<T>;
+
+// @public
+export interface RunOptions {
+    readonly historyGroup?: HistoryGroup;
+    readonly previousObjects?: ClientObject | readonly ClientObject[];
+}
 
 // @public
 export type RuntimeDiagnostic = {

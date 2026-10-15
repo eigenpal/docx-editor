@@ -8,6 +8,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { DocxEditorRootProps } from '@docx-editor.dev/react';
 import * as react from 'react';
 import { ReactNode } from 'react';
+import { RefObject } from 'react';
 import { ReviewAuthorInfo } from '@docx-editor.dev/react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
 import * as Y from 'yjs';
@@ -434,6 +435,15 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
+export interface ReviewRailMetrics {
+    readonly compact: boolean;
+    readonly compactCardLeft: number | null;
+    readonly left: number | null;
+    readonly scale: number;
+    readonly top: number;
+}
+
+// @public
 export type ReviewWriteAction = 'accept' | 'reject' | 'resolve' | 'reopen' | 'remove' | 'reply' | 'comment';
 
 // @public
@@ -510,6 +520,15 @@ export function useReviewItem(): ReviewItemView | null;
 
 // @public
 export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): UseReviewReturn;
+
+// @public
+export function useReviewRailMetrics(railRef?: RefObject<HTMLElement | null> | null, options?: UseReviewRailMetricsOptions): ReviewRailMetrics;
+
+// @public
+export interface UseReviewRailMetricsOptions {
+    readonly reserveGutter?: boolean;
+    readonly trackScroll?: boolean;
+}
 
 // @public
 export interface UseReviewReturn {

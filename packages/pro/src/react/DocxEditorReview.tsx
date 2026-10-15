@@ -73,6 +73,8 @@ import { listenForCommentClicks } from '../review/comment-click-opens-pane.ts';
 import type { ReviewProps } from './review-types.ts';
 import { stackRailCards } from '../review/rail-stack.ts';
 import { ReviewContext, ReviewItemContext, type ReviewRailValue } from './review-context.ts';
+import { ReviewRailMetricsContext } from './useReviewRailMetrics.ts';
+import { isCompactReviewColumn } from '../review/rail-metrics.ts';
 import {
   COLLAPSED_CARD_HEIGHT,
   COLLAPSE_DISPLACEMENT_PX,
@@ -115,6 +117,8 @@ import {
 } from './review-rail-parts.tsx';
 
 export { useReviewAuthor, useReviewItem } from './review-context.ts';
+export { useReviewRailMetrics, type UseReviewRailMetricsOptions } from './useReviewRailMetrics.ts';
+export type { ReviewRailMetrics } from '../review/rail-metrics.ts';
 export type {
   ReviewActionProps,
   ReviewBalloonProps,
@@ -209,7 +213,7 @@ function ReviewRoot({
   // is 0 for one render while this rail's own registration is still in flight; that frame
   // keeps the expanded presentation rather than flashing markers.
   const gutter = useReviewGutter();
-  const compact = open && gutter.inlineEnd > 0 && gutter.inlineEnd < REVIEW_PANE_GUTTER;
+  const compact = isCompactReviewColumn(open, gutter.inlineEnd, REVIEW_PANE_GUTTER);
   const expanded = open && !compact;
 
   // The engine's rule, applied before this rail's own filters. The engine decides whether the
@@ -309,6 +313,8 @@ function ReviewRoot({
   // half of the rail, in `use-rail-geometry.ts`.
   const metrics = useRailMetrics(editor, railRef, items, !documentAbsent && !hidden, compact);
   const window_ = useRailWindow(editor, railRef, !documentAbsent && !hidden);
+  // What `useReviewRailMetrics()` reads inside the rail: the geometry plus the presentation.
+  const railMetrics = useMemo(() => ({ ...metrics, compact }), [metrics, compact]);
 
   // Clicking the canvas AROUND the page closes the open item. The caret decides everything
   // else, but a click on the grey moves no caret, so nothing else would ever put a card away.
@@ -657,52 +663,54 @@ function ReviewRoot({
   return (
     <ResolvedDisclosureProvider items={items}>
       <ReviewContext.Provider value={value}>
-        {asChild && isValidElement(children) ? (
-          // The child becomes the rail ELEMENT and keeps its own children; the rail's content
-          // is appended after them. Two earlier shapes were wrong: rendering `children` alone
-          // mounted an empty element with no cards, and cloning it while ALSO passing it down
-          // as the card preset rendered the consumer's element once per card.
-          <Slot {...shared}>
-            {cloneElement(
-              children as React.ReactElement<{ children?: ReactNode }>,
-              undefined,
-              (children as React.ReactElement<{ children?: ReactNode }>).props.children,
-              // The same presentation switch as the packaged element: a compact rail is
-              // 32px wide (`:not([data-open])`), and mounting the full list inside it
-              // rendered every card squeezed to that width over the page.
-              preset ? (
-                expanded ? (
-                  <ReviewList
-                    stack={stack}
-                    positions={stacked}
-                    collapsed={collapsedKeys}
-                    scale={metrics.scale}
-                    offset={metrics.top}
-                    window={window_}
-                  />
-                ) : (
-                  <>
-                    {markerLayer}
-                    {compactCard}
-                  </>
-                )
-              ) : null,
-              affordances,
-              <ReviewRefusalAnnouncer key="refusal-live" />
-            )}
-          </Slot>
-        ) : (
-          <aside {...shared}>
-            {expanded && furniture !== undefined ? (
-              <div className="docx-review__furniture" data-testid="review-furniture">
-                {furniture}
-              </div>
-            ) : null}
-            {body}
-            {affordances}
-            <ReviewRefusalAnnouncer />
-          </aside>
-        )}
+        <ReviewRailMetricsContext.Provider value={railMetrics}>
+          {asChild && isValidElement(children) ? (
+            // The child becomes the rail ELEMENT and keeps its own children; the rail's content
+            // is appended after them. Two earlier shapes were wrong: rendering `children` alone
+            // mounted an empty element with no cards, and cloning it while ALSO passing it down
+            // as the card preset rendered the consumer's element once per card.
+            <Slot {...shared}>
+              {cloneElement(
+                children as React.ReactElement<{ children?: ReactNode }>,
+                undefined,
+                (children as React.ReactElement<{ children?: ReactNode }>).props.children,
+                // The same presentation switch as the packaged element: a compact rail is
+                // 32px wide (`:not([data-open])`), and mounting the full list inside it
+                // rendered every card squeezed to that width over the page.
+                preset ? (
+                  expanded ? (
+                    <ReviewList
+                      stack={stack}
+                      positions={stacked}
+                      collapsed={collapsedKeys}
+                      scale={metrics.scale}
+                      offset={metrics.top}
+                      window={window_}
+                    />
+                  ) : (
+                    <>
+                      {markerLayer}
+                      {compactCard}
+                    </>
+                  )
+                ) : null,
+                affordances,
+                <ReviewRefusalAnnouncer key="refusal-live" />
+              )}
+            </Slot>
+          ) : (
+            <aside {...shared}>
+              {expanded && furniture !== undefined ? (
+                <div className="docx-review__furniture" data-testid="review-furniture">
+                  {furniture}
+                </div>
+              ) : null}
+              {body}
+              {affordances}
+              <ReviewRefusalAnnouncer />
+            </aside>
+          )}
+        </ReviewRailMetricsContext.Provider>
       </ReviewContext.Provider>
     </ResolvedDisclosureProvider>
   );

@@ -196,7 +196,7 @@ export function useNavigationPane(options: UseNavigationPaneOptions = {}): UseNa
     const observer = new Observer(measure);
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [viewport, open, reviewPaneOpen, rail?.mounted, reviewGutter]);
+  }, [viewport, open, reviewPaneOpen, rail?.mounted, rail?.gutters, reviewGutter]);
 
   // The snapshot reports `pageSetup` as null on some ticks even with a document loaded,
   // and a shift derived from one of those would collapse to zero and snap the page

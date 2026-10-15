@@ -42,6 +42,12 @@ export {
 } from './DocxEditorReview.tsx';
 export { useReviewAuthor } from './review-context.ts';
 export {
+  useReviewRailMetrics,
+  type UseReviewRailMetricsOptions,
+  type UseReviewRailMetricsReturn,
+} from './useReviewRailMetrics.ts';
+export type { ReviewRailMetrics } from '../review/rail-metrics.ts';
+export {
   useReview,
   useReviewOf,
   useStackedReviewPositions,

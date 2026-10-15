@@ -6,6 +6,11 @@ import type { TreePackageStore, StoryScope } from '../store/store/tree-package-s
 import type { SelectionMark } from '../store/store/tree-store.ts';
 import type { TreeApplyOptions, TreeApplyResult } from './tree-session.ts';
 
+/** The store token an apply names, under either of its two option names. */
+function historyTokenOf(options: TreeApplyOptions) {
+  return options.historyToken ?? options.historyGroup;
+}
+
 const EMPTY_APPLY: TreeApplyResult = { committed: false, rejected: false, opCount: 0 };
 
 function refused(opCount: number, reason?: string): TreeApplyResult {
@@ -66,7 +71,7 @@ export function commitSessionTreeOpsAtomic(
         for (const op of group.ops) ctx.applyTo(group.partName, op);
       }
     },
-    options
+    { ...options, historyGroup: historyTokenOf(options) }
   );
   if (!result.ok) return refused(opCount, result.reason);
   return { committed: true, rejected: false, opCount };
@@ -101,7 +106,10 @@ export function commitSessionTreeOps(
     ) {
       return refused(ops.length, 'invalidArgs');
     }
-    const result = packageStore.applyLifecycleOp(ops[0]!, { actorId: options.actorId });
+    const result = packageStore.applyLifecycleOp(ops[0]!, {
+      actorId: options.actorId,
+      historyGroup: historyTokenOf(options),
+    });
     if (!result.ok) return refused(1, result.detail ?? result.reason);
     return { committed: true, rejected: false, opCount: 1 };
   }
@@ -123,7 +131,7 @@ export function commitSessionTreeOps(
         ctx.applyPackage((pkg) => normalizeCollaborationTextPackage(pkg, partName, ops));
       }
     },
-    options
+    { ...options, historyGroup: historyTokenOf(options) }
   );
   if (!result.ok) return refused(opCount, result.reason);
   return { committed: true, rejected: false, opCount };

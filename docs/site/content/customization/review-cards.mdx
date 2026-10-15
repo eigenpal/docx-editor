@@ -34,6 +34,8 @@ Customize the DOCX editor review column separately from its comment boxes and tr
 | `t`                 | Resolves review labels.                                             |
 | `hidden`, `asChild` | Controls the column part's rendering.                               |
 
+With `preset` set to `false`, call `useReviewRailMetrics()` in your children to convert anchors to CSS pixels. For more information, see [Place custom cards](/docs/2.x/pro/tracked-changes#place-custom-cards).
+
 The column owns the spacing between stacked cards. Use `gap` instead of adding card margins. When `stack={false}`, cards stay at their raw text anchors. Filtering the column does not resolve, delete, accept, or reject an item. Keep every required review decision reachable through another surface when you hide it here.
 
 ### Named review parts

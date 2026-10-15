@@ -367,8 +367,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       .placements({ placement: false, pairReplacements: false })
       .find((placement) => placement.isActive)?.key;
     let applied: { committed: boolean; reason?: unknown } | undefined;
-    const refused = surface.commitReviewOps(() => {
-      applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
+    const refused = surface.commitReviewOps((historyToken) => {
+      applied = surface.session.applyTreeOpsAtomic(groups, { partOps, historyToken });
       return applied;
     }, 'revision-attribution');
     if (!applied?.committed) return reviewWriteRefusal(refused, 'the changes were refused');
@@ -453,12 +453,13 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         reason: READ_ONLY_REVISION_REASON,
       };
     let applied: { committed: boolean; reason?: unknown } | undefined;
-    const refused = deps.surface()!.commitReviewOps(() => {
+    const refused = deps.surface()!.commitReviewOps((historyToken) => {
       const session = deps.surface()!.session;
       const part = partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
       if (part && part.name === stylesPartOf(session.currentPackage())?.name) {
         applied = session.applyTreeOpsAtomic([], {
           partOps: [{ partName: part.name, ops: resolutionOps(item, action, part) }],
+          historyToken,
         });
         return applied;
       }
@@ -468,7 +469,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           resolutionOps(item, action, deps.surface()!.session.partFor(deps.scope(item))),
           undefined,
           undefined,
-          deps.scope(item)
+          deps.scope(item),
+          { historyToken }
         );
       return applied;
     }, 'revision-resolve');
@@ -535,8 +537,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     if (command.type !== 'resolveAllReviewChanges') return null;
     const { groups, partOps, result } = bulkPlan(command);
     let applied: { committed: boolean; reason?: unknown } | undefined;
-    const refused = surface.commitReviewOps(() => {
-      applied = surface.session.applyTreeOpsAtomic(groups, { partOps });
+    const refused = surface.commitReviewOps((historyToken) => {
+      applied = surface.session.applyTreeOpsAtomic(groups, { partOps, historyToken });
       return applied;
     }, 'revision-resolve');
     if (!applied?.committed) return reviewWriteRefusal(refused, 'the revisions were refused');

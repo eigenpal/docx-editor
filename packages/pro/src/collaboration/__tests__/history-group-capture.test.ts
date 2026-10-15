@@ -110,6 +110,48 @@ describe('HistoryGroupCapture', () => {
     }
   });
 
+  test('a remote change between two frames neither splits the gesture nor joins its undo', () => {
+    const { undo, frame, elapse, text, doc, destroy } = setup();
+    try {
+      const decision = Symbol('decision');
+      frame('a', decision);
+      elapse(CAPTURE_TIMEOUT_MS * 2);
+      // A peer's edit arrives under an untracked origin while the decision is still open.
+      doc.transact(() => text.insert(0, 'R'), 'relay');
+      frame('b', decision);
+      expect(undo.undoStack).toHaveLength(1);
+      undo.undo();
+      expect(text.toString()).toBe('R');
+      undo.redo();
+      expect(text.toString()).toBe('Rab');
+    } finally {
+      destroy();
+    }
+  });
+
+  test('frames of several kinds in one group are one item: a decision spans package writes', () => {
+    const { doc, origin, destroy } = setup();
+    try {
+      const comments = doc.getMap('comments');
+      const tracked = new Y.UndoManager([doc.getText('t'), comments], {
+        trackedOrigins: new Set([origin]),
+        captureTimeout: CAPTURE_TIMEOUT_MS,
+      });
+      const decision = new HistoryGroupCapture(tracked);
+      const group = Symbol('decision');
+      decision.capture(group, () => doc.transact(() => doc.getText('t').insert(0, 'x'), origin));
+      tracked.lastChange -= CAPTURE_TIMEOUT_MS * 2;
+      decision.capture(group, () => doc.transact(() => comments.set('c1', 'note'), origin));
+      expect(tracked.undoStack).toHaveLength(1);
+      tracked.undo();
+      expect(comments.has('c1')).toBe(false);
+      expect(doc.getText('t').toString()).toBe('');
+      tracked.destroy();
+    } finally {
+      destroy();
+    }
+  });
+
   test('reset makes the next frame of the same gesture a new item', () => {
     const { undo, frame, capture, elapse, destroy } = setup();
     try {

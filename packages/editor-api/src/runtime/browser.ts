@@ -70,6 +70,8 @@ export function createBrowser(
     },
     onException: (error, operations) =>
       reportAutomationException(editor, error, trackedDuring(host, operations)),
+    // The editor validates the handle at each batch: only its own open groups bind.
+    historyGroups: { begin: (group) => host.beginHistoryGroupRun(group) },
     ...(options.author === undefined ? {} : { author: options.author }),
     ...(options.revisionTextView === undefined
       ? {}

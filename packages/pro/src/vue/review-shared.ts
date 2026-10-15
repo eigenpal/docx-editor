@@ -20,22 +20,7 @@ export const selectCommentMarkers = (snapshot: EditorSnapshot) =>
 export const selectDocumentReadOnly = (snapshot: EditorSnapshot) =>
   snapshot.editingMode === 'viewing';
 
-export interface RailMetrics {
-  readonly scale: number;
-  readonly top: number;
-  readonly left: number | null;
-  readonly compactCardLeft: number | null;
-}
-
-export const INITIAL_METRICS: RailMetrics = {
-  scale: 96 / 72,
-  top: 0,
-  left: null,
-  compactCardLeft: null,
-};
-export const RAIL_GUTTER = 16;
-export const COMPACT_CARD_WIDTH = 300;
-export const COMPACT_CARD_INSET = 12;
+export { COMPACT_CARD_WIDTH } from '../review/rail-metrics.ts';
 export const COMPOSE_KEY = '\u0000compose';
 export const RAIL_OVERSCAN = 600;
 export const AUTHOR_SLOTS = 8;

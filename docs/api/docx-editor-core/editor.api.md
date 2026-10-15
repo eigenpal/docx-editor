@@ -132,6 +132,12 @@ export type BookmarkSortOrder = 'name' | 'location';
 export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities;
 
 // @public
+export interface BrowserAutomationHost extends AutomationHost {
+    // @internal
+    beginHistoryGroupRun(group: HistoryGroup): HistoryGroupRun | null;
+}
+
+// @public
 export function calendarDateForKey(iso: string, key: string, locale?: string, shift?: boolean): string | null;
 
 // @public
@@ -1245,7 +1251,7 @@ export function controlsOverflow(bar: HTMLElement, style: CSSStyleDeclaration): 
 export function copyEditorStyles(from: Document, to: Document): () => void;
 
 // @public
-export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost;
+export function createBrowserAutomationHost(editor: DocxEditorInstance): BrowserAutomationHost;
 
 // @public
 export function createContentControlListNavigation(locale?: string): ContentControlListNavigation;
@@ -1877,6 +1883,15 @@ export interface HighlightWatch {
     update(source: HighlightSource, options?: HighlightOptions): void;
 }
 
+// @public (undocumented)
+export interface HistoryGroup {
+    // (undocumented)
+    readonly [historyGroupBrand]: true;
+    end(): void;
+    readonly lastOutcome: HistoryGroupOutcome | null;
+    readonly state: 'open' | 'closed';
+}
+
 // @public
 export interface HistoryGroupBinding {
     dispose(): void;
@@ -1887,6 +1902,17 @@ export interface HistoryGroupBinding {
 export interface HistoryGroupBindingOptions {
     // (undocumented)
     readonly kind: 'native-color' | 'range' | 'repeat' | 'keyboard';
+}
+
+// @public
+export interface HistoryGroupOptions {
+    readonly historyGroup?: HistoryGroup;
+}
+
+// @internal
+export interface HistoryGroupRun {
+    execute(request: AutomationBatchRequest): AutomationBatchResponse | null;
+    finish(): void;
 }
 
 // @public
@@ -2350,7 +2376,7 @@ export interface PaginatedSurface {
     canRefreshToc(tocId?: string): boolean;
     clearFormatting(): void;
     collaborationSession(): EditorCollaborationSession | null;
-    commitReviewOps(run: () => {
+    commitReviewOps(run: (historyToken: symbol | undefined) => {
         readonly committed: boolean;
         readonly reason?: unknown;
     }, intent?: ReviewWriteIntent): string | null;
@@ -4014,11 +4040,11 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     canUndo(): boolean;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
-    deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
+    deleteComment(commentId: string, scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;
         readonly parentCommentId?: string;
-    }[], scope?: StoryScope, noteId?: number): boolean;
+    }[], scope?: StoryScope, noteId?: number, options?: PackageWriteOptions): boolean;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
     documentFonts(): readonly string[];
@@ -4042,7 +4068,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     headerFooterParts(): HeaderFooterParts;
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
     headerFooterResolutionBySection(): readonly HeaderFooterSectionResolution[];
-    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+    insertCustomNode(write: InsertCustomNodeWrite, scope?: StoryScope, options?: PackageWriteOptions): CustomNodeWriteResult;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
     nodeIdOf(paraId: string): string | null;
     numberingRoot(): OoxmlElement | null;
@@ -4070,13 +4096,13 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
         start: number;
     }, text: string, author: string,
     date?: string, scope?: StoryScope,
-    actorId?: string): string | null;
+    actorId?: string, options?: PackageWriteOptions): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;
     save(): Uint8Array;
     saveSteps(): Generator<void, Uint8Array>;
-    setCommentResolved(commentId: string, resolved: boolean): boolean;
+    setCommentResolved(commentId: string, resolved: boolean, options?: PackageWriteOptions): boolean;
     settingsRoot(): OoxmlElement | null;
     storyParts(): readonly OoxmlPart[];
     storyText(scope: StoryScope): string | null;

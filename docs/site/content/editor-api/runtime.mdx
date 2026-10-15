@@ -81,6 +81,47 @@ try {
 
 Browser edits use the editor's transaction and Undo history. The browser runtime has no `save()` method. Save through the owning editor. Runtime disposal releases its adapter; it does not destroy the editor.
 
+### Join an editor history group
+
+By default, each `context.sync()` that writes is its own undo step. To make a run part of a larger undo step, pass an open handle from `editor.beginHistoryGroup()` as the first argument:
+
+```ts
+// `keys` are the other party's change keys from `editor.getReviewItems()`.
+// `runtime` is `DocxEditor.createBrowser(editor, { author: 'Reviewer' })`.
+const decision = editor.beginHistoryGroup();
+try {
+  const resolved = editor.exec(
+    { type: 'resolveAllReviewChanges', action: 'reject', keys },
+    { historyGroup: decision }
+  );
+  if (!resolved.ok) throw new Error(resolved.reason);
+  await runtime.run({ historyGroup: decision }, async (context) => {
+    const ranges = context.document.body.search('30 days');
+    ranges.load('items');
+    await context.sync();
+    const target = ranges.items[0];
+    if (!target) throw new Error('The document has no "30 days" text.');
+    const replaced = target.insertText('45 days', 'Replace');
+    await context.sync();
+    replaced.insertComment('Counter-proposal: 45 days.');
+    await context.sync();
+  });
+} finally {
+  decision.end();
+}
+```
+
+One undo reverts the rejection, the replacement, and the comment together. One redo reapplies them. The run has no `ExecResult`. The whole run counts as one write of the group: when the callback finishes, `decision.lastOutcome` is `started`, `extended`, or `split`. If any sync in the run split the group, the outcome is `split` and the editor emits one `historyDiagnostic` event. `RunOptions` also accepts `previousObjects`, which adopts tracked objects like the object argument of `run(object, callback)`.
+
+`run` options are DocxEditor infrastructure. The Office.js `run` function has no options and no undo grouping. The following rules apply:
+
+- Only the browser runtime supports `historyGroup`. Server and collaborative runtimes reject the run with `NotSupported` before the callback starts.
+- A closed handle, or a handle from another editor, rejects the run with `InvalidArgument` and `target: 'historyGroup'`. The callback does not run.
+- A handle that closes during the run rejects the next `context.sync()` with the same error. That sync writes nothing.
+- A run without the option never joins a group, even while one is open.
+
+For the boundary rules that close a group, such as undo and ungrouped writes, see [Group a review decision](/docs/2.x/core#group-a-review-decision).
+
 ## Configure a host
 
 | Option | Hosts | Meaning |

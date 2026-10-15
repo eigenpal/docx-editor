@@ -5,7 +5,6 @@ import { createRevisionMarkupState } from './revision-markup-state.ts';
 import { withDisplayedHyphens } from '../store/package/hyphen-text.ts';
 import { queryEditorDocument, watermarkOf } from './docx-editor-query.ts';
 import { REFRESH_WRITE_REFUSAL, refreshWriteBlocked } from './refresh-write-guard.ts';
-import { reviewWriteRefusal } from './review-write-refusal.ts';
 import { registerRefreshHost, type RefreshHost } from './document-refresh-host.ts';
 import { reviewChangesLocked } from './command-protection.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
@@ -142,11 +141,9 @@ import {
   tableContextOf,
   selectedTableOf,
 } from './docx-editor-derive.ts';
-import {
-  commentTargetRangeOf,
-  setReviewCommentResolved,
-} from './docx-editor-comment-resolution.ts';
-import { reviewReplyRefusal } from './review-reply.ts';
+import { commentTargetRangeOf } from './docx-editor-comment-resolution.ts';
+import { createReviewWrites } from './docx-editor-review-writes.ts';
+import { registerEditorHistoryGroups } from './editor-history-group-registry.ts';
 import {
   canContentControlCommand,
   runContentControlCommand,
@@ -1403,9 +1400,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return noteStoryScopeOf(item) ?? { kind: 'body' };
   }
 
-  /** Word writes `@w:date` to the second; milliseconds group with nothing. */
-  const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
-
   function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
     return commentTargetRangeOf({
       surface,
@@ -1750,6 +1744,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     events.emitHistoryDiagnostic,
     () => JSON.stringify(surface?.state().selection)
   );
+  const reviewWrites = createReviewWrites({
+    reviewEnabled,
+    historyGroups,
+    surface: () => surface,
+    author: () => author,
+    editingMode: () => editingMode,
+    commentTargetRange,
+    storyScopeOfParagraph,
+    storyScopeOfReviewItem,
+    noteHomeOf,
+    placements: reviewPlacements,
+    resolveReviewItem,
+    bump,
+  });
   const editor: DocxEditorInstance = {
     beginHistoryGroup() {
       openScheduler.flush();
@@ -1915,7 +1923,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       const protectionResult = protection.exec(command);
       if (protectionResult) return protectionResult;
-      const reviewResult = reviewCommands.exec(command);
+      // A review write binds its history group like every other grouped command.
+      const reviewResult =
+        surface &&
+        (command.type === 'resolveAllReviewChanges' || command.type === 'setReviewChangesAuthor')
+          ? historyGroups.run(surface, command, options, () => reviewCommands.exec(command)!)
+          : reviewCommands.exec(command);
       if (reviewResult) return reviewResult;
       if (isContentControlEditorCommand(command)) {
         // The LIVE mode, not the constructed one — see `gateModeOf`.
@@ -2146,54 +2159,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getCustomNodeDefinitions: () => modules.customNodes,
     reportCustomNodeDiagnostic: reportDiagnostic,
 
-    addComment(text: string, authorOverride?: string): ExecResult {
-      // Comment authoring requires the review module, like other review writes.
-      if (!reviewEnabled) {
-        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-      }
-      // The captured offsets outlive this write (they anchor the comment), so any
-      // queued typing must land before they are taken. The range read itself is
-      // flush-free: it is also the review store's snapshot.
-      surface?.flushPendingInput();
-      const range = commentTargetRange();
-      if (!range || !surface) {
-        return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
-      }
-      const writer = (authorOverride ?? author ?? '').trim();
-      if (writer.length === 0 || text.trim().length === 0) {
-        return {
-          ok: false,
-          code: 'invalidArgs',
-          reason: 'a comment needs both an author and text',
-        };
-      }
-      let created: string | null = null;
-      const refused = surface.commitReviewOps(() => {
-        created = surface!.session.replyToComment(
-          null,
-          {
-            paragraphId: range.from.paragraphId,
-            start: range.from.offset,
-            end: range.to.offset,
-            ...(range.to.paragraphId === range.from.paragraphId
-              ? {}
-              : { endParagraphId: range.to.paragraphId }),
-          },
-          text,
-          writer,
-          secondsPrecisionNow(),
-          // The story the SELECTED PARAGRAPH is in, not the one the reader happens to have
-          // open. Commenting on header or note text wrote against the body store, which has
-          // never heard of that paragraph, so the write was refused — after the affordance
-          // had already invited it.
-          storyScopeOfParagraph(range.from.paragraphId)
-        );
-        return { committed: created !== null };
-      }, 'comment-add');
-      if (created === null)
-        return reviewWriteRefusal(refused, 'the comment could not be committed');
-      return { ok: true, changed: true };
-    },
+    ...reviewWrites,
 
     getSelectionPlacement: () => selectionPlacement(),
 
@@ -2428,109 +2394,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       });
     },
 
-    acceptReviewItem: (key: string) => resolveReviewItem(key, 'accept'),
-    rejectReviewItem: (key: string) => resolveReviewItem(key, 'reject'),
-
-    setCommentResolved(key: string, resolved: boolean): ExecResult {
-      return setReviewCommentResolved(
-        {
-          reviewEnabled,
-          editingMode,
-          placements: reviewPlacements,
-          surface,
-          proReviewReason: PRO_REVIEW_REASON,
-          bump,
-        },
-        key,
-        resolved
-      );
-    },
-
-    deleteReviewItem(key: string): ExecResult {
-      if (!reviewEnabled) {
-        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-      }
-      const item = findReviewPlacement(reviewPlacements, key)?.item as ReviewItem | undefined;
-      if (!item || !surface) {
-        return { ok: false, code: 'notFound', reason: 'no review item with that key' };
-      }
-      // Discarding a suggestion IS rejecting it — same transaction, same undo step, and the
-      // refusal rules for an unresolvable kind already live there.
-      if (item.kind === 'revision') return resolveReviewItem(key, 'reject');
-      if (item.kind !== 'comment') {
-        return { ok: false, code: 'unsupported', reason: 'a custom node card cannot be deleted' };
-      }
-      // Nothing is dismissed. Activation reads the live queue, by caret and by pin, so a deleted
-      // card cannot stay active. Dismissing first closed the open card and its draft even when
-      // the delete was refused, and `dismissActiveReview` acts on whatever the caret is in, so
-      // dismissing after it closed whichever other card covers the caret.
-      let deleted = false;
-      const refused = surface.commitReviewOps(() => {
-        const note = noteHomeOf(item);
-        const parsed = note === null ? null : parseNoteScopeId(note);
-        deleted = surface!.session.deleteComment(
-          item.id,
-          storyScopeOfReviewItem(item),
-          parsed?.noteId
-        );
-        return { committed: deleted };
-      }, 'comment-delete');
-      if (!deleted) return reviewWriteRefusal(refused, 'the comment could not be deleted');
-      bump();
-      return { ok: true, changed: true };
-    },
-
-    replyToReviewItem(key: string, text: string, authorOverride?: string): ExecResult {
-      if (!reviewEnabled) {
-        return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-      }
-      // The reply's anchor offsets are captured from the placements below and
-      // outlive this call; queued typing must land before they are taken, the
-      // same rule as commentTargetRange.
-      surface?.flushPendingInput();
-      const found = findReviewPlacement(reviewPlacements, key)?.item as ReviewItem | undefined;
-      // A reply to a paired replacement anchors over its inserted words.
-      const item = replacementPairHalves(found)?.insertion ?? found;
-      if (!item || !surface) {
-        return { ok: false, code: 'notFound', reason: 'no review item with that key' };
-      }
-      const range = firstReviewRange(item);
-      if (!range) {
-        return { ok: false, code: 'invalidArgs', reason: 'the item has no anchorable range' };
-      }
-      const writer = (authorOverride ?? author ?? '').trim();
-      const refusal = reviewReplyRefusal(item, text, writer);
-      if (refusal) return refusal;
-      // Against a REVISION this is a comment over that revision's range: OOXML gives `w:ins`
-      // and `w:del` no body and no thread, so there is nowhere else for the text to live.
-      const parent = item.kind === 'comment' ? item.id : null;
-      let created: string | null = null;
-      const refused = surface.commitReviewOps(() => {
-        created = surface!.session.replyToComment(
-          parent,
-          {
-            paragraphId: range.start.paragraphId,
-            start: range.start.offset,
-            end: range.end.offset,
-          },
-          text,
-          writer,
-          // Word stamps every comment it writes, and a card with no date reads as older
-          // than the ones around it. The clock is the HOST's, which is why the store takes
-          // the value rather than reading one: a store that called `Date.now()` could not
-          // be tested for a deterministic round trip.
-          secondsPrecisionNow(),
-          // The story the card's range lives in. Written against the body, a header
-          // anchor names a paragraph the body store does not have, and every reply to a
-          // header or footer card was refused.
-          storyScopeOfReviewItem(item)
-        );
-        return { committed: created !== null };
-      }, 'comment-reply');
-      if (created === null) return reviewWriteRefusal(refused, 'the reply could not be committed');
-      return { ok: true, changed: true };
-    },
-
     getHeaderFooterState: () => surface?.headerFooterState() ?? null,
     getNotePropertiesState: () => surface?.notePropertiesState?.() ?? null,
     getNotePreviewText: (scopeId) => surface?.notePreviewText?.(scopeId) ?? null,
@@ -2632,5 +2495,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // Host calls read and write saved field results in this editor's mode.
   const instance = fieldScope.methods(editor);
   registerEditorHost(instance, () => container);
+  registerEditorHistoryGroups(instance, historyGroups);
   return instance;
 }

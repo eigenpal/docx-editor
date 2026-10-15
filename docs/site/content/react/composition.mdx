@@ -592,7 +592,7 @@ Use a render callback on `List` when you replace all packaged card markup. Root 
 
 The root callback form remains an alias for an implicit `List`. It cannot include root siblings. Use `List` for new code.
 
-Set `preset={false}` when you replace the packaged review arrangement. The component still provides rail context and root-owned positioning. It does not render omitted defaults. `useStackedReviewPositions(items, heights, options)` provides the packaged stacking calculation. Pass `{ gap, scale: editor.getRenderScale() }` as `options`. It returns each card's top in layout points. Multiply by `scale` and add the rail's top offset to position a card in CSS pixels. Use `useReview()` when you need the review queue without chrome. For placement details, see [Tracked changes](/docs/2.x/pro/tracked-changes).
+Set `preset={false}` when you replace the packaged review arrangement. The component still provides rail context and root-owned positioning. It does not render omitted defaults. `useStackedReviewPositions(items, heights, options)` provides the packaged stacking calculation. `useReviewRailMetrics()` returns the rail's `scale`, the pixel offset of the first page, and the column's left edge. Pass `{ gap, scale: metrics.scale }` as `options`. It returns each card's top in layout points, so set each card's `top` to `metrics.top + position * metrics.scale`. For placement rules and a complete column, see [Place custom cards](/docs/2.x/pro/tracked-changes#place-custom-cards). Use `useReview()` when you need the review queue without chrome. For placement details, see [Tracked changes](/docs/2.x/pro/tracked-changes).
 
 Use `useReviewItem()` to read the card that contains a child:
 

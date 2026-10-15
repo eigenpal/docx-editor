@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
-import { DocxEditor, type ClientObject, type RunCallback } from '@docx-editor.dev/editor-api';
+import {
+  DocxEditor,
+  type ClientObject,
+  type RunCallback,
+  type RunOptions,
+} from '@docx-editor.dev/editor-api';
 import { noteFixture } from './note-test-support';
 import { runWriterTool } from './run-tool';
 import { stateFor } from './document-access';
@@ -76,11 +81,14 @@ test('inspection batch rejects an external edit between inspections', async () =
   const original = runtime.run.bind(runtime);
   let changed = false;
   runtime.run = async <T>(
-    first: RunCallback<T> | ClientObject | readonly ClientObject[],
+    first: RunCallback<T> | RunOptions | ClientObject | readonly ClientObject[],
     second?: RunCallback<T>
   ): Promise<T> => {
+    // Forwarded unchanged; the cast only selects one overload for the compiler.
     const result =
-      typeof first === 'function' ? await original(first) : await original(first, second!);
+      typeof first === 'function'
+        ? await original(first)
+        : await original(first as RunOptions, second!);
     if (!changed) {
       changed = true;
       await original(async (context) => {

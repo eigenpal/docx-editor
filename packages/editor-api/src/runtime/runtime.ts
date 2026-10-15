@@ -28,14 +28,16 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // document.
 
 import type {
+  AutomationBatchRequest,
   AutomationBatchResponse,
   AutomationHandle,
   AutomationHost,
   AutomationOperation,
+  HistoryGroup,
 } from '@docx-editor.dev/core/automation';
 import { Document } from '../model/document.ts';
 import { hostFailure } from './batch.ts';
-import type { ClientObject } from './client-object.ts';
+import { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail } from './errors.ts';
 import { hydratedHandle } from './hydrate.ts';
 import type { RootHandles } from './internals.ts';
@@ -43,6 +45,61 @@ import { RequestContext, type RuntimeSession } from './request-context.ts';
 
 /** What a `run` callback is given, and what it may answer with. */
 export type RunCallback<T> = (context: RequestContext) => Promise<T>;
+
+/**
+ * Options for {@link DocxEditorRuntime.run}, passed before the callback.
+ *
+ * This is DocxEditor infrastructure, not part of the Office.js object model: the Office.js
+ * `run` function has no options and no undo grouping.
+ *
+ * @example
+ * ```ts
+ * // One review decision, one undo step: the editor's writes and every sync of the run.
+ * const decision = editor.beginHistoryGroup();
+ * try {
+ *   const resolved = editor.exec(
+ *     { type: 'resolveAllReviewChanges', action: 'reject', keys },
+ *     { historyGroup: decision }
+ *   );
+ *   if (!resolved.ok) throw new Error(resolved.reason);
+ *   await runtime.run({ historyGroup: decision }, async (context) => {
+ *     const ranges = context.document.body.search('30 days');
+ *     ranges.load('items');
+ *     await context.sync();
+ *     const target = ranges.items[0];
+ *     if (!target) throw new Error('The document has no "30 days" text.');
+ *     const replaced = target.insertText('45 days', 'Replace');
+ *     await context.sync();
+ *     replaced.insertComment('Counter-proposal: 45 days.');
+ *     await context.sync();
+ *   });
+ * } finally {
+ *   decision.end();
+ * }
+ * ```
+ * @public
+ */
+export interface RunOptions {
+  /**
+   * Make every write this run commits part of an open editor history group, so one undo
+   * reverts them together with the group's other writes.
+   *
+   * Pass the handle `editor.beginHistoryGroup()` returns, unchanged.
+   *
+   * Browser runtime only. A server or collaborative runtime refuses the run with
+   * `NotSupported` before the callback starts. A closed handle, or a handle from another
+   * editor, refuses with `InvalidArgument` and `target: 'historyGroup'` before the callback
+   * starts. A handle that closes during the run refuses the next `context.sync()` the same way,
+   * and that sync writes nothing. Runs without this option never join a group.
+   *
+   * The run has no `ExecResult`. The whole run is one write of the group: after the callback
+   * finishes, `historyGroup.lastOutcome` holds its outcome, which is `split` if any sync split
+   * the group. A split also emits the editor's `historyDiagnostic` event.
+   */
+  readonly historyGroup?: HistoryGroup;
+  /** Objects a previous run tracked, adopted by this run. The same as the object argument. */
+  readonly previousObjects?: ClientObject | readonly ClientObject[];
+}
 
 /** Capabilities exposed by a DocxEditor runtime, frozen for its lifetime. */
 export interface DocumentCapabilities {
@@ -80,6 +137,19 @@ export interface DocxEditorRuntime {
   run<T>(callback: RunCallback<T>): Promise<T>;
   /** Run one batch of work, adopting objects a previous run tracked. */
   run<T>(object: ClientObject | readonly ClientObject[], callback: RunCallback<T>): Promise<T>;
+  /**
+   * Run one batch of work with options, such as an editor history group.
+   *
+   * @example
+   * ```ts
+   * const decision = editor.beginHistoryGroup();
+   * await runtime.run({ historyGroup: decision }, async (context) => {
+   *   context.document.body.insertParagraph('Revised terms follow.', 'End');
+   *   await context.sync();
+   * });
+   * ```
+   */
+  run<T>(options: RunOptions, callback: RunCallback<T>): Promise<T>;
   /** Release the host. Idempotent. */
   dispose(): void;
 }
@@ -138,6 +208,57 @@ export interface CreateRuntimeOptions {
   readonly onRefusal?: (error: DocxEditorError, operations: readonly AutomationOperation[]) => void;
   /** Told about each batch that threw an engine error, for anonymous diagnostics. */
   readonly onException?: (error: unknown, operations: readonly AutomationOperation[]) => void;
+  /**
+   * Runs a batch inside an editor history group, answering `null` for a handle that is not
+   * open on the editor. Only the browser runtime has one; without it `historyGroup` refuses.
+   */
+  readonly historyGroups?: {
+    /** One run's frames of `group`, or `null` when it is not an open handle of the editor. */
+    begin(group: HistoryGroup): {
+      execute(request: AutomationBatchRequest): AutomationBatchResponse | null;
+      finish(): void;
+    } | null;
+  };
+}
+
+/** The pieces of a `run` call, whichever overload it used. */
+function runArguments<T>(
+  first: RunCallback<T> | RunOptions | ClientObject | readonly ClientObject[],
+  second: RunCallback<T> | undefined
+): {
+  callback: RunCallback<T> | undefined;
+  adopted: readonly ClientObject[];
+  historyGroup: HistoryGroup | undefined;
+} {
+  const list = (value: ClientObject | readonly ClientObject[] | undefined) =>
+    value === undefined ? [] : Array.isArray(value) ? value : [value as ClientObject];
+  if (typeof first === 'function') return { callback: first, adopted: [], historyGroup: undefined };
+  // Objects to adopt are proxies or arrays of them; any other object is options.
+  if (first instanceof ClientObject || Array.isArray(first)) {
+    return { callback: second, adopted: list(first as ClientObject), historyGroup: undefined };
+  }
+  if (first === null || typeof first !== 'object') fail({ code: 'InvalidArgument', target: 'run' });
+  const options = first as RunOptions;
+  return {
+    callback: second,
+    adopted: list(options.previousObjects),
+    historyGroup: options.historyGroup,
+  };
+}
+
+/** The host a grouped run's context sends its batches through. */
+function groupedHost(
+  host: AutomationHost,
+  run: { execute(request: AutomationBatchRequest): AutomationBatchResponse | null }
+): AutomationHost {
+  return {
+    ...host,
+    execute(request) {
+      const response = run.execute(request);
+      if (response === null) fail({ code: 'InvalidArgument', target: 'historyGroup' });
+      return response;
+    },
+  };
 }
 
 export function createRuntime(
@@ -217,25 +338,31 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
   }
 
   async function run<T>(
-    first: RunCallback<T> | ClientObject | readonly ClientObject[],
+    first: RunCallback<T> | RunOptions | ClientObject | readonly ClientObject[],
     second?: RunCallback<T>
   ): Promise<T> {
     assertLive();
-    const callback = typeof first === 'function' ? (first as RunCallback<T>) : second;
-    const adopted: readonly ClientObject[] =
-      typeof first === 'function'
-        ? []
-        : Array.isArray(first)
-          ? (first as readonly ClientObject[])
-          : [first as ClientObject];
+    const { callback, adopted, historyGroup } = runArguments(first, second);
     if (typeof callback !== 'function') fail({ code: 'InvalidArgument', target: 'run' });
+    let runSession = session;
+    let groupRun: ReturnType<NonNullable<CreateRuntimeOptions['historyGroups']>['begin']> = null;
+    if (historyGroup !== undefined) {
+      // Infrastructure with no Office.js equivalent: refused, never approximated, where the
+      // host has no editor history to join.
+      if (!options.historyGroups) fail({ code: 'NotSupported', target: 'historyGroup' });
+      groupRun = options.historyGroups.begin(historyGroup);
+      if (groupRun === null) fail({ code: 'InvalidArgument', target: 'historyGroup' });
+      runSession = { ...session, host: groupedHost(host, groupRun) };
+    }
 
-    const { context, adopt, finish } = RequestContext.begin(session);
+    const { context, adopt, finish } = RequestContext.begin(runSession);
     try {
       adopt(adopted);
       return await callback(context);
     } finally {
       finish();
+      // The run is one write of the group: it settles once, after its last sync.
+      groupRun?.finish();
     }
   }
 
