@@ -168,6 +168,7 @@ These rules decide membership:
 
 - A change that the range covers only in part is listed whole.
 - A collapsed range lists the changes it touches.
+- A paragraph mark change is listed only when the range continues into the next paragraph. A range that ends at the end of a paragraph, such as `getRange('Content')` or a search result, leaves the mark change out. To decide a mark change, use the story's `body.revisions`.
 - A replacement stored as a deletion and an insertion lists two members.
 - A change nested inside another change, or a change by another author beside it, is listed when the range overlaps it.
 - Membership uses document positions, so `revisionTextView` changes the range text but not the members.
@@ -320,7 +321,7 @@ function AcceptButton(props: { runtime: DocxEditorRuntime; item: { readonly key:
 }
 ```
 
-Use `getReviewItemRevisions` to decide a card. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps. A change with a nested change by another author is one inseparable decision, so `acceptAll()` on its card alone fails with `NotImplemented`.
+Use `getReviewItemRevisions` to decide a card. A change that holds a nested change by another author resolves alone, and the nested change stays pending. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
 
 A key names an item in the current document. After someone accepts or rejects that change, the key names nothing:
 

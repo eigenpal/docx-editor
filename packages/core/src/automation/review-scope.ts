@@ -35,6 +35,8 @@ import {
 } from '../store/store/comment-reads.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { TreeDocOp } from '../store/store/tree-ops.ts';
+import { nestedTextDecisionOps } from './revision-nested-text.ts';
 import { revisionItemsInStory, revisionReads } from './review.ts';
 import {
   resolveSpanRef,
@@ -88,7 +90,7 @@ export function createRevisionDecisionLedger(): RevisionDecisionLedger {
  */
 export function planKeyedDecision(
   reads: AutomationStoryReads,
-  keys: readonly string[],
+  items: readonly ReviewRevisionItem[],
   action: Action,
   ledger: RevisionDecisionLedger,
   pin: (story: AutomationStoryReads) => PlannedOperation | null
@@ -97,36 +99,56 @@ export function planKeyedDecision(
   if (conflict) return conflict;
   if (ledger.whole)
     return refuse('conflicting-operations', 'an earlier decision resolved the whole story');
-  const pending: string[] = [];
-  for (const key of keys) {
-    const earlier = ledger.decided.get(key);
-    if (earlier === undefined) pending.push(key);
+  const pending: ReviewRevisionItem[] = [];
+  for (const item of items) {
+    const earlier = ledger.decided.get(reviewItemKey(item));
+    if (earlier === undefined) pending.push(item);
     else if (earlier !== action)
       return refuse('conflicting-operations', 'an earlier decision took the contrary action');
   }
   if (pending.length === 0)
     return { ok: true, kind: 'command', story: reads.story, ops: [], answer: () => APPLIED };
+  const keys = pending.map(reviewItemKey);
   const decision = planRevisionBatch(
     reads.part,
     action,
-    pending,
+    keys,
     sharesItsPart(reads.story) ? reads.root : undefined
   );
-  if (decision.result.skipped.length > 0)
-    return refuse(
-      'unsupported-revision',
-      'a tracked change in that decision cannot be resolved',
-      decision.result.skipped[0]?.reason
-    );
-  for (const entry of decision.result.resolved) ledger.decided.set(entry.key, action);
-  for (const key of pending) ledger.decided.set(key, action);
-  return {
-    ok: true,
-    kind: 'command',
-    story: reads.story,
-    ops: decision.ops,
-    answer: () => APPLIED,
-  };
+  let ops = decision.ops;
+  const skipped = decision.result.skipped;
+  if (skipped.length > 0) {
+    // Nested text changes share a batch group, but each one is still its own decision.
+    const nested = skipped.every((skip) => skip.reason === 'incomplete-group')
+      ? nestedDecisionOps(reads, pending, action)
+      : null;
+    if (!nested)
+      return refuse(
+        'unsupported-revision',
+        'a tracked change in that decision cannot be resolved',
+        skipped[0]?.reason
+      );
+    ops = nested;
+  } else {
+    for (const entry of decision.result.resolved) ledger.decided.set(entry.key, action);
+  }
+  for (const key of keys) ledger.decided.set(key, action);
+  return { ok: true, kind: 'command', story: reads.story, ops, answer: () => APPLIED };
+}
+
+/** Each pending item resolved alone as a nested text decision, or null when one cannot be. */
+function nestedDecisionOps(
+  reads: AutomationStoryReads,
+  items: readonly ReviewRevisionItem[],
+  action: Action
+): readonly TreeDocOp[] | null {
+  const ops: TreeDocOp[] = [];
+  for (const item of items) {
+    const own = nestedTextDecisionOps(reads, item, action);
+    if (own.length === 0) return null;
+    for (const op of own) ops.push(op);
+  }
+  return ops;
 }
 
 interface Position {
@@ -141,8 +163,8 @@ function compare(a: Position, b: Position): number {
 /**
  * Whether a review range shares characters with a span of the same story.
  *
- * A collapsed span or a collapsed change counts when it touches the other, so a caret inside a
- * change finds it and a span ending where a paragraph-mark change sits includes that change.
+ * A collapsed span counts what it touches, so a caret inside a change finds it. A span with
+ * length counts a zero-length change only when the change sits before the span's end.
  */
 function overlaps(reads: AutomationStoryReads, scope: ResolvedRange, range: ReviewRange): boolean {
   const from = reads.indexOf(range.start.paragraphId);
@@ -152,10 +174,13 @@ function overlaps(reads: AutomationStoryReads, scope: ResolvedRange, range: Revi
   const end = { index: to, offset: range.end.offset };
   const low = { index: reads.indexOf(scope.start.paragraphId), offset: scope.start.offset };
   const high = { index: reads.indexOf(scope.end.paragraphId), offset: scope.end.offset };
-  const collapsed = compare(start, end) === 0 || compare(low, high) === 0;
-  return collapsed
-    ? compare(start, high) <= 0 && compare(end, low) >= 0
-    : compare(start, high) < 0 && compare(end, low) > 0;
+  // A collapsed span touches what sits at its position.
+  if (compare(low, high) === 0) return compare(start, high) <= 0 && compare(end, low) >= 0;
+  // A zero-length change (a paragraph mark, a property change at the end of the text) counts
+  // only from where the span starts to before where it ends, so a span ending at the end of a
+  // paragraph leaves that paragraph's mark alone unless it continues into the next one.
+  if (compare(start, end) === 0) return compare(start, low) >= 0 && compare(start, high) < 0;
+  return compare(start, high) < 0 && compare(end, low) > 0;
 }
 
 /** Every decision of a span's story the span overlaps, readOnly and structural ones included. */
@@ -419,5 +444,5 @@ export function planNarrowRevisionDecision(
   }
   if (target.items.some((item) => item.readOnly))
     return refuse('unsupported-revision', 'a tracked change in that decision is read-only');
-  return planKeyedDecision(target.reads, target.items.map(reviewItemKey), action, ledger, pin);
+  return planKeyedDecision(target.reads, target.items, action, ledger, pin);
 }

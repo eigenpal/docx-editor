@@ -157,17 +157,19 @@ describe('getReviewItemRange over a live editor', () => {
         expect(described(range)).toEqual(['Insert:Ada', 'Delete:Grace']);
         expect(described(own)).toEqual(['Insert:Ada']);
         expect(described(halves)).toEqual(['Delete:Ada', 'Insert:Ada']);
-        // A nested pair is one inseparable decision: the card change alone refuses whole.
+        // The card change resolves alone; the nested change by another author stays pending.
         own.acceptAll();
-        expect(await context.sync().catch((caught: unknown) => caught)).toMatchObject({
-          code: 'NotImplemented',
-        });
         halves.acceptAll();
         await context.sync();
       });
       const after = mounted.editor.getReviewItems({ placement: false });
       expect(after.map((item) => item.key)).not.toContain(pair.key);
-      expect(after.map((item) => item.key)).toContain(outer.key);
+      expect(after.map((item) => item.key)).not.toContain(outer.key);
+      expect(
+        after.some(
+          (item) => item.kind === 'revision' && item.author === 'Grace' && item.text === 'both'
+        )
+      ).toBe(true);
       await runtime.run(async (context) => {
         const stale = getReviewItemRevisions(context, pair.key);
         stale.load('items');

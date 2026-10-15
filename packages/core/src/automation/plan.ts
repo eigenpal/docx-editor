@@ -127,7 +127,7 @@ import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { planProposal, trackedParagraphInsertError, trackedProposalOf } from './plan-proposal.ts';
 import { planRevisionDecision } from './revision-operations.ts';
-import { reviewItemKey, type ReviewCommentItem } from '../store/store/review-items.ts';
+import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
   planDeleteComment,
   planInsertComment,
@@ -2419,8 +2419,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const found = revisionAt(operation.revision);
         if (!found.ok) return found.planned;
         const action = operation.op === 'acceptRevision' ? 'accept' : 'reject';
-        const keys = [reviewItemKey(found.item.item)];
-        return planKeyedDecision(found.reads, keys, action, decisions, pinDecision);
+        return planKeyedDecision(found.reads, [found.item.item], action, decisions, pinDecision);
       }
 
       case 'resolveRevisionBatch':

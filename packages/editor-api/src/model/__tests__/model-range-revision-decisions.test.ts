@@ -149,6 +149,43 @@ describe('what a range decision covers', () => {
   });
 });
 
+describe('paragraph marks', () => {
+  const MARK = docx(
+    '<w:p><w:pPr><w:rPr><w:ins w:id="8" w:author="Grace"/></w:rPr></w:pPr>' +
+      run('first end') +
+      '</w:p>' +
+      para(run('second'))
+  );
+
+  test('a match at the end of a paragraph leaves its mark change alone', async () => {
+    await withRuntime(MARK, async (context) => {
+      const [match] = await find(context, 'end');
+      match!.revisions.load('items');
+      await context.sync();
+      expect(match!.revisions.items).toEqual([]);
+      match!.revisions.rejectAll();
+      await context.sync();
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items');
+      await context.sync();
+      expect(paragraphs.items).toHaveLength(2);
+      expect(await pending(context)).toBe(1);
+    });
+  });
+
+  test('a Content range excludes the mark, and a range into the next paragraph includes it', async () => {
+    await withRuntime(MARK, async (context) => {
+      const content = context.document.body.paragraphs.getFirst().getRange('Content');
+      const whole = context.document.body.getRange('Whole');
+      content.revisions.load('items');
+      whole.revisions.load('items');
+      await context.sync();
+      expect(content.revisions.items).toEqual([]);
+      expect(whole.revisions.items).toHaveLength(1);
+    });
+  });
+});
+
 describe('getReviewItemRevisions', () => {
   const NESTED = docx(
     para(

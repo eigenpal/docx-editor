@@ -194,7 +194,9 @@ export class Range extends ModelObject implements PromisedItem {
    * The tracked changes whose characters this range overlaps, in document order.
    *
    * Lists the same `Revision` objects the story's collection lists, so a change reached here is
-   * the one `body.revisions` holds. A collapsed range lists the changes it touches. Membership
+   * the one `body.revisions` holds. A collapsed range lists the changes it touches. A paragraph
+   * mark change is listed only when the range continues into the next paragraph, so reach the
+   * mark change of a whole paragraph through `body.revisions`. Membership
    * uses document positions, so the runtime's `revisionTextView` changes what `text` reads, not
    * which changes are listed. A change partly inside the range is listed whole. A replacement
    * stored as a deletion followed by an insertion lists as two members.
