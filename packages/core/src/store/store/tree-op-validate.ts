@@ -1,5 +1,6 @@
 import { isInsertableText } from './tree-op-inline-elements.ts';
 import { validateSetLegacyDropdown } from './legacy-dropdown-fields.ts';
+import { validateBookmarkOp } from './tree-op-bookmarks.ts';
 import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
 import { validateSetFieldCode } from './tree-op-field-code.ts';
 import { validateTableAuthoring } from './tree-op-table-batch.ts';
@@ -411,6 +412,7 @@ export function validateTreeOp(
   if (op.op === 'setLegacyDropdown') return validateSetLegacyDropdown(part, op);
   if (op.op === 'setLegacyCheckbox') return validateSetLegacyCheckbox(part, op);
   if (op.op === 'insertBuildingBlock') return validateInsertBuildingBlock(part, op);
+  if (op.op === 'insertBookmark' || op.op === 'deleteBookmark') return validateBookmarkOp(part, op);
   if (op.op === 'refreshFieldResults') {
     return validateRefreshFieldResults(part, op);
   }

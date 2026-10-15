@@ -336,6 +336,14 @@ export {
 } from './para-id.ts';
 export { ensureListDefinition, ensureNumberingLevel, type ListKind } from './numbering-part.ts';
 export { buildBookmarkIndex, type BookmarkAnchor, type BookmarkIndex } from './bookmarks.ts';
+export { listBookmarks, type BookmarkPosition, type BookmarkRecord } from './bookmark-list.ts';
+export {
+  bookmarkNameKey,
+  bookmarkNameProblem,
+  isHiddenBookmarkName,
+  MAX_AUTHORED_BOOKMARK_NAME_LENGTH,
+  type BookmarkNameProblem,
+} from './bookmark-names.ts';
 export {
   collectFlowBlocks,
   contentControlContentOf,

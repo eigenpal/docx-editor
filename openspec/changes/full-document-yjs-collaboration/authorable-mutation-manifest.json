@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 85,
-    "singlePartApply": 71,
+    "treeDocOpKinds": 87,
+    "singlePartApply": 73,
     "headerFooterLifecycle": 7,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -119,7 +119,9 @@
       "commitTextFormField",
       "setLegacyCheckbox",
       "setLegacyDropdown",
-      "insertBuildingBlock"
+      "insertBuildingBlock",
+      "insertBookmark",
+      "deleteBookmark"
     ],
     "headerFooterLifecycle": [
       "createHeaderFooter",
@@ -224,7 +226,9 @@
     "commitTextFormField",
     "setLegacyCheckbox",
     "setLegacyDropdown",
-    "insertBuildingBlock"
+    "insertBuildingBlock",
+    "insertBookmark",
+    "deleteBookmark"
   ],
   "authorableVariants": {
     "insertText": {
@@ -1156,6 +1160,24 @@
     },
     {
       "kind": "insertBuildingBlock",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "insertBookmark",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "deleteBookmark",
       "commitPath": "applyTreeOp",
       "storyScopes": ["body", "headerFooter", "notesPart"],
       "storyParity": "all",

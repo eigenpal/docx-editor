@@ -536,6 +536,9 @@ const TREE_OP_REACH: {
   commitTextFormField: (op) => whole(op.fieldNodeId),
   setLegacyCheckbox: (op) => whole(op.fieldNodeId),
   setLegacyDropdown: (op) => whole(op.fieldNodeId),
+  // Bookmark markers sit beside text and change none; the op refuses locked content itself.
+  insertBookmark: (op) => beside(op.start.paragraphId, op.start.offset),
+  deleteBookmark: () => ({ kind: 'none' }),
   // A building block pick rebuilds `w:sdtContent`, exactly as a value write does.
   insertBuildingBlock: (op) => ({
     kind: 'control',
