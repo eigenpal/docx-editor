@@ -20,3 +20,14 @@ export async function proposeParagraphRemoval(): Promise<void> {
     await context.sync();
   });
 }
+
+export async function acceptChangesInMatch(): Promise<void> {
+  await DocxEditor.run(async (context) => {
+    const matches = context.document.body.search('within 30 days');
+    await context.sync();
+    const revisions = matches.items[0].revisions;
+    await context.sync();
+    for (const revision of revisions.items) revision.accept();
+    await context.sync();
+  });
+}

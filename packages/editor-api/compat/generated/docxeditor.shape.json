@@ -1789,6 +1789,18 @@
             }
           ]
         },
+        "revisions": {
+          "uid": "DocxEditor.Range#revisions",
+          "kind": "property",
+          "readonly": true,
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "RevisionCollection"
+            }
+          ]
+        },
         "search": {
           "uid": "DocxEditor.Range#search",
           "kind": "method",

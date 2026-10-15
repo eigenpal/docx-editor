@@ -611,6 +611,22 @@ export type AutomationOperation =
    * such as a complete tracked row.
    */
   | { readonly op: 'getRevisions'; readonly body: AutomationHandle }
+  /**
+   * The listed tracked changes whose characters a span overlaps, in document order. A collapsed
+   * span lists the changes it touches. Handles are the story-wide listing's handles.
+   */
+  | { readonly op: 'getRevisions'; readonly scope: AutomationSpanRef }
+  /**
+   * The listed tracked changes a review-queue key names: one, or the two halves of a paired
+   * replacement. A key naming nothing answers no handles.
+   */
+  | { readonly op: 'getRevisions'; readonly key: string }
+  /**
+   * The stretch a review-queue key names: `revision-<id>`, a paired `revision-replace:<a>+<b>`,
+   * or `comment-<id>`. Answers `spans` holding one span covering every range of the item, or no
+   * span when the key names nothing this document holds.
+   */
+  | { readonly op: 'getReviewItemRange'; readonly key: string }
   /** Resolve eligible decisions in one story. Omit revisions to select every canonical decision. */
   | {
       readonly op: 'resolveRevisionBatch';
@@ -657,6 +673,15 @@ export type AutomationOperation =
   | { readonly op: 'acceptAllRevisions'; readonly document: AutomationHandle }
   | { readonly op: 'rejectAllRevisions'; readonly body: AutomationHandle }
   | { readonly op: 'rejectAllRevisions'; readonly document: AutomationHandle }
+  /**
+   * Accept or reject every change a span overlaps, or the changes a review-queue key names, as
+   * one transaction. Structural changes absent from listings are included. Refused whole when
+   * any of them is read-only or cannot be resolved, and when the key names nothing.
+   */
+  | { readonly op: 'acceptAllRevisions'; readonly scope: AutomationSpanRef }
+  | { readonly op: 'rejectAllRevisions'; readonly scope: AutomationSpanRef }
+  | { readonly op: 'acceptAllRevisions'; readonly key: string }
+  | { readonly op: 'rejectAllRevisions'; readonly key: string }
   /**
    * Put the reader's selection on a span. Requires the `selection` capability, so a headless
    * host refuses it rather than pretending to have a caret.

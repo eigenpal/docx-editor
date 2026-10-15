@@ -160,6 +160,43 @@ const pending = await runtime.run(async (context) => {
 
 `Revision.date` is `Date | null`; narrow missing or invalid dates before using date methods. `Revision.type` uses the exported `RevisionType` vocabulary. `Revision.range` returns a range for the addressed revision. Resolve the range before reading or selecting its content. `RevisionCollection` exposes `items`, `resolve()`, `setAuthor()`, `acceptAll()`, and `rejectAll()`; it has no first-item accessor.
 
+## Inspect revisions in a range
+
+`Range.revisions` returns the tracked changes that a range overlaps, in document order. The range's own story scopes the collection. A range in a header lists only that header's changes. Each member is the same `Revision` object that the story's collection lists.
+
+These rules decide membership:
+
+- A change that the range covers only in part is listed whole.
+- A collapsed range lists the changes it touches.
+- A paragraph mark change is listed only when the range continues into the next paragraph. A range that ends at the end of a paragraph, such as `getRange('Content')` or a search result, leaves the mark change out. To decide a mark change, use the story's `body.revisions`.
+- A replacement stored as a deletion and an insertion lists two members.
+- A change nested inside another change, or a change by another author beside it, is listed when the range overlaps it.
+- Membership uses document positions, so `revisionTextView` changes the range text but not the members.
+
+For example, accept every change that a search result overlaps:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 30 days');
+  matches.load('items');
+  await context.sync();
+
+  for (const match of matches.items) match.revisions.acceptAll();
+  await context.sync();
+});
+```
+
+On a range collection, `acceptAll()` and `rejectAll()` resolve every change the range overlaps, in one transaction:
+
+- A change that the range covers in part resolves whole, including its characters outside the range.
+- Structural changes that `items` omits, such as a complete tracked row, resolve too.
+- If the range overlaps only part of a group of nested changes, only the overlapped changes resolve, and the others stay pending.
+- If one of the changes is read-only or can't resolve, the sync fails with `NotImplemented` and nothing changes.
+- If two decisions in one sync reach the same change, the later one skips it. Contrary decisions on one change fail with `ConflictingChanges`.
+- A change inside text that a decision in the same sync removes, such as a rejected insertion or an accepted deletion, goes with that text, so any decision on it in that sync is skipped. This also applies to `accept()` and `reject()` on single revisions.
+
+`resolve()` and `setAuthor()` refuse with `NotSupported` on a range collection; call them on the story's collection instead.
+
 ## Resolve a batch of changes
 
 Use `RevisionCollection.resolve(action, revisions?)` to accept or reject supported changes in one story. Pass `'accept'` to keep the changes or `'reject'` to undo them. Unsupported changes remain pending.
@@ -259,6 +296,60 @@ const result = editor.exec({
 To include all authors across supported stories, pass `scope: 'document'`. To require every selected change to resolve, pass `unsupported: 'fail'`. The defaults are `scope: 'visible'` and `unsupported: 'skip'`.
 
 The result has the same fields as an API batch; `remaining` counts pending decisions across the document, including hidden changes. If no eligible changes exist, `editor.can()` returns a refusal and `editor.exec()` adds no undo step.
+
+## Work with review items
+
+A review panel lists cards from `useReview().items` or `editor.getReviewItems()`. Each card has a `key`. Pass the key to these DocxEditor functions to act on the same item through the object model:
+
+- `getReviewItemRevisions(context, key)` returns the change that a revision card shows, or the deletion and insertion of a paired replacement card.
+- `getReviewItemRange(context, key)` returns the range that a revision or comment card covers.
+
+For example, accept the change that a review card shows. In this sample, `item` comes from `useReview().items`:
+
+```tsx
+import {
+  getReviewItemRevisions,
+  type DocxEditorRuntime,
+} from '@docx-editor.dev/editor-api/browser';
+
+function AcceptButton(props: { runtime: DocxEditorRuntime; item: { readonly key: string } }) {
+  const { runtime, item } = props;
+  const accept = () =>
+    runtime.run(async (context) => {
+      getReviewItemRevisions(context, item.key).acceptAll();
+      await context.sync();
+    });
+  return <button onClick={accept}>Accept</button>;
+}
+```
+
+Use `getReviewItemRevisions` to decide a card. A change that holds a nested change by another author resolves alone, and the nested change stays pending. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
+
+A key names an item in the current document. After someone accepts or rejects that change, the key names nothing:
+
+- `getReviewItemRevisions` loads an empty collection, and `acceptAll()` or `rejectAll()` on it fails with `InvalidObjectPath`.
+- `getReviewItemRange` fails the sync with `ItemNotFound`. It also fails for a comment with no anchor in the document.
+- `getReviewItemRangeOrNullObject` returns a range whose `isNullObject` is `true`.
+
+For example, read the words that a card covers, and skip a card that another reviewer already resolved:
+
+```ts
+import { getReviewItemRangeOrNullObject } from '@docx-editor.dev/editor-api/browser';
+
+const key = item.key;
+await runtime.run(async (context) => {
+  const range = getReviewItemRangeOrNullObject(context, key);
+  range.load('text');
+  await context.sync();
+
+  if (range.isNullObject) return;
+  console.log(range.text);
+});
+```
+
+A comment key works with `getReviewItemRange`, and refuses with `NotSupported` in `getReviewItemRevisions`. A custom node key refuses in both. Read keys from the review queue just before you use them, because edits to the document can change them.
+
+These functions are DocxEditor additions. Office.js has no review queue and no key for a revision, so the functions are not members of the Office-shaped classes.
 
 ## Change the author of tracked changes
 

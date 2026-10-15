@@ -205,6 +205,7 @@ export declare namespace DocxEditor {
     readonly font: Font;
     hyperlink: string;
     readonly paragraphs: ParagraphCollection;
+    readonly revisions: RevisionCollection;
     style: string;
     readonly text: string;
     getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;

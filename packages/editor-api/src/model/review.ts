@@ -34,6 +34,7 @@ import {
   hydratedText,
   type AutomationHandle,
   type AutomationOperation,
+  type AutomationSpanRef,
   type ObjectAddress,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -607,17 +608,26 @@ export interface RevisionAuthorOptions {
   readonly date?: Date;
 }
 
+/** What one revision collection addresses. */
+type RevisionScope =
+  | { readonly body: AutomationHandle }
+  | { readonly span: () => AutomationSpanRef }
+  | { readonly key: string };
+
 /**
  * The tracked changes on a document, story or range, as of the batch that loaded them.
  *
  * `items` omits structural cards whose Word subtype this API cannot name; see {@link Revision}.
- * Collection-wide `acceptAll` / `rejectAll` still resolve every store-resolvable revision in this
- * story and refuse atomically if any `readOnly` or otherwise unsupported revision remains.
+ * On a story's collection, `acceptAll` / `rejectAll` still resolve every store-resolvable
+ * revision in the story and refuse atomically if any `readOnly` or otherwise unsupported
+ * revision remains. On {@link Range.revisions} and `getReviewItemRevisions`, they resolve the
+ * changes the range overlaps or the key names, and `resolve` and `setAuthor` refuse with
+ * `NotSupported`.
  *
  * @public
  */
 export class RevisionCollection extends HandleCollection<Revision> {
-  readonly #body: AutomationHandle;
+  readonly #scope: RevisionScope;
 
   /** @internal The pending decisions of one story. */
   static of(
@@ -626,12 +636,32 @@ export class RevisionCollection extends HandleCollection<Revision> {
     owner: ObjectPath,
     body: AutomationHandle
   ): RevisionCollection {
-    return new RevisionCollection(context, ObjectPath.derived(label, owner), body);
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), { body });
   }
 
-  private constructor(context: RequestContext, path: ObjectPath, body: AutomationHandle) {
+  /** @internal The pending decisions a range overlaps, read from the range at plan time. */
+  static inSpan(
+    context: RequestContext,
+    label: string,
+    owner: ObjectPath,
+    span: () => AutomationSpanRef
+  ): RevisionCollection {
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), { span });
+  }
+
+  /** @internal The pending decisions one review-queue key names. */
+  static ofReviewKey(
+    context: RequestContext,
+    label: string,
+    owner: ObjectPath,
+    key: string
+  ): RevisionCollection {
+    return new RevisionCollection(context, ObjectPath.derived(label, owner), { key });
+  }
+
+  private constructor(context: RequestContext, path: ObjectPath, scope: RevisionScope) {
     super(context, path);
-    this.#body = body;
+    this.#scope = scope;
   }
 
   /**
@@ -641,16 +671,40 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * omitted from `items`. Refuses the sync outright where any `readOnly` or otherwise
    * unsupported revision remains, rather than reporting the story as reviewed while pending
    * changes remain.
+   *
+   * On a collection from {@link Range.revisions}, resolves every change the range overlaps at
+   * sync time, structural changes absent from `items` included. A change the range covers in
+   * part resolves whole, characters outside the range included. On a collection from
+   * `getReviewItemRevisions`, resolves the changes the key names, and refuses with
+   * `InvalidObjectPath` when the key names nothing. Either way, the sync refuses whole when one
+   * of the changes is read-only or cannot be resolved, and a change that an earlier decision in
+   * the same sync resolved the same way is skipped.
    */
   acceptAll(): void {
-    const body = this.#body;
-    this.commandOn('acceptAll', () => ({ op: 'acceptAllRevisions', body }));
+    this.commandOn('acceptAll', () => this.#decision('acceptAllRevisions'));
   }
 
   /** Undo every change, likewise as one decision. */
   rejectAll(): void {
-    const body = this.#body;
-    this.commandOn('rejectAll', () => ({ op: 'rejectAllRevisions', body }));
+    this.commandOn('rejectAll', () => this.#decision('rejectAllRevisions'));
+  }
+
+  #decision(op: 'acceptAllRevisions' | 'rejectAllRevisions'): AutomationOperation {
+    return { op, ...this.#scopeRef() } as AutomationOperation;
+  }
+
+  /** What the host addresses: the story, the range read at plan time, or the review key. */
+  #scopeRef(): { body: AutomationHandle } | { scope: AutomationSpanRef } | { key: string } {
+    const scope = this.#scope;
+    if ('span' in scope) return { scope: scope.span() };
+    return 'key' in scope ? { key: scope.key } : { body: scope.body };
+  }
+
+  /** The story handle, or `NotSupported` on a collection that a range or a key scopes. */
+  #storyBody(member: string): AutomationHandle {
+    const scope = this.#scope;
+    if (!('body' in scope)) fail({ code: 'NotSupported', target: `${this.path.label}.${member}` });
+    return scope.body;
   }
 
   /**
@@ -659,6 +713,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * Pass an empty array to select nothing. Duplicate objects resolve once; stale targets
    * are reported as unknown-revision. This must be the only write in its sync batch.
    * Unlike acceptAll/rejectAll, unsupported decisions do not block independent changes.
+   * A collection from `Range.revisions` or `getReviewItemRevisions` refuses this call with
+   * `NotSupported`.
    *
    * @example
    * ```ts
@@ -678,6 +734,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       (revisions !== undefined && !Array.isArray(revisions))
     )
       fail({ code: 'InvalidArgument', target: label });
+    const body = this.#storyBody('resolve');
     const targets = revisions === undefined ? undefined : [...revisions];
     const { result, fill } = clientResult<RevisionBatchResult>(label);
     this.enqueue({
@@ -685,7 +742,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       label,
       plan: () => ({
         op: 'resolveRevisionBatch',
-        body: this.#body,
+        body,
         action,
         ...(targets === undefined
           ? {}
@@ -707,6 +764,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
    * author, including structural ones absent from `items`. An empty array selects nothing.
    * Each change keeps its date unless you pass `options.date`. Keep this the only write in
    * its sync batch. Revision objects you pass stay valid and read the new author after a load.
+   * A collection from `Range.revisions` or `getReviewItemRevisions` refuses this call with
+   * `NotSupported`.
    *
    * @example
    * ```ts
@@ -744,6 +803,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       )
     )
       fail({ code: 'InvalidArgument', target: label });
+    const body = this.#storyBody('setAuthor');
     const targets = revisions === undefined ? undefined : [...revisions];
     const { result, fill } = clientResult<RevisionAuthorResult>(label);
     this.enqueue({
@@ -751,7 +811,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
       label,
       plan: () => ({
         op: 'setRevisionAuthorBatch',
-        body: this.#body,
+        body,
         author,
         ...(date === undefined ? {} : { date: date.toISOString() }),
         ...(authors === undefined ? {} : { authors: [...authors] }),
@@ -773,7 +833,7 @@ export class RevisionCollection extends HandleCollection<Revision> {
 
   /** @internal The read that answers this collection's members. */
   protected listing(): AutomationOperation {
-    return { op: 'getRevisions', body: this.#body };
+    return { op: 'getRevisions', ...this.#scopeRef() } as AutomationOperation;
   }
 
   /** @internal Build one member from an address the listing answered. */

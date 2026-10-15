@@ -1,6 +1,6 @@
 import { sharesItsPart } from './stories.ts';
 import { collectRevisionSites } from '../store/store/tree-op-revisions.ts';
-import { reviewItemKey, type ReviewRevisionItem } from '../store/store/review-items.ts';
+import { reviewItemKey } from '../store/store/review-items.ts';
 import type { PlannedOperation } from './plan-types.ts';
 import { planRevisionBatch, type RevisionBatchResult } from '../store/store/revision-batch.ts';
 import {
@@ -15,13 +15,18 @@ import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
 import { revisionItemsInStory } from './review.ts';
+import { planNarrowRevisionDecision, type RevisionDecisionLedger } from './review-scope.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
-import { nestedTextDecisionOps } from './revision-nested-text.ts';
 
 /** The store's bound on one decision's explicit site list (`tree-op-validate.ts`). */
 const MAX_SITES_PER_OP = 50_000;
 
-type CollectionDecision = Extract<
+type CollectionDecision = Exclude<
+  Extract<AutomationOperation, { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions' }>,
+  { readonly scope: unknown } | { readonly key: unknown }
+>;
+
+type AnyCollectionDecision = Extract<
   AutomationOperation,
   { readonly op: 'acceptAllRevisions' | 'rejectAllRevisions' }
 >;
@@ -240,11 +245,14 @@ export function revisionBatchAnswer(
 
 /** Share story admission between strict collection decisions and selected-set decisions. */
 export function planRevisionDecision(
-  operation: CollectionDecision | BatchOperation,
+  operation: AnyCollectionDecision | BatchOperation,
   handles: AutomationHandleTable,
   reads: AutomationPackageReads,
-  pin: (story: AutomationStoryReads) => PlannedOperation | null
+  pin: (story: AutomationStoryReads) => PlannedOperation | null,
+  ledger: RevisionDecisionLedger
 ): PlannedOperation {
+  if ('scope' in operation || 'key' in operation)
+    return planNarrowRevisionDecision(operation, handles, reads, pin, ledger);
   if (operation.op === 'setRevisionAuthorBatch') {
     const target = revisionAuthorPlan(operation, handles, reads);
     if (!target.ok) return { ok: false, error: { code: target.code, message: target.message } };
@@ -298,6 +306,17 @@ export function planRevisionDecision(
     };
   const conflict = pin(target.reads);
   if (conflict) return conflict;
+  // Every site is planned from the state before the batch; an earlier narrower decision has
+  // already resolved some of them.
+  if (ledger.whole || ledger.decided.size > 0)
+    return {
+      ok: false,
+      error: {
+        code: 'conflicting-operations',
+        message: 'an earlier decision in this batch resolved changes',
+      },
+    };
+  ledger.whole = true;
   return {
     ok: true,
     kind: 'command',
@@ -305,23 +324,4 @@ export function planRevisionDecision(
     ops: revisionCollectionOps(operation, target.reads),
     answer: () => ({ kind: 'applied' }),
   };
-}
-
-/** Resolve only this decision's source sites, with shared dependency preflight. */
-export function revisionItemOps(
-  reads: AutomationStoryReads,
-  item: ReviewRevisionItem,
-  action: 'accept' | 'reject'
-): readonly TreeDocOp[] {
-  const decision = planRevisionBatch(
-    reads.part,
-    action,
-    [reviewItemKey(item)],
-    sharesItsPart(reads.story) ? reads.root : undefined
-  );
-  if (!decision.result.skipped.length) return decision.ops;
-  // Nested text revisions share a batch group, but each one is still its own decision.
-  return decision.result.skipped.every((skip) => skip.reason === 'incomplete-group')
-    ? nestedTextDecisionOps(reads, item, action)
-    : [];
 }

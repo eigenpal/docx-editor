@@ -311,6 +311,38 @@ These tracked edits fail with `NotImplemented`. Read `error.debugInfo.innerError
 
 The range that a tracked `insertText()` returns names your own pending insertion. With tracking on, replacing or deleting that range fails with `edit.tracked-own-pending-change`, because the edit would cover your own pending text. Write the final text in one call, or reject your revision and write again.
 
+## Review changes in a range
+
+Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story, including a nested change or another author's change beside it. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members and decide on each one:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 30 days');
+  matches.load('items');
+  await context.sync();
+
+  const revisions = matches.items.map((match) => match.revisions);
+  for (const collection of revisions) collection.load('items');
+  await context.sync();
+
+  for (const collection of revisions) {
+    for (const revision of collection.items) revision.load('author');
+  }
+  await context.sync();
+
+  for (const collection of revisions) {
+    for (const revision of collection.items) {
+      if (revision.author === 'Agent') revision.accept();
+    }
+  }
+  await context.sync();
+});
+```
+
+`acceptAll()` and `rejectAll()` on a range collection resolve every change the range overlaps, whole, including structural changes that `items` omits. They fail with `NotImplemented` when one of those changes is read-only. When the range overlaps only part of a group of nested changes, only the overlapped changes resolve; the others stay pending. Two decisions in one sync that reach one change resolve it once; contrary decisions fail with `ConflictingChanges`. A change inside text that a decision in the same sync removes, such as a rejected insertion or an accepted deletion, goes with that text, so any decision on it in that sync is skipped. This also applies to `accept()` and `reject()` on single revisions. `resolve()` and `setAuthor()` refuse with `NotSupported` on a range collection. Use the story's `body.revisions` for them.
+
+A browser review panel identifies cards by `key`. Pass the key to the DocxEditor function `getReviewItemRevisions(context, key)` to decide the card's own change, or the two halves of a paired replacement. `getReviewItemRange(context, key)` returns the range that a card covers; use `getReviewItemRangeOrNullObject(context, key)` when another reviewer can resolve the change first. Do not match cards to revisions by text.
+
 ## Set paragraph direction
 
 Office.js has no paragraph direction member. Use the DocxEditor addition `Paragraph.readingOrder` to write right-to-left paragraphs, such as Arabic or Hebrew text. Queue the direction writes for several paragraphs in one sync, then read them back in the next sync:

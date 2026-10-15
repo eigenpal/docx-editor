@@ -32,6 +32,12 @@ import { planTableOperation } from './plan-tables.ts';
 import { planVirtualFurniture } from './virtual-furniture.ts';
 import { isAutomationCommand } from './operations.ts';
 import { planPictures } from './plan-pictures.ts';
+import {
+  createRevisionDecisionLedger,
+  planKeyedDecision,
+  planReviewItemRange,
+  planRevisionListing,
+} from './review-scope.ts';
 import { planBreakOperation, planLineBreak } from './plan-breaks.ts';
 import { insertTextOps, lineBreakRefusal, PARAGRAPH_MARK_IN_TEXT } from './line-break-text.ts';
 import { automationListLevelExists } from './list-authoring.ts';
@@ -120,7 +126,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
 import { planProposal, trackedParagraphInsertError, trackedProposalOf } from './plan-proposal.ts';
-import { planRevisionDecision, revisionItemOps } from './revision-operations.ts';
+import { planRevisionDecision } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
   planDeleteComment,
@@ -309,6 +315,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
   const pinCommentStory = (reads: AutomationStoryReads): PlannedOperation | null =>
     pinWrite(planFor(reads));
+  const pinDecision = pinCommentStory;
+  const decisions = createRevisionDecisionLedger();
 
   /**
    * The comments of one story, or null when the document is gone.
@@ -2345,15 +2353,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return planDeleteComment(found.item, found.reads, (reads) => pinWrite(planFor(reads)));
       }
 
-      case 'getRevisions': {
-        const story = storyOfHandle(operation.body, 'body', handles, packageReads);
-        if (!story.ok) return refuse(story.code, 'that handle does not name a body', story.detail);
-        const reads = story.value;
-        return query({
-          kind: 'handles',
-          handles: revisionReads(reads).map((item) => handles.revision(item.id, reads.story)),
-        });
-      }
+      case 'getRevisions':
+        return planRevisionListing(operation, handles, packageReads);
+
+      case 'getReviewItemRange':
+        return planReviewItemRange(operation.key, handles, packageReads);
 
       case 'getRevisionType': {
         const found = revisionAt(operation.revision);
@@ -2387,26 +2391,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       case 'rejectRevision': {
         const found = revisionAt(operation.revision);
         if (!found.ok) return found.planned;
-        const plan = planFor(found.reads);
-        const conflict = pinWrite(plan);
-        if (conflict) return conflict;
-        const ops = revisionItemOps(
-          found.reads,
-          found.item.item,
-          operation.op === 'acceptRevision' ? 'accept' : 'reject'
-        );
-        if (!ops.length)
-          return refuse('unsupported-revision', 'that change cannot resolve apart from its group');
-        return { ok: true, kind: 'command', story: found.reads.story, ops, answer: () => APPLIED };
+        const action = operation.op === 'acceptRevision' ? 'accept' : 'reject';
+        return planKeyedDecision(found.reads, [found.item.item], action, decisions, pinDecision);
       }
 
       case 'resolveRevisionBatch':
       case 'setRevisionAuthorBatch':
       case 'acceptAllRevisions':
       case 'rejectAllRevisions':
-        return planRevisionDecision(operation, handles, packageReads, (reads) =>
-          pinWrite(planFor(reads))
-        );
+        return planRevisionDecision(operation, handles, packageReads, pinDecision, decisions);
 
       case 'selectSpan': {
         const resolved = resolveSpanRef(operation.span, handles, packageReads);

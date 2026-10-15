@@ -8,16 +8,17 @@
 import type { ReviewItemPlacement, ReviewItemQuery } from '../contracts/editor.ts';
 import type { ReviewItemRevealEvent } from '../contracts/editor-events.ts';
 import {
+  isReplacementPair,
+  REPLACEMENT_PAIR_ID_PREFIX,
   registerRevisionSiteNodeIds,
+  replacementPairId,
   reviewItemKey,
   revisionSiteNodeIdsOf,
   type ReviewItem,
   type ReviewRevisionItem,
 } from '../store/store/review-items.ts';
 
-/** Store revision ids start with their kind and a dash, so this prefix cannot collide. */
-const PAIR_ID_PREFIX = 'replace:';
-const PAIR_KEY_PREFIX = `revision-${PAIR_ID_PREFIX}`;
+const PAIR_KEY_PREFIX = `revision-${REPLACEMENT_PAIR_ID_PREFIX}`;
 
 /** The two store revisions one paired replacement stands for. */
 export interface ReplacementHalves {
@@ -38,29 +39,7 @@ export function reviewItemWithHalves(item: ReviewItem): readonly ReviewItem[] {
   return halves ? [item, halves.deletion, halves.insertion] : [item];
 }
 
-/** The deletion ends exactly where the insertion starts, in the same paragraph. */
-function touches(deletion: ReviewRevisionItem, insertion: ReviewRevisionItem): boolean {
-  const end = deletion.ranges[deletion.ranges.length - 1];
-  const start = insertion.ranges[0];
-  return (
-    end !== undefined &&
-    start !== undefined &&
-    end.partName === start.partName &&
-    end.end.paragraphId === start.start.paragraphId &&
-    end.end.offset === start.start.offset
-  );
-}
-
-function pairable(deletion: ReviewRevisionItem, insertion: ReviewRevisionItem): boolean {
-  return (
-    deletion.revisionKind === 'delete' &&
-    insertion.revisionKind === 'insert' &&
-    deletion.author === insertion.author &&
-    deletion.readOnly === insertion.readOnly &&
-    deletion.nesting === insertion.nesting &&
-    touches(deletion, insertion)
-  );
-}
+const pairable = isReplacementPair;
 
 /** Pairs by deletion, so one queue revision yields the same pair object on every read. */
 const pairCache = new WeakMap<ReviewRevisionItem, ReviewRevisionItem>();
@@ -71,7 +50,7 @@ function pairOf(deletion: ReviewRevisionItem, insertion: ReviewRevisionItem): Re
   const date = insertion.date ?? deletion.date;
   const pair: ReviewRevisionItem = {
     kind: 'revision',
-    id: `${PAIR_ID_PREFIX}${deletion.id}+${insertion.id}`,
+    id: replacementPairId(deletion.id, insertion.id),
     address: deletion.address,
     addresses: [...deletion.addresses, ...insertion.addresses],
     replacedText: deletion.text,

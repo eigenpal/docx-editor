@@ -833,6 +833,15 @@ export class Font extends ModelObject {
 }
 
 // @public
+export function getReviewItemRange(context: RequestContext, key: string): Range_2;
+
+// @public
+export function getReviewItemRangeOrNullObject(context: RequestContext, key: string): Range_2;
+
+// @public
+export function getReviewItemRevisions(context: RequestContext, key: string): RevisionCollection;
+
+// @public
 export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
 
 export { HistoryGroup }
@@ -1178,6 +1187,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     get paragraphs(): ParagraphCollection;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Range_2;
+    get revisions(): RevisionCollection;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     select(selectionMode_?: SelectionMode_2): void;
     get style(): string;
@@ -1320,11 +1330,15 @@ export { RevisionBatchSkipReason }
 export class RevisionCollection extends HandleCollection<Revision> {
     acceptAll(): void;
     // @internal
+    static inSpan(context: RequestContext, label: string, owner: ObjectPath, span: () => AutomationSpanRef): RevisionCollection;
+    // @internal
     protected itemAt(label: string, address: ObjectAddress): Revision;
     // @internal
     protected listing(): AutomationOperation;
     // @internal
     static of(context: RequestContext, label: string, owner: ObjectPath, body: AutomationHandle): RevisionCollection;
+    // @internal
+    static ofReviewKey(context: RequestContext, label: string, owner: ObjectPath, key: string): RevisionCollection;
     // @internal
     protected promised(label: string, nullable: boolean): Revision & PromisedItem;
     rejectAll(): void;
