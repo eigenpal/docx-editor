@@ -62,6 +62,7 @@ export type {
   HyperlinkChromeHandlers,
   BookmarkMarkInfo,
   BookmarkMarkOptions,
+  CommentDraftChromeHandlers,
   GoToChromeHandlers,
   LockedControlNavigation,
   SurfaceHyperlink,

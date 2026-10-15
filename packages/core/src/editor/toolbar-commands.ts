@@ -44,6 +44,8 @@ import {
 import { IMAGE_WRAP_TARGETS, type ImageWrapTarget } from '../store/package/drawing-projection.ts';
 import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
 
+import { NO_COMMENT_DRAFT_VIEW, commentDraftRequestsOf } from './comment-draft-chrome.ts';
+
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
   const candidate = editor as Editor & { readonly surface?: PaginatedSurface | null };
@@ -335,9 +337,10 @@ const EDITING_MODES: readonly DocumentEditingMode[] = ['editing', 'suggesting', 
 
 /**
  * Whether a comment could be started at the selection: the review module is installed, the
- * document is not open for viewing, and the selection is on the page. The click does not run
- * an engine command; the adapter's review rail opens the draft, the way the link popover
- * owns `text.link`.
+ * document is not open for viewing, chrome is registered to open the draft, and the selection
+ * is on the page. The click does not run an engine command; the registered chrome (the review
+ * rail, or the host's own, through `setCommentDraftChrome`) opens the draft, the way the link
+ * popover owns `text.link`.
  */
 function addCommentState(editor: Editor): ToolbarCommandState {
   const id: ChromeSlotId = 'review.addComment';
@@ -352,6 +355,7 @@ function addCommentState(editor: Editor): ToolbarCommandState {
   if ((editor.getEditingMode?.() ?? 'editing') === 'viewing') {
     return refuse('the document is open for viewing');
   }
+  if (!commentDraftRequestsOf(editor)?.canOpen()) return refuse(NO_COMMENT_DRAFT_VIEW);
   if (editor.getSelectionPlacement() === null) return refuse('a comment needs a selected range');
   return { id, enabled: true, disabledReason: null, active: false };
 }
@@ -698,13 +702,17 @@ export function runTableChromeCommand(
   return result.ok ? { result, nextDraft: pick.nextDraft } : { result, nextDraft: null };
 }
 
-/** Slots `runToolbarCommand` runs on the surface directly, so `exec` options do not apply. */
+/**
+ * Slots `runToolbarCommand` runs on the surface or through host chrome directly, so `exec`
+ * options do not apply.
+ */
 const SURFACE_RUN_SLOTS: ReadonlySet<ChromeSlotId> = new Set<ChromeSlotId>([
   'format.painter',
   'contentControl.showAll',
   'contentControl.formFill',
   'contentControl.inspector',
   'contentControl.remove',
+  'review.addComment',
 ]);
 
 /**
@@ -795,6 +803,21 @@ export function runToolbarCommand(
     return surface.formatPainter.press()
       ? { ok: true, changed: false }
       : { ok: false, code: 'notFound', reason: NOTHING_TO_COPY_FORMATTING };
+  }
+  if (id === 'review.addComment') {
+    // Can before exec, with the same answer the enabled state gives; then the registered
+    // chrome opens the draft. Nothing about the document moves until the comment is posted.
+    const state = addCommentState(editor);
+    if (!state.enabled) {
+      return {
+        ok: false,
+        code: 'unsupported',
+        reason: state.disabledReason ?? NO_COMMENT_DRAFT_VIEW,
+      };
+    }
+    return commentDraftRequestsOf(editor)?.open()
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'unsupported', reason: NO_COMMENT_DRAFT_VIEW };
   }
   if (id === 'contentControl.showAll') {
     const surface = surfaceOf(editor);

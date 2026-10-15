@@ -20,6 +20,7 @@
     "noDrawing": "画像が選択されていません",
     "drawingLocked": "この画像はロックされています",
     "commentSelection": "コメントを追加する範囲を選択してください",
+    "noCommentDraftView": "ここではコメントを追加できません",
     "mergeUnsupported": "セルの結合はサポートされていません",
     "splitUnsupported": "セルの分割はサポートされていません",
     "imageSuggesting": "提案モードでは画像を変更できません",

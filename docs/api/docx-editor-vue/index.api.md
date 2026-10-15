@@ -7038,6 +7038,9 @@ export interface UseBookmarksReturn {
 // @public (undocumented)
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ComputedRef<ChromeTranslate>;
 
+// @public
+export function useCommentDraftRequest(handler: (() => void) | null | undefined): void;
+
 // @public (undocumented)
 export function useContentControl(): UseContentControlResult;
 

@@ -33,14 +33,15 @@ export interface BookmarkMarkOptionsSource {
 }
 
 /**
- * One kind of host UI the editor opens on request: the Bookmark dialog, or Go To.
+ * One kind of host UI the editor opens on request: the Bookmark dialog, Go To, or a comment
+ * draft.
  *
  * Whether one is registered is published as a change, so chrome that asks `can` re-renders. A
  * registration publishes at once. A removal waits for the end of the task: a host that
  * registers again (a prop change re-runs its effect) removes and registers in one task, the
  * answer does not change, and nothing is published.
  */
-function createRequestChrome(changed: (() => void) | undefined) {
+export function createRequestChrome(changed: (() => void) | undefined) {
   const stack = createChromeHandlerStack<{
     readonly onRequest?: () => void;
     readonly shortcut?: boolean;

@@ -20,6 +20,7 @@ import {
   reviewModelOption,
 } from './docx-editor-review-commands.ts';
 import { canEditorViewCommand, createEditorViews } from './docx-editor-view-commands.ts';
+import { bindCommentDraftRequests } from './comment-draft-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
 import { attachTargetRefusal, registerEditorHost } from './host-realm.ts';
@@ -2507,6 +2508,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const instance = fieldScope.methods(editor);
   registerEditorHost(instance, () => container);
   registerEditorHistoryGroups(instance, historyGroups);
+  bindCommentDraftRequests(instance, views.popupChrome.commentDraft);
   endPreview = () => endEditorPreview(instance);
   registerEditorPreviewHost(instance, {
     displayOptions: displaySurfaceOptions,

@@ -30,6 +30,8 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'no drawing is selected': 'disabledReason.noDrawing',
   'the drawing is locked': 'disabledReason.drawingLocked',
   'a comment needs a selected range': 'disabledReason.commentSelection',
+  // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.
+  'no comment draft view is registered': 'disabledReason.noCommentDraftView',
   'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
   'cell split is not supported yet': 'disabledReason.splitUnsupported',
   'image changes are not supported in suggesting mode': 'disabledReason.imageSuggesting',

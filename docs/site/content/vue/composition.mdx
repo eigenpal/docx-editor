@@ -436,23 +436,43 @@ Use Tab to focus a vertical ruler margin handle. Arrow Up increases the margin; 
 
 Read-only documents keep the ruler handles inactive.
 
-## Page setup dialog
+## Page setup and paragraph dialogs
 
-You control `DocxEditorPageSetupDialog` with `open` and `@close`.
+You control `DocxEditorPageSetupDialog` and `DocxEditorParagraphDialog` with `open` and `@close`.
+
+### Open the dialogs from your own toolbar
+
+To open a dialog from your own toolbar, keep its `open` state in your component and render the dialog inside `DocxEditorRoot`. Take the button's enabled state from `usePageSetup()` or `useParagraphFormat()`. These composables ask the engine whether the document accepts the change, so the button is disabled when the dialog could not apply it:
 
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue';
-import { DocxEditorPageSetupDialog } from '@docx-editor.dev/vue';
+import {
+  DocxEditorPageSetupDialog,
+  DocxEditorParagraphDialog,
+  usePageSetup,
+  useParagraphFormat,
+} from '@docx-editor.dev/vue';
 
 const pageSetupOpen = ref(false);
+const paragraphOpen = ref(false);
+const pageSetup = usePageSetup();
+const paragraph = useParagraphFormat();
 </script>
 
 <template>
-  <button type="button" @click="pageSetupOpen = true">Page setup</button>
+  <button type="button" :disabled="!pageSetup.isEnabled.value" @click="pageSetupOpen = true">
+    Page setup
+  </button>
+  <button type="button" :disabled="!paragraph.isEnabled.value" @click="paragraphOpen = true">
+    Paragraph
+  </button>
   <DocxEditorPageSetupDialog :open="pageSetupOpen" @close="pageSetupOpen = false" />
+  <DocxEditorParagraphDialog :open="paragraphOpen" @close="paragraphOpen = false" />
 </template>
 ```
+
+The `file.pageSetup` and `paragraph.dialog` slots do not open a dialog. Their values come from the dialog form, so `useEditorCommand('file.pageSetup').execute()` and `useEditorCommand('paragraph.dialog').execute()` return `false`. `usePageSetupDialog()` and `useParagraphDialog()` read the draft of an open dialog from inside it; they do not open it.
 
 Use `usePageSetup()` to build a different form.
 

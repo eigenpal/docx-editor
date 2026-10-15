@@ -241,6 +241,7 @@ export type {
   AttachOptions,
   BookmarkMarkInfo,
   BookmarkMarkOptions,
+  CommentDraftChromeHandlers,
   FontMeasurementState,
   GoToChromeHandlers,
 } from './docx-editor-types.ts';

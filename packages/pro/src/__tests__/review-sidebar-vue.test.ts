@@ -261,7 +261,7 @@ describe('DocxEditorReview (Vue)', () => {
       await waitFor(() => mounted.container.querySelector('.docx-page') !== null);
       mounted.editor().surface!.focus();
       expect(mounted.editor().snapshot().selectionCollapsed).toBe(true);
-      expect(requestDraft()).toBe(true);
+      expect(requestDraft()).toBe(false); // the control refuses before any handler runs
       await flush();
       expect(mounted.container.querySelector('[data-testid="review-draft"]')).toBeNull();
     } finally {

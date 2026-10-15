@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "टिप्पणी जोड़ने से पहले कोई पाठ क्षेत्र चुनें",
+    "noCommentDraftView": "यहाँ टिप्पणियाँ नहीं जोड़ी जा सकतीं",
     "drawingLocked": "यह चित्र लॉक है",
     "editorNotReady": "संपादक तैयार नहीं है",
     "imageSuggesting": "सुझाव मोड में चित्र परिवर्तन उपलब्ध नहीं हैं",

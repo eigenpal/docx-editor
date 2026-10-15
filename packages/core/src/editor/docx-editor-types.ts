@@ -234,6 +234,21 @@ export interface BookmarkChromeHandlers {
 }
 
 /**
+ * Host chrome for comment drafts: the review rail, or the host's own comment UI.
+ *
+ * @public
+ */
+export interface CommentDraftChromeHandlers {
+  /**
+   * Open a comment draft on the selection: the `review.addComment` control's press. The
+   * handler takes no arguments. It reads the selection with `getSelectionPlacement`, and can
+   * pin it with `retainSelection` while the draft is open. The most recent registration
+   * receives each request.
+   */
+  readonly onRequest?: () => void;
+}
+
+/**
  * Host chrome for Go To: the Go to tab of `DocxEditor.Navigation`, or the host's own.
  *
  * @public
@@ -346,6 +361,13 @@ export interface DocxEditorInstance extends Editor {
    * whatever was registered before. `DocxEditor.Navigation` registers its Go to tab.
    */
   setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
+  /**
+   * Wire the host's comment draft UI to the `review.addComment` control. Returns an
+   * unsubscribe that restores whatever was registered before. While nothing is registered,
+   * the control is disabled, because nothing could open the draft. The review rail registers
+   * when it mounts.
+   */
+  setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
   /**
    * Choose which bookmarks Show bookmarks marks and customize each mark. Returns an
    * unsubscribe that restores the previous options.

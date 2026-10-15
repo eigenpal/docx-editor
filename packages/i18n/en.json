@@ -20,6 +20,7 @@
     "noDrawing": "No image is selected",
     "drawingLocked": "This image is locked",
     "commentSelection": "Select a range before adding a comment",
+    "noCommentDraftView": "Comments can't be added here",
     "mergeUnsupported": "Cell merge is not supported",
     "splitUnsupported": "Cell split is not supported",
     "imageSuggesting": "Image changes are unavailable in suggesting mode",

@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "בחר טווח לפני הוספת הערה",
+    "noCommentDraftView": "לא ניתן להוסיף כאן הערות",
     "drawingLocked": "תמונה זו נעולה",
     "editorNotReady": "העורך אינו מוכן",
     "imageSuggesting": "שינויים בתמונות אינם זמינים במצב הצעות",

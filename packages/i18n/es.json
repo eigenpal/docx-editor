@@ -20,6 +20,7 @@
     "noDrawing": "No hay ninguna imagen seleccionada",
     "drawingLocked": "Esta imagen está bloqueada",
     "commentSelection": "Selecciona un texto antes de añadir un comentario",
+    "noCommentDraftView": "Aquí no se pueden añadir comentarios",
     "mergeUnsupported": "No se admite combinar celdas",
     "splitUnsupported": "No se admite dividir celdas",
     "imageSuggesting": "Los cambios de imagen no están disponibles en modo de sugerencias",

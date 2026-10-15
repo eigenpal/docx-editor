@@ -52,7 +52,15 @@ const composition = createDialogComposition<
 export interface UseParagraphDialogReturn extends UseDialogReturn<ParagraphDialogFields> {
   readonly mixed: Readonly<Ref<ParagraphDialogMixed>>;
 }
-/** Access the current Paragraph draft and actions. @public */
+/**
+ * Access the current Paragraph draft and actions.
+ *
+ * Call it in a child of the dialog. It does not open the dialog. To open the dialog from your
+ * own toolbar, keep its `open` state and render `DocxEditorParagraphDialog` with `open` and
+ * `@close`. Take the button's enabled state from `useParagraphFormat().isEnabled`.
+ *
+ * @public
+ */
 export function useParagraphDialog(): UseParagraphDialogReturn {
   return composition.useContext() as UseParagraphDialogReturn;
 }

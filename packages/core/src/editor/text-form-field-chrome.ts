@@ -4,6 +4,7 @@ import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 import { createBookmarkChrome, type BookmarkChromeHost } from './bookmark-chrome.ts';
 import type { EquationChromeHandlers, HyperlinkChromeHandlers } from './docx-editor-types.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
+import { createCommentDraftChrome } from './comment-draft-chrome.ts';
 
 /**
  * Manual renderers take priority over automatic adapter fallbacks in either mount order.
@@ -58,7 +59,7 @@ export const createTextFormFieldChrome = () => createSessionChrome<TextFormField
 
 /**
  * Facade wiring for host chrome: the three core-owned popup session families, and the
- * hyperlink, equation and bookmark handlers.
+ * hyperlink, equation, bookmark and comment draft handlers.
  *
  * The handlers are read through their holders rather than captured: chrome mounts AFTER the
  * editor exists (the provider-first shape), and a document that reloads must not leave the
@@ -68,6 +69,7 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
   const hyperlink = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equation = createChromeHandlerStack<EquationChromeHandlers>({});
   const bookmark = createBookmarkChrome(host);
+  const commentDraft = createCommentDraftChrome(host);
   const text = createTextFormFieldChrome();
   // Checkbox and picture presses reach only renderers that ask for them: a pop-up renderer
   // written before those sessions existed keeps working, and the engine toggles the box or
@@ -95,6 +97,8 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
     },
     bookmarkDialog: bookmark.bookmarkDialog,
     goTo: bookmark.goTo,
+    /** What the `review.addComment` control asks of the registered comment draft chrome. */
+    commentDraft: commentDraft.requests,
     setters: {
       setTextFormFieldChrome: text.register,
       setContentControlWidgetChrome: widget.register,
@@ -102,6 +106,7 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
       setHyperlinkChrome: hyperlink.push,
       setEquationChrome: equation.push,
       ...bookmark.setters,
+      ...commentDraft.setters,
     },
   };
 }

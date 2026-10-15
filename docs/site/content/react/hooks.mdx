@@ -333,6 +333,37 @@ function GoToBox() {
 
 `go(name?)` jumps to `name`, or else to the highlighted row, the bookmark named exactly as typed, or the first row. It returns the command result. `sortBy`, `showHidden`, and their setters choose the order and whether hidden bookmarks are offered. Pass `{ enabled: isOpen }` to read the document only while your UI is shown. Each row's `place` says whether the bookmark is in the body, a header, a footer, a footnote, or an endnote.
 
+## `useCommentDraftRequest`
+
+Use `useCommentDraftRequest` when you render your own comment UI instead of the packaged review rail. The `review.addComment` control does not add a comment by itself, because the comment text comes from a draft. The engine enables the control only while something can open that draft. The packaged review rail registers itself when it mounts. Without a registration, the control is disabled with a reason.
+
+Register your handler, and press the control with `useEditorCommand`:
+
+```tsx
+import { useState } from 'react';
+import { useCommentDraftRequest, useEditorCommand } from '@docx-editor.dev/react';
+
+function AddCommentButton() {
+  const [drafting, setDrafting] = useState(false);
+  useCommentDraftRequest(() => setDrafting(true));
+  const addComment = useEditorCommand('review.addComment');
+  return (
+    <>
+      <button
+        disabled={!addComment.isEnabled}
+        title={addComment.disabledReason ?? 'Add comment'}
+        onClick={() => addComment.execute()}
+      >
+        Add comment
+      </button>
+      {drafting && <MyCommentDraft onClose={() => setDrafting(false)} />}
+    </>
+  );
+}
+```
+
+The handler takes no arguments. Read the selection with `editor.getSelectionPlacement()`, and pin it with `editor.retainSelection()` while the draft is open. The most recent registration receives each press. Pass `null` while your UI cannot open a draft. When the component unmounts, the registration ends, and the control is disabled again if nothing else is registered.
+
 ## `useParagraphFormat`
 
 Use `useParagraphFormat` to read and change the paragraph at the selection. `apply` sends the supplied fields as one command, so one call creates one undo step:

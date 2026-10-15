@@ -37,6 +37,7 @@ import {
   defaultTableLabel,
   resolveZoomMode,
   resolveRevisionMarkup,
+  runToolbarCommand,
   sameZoomMode,
   type DocxEditorInstance,
   type EditorModule,
@@ -197,18 +198,30 @@ export function useDocxEditorRootOwner(
     };
   };
   const commentDraftHandlers: Array<() => void> = [];
+  const commentDraftCount = shallowRef(0);
   const registerCommentDraft = (handler: () => void) => {
     commentDraftHandlers.push(handler);
+    commentDraftCount.value++;
     return () => {
       const index = commentDraftHandlers.indexOf(handler);
-      if (index !== -1) commentDraftHandlers.splice(index, 1);
+      if (index === -1) return;
+      commentDraftHandlers.splice(index, 1);
+      commentDraftCount.value = Math.max(0, commentDraftCount.value - 1);
     };
   };
+  // The engine decides whether Add comment is enabled, so the handlers registered here reach
+  // it as one registration, while any exists. The latest handler receives each request.
+  watch(
+    [() => editorRef.value, () => commentDraftCount.value > 0],
+    ([editor, serving], _previous, onCleanup) => {
+      if (!editor || !serving) return;
+      onCleanup(editor.setCommentDraftChrome({ onRequest: () => commentDraftHandlers.at(-1)?.() }));
+    },
+    { immediate: true }
+  );
   const requestCommentDraft = () => {
-    const handler = commentDraftHandlers.at(-1);
-    if (!handler) return false;
-    handler();
-    return true;
+    const editor = editorRef.value;
+    return editor !== null && runToolbarCommand(editor, 'review.addComment').ok;
   };
   const railRegistry = shallowRef<ReviewRailRegistry>({
     mounted: 0,

@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "Zaznacz zakres przed dodaniem komentarza",
+    "noCommentDraftView": "Tutaj nie można dodawać komentarzy",
     "drawingLocked": "Ten obraz jest zablokowany",
     "editorNotReady": "Edytor nie jest gotowy",
     "imageSuggesting": "Zmiany obrazów są niedostępne w trybie sugerowania",

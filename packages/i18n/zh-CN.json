@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "请先选择文本范围，再添加批注",
+    "noCommentDraftView": "此处无法添加批注",
     "drawingLocked": "此图片已锁定",
     "editorNotReady": "编辑器尚未就绪",
     "imageSuggesting": "建议模式下无法更改图片",

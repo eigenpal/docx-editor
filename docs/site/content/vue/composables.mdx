@@ -460,6 +460,39 @@ Returns the horizontal page offset caused by the open navigation pane.
 
 Returns the inline reservations for the active review rail. The full card column changes to compact marker strips on narrow viewports.
 
+## `useCommentDraftRequest`
+
+Use `useCommentDraftRequest` when you render your own comment UI instead of the packaged review rail. The `review.addComment` control does not add a comment by itself, because the comment text comes from a draft. The engine enables the control only while something can open that draft. The packaged review rail registers itself when it mounts. Without a registration, the control is disabled with a reason.
+
+Register your handler, and press the control with `useEditorCommand`:
+
+```vue
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useCommentDraftRequest, useEditorCommand } from '@docx-editor.dev/vue';
+
+const drafting = ref(false);
+useCommentDraftRequest(() => {
+  drafting.value = true;
+});
+const addComment = useEditorCommand('review.addComment');
+</script>
+
+<template>
+  <button
+    type="button"
+    :disabled="!addComment.isEnabled.value"
+    :title="addComment.disabledReason.value ?? 'Add comment'"
+    @click="addComment.execute()"
+  >
+    Add comment
+  </button>
+  <MyCommentDraft v-if="drafting" @close="drafting = false" />
+</template>
+```
+
+The handler takes no arguments. Read the selection with `editor.getSelectionPlacement()`, and pin it with `editor.retainSelection()` while the draft is open. The most recent registration receives each press. The registration lasts while the calling component is mounted. To stop serving requests while your UI cannot open a draft, unmount that component, for example with `v-if`. When the component unmounts, the registration ends, and the control is disabled again if nothing else is registered.
+
 ## `useDocxSource`
 
 Fetch bytes and fonts from a URL string, a `URL`, a `Uint8Array`, or an `ArrayBuffer`:

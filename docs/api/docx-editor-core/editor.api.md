@@ -1157,6 +1157,11 @@ export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): Edito
 export function commandForTableChromeSlotValue(slotId: TableChromeSlotId, value: unknown, draft: TableChromeDraft): EditorCommand | null;
 
 // @public
+export interface CommentDraftChromeHandlers {
+    readonly onRequest?: () => void;
+}
+
+// @public
 export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
@@ -1485,6 +1490,7 @@ export interface DocxEditorInstance extends Editor {
     setAuthor(author: string | undefined): void;
     setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
     setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
+    setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;

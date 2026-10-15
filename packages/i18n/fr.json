@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "Sélectionnez une plage avant d’ajouter un commentaire",
+    "noCommentDraftView": "Impossible d’ajouter des commentaires ici",
     "drawingLocked": "Cette image est verrouillée",
     "editorNotReady": "L’éditeur n’est pas prêt",
     "imageSuggesting": "La modification des images est indisponible en mode suggestion",

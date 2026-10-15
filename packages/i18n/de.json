@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "Wählen Sie einen Bereich aus, bevor Sie einen Kommentar hinzufügen",
+    "noCommentDraftView": "Hier können keine Kommentare hinzugefügt werden",
     "drawingLocked": "Dieses Bild ist gesperrt",
     "editorNotReady": "Der Editor ist nicht bereit",
     "imageSuggesting": "Bildänderungen sind im Vorschlagsmodus nicht verfügbar",

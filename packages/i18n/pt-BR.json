@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "Selecione um trecho antes de adicionar um comentário",
+    "noCommentDraftView": "Não é possível adicionar comentários aqui",
     "drawingLocked": "Esta imagem está bloqueada",
     "editorNotReady": "O editor não está pronto",
     "imageSuggesting": "Alterações em imagens não estão disponíveis no modo de sugestão",

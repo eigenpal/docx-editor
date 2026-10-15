@@ -51,6 +51,7 @@ export {
   type ImageWrapTarget,
 } from './editor/useEditorValueCommand';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { useCommentDraftRequest } from './editor/useCommentDraftRequest';
 export {
   useEditorHostDocument,
   type UseEditorHostDocumentReturn,

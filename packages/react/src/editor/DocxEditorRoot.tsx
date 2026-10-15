@@ -42,6 +42,7 @@ import {
   defaultTableLabel,
   resolveZoomMode,
   resolveRevisionMarkup,
+  runToolbarCommand,
   sameZoomMode,
 } from '@docx-editor.dev/core/editor';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -500,6 +501,18 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const [rails, setRails] = useState(0);
   const [gutters, setGutters] = useState(0);
   const commentDraftHandlers = useRef<Array<() => void>>([]);
+  const [commentDraftCount, setCommentDraftCount] = useState(0);
+  const servesCommentDrafts = commentDraftCount > 0;
+  const railEditor = useRef(editor);
+  railEditor.current = editor;
+  // The engine decides whether Add comment is enabled, so the handlers registered here reach
+  // it as one registration, while any exists. The latest handler receives each request.
+  useEffect(() => {
+    if (!editor || !servesCommentDrafts) return undefined;
+    return editor.setCommentDraftChrome({
+      onRequest: () => commentDraftHandlers.current.at(-1)?.(),
+    });
+  }, [editor, servesCommentDrafts]);
   const railRegistry = useMemo<ReviewRailRegistry>(
     () => ({
       mounted: rails,
@@ -514,16 +527,17 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       },
       registerCommentDraft: (handler) => {
         commentDraftHandlers.current.push(handler);
+        setCommentDraftCount((count) => count + 1);
         return () => {
           const index = commentDraftHandlers.current.indexOf(handler);
-          if (index !== -1) commentDraftHandlers.current.splice(index, 1);
+          if (index === -1) return;
+          commentDraftHandlers.current.splice(index, 1);
+          setCommentDraftCount((count) => Math.max(0, count - 1));
         };
       },
       requestCommentDraft: () => {
-        const handler = commentDraftHandlers.current.at(-1);
-        if (!handler) return false;
-        handler();
-        return true;
+        const current = railEditor.current;
+        return current !== null && runToolbarCommand(current, 'review.addComment').ok;
       },
     }),
     [rails, gutters]

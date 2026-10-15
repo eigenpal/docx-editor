@@ -61,12 +61,15 @@ export interface ReviewRailRegistry {
    * `retainSelection`, and opens the pane. Release the pin with `releaseSelection` when the
    * draft closes or is cancelled. The most recently registered handler receives each request. Do not register
    * while the column cannot open a draft, such as in viewing mode: a request counts as
-   * served once a handler runs. Returns the unregister function.
+   * served once a handler runs. While a handler is registered, the `review.addComment`
+   * control is enabled. Returns the unregister function.
    */
   readonly registerCommentDraft: (handler: () => void) => () => void;
   /**
-   * Send an Add comment request to the latest handler. Returns `true` when a handler ran,
-   * even if it then opened nothing, and `false` when none is registered.
+   * Send an Add comment request through the `review.addComment` control. The most recent
+   * registration receives it: a handler registered here, or one registered with
+   * `useCommentDraftRequest`. Returns `true` when a handler ran, even if it then opened
+   * nothing, and `false` when the control is disabled.
    */
   readonly requestCommentDraft: () => boolean;
 }

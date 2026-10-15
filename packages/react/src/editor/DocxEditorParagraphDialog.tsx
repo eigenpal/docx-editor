@@ -842,7 +842,15 @@ const parts = createDialogParts<
   Exclude<keyof ParagraphDialogFields, 'clearedAllTabStops'>,
   UseParagraphDialogReturn
 >();
-/** Read the enclosing Paragraph Options draft. @public */
+/**
+ * Read the enclosing Paragraph Options draft.
+ *
+ * Call it in a child of the dialog. It does not open the dialog. To open the dialog from your
+ * own toolbar, keep its `open` state and render `DocxEditor.ParagraphDialog` with `open` and
+ * `onClose`. Take the button's enabled state from `useParagraphFormat().isEnabled`.
+ *
+ * @public
+ */
 export function useParagraphDialog(): UseParagraphDialogReturn {
   return parts.useState();
 }

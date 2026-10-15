@@ -943,6 +943,11 @@ export function commandForSlot(slotId: ChromeSlotId): EditorCommand | null;
 export function commandForSlotValue(slotId: ChromeSlotId, value: unknown): EditorCommand | null;
 
 // @public
+export interface CommentDraftChromeHandlers {
+    readonly onRequest?: () => void;
+}
+
+// @public
 export interface CommentRecord {
     // (undocumented)
     readonly author: string;
@@ -1547,6 +1552,7 @@ export interface DocxEditorInstance extends Editor {
     setAuthor(author: string | undefined): void;
     setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
     setBookmarkMarks(options: BookmarkMarkOptions): Unsubscribe;
+    setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;

@@ -931,6 +931,7 @@
   },
   "disabledReason": {
     "commentSelection": "Açıklama eklemeden önce bir aralık seçin",
+    "noCommentDraftView": "Buraya açıklama eklenemez",
     "drawingLocked": "Bu resim kilitli",
     "editorNotReady": "Düzenleyici hazır değil",
     "imageSuggesting": "Öneri modunda resim değişiklikleri kullanılamaz",

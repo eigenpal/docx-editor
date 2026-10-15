@@ -306,6 +306,7 @@ export {
   type ToolbarContextValue,
 } from './editor/toolbar/toolbar-context';
 export { useEditorEvent } from './editor/useEditorEvent';
+export { useCommentDraftRequest } from './editor/useCommentDraftRequest';
 export {
   useEditorHostDocument,
   type UseEditorHostDocumentReturn,

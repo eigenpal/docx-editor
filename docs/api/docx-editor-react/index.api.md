@@ -3005,6 +3005,9 @@ export interface UseBookmarksReturn {
 export function useChromeTranslate(overrides?: ReadonlyMap<string, string>): ChromeTranslate;
 
 // @public
+export function useCommentDraftRequest(handler: (() => void) | null | undefined): void;
+
+// @public
 export function useContentControl(): UseContentControlResult;
 
 // @public

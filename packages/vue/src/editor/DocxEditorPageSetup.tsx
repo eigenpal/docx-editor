@@ -63,7 +63,15 @@ const composition = createDialogComposition<
   PageSetupDialogFields,
   Exclude<keyof PageSetupDialogFields, 'pageWidth' | 'pageHeight'> | 'pageSize'
 >('PageSetupDialog');
-/** Access the current Page Setup draft and actions. @public */
+/**
+ * Access the current Page Setup draft and actions.
+ *
+ * Call it in a child of the dialog. It does not open the dialog. To open the dialog from your
+ * own toolbar, keep its `open` state and render `DocxEditorPageSetupDialog` with `open` and
+ * `@close`. Take the button's enabled state from `usePageSetup().isEnabled`.
+ *
+ * @public
+ */
 export function usePageSetupDialog(): UsePageSetupDialogReturn {
   return composition.useContext();
 }
