@@ -1,7 +1,11 @@
 import { areInsertableTexts } from '../store/store/tree-op-inline-elements.ts';
 import { planShapes } from './plan-shapes.ts';
-import { planBookmarks } from './plan-bookmarks.ts';
-import { enclosedBookmarkDeletions } from '../store/store/tree-op-bookmarks.ts';
+import {
+  bookmarkHandleRange,
+  bookmarkWriteAdmission,
+  planBookmarks,
+  withEnclosedBookmarkDrops,
+} from './plan-bookmarks.ts';
 import { planDocumentProperties } from './plan-document-properties.ts';
 import { referencedNoteIds } from './note-references.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
@@ -667,18 +671,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       span: spanOf({ start, end: { ...start, offset: start.offset + text.length } }),
     });
     return { ok: true, kind: 'command', ops, story: plan.reads.story, answer };
-  };
-
-  /** An untracked replacement takes the bookmarks its old text enclosed, as typing over it does. */
-  const withEnclosedBookmarkDrops = (
-    planned: PlannedOperation,
-    reads: AutomationStoryReads,
-    range: ResolvedRange
-  ): PlannedOperation => {
-    if (!planned.ok || planned.kind !== 'command' || planned.relate) return planned;
-    if (host.replacementLanding?.(range.start.paragraphId, 0, 0) != null) return planned;
-    const drops = enclosedBookmarkDeletions(reads.part, range.start, range.end, reads.paragraphIds);
-    return drops.length === 0 ? planned : { ...planned, ops: [...drops, ...planned.ops] };
   };
 
   /**
@@ -1521,27 +1513,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { ok: true, kind: 'command', ops: [], story: reads.story, answer: () => APPLIED };
   };
 
-  const resolveBookmarkRange = (handle: AutomationHandle) => {
-    const target = handles.resolve(handle, 'bookmark');
-    if (!target || target.kind !== 'bookmark')
-      return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
-    const reads = packageReads.story(target.story);
-    if (!reads) return refuse('invalid-handle', 'that story is not in this document');
-    const bookmark = bookmarkIn(reads, target.name);
-    if (!bookmark)
-      return refuse(
-        'invalid-handle',
-        'this document no longer declares that bookmark',
-        target.name
-      );
-    const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
-      story: reads.story,
-      paragraphId: marker.paragraphId,
-      index: reads.indexOf(marker.paragraphId),
-      offset: marker.offset,
-    });
-    return { reads, range: { start: point(bookmark.start), end: point(bookmark.end) } };
-  };
+  const resolveBookmarkRange = (handle: AutomationHandle) =>
+    bookmarkHandleRange(handle, handles, packageReads);
 
   const plan = (operation: AutomationOperation, trackingAuthor?: string): PlannedOperation => {
     const lineBreak = planLineBreak(operation, (text) => plan(text, trackingAuthor));
@@ -1609,26 +1582,15 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
           return pinWrite(plan) ?? claim(plan, paragraphId);
         });
       case 'getBookmarks':
+      case 'getBookmarkName':
       case 'getBookmarkNames':
       case 'getBookmarkRangeByName':
       case 'insertBookmark':
       case 'deleteBookmark':
-        return planBookmarks(
-          operation,
-          handles,
-          packageReads,
-          (story, paragraphIds) => {
-            const plan = planFor(story);
-            return (
-              pinWrite(plan) ??
-              [...new Set(paragraphIds)].reduce<PlannedOperation | null>(
-                (refusal, id) => refusal ?? claim(plan, id),
-                null
-              )
-            );
-          },
-          () => writeStory?.reads.story ?? null
-        );
+        return planBookmarks(operation, handles, packageReads, {
+          admit: bookmarkWriteAdmission(planFor, pinWrite, claim),
+          pinned: () => writeStory?.reads.story ?? null,
+        });
       case 'insertBreak':
         return planBreakOperation(
           operation,
@@ -1842,7 +1804,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         return withEnclosedBookmarkDrops(
           planReplaceSpan(planFor(story), resolved.value, operation.text),
           story,
-          resolved.value
+          resolved.value,
+          host.replacementLanding?.(resolved.value.start.paragraphId, 0, 0) != null
         );
       }
 
@@ -2212,13 +2175,6 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyReadsOf(resolved.value);
         if (!story) return refuse('invalid-handle', 'that story is not in this document');
         return planSetHyperlink(planFor(story), resolved.value, operation.target);
-      }
-
-      case 'getBookmarkName': {
-        const target = handles.resolve(operation.bookmark, 'bookmark');
-        if (!target || target.kind !== 'bookmark')
-          return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
-        return query({ kind: 'text', text: target.name });
       }
 
       case 'getBookmarkRange': {

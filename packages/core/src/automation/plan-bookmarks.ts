@@ -11,13 +11,17 @@
 
 import { bookmarkNameKey, bookmarkNameProblem } from '../store/package/bookmark-names.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
-import { withoutBookmarkInPart } from '../store/store/tree-op-bookmarks.ts';
+import {
+  enclosedBookmarkDeletions,
+  withoutBookmarkInPart,
+  type BookmarkOpPosition,
+} from '../store/store/tree-op-bookmarks.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import type { AutomationHandleTable } from './handles.ts';
-import { bookmarkReads, type AutomationBookmarkRead } from './links.ts';
+import { bookmarkIn, bookmarkReads, type AutomationBookmarkRead } from './links.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan-types.ts';
-import type { AutomationValue } from './protocol.ts';
+import type { AutomationHandle, AutomationValue } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { resolveSpanRef, spanParagraphIds, spanValue, storyOfSpanRef } from './spans.ts';
 import { BODY_STORY, HEADER_FOOTER_VARIANTS, storyKey, type AutomationStoryId } from './stories.ts';
@@ -27,6 +31,7 @@ type BookmarkOperation = Extract<
   {
     op:
       | 'getBookmarks'
+      | 'getBookmarkName'
       | 'getBookmarkNames'
       | 'getBookmarkRangeByName'
       | 'insertBookmark'
@@ -40,6 +45,7 @@ export function isBookmarkOperation(
 ): operation is BookmarkOperation {
   return (
     operation.op === 'getBookmarks' ||
+    operation.op === 'getBookmarkName' ||
     operation.op === 'getBookmarkNames' ||
     operation.op === 'getBookmarkRangeByName' ||
     operation.op === 'insertBookmark' ||
@@ -138,17 +144,83 @@ export function bookmarkInRange(
   return same(bookmark.end, range.start) || same(bookmark.start, range.end);
 }
 
-/**
- * Plan a bookmark operation. `admit` pins the batch's write story and claims paragraphs;
- * `pinned` names the story the batch already writes into, or null.
- */
+/** The batch planner's hold on writes, as the bookmark planner needs it. */
+export interface BookmarkWriteAdmission {
+  /** Pin the batch's write story and claim the paragraphs, or say why not. */
+  readonly admit: (
+    story: AutomationStoryReads,
+    paragraphIds: readonly string[]
+  ) => PlannedOperation | null;
+  /** The story the batch already writes into, or null. */
+  readonly pinned: () => AutomationStoryId | null;
+}
+
+/** `admit` from the batch planner's own pin and claim. */
+export function bookmarkWriteAdmission<Plan>(
+  planFor: (story: AutomationStoryReads) => Plan,
+  pinWrite: (plan: Plan) => PlannedOperation | null,
+  claim: (plan: Plan, paragraphId: string) => PlannedOperation | null
+): BookmarkWriteAdmission['admit'] {
+  return (story, paragraphIds) => {
+    const plan = planFor(story);
+    return (
+      pinWrite(plan) ??
+      [...new Set(paragraphIds)].reduce<PlannedOperation | null>(
+        (refusal, id) => refusal ?? claim(plan, id),
+        null
+      )
+    );
+  };
+}
+
+/** An untracked replacement takes the bookmarks its old text enclosed, as typing over it does. */
+export function withEnclosedBookmarkDrops(
+  planned: PlannedOperation,
+  reads: AutomationStoryReads,
+  range: { readonly start: BookmarkOpPosition; readonly end: BookmarkOpPosition },
+  tracked: boolean
+): PlannedOperation {
+  if (tracked || !planned.ok || planned.kind !== 'command' || planned.relate) return planned;
+  const drops = enclosedBookmarkDeletions(reads.part, range.start, range.end, reads.paragraphIds);
+  return drops.length === 0 ? planned : { ...planned, ops: [...drops, ...planned.ops] };
+}
+
+/** The range a bookmark handle names, with its story, or why it names none. */
+export function bookmarkHandleRange(
+  handle: AutomationHandle,
+  handles: AutomationHandleTable,
+  reads: AutomationPackageReads
+) {
+  const target = handles.resolve(handle, 'bookmark');
+  if (!target || target.kind !== 'bookmark')
+    return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
+  const story = reads.story(target.story);
+  if (!story) return refuse('invalid-handle', 'that story is not in this document');
+  const bookmark = bookmarkIn(story, target.name);
+  if (!bookmark)
+    return refuse('invalid-handle', 'this document no longer declares that bookmark', target.name);
+  const point = (marker: { readonly paragraphId: string; readonly offset: number }) => ({
+    story: story.story,
+    paragraphId: marker.paragraphId,
+    index: story.indexOf(marker.paragraphId),
+    offset: marker.offset,
+  });
+  return { reads: story, range: { start: point(bookmark.start), end: point(bookmark.end) } };
+}
+
+/** Plan a bookmark operation. */
 export function planBookmarks(
   operation: BookmarkOperation,
   handles: AutomationHandleTable,
   reads: AutomationPackageReads,
-  admit: (story: AutomationStoryReads, paragraphIds: readonly string[]) => PlannedOperation | null,
-  pinned: () => AutomationStoryId | null = () => null
+  { admit, pinned }: BookmarkWriteAdmission
 ): PlannedOperation {
+  if (operation.op === 'getBookmarkName') {
+    const target = handles.resolve(operation.bookmark, 'bookmark');
+    if (!target || target.kind !== 'bookmark')
+      return refuse('invalid-handle', 'that handle does not name a bookmark', 'bookmark');
+    return query({ kind: 'text', text: target.name });
+  }
   if (operation.op === 'getBookmarks') {
     const resolved = resolveSpanRef(operation.scope, handles, reads);
     if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);

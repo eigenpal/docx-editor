@@ -11,15 +11,13 @@ import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
 import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
-import { createEditorPopupChrome } from './text-form-field-chrome.ts';
-import { bookmarkDialogResult } from './docx-editor-bookmarks.ts';
 import {
   createReviewCommands,
   dateOfReviewItem as dateOfItem,
   reviewActivationRefusal,
   reviewModelOption,
 } from './docx-editor-review-commands.ts';
-import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
+import { canEditorViewCommand, createEditorViews } from './docx-editor-view-commands.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
 import { attachTargetRefusal, registerEditorHost } from './host-realm.ts';
@@ -38,7 +36,6 @@ import {
   reviewItemWithHalves,
   withRevealPairKey,
 } from './review-replacement-pairs.ts';
-import { captureSearchResult } from './document-search-result.ts';
 import { createDocumentProtectionCommands } from './docx-editor-protection.ts';
 import {
   anchorLineY,
@@ -101,7 +98,7 @@ import type { PendingTextFormInput } from './surface-text-form-fields.ts';
 import { saveEditorDocument } from './docx-editor-save.ts';
 import {
   enterStoryPosition,
-  searchStoriesForSurface,
+  findDocumentMatches,
   selectDocumentSearchMatch,
 } from './docx-editor-story-navigation.ts';
 import { noteScopeIndexOf, paragraphOrderOf } from './layout-paragraph-indexes.ts';
@@ -392,7 +389,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // What the last emitted tick reported, so a publish that moved nothing observable stays
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
-  const popupChrome = createEditorPopupChrome();
+  const views = createEditorViews({
+    surface: () => surface,
+    destroyed: () => destroyed,
+    changed: () => (bump(), emitSelectionChange()),
+    emitError: (error) => emitError(error),
+    capability: (command) =>
+      canEditorViewCommand(command, destroyed, reviewEnabled, editingModeRefusal),
+  });
   let destroyed = false;
 
   /** The measurer built per LOAD from `config.fonts` plus the document's embedded faces. */
@@ -497,16 +501,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const fieldScope = surfaceFieldResultsScope({
     fieldResults: config.fieldResults,
     collaborationModel: modules.collaboration ?? undefined,
-  });
-  const paragraphMarks = createEditorParagraphMarks((visible) => {
-    surface?.setShowParagraphMarks(visible);
-    bump();
-    emitSelectionChange();
-  });
-  const bookmarkMarks = createEditorParagraphMarks((visible) => {
-    surface?.bookmarkEditing.setShown(visible);
-    bump();
-    emitSelectionChange();
   });
   // Closures only: every dependency is read when a command runs, not at construction.
   const protection = createDocumentProtectionCommands({
@@ -641,9 +635,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     let publishedReviewFilterState = reviewAuthorVisibility.stateKey;
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
-      showParagraphMarks: paragraphMarks.get(),
-      onToggleParagraphMarks: paragraphMarks.toggle,
-      showBookmarks: bookmarkMarks.get(),
+      ...views.surfaceOptions(),
       // What a run with no authored font is REPORTED as, matching what it is measured
       // as (`resolveFont`'s fallback below) — so a blank document's font box reads
       // "Calibri", not an em-dash.
@@ -682,7 +674,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       ...configSurfaceOptions(config),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       ...(fieldScope.mode === 'editable' ? { fieldResults: fieldScope.mode } : {}),
-      ...popupChrome.surfaceOptions,
       onHostMoved: followHost,
       onTrackedChange: () => {
         if (reviewPaneOpen || !reviewPane.opensOnTrackedChange()) return;
@@ -1211,8 +1202,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pageSetup: pageSetupWhileOpening(openScheduler, surface),
       reviewPaneOpen,
       reviewPane: reviewPane.current(),
-      showParagraphMarks: paragraphMarks.get(),
-      showBookmarks: bookmarkMarks.get(),
+      ...views.snapshot(),
       documentProtection: protection.state(),
       revisionMarkup: revisionMarkupState.current(),
       reviewDisplayMode:
@@ -1241,7 +1231,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const previous = cachedSnapshot;
     const fontsUnmoved = fontConfiguration() === cachedFontConfiguration;
     cachedFontConfiguration = fontConfiguration();
-    const authorUnmoved = author === cachedAuthor;
+    const authorUnmoved = author === cachedAuthor && views.chromeSettled();
     cachedAuthor = author;
     const caret = surface?.state().selection ?? null;
     const caretUnmoved = selectionsMatch(caret, cachedCaret);
@@ -1770,7 +1760,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface && preparedOpen.stillOpening(surface) ? null : surface;
     },
 
-    ...popupChrome.setters,
+    ...views.popupChrome.setters,
 
     stateVersion: () => stateVersion,
 
@@ -1877,20 +1867,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // (`can` does NOT flush — chrome polls it per render; a read must not defeat the yield.)
       openScheduler.flush();
       if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.open();
-      if (command.type === 'openBookmarkDialog')
-        return bookmarkDialogResult(popupChrome, destroyed, true);
+      const dialog = views.dialog(command, true);
+      if (dialog) return dialog;
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       historyGroups.note(command);
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
       // DESTROYED editor, though: there is no reader left.
-      const viewCapability = canEditorViewCommand(
-        command,
-        destroyed,
-        reviewEnabled,
-        editingModeRefusal
-      );
+      const viewCapability = views.capability(command);
       if (destroyed && viewCapability && !viewCapability.ok) return viewCapability;
       if (command.type === 'setEditingMode') {
         const refusal = editingModeRefusal(command.mode);
@@ -1915,10 +1900,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
-      if (command.type === 'toggleParagraphMarks' || command.type === 'toggleBookmarks') {
-        (command.type === 'toggleBookmarks' ? bookmarkMarks : paragraphMarks).toggle();
-        return { ok: true, changed: false };
-      }
+      const toggled = views.toggle(command);
+      if (toggled) return toggled;
       if (command.type === 'toggleReviewPane') {
         if (!reviewEnabled) {
           return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
@@ -1979,8 +1962,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           reason: 'An external document refresh is in progress.',
         };
       if (command.type === 'openRevisionMarkupDialog') return revisionMarkupState.canOpen();
-      if (command.type === 'openBookmarkDialog')
-        return bookmarkDialogResult(popupChrome, destroyed, false);
+      const dialog = views.dialog(command, false);
+      if (dialog) return dialog;
       const historyRefusal = historyGroups.gate(command, options);
       if (historyRefusal) return historyRefusal;
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
@@ -1991,12 +1974,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return canAsyncImageCommandOf(command, surface);
       }
-      const viewCapability = canEditorViewCommand(
-        command,
-        destroyed,
-        reviewEnabled,
-        editingModeRefusal
-      );
+      const viewCapability = views.capability(command);
       if (viewCapability) return viewCapability;
       const protectionCapability = protection.can(command);
       if (protectionCapability) return protectionCapability;
@@ -2063,8 +2041,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // agreement rule, the same one `toggleRunProperty` toggles against. Everything else
     // stays honest-false until its derivation exists.
     isActive(command) {
-      if (command.type === 'toggleParagraphMarks') return paragraphMarks.get();
-      if (command.type === 'toggleBookmarks') return bookmarkMarks.get();
+      const marksActive = views.isActive(command);
+      if (marksActive !== null) return marksActive;
       if (command.type === 'toggleDocumentProtection') return protection.isActive();
       if (command.type === 'setReviewDisplayMode') return reviewDisplayMode === command.mode;
       if (command.type === 'toggleReviewPane') return reviewPaneOpen;
@@ -2092,22 +2070,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getSelectionFormatting: () =>
       selectionFormattingHalfPoints(surface ? snapshotNow().formatting : null),
 
-    findMatches: ((
-      query: string | readonly string[],
-      options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
-    ) => {
-      const scan = {
-        ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
-        ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
-        ...(surface ? { stories: searchStoriesForSurface(surface, editingMode) } : {}),
-      };
-      if (typeof query === 'string') {
-        return captureSearchResult(surface?.session.findText(query, scan), highlights.noteMatches);
-      }
-      // Many terms in one walk of the document.
-      const results = surface?.session.findText(query, scan);
-      return query.map((_, index) => captureSearchResult(results?.[index], highlights.noteMatches));
-    }) as DocxEditorInstance['findMatches'],
+    findMatches: ((query, options) =>
+      findDocumentMatches(
+        surface,
+        editingMode,
+        highlights.noteMatches,
+        query,
+        options
+      )) as DocxEditorInstance['findMatches'],
 
     // Selection uses the match's model address and then reveals its paragraph.
     selectMatch(match: TextMatch): ExecResult {

@@ -1,12 +1,8 @@
 import type { ContentControlWidgetSession, InvalidTextFormFieldSession } from './popup-sessions.ts';
 import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
-import type {
-  BookmarkChromeHandlers,
-  BookmarkMarkOptions,
-  EquationChromeHandlers,
-  HyperlinkChromeHandlers,
-} from './docx-editor-types.ts';
+import { createBookmarkChrome, type BookmarkChromeHost } from './bookmark-chrome.ts';
+import type { EquationChromeHandlers, HyperlinkChromeHandlers } from './docx-editor-types.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 
 /**
@@ -68,10 +64,10 @@ export const createTextFormFieldChrome = () => createSessionChrome<TextFormField
  * editor exists (the provider-first shape), and a document that reloads must not leave the
  * host's chrome wired to the surface it replaced.
  */
-export function createEditorPopupChrome() {
+export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
   const hyperlink = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equation = createChromeHandlerStack<EquationChromeHandlers>({});
-  const bookmark = createChromeHandlerStack<BookmarkChromeHandlers>({});
+  const bookmark = createBookmarkChrome(host);
   const text = createTextFormFieldChrome();
   // Checkbox and picture presses reach only renderers that ask for them: a pop-up renderer
   // written before those sessions existed keeps working, and the engine toggles the box or
@@ -83,28 +79,6 @@ export function createEditorPopupChrome() {
     'buildingBlockGallery',
   ]);
   const invalid = createSessionChrome<InvalidTextFormFieldSession>();
-  const marks = createChromeHandlerStack<BookmarkMarkOptions>({});
-  // The surface that paints the marks now. One slot: a remount replaces it.
-  let repaintMarks: (() => void) | null = null;
-  const bookmarkMarks = {
-    current: marks.current,
-    onChange: (repaint: (() => void) | null) => {
-      repaintMarks = repaint;
-    },
-  };
-  const setBookmarkMarks = (options: BookmarkMarkOptions): (() => void) => {
-    const dispose = marks.push(options);
-    repaintMarks?.();
-    return () => {
-      dispose();
-      repaintMarks?.();
-    };
-  };
-  const openBookmarkDialog = (): boolean => {
-    const request = bookmark.current().onRequest;
-    request?.();
-    return request !== undefined;
-  };
   return {
     surfaceOptions: {
       onRequestTextFormField: text.request,
@@ -117,22 +91,16 @@ export function createEditorPopupChrome() {
       onEquationPopover: (
         activation: Parameters<NonNullable<EquationChromeHandlers['onPopover']>>[0]
       ) => equation.current().onPopover?.(activation),
-      onRequestBookmark: () => openBookmarkDialog(),
-      bookmarkMarks,
+      ...bookmark.surfaceOptions,
     },
-    /** The Bookmark dialog request: open it through the host's chrome, if a host shows one. */
-    bookmarkDialog: {
-      canOpen: () => bookmark.current().onRequest !== undefined,
-      open: openBookmarkDialog,
-    },
+    bookmarkDialog: bookmark.bookmarkDialog,
     setters: {
       setTextFormFieldChrome: text.register,
       setContentControlWidgetChrome: widget.register,
       setInvalidTextFormFieldChrome: invalid.register,
       setHyperlinkChrome: hyperlink.push,
       setEquationChrome: equation.push,
-      setBookmarkChrome: bookmark.push,
-      setBookmarkMarks,
+      ...bookmark.setters,
     },
   };
 }
