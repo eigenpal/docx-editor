@@ -743,9 +743,26 @@
     "openShortcutTitle": "Navegação ({shortcut})",
     "tabs": {
       "find": "Localizar",
-      "headings": "Títulos"
+      "headings": "Títulos",
+      "goto": "Ir para"
     },
-    "title": "Navegação"
+    "title": "Navegação",
+    "goTo": {
+      "tabTitle": "Ir para ({shortcut})",
+      "label": "Indicador",
+      "placeholder": "Digite o nome de um indicador",
+      "listAriaLabel": "Indicadores",
+      "go": "Ir para",
+      "notFound": "Nenhum indicador se chama “{name}”.",
+      "empty": "Este documento não tem indicadores.",
+      "noMatches": "Nenhum indicador corresponde.",
+      "places": {
+        "header": "Cabeçalho",
+        "footer": "Rodapé",
+        "footnote": "Nota de rodapé",
+        "endnote": "Nota de fim"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Modo de preenchimento de formulário",

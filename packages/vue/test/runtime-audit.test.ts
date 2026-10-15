@@ -155,7 +155,7 @@ describe('controlled navigation props', () => {
   test('honours controlled tab prop', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const tab = ref<'headings' | 'find'>('headings');
+    const tab = ref<'headings' | 'find' | 'goto'>('headings');
     const app = createApp({
       setup() {
         return () =>
@@ -167,7 +167,7 @@ describe('controlled navigation props', () => {
                 h(DocxEditorNavigation, {
                   open: true,
                   tab: tab.value,
-                  onTabChange: (next: 'headings' | 'find') => {
+                  onTabChange: (next: 'headings' | 'find' | 'goto') => {
                     tab.value = next;
                   },
                 }),

@@ -94,6 +94,7 @@ export function createEditorPopupChrome(host: BookmarkChromeHost = {}) {
       ...bookmark.surfaceOptions,
     },
     bookmarkDialog: bookmark.bookmarkDialog,
+    goTo: bookmark.goTo,
     setters: {
       setTextFormFieldChrome: text.register,
       setContentControlWidgetChrome: widget.register,

@@ -53,6 +53,7 @@ const COMMANDS: Readonly<Record<EditorCommand['type'], true>> = {
   mergeParagraphs: true,
   navigateReviewChange: true,
   openBookmarkDialog: true,
+  openGoTo: true,
   openRevisionMarkupDialog: true,
   paste: true,
   pasteFormatting: true,

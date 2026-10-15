@@ -70,6 +70,7 @@ import { classifyCommand, unknownCommandReason } from './docx-editor-support.ts'
 const FACADE_COMMANDS: ReadonlySet<string> = new Set<EditorCommand['type']>([
   'insertImage',
   'openBookmarkDialog',
+  'openGoTo',
   'openRevisionMarkupDialog',
   'proposeDeletion',
   'proposeInsertion',

@@ -196,3 +196,49 @@ test('a name moved from the body into a header converges on both editors', async
   expect(stories(alice)).toEqual(['moved:headerFooter']);
   expect(stories(bob)).toEqual(['moved:headerFooter']);
 });
+
+test('Go To follows a collaborator: a renamed bookmark lists under its new name, a deleted one is refused', async () => {
+  const peers = await harness.pair(zipDocument(DOCUMENT));
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    return editor;
+  }) as [Editor, Editor];
+  const sync = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+
+  select(alice, 0, 6, 11);
+  expect(alice.exec({ type: 'insertBookmark', name: 'Old' }).ok).toBe(true);
+  sync();
+  expect(names(bob)).toEqual(['Old']);
+
+  // Bob renames it: the same text under a new name, then the old name removed.
+  expect(bob.exec({ type: 'goToBookmark', name: 'Old' }).ok).toBe(true);
+  expect(bob.exec({ type: 'insertBookmark', name: 'Renamed' }).ok).toBe(true);
+  expect(bob.exec({ type: 'deleteBookmark', name: 'Old' }).ok).toBe(true);
+  sync();
+  expect(names(alice)).toEqual(['Renamed']);
+  expect(alice.exec({ type: 'goToBookmark', name: 'Old' })).toMatchObject({
+    ok: false,
+    code: 'notFound',
+  });
+  expect(alice.exec({ type: 'goToBookmark', name: 'renamed' }).ok).toBe(true);
+  const selection = alice.surface!.state().selection;
+  expect([selection.anchor.offset, selection.head.offset]).toEqual([6, 11]);
+
+  // Bob deletes it; Alice's list empties and a jump to it is refused.
+  expect(bob.exec({ type: 'deleteBookmark', name: 'Renamed' }).ok).toBe(true);
+  sync();
+  expect(names(alice)).toEqual([]);
+  expect(alice.exec({ type: 'goToBookmark', name: 'Renamed' })).toMatchObject({
+    ok: false,
+    code: 'notFound',
+  });
+});

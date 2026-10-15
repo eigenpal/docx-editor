@@ -36,6 +36,50 @@ export function bookmarkDialogRows(
 }
 
 /**
+ * The bookmarks a Go To name box offers for what was typed: those whose name contains it,
+ * compared without case, in the dialog's order. Names that start with it come first. An empty
+ * query offers every row.
+ *
+ * @public
+ */
+export function goToBookmarkRows(
+  bookmarks: readonly BookmarkSummary[],
+  options: {
+    readonly query: string;
+    readonly sortBy: BookmarkSortOrder;
+    readonly showHidden: boolean;
+  }
+): readonly BookmarkSummary[] {
+  const rows = bookmarkDialogRows(bookmarks, options);
+  const needle = bookmarkNameKey(options.query.trim());
+  if (needle.length === 0) return rows;
+  const starts: BookmarkSummary[] = [];
+  const contains: BookmarkSummary[] = [];
+  for (const row of rows) {
+    const key = bookmarkNameKey(row.name);
+    if (key.startsWith(needle)) starts.push(row);
+    else if (key.includes(needle)) contains.push(row);
+  }
+  return [...starts, ...contains];
+}
+
+/**
+ * The bookmark a Go To name box means: the one whose name equals what was typed, compared
+ * without case, hidden or not; else the first row offered. Null when there is none.
+ *
+ * @public
+ */
+export function goToBookmarkTarget(
+  bookmarks: readonly BookmarkSummary[],
+  query: string,
+  offered: readonly BookmarkSummary[]
+): BookmarkSummary | null {
+  const key = bookmarkNameKey(query.trim());
+  if (key.length === 0) return null;
+  return bookmarks.find((bookmark) => bookmarkNameKey(bookmark.name) === key) ?? offered[0] ?? null;
+}
+
+/**
  * The name the dialog starts with: the visible bookmark the selection is in, or an empty name.
  *
  * @public

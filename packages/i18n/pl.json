@@ -743,9 +743,26 @@
     "openShortcutTitle": "Nawigacja ({shortcut})",
     "tabs": {
       "find": "Znajdź",
-      "headings": "Nagłówki"
+      "headings": "Nagłówki",
+      "goto": "Przejdź do"
     },
-    "title": "Nawigacja"
+    "title": "Nawigacja",
+    "goTo": {
+      "tabTitle": "Przejdź do ({shortcut})",
+      "label": "Zakładka",
+      "placeholder": "Wpisz nazwę zakładki",
+      "listAriaLabel": "Zakładki",
+      "go": "Przejdź do",
+      "notFound": "Brak zakładki o nazwie „{name}”.",
+      "empty": "Ten dokument nie ma zakładek.",
+      "noMatches": "Brak pasujących zakładek.",
+      "places": {
+        "header": "Nagłówek",
+        "footer": "Stopka",
+        "footnote": "Przypis dolny",
+        "endnote": "Przypis końcowy"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Tryb wypełniania formularza",

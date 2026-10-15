@@ -6,6 +6,14 @@
 export type BookmarkStory = 'body' | 'headerFooter' | 'note';
 
 /**
+ * Where a bookmark is, finer than {@link BookmarkStory}: the main text, a header, a footer, a
+ * footnote or an endnote.
+ *
+ * @public
+ */
+export type BookmarkPlace = 'body' | 'header' | 'footer' | 'footnote' | 'endnote';
+
+/**
  * One bookmark, as the `bookmarks` query lists it.
  *
  * @public
@@ -17,6 +25,8 @@ export interface BookmarkSummary {
   readonly hidden: boolean;
   /** The story the bookmark starts in. */
   readonly story: BookmarkStory;
+  /** The same story, telling a header from a footer and a footnote from an endnote. */
+  readonly place: BookmarkPlace;
   /**
    * Position in document order: the main text first, then headers, footers and notes. Sort by
    * this value to list bookmarks by location.
@@ -66,6 +76,12 @@ export interface EditorBookmarkCommands {
   goToBookmark: { name: string };
   /** Show or hide bracket marks at bookmarks. A view command: the document does not change. */
   toggleBookmarks: Record<never, never>;
+  /**
+   * Open the host's Go To UI, the Go to tab of `DocxEditor.Navigation`, the request its
+   * shortcut (Ctrl+G, Cmd+Option+G on macOS) sends. Allowed in a read-only document. Refused
+   * with `unsupported` while no host shows one. To jump without UI, run `goToBookmark`.
+   */
+  openGoTo: Record<never, never>;
   /**
    * Open the Bookmark dialog the host registered, the same request the Insert menu and
    * Ctrl/Cmd+Shift+F5 send. Allowed in a read-only document, where Go To still works.

@@ -36,7 +36,11 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import type { BookmarkStory, BookmarkSummary } from '../contracts/editor-bookmarks.ts';
+import type {
+  BookmarkPlace,
+  BookmarkStory,
+  BookmarkSummary,
+} from '../contracts/editor-bookmarks.ts';
 import type { BookmarkMarkInfo, BookmarkMarkOptions } from './docx-editor-types.ts';
 import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 import { storyScopeOfPartName, type StoryScopeLookup } from './surface-scope.ts';
@@ -63,7 +67,11 @@ export interface SurfaceBookmarkDeps {
   /** Why a write cannot happen at the selection now, or null. */
   readonly writeRefusal: () => string | null;
   readonly commit: (run: () => boolean, selectionAfter?: () => SemanticSelection | null) => void;
-  readonly goToPosition: (position: { paragraphId: string; offset: number }) => boolean;
+  /** Jump; with `orShow`, a story that cannot be opened is only scrolled to (`'shown'`). */
+  readonly goToPosition: (
+    position: { paragraphId: string; offset: number },
+    options?: { readonly orShow?: boolean }
+  ) => boolean | 'shown';
   readonly setSelection: (selection: SemanticSelection) => void;
   /** Settle pending input and layout before the marks change. */
   readonly beforeChange: () => void;
@@ -132,6 +140,13 @@ function recordsOf(part: OoxmlPart): readonly BookmarkRecord[] {
   return records;
 }
 
+/** A header or footer part's root says which; notes say their kind in the scope. */
+function placeOf(scope: StoryScope, part: OoxmlPart): BookmarkPlace {
+  if (scope.kind === 'body') return 'body';
+  if (scope.kind === 'notesPart') return scope.noteKind;
+  return part.root.localName === 'ftr' ? 'footer' : 'header';
+}
+
 function storyOf(scope: StoryScope): BookmarkStory {
   if (scope.kind === 'body') return 'body';
   return scope.kind === 'headerFooter' ? 'headerFooter' : 'note';
@@ -150,6 +165,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
     readonly record: BookmarkRecord;
     readonly scope: StoryScope;
     readonly partName: string;
+    readonly place: BookmarkPlace;
   };
   // Read once per set of story parts: the dialog and the marks ask on every render. Keyed by
   // the parts themselves, not a revision number, so a collaborator's edit that replaces a part
@@ -165,13 +181,11 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       return cache.entries;
     const entries: Located[] = [];
     for (const part of parts) {
+      // From the part, not the node id: a collaborator's marker ids name no part.
+      const scope = storyScopeOfPartName(deps.session, part.name, { kind: 'body' });
+      const place = placeOf(scope, part);
       for (const record of recordsOf(part)) {
-        entries.push({
-          record,
-          // From the part, not the node id: a collaborator's marker ids name no part.
-          scope: storyScopeOfPartName(deps.session, part.name, { kind: 'body' }),
-          partName: part.name,
-        });
+        entries.push({ record, scope, partName: part.name, place });
       }
     }
     cache = { parts, entries };
@@ -236,7 +250,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       }
       const seen = new Set<string>();
       const rows: BookmarkSummary[] = [];
-      for (const { record, scope } of located()) {
+      for (const { record, scope, place } of located()) {
         const key = bookmarkNameKey(record.name);
         if (seen.has(key)) continue;
         seen.add(key);
@@ -245,6 +259,7 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
             name: record.name,
             hidden: record.hidden,
             story: storyOf(scope),
+            place,
             order: rows.length,
             empty:
               record.start.paragraphId === record.end.paragraphId &&
@@ -337,8 +352,10 @@ export function createSurfaceBookmarks(deps: SurfaceBookmarkDeps): SurfaceBookma
       const entry = find(name);
       if (!entry) return false;
       const { start, end } = entry.record;
-      if (!deps.goToPosition(start)) return false;
-      deps.setSelection({ anchor: start, head: end });
+      // A header, footer or note the document cannot open (read-only) is shown, not entered.
+      const went = deps.goToPosition(start, { orShow: true });
+      if (!went) return false;
+      if (went === true) deps.setSelection({ anchor: start, head: end });
       return true;
     },
     shown: () => visible,

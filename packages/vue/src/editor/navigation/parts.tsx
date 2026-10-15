@@ -13,7 +13,7 @@ import { selectDocumentAbsent } from '../document-presence';
 import { useEditorState } from '../useEditorState';
 import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useLiveNavigationContext } from './navigation-context';
-import { findKeyShortcuts } from './navigation-keys';
+import { findKeyShortcuts, goToKeyShortcuts, goToShortcutLabel } from './navigation-keys';
 import type { NavigationTab as NavigationTabId } from './useNavigationPane';
 
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -30,7 +30,7 @@ export interface NavigationTabProps extends NavigationPartProps {
   value: NavigationTabId;
 }
 
-const TABS: NavigationTabId[] = ['headings', 'find'];
+const TABS: NavigationTabId[] = ['headings', 'find', 'goto'];
 
 const cx = (...parts: (string | false | undefined)[]) => parts.filter(Boolean).join(' ');
 
@@ -151,8 +151,14 @@ export const NavigationTab = defineComponent({
     const nav = useLiveNavigationContext('Tab');
     const { pane } = nav;
     const t = (key: string, params?: Record<string, string | number>) => nav.t(key, params);
+    const shortcut = usePlatformShortcut();
     return () => {
       const selected = pane.tab.value === props.value;
+      // The Go to tab names its shortcut while it is bound.
+      const goToTitle =
+        props.value === 'goto' && nav.goToShortcut
+          ? t('navigation.goTo.tabTitle', { shortcut: shortcut(goToShortcutLabel()) })
+          : undefined;
       return (
         <button
           type="button"
@@ -163,6 +169,7 @@ export const NavigationTab = defineComponent({
           tabindex={selected ? 0 : -1}
           class={cx('docx-nav__tab', selected && 'docx-nav__tab--selected', props.className)}
           style={props.style}
+          {...(goToTitle ? { title: goToTitle, 'aria-keyshortcuts': goToKeyShortcuts() } : {})}
           onClick={() => pane.setTab(props.value)}
         >
           {slots.default?.() ?? t(`navigation.tabs.${props.value}`)}

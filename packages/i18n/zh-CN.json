@@ -743,9 +743,26 @@
     "openShortcutTitle": "导航 ({shortcut})",
     "tabs": {
       "find": "查找",
-      "headings": "标题"
+      "headings": "标题",
+      "goto": "定位"
     },
-    "title": "导航"
+    "title": "导航",
+    "goTo": {
+      "tabTitle": "定位 ({shortcut})",
+      "label": "书签",
+      "placeholder": "输入书签名",
+      "listAriaLabel": "书签",
+      "go": "定位",
+      "notFound": "没有名为“{name}”的书签。",
+      "empty": "此文档没有书签。",
+      "noMatches": "没有匹配的书签。",
+      "places": {
+        "header": "页眉",
+        "footer": "页脚",
+        "footnote": "脚注",
+        "endnote": "尾注"
+      }
+    }
   },
   "contentControl": {
     "formFill": "表单填写模式",

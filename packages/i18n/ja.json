@@ -531,7 +531,8 @@
     "closeTitle": "ナビゲーションを閉じる",
     "tabs": {
       "headings": "見出し",
-      "find": "検索"
+      "find": "検索",
+      "goto": "ジャンプ"
     },
     "headings": {
       "noHeadings": "見出しがありません。文書に見出しを追加すると、ここに表示されます。"
@@ -552,6 +553,22 @@
       "counterTruncated": "{total} 件以上のうち {current} 件目",
       "total": "{total, plural, other {# 件}}",
       "totalTruncated": "{total, plural, other {# 件以上}}"
+    },
+    "goTo": {
+      "tabTitle": "ジャンプ ({shortcut})",
+      "label": "ブックマーク",
+      "placeholder": "ブックマーク名を入力",
+      "listAriaLabel": "ブックマーク",
+      "go": "ジャンプ",
+      "notFound": "「{name}」という名前のブックマークはありません。",
+      "empty": "この文書にはブックマークがありません。",
+      "noMatches": "一致するブックマークはありません。",
+      "places": {
+        "header": "ヘッダー",
+        "footer": "フッター",
+        "footnote": "脚注",
+        "endnote": "文末脚注"
+      }
     }
   },
   "viewer": {

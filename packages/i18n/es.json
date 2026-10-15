@@ -531,7 +531,8 @@
     "closeTitle": "Cerrar navegación",
     "tabs": {
       "headings": "Títulos",
-      "find": "Buscar"
+      "find": "Buscar",
+      "goto": "Ir a"
     },
     "headings": {
       "noHeadings": "No se encontraron títulos. Añade títulos al documento para verlos aquí."
@@ -552,6 +553,22 @@
       "counterTruncated": "Resultado {current} de {total}+",
       "total": "{total, plural, one {# resultado} other {# resultados}}",
       "totalTruncated": "{total, plural, other {#+ resultados}}"
+    },
+    "goTo": {
+      "tabTitle": "Ir a ({shortcut})",
+      "label": "Marcador",
+      "placeholder": "Escriba el nombre de un marcador",
+      "listAriaLabel": "Marcadores",
+      "go": "Ir a",
+      "notFound": "Ningún marcador se llama «{name}».",
+      "empty": "Este documento no tiene marcadores.",
+      "noMatches": "Ningún marcador coincide.",
+      "places": {
+        "header": "Encabezado",
+        "footer": "Pie de página",
+        "footnote": "Nota al pie",
+        "endnote": "Nota al final"
+      }
     }
   },
   "viewer": {

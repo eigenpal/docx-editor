@@ -743,9 +743,26 @@
     "openShortcutTitle": "Gezinti ({shortcut})",
     "tabs": {
       "find": "Bul",
-      "headings": "Başlıklar"
+      "headings": "Başlıklar",
+      "goto": "Git"
     },
-    "title": "Gezinti"
+    "title": "Gezinti",
+    "goTo": {
+      "tabTitle": "Git ({shortcut})",
+      "label": "Yer işareti",
+      "placeholder": "Bir yer işareti adı girin",
+      "listAriaLabel": "Yer işaretleri",
+      "go": "Git",
+      "notFound": "“{name}” adlı yer işareti yok.",
+      "empty": "Bu belgede yer işareti yok.",
+      "noMatches": "Eşleşen yer işareti yok.",
+      "places": {
+        "header": "Üst bilgi",
+        "footer": "Alt bilgi",
+        "footnote": "Dipnot",
+        "endnote": "Son not"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Form doldurma modu",

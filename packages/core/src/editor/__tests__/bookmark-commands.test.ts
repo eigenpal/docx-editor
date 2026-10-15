@@ -50,7 +50,7 @@ describe('bookmark commands', () => {
         { name: 'Zeta', hidden: false, story: 'body', order: 0, empty: false, atSelection: false },
         { name: '_Toc1', hidden: true, story: 'body', order: 1, empty: false, atSelection: false },
         { name: 'alpha', hidden: false, story: 'body', order: 2, empty: true, atSelection: false },
-      ].map((bookmark) => ({ ...bookmark, duplicates: 0 }))
+      ].map((bookmark) => ({ ...bookmark, place: 'body', duplicates: 0 }))
     );
   });
 

@@ -743,9 +743,26 @@
     "openShortcutTitle": "नेविगेशन ({shortcut})",
     "tabs": {
       "find": "ढूँढें",
-      "headings": "शीर्षक"
+      "headings": "शीर्षक",
+      "goto": "यहां जाएं"
     },
-    "title": "नेविगेशन"
+    "title": "नेविगेशन",
+    "goTo": {
+      "tabTitle": "यहां जाएं ({shortcut})",
+      "label": "बुकमार्क",
+      "placeholder": "बुकमार्क का नाम दर्ज करें",
+      "listAriaLabel": "बुकमार्क",
+      "go": "यहां जाएं",
+      "notFound": "“{name}” नाम का कोई बुकमार्क नहीं है।",
+      "empty": "इस दस्तावेज़ में कोई बुकमार्क नहीं है।",
+      "noMatches": "कोई बुकमार्क मेल नहीं खाता।",
+      "places": {
+        "header": "हेडर",
+        "footer": "फ़ुटर",
+        "footnote": "फ़ुटनोट",
+        "endnote": "एंडनोट"
+      }
+    }
   },
   "contentControl": {
     "formFill": "फ़ॉर्म भरने का मोड",

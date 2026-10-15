@@ -743,9 +743,26 @@
     "openShortcutTitle": "ניווט ({shortcut})",
     "tabs": {
       "find": "חיפוש",
-      "headings": "כותרות"
+      "headings": "כותרות",
+      "goto": "מעבר אל"
     },
-    "title": "ניווט"
+    "title": "ניווט",
+    "goTo": {
+      "tabTitle": "מעבר אל ({shortcut})",
+      "label": "סימניה",
+      "placeholder": "הזן שם סימניה",
+      "listAriaLabel": "סימניות",
+      "go": "מעבר אל",
+      "notFound": "אין סימניה בשם \"{name}\".",
+      "empty": "אין סימניות במסמך זה.",
+      "noMatches": "אין סימניות תואמות.",
+      "places": {
+        "header": "כותרת עליונה",
+        "footer": "כותרת תחתונה",
+        "footnote": "הערת שוליים",
+        "endnote": "הערת סיום"
+      }
+    }
   },
   "contentControl": {
     "formFill": "מצב מילוי טפסים",

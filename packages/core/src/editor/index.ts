@@ -242,6 +242,7 @@ export type {
   BookmarkMarkInfo,
   BookmarkMarkOptions,
   FontMeasurementState,
+  GoToChromeHandlers,
 } from './docx-editor-types.ts';
 export type { BookmarkMarkOptionsSource } from './bookmark-chrome.ts';
 // `DocxEditorConfig.fieldResults` takes it.
@@ -602,6 +603,8 @@ export {
   bookmarkDialogInitialName,
   bookmarkDialogNameState,
   bookmarkDialogRows,
+  goToBookmarkRows,
+  goToBookmarkTarget,
   type BookmarkDialogNameState,
   type BookmarkSortOrder,
 } from './bookmark-dialog-model.ts';

@@ -743,9 +743,26 @@
     "openShortcutTitle": "Navigasi ({shortcut})",
     "tabs": {
       "find": "Temukan",
-      "headings": "Judul"
+      "headings": "Judul",
+      "goto": "Buka"
     },
-    "title": "Navigasi"
+    "title": "Navigasi",
+    "goTo": {
+      "tabTitle": "Buka ({shortcut})",
+      "label": "Penanda",
+      "placeholder": "Masukkan nama penanda",
+      "listAriaLabel": "Penanda",
+      "go": "Buka",
+      "notFound": "Tidak ada penanda bernama “{name}”.",
+      "empty": "Dokumen ini tidak memiliki penanda.",
+      "noMatches": "Tidak ada penanda yang cocok.",
+      "places": {
+        "header": "Header",
+        "footer": "Footer",
+        "footnote": "Catatan kaki",
+        "endnote": "Catatan akhir"
+      }
+    }
   },
   "contentControl": {
     "formFill": "Mode isi formulir",

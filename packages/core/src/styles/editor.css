@@ -5949,6 +5949,7 @@ a.docx-hyperlink:focus-visible {
 .docx-editor .docx-nav__tab:focus-visible,
 .docx-editor .docx-nav__stepper:focus-visible,
 .docx-editor .docx-nav__heading:focus-visible,
+.docx-editor .docx-nav__goto-button:focus-visible,
 .docx-editor .docx-nav__result:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 2px;
@@ -6991,6 +6992,56 @@ a.docx-hyperlink:focus-visible {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* ── Go to ───────────────────────────────────────────────────────────────── */
+
+.docx-editor .docx-nav__goto-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--doc-text);
+}
+
+.docx-editor .docx-nav__goto-row > .docx-nav__result-text {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.docx-editor .docx-nav__goto-place {
+  flex: none;
+  font-size: 11px;
+  color: var(--doc-text-subtle);
+}
+
+.docx-editor .docx-nav__goto-message {
+  font-weight: 400;
+  color: var(--doc-text-muted);
+}
+
+.docx-editor .docx-nav__goto-button {
+  flex: none;
+  height: 28px;
+  padding-inline: 12px;
+  border: 1px solid var(--doc-border-input);
+  border-radius: 4px;
+  background: var(--doc-bg-input);
+  font: inherit;
+  font-size: 13px;
+  color: var(--doc-text);
+  cursor: pointer;
+}
+
+.docx-editor .docx-nav__goto-button:hover:not(:disabled) {
+  background: var(--doc-bg-hover);
+}
+
+.docx-editor .docx-nav__goto-button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .docx-editor .docx-nav__result-hit {

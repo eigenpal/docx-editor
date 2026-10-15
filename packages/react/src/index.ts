@@ -123,13 +123,14 @@ export {
 } from './i18n';
 export { useChromeTranslate, type ChromeTranslate } from './i18n';
 // The navigation pane (also reachable as `DocxEditor.Navigation`): the compound over the
-// left gutter, its parts, and the three hooks a custom pane is built from. The pane FLOATS
+// left gutter, its parts, and the hooks a custom pane is built from. The pane FLOATS
 // — it displaces the page only when the gutter is too narrow to hold it, and
 // `navigationShift` is that rule as a pure function a host can reuse or test.
 export {
   DocxEditorNavigation,
   NavigationClose,
   NavigationFind,
+  NavigationGoTo,
   NavigationHeader,
   NavigationHeadings,
   NavigationTab,
@@ -149,6 +150,7 @@ export {
   navigationShift,
   useDocumentOutline,
   useDocumentSearch,
+  useGoToBookmark,
   useNavigationPane,
   useNavigationShift,
   type DocxEditorNavigationNamespace,
@@ -166,6 +168,8 @@ export {
   type DocumentSearchOptions,
   type UseDocumentSearchOptions,
   type UseDocumentSearchResult,
+  type GoToBookmarkProblem,
+  type UseGoToBookmarkReturn,
   type UseNavigationPaneOptions,
   type UseNavigationPaneResult,
 } from './editor/navigation';

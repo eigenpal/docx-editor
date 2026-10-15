@@ -234,6 +234,16 @@ export interface BookmarkChromeHandlers {
 }
 
 /**
+ * Host chrome for Go To: the Go to tab of `DocxEditor.Navigation`, or the host's own.
+ *
+ * @public
+ */
+export interface GoToChromeHandlers {
+  /** Open the Go To UI: the `openGoTo` command, which its shortcut also sends. */
+  readonly onRequest?: () => void;
+}
+
+/**
  * One painted bookmark mark, as `BookmarkMarkOptions` callbacks see it.
  *
  * @public
@@ -324,6 +334,11 @@ export interface DocxEditorInstance extends Editor {
    * restores whatever was registered before, like {@link DocxEditorInstance.setHyperlinkChrome}.
    */
   setBookmarkChrome(handlers: BookmarkChromeHandlers): Unsubscribe;
+  /**
+   * Wire the host's Go To UI to the `openGoTo` command. Returns an unsubscribe that restores
+   * whatever was registered before. `DocxEditor.Navigation` registers its Go to tab.
+   */
+  setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
   /**
    * Choose which bookmarks Show bookmarks marks and customize each mark. Returns an
    * unsubscribe that restores the previous options.

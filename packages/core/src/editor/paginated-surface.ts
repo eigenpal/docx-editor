@@ -1119,7 +1119,7 @@ export function mountPaginatedSurface(
     orderedRange: () => orderedRange(),
     writeRefusal: () => writeRefusal(true),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
-    goToPosition: (position) => navigation.goToPosition(position),
+    goToPosition: (position, options) => navigation.goToPosition(position, options),
     setSelection: (next) => setSelection(next),
     beforeChange: flushPendingInputAndLayout,
     repaint: () => render(false),

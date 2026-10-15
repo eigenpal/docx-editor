@@ -4,7 +4,11 @@
 // Both live on the editor, not on a surface: chrome mounts after the editor exists, and a
 // document that reloads must keep the host's registration. The surface reads them on use.
 
-import type { BookmarkChromeHandlers, BookmarkMarkOptions } from './docx-editor-types.ts';
+import type {
+  BookmarkChromeHandlers,
+  BookmarkMarkOptions,
+  GoToChromeHandlers,
+} from './docx-editor-types.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 
 /** What the bookmark chrome tells the editor. */
@@ -28,8 +32,51 @@ export interface BookmarkMarkOptionsSource {
   readonly reportError: (error: unknown) => void;
 }
 
+/**
+ * One kind of host UI the editor opens on request: the Bookmark dialog, or Go To.
+ *
+ * Whether one is registered is published as a change, so chrome that asks `can` re-renders. A
+ * registration publishes at once. A removal waits for the end of the task: a host that
+ * registers again (a prop change re-runs its effect) removes and registers in one task, the
+ * answer does not change, and nothing is published.
+ */
+function createRequestChrome(changed: (() => void) | undefined) {
+  const stack = createChromeHandlerStack<{ readonly onRequest?: () => void }>({});
+  let published = false;
+  let pending = false;
+  const canOpen = (): boolean => stack.current().onRequest !== undefined;
+  const publish = (): void => {
+    if (canOpen() === published) return;
+    published = canOpen();
+    changed?.();
+  };
+  return {
+    canOpen,
+    /** Ask the host's UI to open; false when none is registered. */
+    open(): boolean {
+      const request = stack.current().onRequest;
+      request?.();
+      return request !== undefined;
+    },
+    register(handlers: { readonly onRequest?: () => void }): () => void {
+      const dispose = stack.push(handlers);
+      publish();
+      return () => {
+        dispose();
+        if (pending) return;
+        pending = true;
+        globalThis.queueMicrotask(() => {
+          pending = false;
+          publish();
+        });
+      };
+    },
+  };
+}
+
 export function createBookmarkChrome(host: BookmarkChromeHost = {}) {
-  const dialog = createChromeHandlerStack<BookmarkChromeHandlers>({});
+  const dialog = createRequestChrome(host.changed);
+  const goTo = createRequestChrome(host.changed);
   const marks = createChromeHandlerStack<BookmarkMarkOptions>({});
   let repaintMarks: (() => void) | null = null;
   const bookmarkMarks: BookmarkMarkOptionsSource = {
@@ -39,47 +86,16 @@ export function createBookmarkChrome(host: BookmarkChromeHost = {}) {
     },
     reportError: (error) => host.error?.(error),
   };
-  // Whether a dialog can open, as last published. A registration publishes at once. A
-  // removal waits for the end of the task: a host that registers again (a prop change re-runs
-  // its effect) removes and registers in one task, the answer does not change, and nothing is
-  // published.
-  let published = false;
-  let pending = false;
-  const publish = (): void => {
-    const now = dialog.current().onRequest !== undefined;
-    if (now === published) return;
-    published = now;
-    host.changed?.();
-  };
-  const publishLater = (): void => {
-    if (pending) return;
-    pending = true;
-    globalThis.queueMicrotask(() => {
-      pending = false;
-      publish();
-    });
-  };
-  const openBookmarkDialog = (): boolean => {
-    const request = dialog.current().onRequest;
-    request?.();
-    return request !== undefined;
-  };
   return {
-    surfaceOptions: { onRequestBookmark: openBookmarkDialog, bookmarkMarks },
+    surfaceOptions: { onRequestBookmark: dialog.open, bookmarkMarks },
     /** The `openBookmarkDialog` command: open the host's dialog, if a host shows one. */
-    bookmarkDialog: {
-      canOpen: () => dialog.current().onRequest !== undefined,
-      open: openBookmarkDialog,
-    },
+    bookmarkDialog: dialog,
+    /** The `openGoTo` command: open the host's Go To UI, if a host shows one. */
+    goTo,
     setters: {
-      setBookmarkChrome(handlers: BookmarkChromeHandlers): () => void {
-        const dispose = dialog.push(handlers);
-        publish();
-        return () => {
-          dispose();
-          publishLater();
-        };
-      },
+      setBookmarkChrome: (handlers: BookmarkChromeHandlers): (() => void) =>
+        dialog.register(handlers),
+      setGoToChrome: (handlers: GoToChromeHandlers): (() => void) => goTo.register(handlers),
       setBookmarkMarks(options: BookmarkMarkOptions): () => void {
         const dispose = marks.push(options);
         repaintMarks?.();

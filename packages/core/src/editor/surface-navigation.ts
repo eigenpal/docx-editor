@@ -74,7 +74,14 @@ export interface NavigationDeps {
  */
 export interface SurfaceNavigation {
   /** Snap to a semantic position using layout geometry, then place the caret there. */
-  goToPosition(position: { paragraphId: string; offset: number }): boolean;
+  /**
+   * With `orShow`, a story that cannot be opened is scrolled to without moving the caret into
+   * it, and the answer is `'shown'`.
+   */
+  goToPosition(
+    position: { paragraphId: string; offset: number },
+    options?: { readonly orShow?: boolean }
+  ): boolean | 'shown';
   /**
    * Scroll a bookmark into view and place the caret at it. Answers false for a name no
    * bookmark declares — an inert click, which is what Word does with a dangling anchor.
@@ -112,13 +119,19 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     return true;
   };
 
-  const goToPosition = (position: { paragraphId: string; offset: number }): boolean => {
+  const goToPosition = (
+    position: { paragraphId: string; offset: number },
+    options?: { readonly orShow?: boolean }
+  ): boolean | 'shown' => {
     // Geometry from the LAYOUT, not the DOM. The target of a cross-document jump is normally
     // on a virtualized page with no DOM at all, so `scrollIntoView` would resolve exactly the
     // jumps that did not need it and fail every one that did.
     // BEFORE the geometry is read: entering re-scopes the layout this resolves against, so
     // doing it afterwards would measure the target against the story the reader was leaving.
-    if (deps.enterStoryFor && !deps.enterStoryFor(position.paragraphId)) return false;
+    // A story that cannot be opened (a header in a read-only document) is shown without
+    // moving the caret into it, when the caller asks for that.
+    const entered = !deps.enterStoryFor || deps.enterStoryFor(position.paragraphId);
+    if (!entered && !options?.orShow) return false;
     const layout = deps.layout();
     const caret = caretAt(layout, position);
     if (!caret) return false;
@@ -133,6 +146,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
       element.scrollTop = Math.max(0, sheetY * deps.scale() - JUMP_MARGIN_PX);
       deps.onScrolled?.();
     }
+    if (!entered) return 'shown';
     // The caret moves whether or not there was anywhere to scroll: the jump's POINT is that
     // the user is now editing at the target, and a document short enough to need no scroll
     // must still move the caret.
@@ -142,7 +156,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
 
   const goToBookmark = (name: string): boolean => {
     const anchor = deps.bookmarks().get(name);
-    return anchor ? goToPosition(anchor) : false;
+    return anchor ? goToPosition(anchor) === true : false;
   };
 
   /**

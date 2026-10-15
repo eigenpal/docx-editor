@@ -104,10 +104,12 @@ export function createEditorViews(host: {
       showParagraphMarks: paragraphMarks.get(),
       showBookmarks: bookmarkMarks.get(),
     }),
-    /** `openBookmarkDialog`, answered before any document gate; null for other commands. */
+    /** `openBookmarkDialog` and `openGoTo`, answered before any document gate; else null. */
     dialog(command: EditorCommand, run: boolean): ExecResult | null {
+      if (command.type === 'openGoTo')
+        return bookmarkDialogResult(popupChrome.goTo, host.destroyed(), run, 'Go To view');
       if (command.type !== 'openBookmarkDialog') return null;
-      return bookmarkDialogResult(popupChrome, host.destroyed(), run);
+      return bookmarkDialogResult(popupChrome.bookmarkDialog, host.destroyed(), run);
     },
     /** Run a mark toggle; null for other commands. */
     toggle(command: EditorCommand): ExecResult | null {

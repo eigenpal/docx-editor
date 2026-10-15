@@ -62,14 +62,15 @@ export function bookmarkCommandRefusal(
  * whether it would. A view request, so it works in a read-only document.
  */
 export function bookmarkDialogResult(
-  chrome: { readonly bookmarkDialog: { canOpen(): boolean; open(): boolean } },
+  chrome: { canOpen(): boolean; open(): boolean },
   destroyed: boolean,
-  run: boolean
+  run: boolean,
+  what = 'bookmark dialog'
 ): ExecResult {
   if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
-  if (!chrome.bookmarkDialog.canOpen())
-    return { ok: false, code: 'unsupported', reason: 'no bookmark dialog is registered' };
-  if (run) chrome.bookmarkDialog.open();
+  if (!chrome.canOpen())
+    return { ok: false, code: 'unsupported', reason: `no ${what} is registered` };
+  if (run) chrome.open();
   return { ok: true, changed: false };
 }
 

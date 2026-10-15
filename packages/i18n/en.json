@@ -531,7 +531,8 @@
     "closeTitle": "Close navigation",
     "tabs": {
       "headings": "Headings",
-      "find": "Find"
+      "find": "Find",
+      "goto": "Go to"
     },
     "headings": {
       "noHeadings": "No headings found. Add headings to your document to see them here."
@@ -552,6 +553,22 @@
       "counterTruncated": "Result {current} of {total}+",
       "total": "{total, plural, one {# result} other {# results}}",
       "totalTruncated": "{total, plural, other {#+ results}}"
+    },
+    "goTo": {
+      "tabTitle": "Go to ({shortcut})",
+      "label": "Bookmark",
+      "placeholder": "Enter a bookmark name",
+      "listAriaLabel": "Bookmarks",
+      "go": "Go to",
+      "notFound": "No bookmark is named “{name}”.",
+      "empty": "This document has no bookmarks.",
+      "noMatches": "No bookmarks match.",
+      "places": {
+        "header": "Header",
+        "footer": "Footer",
+        "footnote": "Footnote",
+        "endnote": "Endnote"
+      }
     }
   },
   "viewer": {

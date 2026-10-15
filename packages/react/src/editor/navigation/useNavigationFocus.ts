@@ -19,12 +19,16 @@ import {
   focusPaneEntry,
   coverPage,
   isFindShortcut,
+  isGoToShortcut,
   ownsShortcutTarget,
   paneEntryTarget,
   publishViewportSize,
   returnFocus,
 } from './navigation-keys';
-import type { UseNavigationPaneResult } from './useNavigationPane';
+import type {
+  NavigationTab as NavigationTabId,
+  UseNavigationPaneResult,
+} from './useNavigationPane';
 import { hostWindowOf, isHTMLElementNode } from '@docx-editor.dev/core/editor';
 
 /** @internal */
@@ -37,7 +41,8 @@ export interface NavigationFocus {
 /** @internal */
 export function useNavigationFocus(
   pane: UseNavigationPaneResult,
-  findShortcut = true
+  findShortcut = true,
+  goToShortcut = true
 ): NavigationFocus {
   const editor = useDocxEditor();
   const viewport = useNavigationViewportElement();
@@ -95,8 +100,31 @@ export function useNavigationFocus(
     expireRequests();
   }, [expireRequests]);
 
+  // Open the pane on `tab` and focus its entry. `opener` gets focus back when it closes.
+  const openTab = useCallback(
+    (tab: NavigationTabId, opener_: HTMLElement | null) => {
+      if (opener_ && !rootRef.current?.contains(opener_)) opener.current = opener_;
+      restoreRequest.current = false;
+      const current = paneRef.current;
+      // Already open on the tab: nothing re-renders, so focus the entry now.
+      if (current.open && current.tab === tab) {
+        focusEntry();
+        return;
+      }
+      focusRequest.current = true;
+      if (current.tab !== tab) current.setTab(tab);
+      if (!current.open) current.setOpen(true);
+      expireRequests();
+    },
+    [focusEntry, expireRequests]
+  );
+
   const intents = useMemo<NavigationIntents>(
     () => ({
+      openTab: (tab) => {
+        const active = rootRef.current?.ownerDocument.activeElement;
+        openTab(tab, isHTMLElementNode(active) ? active : null);
+      },
       toggle: () => {
         if (paneRef.current.open) {
           close();
@@ -120,41 +148,34 @@ export function useNavigationFocus(
         expireRequests();
       },
     }),
-    [close, expireRequests]
+    [close, expireRequests, openTab]
   );
 
   const intentsRef = useRef(intents);
   intentsRef.current = intents;
 
-  // Ctrl/Cmd+F, on the document so it reaches the toolbar and the pane as well as the pages.
-  // Bubble phase: the engine's keymap and the viewport's zoom capture see it first, and an
-  // event either of them claimed (default prevented) is left alone.
+  // Ctrl/Cmd+F and the Go To chord, on the document so they reach the toolbar and the pane as
+  // well as the pages. Bubble phase: the engine's keymap and the viewport's zoom capture see
+  // them first, and an event either of them claimed (default prevented) is left alone.
   useEffect(() => {
     const doc = rootRef.current?.ownerDocument;
-    if (!doc || !findShortcut) return undefined;
+    if (!doc || (!findShortcut && !goToShortcut)) return undefined;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented || !isFindShortcut(event)) return;
-      if (!ownsShortcutTarget(event.target, rootRef.current, viewport)) return;
+      if (event.defaultPrevented) return;
+      const tab: NavigationTabId | null =
+        findShortcut && isFindShortcut(event)
+          ? 'find'
+          : goToShortcut && isGoToShortcut(event)
+            ? 'goto'
+            : null;
+      if (!tab || !ownsShortcutTarget(event.target, rootRef.current, viewport)) return;
       event.preventDefault();
       const active = doc.activeElement;
-      if (isHTMLElementNode(active) && !rootRef.current?.contains(active)) {
-        opener.current = active;
-      }
-      restoreRequest.current = false;
-      const current = paneRef.current;
-      // Already open on Find: nothing re-renders, so focus the query now.
-      if (current.open && current.tab === 'find') {
-        focusEntry();
-        return;
-      }
-      focusRequest.current = true;
-      if (current.tab !== 'find') current.setTab('find');
-      if (!current.open) current.setOpen(true);
-      expireRequests();
+      openTab(tab, isHTMLElementNode(active) ? active : null);
     };
     doc.addEventListener('keydown', onKeyDown);
     return () => doc.removeEventListener('keydown', onKeyDown);
-  }, [viewport, focusEntry, findShortcut, expireRequests]);
+  }, [viewport, findShortcut, goToShortcut, openTab]);
 
   // Every render answers the requests made before it (see the header).
   useEffect(() => {
