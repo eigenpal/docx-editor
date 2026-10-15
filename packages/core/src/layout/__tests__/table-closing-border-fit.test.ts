@@ -59,3 +59,39 @@ test('a row followed on the page by another row keeps its place', () => {
   // A two-line row that may split opens on the page, so the row above does not end it.
   expect(firstPageRows(38, 2)).toEqual(['One', 'Two', 'Three0']);
 });
+
+test('a row stays when the next row opens below it, though a thick bottom rule would not fit', () => {
+  // The page-ending rule is the table's thick bottom edge; rows on one page share a thin
+  // inside rule. A splittable next row whose first line fits keeps the row above.
+  const borders =
+    '<w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/>' +
+    '<w:right w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/>' +
+    '<w:insideH w:val="single" w:sz="4"/><w:bottom w:val="double" w:sz="96"/>';
+  const row = (content: string) => `<w:tr><w:tc>${content}</w:tc></w:tr>`;
+  const margins = ['top', 'bottom', 'left', 'right']
+    .map((side) => `<w:${side} w:w="0" w:type="dxa"/>`)
+    .join('');
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:tbl><w:tblPr><w:tblBorders>${borders}</w:tblBorders>` +
+      `<w:tblCellMar>${margins}</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
+      row(paragraph('One')) +
+      row(paragraph('Two')) +
+      row(paragraph('Three') + paragraph('More')) +
+      row(paragraph('Four')) +
+      '</w:tbl></w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const rowsOnFirstPage = (height: number) =>
+    layoutSemanticDocument(parsed.part, 0, {
+      measurer: createFixedMeasurer(5, 12),
+      session: createLayoutSession(),
+      geometry: { width: 150, height, margin: { top: 0, right: 0, bottom: 0, left: 0 } },
+    }).pages[0]!.fragments.flatMap((fragment) => (fragment.kind === 'table' ? fragment.rows : []))
+      .length;
+  // 12pt below `Two`: the next row cannot open, so `Two` ends the page and its thick rule
+  // does not fit.
+  expect(rowsOnFirstPage(37)).toBe(1);
+  // 13pt: `Three` opens with its first line, so `Two` stays.
+  expect(rowsOnFirstPage(38)).toBe(3);
+});
