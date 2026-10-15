@@ -320,11 +320,18 @@ export function planBookmarks(
     if (!span) return refuse('invalid-offset', 'this story holds no paragraph to bookmark');
     // One name, one bookmark: a name another part declares leaves that part in the same
     // transaction. Within one part the insert op moves it itself.
-    const existing = findByName(reads, operation.name);
-    const otherPart =
-      existing && existing.story.part.name !== story.value.part.name
-        ? existing.story.part.name
-        : null;
+    const key = bookmarkNameKey(operation.name);
+    const otherParts = new Set(
+      storiesOf(reads)
+        .filter(
+          (candidate) =>
+            candidate.part.name !== story.value.part.name &&
+            bookmarkReads(candidate, { includeHidden: true }).some(
+              (entry) => bookmarkNameKey(entry.name) === key
+            )
+        )
+        .map((candidate) => candidate.part.name)
+    );
     const refusal = admit(story.value, [span.start.paragraphId, span.end.paragraphId]);
     if (refusal) return refusal;
     const op: TreeDocOp = {
@@ -338,10 +345,15 @@ export function planBookmarks(
       kind: 'command',
       ops: [op],
       story: story.value.story,
-      ...(otherPart
+      ...(otherParts.size > 0
         ? {
             packageEdits: [
-              (pkg: OoxmlPackage) => withoutBookmarkInPart(pkg, otherPart, operation.name),
+              (pkg: OoxmlPackage) => {
+                let next = pkg;
+                for (const partName of otherParts)
+                  next = withoutBookmarkInPart(next, partName, operation.name);
+                return next;
+              },
             ],
           }
         : {}),

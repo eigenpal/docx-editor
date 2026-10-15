@@ -1592,6 +1592,7 @@ export function editorPreviewActive(editor: object): boolean;
 
 // @internal
 export interface EditorPreviewFork {
+    deferEvents<T>(run: () => T): T;
     end(): void;
     readonly ended: boolean;
     readonly host: AutomationHost;

@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Bookmark moves and deletions could remove markers inside locked or bound controls.",
+  "after": "Protected marker removals refuse atomically across document parts and preserve history.",
+  "reason": "Local admission changes only. Shared canonical operations and format remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/bookmark-protection.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-bookmark-protection.test.ts"
+  ],
+  "changeset": "bookmark-protection",
+  "migration": null
+}

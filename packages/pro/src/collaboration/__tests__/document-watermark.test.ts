@@ -28,7 +28,7 @@ const PNG_1X1 = Uint8Array.from(
   (char) => char.charCodeAt(0)
 );
 
-function headerDoc(): Uint8Array {
+function headerDoc(mixedRun = false): Uint8Array {
   return zipDocument(
     '<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="rId7"/>' +
       '</w:sectPr></w:pPr><w:r><w:t>body</w:t></w:r></w:p>',
@@ -39,7 +39,7 @@ function headerDoc(): Uint8Array {
       overrides:
         '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>',
       extraXml: {
-        'word/header1.xml': `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Header text</w:t></w:r></w:p></w:hdr>`,
+        'word/header1.xml': `<w:hdr xmlns:w="${W}" xmlns:v="urn:schemas-microsoft-com:vml"><w:p><w:r><w:t>Header text</w:t>${mixedRun ? '<w:pict><v:shape id="PowerPlusWaterMarkObject1" style="width:200pt;height:100pt"><v:textpath style="font-family:Calibri;font-size:1pt" string="OLD"/></v:shape><v:shape id="HeaderLogo" style="width:20pt;height:20pt"/></w:pict>' : ''}</w:r></w:p></w:hdr>`,
       },
     }
   );
@@ -172,6 +172,64 @@ describe('watermark collaboration', () => {
       expect(watermarks(harness.packageOf(peer)).texts).toEqual(['SAMPLE']);
       expect(headerText(harness.packageOf(peer))).toContain('New Header text');
     }
+  });
+
+  for (const replacement of [false, true]) {
+    test(`${replacement ? 'replacement' : 'removal'} preserves a concurrent edit in the watermark run`, async () => {
+      const { alice, bob, pause, resume } = await harness.pair(headerDoc(true));
+      pause();
+      applyLifecycle(alice, replacement ? text('NEW') : { op: 'setWatermark', watermark: null });
+      harness.apply(
+        bob,
+        [
+          {
+            op: 'insertText',
+            paragraphId: harness.paragraphIdAt(bob, 0, HEADER),
+            offset: 0,
+            text: 'New ',
+          },
+        ],
+        HEADER
+      );
+      resume();
+      alice.port.flushPendingJournals();
+      bob.port.flushPendingJournals();
+      harness.expectConverged(alice, bob);
+      for (const peer of [alice, bob]) {
+        expect(peer.room.session.status()).toBe('ready');
+        expect(headerText(harness.packageOf(peer))).toContain('New Header text');
+        expect(watermarks(harness.packageOf(peer)).texts).toEqual(replacement ? ['NEW'] : []);
+        let logo = false;
+        walk(harness.packageOf(peer).parts.get('/word/header1.xml')!.root, (node) => {
+          if (
+            node.kind !== 'textValue' &&
+            node.attributes.some((attr) => attr.value === 'HeaderLogo')
+          )
+            logo = true;
+        });
+        expect(logo).toBe(true);
+      }
+      const reopened = await harness.remount(bob);
+      harness.expectConverged(alice, reopened);
+      expect(headerText(harness.packageOf(reopened))).toContain('New Header text');
+    });
+  }
+
+  test('removing a watermark in a shared run supports undo and redo without removing text', async () => {
+    const { alice, bob } = await harness.pair(headerDoc(true));
+    applyLifecycle(alice, { op: 'setWatermark', watermark: null });
+    harness.expectConverged(alice, bob);
+    expect(headerText(harness.packageOf(bob))).toBe('Header text');
+    expect(alice.room.session.undo()).toBe(true);
+    alice.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    expect(watermarks(harness.packageOf(bob)).texts).toEqual(['OLD']);
+    expect(headerText(harness.packageOf(bob))).toBe('Header text');
+    expect(alice.room.session.redo()).toBe(true);
+    alice.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    expect(watermarks(harness.packageOf(bob)).texts).toEqual([]);
+    expect(headerText(harness.packageOf(bob))).toBe('Header text');
   });
 
   test('a watermark undoes as one step on every peer', async () => {

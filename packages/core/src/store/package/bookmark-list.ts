@@ -72,9 +72,9 @@ interface OpenStart {
 /**
  * List the bookmarks of a part in the document order of their starts.
  *
- * @public
+ * @internal Includes each duplicate pair so range edits address only the enclosed markers.
  */
-export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
+export function listBookmarkPairs(part: OoxmlPart): readonly BookmarkRecord[] {
   const open = new Map<string, OpenStart>();
   /** Starts between blocks, waiting for the paragraph that follows them. */
   const pendingStarts: string[] = [];
@@ -84,7 +84,6 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
     readonly record: Omit<BookmarkRecord, 'copies'>;
   }[] = [];
   const copies = new Map<string, number>();
-  const seenNames = new Set<string>();
   const startOrder = new Map<string, number>();
   let order = 0;
   let previous: BookmarkPosition | null = null;
@@ -112,8 +111,6 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
     if (!start || !end) return;
     const key = bookmarkNameKey(started.name);
     copies.set(key, (copies.get(key) ?? 0) + 1);
-    if (seenNames.has(key)) return;
-    seenNames.add(key);
     closed.push({
       order: startOrder.get(id) ?? 0,
       key,
@@ -172,5 +169,18 @@ export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
   closed.sort((a, b) => a.order - b.order);
   return Object.freeze(
     closed.map((entry) => Object.freeze({ ...entry.record, copies: copies.get(entry.key) ?? 1 }))
+  );
+}
+
+/** List each name once, using its first marker pair in document order. @public */
+export function listBookmarks(part: OoxmlPart): readonly BookmarkRecord[] {
+  const seen = new Set<string>();
+  return Object.freeze(
+    listBookmarkPairs(part).filter((record) => {
+      const key = bookmarkNameKey(record.name);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
   );
 }

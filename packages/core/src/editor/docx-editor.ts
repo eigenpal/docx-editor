@@ -2509,6 +2509,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   registerEditorHistoryGroups(instance, historyGroups);
   endPreview = () => endEditorPreview(instance);
   registerEditorPreviewHost(instance, {
+    deferEvents: events.defer,
     displayOptions: displaySurfaceOptions,
     changed: () => {
       bump();

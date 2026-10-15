@@ -280,7 +280,8 @@ export function createCjkOpticalFitter(
   pieces: readonly FieldAwarePiece[],
   breaks: CjkParagraphBreaks | null,
   measurer: TextMeasurer,
-  overflowPunctuation: boolean
+  overflowPunctuation: boolean,
+  allowFullwidth = true
 ) {
   const queued = new Map<number, CjkOpticalFit>();
   return (
@@ -378,7 +379,8 @@ export function createCjkOpticalFitter(
         pieces[currentIndex]!,
         available - line.width,
         x - origin,
-        measurer
+        measurer,
+        allowFullwidth
       )
     )
       return undefined;

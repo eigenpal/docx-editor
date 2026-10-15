@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Removing or replacing a watermark deleted its entire run, including sibling header content.",
+  "after": "Watermark changes remove only the identified shape and preserve sibling content and referenced image parts.",
+  "reason": "The operation uses existing canonical node removal and package journal records. The collaboration schema and operation encoding do not change.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-watermark.test.ts",
+    "packages/core/src/store/__tests__/watermark-package.test.ts"
+  ],
+  "changeset": "watermark-shared-run-preservation",
+  "migration": null
+}

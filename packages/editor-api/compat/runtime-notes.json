@@ -1,7 +1,7 @@
 {
   "OfficeExtension.ClientRequestContext#sync": {
     "status": "partial",
-    "notes": "One atomic write batch targets one story. Main-body, header, footer, and other story writes need separate sync calls. Mixed-story writes refuse with ConflictingChanges without committing that batch. Reads can span stories. Earlier successful syncs remain committed after a later failure. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing."
+    "notes": "Text and formatting writes in one atomic batch target one story. Mixed-story writes refuse with ConflictingChanges without committing that batch. Bookmark removal can share a batch with writes to another story. Inserting a bookmark can move an existing name from another story in that transaction. Reads can span stories. Earlier successful syncs remain committed after a later failure. Inserting a control or paragraph inside a control and deleting that control with keepContent=false in one batch refuses with ConflictingChanges before writing."
   },
   "Word.run": {
     "status": "different",
@@ -745,7 +745,7 @@
   },
   "Word.Range#insertBookmark": {
     "status": "partial",
-    "notes": "Names compare without case and follow the authoring rules: a letter or underscore first, then letters, digits, and underscores, at most 40 characters; other names fail context.sync() with InvalidArgument, and the batch writes nothing. The call itself does not throw, so an argument error reports at the sync like every other batch error. Names are unique in the whole document: a same-name bookmark moves here, also from another story (header, footer, or note), in the same sync. With TrackMineOnly the markers are written directly, because bookmarks are not revisions."
+    "notes": "Names compare without case and follow the authoring rules: a letter or underscore first, then letters, digits, and underscores, at most 40 characters; other names fail context.sync() with InvalidArgument, and the batch writes nothing. The call itself does not throw, so an argument error reports at the sync like every other batch error. Names are unique in the whole document: a same-name bookmark moves here, also from another story (header, footer, or note), in the same sync. With TrackMineOnly the markers are written directly, because bookmarks are not revisions. Moving or deleting markers inside content-locked or bound controls refuses the whole transaction."
   },
   "Word.Range#getBookmarks": {
     "status": "partial",
@@ -753,7 +753,7 @@
   },
   "Word.Document#deleteBookmark": {
     "status": "partial",
-    "notes": "Searches the main text, then headers, footers, and notes, and removes the first bookmark with the name, compared without case. The text stays. A missing name changes nothing. The removal joins the batch's transaction in any story, so it can share a sync with writes to another story."
+    "notes": "Searches the main text, then headers, footers, and notes, and selects the first bookmark with the name, compared without case. Removes all same-name marker pairs in that bookmark's XML part; copies in other parts remain. The text stays. A missing name changes nothing. The removal joins the batch's transaction in any story, so it can share a sync with writes to another story. Moving or deleting markers inside content-locked or bound controls refuses the whole transaction."
   },
   "Word.Document#getBookmarkRange": {
     "status": "partial",
@@ -765,7 +765,7 @@
   },
   "Word.Bookmark#delete": {
     "status": "partial",
-    "notes": "Removes the bookmark's marker pair and keeps the text. A bookmark the document no longer declares refuses with InvalidObjectPath."
+    "notes": "Removes same-name marker pairs in the bookmark's XML part and keeps the text. Copies in other parts remain. A bookmark the document no longer declares refuses with InvalidObjectPath."
   },
   "OfficeExtension.LoadOption#select": {
     "status": "partial",

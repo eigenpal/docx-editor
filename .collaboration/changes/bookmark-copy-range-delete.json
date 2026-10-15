@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Replacing text inside one bookmark copy removed every copy with the same name, including untouched ranges.",
+  "after": "Text deletion addresses each enclosed canonical marker pair separately. Bookmark moves remove copies from every other story. Explicit deletion by name removes copies in the first matching story.",
+  "reason": "The internal deleteBookmark selector changes local planning only. Shared updates remain canonical marker deletions with unchanged format and meaning.",
+  "tests": [
+    "packages/core/src/store/__tests__/bookmark-ops.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-bookmark-editors.test.ts",
+    "packages/editor-api/src/model/__tests__/model-bookmark-writes.test.ts"
+  ],
+  "changeset": "bookmark-copy-range-delete",
+  "migration": null
+}

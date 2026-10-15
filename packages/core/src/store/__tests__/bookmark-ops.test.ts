@@ -8,6 +8,7 @@ import { listBookmarks } from '../package/bookmark-list.ts';
 import { bookmarkNameProblem, isHiddenBookmarkName } from '../package/bookmark-names.ts';
 import { applyTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
+import { enclosedBookmarkDeletions } from '../store/tree-op-bookmarks.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const P = '/word/document.xml#0.0.0';
@@ -340,3 +341,73 @@ function listParagraphIds(part: OoxmlPart): string[] {
   walk(part.root);
   return ids;
 }
+
+for (const target of [0, 1]) {
+  test(`enclosed bookmark deletion keeps the other duplicate pair when deleting pair ${target}`, () => {
+    const part = load(
+      [0, 1]
+        .map(
+          (id) =>
+            `<w:p><w:bookmarkStart w:id="${id}" w:name="Same"/><w:r><w:t>Text</w:t></w:r><w:bookmarkEnd w:id="${id}"/></w:p>`
+        )
+        .join('')
+    );
+    const paragraphs = [P, P2];
+    const drops = enclosedBookmarkDeletions(
+      part,
+      { paragraphId: paragraphs[target]!, offset: 0 },
+      { paragraphId: paragraphs[target]!, offset: 4 },
+      paragraphs
+    );
+    expect(drops).toHaveLength(1);
+    const result = apply(part, drops[0]!);
+    expect(listBookmarks(result)).toHaveLength(1);
+    expect(listBookmarks(result)[0]!.start.paragraphId).toBe(paragraphs[1 - target]);
+    expect(listBookmarks(result)[0]!.copies).toBe(1);
+  });
+}
+
+test('nested duplicate names resolve to the first start, not the first end', () => {
+  const part = load(
+    '<w:p><w:bookmarkStart w:id="1" w:name="Same"/>' +
+      '<w:r><w:t>A</w:t></w:r><w:bookmarkStart w:id="2" w:name="SAME"/>' +
+      '<w:r><w:t>B</w:t></w:r><w:bookmarkEnd w:id="2"/>' +
+      '<w:r><w:t>C</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+  );
+  expect(listBookmarks(part)[0]).toMatchObject({
+    markerId: '1',
+    copies: 2,
+    start: { offset: 0 },
+    end: { offset: 3 },
+  });
+  const drops = enclosedBookmarkDeletions(
+    part,
+    { paragraphId: P, offset: 1 },
+    { paragraphId: P, offset: 2 },
+    [P]
+  );
+  expect(drops).toHaveLength(1);
+  const result = apply(part, drops[0]!);
+  expect(listBookmarks(result)[0]).toMatchObject({ markerId: '1', copies: 1 });
+});
+
+test('enclosed deletion addresses canonical pairs when file-level ids repeat', () => {
+  const part = load(
+    [0, 1]
+      .map(
+        () =>
+          '<w:p><w:bookmarkStart w:id="1" w:name="Same"/><w:r><w:t>Text</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+      )
+      .join('')
+  );
+  const drops = enclosedBookmarkDeletions(
+    part,
+    { paragraphId: P, offset: 0 },
+    { paragraphId: P, offset: 4 },
+    [P, P2]
+  );
+  expect(drops).toHaveLength(1);
+  const result = apply(part, drops[0]!);
+  expect(listBookmarks(result)).toHaveLength(1);
+  expect(listBookmarks(result)[0]!.start.paragraphId).toBe(P2);
+});

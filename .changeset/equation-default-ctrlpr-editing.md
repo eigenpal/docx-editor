@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Equations whose structures share the same default control properties can now be edited in the equation popover, and they lay out as math when those properties include a size, language, or complex-script italic. Fixes #1335
+Allow equation editing with shared default control properties and preserve size, language, and complex-script italic during layout. Fixes #1335

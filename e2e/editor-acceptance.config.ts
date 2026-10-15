@@ -12,6 +12,7 @@ export default defineConfig(editorSmoke, {
     'document-refresh-highlights.interaction.spec.ts',
     'font-remount-focus.interaction.spec.ts',
     'formtext-selection.interaction.spec.ts',
+    'host-window.interaction.spec.ts',
     'table-editing.interaction.spec.ts',
     'text-form-field-save.interaction.spec.ts',
     'vue.interaction.spec.ts',

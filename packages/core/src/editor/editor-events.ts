@@ -41,41 +41,91 @@ export function createEditorEvents(
     const value: EditorHostChange = Object.freeze({ document: current });
     for (const handler of [...handlers.hostChange]) handler(value);
   };
+  let deferring = 0;
+  let draining = false;
+  let pending: Array<() => void> = [];
+  const dispatch = (notify: () => void): void => {
+    if (deferring > 0 || draining) pending.push(notify);
+    else notify();
+  };
   return {
-    emitError(error: EditorError, isCurrent?: () => boolean) {
-      for (const handler of [...handlers.error]) {
-        // A listener can load another document or destroy the editor before the next listener.
-        if (isCurrent && !isCurrent()) return;
-        handler(error);
+    /** Keep host listeners outside a synchronous multi-batch preview commit. */
+    defer<T>(run: () => T): T {
+      deferring += 1;
+      try {
+        return run();
+      } finally {
+        deferring -= 1;
+        if (deferring === 0 && !draining) {
+          draining = true;
+          try {
+            // Listener edits follow every notification already queued by the commit.
+            while (pending.length > 0) {
+              const notifications = pending;
+              pending = [];
+              for (const notify of notifications) {
+                try {
+                  notify();
+                } catch {
+                  // The commit already finished. A host listener cannot turn it into a refusal.
+                }
+              }
+            }
+          } finally {
+            draining = false;
+          }
+        }
       }
     },
+    emitError(error: EditorError, isCurrent?: () => boolean) {
+      dispatch(() => {
+        for (const handler of [...handlers.error]) {
+          // A listener can load another document or destroy the editor before the next listener.
+          if (isCurrent && !isCurrent()) return;
+          handler(error);
+        }
+      });
+    },
     emitDocumentChange(change: DocumentChange) {
-      for (const handler of [...handlers.change]) handler(change);
+      dispatch(() => {
+        for (const handler of [...handlers.change]) handler(change);
+      });
     },
     emitSelectionChange() {
-      // `hostChange` rides on this: every mount, move, heal and detach reports the selection,
-      // so do not drop a "redundant" selection report from those paths.
-      syncHost();
-      if (!handlers.selectionChange.size) return;
-      const value = snapshot();
-      for (const handler of [...handlers.selectionChange]) handler(value);
+      dispatch(() => {
+        // `hostChange` rides on this: every mount, move, heal and detach reports the selection,
+        // so do not drop a "redundant" selection report from those paths.
+        syncHost();
+        if (!handlers.selectionChange.size) return;
+        const value = snapshot();
+        for (const handler of [...handlers.selectionChange]) handler(value);
+      });
     },
     emitHistoryDiagnostic(diagnostic: HistoryDiagnostic) {
-      for (const handler of [...handlers.historyDiagnostic]) handler(diagnostic);
+      dispatch(() => {
+        for (const handler of [...handlers.historyDiagnostic]) handler(diagnostic);
+      });
     },
     emitDiagnostic(event: EditorDiagnostic) {
-      for (const handler of [...handlers.diagnostic]) handler(event);
+      dispatch(() => {
+        for (const handler of [...handlers.diagnostic]) handler(event);
+      });
     },
     emitRevisionMarkupChange(value: ResolvedRevisionMarkup) {
-      for (const handler of [...handlers.revisionMarkupChange]) handler(value);
+      dispatch(() => {
+        for (const handler of [...handlers.revisionMarkupChange]) handler(value);
+      });
     },
     emitReviewItemReveal(event: ReviewItemRevealEvent) {
-      const value = Object.freeze({ ...event });
-      for (const handler of [...handlers.reviewItemReveal]) handler(value);
+      dispatch(() => {
+        const value = Object.freeze({ ...event });
+        for (const handler of [...handlers.reviewItemReveal]) handler(value);
+      });
     },
     hasErrorHandlers: () => handlers.error.size > 0,
     hasDiagnosticHandlers: () => handlers.diagnostic.size > 0,
     clear() {
+      pending = [];
       for (const set of Object.values(handlers)) set.clear();
     },
     on<E extends keyof EditorEvents>(event: E, handler: EditorEvents[E]): Unsubscribe {

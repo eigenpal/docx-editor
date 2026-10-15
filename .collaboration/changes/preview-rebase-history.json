@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A preview rebase could write an earlier batch before a later read diverged. Undo removed the writes but left them in redo and discarded the previous redo branch.",
+  "after": "Commit validates every recorded batch on a fresh private fork before writing to the live document. A divergent read preserves shared state and undo and redo history. Editor event listeners and preview status listeners run after all commit batches and their history group finish. Notifications from listener edits follow previously queued commit notifications.",
+  "reason": "Validation changes no shared format or operations. Successful commits use the existing live replay. Refused validation writes nothing to either collaboration participant.",
+  "tests": [
+    "packages/editor-api/src/runtime/__tests__/runtime-preview-rebase.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-preview.test.ts",
+    "packages/core/src/editor/__tests__/editor-events.test.ts"
+  ],
+  "changeset": "preview-rebase-history",
+  "migration": null
+}

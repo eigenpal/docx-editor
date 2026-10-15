@@ -533,6 +533,18 @@ A zero count does not confirm durable server storage. Persist room updates on th
 
 To pause editing while disconnected, set `offlineEditing: false` in the `room` or `connect` options. Every room factory and hook accepts this option. The session refuses edits in the `error` status in both cases.
 
+## Upgrade WebRTC configuration to 2.31.0
+
+Version 2.31.0 includes a security compatibility exception: WebRTC no longer selects public signaling servers when you omit `signaling`. Existing callers must provide this option before connecting.
+
+Update `createWebrtcCollaboration`, `useWebrtcCollaboration`, and `connect` options in React and Vue:
+
+- For production, set `signaling` to your own signaling server URLs.
+- For demos, explicitly pass `DEMO_SIGNALING_ENDPOINTS`.
+- For communication between tabs of one browser, pass `[]`. This does not connect peers in different browsers.
+
+Hocuspocus connections do not use this option.
+
 ## Use your own signaling
 
 A WebRTC room needs signaling URLs that introduce peers to each other. The `signaling` option has no default, and the TypeScript types require it. Each entry must be a `ws://` or `wss://` URL. If you omit the option or pass an invalid entry, no network connection opens, and the failure appears as follows:

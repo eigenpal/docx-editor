@@ -168,3 +168,75 @@ describe('preview.commit({ rebase: true })', () => {
     }
   });
 });
+
+test('a later divergent batch never enters live history or redo', async () => {
+  const mounted = mount();
+  try {
+    const preview = await mounted.runtime.preview(async (context) => {
+      context.document.body.search('Notice').getFirst().insertText('NOTICE', 'Replace');
+      await context.sync();
+      context.document.body.search('Delivery').getFirst().insertText('DELIVERY', 'Replace');
+      await context.sync();
+    });
+    mounted.peer(1, 'delete', 0, 8);
+    const before = await body(mounted.editor);
+    const revision = mounted.editor.surface!.session.packageRevision();
+    await expect(preview.commit({ rebase: true })).rejects.toMatchObject({
+      code: 'StaleDocument',
+    });
+    expect(await body(mounted.editor)).toBe(before);
+    expect(mounted.editor.surface!.session.packageRevision()).toBe(revision);
+    expect(mounted.editor.snapshot().canRedo).toBe(false);
+    expect(mounted.editor.exec({ type: 'redo' }).ok).toBe(false);
+    // The preceding edit, rather than a partial preview, remains the next undo step.
+    expect(mounted.editor.exec({ type: 'undo' }).ok).toBe(true);
+    expect(await body(mounted.editor)).toContain('Delivery');
+    expect(await body(mounted.editor)).not.toContain('NOTICE');
+  } finally {
+    mounted.dispose();
+  }
+});
+
+for (const event of ['change', 'selectionChange', 'status'] as const) {
+  test(`preview commit defers ${event} listeners until every batch finishes`, async () => {
+    const mounted = mount();
+    let stop = () => {};
+    try {
+      const preview = await mounted.runtime.preview(async (context) => {
+        context.document.body.search('Notice').getFirst().insertText('NOTICE', 'Replace');
+        await context.sync();
+        context.document.body.search('Delivery').getFirst().insertText('DELIVERY', 'Replace');
+        await context.sync();
+      });
+      let called = false;
+      let observed = '';
+      const interrupt = () => {
+        if (called) return;
+        const text = mounted.editor.surface!.session.bodyText();
+        if (event !== 'status' && !text.includes('NOTICE')) return;
+        called = true;
+        observed = text;
+        mounted.editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+      };
+      stop =
+        event === 'status'
+          ? preview.onStatusChanged(interrupt)
+          : mounted.editor.on(event, interrupt);
+      await preview.commit();
+      expect(called).toBe(true);
+      expect(observed).toContain('NOTICE');
+      expect(observed).toContain('DELIVERY');
+      stop();
+      mounted.editor.exec({ type: 'setEditingMode', mode: 'editing' });
+      expect(mounted.editor.exec({ type: 'undo' }).ok).toBe(true);
+      const reverted = await body(mounted.editor);
+      expect(reverted).toContain('Notice');
+      expect(reverted).toContain('Delivery');
+      expect(reverted).not.toContain('NOTICE');
+      expect(reverted).not.toContain('DELIVERY');
+    } finally {
+      stop();
+      mounted.dispose();
+    }
+  });
+}

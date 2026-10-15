@@ -373,38 +373,37 @@ function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => voi
 }
 ```
 
-In Vue, inject the registry. It is a ref, so read `.value`. This sketch registers on mount; also unregister while the document is in viewing mode:
+In Vue, inject the registry and read its `.value`. Watch the editor and viewing mode to update the registration:
 
 ```ts
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, watchEffect } from 'vue';
 import type { SelectionPin } from '@docx-editor.dev/core/contracts/editor';
-import { ReviewRailContext, useDocxEditor } from '@docx-editor.dev/vue';
+import { ReviewRailContext, useDocxEditor, useEditorState } from '@docx-editor.dev/vue';
 import { useReview } from '@docx-editor.dev/pro/vue';
 
 export function useCommentDrafts(openDraft: (anchorY: number, pin: SelectionPin) => void) {
   const registry = inject(ReviewRailContext, null);
   const editorRef = useDocxEditor();
   const { setPaneOpen } = useReview();
-  let cleanup: (() => void) | undefined;
-  onMounted(() => {
+  const viewing = useEditorState((state) => state.editingMode === 'viewing');
+  watchEffect((onCleanup) => {
     const rail = registry?.value;
-    if (!rail) return;
+    const editor = editorRef.value;
+    if (!rail || !editor || viewing.value) return;
     const unregister = rail.register();
     const release = rail.registerCommentDraft(() => {
-      const editor = editorRef.value;
-      const anchorY = editor?.getSelectionPlacement()?.anchorY;
-      if (!editor || anchorY === undefined) return;
+      const anchorY = editor.getSelectionPlacement()?.anchorY;
+      if (anchorY === undefined) return;
       const pin = editor.retainSelection();
       if (!pin) return;
       setPaneOpen(true);
       openDraft(anchorY, pin);
     });
-    cleanup = () => {
+    onCleanup(() => {
       release();
       unregister();
-    };
+    });
   });
-  onUnmounted(() => cleanup?.());
 }
 ```
 

@@ -8,6 +8,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
+import { DocxEditor } from '@docx-editor.dev/editor-api/browser';
+import { WITH_FURNITURE } from '../../../../editor-api/src/model/__tests__/support/documents.ts';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, R, REL, W, zipDocument } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
@@ -241,4 +243,144 @@ test('Go To follows a collaborator: a renamed bookmark lists under its new name,
     ok: false,
     code: 'notFound',
   });
+});
+
+for (const replaced of ['world', 'Second']) {
+  test(`replacing ${replaced} keeps an untouched concurrent bookmark copy`, async () => {
+    const peers = await harness.pair(zipDocument(DOCUMENT));
+    const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+      peer.detach();
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: peer.room.document,
+        modules: [collaborationModule({ session: peer.room.session })],
+      });
+      editors.push(editor);
+      return editor;
+    }) as [Editor, Editor];
+    const runtime = DocxEditor.createBrowser(alice);
+    const converged = () => {
+      peers.alice.room.session.flushPendingJournals();
+      peers.bob.room.session.flushPendingJournals();
+      const left = alice.surface!.session.currentPackage();
+      const right = bob.surface!.session.currentPackage();
+      expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+      expect(saveReopenDigest(right)).toEqual(saveReopenDigest(left));
+    };
+    try {
+      peers.pause();
+      select(alice, 0, 6, 11);
+      expect(alice.exec({ type: 'insertBookmark', name: 'Same' }).ok).toBe(true);
+      select(bob, 1, 0, 6);
+      expect(bob.exec({ type: 'insertBookmark', name: 'SAME' }).ok).toBe(true);
+      peers.resume();
+      converged();
+      expect(alice.query({ type: 'bookmarks' })[0]!.duplicates).toBe(1);
+      await runtime.run(async (context) => {
+        context.document.body.search(replaced).getFirst().insertText('Replaced', 'Replace');
+        await context.sync();
+      });
+      converged();
+      expect(alice.query({ type: 'bookmarks' })).toHaveLength(1);
+      expect(alice.query({ type: 'bookmarks' })[0]!.duplicates).toBe(0);
+      expect(bob.exec({ type: 'goToBookmark', name: 'Same' }).ok).toBe(true);
+      const selected = bob.surface!.state().selection;
+      expect(selected.anchor.paragraphId).toBe(
+        bob.surface!.session.paragraphIds()[replaced === 'world' ? 1 : 0]
+      );
+      const reopened = createDocxEditor({
+        container: document.createElement('div'),
+        document: await alice.save(),
+      });
+      editors.push(reopened);
+      expect(reopened.query({ type: 'bookmarks' })).toHaveLength(1);
+      expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+      converged();
+      expect(alice.query({ type: 'bookmarks' })[0]!.duplicates).toBe(1);
+      expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+      converged();
+      expect(bob.query({ type: 'bookmarks' })).toHaveLength(1);
+      expect(bob.query({ type: 'bookmarks' })[0]!.duplicates).toBe(0);
+    } finally {
+      runtime.dispose();
+    }
+  });
+}
+
+test('moving concurrent copies to a third story leaves one target across peers and history', async () => {
+  const peers = await harness.pair(WITH_FURNITURE);
+  const [alice, bob] = [peers.alice, peers.bob].map((peer) => {
+    peer.detach();
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    return editor;
+  }) as [Editor, Editor];
+  const a = DocxEditor.createBrowser(alice);
+  const b = DocxEditor.createBrowser(bob);
+  const converged = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+    expect(packageFingerprint(alice.surface!.session.currentPackage())).toBe(
+      packageFingerprint(bob.surface!.session.currentPackage())
+    );
+  };
+  try {
+    peers.pause();
+    await a.run(async (context) => {
+      context.document.body.getRange('Whole').insertBookmark('Same');
+      await context.sync();
+    });
+    await b.run(async (context) => {
+      context.document.sections
+        .getFirst()
+        .getHeader('Primary')
+        .getRange('Whole')
+        .insertBookmark('SAME');
+      await context.sync();
+    });
+    peers.resume();
+    converged();
+    expect(alice.query({ type: 'bookmarks' })[0]!.duplicates).toBe(1);
+    const move = alice.beginHistoryGroup();
+    try {
+      await a.run({ historyGroup: move }, async (context) => {
+        context.document.sections
+          .getFirst()
+          .getFooter('Primary')
+          .getRange('Whole')
+          .insertBookmark('Same');
+        await context.sync();
+      });
+    } finally {
+      move.end();
+    }
+    converged();
+    for (const editor of [alice, bob])
+      expect(editor.query({ type: 'bookmarks' })[0]).toMatchObject({
+        place: 'footer',
+        duplicates: 0,
+      });
+    const reopened = createDocxEditor({
+      container: document.createElement('div'),
+      document: await alice.save(),
+    });
+    editors.push(reopened);
+    expect(reopened.query({ type: 'bookmarks' })[0]).toMatchObject({
+      place: 'footer',
+      duplicates: 0,
+    });
+    expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+    converged();
+    expect(bob.query({ type: 'bookmarks' })[0]).toMatchObject({ place: 'body', duplicates: 1 });
+    expect(alice.exec({ type: 'redo' }).ok).toBe(true);
+    converged();
+    expect(bob.query({ type: 'bookmarks' })[0]).toMatchObject({ place: 'footer', duplicates: 0 });
+  } finally {
+    a.dispose();
+    b.dispose();
+  }
 });

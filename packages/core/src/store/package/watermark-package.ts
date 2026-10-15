@@ -337,7 +337,7 @@ function withShownHeaders(pkg: OoxmlPackage, create: CreateSectionHeader): Ooxml
   return next;
 }
 
-/** Remove one header's watermark runs and the picture relationships only they used. */
+/** Remove watermark shapes and picture relationships that no remaining node uses. */
 function withoutWatermarks(pkg: OoxmlPackage, partName: string): OoxmlPackage | null {
   let next = pkg;
   const media: string[] = [];
@@ -347,7 +347,9 @@ function withoutWatermarks(pkg: OoxmlPackage, partName: string): OoxmlPackage | 
     const first = watermarkRuns(part)[0];
     if (!first) break;
     const reading = readShape(part, first.shape, next);
-    const removed = removeNode(part, first.run.id);
+    // A run or pict can also hold text, fields, and unrelated pictures.
+    // Remove only the identified shape; preserve its containers and siblings.
+    const removed = removeNode(part, first.shape.id);
     if (!removed.ok) return null;
     next = withPart(next, removed.part);
     if (

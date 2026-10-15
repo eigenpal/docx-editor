@@ -223,7 +223,7 @@ If an IME composition prevents grouping, the command reports `split` with reason
 
 A review decision often combines several writes: you resolve the other party's tracked changes, write a counter-proposal, and explain it in a comment. Pass one handle to each write, and the decision becomes one undo step and one redo step. The writes can mix `exec` commands, review methods, and browser automation runs.
 
-The following example rejects the other party's changes, replaces text through the browser runtime, and comments on the replacement. Each step checks its result:
+The following example rejects the other party's changes, replaces text through the browser runtime, and comments on the replacement. Install the Pro review module and configure a nonempty runtime author. Each step checks its result:
 
 ```ts
 // `keys` are the other party's change keys from `editor.getReviewItems()`.
@@ -241,6 +241,7 @@ try {
     await context.sync();
     const target = ranges.items[0];
     if (!target) throw new Error('The document has no "30 days" text.');
+    context.document.changeTrackingMode = 'TrackMineOnly';
     const replaced = target.insertText('45 days', 'Replace');
     await context.sync();
     replaced.insertComment('Counter-proposal: 45 days.');

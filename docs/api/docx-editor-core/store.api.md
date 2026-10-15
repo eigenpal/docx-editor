@@ -1103,6 +1103,11 @@ export interface DeleteBookmarkOp {
     readonly name: string;
     // (undocumented)
     readonly op: 'deleteBookmark';
+    // @internal
+    readonly pair?: {
+        readonly endNodeId: string;
+        readonly startNodeId: string;
+    };
 }
 
 // @public

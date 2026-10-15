@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Non-justified paragraphs wrap Latin punctuation early despite an East Asian run language.",
+  "after": "Latin punctuation follows the authored overflow setting in every paragraph alignment.",
+  "reason": "Only line fitting changes. Shared text, source ranges, operations, and the collaboration format keep their meanings.",
+  "tests": [
+    "packages/core/src/layout/__tests__/cjk-followups.test.ts",
+    "packages/core/src/layout/__tests__/punctuation-pair-line-break.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-latin-punctuation.test.ts"
+  ],
+  "changeset": "latin-punctuation-overflow",
+  "migration": null
+}

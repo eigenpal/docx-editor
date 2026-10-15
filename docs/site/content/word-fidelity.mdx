@@ -124,6 +124,8 @@ In compatibility mode 15 and later, a right-to-left table moves toward its visua
 
 A table percentage width can be larger than 100%, up to 655.34%. The table then extends past the text column and keeps its cells' line breaks. This applies to every alignment, to AutoFit and fixed tables, and in every compatibility mode. A nested table can extend past its cell in the same way. A supported full-width table in a file without a compatibility mode, or in compatibility mode 11, 12, or 14, measures the percentage against the text-column width plus its outer cell margins. A larger count of fiftieths wraps at 65536, and a count that wraps above 32767 states no width. A larger value stated with a percent sign makes the table as narrow as its content allows.
 
+AutoFit widths account for deleted content across revision views. Each view retains the minimum widths its visible content requires.
+
 An AutoFit column widens to hold its widest unbroken word, such as a long URL, with its indents and cell margins. The other columns give up width in proportion to their spare room. When the minimums are wider than both the text column and the table, the columns shrink in proportion to their minimums to the wider of the two.
 
 An AutoFit column whose cells state no width is sized by its content. Each such column takes its widest unwrapped line when the table has room, and the columns share any extra room in proportion to those widths. A table with no width of its own takes only what its content needs. Columns with a stated width give way first. When the table is still too narrow, the content-sized columns wrap, each by the same fraction of its range.
@@ -252,6 +254,8 @@ An empty paragraph that ends a section ignores its own page break before, from d
 
 Bottom-to-top cell text does not make its row taller. The text wraps at the final row height, or along the full merged cell height. The cell width clips overflowing text.
 
+A table row that closes a page reserves space for its bottom border. A following row that can split can keep the preceding row on the page.
+
 A table row starts below other content only when the remaining space holds its minimum height. If it does not, the row moves to the next page, also when its content is taller than a page. A keep-with-next paragraph before the table moves with the row. If a fresh page cannot hold that minimum below repeated headers, the row splits where it stands. Rows of positioned tables keep their existing placement.
 
 A row with an exact height taller than the page content starts on a fresh page and does not split. It fills the rest of that page, and its border and content stop at the bottom margin. The row does not paint past the margin, with or without `w:cantSplit`. The next block starts on the next page.
@@ -294,11 +298,13 @@ Paragraph `w:bidi` controls alignment and the order of groups with different run
 
 East Asian layout keeps punctuation, graphemes, and full-width number groups together across formatting changes. Justified lines distribute inter-character spacing through the same geometry used for paint and caret placement.
 
+Justified lines compare space compression with the expansion needed for an earlier break. Hyphenated fragments and currency or math symbols participate in this fit calculation. Plain `REF` results can complete a word; changing `PAGEREF` and `NOTEREF` results cannot.
+
 Modern Latin justification includes terminal footnote and endnote citations when testing whether a complete word fits. Citations keep their formatting and model positions. Marks with reserved page-local widths retain their existing line-break behavior.
 
 East Asian font hints select the document's East Asian face for supported punctuation, symbols, Greek, and Cyrillic ranges. Combining marks and joined emoji keep their base character's slot across text runs. Explicit symbol fonts retain their selected face.
 
-Document settings control kinsoku, Japanese strict rules, Korean character wrapping, and punctuation overflow. Adjacent full-width punctuation shares a half-cell bearing when both runs enable `w:kern` at their font size. `w:noPunctuationKerning` disables this compression. The East Asian face of the document defaults (`w:rPrDefault`) must be an East Asian font. A known Chinese, Japanese, or Korean font qualifies. A known Latin font, such as Arial, does not. Another face qualifies only when the font table gives it a Shift JIS, Hangul, GB2312, or Big5 `w:charset`. An East Asian theme font with an empty theme slot qualifies. Korean-language runs retain their advances. Close/open, close/close, open/open, comma/period, and colon/open pairs compress; open/close pairs do not. The run's own font, bold, italic, and authored tracking do not select the rule. Run boundaries do not disable it. Paragraph and manual line-break boundaries retain their advance widths. A pair compresses only when both characters are on the same line, so punctuation at the end of a line keeps its full advance. Punctuation overflow (`w:overflowPunct`) hangs punctuation past the margin only in justified paragraphs.
+Document settings control kinsoku, Japanese strict rules, Korean character wrapping, and punctuation overflow. Adjacent full-width punctuation shares a half-cell bearing when both runs enable `w:kern` at their font size. `w:noPunctuationKerning` disables this compression. The East Asian face of the document defaults (`w:rPrDefault`) must be an East Asian font. A known Chinese, Japanese, or Korean font qualifies. A known Latin font, such as Arial, does not. Another face qualifies only when the font table gives it a Shift JIS, Hangul, GB2312, or Big5 `w:charset`. An East Asian theme font with an empty theme slot qualifies. Korean-language runs retain their advances. Close/open, close/close, open/open, comma/period, and colon/open pairs compress; open/close pairs do not. The run's own font, bold, italic, and authored tracking do not select the rule. Run boundaries do not disable it. Paragraph and manual line-break boundaries retain their advance widths. A pair compresses only when both characters are on the same line, so punctuation at the end of a line keeps its full advance. Punctuation overflow (`w:overflowPunct`) hangs full-width punctuation past the margin only in justified paragraphs. Latin punctuation with an East Asian run language follows the overflow setting in every alignment.
 
 `w:characterSpacingControl` does not enable or disable this pair rule. Latin punctuation keeps the font's HarfBuzz kerning, including with `w:noPunctuationKerning`.
 

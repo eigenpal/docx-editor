@@ -67,7 +67,9 @@ applyButton.onclick = async () => {
 cancelButton.onclick = () => preview.discard();
 ```
 
-`commit()` writes the tracked replacement as one undo step. It also keeps the tracking mode that the callback set on this runtime, as `run()` does. If a collaboration peer edits the document while the preview is open, `preview.status` becomes `stale`. With `rebase: true`, the commit applies the preview to the current document, even after an edit earlier in the same paragraph. It refuses with `StaleDocument` only if the previewed search now finds a different number of matches, the text it read reads otherwise, or the text it replaces changed. In suggesting mode, the preview and the commit write the same suggestions. For the full rules, see [Preview other wording before you write it](/docs/2.x/editor-api/runtime#preview-other-wording-before-you-write-it).
+`commit()` writes the tracked replacement as one undo step. It also keeps the tracking mode that the callback set on this runtime, as `run()` does. If a collaboration peer edits the document while the preview is open, `preview.status` becomes `stale`. With `rebase: true`, the commit applies the preview to the current document, even after an edit earlier in the same paragraph. It refuses with `StaleDocument` if replayed reads differ or the text it replaces changed. A replay refusal ends the preview.
+
+The live editor can also refuse the commit, for example if permissions change. In suggesting mode, the preview and the commit write the same suggestions. For the full rules, see [Preview other wording before you write it](/docs/2.x/editor-api/runtime#preview-other-wording-before-you-write-it).
 
 ## Supported tracked edits
 
@@ -194,7 +196,7 @@ const pending = await runtime.run(async (context) => {
 
 ## Inspect revisions in a range
 
-`Range.revisions` returns the tracked changes that a range overlaps, in document order. The range's own story scopes the collection. A range in a header lists only that header's changes. Each member is the same `Revision` object that the story's collection lists.
+`Range.revisions` returns the tracked changes that a range overlaps, in document order. The range's own story scopes the collection. A range in a header lists only that header's changes. Each member represents a revision that the story's collection also lists.
 
 These rules decide membership:
 
@@ -355,7 +357,7 @@ function AcceptButton(props: { runtime: DocxEditorRuntime; item: { readonly key:
 }
 ```
 
-Use `getReviewItemRevisions` to decide a card. A change that holds a nested change by another author resolves alone, and the nested change stays pending. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
+Use `getReviewItemRevisions` to decide a card. Its collection refuses `resolve()` and `setAuthor()` with `NotSupported`. Use the story's `body.revisions` for those operations. A change that holds a nested change by another author resolves alone, and the nested change stays pending. `getReviewItemRange(context, key).revisions` also lists changes nested inside the card's change and changes by other authors that the range overlaps.
 
 A key names an item in the current document. After someone accepts or rejects that change, the key names nothing:
 

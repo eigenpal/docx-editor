@@ -325,3 +325,96 @@ test('in suggesting mode a preview commits the same suggestion to both peers', a
     a.close();
   }
 });
+
+test('a later divergent preview batch preserves shared history and the existing redo branch', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  let rejoined: Peer | undefined;
+  try {
+    await a.runtime.run(async (context) => {
+      context.document.body.search('Notes').getFirst().insertText('Alice notes', 'Replace');
+      await context.sync();
+    });
+    sync(a, b);
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    expect(a.editor.snapshot().canRedo).toBe(true);
+    const preview = await a.runtime.preview(async (context) => {
+      context.document.body.search('Notice').getFirst().insertText('NOTICE', 'Replace');
+      await context.sync();
+      context.document.body.search('Delivery').getFirst().insertText('DELIVERY', 'Replace');
+      await context.sync();
+    });
+    await b.runtime.run(async (context) => {
+      context.document.body.search('Delivery').getFirst().insertText('Shipping', 'Replace');
+      await context.sync();
+    });
+    sync(a, b);
+    const before = await converged(a, b);
+    const state = Y.encodeStateAsUpdate(a.ydoc);
+    await expect(preview.commit({ rebase: true })).rejects.toMatchObject({ code: 'StaleDocument' });
+    expect(Y.encodeStateAsUpdate(a.ydoc)).toEqual(state);
+    sync(a, b);
+    expect(await converged(a, b)).toBe(before);
+    expect(a.editor.snapshot().canUndo).toBe(false);
+    expect(a.editor.snapshot().canRedo).toBe(true);
+    expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+    sync(a, b);
+    const redone = await converged(a, b);
+    expect(text(b)).toContain('Alice notes');
+    expect(text(b)).toContain('Shipping');
+    expect(text(b)).not.toContain('NOTICE');
+    expect(text(b)).not.toContain('DELIVERY');
+    rejoined = await peer('Carol', b);
+    expect(await fingerprint(rejoined)).toBe(redone);
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    expect(await converged(a, b)).toBe(before);
+  } finally {
+    rejoined?.close();
+    b.close();
+    a.close();
+  }
+});
+
+test('a host change listener cannot interrupt a multi-batch shared preview commit', async () => {
+  const a = await peer('Alice');
+  const b = await peer('Bob', a);
+  let stop = () => {};
+  try {
+    const original = await converged(a, b);
+    const preview = await a.runtime.preview(async (context) => {
+      context.document.body.search('Notice').getFirst().insertText('NOTICE', 'Replace');
+      await context.sync();
+      context.document.body.search('Delivery').getFirst().insertText('DELIVERY', 'Replace');
+      await context.sync();
+    });
+    let observed = '';
+    stop = a.editor.on('change', () => {
+      if (observed || !text(a).includes('NOTICE')) return;
+      observed = text(a);
+      a.editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+    });
+    await preview.commit();
+    expect(observed).toContain('NOTICE');
+    expect(observed).toContain('DELIVERY');
+    sync(a, b);
+    await converged(a, b);
+    expect(text(b)).toContain('NOTICE');
+    expect(text(b)).toContain('DELIVERY');
+    stop();
+    a.editor.exec({ type: 'setEditingMode', mode: 'editing' });
+    expect(a.editor.exec({ type: 'undo' }).ok).toBe(true);
+    sync(a, b);
+    expect(await converged(a, b)).toBe(original);
+    expect(a.editor.exec({ type: 'redo' }).ok).toBe(true);
+    sync(a, b);
+    await converged(a, b);
+    expect(text(b)).toContain('NOTICE');
+    expect(text(b)).toContain('DELIVERY');
+  } finally {
+    stop();
+    b.close();
+    a.close();
+  }
+});

@@ -89,17 +89,26 @@ A check such as `node instanceof HTMLElement` is `false` for an element of anoth
 The following example binds a keyboard shortcut to the editor's current document and moves it when the editor moves:
 
 ```ts
-import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { editorHostElement, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
 
 declare const editor: DocxEditorInstance;
 declare function onShortcut(event: KeyboardEvent): void;
 
 let bound: Document | null = null;
-editor.on('hostChange', ({ document }) => {
+function bind(document: Document | null) {
   bound?.removeEventListener('keydown', onShortcut);
   bound = document;
   bound?.addEventListener('keydown', onShortcut);
-});
+}
+
+const unsubscribe = editor.on('hostChange', ({ document }) => bind(document));
+bind(editorHostElement(editor)?.ownerDocument ?? null);
+
+// Call when your custom chrome unmounts.
+function dispose() {
+  unsubscribe();
+  bind(null);
+}
 ```
 
 While the editor is detached, `hostChange` reports `null`.

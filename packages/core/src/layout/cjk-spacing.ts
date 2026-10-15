@@ -347,14 +347,16 @@ export function canHangCjkPunctuation(
   piece: FieldAwarePiece,
   remaining: number,
   width: number,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  allowFullwidth = true
 ): boolean {
   if (piece.projected || piece.measureText !== undefined) return false;
   // Hanging is enabled by default. Ordinary Latin words/spaces must not allocate
   // a grapheme array on every placement candidate just to discover no punctuation.
   const tail = text[text.length - 1];
   if (!tail || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(tail)) return false;
-  if (!FULLWIDTH_PUNCTUATION.test(tail) && !eastAsianLanguage(piece.props)) return false;
+  const fullwidth = FULLWIDTH_PUNCTUATION.test(tail);
+  if (fullwidth ? !allowFullwidth : !eastAsianLanguage(piece.props)) return false;
   const last = segmentGraphemes(text).at(-1)?.text;
   if (!last || !/^[\p{Pe}\p{Pf}\p{Po}]$/u.test(last)) return false;
   const advance = measureDisplayText(last, styleForFontSlot(piece.style, piece.fontSlot), measurer);

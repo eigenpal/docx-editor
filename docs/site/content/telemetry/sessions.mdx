@@ -28,7 +28,7 @@ Every event of one session has the same `editorSessionId`. A reload creates a ne
 
 `activeMs` counts the time between key presses, pointer presses, and edits that are at most 30 seconds apart. A longer pause counts as idle. A single key press after a long pause adds no active time; the time until the next press within 30 seconds does.
 
-`durationMs` on a `performance` event and on a session `end` includes idle time. Use `activeMs` to measure use.
+`windowMs` on a `performance` event includes idle time. So does `durationMs` on a session `end`. Use `activeMs` to measure use.
 
 ## Edits
 
@@ -40,7 +40,7 @@ An edit is a change that this editor committed to the document. Edits are counte
 
 Refused edits are not edits; the editor reports them as `edit.rejected`. Edits that collaborators make are counted by their own editors, not by yours. An action that changes nothing, such as redo with nothing to redo, is not counted.
 
-To get an edit failure rate, divide refused edits by all edit attempts, which are edits plus refused edits. Use metrics for both counts. Events are deduplicated and sampled, so a rate from events is lower than the real rate.
+To get an edit failure rate, divide refused edits by all edit attempts, which are edits plus refused edits. Use metrics for both counts. Events are deduplicated and sampled, so event counts do not give a reliable failure rate.
 
 ## Save events
 

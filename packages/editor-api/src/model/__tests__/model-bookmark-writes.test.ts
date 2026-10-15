@@ -336,3 +336,32 @@ describe('Document bookmarks by name', () => {
     expect(await mainXmlOf(runtime)).not.toContain('w:name="rng"');
   });
 });
+
+test('moving a bookmark into a third story removes every old part copy', async () => {
+  const runtime = await serverRuntime(WITH_BOOKMARKED_STORIES);
+  try {
+    await runtime.run(async (context) => {
+      context.document.sections
+        .getFirst()
+        .getFooter('Primary')
+        .getRange('Whole')
+        .insertBookmark('Duplicate');
+      await context.sync();
+    });
+    for (const current of [runtime, await reopen(runtime)]) {
+      const text = await current.run(async (context) => {
+        const range = context.document.getBookmarkRange('Duplicate');
+        range.load('text');
+        await context.sync();
+        return range.text;
+      });
+      expect(text).toBe('in the footer');
+      const files = unzipSync(await current.save());
+      expect(strFromU8(files['word/document.xml']!)).not.toContain('w:name="Duplicate"');
+      expect(strFromU8(files['word/header1.xml']!)).not.toContain('w:name="Duplicate"');
+      if (current !== runtime) current.dispose();
+    }
+  } finally {
+    runtime.dispose();
+  }
+});

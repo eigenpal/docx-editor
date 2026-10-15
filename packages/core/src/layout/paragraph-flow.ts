@@ -278,7 +278,8 @@ export function breakParagraph(
     pieces,
     cjkBreaks,
     measurer,
-    typography.overflowPunctuation
+    typography.overflowPunctuation,
+    typography.overflowFullwidthPunctuation !== false
   );
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>
@@ -1388,7 +1389,14 @@ export function breakParagraph(
       width = clippedWordEnd?.width ?? width;
       const hangs =
         typography.overflowPunctuation &&
-        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
+        canHangCjkPunctuation(
+          candidate,
+          piece,
+          lineAvailable() - line.width,
+          width,
+          measurer,
+          typography.overflowFullwidthPunctuation !== false
+        );
       const applyOpticalFit =
         opticalCompression && sameParagraphAnchorStarts.length === 0
           ? () => {

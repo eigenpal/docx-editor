@@ -95,7 +95,9 @@ A range across paragraphs also becomes stale if an intervening paragraph changes
 
 ## Keep writes within one story
 
-A story is the main body, a header, a footer, or another document text container. One `context.sync()` can write only one story. Writes across stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
+A story is the main body, a header, a footer, or another document text container. Text and formatting writes in one `context.sync()` must target one story. Writes to multiple stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
+
+Bookmark removal is an exception: `Document.deleteBookmark()` and `Bookmark.delete()` can share a sync with writes to another story. Inserting a bookmark can also move an existing name from another story in the same transaction.
 
 If the document has a primary header and footer, resolve both objects before formatting them. Then commit each story's writes separately:
 

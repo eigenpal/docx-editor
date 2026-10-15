@@ -77,7 +77,9 @@ Proxies returned by insertions require a completed `sync()` before dependent ope
 
 ## Keep writes within one story
 
-A story is the main body, a header, a footer, or another document text container. One `context.sync()` can write only one story. Writes across stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
+A story is the main body, a header, a footer, or another document text container. Text and formatting writes in one `context.sync()` must target one story. Writes to multiple stories fail with `ConflictingChanges`. Reads from different stories can share a sync.
+
+Bookmark removal is an exception: `Document.deleteBookmark()` and `Bookmark.delete()` can share a sync with writes to another story. Inserting a bookmark can also move an existing name from another story in the same transaction.
 
 If the document has a primary header and footer, resolve both objects before formatting them. Then commit each story's writes separately:
 
@@ -175,7 +177,15 @@ preview.reveal();
 await preview.commit({ rebase: true }); // or preview.discard()
 ```
 
-`commit()` replays the recorded batches as one undo step; it never runs the callback again. Every replayed read must answer what it answered in the preview. If the live document moved after the preview began, `commit()` refuses with `StaleDocument`, writes nothing, and keeps the preview. `commit({ rebase: true })` applies it to the current document, with ranges following their text, and refuses only when a replayed read answers differently or a write would overwrite text that changed. On that refusal, read again and build a new preview; never replay the model's old edit. While a preview shows, the editor refuses document writes, and other runs refuse writes with `PreviewActive`. A preview refuses writes it cannot show, such as tables and pictures, with `NotSupported`. Server and collaborative runtimes refuse `preview()` with `NotSupported`. This method is DocxEditor infrastructure with no Office.js equivalent.
+`commit()` replays the recorded batches as one undo step. It never runs the callback again. Every replayed read must match its preview result. If the live document changed, `commit()` refuses with `StaleDocument` and keeps the preview open. That refusal writes nothing.
+
+`commit({ rebase: true })` applies the recorded edits to the current document. Ranges follow their text. A changed read result or replacement target causes a refusal. The live editor can also refuse the commit, for example if permissions change. Commit validates all recorded batches on a fresh document copy before writing. A validation refusal ends the preview without changing live content or undo and redo history.
+
+Editor event listeners and preview status listeners run after replay and its history group finish. They observe the completed edit. Listener edits cannot interrupt a partially committed preview, and listener exceptions do not change the commit result. Unexpected live replay failures undo earlier writes. If undo fails, inspect `GeneralException` with target `preview.rollback` before further writes.
+
+After a replay refusal, read again and build a new preview. Never repeat the model's old edit without reconsidering it. While a preview shows, the editor refuses document writes. Other runs refuse writes with `PreviewActive`. A preview refuses unsupported writes, such as tables and pictures, with `NotSupported`.
+
+Server and collaborative runtimes refuse `preview()` with `NotSupported`. This method is DocxEditor infrastructure with no Office.js equivalent.
 
 ## Keep proxy lifetimes clear
 
@@ -301,7 +311,8 @@ Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a
 A counterparty's pending insertion is ordinary text to a tracked edit. Replace it, delete part of it, or write inside it. Your changes record under the runtime author, and each author's change stays a separate decision. New text inside their insertion splits it, so their insertion becomes two revisions, one on each side of your text. To accept or reject all of their insertion, decide both revisions, or pass both to `revisions.resolve(action, [first, second])`. In a collaboration session, the API refuses strikes over another author's pending insertion or deletion, and edits that start inside or right after one, with `edit.tracked-foreign-revision-unsupported`. In the following example, the agent replaces a counterparty's proposed term, then rejects only its own revisions:
 
 ```ts
-await editor.run(async (context) => {
+// Create runtime with author: 'Avery Chen' before this example.
+await runtime.run(async (context) => {
   context.document.changeTrackingMode = 'TrackMineOnly';
   const proposed = context.document.body
     .search('thirty (30) days of receipt', { matchCase: true })
@@ -310,11 +321,9 @@ await editor.run(async (context) => {
   proposed.insertText('forty-five (45) days of receipt', 'Replace');
   await context.sync();
 
-  // Load the revisions again after the edit. Read author and type in one sync.
+  // Load the revisions again after the edit.
   const revisions = context.document.body.revisions;
-  revisions.load('items');
-  await context.sync();
-  for (const revision of revisions.items) revision.load('author,type');
+  revisions.load('items/author');
   await context.sync();
 
   // Reject only this agent's changes. The counterparty's insertion stays pending.

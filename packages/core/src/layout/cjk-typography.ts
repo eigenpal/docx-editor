@@ -27,8 +27,10 @@ export interface CjkTypographySettings {
 export interface CjkParagraphTypography {
   readonly settings?: CjkTypographySettings;
   readonly kinsoku: boolean;
-  /** Punctuation may hang past the margin: `w:overflowPunct` on a justified paragraph. */
+  /** Authored `w:overflowPunct` switch, including language-enabled Latin punctuation. */
   readonly overflowPunctuation: boolean;
+  /** Full-width punctuation hangs only on justified paragraphs. */
+  readonly overflowFullwidthPunctuation?: boolean;
   readonly characterWrap: boolean;
 }
 
@@ -105,12 +107,13 @@ export function resolveCjkTypography(
     if (prop.localName === 'wordWrap') characterWrap = !on(prop.attributes?.val);
     if (prop.localName === 'jc') justified = JUSTIFIED.has(prop.attributes?.val ?? '');
   }
-  // Punctuation hangs past the margin only on justified lines. Left, centred, and
-  // right-aligned lines move the punctuation to the next line instead.
+  // Full-width punctuation requires justification. Latin punctuation selected by
+  // an East Asian run language keeps the authored overflow switch in every alignment.
   return {
     settings,
     kinsoku,
-    overflowPunctuation: overflowPunctuation && justified,
+    overflowPunctuation,
+    overflowFullwidthPunctuation: overflowPunctuation && justified,
     characterWrap,
   };
 }

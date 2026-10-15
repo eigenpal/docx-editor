@@ -23,10 +23,11 @@ import type { EditOptions } from '../package/ooxml-edit.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { bookmarkNameKey, bookmarkNameProblem } from '../package/bookmark-names.ts';
-import { listBookmarks } from '../package/bookmark-list.ts';
+import { listBookmarks, listBookmarkPairs } from '../package/bookmark-list.ts';
 import { bookmarkPairNodes } from '../package/toc-build.ts';
 import { DEPENDENCY_KEY_IDS } from '../registry/frozen-ids.ts';
 import { nextBookmarkId } from './tree-op-bookmark-ids.ts';
+import { PackageEditRefusal } from './package-edit-refusal.ts';
 import { markerSiteAt } from './tree-op-comments.ts';
 import { effectiveContentLockAt, isBoundAt } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex } from './tree-op-segments.ts';
@@ -63,6 +64,8 @@ export interface DeleteBookmarkOp {
   readonly op: 'deleteBookmark';
   readonly name: string;
   readonly keepFirst?: boolean;
+  /** @internal Limit a text deletion to one enclosed pair; explicit name deletion omits this. */
+  readonly pair?: { readonly startNodeId: string; readonly endNodeId: string };
 }
 
 export type BookmarkTreeOp = InsertBookmarkOp | DeleteBookmarkOp;
@@ -118,6 +121,18 @@ function markerIdsNamed(part: OoxmlPart, name: string): readonly string[] {
   return [...starts, ...ends.filter((end) => ids.has(end.markerId)).map((end) => end.nodeId)];
 }
 
+/** Exact canonical marker identities remain unambiguous when file-level ids repeat. */
+function exactPairIds(part: OoxmlPart, op: DeleteBookmarkOp): readonly string[] {
+  const key = bookmarkNameKey(op.name);
+  const found = listBookmarkPairs(part).find(
+    (record) =>
+      record.startNodeId === op.pair?.startNodeId &&
+      record.endNodeId === op.pair?.endNodeId &&
+      bookmarkNameKey(record.name) === key
+  );
+  return found ? [found.startNodeId, found.endNodeId] : [];
+}
+
 /** The bookmark a name means in this part: the first, as `listBookmarks` answers. */
 function firstNamed(part: OoxmlPart, name: string) {
   const key = bookmarkNameKey(name);
@@ -152,6 +167,21 @@ function validPosition(part: OoxmlPart, position: BookmarkOpPosition): TreeOpRej
   return null;
 }
 
+function removedMarkerIds(part: OoxmlPart, op: BookmarkTreeOp): readonly string[] {
+  const kept = op.op === 'deleteBookmark' && op.keepFirst ? firstNamed(part, op.name) : undefined;
+  const ids =
+    op.op === 'deleteBookmark' && op.pair ? exactPairIds(part, op) : markerIdsNamed(part, op.name);
+  return ids.filter((id) => id !== kept?.startNodeId && id !== kept?.endNodeId);
+}
+
+function markerRemovalRefusal(part: OoxmlPart, op: BookmarkTreeOp): TreeOpRejection | null {
+  for (const id of removedMarkerIds(part, op)) {
+    if (isBoundAt(part, id)) return 'bound';
+    if (effectiveContentLockAt(part, id).content) return 'locked';
+  }
+  return null;
+}
+
 /** Refuse a bookmark op before any tree work, so a refusal is a true no-op. */
 export function validateBookmarkOp(part: OoxmlPart, op: BookmarkTreeOp): TreeOpRejection | null {
   if (typeof op.name !== 'string') return 'invalidArgs';
@@ -159,8 +189,17 @@ export function validateBookmarkOp(part: OoxmlPart, op: BookmarkTreeOp): TreeOpR
   if (op.op === 'deleteBookmark') {
     if (op.name.length === 0 || op.name.length > MAX_DELETED_NAME_LENGTH) return 'invalidArgs';
     if (op.keepFirst !== undefined && typeof op.keepFirst !== 'boolean') return 'invalidArgs';
-    if (op.keepFirst) return (firstNamed(part, op.name)?.copies ?? 0) > 1 ? null : 'invalidArgs';
-    return markerIdsNamed(part, op.name).length > 0 ? null : 'invalidArgs';
+    if (op.pair !== undefined) {
+      if (!op.pair || typeof op.pair !== 'object' || op.keepFirst) return 'invalidArgs';
+      return exactPairIds(part, op).length === 2 ? markerRemovalRefusal(part, op) : 'invalidArgs';
+    }
+    if (op.keepFirst)
+      return (firstNamed(part, op.name)?.copies ?? 0) > 1
+        ? markerRemovalRefusal(part, op)
+        : 'invalidArgs';
+    return markerIdsNamed(part, op.name).length > 0
+      ? markerRemovalRefusal(part, op)
+      : 'invalidArgs';
   }
   if (bookmarkNameProblem(op.name) !== null) return 'invalidArgs';
   const start = validPosition(part, op.start);
@@ -169,7 +208,7 @@ export function validateBookmarkOp(part: OoxmlPart, op: BookmarkTreeOp): TreeOpR
   if (end) return end;
   const order = paragraphOrder(part, op.start.paragraphId, op.end.paragraphId);
   if (order > 0 || (order === 0 && op.start.offset > op.end.offset)) return 'invalid-range';
-  return null;
+  return markerRemovalRefusal(part, op);
 }
 
 /** Apply a validated bookmark op. */
@@ -182,9 +221,7 @@ export function applyBookmarkOp(
   if (rejection) return { ok: false, reason: rejection };
   const dirty = new Set<string>();
   let current = part;
-  const kept = op.op === 'deleteBookmark' && op.keepFirst ? firstNamed(part, op.name) : undefined;
-  for (const nodeId of markerIdsNamed(part, op.name)) {
-    if (nodeId === kept?.startNodeId || nodeId === kept?.endNodeId) continue;
+  for (const nodeId of removedMarkerIds(part, op)) {
     const paragraph = paragraphOf(current, nodeId);
     if (paragraph) dirty.add(paragraph);
     const removed = removeNode(current, nodeId, options);
@@ -228,7 +265,7 @@ export function applyBookmarkOp(
 /**
  * The package with every bookmark of this name removed from one part, for moving a name out
  * of another story inside the same transaction. The package is unchanged when that part does
- * not declare the name.
+ * not declare the name. Protected markers refuse the whole package transaction.
  */
 export function withoutBookmarkInPart(
   pkg: OoxmlPackage,
@@ -238,7 +275,10 @@ export function withoutBookmarkInPart(
   const part = pkg.parts.get(partName);
   if (!part) return pkg;
   const result = applyBookmarkOp(part, { op: 'deleteBookmark', name });
-  // A delete refuses only a name the part does not declare, which is already the result.
+  // Refuse the whole package transaction when another story protects these markers.
+  if (!result.ok && (result.reason === 'locked' || result.reason === 'bound')) {
+    throw new PackageEditRefusal('bookmark markers are protected', result.reason);
+  }
   return result.ok ? withPart(pkg, result.part) : pkg;
 }
 
@@ -264,18 +304,18 @@ export function enclosedBookmarkDeletions(
   };
   if (!index.has(from.paragraphId) || !index.has(to.paragraphId)) return [];
   const ops: DeleteBookmarkOp[] = [];
-  const seen = new Set<string>();
-  for (const record of listBookmarks(part)) {
+  for (const record of listBookmarkPairs(part)) {
     if (!index.has(record.start.paragraphId) || !index.has(record.end.paragraphId)) continue;
     const point = compare(record.start, record.end) === 0;
     const enclosed = point
       ? compare(from, record.start) < 0 && compare(record.start, to) < 0
       : compare(from, record.start) <= 0 && compare(record.end, to) <= 0;
-    // One op per name: a delete removes every pair of its name, so a second would refuse.
-    if (enclosed && !seen.has(bookmarkNameKey(record.name))) {
-      seen.add(bookmarkNameKey(record.name));
-      ops.push({ op: 'deleteBookmark', name: record.name });
-    }
+    if (enclosed)
+      ops.push({
+        op: 'deleteBookmark',
+        name: record.name,
+        pair: { startNodeId: record.startNodeId, endNodeId: record.endNodeId },
+      });
   }
   return ops;
 }

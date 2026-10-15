@@ -157,8 +157,11 @@ export interface DocumentPreview<T = void> {
   /**
    * Write the preview to the live document as one undo step, then end the preview.
    *
-   * Commit replays the preview's batches, in order, against the live document inside one
-   * editor history group. It never runs the callback again. A tracking mode the callback set
+   * Commit first validates every recorded batch against a fresh fork of the live document.
+   * A divergent read changes neither the live document nor its undo and redo history.
+   * It then replays the batches against the live document inside one editor history group.
+   * Editor event listeners run after replay and its history group finish.
+   * It never runs the callback again. A tracking mode the callback set
    * stays set on this runtime afterwards, as it does after `run()`.
    *
    * Refusals:
@@ -232,6 +235,7 @@ export type PreviewForkRefusal =
 
 /** The fork the browser editor lends a preview. @internal */
 export interface PreviewFork {
+  deferEvents<T>(run: () => T): T;
   readonly host: AutomationHost;
   show(): boolean;
   reveal(): boolean;
@@ -418,6 +422,8 @@ function seedTracking(runtime: PreviewRuntime, fork: AutomationHost): void {
 
 class Preview<T> implements DocumentPreview<T> {
   #status: DocumentPreviewStatus = 'active';
+  #deferringStatus = false;
+  readonly #pendingStatus: Array<() => void> = [];
   readonly #listeners = new Set<(status: DocumentPreviewStatus) => void>();
   #unsubscribe: (() => void) | undefined;
   #unsubscribeEnd: (() => void) | undefined;
@@ -457,45 +463,81 @@ class Preview<T> implements DocumentPreview<T> {
 
   async commit(options: CommitPreviewOptions = {}): Promise<void> {
     if (this.#status === 'ended') fail({ code: 'PreviewEnded', target: 'preview' });
-    const rebase = options?.rebase === true;
-    const actual = this.runtime.host.revision();
-    const moved = actual !== this.base;
-    if (moved) this.#set('stale');
-    // Refused BEFORE anything ends: the preview stays, so the caller can rebase or discard.
-    if (moved && !rebase) {
-      fail({
-        code: 'StaleDocument',
-        target: 'preview',
-        expectedRevision: this.base,
-        actualRevision: actual,
+    this.#deferringStatus = true;
+    try {
+      const rebase = options?.rebase === true;
+      const actual = this.runtime.host.revision();
+      const moved = actual !== this.base;
+      if (moved) this.#set('stale');
+      // Refuse before ending: the caller can still rebase or discard the preview.
+      if (moved && !rebase) {
+        fail({
+          code: 'StaleDocument',
+          target: 'preview',
+          expectedRevision: this.base,
+          actualRevision: actual,
+        });
+      }
+      // Lift the write guard before replay, but keep host listeners outside the commit.
+      this.fork.deferEvents(() => {
+        this.#end();
+        this.#validateReplay(actual, moved);
+        this.#replay(actual, moved);
       });
+    } finally {
+      this.#deferringStatus = false;
+      for (const notify of this.#pendingStatus.splice(0)) notify();
     }
-    // Ended before the replay: the write guard must lift before the live editor can take it.
-    this.#end();
-    this.#replay(actual, moved);
+  }
+
+  /** Validate every batch on a fresh fork before a live write can change undo or redo. */
+  #validateReplay(liveBase: number, moved: boolean): void {
+    const begun = this.runtime.port.begin();
+    if (!begun.ok) throw forkRefusal(begun.reason);
+    const fork = begun.fork;
+    try {
+      seedTracking(this.runtime, fork.host);
+      const outcome = replayPreview(
+        this.log,
+        { execute: (request) => fork.host.execute(request), revision: () => fork.host.revision() },
+        this.forkBase,
+        fork.host.revision()
+      );
+      if (!outcome.ok) this.#refuseReplay(outcome.refusal, liveBase, moved);
+    } finally {
+      fork.end();
+    }
   }
 
   #replay(liveBase: number, moved: boolean): void {
     const { runtime } = this;
     const group = runtime.port.beginHistoryGroup();
     const run = runtime.groupRun(group);
-    const outcome = replayPreview(
-      this.log,
-      {
-        execute: (request) => (run ? run.execute(request) : runtime.host.execute(request)),
-        revision: () => runtime.host.revision(),
-      },
-      this.forkBase,
-      liveBase
-    );
-    run?.finish();
-    group.end();
+    let outcome: ReturnType<typeof replayPreview>;
+    try {
+      outcome = replayPreview(
+        this.log,
+        {
+          execute: (request) => (run ? run.execute(request) : runtime.host.execute(request)),
+          revision: () => runtime.host.revision(),
+        },
+        this.forkBase,
+        liveBase
+      );
+    } finally {
+      run?.finish();
+      group.end();
+    }
     if (outcome.ok) return;
     // The replayed writes are one step of the group: one undo takes all of them back.
     if (outcome.wrote && !runtime.port.undo()) {
       fail({ code: 'GeneralException', target: 'preview.rollback' });
     }
-    if (outcome.refusal) throw outcome.refusal;
+    this.#refuseReplay(outcome.refusal, liveBase, moved);
+  }
+
+  #refuseReplay(refusal: DocxEditorError | null, liveBase: number, moved: boolean): never {
+    if (refusal) throw refusal;
     // A disagreement on a document that moved is the move's doing; on one that did not, it is
     // the engine's.
     fail(
@@ -515,11 +557,15 @@ class Preview<T> implements DocumentPreview<T> {
     if (this.#status === status || this.#status === 'ended') return;
     this.#status = status;
     for (const listener of [...this.#listeners]) {
-      try {
-        listener(status);
-      } catch {
-        /* a listener must never change what the preview does */
-      }
+      const notify = () => {
+        try {
+          listener(status);
+        } catch {
+          /* a listener must never change what the preview does */
+        }
+      };
+      if (this.#deferringStatus) this.#pendingStatus.push(notify);
+      else notify();
     }
   }
 

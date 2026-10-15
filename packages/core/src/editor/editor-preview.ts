@@ -66,6 +66,8 @@ export type EditorPreviewRefusal =
  * @internal
  */
 export interface EditorPreviewFork {
+  /** Defer host event listeners until a synchronous commit finishes. */
+  deferEvents<T>(run: () => T): T;
   /** An automation host over the fork. Its writes never reach the live editor. */
   readonly host: AutomationHost;
   /**
@@ -87,6 +89,7 @@ export interface EditorPreviewFork {
 
 /** What the facade lends a preview. */
 interface PreviewHost {
+  readonly deferEvents: <T>(run: () => T) => T;
   /** The options the facade's own mount paints with. */
   readonly displayOptions: () => PaginatedSurfaceRuntimeOptions;
   /** Publish a state change: the write guard moves `snapshot().editable`. */
@@ -192,6 +195,7 @@ export function beginEditorPreview(
   });
 
   const fork: EditorPreviewFork = {
+    deferEvents: record.deferEvents,
     host,
     get shown() {
       return display !== null;
