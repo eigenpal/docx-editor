@@ -18,7 +18,10 @@ export function dictionaryParagraphBreaks(cuts: PieceDictionaryCuts): CjkParagra
       if (offset === 0 && cuts.startsAtCut(piece)) return 'opens';
       return lineOpenDecisionAt(lastEmitted, candidate, offset > 0);
     },
-    cutAllowed: (piece, candidateStart, index) =>
-      cjkChopCutAllowedAt(piece.text.slice(candidateStart), index),
+    cutAllowed(piece, candidateStart, index) {
+      // The chop asks about one candidate: from its start to the next boundary.
+      const end = cuts.boundaries(piece).find((boundary) => boundary > candidateStart);
+      return cjkChopCutAllowedAt(piece.text.slice(candidateStart, end), index);
+    },
   };
 }

@@ -302,7 +302,7 @@ A line can end after a zero-width space (U+200B) in any script, and never starts
 
 Word boundaries come from `Intl.Segmenter` with ICU dictionary data for each script. Major browsers, Bun, and Node.js builds with full ICU data, which is the default, include this data. Node.js built with `small-icu` and React Native on Hermes do not. In those runtimes, text in these scripts wraps only at spaces, zero-width spaces, and dashes. Break positions come from the ICU dictionaries of the runtime, so they can differ between ICU versions.
 
-To check support, or to supply your own dictionary, use the functions in `@docx-editor.dev/core/layout`. Install a segmenter before the first layout. Layout sessions keep the lines that they laid out before.
+To check support, or to supply your own dictionary, use the functions in `@docx-editor.dev/core/layout`. If you install a segmenter while a document is open, the next layout pass breaks the text again with it. An editor shows the new line breaks at its next layout, for example after the next edit.
 
 ```ts
 import {

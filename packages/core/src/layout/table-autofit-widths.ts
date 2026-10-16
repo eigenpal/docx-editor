@@ -55,7 +55,7 @@ import {
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { preferredSpreadWidths } from './table-autofit-spread.ts';
 import type { PreferredWidth } from './table-widths.ts';
-import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
 /**
  * What autofit needs from layout to measure each cell the way layout paints it.
@@ -396,7 +396,7 @@ export function paragraphContentWidthsPt(
       }
       // Measured as line breaking measures it, so the advance comes from the same cache;
       // the trailing spaces it hangs are priced on their own.
-      const ink = withoutTrailingSpaces(candidate);
+      const ink = withoutLineEndWhitespace(candidate);
       const full = measure(candidate);
       advance(full, ink.length === candidate.length ? 0 : full - (ink ? measure(ink) : 0));
       if (lineStart && ink.length === 0) {

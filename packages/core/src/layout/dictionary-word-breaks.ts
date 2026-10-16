@@ -20,7 +20,7 @@
 // one runtime, not across runtimes.
 
 import { clusterBreaksBetween } from './cjk-line-break.ts';
-import { segmentGraphemes } from './grapheme.ts';
+import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { createIntlWordBoundary, isIntlWordSegmenterAvailable } from './word-segment.ts';
 
 /**
@@ -115,6 +115,8 @@ let defaultSegmenter: DictionaryWordSegmenter | null | undefined;
 let support: Partial<Record<DictionaryScript, boolean>> = {};
 const runCache = new Map<string, readonly number[]>();
 const textCache = new Map<string, readonly number[]>();
+let segmenterEpoch = 0;
+let cachedGraphemeEpoch = -1;
 
 /**
  * Install the dictionary word segmenter that line breaking and table AutoFit use, for a
@@ -122,16 +124,15 @@ const textCache = new Map<string, readonly number[]>();
  * built with `small-icu`). `null` turns dictionary word breaks off: these scripts then wrap
  * only at spaces, zero-width spaces, and dashes.
  *
- * Install it before layout. Layout sessions keep the lines they cached under the previous
- * segmenter. Each script is probed again through the new segmenter. Call
+ * The next layout pass re-breaks text instead of serving lines cached under the previous
+ * segmenter: layout sessions and paragraph break caches key on the segmenter generation. Each script is probed again through the new segmenter. Call
  * {@link resetDictionaryWordSegmenter} to restore `Intl.Segmenter`.
  * @public
  */
 export function setDictionaryWordSegmenter(segmenter: DictionaryWordSegmenter | null): void {
   override = segmenter;
-  support = {};
-  runCache.clear();
-  textCache.clear();
+  segmenterEpoch += 1;
+  clearCaches();
 }
 
 /**
@@ -140,9 +141,34 @@ export function setDictionaryWordSegmenter(segmenter: DictionaryWordSegmenter | 
  */
 export function resetDictionaryWordSegmenter(): void {
   override = undefined;
+  segmenterEpoch += 1;
+  clearCaches();
+}
+
+/**
+ * Bumped by {@link setDictionaryWordSegmenter} and {@link resetDictionaryWordSegmenter}. The
+ * pass producer folds it in, so paragraph break caches and layout sessions re-break text
+ * under the new segmenter instead of serving lines from the old one.
+ */
+export function dictionaryWordSegmenterEpoch(): number {
+  return segmenterEpoch;
+}
+
+function clearCaches(): void {
   support = {};
   runCache.clear();
   textCache.clear();
+}
+
+/**
+ * Probe results and cached cuts depend on the grapheme boundary too (the probe counts
+ * clusters, cuts are filtered by them), so a boundary change drops them.
+ */
+function syncGraphemeEpoch(): void {
+  const epoch = graphemeBoundaryEpoch();
+  if (epoch === cachedGraphemeEpoch) return;
+  cachedGraphemeEpoch = epoch;
+  clearCaches();
 }
 
 function activeSegmenter(): DictionaryWordSegmenter | null {
@@ -161,6 +187,7 @@ function activeSegmenter(): DictionaryWordSegmenter | null {
  * @public
  */
 export function isDictionaryWordBreakSupported(script: DictionaryScript): boolean {
+  syncGraphemeEpoch();
   const known = support[script];
   if (known !== undefined) return known;
   const segmenter = activeSegmenter();
@@ -233,6 +260,7 @@ export function dictionaryWordBreaks(text: string): readonly number[] {
   if (!hasDictionaryScriptText(text)) return NO_CUTS;
   const segmenter = activeSegmenter();
   if (!segmenter) return NO_CUTS;
+  syncGraphemeEpoch();
   const cacheable = text.length <= MAX_CACHED_TEXT_UNITS;
   const cached = cacheable ? textCache.get(text) : undefined;
   if (cached) return cached;

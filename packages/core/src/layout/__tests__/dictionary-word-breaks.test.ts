@@ -17,6 +17,7 @@ import {
 import * as layoutApi from '../index.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
+import type { TextMeasurer } from '../semantic-records.ts';
 import { paragraphMinimumWidthPt } from '../table-autofit-widths.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -243,6 +244,51 @@ describe('zero-width space', () => {
     // ฉัน plus its zero-width space is the widest of the six words at four units.
     expect(minimumOf(`<w:p>${run(spaced)}</w:p>`)).toBeCloseTo(30, 5);
     expect(minimumOf(`<w:p>${run('ฉัน\u200b')}${run('อยาก')}</w:p>`)).toBeCloseTo(24, 5);
+  });
+});
+
+describe('a space next to a zero-width space', () => {
+  // A zero-width space takes no width in a shaped font; the fixed measurer gives it 6pt.
+  const zero: TextMeasurer = {
+    ...measurer,
+    measure: (text, style) => measurer.measure(text.replace(/\u200b/gu, ''), style),
+  };
+  const zeroLines = (body: string, width: number) =>
+    breakParagraph(paragraph(body), 'p', 0, width, zero, undefined, null).map((line) =>
+      line.spans.map((span) => span.text).join('')
+    );
+  const zeroMinimum = (body: string) =>
+    paragraphMinimumWidthPt(paragraph(body) as OoxmlElement, {
+      context: { measurer: zero },
+      view: {
+        styleCascade: undefined,
+        displayMode: 'all-markup',
+        authorFilter: undefined,
+        readNested: () => null,
+      },
+      tableCellStyle: undefined,
+    });
+
+  test('hangs with the space at the line end, before or after it', () => {
+    for (const text of ['xxalpha \u200bbeta', 'xxalpha\u200b beta']) {
+      const lines = zeroLines(`<w:p>${run(text)}</w:p>`, 42);
+      expect(lines.map((line) => line.replace(/\u200b/gu, '').trimEnd())).toEqual([
+        'xxalpha',
+        'beta',
+      ]);
+      for (const line of lines) expect(line).not.toMatch(/^[ \u200b]/u);
+      expect(zeroMinimum(`<w:p>${run(text)}</w:p>`)).toBeCloseTo(42, 5);
+    }
+    expect(zeroLines(`<w:p>${run('中文alpha \u200bbeta')}</w:p>`, 42)).toEqual([
+      '中文alpha \u200b',
+      'beta',
+    ]);
+    expect(zeroLines(`<w:p>${run('ฉันอยาก \u200bกินข้าว')}</w:p>`, 24)).toEqual([
+      'ฉัน',
+      'อยาก \u200b',
+      'กิน',
+      'ข้าว',
+    ]);
   });
 });
 

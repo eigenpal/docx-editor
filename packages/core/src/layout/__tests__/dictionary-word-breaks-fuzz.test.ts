@@ -100,7 +100,9 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
     const next = text[i + 1];
     // Never before a space or a zero-width space (UAX #14 LB7).
     if (ch === ' ' && next !== undefined && next !== ' ' && next !== '\u200b') legal.add(i + 1);
-    if (ch === '​' && next !== undefined) legal.add(i + 1);
+    // ZW SP* ÷: after a zero-width space, past the spaces that follow it.
+    if (ch === '\u200b' && next !== undefined && next !== ' ' && next !== '\u200b')
+      legal.add(i + 1);
     if (ch === '\t') {
       if (i > 0) legal.add(i);
       if (next !== undefined) legal.add(i + 1);
@@ -122,7 +124,7 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
 /** Width of text: a zero-width space takes none. */
 const widthPt = (text: string): number => text.replace(/\u200b/gu, '').length * UNIT;
 /** Ink width of a line or word: trailing spaces hang and take no width. */
-const inkPt = (text: string): number => widthPt(text.replace(/ +$/u, ''));
+const inkPt = (text: string): number => widthPt(text.replace(/[ \u200b]+$/u, ''));
 
 /** The words between legal breaks, as [start, end) ranges. */
 function wordsOf(text: string, legal: ReadonlySet<number>): [number, number][] {
@@ -162,7 +164,7 @@ const THAI_WORDS = [
   'กรุงเทพมหานคร',
 ];
 const OTHER_WORDS = ['ພາສາລາວ', 'ភាសាខ្មែរ', 'မြန်မာ', 'ABC', 'word', '123', '๒๕๖๕', '2026'];
-const SEPARATORS = [' ', ' ', '-', '  ', '​', '​', ' '];
+const SEPARATORS = [' ', ' ', '-', '  ', '\u200b', '\u200b', '\u00a0', ' \u200b', '\u200b '];
 
 type Rand = () => number;
 const pick = <T>(rand: Rand, items: readonly T[]): T => items[Math.floor(rand() * items.length)]!;

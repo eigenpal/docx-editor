@@ -16,6 +16,7 @@
 // line slack as published geometry. Layout-owned field results remain atomic.
 
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
+import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
 /**
  * Whether the code point takes ideographic line breaking — a break opportunity on both
@@ -176,9 +177,12 @@ export function wordBoundaries(text: string, ideographic: boolean): number[] {
       if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
       boundaries.push(index + 1);
     } else if (ch === ' ' || ch === ZERO_WIDTH_SPACE) {
-      // UAX #14 class ZW: a break opportunity after a zero-width space, never before it,
-      // not even after a space.
-      if (text[index + 1] !== ZERO_WIDTH_SPACE) boundaries.push(index + 1);
+      // UAX #14 ZW SP* ÷: the break after a zero-width space comes after the spaces that
+      // follow it, and there is no break before a zero-width space, even after a space. So a
+      // run of spaces and zero-width spaces breaks once, at its end, and hangs as one.
+      const next = text[index + 1];
+      if (next !== ZERO_WIDTH_SPACE && !(ch === ZERO_WIDTH_SPACE && next === ' '))
+        boundaries.push(index + 1);
     } else if (
       BREAK_AFTER_DASH.has(ch) &&
       index > 0 &&
@@ -237,8 +241,11 @@ export function cjkCutAllowedBetween(
  */
 export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
-  // No line starts with a zero-width space, even after an emergency cut.
-  if (text.charCodeAt(index) === 0x200b) return false;
+  // No line starts with a zero-width space, even after an emergency cut, nor with a space
+  // that ink follows. A cut where only line-end whitespace remains hangs that whitespace.
+  const next = text.charCodeAt(index);
+  if (next === 0x200b) return false;
+  if (next === 0x20 && withoutLineEndWhitespace(text).length > index) return false;
   return cjkCutAllowedBetween(lastCodePointOf(text.slice(0, index)), text.codePointAt(index));
 }
 
