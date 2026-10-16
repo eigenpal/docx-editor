@@ -13,6 +13,7 @@ import { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import {
   checkCollaborationRoomGeneration,
+  compactCollaborationState,
   createCollaborationState,
   prepareCollaborationServerDocument,
 } from '@docx-editor.dev/pro/collaboration';
@@ -72,12 +73,23 @@ export interface SeedServerOptions {
   readonly loadDelayMs?: () => number;
   /** Send the loaded state to nobody before the first connection joins. Default true. */
   readonly flushAfterLoad?: boolean;
+  /** Refuse a known room whose state is missing. Default true; false seeds it again. */
+  readonly refuseLostRooms?: boolean;
+  /** Compact a stored room when it loads, whatever the gain, while this returns true. */
+  readonly compactOnLoad?: () => boolean;
 }
 
 export interface SeedServer {
   readonly url: string;
   /** Stored room states, by room name. The server writes a seeded room here at once. */
   readonly storage: Map<string, Uint8Array>;
+  /**
+   * The rooms the server created: a durable record kept apart from the room state. A known
+   * room whose state is missing is refused with `saved-room-unavailable`, never seeded again.
+   */
+  readonly created: Set<string>;
+  /** How many times the server compacted a room. */
+  readonly compactions: () => number;
   /** Every connection's traffic, in the order the connections opened. */
   readonly connections: readonly ConnectionTraffic[];
   /** How many times the server seeded a room. */
@@ -119,8 +131,10 @@ function bytesOf(data: unknown): Uint8Array {
 
 export async function startSeedServer(options: SeedServerOptions): Promise<SeedServer> {
   const storage = new Map<string, Uint8Array>();
+  const created = new Set<string>();
   const connections: ConnectionTraffic[] = [];
   let seeds = 0;
+  let compactions = 0;
   const hocuspocus = new Hocuspocus({
     quiet: true,
     debounce: 50,
@@ -130,21 +144,42 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
       const delay = options.loadDelayMs?.() ?? 0;
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       let state = storage.get(documentName);
+      if (state && options.compactOnLoad?.()) {
+        const compacted = await compactCollaborationState(state, { minimumGain: Number.MIN_VALUE });
+        if (compacted) {
+          storage.set(documentName, compacted);
+          state = compacted;
+          compactions += 1;
+        }
+      }
+      if (!state && created.has(documentName) && options.refuseLostRooms !== false) {
+        // A second seed would replace the room's edits with the original file.
+        throw Object.assign(new Error('saved-room-unavailable'), {
+          reason: 'saved-room-unavailable',
+        });
+      }
       if (!state && options.seed === 'server') {
         state = await createCollaborationState(options.document, { documentId: documentName });
-        // Stored before any participant syncs, so a restart does not seed the room again.
+        // Stored before any participant syncs: Hocuspocus does not store state applied while
+        // it loads a room, and a restart must load this room instead of seeding another.
         storage.set(documentName, state);
         seeds += 1;
       }
-      if (state) Y.applyUpdate(document, state);
-      if (options.flushAfterLoad !== false) document.flush();
+      if (state) {
+        created.add(documentName);
+        Y.applyUpdate(document, state);
+      }
       return document;
+    },
+    async afterLoadDocument({ document }) {
+      if (options.flushAfterLoad !== false) document.flush();
     },
     async beforeHandleMessage(payload) {
       checkCollaborationRoomGeneration(payload);
     },
     async onStoreDocument({ documentName, document }) {
       storage.set(documentName, Y.encodeStateAsUpdate(document));
+      created.add(documentName);
     },
   });
   type Socket = {
@@ -213,8 +248,10 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
   return {
     url: `ws://127.0.0.1:${server.port}`,
     storage,
+    created,
     connections,
     seeds: () => seeds,
+    compactions: () => compactions,
     document: (room) => hocuspocus.documents.get(room),
     traffic(peer) {
       const total: ConnectionTraffic = {
@@ -285,6 +322,12 @@ export interface SeedParticipant {
   readonly statuses: string[];
   /** Insert `text` into body paragraph `index` at `fraction` of its length. */
   insert(index: number, fraction: number, text: string): void;
+  /** Delete the first occurrence of `text`. Returns false when no paragraph shows it. */
+  remove(text: string): boolean;
+  /** Undo this participant's last step, through the shared undo history. */
+  undo(): boolean;
+  /** Redo this participant's last undone step. */
+  redo(): boolean;
   /** Close the connection. Edits stay local until `reconnect`. */
   disconnect(): void;
   /** Open the connection again, once the previous socket has closed. */
@@ -315,6 +358,15 @@ export async function joinRoom(
   const stopStatus = room.session.subscribeStatus((status, reason) => {
     statuses.push(reason ? `${status}:${reason}` : status);
   });
+  const apply = (ops: TreeDocOp[]): void => {
+    const refusal = room.session.gateOperations(ops, BODY);
+    if (refusal) throw new Error(`peer ${options.peer} refused ${ops[0]!.op}: ${refusal}`);
+    const result = store.transact(BODY, (context) => {
+      for (const op of ops) context.apply(op);
+    });
+    if (!result.ok) throw new Error(`peer ${options.peer} ${ops[0]!.op} failed: ${result.reason}`);
+    room.session.flushPendingJournals();
+  };
   let destroyed = false;
   // The provider ignores `connect()` while its socket still reads as connected, so a reconnect
   // right after a disconnect would leave it offline for good.
@@ -339,22 +391,27 @@ export async function joinRoom(
       const paragraph = paragraphs[index % paragraphs.length];
       if (!paragraph) throw new Error('the document has no paragraph');
       const length = paragraphTextOf(store.bodyStore().part, paragraph.id)?.length ?? 0;
-      const ops: TreeDocOp[] = [
+      apply([
         {
           op: 'insertText',
           paragraphId: paragraph.id,
           offset: Math.floor(fraction * (length + 1)),
           text,
         },
-      ];
-      const refusal = room.session.gateOperations(ops, BODY);
-      if (refusal) throw new Error(`peer ${options.peer} refused an insert: ${refusal}`);
-      const result = store.transact(BODY, (context) => {
-        for (const op of ops) context.apply(op);
-      });
-      if (!result.ok) throw new Error(`peer ${options.peer} insert failed: ${result.reason}`);
-      room.session.flushPendingJournals();
+      ]);
     },
+    remove(text) {
+      for (const paragraph of bodyParagraphs(store)) {
+        const shown = paragraphTextOf(store.bodyStore().part, paragraph.id) ?? '';
+        const at = shown.indexOf(text);
+        if (at < 0) continue;
+        apply([{ op: 'deleteText', paragraphId: paragraph.id, start: at, end: at + text.length }]);
+        return true;
+      }
+      return false;
+    },
+    undo: () => room.session.undo(),
+    redo: () => room.session.redo(),
     destroy() {
       if (destroyed) return;
       destroyed = true;

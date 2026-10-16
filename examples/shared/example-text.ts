@@ -67,6 +67,9 @@ const messages = {
     'Check COLLAB_TOKEN on the server against VITE_COLLAB_TOKEN here, then reconnect.',
   'collaborationDemo.serverRecovery.generalBody':
     'Save a copy of any local changes. Ask the room owner to resolve the connection problem before rejoining.',
+  'collaborationDemo.serverRecovery.unknownRoomTitle': 'This room does not exist.',
+  'collaborationDemo.serverRecovery.unknownRoomBody':
+    'Check the invite link. To start a new room, open this page without a room in its address.',
   'collaborationDemo.serverRecovery.savedRoomTitle': 'The saved room could not be opened.',
   'collaborationDemo.serverRecovery.savedRoomBody':
     'Ask the room owner to check the saved files and server storage access. Keep the existing files; restore a working backup or recover a DOCX into a new room before trying again.',

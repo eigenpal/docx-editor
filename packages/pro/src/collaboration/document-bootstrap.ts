@@ -57,18 +57,31 @@ const SEED_CANDIDATE_FIELD = 'docxEditorSeedCandidate';
 const SEED_NONCE_PATTERN = /^[0-9a-f]{16}$/;
 const MAX_ELECTION_STATES = 256;
 
-/** Normalized canonical package for the creator's baseline bytes. */
-export function openBaselinePackage(bytes: Uint8Array): OoxmlPackage {
+/**
+ * Normalized canonical package for the creator's baseline bytes.
+ *
+ * `maxBytes` bounds both the file and its expanded package, at most `MAX_BASELINE_BYTES`. A
+ * file over the bound is refused with `baseline-too-large` before any part is parsed.
+ */
+export function openBaselinePackage(
+  bytes: Uint8Array,
+  maxBytes: number = MAX_BASELINE_BYTES
+): OoxmlPackage {
   if (!(bytes instanceof Uint8Array) || bytes.byteLength === 0) {
     throw new CollaborationSchemaError('invalid-baseline');
   }
-  if (bytes.byteLength > MAX_BASELINE_BYTES) {
+  const limit = Math.min(maxBytes, MAX_BASELINE_BYTES);
+  if (bytes.byteLength > limit) {
     throw new CollaborationSchemaError('baseline-too-large');
   }
   const loaded = readOoxmlPackage(bytes, {
-    zip: { maxEntries: 10_000, maxTotalBytes: MAX_BASELINE_BYTES, maxRatio: 200 },
+    zip: { maxEntries: 10_000, maxTotalBytes: limit, maxRatio: 200 },
   });
-  if (!loaded.ok) throw new CollaborationSchemaError('invalid-baseline');
+  if (!loaded.ok) {
+    throw new CollaborationSchemaError(
+      loaded.limit === 'zip.maxTotalBytes' ? 'baseline-too-large' : 'invalid-baseline'
+    );
+  }
   const main = loaded.package.parts.get(loaded.package.mainDocumentPart);
   if (!main) throw new CollaborationSchemaError('no-main-document-part');
   // Lazy story stores normalize paragraph identity when first opened. Seed the same

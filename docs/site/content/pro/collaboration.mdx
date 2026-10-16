@@ -703,9 +703,11 @@ const server = new Server({
         candidate.destroy();
       }
     }
+    return document;
+  },
+  async afterLoadDocument({ document }) {
     // Send the loaded state to nobody before the first participant joins.
     document.flush();
-    return document;
   },
   async beforeHandleMessage(payload) {
     checkCollaborationRoomGeneration(payload);
@@ -713,7 +715,7 @@ const server = new Server({
 });
 ```
 
-Hocuspocus 4.6 holds back an update smaller than `flushMaxBytes` until its next turn, and then sends it to every connection. Without `document.flush()`, the state that `onLoadDocument` applies reaches the first participant twice: once in its own sync, and once more as an update. Call `document.flush()` at the end of the server's own `onLoadDocument`, which runs after the hooks of extensions.
+Hocuspocus 4.6 holds back an update smaller than `flushMaxBytes` until its next turn, and then sends it to every connection. Without `document.flush()`, the state that `onLoadDocument` applies reaches the first participant twice: once in its own sync, and once more as an update. Call `document.flush()` in `afterLoadDocument`. That hook runs after every `onLoadDocument` hook, those of extensions included, and before the first participant joins.
 
 Preparation preserves formatting markers; it does not validate a room or authenticate a client. The example validates saved data in a temporary document before loading it. Storage and validation failures stop loading. Keep the saved state for recovery. Add [client admission checks](/docs/2.x/pro/collaboration-versions#check-clients-before-synchronization) before production use.
 
@@ -739,53 +741,150 @@ A server that only relays updates, and holds no `Y.Doc`, needs no preparation.
 
 With a `create` or `create-or-join` bootstrap, the first participant seeds an empty room from its own `document` bytes. On Hocuspocus, that participant uploads the whole room state, and the server sends the same state back to it, because Hocuspocus sends every update to every connection, the sender included. The room state of a document is often larger than its `.docx` file.
 
-If your server knows which document a room edits, seed the room on the server instead. Pass the `.docx` bytes and the room name to `createCollaborationState` when the server loads a room that has no stored state. It returns the room's Yjs state. Store that state before any participant syncs, then apply it to the room document. Participants find the room seeded and join it with `join` or `create-or-join`. No participant uploads the document, and each participant receives it once.
+If your server knows which document a room edits, seed the room on the server instead. `createCollaborationState` takes the `.docx` bytes and the room name, and returns the room's Yjs state. Participants find the room seeded and join it with `join` or `create-or-join`. No participant uploads the document, and each participant receives it once.
 
-The example uses the `roomFile` and `readSavedRoom` functions from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). `readDocumentFor` stands for your application's lookup of the document that a room edits.
+Seed a room only when your application knows that the room is new. A second seed of a room that already exists replaces its content with the original file, and every edit made since is gone from the room. If the server knows a room but cannot find its stored state, refuse the room with `saved-room-unavailable`. Participants keep their copies while you restore the state.
+
+The following server keeps three kinds of files. The application writes a room's `.docx` file when it creates the room. The server writes the room's state, and a record that it seeded the room. Keep the records apart from the state, for example in your database, so that losing the state does not also lose the record. Every write of new state is create-only, so two server processes that load one new room at the same time keep one seed.
 
 ```ts
-import { rename, writeFile } from 'node:fs/promises';
+import { link, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import {
+  CollaborationSchemaError,
   checkCollaborationRoomGeneration,
   createCollaborationState,
   prepareCollaborationServerDocument,
 } from '@docx-editor.dev/pro/collaboration';
 
-// Resolves with the `.docx` bytes that a new room starts from.
-declare function readDocumentFor(documentName: string): Promise<Uint8Array>;
+// The .docx file each room starts from, written when the application creates the room.
+const DOCUMENTS_DIR = '/var/lib/documents';
+// Each room's Yjs state.
+const ROOMS_DIR = '/var/lib/rooms';
+// One record for each room the server seeded. Keep it apart from the state.
+const SEEDED_DIR = '/var/lib/rooms-seeded';
+// The largest document, expanded, that the server seeds a room from.
+const MAX_SEED_BYTES = 4 * 1024 * 1024;
+// No `.`, `/`, or `\`, so a room name cannot leave these directories.
+const ROOM_ID = /^[A-Za-z0-9_-]{24,256}$/;
+
+/** An error whose reason Hocuspocus sends to the client that it refuses. */
+function refusal(reason: string): Error & { reason: string } {
+  return Object.assign(new Error(reason), { reason });
+}
+
+function fileOf(directory: string, documentName: string, extension: string): string {
+  if (!ROOM_ID.test(documentName)) throw refusal('unknown-room');
+  return path.join(directory, `${documentName}${extension}`);
+}
+
+/** The file's bytes, or null when it does not exist. Other storage errors stop the load. */
+async function readIfPresent(file: string): Promise<Uint8Array | null> {
+  try {
+    return new Uint8Array(await readFile(file));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw refusal('saved-room-unavailable');
+  }
+}
+
+/** Write a file that must not exist yet. Resolves false when it exists. */
+async function writeNew(file: string, bytes: Uint8Array): Promise<boolean> {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  const handle = await open(temporary, 'wx');
+  try {
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  try {
+    await link(temporary, file); // Fails with EEXIST when the file exists.
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw error;
+  } finally {
+    await unlink(temporary);
+  }
+}
+
+async function seedRoom(documentName: string, stateFile: string): Promise<Uint8Array> {
+  const docx = await readIfPresent(fileOf(DOCUMENTS_DIR, documentName, '.docx'));
+  if (!docx) throw refusal('unknown-room');
+  let state: Uint8Array;
+  try {
+    state = await createCollaborationState(docx, {
+      documentId: documentName,
+      maxBytes: MAX_SEED_BYTES,
+    });
+  } catch (error) {
+    // For example `baseline-too-large`: the client reports it at once.
+    throw refusal(error instanceof CollaborationSchemaError ? error.code : 'invalid-baseline');
+  }
+  // Hocuspocus does not store state applied while it loads a room, so store it now.
+  if (!(await writeNew(stateFile, state))) {
+    // Another server process seeded the room first. Use its state.
+    const existing = await readIfPresent(stateFile);
+    if (!existing) throw refusal('saved-room-unavailable');
+    state = existing;
+  }
+  await writeNew(fileOf(SEEDED_DIR, documentName, '.seeded'), new Uint8Array());
+  return state;
+}
 
 const server = new Server({
   async onLoadDocument({ documentName, document }) {
     prepareCollaborationServerDocument(document);
-    const file = roomFile(documentName);
-    let state = await readSavedRoom(file);
+    const stateFile = fileOf(ROOMS_DIR, documentName, '.ydoc');
+    let state = await readIfPresent(stateFile);
     if (!state) {
-      state = await createCollaborationState(await readDocumentFor(documentName), {
-        documentId: documentName,
-      });
-      // Store the new room first, so a restart loads it instead of seeding another.
-      await writeFile(`${file}.tmp`, state);
-      await rename(`${file}.tmp`, file);
+      // A room the server seeded before has lost its state. Never seed it again.
+      if (await readIfPresent(fileOf(SEEDED_DIR, documentName, '.seeded'))) {
+        throw refusal('saved-room-unavailable');
+      }
+      state = await seedRoom(documentName, stateFile);
     }
     Y.applyUpdate(document, state);
-    document.flush();
     return document;
+  },
+  async afterLoadDocument({ document }) {
+    // Send the loaded state to nobody before the first participant joins.
+    document.flush();
   },
   async beforeHandleMessage(payload) {
     checkCollaborationRoomGeneration(payload);
   },
+  async onStoreDocument({ documentName, document }) {
+    const stateFile = fileOf(ROOMS_DIR, documentName, '.ydoc');
+    await writeFile(`${stateFile}.tmp`, Y.encodeStateAsUpdate(document));
+    await rename(`${stateFile}.tmp`, stateFile);
+  },
 });
+
+await server.listen();
 ```
 
-The example omits the validation of saved rooms. Keep it from the earlier example in production.
+The example omits authentication and the validation of saved rooms. In production, check in `onAuthenticate` that the user may open the room, and refuse a room that has no document there, before the room loads. Validate saved rooms as [Prepare the room document on a server](#prepare-the-room-document-on-a-server) shows.
 
-Each seed carries a new room generation ID. If the server loses a room's stored state and seeds it again, `checkCollaborationRoomGeneration` refuses a participant that still holds the earlier room with `room-generation-changed`. That participant keeps its document and can save a copy. Without the refusal, its state would merge into the new room as a second copy of the document.
+Each seed also carries a new room generation ID. If the server loses both a room's state and its record and seeds the room again, `checkCollaborationRoomGeneration` refuses a participant that still holds the earlier room with `room-generation-changed`. That participant keeps its document and can save a copy. The edits it holds are not in the new room.
 
-Hocuspocus loads a room once for each server process, so participants that open a new room at the same time all join one seed. If several server processes can load the same room, let only one of them seed it: for example, write the new state to storage with a create-only write, and load the stored state when that write fails.
+### Seed with the database extension
 
-`createCollaborationState` throws `CollaborationSchemaError` when the bytes are not a usable `.docx` package or exceed the baseline size limit, or when the document ID is empty.
+With `@hocuspocus/extension-database`, seed the room in `fetch`. When the room has no row and no seed record, create the state, insert it with a create-only statement such as `INSERT ... ON CONFLICT DO NOTHING`, read the row back, and return its state. Hocuspocus does not call `store` for the state that `fetch` returns, so that insert is what stores the seed. Keep the `afterLoadDocument` hook with `document.flush()` on the server.
+
+### Plan for the cost of a seed
+
+`createCollaborationState` builds the whole room in one call, and most of that work is synchronous. Measured on a laptop, 4.4 MiB of expanded XML, about 10,000 paragraphs, took 5.2 seconds. It held the event loop for up to 210 ms at a time and used several hundred MiB of memory. A document of 30,000 paragraphs took about 26 seconds and 3 GiB of memory.
+
+- Set `maxBytes` to the largest document you accept. It bounds the file and its expanded package, and a document over it is refused with `baseline-too-large` before any part is parsed. The default and maximum is 20 MiB.
+- Seed in a worker thread or a job queue with a small concurrency limit, not on the thread that serves rooms. `createCollaborationState` takes bytes and returns bytes, so it can run in any worker.
+- Seed when the application creates the room, if you can, rather than when the first participant opens it.
+
+`createCollaborationState` throws `CollaborationSchemaError`: `baseline-too-large` for a document over `maxBytes`, `invalid-baseline` for bytes that are not a usable `.docx` package, `invalid-document-id` for an empty room name, and `invalid-bound` for an invalid `maxBytes`.
 
 ## Compact rooms on a server
 
@@ -820,8 +919,10 @@ const server = new Server({
       await rename(`${file}.tmp`, file);
     }
     Y.applyUpdate(document, compacted ?? new Uint8Array(saved));
-    document.flush();
     return document;
+  },
+  async afterLoadDocument({ document }) {
+    document.flush();
   },
   async beforeHandleMessage(payload) {
     checkCollaborationRoomGeneration(payload);
@@ -854,7 +955,7 @@ if (session.statusSnapshot().reason?.code === 'room-generation-changed') {
 
 `save()` resolves with `null` when the editor has no document to save. `rejoin` resolves with the failure, or `null` after a successful join; it does not reject. `showRecoveryMessage` stands for your application's own recovery UI. `preserveRecoveryCopy` must finish before `rejoin` replaces the local document. Keep that copy until you reconcile unsynchronized edits.
 
-`readCollaborationRoomGeneration(ydoc)` returns the generation a room holds, or an empty string for a room that was never compacted.
+`readCollaborationRoomGeneration(ydoc)` returns the generation a room holds. It returns an empty string for a room that a participant seeded and nobody compacted since. A room that `createCollaborationState` or `compactCollaborationState` built has a generation.
 
 ## Run many rooms
 
@@ -1196,7 +1297,7 @@ Most exceeded limits produce a typed failure code.
 
 | Limit | Value | Failure code | Remedy |
 | --- | --- | --- | --- |
-| Seed document | 20 MiB, both compressed and uncompressed | `baseline-too-large` or `invalid-baseline` | Reduce the document. |
+| Seed document | 20 MiB, both compressed and uncompressed. `createCollaborationState` takes a lower `maxBytes`. | `baseline-too-large` | Reduce the document. |
 | Files in the seed document | 10,000 | `invalid-baseline` | Remove parts from the document. |
 | One embedded file | 32 MiB | `blob-too-large` | Compress the media. |
 | All embedded files | 64 MiB | `blob-store-full` | Remove media and create a new room. |

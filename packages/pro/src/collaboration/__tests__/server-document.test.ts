@@ -133,6 +133,26 @@ describe('createCollaborationState', () => {
       createCollaborationState(collaborationDocx(), { documentId: '  ' })
     ).rejects.toMatchObject({ code: 'invalid-document-id' });
   });
+
+  test('refuses a document over maxBytes before it builds the room', async () => {
+    const bytes = collaborationDocx();
+    await expect(
+      createCollaborationState(bytes, { documentId: 'room', maxBytes: bytes.byteLength - 1 })
+    ).rejects.toMatchObject({ code: 'baseline-too-large' });
+    // A small file whose parts expand past the bound is refused the same way.
+    const expanded = Object.values(unzipSync(bytes)).reduce((sum, part) => sum + part.length, 0);
+    await expect(
+      createCollaborationState(bytes, { documentId: 'room', maxBytes: expanded - 1 })
+    ).rejects.toMatchObject({ code: 'baseline-too-large' });
+    await expect(
+      createCollaborationState(bytes, { documentId: 'room', maxBytes: expanded })
+    ).resolves.toBeInstanceOf(Uint8Array);
+    for (const maxBytes of [0, -1, 1.5, 21 * 1024 * 1024]) {
+      await expect(
+        createCollaborationState(bytes, { documentId: 'room', maxBytes })
+      ).rejects.toMatchObject({ code: 'invalid-bound' });
+    }
+  });
 });
 
 function stateDoc(state: Uint8Array): Y.Doc {

@@ -40,6 +40,14 @@ export function failureMessage(
       command: connection.serverCommand,
     };
   }
+  // The server refuses an invite to a room it does not know with the demo reason
+  // `unknown-room`, which is not a library failure code, so it arrives only in the detail.
+  if (failure.code === 'initialization-aborted' && failure.detail?.endsWith('unknown-room')) {
+    return {
+      title: t('collaborationDemo.serverRecovery.unknownRoomTitle'),
+      body: t('collaborationDemo.serverRecovery.unknownRoomBody'),
+    };
+  }
   if (failure.code === 'initialization-aborted' || failure.code === 'authentication-failed') {
     return {
       title: t('collaborationDemo.connectFailed'),

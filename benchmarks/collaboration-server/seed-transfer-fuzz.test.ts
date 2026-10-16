@@ -32,4 +32,11 @@ describe('server-seeded rooms', () => {
     const result = await runSeedScenario(3, { flushAfterLoad: false });
     expect(result.problems.some((problem) => problem.includes('seed-sized messages'))).toBe(true);
   }, 60_000);
+
+  test('the checks find a server that seeds a known room again after its state is lost', async () => {
+    // Seed 5 loses the stored state at the end.
+    const result = await runSeedScenario(5, { refuseLostRooms: false });
+    expect(result.summary).toContain('lose storage');
+    expect(result.problems.length).toBeGreaterThan(0);
+  }, 60_000);
 });
