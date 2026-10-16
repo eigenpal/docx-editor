@@ -14,12 +14,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * that step clears exactly those marks.
  */
 import * as Y from 'yjs';
-import type { LogicalId } from './identity.ts';
+import { parseClientClock, type LogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { RESTORE_ORIGIN } from './paragraph-text-restore.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
+import { itemIdentity } from './paragraph-text-identity.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -74,6 +75,13 @@ const COPY_RUNS = 'docx-copy-runs';
 const HIDDEN_KEYS = 'docx-hidden-copies';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
+/** A step that a host undo group collected: one undo reverts it and nothing older. */
+const GROUP_STEP = 'docx-undo-group';
+
+/** Mark `item` as the step of a host undo group. */
+export function markGroupStep(item: { readonly meta: Map<unknown, unknown> }): void {
+  item.meta.set(GROUP_STEP, true);
+}
 
 interface HistoryStack {
   readonly undoStack: StackItemShape[];
@@ -111,12 +119,24 @@ export function stepHistory(
   const before = opposite.length;
   // A step for copies alone that Yjs later merged an edit into has that edit to reverse too.
   const copiesOnly = popped?.meta.get(COPIES_ONLY) === true && changesOf(popped) === 0;
+  // Yjs pops steps until one changes something. When other participants already removed
+  // everything a group wrote, that would revert the group's older steps too. A group step
+  // is stepped alone: with nothing left to reverse, it is popped and changes nothing.
+  const grouped = popped?.meta.get(GROUP_STEP) === true;
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
-  } else if (direction === 'undo') {
-    history.undo();
   } else {
-    history.redo();
+    const below = grouped ? stack.splice(0, stack.length - 1) : [];
+    try {
+      if (direction === 'undo') history.undo();
+      else history.redo();
+    } finally {
+      if (below.length > 0) {
+        const restored = below.concat(stack);
+        stack.length = 0;
+        for (const step of restored) stack.push(step);
+      }
+    }
   }
   afterStep();
   let pushed = opposite.length > before ? opposite[opposite.length - 1] : undefined;
@@ -137,6 +157,11 @@ export function stepHistory(
       });
       pushed.meta.set(HIDDEN_KEYS, keys);
     }
+  }
+  if (grouped) {
+    // The step that undoes this undo is the group's step too, even when it changes nothing.
+    pushed ??= pushCopiesOnly(opposite);
+    markGroupStep(pushed);
   }
   markUndoneRecords(
     registry,
@@ -180,10 +205,19 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
       const item = structAt(registry.doc, { client: run.client, clock });
       const end = item ? Math.min(item.id.clock + item.length, runEnd) : clock + 1;
       if (item?.deleted) {
+        // A redo writes characters again under new IDs and marks them with the identity they
+        // had. A copy of them carries that identity, so the record names identities too.
+        const identities: { client: number; clock: number }[] = [];
         for (let at = clock; at < end; at += 1) {
-          if (follow.shownCopy(`${run.client}:${at}`) === null) continue;
-          add(run.client, clock, end);
-          break;
+          const key =
+            item.parent instanceof Y.Text
+              ? itemIdentity(item.parent, item, at - item.id.clock)
+              : `${run.client}:${at}`;
+          identities.push(parseClientClock(key) ?? { client: run.client, clock: at });
+        }
+        if (identities.some(({ client, clock: at }) => follow.shownCopy(`${client}:${at}`))) {
+          for (const identity of identities)
+            add(identity.client, identity.clock, identity.clock + 1);
         }
       }
       clock = end;
@@ -192,18 +226,42 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
   return copied;
 }
 
-/** Whether Yjs has nothing to reverse for a step: it deleted nothing, and what it wrote is gone. */
+/**
+ * Whether Yjs has nothing to reverse for a step: it deleted nothing, and what it wrote is gone.
+ *
+ * Only the undo manager's own types count. A step also records the items its transaction
+ * wrote elsewhere, such as the mark that says where typed text follows a moved character.
+ * Yjs never reverses those, so a live one does not mean there is something to undo.
+ */
 function nothingElse(registry: DocumentRegistry, step: StackItemShape | undefined): boolean {
   if (!step) return false;
-  if (deleteSetRuns((step as { deletions?: unknown }).deletions).length > 0) return false;
-  for (const run of deleteSetRuns((step as { insertions?: unknown }).insertions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
-      const item = structAt(registry.doc, { client: run.client, clock });
-      if (!item || !item.deleted) return false;
-      clock = item.id.clock + item.length;
+  const scope = new Set<unknown>(registry.trackedTypes());
+  const shape = step as { deletions?: unknown; insertions?: unknown };
+  for (const [runs, deletion] of [
+    [deleteSetRuns(shape.deletions), true],
+    [deleteSetRuns(shape.insertions), false],
+  ] as const) {
+    for (const run of runs) {
+      for (let clock = run.clock; clock < run.clock + run.length; ) {
+        const item = structAt(registry.doc, { client: run.client, clock });
+        if (!item) return false;
+        if (inScope(item, scope) && (deletion || !item.deleted)) return false;
+        clock = item.id.clock + item.length;
+      }
     }
   }
   return true;
+}
+
+/** Whether `item` lives under one of the undo manager's root types. */
+function inScope(item: Y.Item, scope: ReadonlySet<unknown>): boolean {
+  let type: Y.AbstractType<unknown> | null = item.parent as Y.AbstractType<unknown> | null;
+  while (type !== null) {
+    if (scope.has(type)) return true;
+    const parent: unknown = type._item?.parent;
+    type = parent instanceof Y.AbstractType ? parent : null;
+  }
+  return false;
 }
 
 function runsOf<Value>(step: StackItemShape | undefined, key: string): Value[] | undefined {

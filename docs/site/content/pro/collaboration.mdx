@@ -1073,6 +1073,48 @@ Commit one logical suggestion per sync. Send progress through a separate job/eve
 
 The [server agent review example](https://github.com/eigenpal/docx-editor/tree/main/examples/server-agent-review) includes a React review room, Hocuspocus persistence, a Node worker, scripted and AI modes, snapshot tokens, deduplication, cancellation, and browser-independent jobs. It also shows how to wait for outbound transport acknowledgement and clean up both the runtime and the room. Browser peers need the review module to display and accept or reject suggestions.
 
+## Undo an agent operation
+
+Each session has its own undo history, so an agent's undo reverts only the agent's edits. Without a group, the session merges local writes that land less than 500 milliseconds (ms) apart into one undo step. Two quick operations can then become one step, and one slow operation can become several.
+
+To make one logical operation exactly one undo step, open an undo group on the agent's session before the operation, and end the group when the operation finishes:
+
+```ts
+const group = room.session.beginUndoGroup();
+try {
+  await runtime.run(async (context) => {
+    context.document.body.insertParagraph('Summary of changes', 'End');
+    await context.sync();
+  });
+  await runtime.run(async (context) => {
+    context.document.body.insertParagraph('Next steps', 'End');
+    await context.sync();
+  });
+} finally {
+  group.end();
+}
+
+// Later, revert the whole operation and keep every other participant's edits:
+room.session.undo();
+```
+
+A group follows these rules:
+
+- Every local write that the session publishes while the group is open joins one undo step, however long the group stays open. The first write after `group.end()` starts a new step, however soon it follows.
+- `beginUndoGroup()` and `group.end()` publish queued local writes first, so each write lands on the correct side of the boundary.
+- `undo()` and `redo()` return `false` while a group is open, and `canUndo()` and `canRedo()` report `false`. End the group first.
+- A refused write does not end the group. Later writes in the group join the same step as the earlier ones. To revert the whole operation, end the group and call `undo()` once.
+- Other participants' edits never join the group. If they remove everything that the group wrote, an undo of the group changes nothing. It never reverts an older step instead.
+- `group.end()` is safe to call more than once. `room.destroy()` closes an open group.
+- Groups do not nest. `beginUndoGroup()` throws `CollaborationUndoGroupError` while the session has an open group. Give each concurrent operation its own session.
+
+| Code | Cause | What the host does |
+| --- | --- | --- |
+| `undo-group-already-open` | The session already has an open undo group. | End the open group, or use another session for the concurrent operation. |
+| `collaboration-session-destroyed` | The session was destroyed. | Join the room with a new session. |
+
+`runtime.run({ historyGroup })` joins an editor history group, which only a browser runtime has. A collaborative server runtime refuses that option with `NotSupported`, so use the session's undo group.
+
 ## Compose custom controls
 
 Add custom controls as children of the collaboration root shown in [Mount the editor](#mount-the-editor). The root supplies `key`, `document`, `modules`, and the default author. Status and presence hooks inside it find the session without a `session` argument.

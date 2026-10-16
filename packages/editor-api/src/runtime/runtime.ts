@@ -94,7 +94,8 @@ export interface RunOptions {
    * Pass the handle `editor.beginHistoryGroup()` returns, unchanged.
    *
    * Browser runtime only. A server or collaborative runtime refuses the run with
-   * `NotSupported` before the callback starts. A closed handle, or a handle from another
+   * `NotSupported` before the callback starts. To make one operation of a collaborative
+   * server runtime one undo step, open `beginUndoGroup()` on its collaboration session. A closed handle, or a handle from another
    * editor, refuses with `InvalidArgument` and `target: 'historyGroup'` before the callback
    * starts. A handle that closes during the run refuses the next `context.sync()` the same way,
    * and that sync writes nothing. Runs without this option never join a group.
