@@ -435,13 +435,35 @@ describe('undo groups', () => {
   });
 
   test('an undo of a long paste reads its marks per insert, not per character', async () => {
-    const { alice } = await pair();
+    const { alice, bob, pause, resume } = await pair();
+    // Alice's earlier typing moves with a concurrent split, and Bob's edit there copies it,
+    // so her client holds copies outside the paste: a check by client alone cannot skip it.
+    pause();
+    harness.apply(bob, [
+      { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(bob, 2), offset: 0 },
+    ]);
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 2), offset: 1, text: '(old)' },
+    ]);
+    resume();
+    harness.apply(bob, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(bob, 3), offset: 7, text: '!' },
+    ]);
+    elapse(1_000);
     const marks = textMarksOf(alice.ydoc);
     const follow = (
       alice.room.session as unknown as {
-        registry: { inline: { follow: { shownCopy(identity: string): unknown } } };
+        registry: {
+          inline: {
+            follow: {
+              shownCopy(identity: string): unknown;
+              index: { hasCopies(client: number): boolean };
+            };
+          };
+        };
       }
     ).registry.inline.follow;
+    expect(follow.index.hasCopies(alice.ydoc.clientID)).toBe(true);
     let lookups = 0;
     const origin = marks.origin.bind(marks);
     const shownCopy = follow.shownCopy.bind(follow);

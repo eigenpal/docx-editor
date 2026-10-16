@@ -73,7 +73,9 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    *   undo of the group keeps them. When they removed everything the group wrote, its undo
    *   changes nothing and never reverts an older step.
    * - An undo of an ungrouped step never reverts a group's step below it. Ungrouped history
-   *   otherwise undoes as it does without groups.
+   *   otherwise undoes as it does without groups. If a peer removed everything that the top
+   *   ungrouped step wrote, that `undo()` changes nothing and returns true. Call `undo()`
+   *   again to revert the group.
    * - Destroying the session, or attaching an editor to it, closes an open group.
    *
    * @throws CollaborationUndoGroupError with `undo-group-already-open` when this session
