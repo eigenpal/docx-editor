@@ -18,6 +18,7 @@ import { paragraphIsRtl } from '../layout/rtl-paragraph.ts';
 import { DEFAULT_RUN_STYLE } from '../layout/run-style.ts';
 
 import { paintedSpanText } from '../layout/optional-hyphen-break.ts';
+import { withoutTrailingZeroWidthSpaces } from '../layout/trailing-spaces.ts';
 import { paintManualLineBreak } from './semantic-paragraph-marks.ts';
 import {
   DEFAULT_BREAK_MARK_STRINGS,
@@ -1346,7 +1347,7 @@ const WORD_SEPARATOR = /[\t\n\r \u00A0\u1361\u{10100}-\u{10102}\u{1039F}\u{1091F
  * itself, stretching its trailing space, instead of as a margin on the next span.
  *
  * The stretch must move ONLY the trailing space. Layout puts justify slack after expandable
- * U+0020s and word-breaks after every one of them, so an ordinary word-span qualifies —
+ * U+0020s (and any U+200B after) and word-breaks after each, so an ordinary span qualifies —
  * including a projected field result, whose box was reserved from the drawn text like any
  * other. A span carrying any OTHER word separator keeps the margin, whose only cost is a
  * seam in the native selection band. A span with a forced width (`w:w` horizontal scaling)
@@ -1359,11 +1360,12 @@ const WORD_SEPARATOR = /[\t\n\r \u00A0\u1361\u{10100}-\u{10102}\u{1039F}\u{1091F
  * slack (and this span's underline and shading) inside the float's exclusion zone.
  */
 function absorbsFollowingGap(span: StyleSpanRecord, next: StyleSpanRecord): boolean {
-  if (!span.text.endsWith(' ')) return false;
+  const text = withoutTrailingZeroWidthSpaces(span.text);
+  if (!text.endsWith(' ')) return false;
   if (span.style.horizontalScalePercent !== 100) return false;
   if (!sharesAnchor(span, next)) return false;
   if ((next.wrapAdvanceBefore ?? 0) > 0.001) return false;
-  return !WORD_SEPARATOR.test(span.text.slice(0, -1));
+  return !WORD_SEPARATOR.test(text.slice(0, -1));
 }
 
 /**

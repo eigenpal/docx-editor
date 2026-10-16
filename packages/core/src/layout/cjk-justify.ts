@@ -1,5 +1,6 @@
 // Inter-character justification uses real span geometry. Paint and exporters already
 // consume the gaps between spans; no browser-only text-justify rule may move the caret.
+import { endsWithLineEndWhitespace } from './trailing-spaces.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { cjkParagraphBreaks, hasCjkText, isCjk } from './cjk-paragraph-breaks.ts';
 import { DEFAULT_CJK_TYPOGRAPHY } from './cjk-typography.ts';
@@ -90,7 +91,7 @@ export function justifyCjkSpans(
     )
       continue;
     if (
-      previous.text.endsWith(' ') ||
+      endsWithLineEndWhitespace(previous.text) ||
       ((isCjk(before) || isCjk(after)) &&
         breaks?.decision(pieces[index]!, 0, previous.text, current.text) === 'opens' &&
         cjkCutAllowedBetween(before, after) &&

@@ -697,7 +697,9 @@ export function splitBidiTrailingWhitespace(
     let from = span.text.length;
     while (
       from > 0 &&
-      ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(span.text[from - 1]!))
+      // A zero-width space (class BN) after a space hangs with it.
+      (span.text[from - 1] === '\u200b' ||
+        ['WS', 'B', 'S'].includes(bidiAlgorithm.getBidiCharTypeName(span.text[from - 1]!)))
     )
       from--;
     if (from === 0) continue;

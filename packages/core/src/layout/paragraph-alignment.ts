@@ -5,7 +5,11 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
-import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import {
+  endsWithLineEndWhitespace,
+  withoutLineEndWhitespace,
+  withoutTrailingZeroWidthSpaces,
+} from './trailing-spaces.ts';
 import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
 import { alignPassageSpans, partUsedWidth, type LinePassage } from './passage-alignment.ts';
 
@@ -66,6 +70,11 @@ export function jcValueForAlignment(
   return alignment === 'left' ? 'right' : 'left';
 }
 
+/** A span holding only zero-width spaces, which take no room. */
+function isZeroWidthSpaceOnly(span: StyleSpanRecord): boolean {
+  return span.text.length > 0 && withoutTrailingZeroWidthSpaces(span.text) === '';
+}
+
 /**
  * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
  *
@@ -75,7 +84,8 @@ export function jcValueForAlignment(
  * the highlight (DOM) stayed on the glyphs.
  */
 function endsWithExpandableSpace(text: string): boolean {
-  return text.endsWith(' ');
+  // A zero-width space after the space takes no room; the space is still the slot.
+  return withoutTrailingZeroWidthSpaces(text).endsWith(' ');
 }
 
 /**
@@ -194,11 +204,12 @@ function alignLogicalSpans(
   // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
   // over-stretches the line. Measured only on that path.
-  // Only U+0020 hangs. A tab or no-break space remains content after bidi alignment
+  // Only U+0020 hangs, with any zero-width spaces after it. A tab or no-break space remains
+  // content after bidi alignment
   // separates the zero-width break that follows it.
   const trailingWhitespaceOf = (
     span: StyleSpanRecord,
-    visible = withoutTrailingSpaces(span.text)
+    visible = withoutLineEndWhitespace(span.text)
   ): number =>
     visible === span.text
       ? 0
@@ -208,7 +219,10 @@ function alignLogicalSpans(
   // line, and spaces in spans of their own, are not content: they hang. Before a break only
   // U+0020 hangs; a tab or a no-break space there is content.
   let contentLast = trailingEnd - 1;
-  while (contentLast > 0 && withoutTrailingSpaces(spans[contentLast]!.text) === '') {
+  while (
+    contentLast > 0 &&
+    withoutLineEndWhitespace(withoutTrailingZeroWidthSpaces(spans[contentLast]!.text)) === ''
+  ) {
     contentLast -= 1;
   }
   const contentEnd = spans[contentLast] ?? last;
@@ -218,11 +232,12 @@ function alignLogicalSpans(
     contentEnd.box.width -
     trailingWhitespaceOf(
       contentEnd,
-      contentEnd === last ? undefined : withoutTrailingSpaces(contentEnd.text)
+      contentEnd === last ? undefined : withoutLineEndWhitespace(contentEnd.text)
     );
   // A justified line's hanging spaces may follow a word that keeps its own space (a double
   // space split across runs). That space hangs too: it is neither content nor a slot.
-  // Only U+0020 hangs; a tab or a no-break space before the hanging spaces is content.
+  // Only U+0020 (and zero-width spaces after it) hangs; a tab or a no-break space before the
+  // hanging spaces is content.
   const hangsAfterOwnSpace =
     alignment === 'both' &&
     !paragraphRtl &&
@@ -235,7 +250,7 @@ function alignLogicalSpans(
       ? hangingStart -
         trailingWhitespaceOf(
           spans[trailingStart - 1]!,
-          withoutTrailingSpaces(spans[trailingStart - 1]!.text)
+          withoutLineEndWhitespace(spans[trailingStart - 1]!.text)
         )
       : hangingStart) ??
     contentEndWithoutTrailingWhitespace();
@@ -243,19 +258,24 @@ function alignLogicalSpans(
   // A space retained at a natural wrap still owns its model/caret advance, but Word
   // centers/right-aligns the visible text. Do not subtract from drawing-owned width,
   // tabs or nonbreaking spaces: only a text span reaching the measured line end qualifies.
+  // A zero-width space in a run of its own after the space takes no room: the space ends
+  // the line's text.
+  let spaceSpan = lastContentSpan;
+  for (let index = trailingEnd - 1; index > 0 && isZeroWidthSpaceOnly(spans[index]!); index--)
+    spaceSpan = spans[index - 1];
   if (
     (alignment === 'center' || alignment === 'right') &&
     spansReachLineEnd &&
-    lastContentSpan?.text.endsWith(' ') &&
-    !lastContentSpan.lineEndWhitespace
+    endsWithLineEndWhitespace(spaceSpan?.text ?? '') &&
+    !spaceSpan.lineEndWhitespace
   ) {
-    const visible = withoutTrailingSpaces(lastContentSpan.text);
+    const visible = withoutLineEndWhitespace(spaceSpan.text);
     const width = measureDisplayText(
       visible,
-      styleForFontSlot(lastContentSpan.style, lastContentSpan.fontSlot),
+      styleForFontSlot(spaceSpan.style, spaceSpan.fontSlot),
       measurer
     );
-    const trailing = Math.max(0, lastContentSpan.box.width - width);
+    const trailing = Math.max(0, spaceSpan.box.width - width);
     used -= trailing;
     // Bidi puts these spaces before the visible text. Move the full line back by
     // their advance, so right/center alignment still anchors the visible glyphs.

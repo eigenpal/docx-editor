@@ -17,6 +17,8 @@
 //    run breaks.
 // 7. The AutoFit minimum equals the widest word, and is at most the minimum without
 //    dictionary data.
+// 8. Right alignment puts the ink end of every line that fits at the measure, so hanging
+//    spaces and zero-width spaces never count as content.
 //
 // A second generator adds fields, inline pictures, tabs, and positional tabs, and checks
 // properties 1 to 3 through full document layout. A third edits Thai paragraphs at random and
@@ -293,6 +295,32 @@ function checkBreaks(
 
 // ── Text paragraphs ───────────────────────────────────────────────────────────
 
+/** Each right-aligned line as [ink end, ink width], through full document layout. */
+function rightAlignedLines(xml: string, width: number): [number, number][] {
+  const part = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="right"/></w:pPr>${xml}</w:p>` +
+      `<w:sectPr><w:pgSz w:w="${Math.round((width + 20) * 20)}" w:h="40000"/>` +
+      '<w:pgMar w:left="200" w:right="200" w:top="200" w:bottom="200"/></w:sectPr></w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!part.ok) throw new Error(part.reason);
+  const out: [number, number][] = [];
+  for (const page of layoutSemanticDocument(part.part, 1, { measurer }).pages)
+    for (const fragment of page.fragments)
+      if (fragment.kind === 'paragraph')
+        for (const line of fragment.lines) {
+          const content = line.spans.filter((span) => inkPt(span.text) > 0);
+          const last = content.at(-1);
+          if (!last) continue;
+          const text = line.spans.map((span) => span.text).join('');
+          // Two trailing spaces keep one space of room on right-aligned lines, a separate,
+          // older behavior that this property does not cover.
+          if (/ {2}[\u200b]*$/u.test(text.replace(/\u200b/gu, ''))) continue;
+          out.push([last.box.x - fragment.box.x + inkPt(last.text), inkPt(text)]);
+        }
+  return out;
+}
+
 const SEEDS = Array.from({ length: 50 }, (_, index) => 0x1384 + index * 7919);
 const CASES = 80;
 
@@ -355,6 +383,16 @@ describe('dictionary word breaks hold their invariants on random text', () => {
         expect(breakOffsets(lineTexts(alignedRuns, width)), `${where}: ${alignedRuns}`).toEqual(
           offsets
         );
+
+        // Property 8: right alignment puts the ink end of every line that fits at the measure,
+        // whatever hangs after it (spaces, zero-width spaces).
+        if (index % 2 === 0)
+          for (const [end, ink] of rightAlignedLines(alignedRuns, width))
+            if (ink <= width + 0.01)
+              expect(
+                Math.abs(end - width),
+                `${where}: right-aligned ink ends at ${end}`
+              ).toBeLessThan(0.01);
 
         // Property 7.
         const widest = Math.max(...words.map(([from, to]) => inkPt(text.slice(from, to))));

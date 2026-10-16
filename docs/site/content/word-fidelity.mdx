@@ -298,11 +298,11 @@ Paragraph `w:bidi` controls alignment and the order of groups with different run
 
 Thai, Lao, Khmer, and Myanmar text puts no spaces between words. Lines in these scripts wrap at dictionary word boundaries, in body text, table cells, and field results. Table AutoFit uses the widest word as the narrowest column content. Formatting changes and tracked changes inside a word do not add or remove a break position. Fields, pictures, punctuation, and no-break spaces next to these scripts follow the same rules as in Latin text.
 
-A line can end after a zero-width space (U+200B) in any script, and never starts with one. Line breaks never split a grapheme cluster, so tone marks and vowel signs stay with their base letter. A word wider than the line breaks between grapheme clusters.
+A line can end after a zero-width space (U+200B) in any script, and never starts with one. A space next to a zero-width space hangs at the line end like a plain space, so it does not change alignment or justification. Line breaks never split a grapheme cluster, so tone marks and vowel signs stay with their base letter. A word wider than the line breaks between grapheme clusters.
 
 Word boundaries come from `Intl.Segmenter` with ICU dictionary data for each script. Major browsers, Bun, and Node.js builds with full ICU data, which is the default, include this data. Node.js built with `small-icu` and React Native on Hermes do not. In those runtimes, text in these scripts wraps only at spaces, zero-width spaces, and dashes. Break positions come from the ICU dictionaries of the runtime, so they can differ between ICU versions.
 
-To check support, or to supply your own dictionary, use the functions in `@docx-editor.dev/core/layout`. If you install a segmenter while a document is open, the next layout pass breaks the text again with it. An editor shows the new line breaks at its next layout, for example after the next edit.
+To check support, or to supply your own dictionary, use the functions in `@docx-editor.dev/core/layout`. Install the segmenter before you create editors. A change takes effect at the next layout pass. An editor that is already open does not lay out again on its own. It shows the new line breaks after its next layout, for example after the next edit.
 
 ```ts
 import {
@@ -310,6 +310,7 @@ import {
   setDictionaryWordSegmenter,
 } from '@docx-editor.dev/core/layout';
 
+// Run this at startup, before you create any editor.
 if (!isDictionaryWordBreakSupported('thai')) {
   // Return the word boundaries inside one run of Thai, Lao, Khmer, or Myanmar
   // letters, as UTF-16 offsets between 0 and run.length.

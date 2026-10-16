@@ -1,4 +1,5 @@
 import { beyondLine, gapOffset } from './line-edge-hit.ts';
+import { endsWithLineEndWhitespace } from './trailing-spaces.ts';
 import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-caret.ts';
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
@@ -1000,7 +1001,7 @@ export function caretBoxOnLine(
       if (next && next.range.start === offset) {
         const cjk = isCjk(lastCodePointOf(span.text) ?? 0) || isCjk(next.text.codePointAt(0) ?? 0);
         const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
-        if ((span.text.endsWith(' ') && gap > 0.25) || (cjk && gap > 0.001)) {
+        if ((endsWithLineEndWhitespace(span.text) && gap > 0.25) || (cjk && gap > 0.001)) {
           chosen = next;
           break;
         }

@@ -124,9 +124,12 @@ let cachedGraphemeEpoch = -1;
  * built with `small-icu`). `null` turns dictionary word breaks off: these scripts then wrap
  * only at spaces, zero-width spaces, and dashes.
  *
- * The next layout pass re-breaks text instead of serving lines cached under the previous
- * segmenter: layout sessions and paragraph break caches key on the segmenter generation. Each script is probed again through the new segmenter. Call
- * {@link resetDictionaryWordSegmenter} to restore `Intl.Segmenter`.
+ * Install it before you create editors. A change takes effect at the next layout pass: layout
+ * sessions and paragraph break caches key on the segmenter generation, so that pass re-breaks
+ * text instead of serving lines cached under the previous segmenter. An editor that is
+ * already open does not lay out again on its own; it shows the new breaks after its next
+ * layout, such as the one an edit causes. Each script is probed again through the new
+ * segmenter. Call {@link resetDictionaryWordSegmenter} to restore `Intl.Segmenter`.
  * @public
  */
 export function setDictionaryWordSegmenter(segmenter: DictionaryWordSegmenter | null): void {

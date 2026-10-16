@@ -27,3 +27,19 @@ export function withoutLineEndWhitespace(text: string): string {
   const firstSpace = text.indexOf(' ', start);
   return firstSpace < 0 ? text : text.slice(0, firstSpace);
 }
+
+/** Whether `text` ends in whitespace that hangs at a line end. */
+export function endsWithLineEndWhitespace(text: string): boolean {
+  return withoutLineEndWhitespace(text).length < text.length;
+}
+
+/**
+ * `text` without trailing zero-width spaces. A span that ends in a space and then a zero-width
+ * space ends in that space for justification, underline, and caret purposes: the zero-width
+ * space takes no room.
+ */
+export function withoutTrailingZeroWidthSpaces(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 0x200b) end -= 1;
+  return end === text.length ? text : text.slice(0, end);
+}
