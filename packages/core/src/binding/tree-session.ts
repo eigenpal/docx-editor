@@ -19,6 +19,7 @@ import {
   patchLocalReviewItems,
 } from './review-patch.ts';
 import { createReviewItemsMemo } from './review-items-memo.ts';
+import { reviewItemFilterOf } from './review-item-filter.ts';
 import {
   addPackageComment,
   deletePackageComments,
@@ -1022,6 +1023,7 @@ export function openTreeSessionFromPackage(
           commentsPart,
           commentsExtendedPart,
           stylesPart: stylesPartOf(pkg),
+          numberingRoot: resolveNumberingRoot(),
           furnitureParts: furnitureAndNoteParts(),
           // Resolved HERE because a payload lives in a customXml data part: the derivation
           // receives story parts, and reaching a package part from one is not something a
@@ -1084,6 +1086,11 @@ export function openTreeSessionFromPackage(
           }
         }
 
+        const filter = reviewItemFilterOf(derive);
+        if (filter) {
+          const { stylesPart, numberingRoot } = memoInputs;
+          items = filter(items, { pkg, stylesRoot: stylesPart?.root ?? null, numberingRoot });
+        }
         reviewItemsMemo.set(memoInputs, items);
         reviewCache = {
           revisionKey,

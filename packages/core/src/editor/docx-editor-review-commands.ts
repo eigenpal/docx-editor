@@ -38,6 +38,12 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { EditorDiagnostics } from './editor-diagnostics.ts';
 import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { withReviewItemFilter } from '../binding/review-item-filter.ts';
+import {
+  inertPropertyChanges,
+  withoutInertPropertyChanges,
+} from './review-inert-property-changes.ts';
+import { revisionItemsOf } from '../store/store/review-reads.ts';
 import {
   findReviewPlacement,
   isReplacementPairKey,
@@ -88,21 +94,25 @@ export function reviewModelOption(
   const review = modules.review;
   if (!review) return {};
   return {
-    reviewModel: {
-      ...review,
-      collectReviewItems: (input: ReviewModelInput) =>
-        review.collectReviewItems(
-          modules.customNodes.length > 0
-            ? {
-                ...input,
-                customNodes: modules.customNodes,
-                ...(modules.customNodeDiagnostics.length > 0
-                  ? { reportCustomNodeDiagnostic: reportDiagnostic }
-                  : {}),
-              }
-            : input
-        ),
-    },
+    // Property changes that resolve to no change are left out of every queue reader.
+    reviewModel: withReviewItemFilter(
+      {
+        ...review,
+        collectReviewItems: (input: ReviewModelInput) =>
+          review.collectReviewItems(
+            modules.customNodes.length > 0
+              ? {
+                  ...input,
+                  customNodes: modules.customNodes,
+                  ...(modules.customNodeDiagnostics.length > 0
+                    ? { reportCustomNodeDiagnostic: reportDiagnostic }
+                    : {}),
+                }
+              : input
+          ),
+      },
+      withoutInertPropertyChanges
+    ),
   };
 }
 
@@ -131,6 +141,36 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       .surface()
       ?.session.reviewItems()
       .filter((item): item is ReviewRevisionItem => item.kind === 'revision') ?? [];
+  /**
+   * Property changes the queue leaves out because they change nothing. A bulk decision that
+   * names no keys clears them too; with `scope: 'visible'`, only those by an author it shows.
+   * Their keys join `selected`.
+   */
+  const unlistedRecords = (
+    command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
+    selected: Set<string>
+  ): readonly ReviewRevisionItem[] => {
+    const session = deps.surface()?.session;
+    if (!session || command.keys !== undefined) return [];
+    const pkg = session.currentPackage();
+    const inputs = {
+      pkg,
+      stylesRoot: stylesPartOf(pkg)?.root ?? null,
+      numberingRoot: session.numberingRoot(),
+    };
+    const authors =
+      command.scope === 'document'
+        ? undefined
+        : new Set(
+            deps.visible().flatMap((item) => (item.kind === 'revision' ? [item.author] : []))
+          );
+    const records = session
+      .storyParts()
+      .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs))
+      .filter((item) => !authors || authors.has(item.author));
+    for (const item of records) selected.add(reviewItemKey(item));
+    return records;
+  };
   /** The parts a bulk review command reaches, with the keys it selects in each. */
   const selection = (command: { scope?: 'visible' | 'document'; keys?: readonly string[] }) => {
     const items = all();
@@ -167,7 +207,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           keys: [],
         });
     }
-    for (const item of items) {
+    for (const item of [...items, ...unlistedRecords(command, selected)]) {
       const scope = deps.scope(item);
       const part = partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]);
       if (!part) continue;

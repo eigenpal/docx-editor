@@ -9,6 +9,8 @@ export interface ReviewItemsInputs {
   readonly commentsPart: OoxmlPart | undefined;
   readonly commentsExtendedPart: OoxmlPart | undefined;
   readonly stylesPart: OoxmlPart | undefined;
+  /** Read by the session's last pass over the queue, not by the derivation itself. */
+  readonly numberingRoot: object | null;
   readonly furnitureParts: readonly OoxmlPart[];
   readonly customNodePayloads: ReadonlyMap<string, CustomNodePayloadRead>;
 }
@@ -44,6 +46,7 @@ function sameInputs(left: ReviewItemsInputs, right: ReviewItemsInputs): boolean 
     left.commentsPart === right.commentsPart &&
     left.commentsExtendedPart === right.commentsExtendedPart &&
     left.stylesPart === right.stylesPart &&
+    left.numberingRoot === right.numberingRoot &&
     left.furnitureParts.length === right.furnitureParts.length &&
     left.furnitureParts.every((part, index) => part === right.furnitureParts[index]) &&
     samePayloads(left.customNodePayloads, right.customNodePayloads)
