@@ -7,8 +7,8 @@ import {
   tableRevisionRemovals,
   tableRevisionNeighbours,
   tableMergeDependencies,
-  ancestorIdsOf,
 } from './revision-table-plan.ts';
+import { ancestorIdsOf } from './node-ancestors.ts';
 import { paragraphMergeSources } from './revision-paragraph-merge.ts';
 import { preservedRevisionProperty } from './revision-property-records.ts';
 import { recordedProperties } from './tree-op-tracked-properties.ts';

@@ -1,6 +1,7 @@
 import { retainsNestedTable } from './revision-table-preserve-nested.ts';
 import { tableChildren, isTableWrapper } from './revision-table-children.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
+import { ancestorIdsOf } from './node-ancestors.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -75,24 +76,6 @@ export function tableRevisionRemoves(site: RevisionSite, action: 'accept' | 'rej
   return action === 'accept'
     ? name === 'del' || name === 'cellDel'
     : name === 'ins' || name === 'cellIns';
-}
-
-/**
- * The ids of every ancestor of `ids`, with `ids` themselves. A walk that only acts on tables and
- * rows holding removed cells or rows can skip every other subtree, and still visit in document
- * order: a long document is mostly paragraphs no table decision reaches.
- */
-export function ancestorIdsOf(part: OoxmlPart, ids: Iterable<string>): ReadonlySet<string> {
-  const ancestors = new Set<string>();
-  for (const id of ids) {
-    let current: string | undefined = id;
-    while (current !== undefined && !ancestors.has(current)) {
-      ancestors.add(current);
-      current = parentNodeOf(part, current)?.id;
-    }
-  }
-  ancestors.add(part.root.id);
-  return ancestors;
 }
 
 /** Exact removed cells/rows/tables and the selected markers responsible for their removal. */

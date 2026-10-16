@@ -17,6 +17,7 @@ import { textUnder } from './review-text.ts';
 import { groupTableFormatting } from './review-table-format-groups.ts';
 import { groupAdjacentRunFormatting } from './review-run-format-groups.ts';
 import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
+import { ancestorIdsOf } from './node-ancestors.ts';
 
 type Direction = 'ins' | 'del';
 interface RowGroup {
@@ -138,8 +139,10 @@ function groupRowRevisions(
     }
     for (const child of node.children) collect(child, group);
   };
+  // Only a table holding a row marker forms a group; the walk keeps to the markers' ancestors.
+  const reached = ancestorIdsOf(part, rowSites.keys());
   const walk = (node: OoxmlNode, tableDepth = 0): void => {
-    if (node.kind === 'textValue' || !holdsTableStructure(node)) return;
+    if (node.kind === 'textValue' || !reached.has(node.id) || !holdsTableStructure(node)) return;
     if (isW(node, 'tr') && tableDepth > 1) {
       const properties = node.children.find((child) => isW(child, 'trPr'));
       if (properties && properties.kind !== 'textValue') {
