@@ -57,6 +57,15 @@ export type CollaborationApplyResult =
  */
 export interface CollaborationDocumentPort {
   readonly documentId: string;
+  /**
+   * True for the port of an editor that people edit through, which shows undo state to
+   * them. False or absent for a headless or server replica. Optional.
+   *
+   * While a port with `true` is attached, a full-document session refuses
+   * `beginUndoGroup()` with `editor-attached`, and attaching it closes an open undo group, so
+   * the undo state a person sees stays true.
+   */
+  readonly interactive?: boolean;
   paragraphs(): readonly CollaborationParagraph[];
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
   /**

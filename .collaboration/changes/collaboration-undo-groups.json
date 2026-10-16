@@ -1,0 +1,15 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Local writes of a session that land less than 500 ms apart share one undo step, and an undo whose step other participants already removed can revert an older step.",
+  "after": "A host can open an undo group on a session that no editor is attached to, so that one operation is exactly one undo step. An undo never reverts a group's step unless that step is the one being undone. An undo of typing that a peer moved reverts only that step, and an undo of redone typing that a peer moved removes it, also after a peer edits the paragraph the move took it to.",
+  "reason": "Undo groups and undo step selection change only the local undo stack of one replica. Undo and redo still write ordinary shared updates, and the shared schema, text offsets, and update meaning stay unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-undo-groups.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-undo-groups-runtime.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-undo-groups-fuzz.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-undo-groups-editor.test.ts"
+  ],
+  "changeset": "collaboration-undo-groups",
+  "migration": null
+}
