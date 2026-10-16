@@ -45,6 +45,43 @@ function bodyBlocksOf(
   return body;
 }
 
+/**
+ * The ids of the paragraphs a split or join changed, with the unchanged blocks on either side,
+ * when the two body lists differ only in such a run of paragraphs; undefined otherwise. The
+ * queue reads which paragraph follows which, so the caller also requires that none of these
+ * holds a revision: then no decision can have moved, merged or split.
+ */
+function splicedParagraphs(blocks: {
+  readonly before: readonly OoxmlNode[];
+  readonly after: readonly OoxmlNode[];
+}): ReadonlySet<string> | undefined {
+  const { before, after } = blocks;
+  const shorter = Math.min(before.length, after.length);
+  let prefix = 0;
+  while (prefix < shorter && before[prefix] === after[prefix]) prefix += 1;
+  let suffix = 0;
+  while (
+    suffix < shorter - prefix &&
+    before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
+  )
+    suffix += 1;
+  const changed = [
+    ...before.slice(prefix, before.length - suffix),
+    ...after.slice(prefix, after.length - suffix),
+  ];
+  if (changed.length > MAX_CHANGED_PARAGRAPHS) return undefined;
+  const ids = new Set<string>();
+  for (const node of changed) {
+    if (node.kind !== 'paragraph' || holdsParagraph(node)) return undefined;
+    ids.add(node.id);
+  }
+  // The neighbours: a paragraph mark revision reads the paragraph after it.
+  for (const neighbour of [before[prefix - 1], before[before.length - suffix]]) {
+    if (neighbour && neighbour.kind !== 'textValue') ids.add(neighbour.id);
+  }
+  return ids;
+}
+
 /** A paragraph holding another (a text box's content) is beyond this check. */
 function holdsParagraph(node: OoxmlNode, depth = 0): boolean {
   if (node.kind === 'textValue' || depth > 64) return false;
@@ -109,24 +146,33 @@ export function unchangedRevisionItems(
   const before = locatedSitesIfKnown(previousPart);
   if (!before) return undefined;
   const blocks = bodyBlocksOf(previousRoot, part.root);
-  if (!blocks || blocks.before.length !== blocks.after.length) return undefined;
-  // Position by position: the queue reads sibling order (which paragraph follows which), so a
-  // block that moved is a change even when it is the same object.
-  let changed = 0;
-  for (let index = 0; index < blocks.after.length; index += 1) {
-    const old = blocks.before[index]!;
-    const block = blocks.after[index]!;
-    if (old === block) continue;
-    if (old.kind !== 'paragraph' || block.kind !== 'paragraph' || old.id !== block.id)
-      return undefined;
-    if (++changed > MAX_CHANGED_PARAGRAPHS) return undefined;
-    if (holdsParagraph(old) || holdsParagraph(block)) return undefined;
-    if (paragraphOffsetIndex(old).length !== paragraphOffsetIndex(block).length) return undefined;
+  if (!blocks) return undefined;
+  // Paragraphs added or removed (a split, a join) whose neighbourhood holds no revision.
+  const spliced = blocks.before.length === blocks.after.length ? null : splicedParagraphs(blocks);
+  if (spliced === undefined) return undefined;
+  if (spliced === null) {
+    // Position by position: the queue reads sibling order (which paragraph follows which), so
+    // a block that moved is a change even when it is the same object.
+    let changed = 0;
+    for (let index = 0; index < blocks.after.length; index += 1) {
+      const old = blocks.before[index]!;
+      const block = blocks.after[index]!;
+      if (old === block) continue;
+      if (old.kind !== 'paragraph' || block.kind !== 'paragraph' || old.id !== block.id)
+        return undefined;
+      if (++changed > MAX_CHANGED_PARAGRAPHS) return undefined;
+      if (holdsParagraph(old) || holdsParagraph(block)) return undefined;
+      if (paragraphOffsetIndex(old).length !== paragraphOffsetIndex(block).length) return undefined;
+    }
   }
   const oldSites = collectRevisionSites(previousPart);
   const newSites = collectRevisionSites(part);
   if (oldSites.length !== newSites.length) return undefined;
   const after = locateSites(part);
+  if (spliced) {
+    for (const location of before.values()) if (spliced.has(location.paragraphId)) return undefined;
+    for (const location of after.values()) if (spliced.has(location.paragraphId)) return undefined;
+  }
   for (let index = 0; index < newSites.length; index += 1) {
     const site = newSites[index]!;
     // A move range's preview is the text between its markers, not the site's own.

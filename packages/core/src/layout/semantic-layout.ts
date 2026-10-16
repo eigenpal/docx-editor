@@ -994,14 +994,23 @@ function* layoutBlocksPass(
   function buildSectionPrepass(): SectionPrepass {
     // Frame admission can vary during wrap probes without moving resource epochs.
     // Keep those passes on the full preparation path.
-    const reusable =
-      prepassInputsValid && columns.count === 1 && !options.disabledParagraphFrameIds
-        ? prepassMemo
-        : null;
+    const unframed = columns.count === 1 && !options.disabledParagraphFrameIds;
+    const reusable = prepassInputsValid && unframed ? prepassMemo : null;
+    // Only the list map moved (a paragraph split or joined renumbers some items, and the map is
+    // new): an unchanged paragraph whose own list item is the same object keeps its entry; any
+    // other block is prepared again, which its own memo answers.
+    const listMoved = !reusable && prepassNonListInputsValid && unframed ? prepassMemo : null;
     const orderSource = reusable ?? (autofitInputsEqual ? prepassMemo : null);
     const prepared = resolveListAutoSpacing(
-      sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
-        prepareBlock(block, contentWidth)
+      sectionPrep.prepareSectionBlocks(
+        bodies,
+        reusable ?? listMoved,
+        (block) => prepareBlock(block, contentWidth),
+        listMoved
+          ? (block) =>
+              block.kind === 'paragraph' &&
+              listMoved.listItems?.get(block.id) === listItems?.get(block.id)
+          : undefined
       ),
       options.paragraphLineUnitPt,
       styleCascade

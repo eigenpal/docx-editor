@@ -2,7 +2,9 @@
 export function prepareSectionBlocks<Node extends object, Prepared>(
   bodies: readonly Node[],
   previous: { readonly bodies: readonly Node[]; readonly prepared: readonly Prepared[] } | null,
-  prepare: (body: Node) => Prepared
+  prepare: (body: Node) => Prepared,
+  /** When given, an unchanged block keeps its entry only if this also holds for it. */
+  stillValid?: (body: Node) => boolean
 ): Prepared[] {
   if (!previous) return bodies.map(prepare);
   // Match shifted tails after insert/delete without allocating a document-sized map.
@@ -17,6 +19,7 @@ export function prepareSectionBlocks<Node extends object, Prepared>(
       suffix += 1;
   }
   return bodies.map((body, index) => {
+    if (stillValid && !stillValid(body)) return prepare(body);
     if (body === previous.bodies[index]) return previous.prepared[index]!;
     if (index >= bodies.length - suffix) {
       return previous.prepared[index + previous.bodies.length - bodies.length]!;
