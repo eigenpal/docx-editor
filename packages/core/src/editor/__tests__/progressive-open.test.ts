@@ -477,6 +477,53 @@ describe('a large open laid out in slices', () => {
     }
   });
 
+  test('Select All during the slices selects the whole body', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      expect(progressiveOpenPending(surface)).toBe(true);
+      surface.selectAll();
+      const ids = surface.session.paragraphIds();
+      expect(surface.state().selection.anchor.paragraphId).toBe(ids[0]);
+      expect(surface.state().selection.head.paragraphId).toBe(ids[ids.length - 1]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a bookmark past the laid-out pages moves the caret at once, and the view follows', () => {
+    const parts: string[] = [];
+    for (let index = 0; index < 299; index += 1)
+      parts.push(paragraph(`Paragraph ${index}`, '<w:pageBreakBefore/>'));
+    parts.push(
+      '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:bookmarkStart w:id="1" w:name="Far"/>' +
+        '<w:r><w:t>Far target</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+    );
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+    const surface = slicedMount(bytes);
+    try {
+      expect(progressiveOpenPending(surface)).toBe(true);
+      expect(surface.bookmarkEditing.goTo('Far')).toBe(true);
+      // Not laid out yet, and the jump did not lay the document out to answer.
+      expect(progressiveOpenPending(surface)).toBe(true);
+      const ids = surface.session.paragraphIds();
+      expect(surface.state().selection.head.paragraphId).toBe(ids[ids.length - 1]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a long table after the first slice is hashed a row at a time', () => {
     const bytes = longTableDocx();
     const surface = slicedMount(bytes);

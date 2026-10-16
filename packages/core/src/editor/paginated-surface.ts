@@ -1370,6 +1370,7 @@ export function mountPaginatedSurface(
     linkById: (linkId) => fieldLinks.linkById(linkId) ?? hyperlinks.linkById(linkId),
     drawingLinkById: (drawingNodeId) => drawingLinkByIdFromLayout(currentLayout, drawingNodeId),
     setSelection: (position) => setSelection(collapsedAt(position)),
+    whenLaidOut: (position, retry) => laterOnOpening(position, retry),
     enterStoryFor: (paragraphId) => enterStoryHolding(paragraphId),
     // Viewing makes no range from a press, so a range left over from editing is no drag.
     isCollapsedSelection: () =>
@@ -4764,6 +4765,7 @@ export function mountPaginatedSurface(
     },
 
     navigate(command, extend = false) {
+      if (command === 'documentEnd') completeProgressiveOpen(surface); // The real end.
       // Arrow keys move from the caret AFTER the typed text, over the layout
       // that includes it.
       flushPendingInputAndLayout();
@@ -5079,6 +5081,7 @@ export function mountPaginatedSurface(
     },
 
     selectAll() {
+      completeProgressiveOpen(surface); // The order below reads the whole layout.
       const ids = paragraphOrder();
       const first = ids[0];
       const last = ids[ids.length - 1];

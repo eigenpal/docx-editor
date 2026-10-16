@@ -46,6 +46,14 @@ export interface NavigationDeps {
   readonly drawingLinkById?: (drawingNodeId: string) => SurfaceHyperlink | null;
   readonly setSelection: (position: { paragraphId: string; offset: number }) => void;
   /**
+   * During a large open, wait for a target the layout has not reached and `retry` the jump
+   * once it has. False when there is nothing to wait for.
+   */
+  readonly whenLaidOut?: (
+    position: { paragraphId: string; offset: number },
+    retry: () => void
+  ) => boolean;
+  /**
    * Put the surface in the story a jump target is in, before the caret moves there.
    *
    * A bookmark, and now an internal link, can name a paragraph in a header, a footer or a
@@ -167,7 +175,13 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
       position,
       entered ? undefined : { preferredPageIndex: pageInView(layout, element, deps.scale()) }
     );
-    if (!caret) return false;
+    if (!caret) {
+      // A body target past the pages laid out so far: the caret moves now, the view follows.
+      if (!entered || !deps.whenLaidOut?.(position, () => goToPosition(position, options)))
+        return false;
+      deps.setSelection(position);
+      return true;
+    }
     const page = layout.pages[caret.pageIndex];
     if (!page) return false;
 
