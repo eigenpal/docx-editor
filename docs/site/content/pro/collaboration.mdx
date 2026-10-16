@@ -745,7 +745,7 @@ If your server knows which document a room edits, seed the room on the server in
 
 Seed a room only when your application knows that the room is new. A second seed of a room that already exists replaces its content with the original file, and every edit made since is gone from the room. If the server knows a room but cannot find its stored state, refuse the room with `saved-room-unavailable`. Participants keep their copies while you restore the state.
 
-The following server keeps three kinds of files. The application writes a room's `.docx` file when it creates the room. The server writes the room's state, and a record that it seeded the room. Keep the records apart from the state, for example in your database, so that losing the state does not also lose the record. Every write of new state is create-only, so two server processes that load one new room at the same time keep one seed.
+The following server keeps three kinds of files. The application writes a room's `.docx` file when it creates the room. The server writes the room's state, and a record that it seeded the room. Keep the records apart from the state, for example in your database, so that losing the state does not also lose the record. Every write of new state is create-only, so two server processes that load one new room at the same time keep one seed. When the server loads stored state that has no record, it writes the record, so a crash between the two writes does not leave a room unprotected.
 
 ```ts
 import { link, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
@@ -794,22 +794,28 @@ async function readIfPresent(file: string): Promise<Uint8Array | null> {
 /** Write a file that must not exist yet. Resolves false when it exists. */
 async function writeNew(file: string, bytes: Uint8Array): Promise<boolean> {
   const temporary = `${file}.${randomUUID()}.tmp`;
-  const handle = await open(temporary, 'wx');
   try {
-    await handle.writeFile(bytes);
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
+    const handle = await open(temporary, 'wx');
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
     await link(temporary, file); // Fails with EEXIST when the file exists.
     return true;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
     throw error;
   } finally {
-    await unlink(temporary);
+    await unlink(temporary).catch(() => undefined);
   }
+}
+
+/** Write the room's seed record if it has none. */
+async function recordSeeded(documentName: string): Promise<void> {
+  const record = fileOf(SEEDED_DIR, documentName, '.seeded');
+  if (!(await readIfPresent(record))) await writeNew(record, new Uint8Array());
 }
 
 async function seedRoom(documentName: string, stateFile: string): Promise<Uint8Array> {
@@ -832,7 +838,7 @@ async function seedRoom(documentName: string, stateFile: string): Promise<Uint8A
     if (!existing) throw refusal('saved-room-unavailable');
     state = existing;
   }
-  await writeNew(fileOf(SEEDED_DIR, documentName, '.seeded'), new Uint8Array());
+  await recordSeeded(documentName);
   return state;
 }
 
@@ -847,6 +853,9 @@ const server = new Server({
         throw refusal('saved-room-unavailable');
       }
       state = await seedRoom(documentName, stateFile);
+    } else {
+      // A crash between the state write and the record write leaves a room without a record.
+      await recordSeeded(documentName);
     }
     Y.applyUpdate(document, state);
     return document;

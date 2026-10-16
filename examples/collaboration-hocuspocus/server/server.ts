@@ -12,7 +12,7 @@
 // Run it with Node 22.18 or later: `node server/server.ts`. Node strips the types.
 // Hocuspocus v4 targets Node, not Bun.
 
-import { mkdir, readFile } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import {
@@ -98,8 +98,9 @@ async function seedNewRoom(documentName: string, file: string): Promise<Uint8Arr
     });
   } catch (error) {
     console.warn(`[room ${documentName}] no seed: ${(error as Error).message}`);
+    // An unreadable seed file is a document that cannot open, as a refused one is.
     throw admissionError(
-      error instanceof CollaborationSchemaError ? error.code : 'saved-room-unavailable'
+      error instanceof CollaborationSchemaError ? error.code : 'invalid-baseline'
     );
   }
   await mkdir(DATA_DIR, { recursive: true });
@@ -108,9 +109,25 @@ async function seedNewRoom(documentName: string, file: string): Promise<Uint8Arr
     if (!existing) throw admissionError('saved-room-unavailable');
     state = existing;
   }
-  const record = roomRecordFile(documentName);
-  if (record) await writeNewFile(record, new TextEncoder().encode(new Date().toISOString()));
+  await recordRoom(documentName);
   return state;
+}
+
+/**
+ * Write the room's record if it has none. The server also does this when it loads a stored
+ * room, so a crash between the state write and the record write leaves no room without one.
+ */
+async function recordRoom(documentName: string): Promise<void> {
+  const record = roomRecordFile(documentName);
+  if (
+    !record ||
+    (await access(record).then(
+      () => true,
+      () => false
+    ))
+  )
+    return;
+  await writeNewFile(record, new TextEncoder().encode(new Date().toISOString()));
 }
 
 const { config, rooms } = withCollaborationTelemetry(
@@ -160,6 +177,7 @@ const { config, rooms } = withCollaborationTelemetry(
       if (!file) return document;
       const stored = await readStoredRoom(documentName, file);
       if (stored) {
+        await recordRoom(documentName);
         const compacted = await compactCollaborationState(stored).catch(() => null);
         if (compacted) await writeAtomically(file, compacted);
         loadStoredDemoDocument(document, compacted ?? stored);

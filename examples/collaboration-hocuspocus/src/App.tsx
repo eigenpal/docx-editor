@@ -402,18 +402,23 @@ export function App() {
   // reconnecting to the room it was just asked to leave.
   const [left, setLeft] = useState(false);
 
-  // Fetch the document and Word's substitute faces in one call. The hook holds `document`
-  // back until fonts settle, because layout measures with them.
+  // A tab opened from an invite link joins a room that exists, so it needs no document of its
+  // own: the room is the document. Read once; the address bar changes only on join.
+  const [invited] = useState(() => roomFromUrl() !== null);
+
+  // Fetch the document and the substitute faces in one call. The hook holds `document` back
+  // until fonts settle, because layout measures with them. An invited tab loads fonts only.
   const {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(DOCUMENT_URL, { fonts: packagedFonts() });
+  } = useDocxSource(invited ? null : DOCUMENT_URL, { fonts: packagedFonts() });
 
   // Only the room's identity keys the connection, so this object does not need to be stable —
   // but building it in a memo keeps the branch that decides "no room yet" in one place.
   const room = useMemo(() => {
-    if (!joined || !bytes || left) return null;
+    if (!joined || left) return null;
+    if (joined.creating && !bytes) return null;
     return {
       url: SERVER_URL,
       roomId: joined.roomId,
@@ -425,9 +430,12 @@ export function App() {
         color: joined.person.color,
       },
       // `server/server.ts` seeds every new room itself, so every tab joins the document the
-      // server holds and uploads nothing. These bytes seed the room only on a server that
-      // leaves new rooms empty.
-      bootstrap: { kind: 'create-or-join', document: bytes } as const,
+      // server holds and uploads nothing. The starting tab's bytes seed the room only on a
+      // server that leaves new rooms empty; an invited tab only joins.
+      bootstrap:
+        joined.creating && bytes
+          ? ({ kind: 'create-or-join', document: bytes } as const)
+          : ({ kind: 'join' } as const),
     };
   }, [bytes, joined, left]);
 
@@ -462,7 +470,7 @@ export function App() {
     );
   }
 
-  if (!joined) return <SignIn ready={bytes !== undefined} onJoin={join} />;
+  if (!joined) return <SignIn ready={invited || bytes !== undefined} onJoin={join} />;
 
   if (collaboration.error) {
     const message = failureMessage(collaboration.error, {

@@ -24,6 +24,7 @@
 //   restart and a compaction reads them too, and its edit reaches another participant.
 // - After the stored state is lost, the server seeds nothing: a participant that reconnects
 //   reports `saved-room-unavailable` and keeps its document, and a new participant is refused.
+// - A join whose signal fired before it finished rejects with `initialization-aborted`.
 // - No session reported any other error.
 
 import { HocuspocusProvider } from '@hocuspocus/provider';
@@ -146,19 +147,27 @@ export async function runSeedScenario(
     const abort = rng() < 0.2 ? new AbortController() : null;
     const chosen = bootstrap();
     log.push(`${when} ${peer} ${chosen.kind}${abort ? ' abort' : ''}`);
-    if (abort) setTimeout(() => abort.abort(), int(0, 60));
+    // Most joins finish in a few ms, so the abort lands early, often while the room loads.
+    if (abort) setTimeout(() => abort.abort(), int(0, 6));
     try {
       const participant = await joinRoom(server, {
         peer,
         roomId,
         bootstrap: abort ? { ...chosen, signal: abort.signal } : chosen,
       });
+      if (abort?.signal.aborted) {
+        // The signal fired before the join finished: the join must reject, not resolve.
+        problems.push(`${peer} joined after its join was aborted`);
+        participant.destroy();
+        return null;
+      }
       live.push({ participant, online: true });
       return participant;
     } catch (error) {
       const code = (error as { code?: string }).code;
       // An aborted join is the participant leaving; anything else is a defect.
-      if (!(abort?.signal.aborted && code === 'initialization-aborted')) {
+      if (abort?.signal.aborted && code === 'initialization-aborted') log.push(`${peer} aborted`);
+      else {
         problems.push(`${peer} failed to open the room: ${code ?? (error as Error).message}`);
       }
       return null;
@@ -407,9 +416,13 @@ async function loseStorage(
   server.storage.delete(roomId);
   await holder.reconnect();
   await until(
-    () => holder.statuses.includes('error:saved-room-unavailable'),
+    () => holder.statuses.some((status) => status.startsWith('error')),
     'the reconnecting participant to be refused'
   );
+  const reported = holder.statuses.find((status) => status.startsWith('error'));
+  if (reported !== 'error:saved-room-unavailable') {
+    problems.push(`the reconnecting participant reported ${reported}, not saved-room-unavailable`);
+  }
   if (JSON.stringify(paragraphTexts(holder.store)) !== before) {
     problems.push('the refused participant lost its document');
   }

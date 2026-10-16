@@ -23,6 +23,7 @@ import {
 } from '../index.ts';
 import { SEED_RECORDS_KEY } from '../document-bootstrap.ts';
 import { collaborationDocx } from './support.ts';
+import { zipDocument } from './document-peer-support.ts';
 import { deleteContent, keepFormattingMarkers } from '../document/yjs-items.ts';
 
 const REMOTE = Symbol('remote');
@@ -160,3 +161,36 @@ function stateDoc(state: Uint8Array): Y.Doc {
   Y.applyUpdate(document, state);
   return document;
 }
+
+describe('a participant seed over the size limit', () => {
+  // A small file whose parts expand past 20 MiB. The zip reader refuses it by its expanded
+  // size before it inflates anything, and the seed reports that size, not a broken file.
+  const oversized = zipDocument('<w:p/><w:sectPr/>', {
+    extraXml: { 'word/padding.xml': `<a>${'x'.repeat(21 * 1024 * 1024)}</a>` },
+  });
+
+  for (const kind of ['create', 'create-or-join'] as const) {
+    test(`a ${kind} bootstrap reports baseline-too-large`, async () => {
+      expect(oversized.byteLength).toBeLessThan(1024 * 1024);
+      const ydoc = new Y.Doc();
+      const awareness = new Awareness(ydoc);
+      try {
+        await expect(
+          createDocumentCollaboration({
+            ydoc,
+            awareness,
+            documentId: 'oversized-room',
+            identity: { actorId: 'creator', name: 'Creator' },
+            bootstrap:
+              kind === 'create'
+                ? { kind, document: oversized }
+                : { kind, document: oversized, probeTimeoutMs: 0, electionWindowMs: 0 },
+          })
+        ).rejects.toMatchObject({ code: 'baseline-too-large' });
+      } finally {
+        awareness.destroy();
+        ydoc.destroy();
+      }
+    });
+  }
+});

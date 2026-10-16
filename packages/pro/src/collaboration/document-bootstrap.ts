@@ -128,12 +128,13 @@ function waitForSharedInitialization(
     const digest = blobs.poisonedDigest();
     return digest ? new CollaborationSchemaError('blob-digest-mismatch', digest) : null;
   };
-  if (ready()) return Promise.resolve();
-  const poisonedNow = poison();
-  if (poisonedNow) return Promise.reject(poisonedNow);
+  // An aborted join stays aborted, even when the room is already there.
   if (signal?.aborted) {
     return Promise.reject(new CollaborationSchemaError('initialization-aborted'));
   }
+  if (ready()) return Promise.resolve();
+  const poisonedNow = poison();
+  if (poisonedNow) return Promise.reject(poisonedNow);
   return new Promise((resolve, reject) => {
     const finish = (error?: Error): void => {
       clearTimeout(timer);
@@ -257,10 +258,10 @@ function waitForDocumentId(
 ): Promise<void> {
   const meta = registry.schema.meta;
   const has = (): boolean => meta.get('documentId') !== undefined;
-  if (has()) return Promise.resolve();
   if (signal?.aborted) {
     return Promise.reject(new CollaborationSchemaError('initialization-aborted'));
   }
+  if (has()) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const finish = (error?: Error): void => {
       clearTimeout(timer);
@@ -338,6 +339,8 @@ async function runCreateOrJoinBootstrap(
       await waitForSharedInitialization(registry, blobs, joinMs, options.signal);
       return await joined();
     }
+    // A participant that left during the election seeds nothing.
+    if (options.signal?.aborted) throw new CollaborationSchemaError('initialization-aborted');
     const seeded = await seedPackage(registry, openBaselinePackage(options.document), blobs);
     if (!seeded.ok) throw new CollaborationSchemaError(seeded.code);
     // `seedPackage` owns its transaction (it awaits blob digests first), so the seed record
