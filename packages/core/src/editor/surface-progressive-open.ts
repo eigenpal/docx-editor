@@ -287,6 +287,11 @@ export function startOpeningSlices(
     if (stopped) return;
     stopped = true;
     steps.delete(surface);
+    // The surface keeps `finishPaused` for its lifetime: drop what it closes over, or the last
+    // table rows hashed and a paused pass keep old revisions of the document alive.
+    pass = null;
+    nextLimit = null;
+    hashQueue = [];
     for (const type of inputs) target.removeEventListener(type, dropReveal, true);
     container().removeAttribute('data-docx-opening-preview');
     if (!host.busy()) container().removeAttribute('data-docx-layout-pending');
