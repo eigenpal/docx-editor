@@ -53,3 +53,25 @@ test('deep paragraph order keeps its depth bound', () => {
   expect(order(nest(62))).toHaveLength(1);
   expect(order(nest(63))).toHaveLength(0);
 });
+
+test('deep paragraph order after splits equals a fresh read, text box paragraphs included', () => {
+  const textBox =
+    '<w:r><w:pict><w:txbxContent><w:p>' +
+    run('inner one') +
+    '</w:p><w:p>' +
+    run('inner two') +
+    '</w:p></w:txbxContent></w:pict></w:r>';
+  let part = document(
+    `<w:p>${run('first')}</w:p>` + `<w:p>${run('holder')}${textBox}</w:p>` + table + '<w:p/>'
+  );
+  // Three body paragraphs, two text box paragraphs, two cell paragraphs.
+  expect(order(part)).toHaveLength(7);
+  for (const index of [0, 2, 0]) {
+    const paragraphId = (bodyOf(part).children[index] as OoxmlElement).id;
+    const edit = applyTreeOp(part, { op: 'splitParagraph', paragraphId, offset: 2 });
+    if (!edit.ok) throw Error(edit.reason);
+    part = edit.part;
+    expect(order(part)).toEqual(order(structuredClone(part)));
+  }
+  expect(order(part)).toHaveLength(10);
+});

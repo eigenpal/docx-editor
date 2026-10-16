@@ -98,8 +98,18 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
   const cached = subtreeDeepParagraphIdsCache.get(node);
   if (cached && cached.depth === depth) return cached.ids;
   let found: string[] | null = null;
-  if (node.kind === 'paragraph') (found ??= []).push(node.id);
+  if (node.kind === 'paragraph') {
+    (found ??= []).push(node.id);
+    for (const id of nestedParagraphIdsOf(node, depth)) found.push(id);
+    return found;
+  }
   for (const child of node.children) {
+    if (child.kind === 'paragraph' && depth + 1 <= MAX_DEEP_PARAGRAPH_DEPTH) {
+      // A paragraph is its own id and the few it nests: read from its memo, not its runs.
+      (found ??= []).push(child.id);
+      for (const id of nestedParagraphIdsOf(child, depth + 1)) found.push(id);
+      continue;
+    }
     const ids = subtreeDeepParagraphIds(child, depth + 1);
     if (ids.length === 0) continue;
     found ??= [];
@@ -113,6 +123,32 @@ function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly strin
       found?.length ?? 0
     );
   return found ?? EMPTY_DEEP_PARAGRAPH_IDS;
+}
+
+/**
+ * The paragraphs nested inside one paragraph (a text box's), at `depth`, memoized per paragraph
+ * for every paragraph: a long document's paragraphs are mostly too small for the subtree memo,
+ * and re-reading every run of every paragraph after a split was most of a new order's cost.
+ * Almost always the shared empty list.
+ */
+const nestedParagraphIdsCache = new WeakMap<OoxmlNode, DeepParagraphIds>();
+
+function nestedParagraphIdsOf(paragraph: OoxmlNode, depth: number): readonly string[] {
+  if (paragraph.kind === 'textValue') return EMPTY_DEEP_PARAGRAPH_IDS;
+  const cached = nestedParagraphIdsCache.get(paragraph);
+  if (cached && cached.depth === depth) return cached.ids;
+  let nested: string[] | null = null;
+  for (const child of paragraph.children) {
+    const ids = subtreeDeepParagraphIds(child, depth + 1);
+    if (ids.length === 0) continue;
+    nested ??= [];
+    for (const id of ids) nested.push(id);
+  }
+  nestedParagraphIdsCache.set(
+    paragraph,
+    nested ? { depth, ids: nested } : EMPTY_DEEP_PARAGRAPH_ENTRIES[depth]!
+  );
+  return nested ?? EMPTY_DEEP_PARAGRAPH_IDS;
 }
 
 const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(3);
