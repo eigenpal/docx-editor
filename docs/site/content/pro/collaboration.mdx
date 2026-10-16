@@ -639,7 +639,7 @@ The provider preserves recognized collaboration failure codes from the server bo
 
 An unrecognized authentication refusal produces `initialization-aborted` during initialization or `authentication-failed` after joining. For a rejected credential, refresh it before calling `rejoin`. A `transport-disconnected` failure recovers on its own.
 
-`syncedTimeoutMs` limits the initial sync wait. Its default is 30 seconds. A timeout produces `initialization-timeout`.
+`syncedTimeoutMs` limits the initial sync wait. Its default is 30 seconds. A timeout produces `initialization-timeout`. The bootstrap `signal` covers the whole join, the server's load of the room included. An aborted join fails with `initialization-aborted`, also when the room is already present.
 
 The `createHocuspocusCollaboration` factory accepts the same options. Import it from `@docx-editor.dev/pro/collaboration/hocuspocus`. It returns the room, `ydoc`, and `provider`.
 

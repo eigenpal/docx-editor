@@ -40,6 +40,8 @@ import { useColorMode, type ColorMode } from './useColorMode';
 import { actorIdFor, PEOPLE, type Person } from './people';
 import { encodeDemoToken } from '../shared/admission';
 import { failureMessage } from '../shared/failure-message';
+import { exampleText as t } from '../../shared/example-text';
+import { roomAddress } from './room-address';
 
 /**
  * Anonymous diagnostics. In development, the console prints each one with its hint, such as why
@@ -444,12 +446,17 @@ export function App() {
   const join = useCallback((person: Person) => {
     const invited = roomFromUrl();
     const roomId = invited ?? createCollaborationRoomId();
-    const url = new URL(location.href);
-    url.search = '';
-    url.searchParams.set('room', roomId);
-    history.replaceState(null, '', url);
     setJoined({ person, roomId, actorId: actorIdFor(person), creating: invited === null });
   }, []);
+
+  // Name the room in the address bar. A starting tab waits for its first successful connect:
+  // until then a reload starts a new room instead of asking for one the server never made.
+  const connected = collaboration.document !== null;
+  useEffect(() => {
+    if (!joined) return;
+    const next = roomAddress({ href: location.href, ...joined, connected });
+    if (next) history.replaceState(null, '', next);
+  }, [joined, connected]);
 
   const leave = useCallback(
     (nextDocument: Uint8Array) => {
@@ -488,6 +495,11 @@ export function App() {
             </a>
           ) : null}
           {message.command ? <code>{message.command}</code> : null}
+          {message.retry && room ? (
+            <button type="button" onClick={() => void collaboration.connect(room)}>
+              {t('collaborationDemo.serverRecovery.retry')}
+            </button>
+          ) : null}
         </div>
       </div>
     );

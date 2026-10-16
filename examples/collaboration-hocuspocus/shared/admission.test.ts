@@ -175,6 +175,7 @@ describe('demo version recovery', () => {
     expect(message.body).toContain('network connection');
     expect(message.body).not.toContain('Nothing is listening');
     expect(message.command).toBe(context.serverCommand);
+    expect(message.retry).toBe(true);
   });
   test('other failures preserve local work without exposing diagnostics or blaming storage', () => {
     const message = failureMessage(
