@@ -712,3 +712,44 @@ test('orphan-only review metadata does not walk the semantic page graph', () => 
     { kind: 'comment', text: 'Orphan only', orphaned: true, occurrences: [] },
   ]);
 });
+
+test('a property change that leaves the formatting unchanged has no artifact and no markup', async () => {
+  const change = (value: string, text: string) =>
+    `<w:p><w:pPr><w:jc w:val="${value}"/><w:pPrChange w:id="${text.length}" w:author="Ada" w:date="2026-03-01T10:00:00Z"><w:pPr/></w:pPrChange></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const source = pkg(change('left', 'Unlisted') + change('center', 'Listed'));
+  const main = source.parts.get(source.mainDocumentPart)!;
+  const opened = openDocumentForExport(
+    liveView(new TreePackageStore(source, normalizeParagraphIdentity(main)))
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const layout = await opened.session.layout();
+    const revisions = layout.reviewArtifacts?.filter(
+      (artifact) => artifact.kind === 'tracked-change'
+    );
+    expect(revisions).toHaveLength(1);
+    // Paragraph ids whose laid-out properties still carry the paragraph-property change.
+    const marked = new Set<string>();
+    const seen = new Set<object>();
+    const visit = (value: unknown, paragraphId: string | undefined, depth: number): void => {
+      if (depth > 40 || value === null || typeof value !== 'object' || seen.has(value)) return;
+      seen.add(value);
+      const record = value as Record<string, unknown>;
+      const here = typeof record.paragraphId === 'string' ? record.paragraphId : paragraphId;
+      const props = record.props;
+      if (
+        here &&
+        Array.isArray(props) &&
+        props.some((property) => (property as { localName?: string }).localName === 'pPrChange')
+      ) {
+        marked.add(here);
+      }
+      for (const entry of Object.values(record)) visit(entry, here, depth + 1);
+    };
+    visit(layout.pages, undefined, 0);
+    expect(marked.size).toBe(1);
+  } finally {
+    opened.session.dispose();
+  }
+});

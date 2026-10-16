@@ -1740,6 +1740,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     placements: reviewPlacements,
     visible: () =>
       filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
+    authorVisible: (author) => reviewAuthorVisibility.isVisible(author),
+    predicateActive: () => reviewAuthorVisibility.hasPredicate,
     scope: storyScopeOfReviewItem,
     reveal: (event) => events.emitReviewItemReveal(withRevealPairKey(reviewPlacements, event)),
     activate: (key, allowExcludedFormat) => {

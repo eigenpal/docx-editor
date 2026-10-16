@@ -18,13 +18,12 @@
 // caller's is bounded and validated as XML text here, and only ever compared against names the
 // document already declares — nothing is templated into markup and no id is derived from it.
 
-import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { indexStyles, numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
-import { resolveRelationship } from '../store/package/relationships.ts';
 import {
   paragraphInheritsRtl,
   type DirectionSources,
@@ -50,28 +49,6 @@ export interface AutomationStyleIndex {
    * layout resolves them. `styleId` resolves it as if it named that paragraph style.
    */
   inheritsRtl(part: OoxmlPart, paragraph: OoxmlNode, styleId?: string): boolean;
-}
-
-const NUMBERING_REL =
-  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
-
-/**
- * The numbering part's root, chosen as the editor session chooses the one it paints with: the
- * main document's FIRST numbering relationship, else the default path.
- */
-function numberingRootOf(pkg: OoxmlPackage): OoxmlElement | null {
-  const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
-    (relationship) => relationship.type === NUMBERING_REL
-  );
-  let part: OoxmlPart | undefined;
-  if (record) {
-    const resolved = resolveRelationship(record);
-    if (resolved.mode === 'Internal' && resolved.target.ok) {
-      part = pkg.parts.get(resolved.target.partName);
-    }
-  }
-  part ??= pkg.parts.get('/word/numbering.xml');
-  return part?.root ?? null;
 }
 
 /**

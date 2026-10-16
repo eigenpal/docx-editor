@@ -40,6 +40,7 @@ import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { nestedTextDecisionOps } from './revision-nested-text.ts';
 import { parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { revisionItemsInStory, revisionReads } from './review.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import {
   resolveSpanRef,
   spanValue,
@@ -258,12 +259,13 @@ function itemsInScope(
 function listedHandles(
   reads: AutomationStoryReads,
   items: readonly ReviewRevisionItem[],
-  handles: AutomationHandleTable
+  handles: AutomationHandleTable,
+  pkg: OoxmlPackage | null
 ): AutomationValue {
   const ids = new Set(items.map((item) => item.id));
   return {
     kind: 'handles',
-    handles: revisionReads(reads)
+    handles: revisionReads(reads, pkg)
       .filter((revision) => ids.has(revision.id))
       .map((revision) => handles.revision(revision.id, reads.story)),
   };
@@ -448,7 +450,9 @@ export function planRevisionListing(
     const reads = story.value;
     return query({
       kind: 'handles',
-      handles: revisionReads(reads).map((item) => handles.revision(item.id, reads.story)),
+      handles: revisionReads(reads, packageReads.package).map((item) =>
+        handles.revision(item.id, reads.story)
+      ),
     });
   }
   if ('key' in operation) {
@@ -456,14 +460,23 @@ export function planRevisionListing(
     if (invalid) return invalid;
     const found = revisionItemsOfKey(packageReads, operation.key);
     return query(
-      found ? listedHandles(found.reads, found.items, handles) : { kind: 'handles', handles: [] }
+      found
+        ? listedHandles(found.reads, found.items, handles, packageReads.package)
+        : { kind: 'handles', handles: [] }
     );
   }
   const scope = resolveSpanRef(operation.scope, handles, packageReads);
   if (!scope.ok) return refuse(scope.code, 'that span is not a place', scope.detail);
   const story = storyOfSpanRef(operation.scope, handles, packageReads);
   if (!story.ok) return refuse(story.code, 'that span names no story', story.detail);
-  return query(listedHandles(story.value, itemsInScope(story.value, scope.value), handles));
+  return query(
+    listedHandles(
+      story.value,
+      itemsInScope(story.value, scope.value),
+      handles,
+      packageReads.package
+    )
+  );
 }
 
 type NarrowDecision = Extract<

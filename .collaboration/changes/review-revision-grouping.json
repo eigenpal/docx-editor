@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Review items listed every property-change element, one item per paragraph for a paragraph-property change, and kept insertions or deletions apart across a tracked paragraph mark when their dates differed.",
+  "after": "Each replica leaves out property changes that resolve to the same formatting, joins identical paragraph-property changes on consecutive paragraphs, and joins edits across a tracked paragraph mark whatever their dates. Accept All and Reject All with no keys also clear the unlisted records of the authors they reach.",
+  "reason": "Only the derived review queue changes. Shared nodes, text offsets, operations, and package serialization remain unchanged, and every replica derives the same queue from the shared tree.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-review-grouping.test.ts",
+    "packages/core/src/editor/__tests__/review-inert-property-changes.test.ts",
+    "packages/core/src/store/__tests__/review-cross-paragraph-groups.test.ts",
+    "packages/editor-api/src/model/__tests__/model-revision-inert-formatting.test.ts",
+    "packages/core/src/binding/__tests__/review-item-filter.test.ts"
+  ],
+  "changeset": "review-revision-grouping",
+  "migration": null
+}

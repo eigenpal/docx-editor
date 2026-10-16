@@ -136,16 +136,23 @@ describe('shared Review menu commands', () => {
     });
   }
 
-  test('empty adjacent paragraph breaks from separate editing moments stay separate', () => {
-    const mark = (id: number, date: string) =>
-      `<w:p><w:pPr><w:rPr><w:ins w:id="${id}" w:author="Ada" w:date="${date}"/></w:rPr></w:pPr></w:p>`;
-    const editor = mountEditor(mark(1, '2026-09-08T10:00:00Z') + mark(2, '2026-09-09T10:00:00Z'));
-    const paragraphBreaks = editor
-      .getReviewItems({ pairReplacements: false })
-      .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
-    expect(paragraphBreaks).toHaveLength(2);
-    editor.destroy();
-  });
+  for (const [name, author, expected] of [
+    ['one author at separate editing moments join', 'Ada', 1],
+    ['two authors stay separate', 'Grace', 2],
+  ] as const) {
+    test(`empty adjacent paragraph breaks by ${name}`, () => {
+      const mark = (id: number, who: string, date: string) =>
+        `<w:p><w:pPr><w:rPr><w:ins w:id="${id}" w:author="${who}" w:date="${date}"/></w:rPr></w:pPr></w:p>`;
+      const editor = mountEditor(
+        mark(1, 'Ada', '2026-09-08T10:00:00Z') + mark(2, author, '2026-09-09T10:00:00Z')
+      );
+      const paragraphBreaks = editor
+        .getReviewItems({ pairReplacements: false })
+        .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
+      expect(paragraphBreaks).toHaveLength(expected);
+      editor.destroy();
+    });
+  }
   test('navigation starts from the caret when no change is active', () => {
     const editor = mountEditor(ins(1) + '<w:p><w:r><w:t>Unchanged</w:t></w:r></w:p>' + ins(2));
     const items = editor.getReviewItems({ pairReplacements: false });

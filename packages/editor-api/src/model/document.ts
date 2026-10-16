@@ -197,7 +197,8 @@ export class Document extends ModelObject {
   /**
    * The tracked changes of the main-body story that this API can publish as typed objects.
    *
-   * Structural cards whose exact Word subtype cannot be named are omitted from `items`.
+   * Structural cards whose exact Word subtype cannot be named are omitted from `items`, and so
+   * are property changes that leave the resolved formatting unchanged.
    * `acceptAll` / `rejectAll` still resolve every store-resolvable revision in the main body
    * and refuse atomically if any `readOnly` or otherwise unsupported revision remains. Header,
    * footer, and note revisions live on those stories' own `Body.revisions` collections.

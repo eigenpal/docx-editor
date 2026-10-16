@@ -104,6 +104,18 @@ export interface RevisionFilter {
    */
   readonly resolvedMarkup?: 'plain';
   readonly cacheKey: string;
+  /**
+   * @internal Revision records the review queue leaves out, by change-element node id, and the
+   * paragraphs that hold them. Their paragraphs project without those records, so they paint
+   * no markup. Not a selection: it never moves a projection off the unfiltered path.
+   */
+  readonly unlisted?: {
+    readonly sites: ReadonlySet<string>;
+    /** Each paragraph that holds one, keyed by the records it holds. */
+    readonly paragraphs: ReadonlyMap<string, string>;
+    /** Names the styles and numbering the records were decided against. */
+    readonly key: string;
+  };
 }
 
 /**
