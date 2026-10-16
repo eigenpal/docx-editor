@@ -10,19 +10,7 @@
 import { cjkChopCutAllowedAt, lineOpenDecisionAt } from './cjk-line-break.ts';
 import type { CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import type { PieceDictionaryCuts } from './dictionary-piece-cuts.ts';
-import { breakAfterSignScript, isDictionaryWordBreakSupported } from './dictionary-word-breaks.ts';
-
-function breaksAfterSign(lastEmitted: string, candidate: string): boolean {
-  const before = lastEmitted.charCodeAt(lastEmitted.length - 1);
-  const after = candidate.charCodeAt(0);
-  return (
-    breakAfterSignScript(before) !== null &&
-    isDictionaryWordBreakSupported(breakAfterSignScript(before)!) &&
-    after !== 0x20 &&
-    after !== 0x200b &&
-    breakAfterSignScript(after) === null
-  );
-}
+import { breaksAfterSign } from './dictionary-word-breaks.ts';
 
 export function dictionaryParagraphBreaks(cuts: PieceDictionaryCuts): CjkParagraphBreaks {
   return {
@@ -30,7 +18,13 @@ export function dictionaryParagraphBreaks(cuts: PieceDictionaryCuts): CjkParagra
     decision(piece, offset, lastEmitted, candidate) {
       if (offset === 0 && cuts.startsAtCut(piece)) return 'opens';
       // A sentence mark that ends a field result breaks after itself, as a dash there does.
-      if (offset === 0 && breaksAfterSign(lastEmitted, candidate)) return 'opens';
+      if (
+        offset === 0 &&
+        lastEmitted.length > 0 &&
+        candidate.length > 0 &&
+        breaksAfterSign(lastEmitted.charCodeAt(lastEmitted.length - 1), candidate.codePointAt(0)!)
+      )
+        return 'opens';
       return lineOpenDecisionAt(lastEmitted, candidate, offset > 0);
     },
     cutAllowed(piece, candidateStart, index) {

@@ -34,6 +34,7 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import {
+  breaksAfterSign,
   resetDictionaryWordSegmenter,
   setDictionaryWordSegmenter,
 } from '../dictionary-word-breaks.ts';
@@ -93,7 +94,6 @@ function oracleDictionaryCuts(text: string): Set<number> {
 }
 
 const DASHES = '-‐–—';
-const BREAK_AFTER_SIGNS = '\u0e5a\u0e5b\u17d4\u17d5\u17d8\u17da\u104a\u104b';
 
 /** Legal breaks, never before a space: after a space run, a zero-width space, or a dash. */
 function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<number> {
@@ -106,14 +106,9 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
     // ZW SP* ÷: after a zero-width space, past the spaces that follow it.
     if (ch === '\u200b' && next !== undefined && next !== ' ' && next !== '\u200b')
       legal.add(i + 1);
-    // A phrase or sentence mark (UAX #14 class BA) breaks after itself before text.
-    if (
-      BREAK_AFTER_SIGNS.includes(ch) &&
-      next !== undefined &&
-      next !== ' ' &&
-      next !== '\u200b' &&
-      !BREAK_AFTER_SIGNS.includes(next)
-    )
+    // A phrase or sentence mark (UAX #14 class BA) breaks after itself before a character
+    // that may start a line. The class table is the engine's one helper, not a copy.
+    if (next !== undefined && breaksAfterSign(ch.charCodeAt(0), next.codePointAt(0)!))
       legal.add(i + 1);
     if (ch === '\t') {
       if (i > 0) legal.add(i);
@@ -184,8 +179,23 @@ const pick = <T>(rand: Rand, items: readonly T[]): T => items[Math.floor(rand() 
 /** Words of whole Lao, Khmer, and Myanmar sentences, with their sentence marks. */
 const SCRIPT_WORDS: readonly (readonly string[])[] = [
   ['ພາສາ', 'ລາວ', 'ເປັນ', 'ທີ່', 'ສວຍງາມ', 'ຫຼາຍ', 'ປະເທດ', 'ຂອງ'],
-  ['ភាសា', 'ខ្មែរ', 'ជា', 'ផ្លូវការ', 'នៃ', 'ប្រទេស', 'កម្ពុជា', 'ស្រុក', '។', '៕'],
-  ['မြန်မာ', 'ဘာသာ', 'စကား', 'သည်', 'ရုံးသုံး', 'ဖြစ်', 'ကမ္ဘာ', 'နိုင်ငံ', '။', '၊'],
+  [
+    'ភាសា',
+    'ខ្មែរ',
+    'ជា',
+    'ផ្លូវការ',
+    'នៃ',
+    'ប្រទេស',
+    'កម្ពុជា',
+    'ស្រុក',
+    '។',
+    '៕',
+    '។»',
+    '៕”',
+    '។!',
+  ],
+  ['မြန်မာ', 'ဘာသာ', 'စကား', 'သည်', 'ရုံးသုံး', 'ဖြစ်', 'ကမ္ဘာ', 'နိုင်ငံ', '။', '၊', '။)', '၊!'],
+  ['ภาษา', 'ไทย', 'กิน', 'ข้าว', '๚', '๚”', '๚ะ', '๛', '๚)'],
 ];
 
 function randomText(rand: Rand): string {

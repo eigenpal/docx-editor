@@ -19,7 +19,7 @@
 // ICU dictionaries, so they can differ between ICU versions; layout is deterministic for
 // one runtime, not across runtimes.
 
-import { clusterBreaksBetween, isStackingSign } from './cjk-line-break.ts';
+import { CJK_NO_BREAK_BEFORE, clusterBreaksBetween, isStackingSign } from './cjk-line-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { createIntlWordBoundary, isIntlWordSegmenterAvailable } from './word-segment.ts';
 
@@ -63,11 +63,38 @@ export function breakAfterSignScript(cp: number): DictionaryScript | null {
   return null;
 }
 
-/** A cheap prefilter: whether the text can hold any dictionary-script letter or mark. */
+/**
+ * Characters that cannot start a line after a sentence mark (UAX #14): closing punctuation
+ * (CL, CP), quotation marks (QU), `!` and `?` (EX), infix separators (IS), `/` (SY), hyphens
+ * (HY), combining marks and the zero-width joiner (CM), word joiners (WJ), no-break
+ * characters (GL), the Khmer sign U+17D6 (NS), and the Thai vowels that follow a consonant
+ * (U+0E30, U+0E32, U+0E33, U+0E45). Spaces and zero-width spaces break after themselves
+ * instead, and so does another sentence mark.
+ */
+const NO_LINE_START_AFTER_SIGN =
+  /^[\p{M}\p{Pe}\p{Pf}\p{Pi}"'!?,.:;/\-\u00a0\u034f\u2007\u2011\u202f\u200b\u200d\u2060\ufeff \u17d6\u0e30\u0e32\u0e33\u0e45]$/u;
+
+/**
+ * Whether a line may break between a Khmer, Myanmar, or Thai sentence mark (class BA) and
+ * the code point after it: only when that script has dictionary support, and the next code
+ * point may start a line. The one rule both line breaking and table AutoFit use.
+ */
+export function breaksAfterSign(sign: number, next: number): boolean {
+  const script = breakAfterSignScript(sign);
+  if (script === null || breakAfterSignScript(next) !== null) return false;
+  if (CJK_NO_BREAK_BEFORE.has(next)) return false;
+  if (NO_LINE_START_AFTER_SIGN.test(String.fromCodePoint(next))) return false;
+  return isDictionaryWordBreakSupported(script);
+}
+
+/**
+ * A cheap prefilter: whether the text can hold any character of the dictionary scripts'
+ * blocks (letters, marks, digits, or sentence marks).
+ */
 const DICTIONARY_SCRIPT_TEXT =
   /[\u0e01-\u0e5b\u0e81-\u0edf\u1000-\u109f\u1780-\u17dd\ua9e0-\ua9fe\uaa60-\uaa7f]/u;
 
-/** Whether the text holds a letter of a dictionary script. */
+/** Whether the text holds a character of a dictionary script's block. */
 export function hasDictionaryScriptText(text: string): boolean {
   return DICTIONARY_SCRIPT_TEXT.test(text);
 }
@@ -298,16 +325,7 @@ function paragraphCuts(text: string, segmenter: DictionaryWordSegmenter): readon
     if (script === null) {
       // A sentence or phrase mark of these scripts (UAX #14 class BA) breaks after itself,
       // unless a space, zero-width space, or another such mark follows and breaks later.
-      const signScript = breakAfterSignScript(unit);
-      const next = text.charCodeAt(index + 1);
-      if (
-        signScript !== null &&
-        index + 1 < text.length &&
-        next !== 0x20 &&
-        next !== 0x200b &&
-        breakAfterSignScript(next) === null &&
-        isDictionaryWordBreakSupported(signScript)
-      )
+      if (index + 1 < text.length && breaksAfterSign(unit, text.codePointAt(index + 1)!))
         out.push(index + 1);
       index += 1;
       continue;

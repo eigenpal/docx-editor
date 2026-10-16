@@ -394,6 +394,29 @@ describe('Lao, Khmer, and Myanmar sentences', () => {
     expect(linesOf(`<w:p>${run('ភាសា។ខ្មែរ')}</w:p>`, 36)).toEqual(['ភាសា។', 'ខ្មែរ']);
     expect(minimumOf(`<w:p>${run('ភាសា។ខ្មែរ')}</w:p>`)).toBeCloseTo(30, 5);
   });
+
+  test('no break after a sentence mark before a character that cannot start a line', () => {
+    // Closing quotes and brackets, `!`, the Khmer NS sign, a word joiner, and the Thai vowels
+    // that follow a consonant stay with the mark.
+    for (const text of [
+      'ភាសា។»ខ្មែរ',
+      'ភាសា។”ខ្មែរ',
+      'ภาษา๚”ไทย',
+      'စကား။)ဘာသာ',
+      'ភាសា។!ខ្មែរ',
+      'ភាសា។៖ខ្មែរ',
+      'ភាសា។\u2060ខ្មែរ',
+      'ภาษา๚ะไทย',
+      'ภาษา๛าไทย',
+    ]) {
+      expect(dictionaryWordBreaks(text).includes(5), text).toBe(false);
+      for (const line of linesOf(`<w:p>${run(text)}</w:p>`, 36).slice(1))
+        expect(line, text).not.toMatch(/^[»”)!៖\u2060ะา]/u);
+    }
+    // The same mark before a letter still breaks, across a run seam too.
+    expect(linesOf(`<w:p>${run('ភាសា។')}${run('ខ្មែរ')}</w:p>`, 36)).toEqual(['ភាសា។', 'ខ្មែរ']);
+    expect(linesOf(`<w:p>${run('ភាសា។')}${run('»ខ្មែរ')}</w:p>`, 36)[0]).not.toBe('ភាសា។');
+  });
 });
 
 describe('Thai table AutoFit minimum', () => {
