@@ -20,6 +20,13 @@ import {
 } from '../store/store/tree-op-table-topology.ts';
 import { wmlAttributeValue, wmlChildNamed } from '../store/store/tree-op-table-shared.ts';
 import {
+  cellStructureOp,
+  cellStructureRejection,
+  outerColumnOfSelection,
+  outerRowOfSelection,
+  splitCellShapeRefusal,
+} from './table-cell-structure-plan.ts';
+import {
   MAX_TABLE_COLUMNS,
   MAX_TABLE_BORDER_SIZE_EIGHTHS,
   MIN_TABLE_BORDER_SIZE_EIGHTHS,
@@ -141,14 +148,20 @@ function refusal(code: 'unsupported' | 'invalidArgs' | 'locked', reason: string)
 }
 
 function mapStoreRejection(reason: TreeOpRejection, detail?: string): TableCommandPlan {
+  const cellStructure = cellStructureRejection(reason);
+  if (cellStructure) return refusal(cellStructure.code, cellStructure.reason);
   switch (reason) {
     case 'unknown-table':
     case 'unknown-row':
     case 'unknown-grid-column':
       return refusal('invalidArgs', 'the table target is no longer valid');
     case 'table-has-merge':
-      return refusal('unsupported', 'this table has merged cells');
+      return refusal(
+        'unsupported',
+        'this table uses a legacy horizontal merge the editor cannot change'
+      );
     case 'row-hides-cell':
+    case 'tree-invariant':
       return refusal('unsupported', 'this table has a cell the editor cannot place in the grid');
     case 'block-required':
       return refusal('unsupported', 'the table must keep at least one row or column');
@@ -286,6 +299,10 @@ function validateOptionalColumnTarget(command: Record<string, unknown>): boolean
 
 function validateTableCommandShape(command: EditorCommand): TableCommandPlan | null {
   switch (command.type) {
+    case 'splitCell': {
+      const invalid = splitCellShapeRefusal(command);
+      return invalid ? refusal('invalidArgs', invalid) : null;
+    }
     case 'insertRow':
       if (!isPlainObject(command) || command.type !== 'insertRow') {
         return refusal('invalidArgs', 'insertRow command shape is invalid');
@@ -723,10 +740,6 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
   }
 
   switch (command.type) {
-    case 'mergeCells':
-      return refusal('unsupported', 'cell merge is not supported yet');
-    case 'splitCell':
-      return refusal('unsupported', 'cell split is not supported yet');
     case 'toggleHeaderRow':
     case 'selectTableRegion':
     case 'setTableProperties':
@@ -782,12 +795,23 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
   }
 
   switch (command.type) {
+    case 'mergeCells':
+    case 'splitCell': {
+      if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
+      const planned = cellStructureOp(command, anchor, input.cellSelection !== null);
+      if (!planned.ok) return refusal(planned.code, planned.reason);
+      return planValidated(part, [planned.op], { kind: 'adoptCommittedCaret' });
+    }
     case 'insertRow': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
+      // Beside the selection's outer row: below a cell merged down several rows is below its
+      // last row, not inside the merge. An explicit occurrence target keeps its row.
+      const rowId =
+        (rowTarget ? null : outerRowOfSelection(part, anchor, command.where)) ?? anchor.rowId;
       const op: TreeDocOp = {
         op: 'insertTableRow',
         tableId: anchor.tableId,
-        rowId: anchor.rowId,
+        rowId,
         where: command.where,
       };
       return planValidated(part, [op], { kind: 'adoptCommittedCaret' });
@@ -810,13 +834,17 @@ export function planTableCommand(input: TableCommandPlannerInput): TableCommandP
     case 'insertColumn': {
       if (!anchor) return refusal('unsupported', 'the selection is not inside a table');
       const tableId = columnTarget?.tableId ?? anchor.tableId;
-      const gridColumnId =
-        columnTarget?.gridColumnId ?? gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
       const where = isVisualRtlTable(input.layout, tableId)
         ? command.where === 'left'
           ? 'right'
           : 'left'
         : command.where;
+      // Beside the selection's outer column on that side: right of a merged cell is right of
+      // the last column it spans, not inside it.
+      const gridColumnId =
+        columnTarget?.gridColumnId ??
+        outerColumnOfSelection(part, anchor, where) ??
+        gridColumnIdAt(part, tableId, anchor.gridColumnIndex);
       const op: TreeDocOp = gridColumnId
         ? {
             op: 'insertTableColumn',
@@ -946,10 +974,6 @@ export function tableCommandCanSupport(command: EditorCommand): {
     return { supported: false, reason: `command '${command.type}' is not a table command` };
   }
   switch (command.type) {
-    case 'mergeCells':
-      return { supported: false, reason: 'cell merge is not supported yet' };
-    case 'splitCell':
-      return { supported: false, reason: 'cell split is not supported yet' };
     case 'toggleHeaderRow':
     case 'selectTableRegion':
     case 'setTableProperties':

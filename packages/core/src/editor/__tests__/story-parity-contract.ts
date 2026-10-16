@@ -145,6 +145,8 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'table.borderStyle': { parity: 'same' },
   'table.borderWidth': { parity: 'same' },
   'table.cellFill': { parity: 'same' },
+  'table.mergeCells': { parity: 'same' },
+  'table.splitCell': { parity: 'same' },
   'file.open': { parity: 'same' },
   'file.save': { parity: 'same' },
   'file.exportMarkdown': { parity: 'same' },

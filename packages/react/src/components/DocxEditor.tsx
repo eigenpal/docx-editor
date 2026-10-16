@@ -34,6 +34,7 @@ import { Navigation as DocxEditorNavigationCompound } from '../editor/navigation
 import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
 import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
+import { DocxEditorSplitCellDialog } from '../editor/DocxEditorSplitCell';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
@@ -554,6 +555,8 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
   /** Bookmark dialog — list, add, delete and go to bookmarks. */
   readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+  /** Split cells dialog — split the cell at the selection into columns and rows. */
+  readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
   readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
@@ -619,6 +622,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   PageSetupDialog: DocxEditorPageSetupDialog,
   WatermarkDialog: DocxEditorWatermarkDialog,
   BookmarkDialog: DocxEditorBookmarkDialog,
+  SplitCellDialog: DocxEditorSplitCellDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
   TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,

@@ -343,6 +343,12 @@
       "emitsAddedInReact": ["change", "font-error", "ready", "revision-markup-change"],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorSplitCell": {
+      "propsAddedInReact": ["columns", "rows"],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorTextFormFieldDialog": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],

@@ -51,6 +51,8 @@ export const TREE_DOC_OP_KINDS = [
   'deleteTableRow',
   'insertTableColumn',
   'deleteTableColumn',
+  'mergeTableCells',
+  'splitTableCell',
   'setTableColumnWidths',
   'setTableRightEdgeWidth',
   'setTableRowHeight',

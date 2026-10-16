@@ -6,6 +6,7 @@ import { useDocxEditor, useEditorContentElement } from '../context';
 import { useEditorCommand } from '../useEditorCommand';
 import { useEditorState } from '../useEditorState';
 import { MenuRow, menuRowSlot } from '../menu/parts';
+import { useDialogHost } from '../dialog-host';
 import { useMenuLabel } from '../menu/menu-context';
 import { useContextMenuContext } from './contextmenu-context';
 import {
@@ -371,6 +372,54 @@ export const ContextMenuInsertColumnRight = defineTableCommandRow(
   'table.insertColumnRight',
   { type: 'insertColumn', where: 'right' },
   { labelKey: 'table.insertColumnRight', paths: tableChromeIconPaths('view_column') }
+);
+
+/** Merge the selected cells into one cell. @public */
+export const ContextMenuMergeCells = defineTableCommandRow(
+  'table.mergeCells',
+  { type: 'mergeCells' },
+  { labelKey: 'table.mergeCells', paths: tableChromeIconPaths('call_merge') }
+);
+
+/** Open the Split cells dialog for the cell at the selection. @public */
+export const ContextMenuSplitCell = Object.assign(
+  defineComponent({
+    name: 'ContextMenuTable_table_splitCell',
+    props: {
+      icon: { type: null as unknown as PropType<VNode>, default: undefined },
+      labelKey: { type: String, default: undefined },
+      className: { type: String, default: undefined },
+      hidden: { type: Boolean, default: undefined },
+    },
+    setup(props) {
+      const { close } = useContextMenuContext();
+      const label = useMenuLabel();
+      const tableVisible = useTableContextMenuVisible();
+      const dialogs = useDialogHost();
+      // The slot's probe answers whether the cell splits; the dialog picks the counts.
+      const cmd = useEditorCommand('table.splitCell');
+      return () => {
+        if (props.hidden || !tableVisible.value || !dialogs) return null;
+        return (
+          <MenuRow
+            {...menuRowSlot('table.splitCell')}
+            icon={props.icon ?? chromeIcon(tableChromeIconPaths('call_split')) ?? undefined}
+            disabled={!cmd.isEnabled.value}
+            {...(cmd.disabledReason.value ? { title: cmd.disabledReason.value } : {})}
+            {...(props.className ? { class: props.className } : {})}
+            onSelect={() => {
+              // Focus goes back to the document first, so closing the dialog returns it there.
+              close(true);
+              dialogs.open('splitCell');
+            }}
+          >
+            {{ default: () => label(props.labelKey ?? 'table.splitCell') }}
+          </MenuRow>
+        );
+      };
+    },
+  }),
+  { docxRow: 'table.splitCell' }
 );
 
 /** @public */

@@ -100,6 +100,7 @@ import {
   ToolbarContentControlRemove,
   ToolbarContentControlShowAll,
 } from './ContentControlParts';
+import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import {
   TableChromeGroup,
   ToolbarTableBorderColor,
@@ -124,6 +125,8 @@ const TABLE_CHROME_SLOTS: readonly ChromeSlotId[] = [
   'table.borderStyle',
   'table.borderWidth',
   'table.cellFill',
+  'table.mergeCells',
+  'table.splitCell',
 ];
 
 const TABLE_CONTEXTUAL_GROUP_ID = 'contextual-table';
@@ -161,6 +164,8 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'table.borderStyle': ToolbarTableBorderStyle,
   'table.borderWidth': ToolbarTableBorderWidth,
   'table.cellFill': ToolbarTableCellFill,
+  // Opens a dialog rather than running its slot, so it is drawn like a picker everywhere.
+  'table.splitCell': ToolbarTableSplitCell,
   'image.insert': ToolbarImageInsert,
   'image.wrap': ToolbarImageWrap,
   'image.altText': ToolbarImageAltText,
@@ -169,7 +174,11 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
 const TABLE_CONTEXTUAL_GROUP: DefaultGroup = {
   id: TABLE_CONTEXTUAL_GROUP_ID,
   labelKey: 'formattingBar.groups.table',
-  entries: TABLE_CHROME_SLOTS.map((slot) => ({ slot, Part: SHAPED_PARTS[slot]! })),
+  entries: TABLE_CHROME_SLOTS.map((slot) => ({
+    slot,
+    // Merge is a plain command button; every other table slot has a shaped part.
+    Part: slot === 'table.mergeCells' ? ToolbarTableMergeCells : SHAPED_PARTS[slot]!,
+  })),
 };
 
 const iconPartCache = new Map<ChromeSlotId, PartLike>();
@@ -311,6 +320,10 @@ export interface DocxEditorToolbarNamespace {
   readonly TableBorderStyle: TableBorderStyleNamespace;
   readonly TableBorderWidth: TableBorderWidthNamespace;
   readonly TableCellFill: TableCellFillNamespace;
+  /** Merge the selected cells. */
+  readonly TableMergeCells: ToolbarPartComponent;
+  /** Open the Split cells dialog. */
+  readonly TableSplitCell: ToolbarPartComponent;
   readonly Comments: ToolbarPartComponent;
   readonly FontFamily: typeof FontFamily;
   readonly FontSize: ToolbarSlotPartComponent;
@@ -715,6 +728,8 @@ export const DocxEditorToolbar = Object.assign(DocxEditorToolbarRoot, {
   TableBorderStyle: ToolbarTableBorderStyle,
   TableBorderWidth: ToolbarTableBorderWidth,
   TableCellFill: ToolbarTableCellFill,
+  TableMergeCells: ToolbarTableMergeCells,
+  TableSplitCell: ToolbarTableSplitCell,
   Comments: ToolbarComments,
   FontFamily,
   FontSize: ToolbarFontSize,

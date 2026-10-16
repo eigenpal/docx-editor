@@ -13,6 +13,7 @@ import {
   isInsideTocOf,
   hyperlinkAtOf,
   tableContextOf,
+  splitCellConfigOf,
 } from './docx-editor-derive.ts';
 import { contentControlsOf, contentControlAtOf } from './content-controls.ts';
 
@@ -64,12 +65,14 @@ export function queryEditorDocument<K extends keyof EditorQueries>(
       ) as unknown as EditorQueryResults[K];
     case 'tableContext':
       return tableContextOf(surface) as EditorQueryResults[K];
+    case 'splitCellConfig':
+      return splitCellConfigOf(surface) as EditorQueryResults[K];
     case 'watermark':
       return watermarkQueryOf(surface) as EditorQueryResults[K];
     case 'bookmarks':
       return (surface?.bookmarkEditing.list() ?? []) as unknown as EditorQueryResults[K];
     default:
-      // splitCellConfig and pageContent are nullable and underived.
+      // pageContent is nullable and underived.
       return null as EditorQueryResults[K];
   }
 }

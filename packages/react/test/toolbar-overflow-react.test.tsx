@@ -310,7 +310,9 @@ describe('toolbar overflow integration', () => {
     const tableSection = overflowSections[0]!;
     expect(panel.querySelector('[data-slot="table.borderTarget"]')).not.toBeNull();
     expect(panel.querySelector('[data-slot="table.borderStyle"]')).toBeNull();
-    expect(tableSection.querySelectorAll('.docx-toolbar__more-control').length).toBe(4);
+    // The four pickers and Split cells draw as controls; Merge cells is an ordinary row.
+    expect(tableSection.querySelectorAll('.docx-toolbar__more-control').length).toBe(5);
+    expect(tableSection.querySelector('[data-slot="table.mergeCells"]')).not.toBeNull();
     expect(panel.querySelector('[data-slot="text.color"]')).toBeNull();
 
     await act(async () => {

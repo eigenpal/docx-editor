@@ -326,7 +326,7 @@ describe('setTableColumnWidths', () => {
     ['gridSpan', '<w:gridSpan w:val="2"/>'],
     ['hMerge', '<w:hMerge w:val="restart"/>'],
     ['vMerge', '<w:vMerge w:val="restart"/>'],
-  ] as const)('refuses merged tables (%s)', (_label, mergeMarkup) => {
+  ] as const)('answers merged tables by their grid (%s)', (_label, mergeMarkup) => {
     const part = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>` +
         `<w:tr><w:tc><w:tcPr>${mergeMarkup}</w:tcPr><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr></w:tbl>`
@@ -342,7 +342,9 @@ describe('setTableColumnWidths', () => {
         leftWidthTwips: 3000,
         rightWidthTwips: 3000,
       })
-    ).toBe(_label === 'gridSpan' ? 'tree-invariant' : 'table-has-merge');
+    ).toBe(
+      _label === 'gridSpan' ? 'tree-invariant' : _label === 'hMerge' ? 'table-has-merge' : null
+    );
   });
 
   test('resizes a grid beneath a spanning header and preserves its merged width', () => {

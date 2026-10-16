@@ -481,6 +481,20 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
       const ids = tableIds(store);
       return { op: 'deleteTableColumn', tableId: ids.tableId, gridColumnId: ids.gridColIds[1]! };
     }),
+    story('mergeTableCells', zipDoc({ body: TABLE }), (store) => {
+      const ids = tableIds(store);
+      return { op: 'mergeTableCells', tableId: ids.tableId, cellIds: ids.cellIds };
+    }),
+    story('splitTableCell', zipDoc({ body: TABLE }), (store) => {
+      const ids = tableIds(store);
+      return {
+        op: 'splitTableCell',
+        tableId: ids.tableId,
+        cellId: ids.cellIds[0]!,
+        rows: 2,
+        columns: 2,
+      };
+    }),
     story('setTableColumnWidths', zipDoc({ body: TABLE }), (store) => {
       const ids = tableIds(store);
       return {

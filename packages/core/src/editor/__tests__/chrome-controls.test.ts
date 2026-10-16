@@ -121,6 +121,8 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'table.borderStyle',
   'table.borderWidth',
   'table.cellFill',
+  'table.mergeCells',
+  'table.splitCell',
   'paragraph.dialog',
   'file.open',
   'file.save',
@@ -325,10 +327,10 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(79);
+    expect(chromeControlCount()).toBe(81);
   });
 
-  test('the table group is contextual and carries border/fill chrome slots', () => {
+  test('the table group is contextual and carries border, fill, merge, and split slots', () => {
     const table = CHROME_GROUPS.find((g) => g.id === 'table');
     expect(table?.contextual).toBe(true);
     const slots = table!.controls.map((c) => chromeSlotId(table!, c));
@@ -339,10 +341,15 @@ describe('legacy chrome descriptor', () => {
       'table.borderStyle',
       'table.borderWidth',
       'table.cellFill',
+      'table.mergeCells',
+      'table.splitCell',
     ]);
-    for (const slot of slots.slice(1)) {
+    for (const slot of slots.slice(1, 6)) {
       expect(commandForSlot(slot as ChromeSlotId)).toBeNull();
     }
+    expect(commandForSlot('table.mergeCells')).toEqual({ type: 'mergeCells' });
+    // Split takes its counts from a dialog, so only a probe stands behind it.
+    expect(commandForSlot('table.splitCell')).toBeNull();
   });
 
   test('the image group carries insert, properties, wrap, and altText in order', () => {

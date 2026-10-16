@@ -46,6 +46,7 @@ import {
 import { diffSemanticDigests, semanticDigest } from '../../store/package/ooxml-digest.ts';
 import { wmlChildNamed } from '../../store/store/tree-op-table-shared.ts';
 import { MAX_TABLE_COLUMNS } from '../../store/store/table-constraints.ts';
+import { MERGE_NEEDS_SELECTION } from '../table-cell-structure-plan.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -194,6 +195,8 @@ function assertCanExecParity(
   }
 }
 
+const gridReason = 'this table has a cell the editor cannot place in the grid';
+
 describe('table command planner and editor parity', () => {
   test('insertRow can and exec agree outside a table', () => {
     const editor = mount(p('hello'));
@@ -300,14 +303,13 @@ describe('table command planner and editor parity', () => {
     expect(editor.exec(cmd)).toEqual(can);
   });
 
-  test('mergeCells is unsupported with an exact reason', () => {
+  test('mergeCells at a caret asks for a cell selection', () => {
     const editor = mount(TABLE_2X2);
     const surface = editor.surface!;
     caret(surface, paragraphByText('A1', surface));
     const cmd = { type: 'mergeCells' as const };
     const can = editor.can(cmd);
-    expect(can.ok).toBe(false);
-    expect(can.reason).toBe('cell merge is not supported yet');
+    expect(can).toMatchObject({ ok: false, reason: MERGE_NEEDS_SELECTION });
     expect(editor.exec(cmd)).toEqual(can);
   });
 
@@ -491,7 +493,7 @@ describe('table command planner and editor parity', () => {
     expect(editor.exec(cmd)).toEqual(can);
   });
 
-  test('merged table insertColumn refuses at the editor seam', () => {
+  test('a merged grid the table cannot fill refuses insertColumn at the editor seam', () => {
     const merged =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
       `<w:tr><w:tc>${p('A1')}</w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>${p('span')}</w:tc></w:tr>` +
@@ -502,7 +504,7 @@ describe('table command planner and editor parity', () => {
     const cmd = { type: 'insertColumn' as const, where: 'right' as const };
     const can = editor.can(cmd);
     expect(can.ok).toBe(false);
-    expect(can.reason).toBe('this table has merged cells');
+    expect(can.reason).toBe(gridReason);
     expect(editor.exec(cmd)).toEqual(can);
   });
 
@@ -797,9 +799,7 @@ describe('occurrence targets and provenance', () => {
 });
 
 describe('merge and resource refusals at editor seam', () => {
-  const mergeReason = 'this table has merged cells';
-
-  test('column insertion refuses merges and resizing refuses an overflowing span', () => {
+  test('a span past the grid refuses column insertion and resizing', () => {
     const merged =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
       `<w:tr><w:tc>${p('A1')}</w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>${p('span')}</w:tc></w:tr>` +
@@ -809,7 +809,7 @@ describe('merge and resource refusals at editor seam', () => {
     caret(surface, paragraphByText('A1', surface));
     const insertCan = editor.can({ type: 'insertColumn', where: 'right' });
     expect(insertCan.ok).toBe(false);
-    expect(insertCan.reason).toBe(mergeReason);
+    expect(insertCan.reason).toBe(gridReason);
     const table = tableFragment(surface);
     const topo = readEditableTableTopology(surface.session.part().root, table.tableId);
     expect(topo.ok).toBe(true);
@@ -829,29 +829,51 @@ describe('merge and resource refusals at editor seam', () => {
       leftWidthTwips: 2400,
       rightWidthTwips: 3600,
     });
-    expect(resizeCan).toMatchObject({
-      ok: false,
-      reason: 'the table operation was refused (tree-invariant)',
-    });
+    expect(resizeCan).toMatchObject({ ok: false, reason: gridReason });
   });
 
-  test('hMerge and vMerge column ops refuse with merge reason', () => {
-    for (const extra of [
-      `<w:tr><w:tc><w:tcPr><w:hMerge w:val="restart"/></w:tcPr>${p('h')}</w:tc><w:tc>${p('x')}</w:tc></w:tr>`,
-      `<w:tr><w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr>${p('v')}</w:tc><w:tc>${p('x')}</w:tc></w:tr>` +
-        `<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr>${p('v2')}</w:tc><w:tc>${p('y')}</w:tc></w:tr>`,
-    ]) {
+  test('insert column right of a merged cell lands after its last column', () => {
+    const editor = mount(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+        `<w:tr><w:tc><w:tcPr><w:gridSpan w:val="3"/></w:tcPr>${p('Head')}</w:tc></w:tr>` +
+        `<w:tr><w:tc>${p('A')}</w:tc><w:tc>${p('B')}</w:tc><w:tc>${p('C')}</w:tc></w:tr></w:tbl>`
+    );
+    const surface = editor.surface!;
+    caret(surface, paragraphByText('Head', surface));
+    expect(editor.exec({ type: 'insertColumn', where: 'right' }).ok).toBe(true);
+    const part = surface.session.part();
+    const topo = readEditableTableTopology(part.root, tableFragment(surface).tableId);
+    if (!topo.ok) throw new Error('no table');
+    // The header keeps its three columns and the body gains a cell after C.
+    expect(topo.topology.rows.map(({ cells }) => cells.length)).toEqual([2, 4]);
+    const body = topo.topology.rows[1]!.cells.map((cell) =>
+      paragraphTextOf(part, cell.children.find((child) => child.kind === 'paragraph')!.id)
+    );
+    expect(body.slice(0, 3)).toEqual(['A', 'B', 'C']);
+  });
+
+  test('hMerge column ops refuse; vMerge column ops apply', () => {
+    for (const [extra, reason] of [
+      [
+        `<w:tr><w:tc><w:tcPr><w:hMerge w:val="restart"/></w:tcPr>${p('h')}</w:tc><w:tc>${p('x')}</w:tc></w:tr>`,
+        'this table uses a legacy horizontal merge the editor cannot change',
+      ],
+      [
+        `<w:tr><w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr>${p('v')}</w:tc><w:tc>${p('x')}</w:tc></w:tr>` +
+          `<w:tr><w:tc><w:tcPr><w:vMerge/></w:tcPr>${p('v2')}</w:tc><w:tc>${p('y')}</w:tc></w:tr>`,
+        undefined,
+      ],
+    ] as const) {
       const editor = mount(
         '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
           extra +
           '</w:tbl>'
       );
       const surface = editor.surface!;
-      const first = surface.session.paragraphIds()[0]!;
-      caret(surface, first);
+      caret(surface, surface.session.paragraphIds()[0]!);
       const can = editor.can({ type: 'deleteColumn' });
-      expect(can.ok).toBe(false);
-      expect(can.reason).toBe(mergeReason);
+      expect(can.ok).toBe(reason === undefined);
+      expect(can.reason).toBe(reason);
     }
   });
 

@@ -42,6 +42,7 @@ import {
 import { tableCommandState } from '../docx-editor-derive.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+import { readEditableTableTopology } from '../../store/store/tree-op-table-topology.ts';
 
 const liveToolbarEditors: DocxEditorInstance[] = [];
 
@@ -425,18 +426,60 @@ describe('table command toolbar state (Task 7)', () => {
     expect(runTableCommand(editor, cmd)).toEqual(can);
   });
 
-  test('merged-cell refusal matches can and exec verbatim', () => {
+  test('a merged table answers can and exec alike', () => {
     const merged =
-      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="1800"/><w:gridCol w:w="1800"/></w:tblGrid>' +
       '<w:tr><w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>span</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
     const editor = mountTable(merged);
     caret(editor, paragraphByText(editor, 'A1'));
     const cmd = { type: 'insertColumn' as const, where: 'right' as const };
-    const can = editor.can(cmd);
-    expect(tableCommandToolbarState(editor.surface, cmd).disabledReason).toBe(
-      'this table has merged cells'
+    expect(editor.can(cmd)).toEqual({ ok: true });
+    expect(tableCommandToolbarState(editor.surface, cmd).enabled).toBe(true);
+    expect(runTableCommand(editor, cmd).ok).toBe(true);
+  });
+
+  test('insert row below a cell merged down two rows lands after the merge', () => {
+    const tc = (tcPr: string, text: string) =>
+      `<w:tc><w:tcPr>${tcPr}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const body =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+      `<w:tr>${tc('<w:vMerge w:val="restart"/>', 'M')}${tc('', 'B1')}</w:tr>` +
+      `<w:tr>${tc('<w:vMerge/>', '')}${tc('', 'B2')}</w:tr>` +
+      `<w:tr>${tc('', 'A3')}${tc('', 'B3')}</w:tr></w:tbl>`;
+    const editor = mountTable(body);
+    caret(editor, paragraphByText(editor, 'M'));
+    expect(editor.exec({ type: 'insertRow', where: 'below' }).ok).toBe(true);
+    const part = editor.surface!.session.part();
+    const fragment = editor.surface!.layout().pages[0]!.fragments.find((f) => f.kind === 'table')!;
+    const topo = readEditableTableTopology(part.root, (fragment as { tableId: string }).tableId);
+    if (!topo.ok) throw new Error('no table');
+    const rowTexts = topo.topology.rows.map(({ cells }) =>
+      cells
+        .map((cell) =>
+          paragraphTextOf(part, cell.children.find((child) => child.kind === 'paragraph')!.id)
+        )
+        .join('')
     );
-    expect(runTableCommand(editor, cmd)).toEqual(can);
+    // The new row sits after B2, so the merge keeps its two rows.
+    expect(rowTexts).toEqual(['MB1', 'B2', '', 'A3B3']);
+  });
+
+  test('Split cells stays enabled for a narrow cell merged over three rows', () => {
+    // Too narrow for two columns, and two rows do not divide three: only 3 by 1 splits.
+    const cell = (tcPr: string, text: string) =>
+      `<w:tc><w:tcPr>${tcPr}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const row = (first: string) => `<w:tr>${first}${cell('', 'x')}</w:tr>`;
+    const narrow =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="400"/><w:gridCol w:w="3000"/></w:tblGrid>' +
+      row(cell('<w:vMerge w:val="restart"/>', 'N')) +
+      row(cell('<w:vMerge/>', '')) +
+      row(cell('<w:vMerge/>', '')) +
+      '</w:tbl>';
+    const editor = mountTable(narrow);
+    caret(editor, paragraphByText(editor, 'N'));
+    expect(editor.can({ type: 'splitCell', rows: 1, cols: 2 }).ok).toBe(false);
+    expect(editor.can({ type: 'splitCell', rows: 2, cols: 1 }).ok).toBe(false);
+    expect(toolbarCommandState(editor, 'table.splitCell').enabled).toBe(true);
   });
 });
 

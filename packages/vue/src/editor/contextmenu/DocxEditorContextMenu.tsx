@@ -50,6 +50,8 @@ import {
   ContextMenuDeleteTableRow,
   ContextMenuInsertColumnLeft,
   ContextMenuInsertColumnRight,
+  ContextMenuMergeCells,
+  ContextMenuSplitCell,
   ContextMenuInsertRowAbove,
   ContextMenuInsertRowBelow,
   ContextMenuItem,
@@ -187,6 +189,17 @@ function tableContextEntries(): readonly DefaultEntry[] {
       kind: 'row',
       id: ContextMenuInsertColumnRight.docxRow,
       render: () => <ContextMenuInsertColumnRight />,
+    },
+    { kind: 'separator', id: 'sep.table.cells' },
+    {
+      kind: 'row',
+      id: ContextMenuMergeCells.docxRow,
+      render: () => <ContextMenuMergeCells />,
+    },
+    {
+      kind: 'row',
+      id: ContextMenuSplitCell.docxRow,
+      render: () => <ContextMenuSplitCell />,
     },
     { kind: 'separator', id: 'sep.table.destructive' },
     {
@@ -554,6 +567,8 @@ export interface DocxEditorContextMenuNamespace {
   readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
   readonly InsertColumnLeft: typeof ContextMenuInsertColumnLeft;
   readonly InsertColumnRight: typeof ContextMenuInsertColumnRight;
+  readonly MergeCells: typeof ContextMenuMergeCells;
+  readonly SplitCell: typeof ContextMenuSplitCell;
   readonly DeleteTableRow: typeof ContextMenuDeleteTableRow;
   readonly DeleteTableColumn: typeof ContextMenuDeleteTableColumn;
   readonly DeleteTable: typeof ContextMenuDeleteTable;
@@ -580,6 +595,8 @@ export const ContextMenu = Object.assign(DocxEditorContextMenu, {
   InsertRowBelow: ContextMenuInsertRowBelow,
   InsertColumnLeft: ContextMenuInsertColumnLeft,
   InsertColumnRight: ContextMenuInsertColumnRight,
+  MergeCells: ContextMenuMergeCells,
+  SplitCell: ContextMenuSplitCell,
   DeleteTableRow: ContextMenuDeleteTableRow,
   DeleteTableColumn: ContextMenuDeleteTableColumn,
   DeleteTable: ContextMenuDeleteTable,

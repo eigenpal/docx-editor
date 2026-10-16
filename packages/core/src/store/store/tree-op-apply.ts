@@ -181,6 +181,9 @@ import {
   applyTableResizeOp,
   applyTableCellPropertyOp,
 } from './tree-op-tables.ts';
+import { applyMergeTableCells } from './tree-op-table-merge.ts';
+import { applySplitTableCell } from './tree-op-table-split.ts';
+import { addressesMergedColumns, applyMergedColumnOp } from './tree-op-table-merged-columns.ts';
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
 import { isDrawingTreeDocOp } from './tree-op-drawings.ts';
 import { applyInsertFragment } from './tree-op-fragment.ts';
@@ -282,8 +285,12 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (op.op === 'setTableProperties') return applyTableProperties(part, op, options);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow')
     return applyTableRowOp(part, op, options);
-  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn') {
+    if (addressesMergedColumns(part, op)) return applyMergedColumnOp(part, op, options);
     return applyTableColumnOp(part, op, options);
+  }
+  if (op.op === 'mergeTableCells') return applyMergeTableCells(part, op, options);
+  if (op.op === 'splitTableCell') return applySplitTableCell(part, op, options);
   if (
     op.op === 'setTableColumnWidths' ||
     op.op === 'setTableRightEdgeWidth' ||

@@ -12,9 +12,10 @@ import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
 import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
+import { DocxEditorSplitCellDialog } from './DocxEditorSplitCell';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 
-type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark' | 'splitCell';
 interface DialogHost {
   readonly container: HTMLElement | null;
   readonly ownsPageSetup: boolean;
@@ -164,6 +165,12 @@ export function DialogProvider({
         renderPopup(popups.bookmark, props)
       ) : (
         <DocxEditorBookmarkDialog {...props} />
+      )
+    ) : active === 'splitCell' && popups?.splitCell !== false ? (
+      popups?.splitCell ? (
+        renderPopup(popups.splitCell, props)
+      ) : (
+        <DocxEditorSplitCellDialog {...props} />
       )
     ) : markupSession && popups?.revisionMarkup !== false ? (
       popups?.revisionMarkup ? (

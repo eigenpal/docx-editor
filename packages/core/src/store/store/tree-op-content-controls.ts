@@ -493,6 +493,16 @@ const TREE_OP_REACH: {
       { nodeId: op.tableId, removes: true },
     ],
   }),
+  // A merge removes cells and moves their content, so it asks both questions a column delete
+  // asks. A split only rearranges.
+  mergeTableCells: (op) => ({
+    kind: 'nodes',
+    targets: [
+      { nodeId: op.tableId, structural: true },
+      { nodeId: op.tableId, removes: true },
+    ],
+  }),
+  splitTableCell: (op) => restructuring(op.tableId),
   // Geometry and cell decoration change PROPERTIES. Every control inside keeps every character
   // it held, so only the controls ENCLOSING the addressed node are asked — the same answer
   // `setParagraphProperties` gives for a paragraph.

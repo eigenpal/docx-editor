@@ -241,6 +241,7 @@ export function DialogFrame({
     | 'paragraph'
     | 'watermark'
     | 'bookmark'
+    | 'splitCell'
     | 'textFormField'
     | 'invalidTextFormField'
     | 'imageInsertError'

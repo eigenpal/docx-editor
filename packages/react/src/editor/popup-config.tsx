@@ -19,6 +19,7 @@ import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
 import type { DocxEditorWatermarkDialogProps } from './DocxEditorWatermark';
 import type { DocxEditorBookmarkDialogProps } from './DocxEditorBookmark';
+import type { DocxEditorSplitCellDialogProps } from './DocxEditorSplitCell';
 import type { DocxEditorTextFormFieldDialogProps } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorHyperLink, type HyperLinkProps } from './DocxEditorHyperLink';
 import { DocxEditorContentControl, type ContentControlProps } from './DocxEditorContentControl';
@@ -58,6 +59,8 @@ export interface DocxEditorPopups {
   watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
   /** The Bookmark dialog the Insert menu and Ctrl/Cmd+Shift+F5 open. */
   bookmark?: DocxEditorPopup<DocxEditorBookmarkDialogProps>;
+  /** The Split cells dialog the table context menu and toolbar open. */
+  splitCell?: DocxEditorPopup<DocxEditorSplitCellDialogProps>;
   revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
   textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
   hyperlink?: DocxEditorPopup<HyperLinkProps>;

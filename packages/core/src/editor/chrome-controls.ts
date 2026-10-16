@@ -564,6 +564,19 @@ export const CHROME_GROUPS = [
         paths: GENERATED_ICON_PATHS['format_color_fill'],
         state: { kind: 'value' },
       },
+      {
+        id: 'mergeCells',
+        labelKey: 'table.mergeCells',
+        paths: GENERATED_ICON_PATHS['call_merge'],
+        state: { kind: 'command' },
+      },
+      // Opens the Split Cells dialog, which supplies the counts; see `chromeProbeForSlot`.
+      {
+        id: 'splitCell',
+        labelKey: 'table.splitCell',
+        paths: GENERATED_ICON_PATHS['call_split'],
+        state: { kind: 'command' },
+      },
     ],
   },
   {
@@ -804,6 +817,8 @@ export type ChromeSlotId =
   | 'table.borderStyle'
   | 'table.borderWidth'
   | 'table.cellFill'
+  | 'table.mergeCells'
+  | 'table.splitCell'
   | 'file.open'
   | 'file.save'
   | 'file.exportMarkdown'

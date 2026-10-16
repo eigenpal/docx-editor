@@ -731,6 +731,20 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: 'value';
         };
         readonly swatch: '#ffffff';
+    }, {
+        readonly id: 'mergeCells';
+        readonly labelKey: 'table.mergeCells';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
+    }, {
+        readonly id: 'splitCell';
+        readonly labelKey: 'table.splitCell';
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: 'command';
+        };
     }];
     readonly id: 'table';
     readonly labelKey: 'formattingBar.groups.table';
@@ -1098,7 +1112,7 @@ export interface ChromePrintOptions {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'direction.ltr' | 'direction.rtl' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.revisionMarkup' | 'review.comments' | 'review.addComment' | 'review.paragraphMarks' | 'review.bookmarks' | 'review.protectDocument' | 'review.simpleMarkup' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'table.mergeCells' | 'table.splitCell' | 'file.open' | 'file.save' | 'file.exportMarkdown' | 'file.exportPdf' | 'file.print' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.textBox' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc' | 'insert.bookmark' | 'insert.goToBookmark' | 'insert.watermark';
 
 // @public
 export function chromeSlotId(group: {
@@ -2161,6 +2175,14 @@ export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight'
 export const inchesToTwips: (inches: number) => number;
 
 // @public
+export function initialSplitCellCounts(limits: SplitCellLimits | null, can: (command: Extract<EditorCommand, {
+    type: 'splitCell';
+}>) => CanResult): {
+    readonly columns: string;
+    readonly rows: string;
+};
+
+// @public
 export interface InvalidTextFormFieldChromeHandlers {
     // (undocumented)
     readonly onRequest?: (session: InvalidTextFormFieldSession) => void;
@@ -2978,6 +3000,9 @@ export function readInlineMargins(style: CSSStyleDeclaration): {
 };
 
 // @public
+export function readSplitCellCounts(columns: string, rows: string, limits: SplitCellLimits | null): SplitCellCounts;
+
+// @public
 export interface RefreshChange {
     readonly description?: string;
     readonly diagnostic?: {
@@ -3630,6 +3655,36 @@ export type SpecialIndent = 'none' | 'firstLine' | 'hanging';
 
 // @public (undocumented)
 export const specialOf: (signedTwips: number | null) => SpecialIndent;
+
+// @public
+export const SPLIT_CELL_FALLBACK_MAX = 63;
+
+// @public
+export type SplitCellCountProblem = {
+    readonly field: 'columns' | 'rows';
+    readonly kind: 'range';
+    readonly max: number;
+} | {
+    readonly kind: 'oneCell';
+};
+
+// @public
+export interface SplitCellCounts {
+    readonly counts: {
+        readonly cols: number;
+        readonly rows: number;
+    } | null;
+    // (undocumented)
+    readonly problem: SplitCellCountProblem | null;
+}
+
+// @public
+export interface SplitCellLimits {
+    // (undocumented)
+    readonly maxCols: number;
+    // (undocumented)
+    readonly maxRows: number;
+}
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';

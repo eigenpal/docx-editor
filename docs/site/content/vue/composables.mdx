@@ -660,12 +660,15 @@ Call the composable in a child component of the matching dialog. Each returns `v
 | `useRevisionMarkupDialog()` | `ResolvedRevisionMarkup` | `insertions`, `deletions`, `changedLines`, `movedFrom`, `movedTo`, `cells`, `formatting`, `trackMoves`, `trackFormatting` |
 | `useWatermarkDialog()` | `WatermarkDialogFields` | `kind`, `imageData`, `imageName`, `scale`, `washout`, `text`, `fontFamily`, `fontSizePt`, `bold`, `italic`, `transparency`, `color`, `layout` |
 | `useBookmarkDialog()` | `BookmarkDialogFields` | `name`, `sortBy`, `showHidden` |
+| `useSplitCellDialog()` | `SplitCellDialogFields` | `columns`, `rows` |
 
 Vue exposes state as refs. Use `.value` in JavaScript; templates unwrap these refs.
 
 Page dimensions, margins, and paragraph indents use twips: 1,440 per inch. Paragraph spacing uses points. `lineValue` is a multiple for `lineRule: 'multiple'`, and points for `'exact'` or `'atLeast'`. Paragraph also exposes `mixed` selection state.
 
 `useRevisionMarkupDialog()` also provides `reset()`, which restores the draft defaults without applying them.
+
+`useSplitCellDialog()` also provides `limits`, the most rows and columns the cell at the selection splits into. The draft keeps each count as typed text.
 
 Most `Field` names match draft keys. Page Setup uses `pageSize` for the size selector, which updates `pageWidth` and `pageHeight`. Paragraph's `clearedAllTabStops` is draft state, not a separate `Field`.
 

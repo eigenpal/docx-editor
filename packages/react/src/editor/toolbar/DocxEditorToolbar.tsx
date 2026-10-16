@@ -140,6 +140,7 @@ import {
   type TableCellFillNamespace,
 } from './TableControls';
 import { TableChromeProvider } from './useTableChrome';
+import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import { useScopeClassName } from '../scope-context';
 
 /** Contextual table chrome slots appended when the caret is inside a table. */
@@ -149,6 +150,8 @@ const TABLE_CHROME_SLOTS: readonly ChromeSlotId[] = [
   'table.borderStyle',
   'table.borderWidth',
   'table.cellFill',
+  'table.mergeCells',
+  'table.splitCell',
 ];
 
 const TABLE_CONTEXTUAL_GROUP_ID = 'contextual-table';
@@ -204,6 +207,8 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'table.borderStyle': ToolbarTableBorderStyle,
   'table.borderWidth': ToolbarTableBorderWidth,
   'table.cellFill': ToolbarTableCellFill,
+  // Opens a dialog rather than running its slot, so it is drawn like a picker everywhere.
+  'table.splitCell': ToolbarTableSplitCell,
   'image.insert': ToolbarImageInsert,
   'image.properties': ToolbarImageProperties,
   'image.wrap': ToolbarImageWrap,
@@ -213,7 +218,11 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
 const TABLE_CONTEXTUAL_GROUP: DefaultGroup = {
   id: TABLE_CONTEXTUAL_GROUP_ID,
   labelKey: 'formattingBar.groups.table',
-  entries: TABLE_CHROME_SLOTS.map((slot) => ({ slot, Part: SHAPED_PARTS[slot]! })),
+  entries: TABLE_CHROME_SLOTS.map((slot) => ({
+    slot,
+    // Merge is a plain command button; every other table slot has a shaped part.
+    Part: slot === 'table.mergeCells' ? ToolbarTableMergeCells : SHAPED_PARTS[slot]!,
+  })),
 };
 
 /** Icon-button fallback parts, one per slot, created once. */
@@ -756,6 +765,10 @@ export interface DocxEditorToolbarNamespace {
   readonly TableBorderWidth: TableBorderWidthNamespace;
   /** Cell background fill split compound (quick-apply main + swatch dialog). */
   readonly TableCellFill: TableCellFillNamespace;
+  /** Merge the selected cells. */
+  readonly TableMergeCells: ToolbarPartComponent;
+  /** Open the Split cells dialog. */
+  readonly TableSplitCell: ToolbarPartComponent;
   readonly Comments: ToolbarPartComponent;
   readonly FontFamily: typeof FontFamily;
   readonly FontSize: ToolbarSlotPartComponent;
@@ -817,6 +830,8 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   TableBorderStyle: ToolbarTableBorderStyle,
   TableBorderWidth: ToolbarTableBorderWidth,
   TableCellFill: ToolbarTableCellFill,
+  TableMergeCells: ToolbarTableMergeCells,
+  TableSplitCell: ToolbarTableSplitCell,
   Comments: ToolbarComments,
   FontFamily,
   FontSize: ToolbarFontSize,

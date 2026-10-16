@@ -27,6 +27,8 @@ export type StructureEditKind =
   | 'insertColumn'
   | 'deleteColumn'
   | 'cellFill'
+  | 'mergeCells'
+  | 'splitCell'
   | 'pageBreak'
   | 'control'
   | 'footnote'
@@ -45,6 +47,10 @@ export const STRUCTURE_WEIGHTS: Record<StructureEditKind, number> = {
   insertColumn: 1,
   deleteColumn: 1,
   cellFill: 1,
+  // Off by default, so adding them left every existing seed's edits unchanged; the
+  // `tableCells` shape turns them on.
+  mergeCells: 0,
+  splitCell: 0,
   pageBreak: 1,
   control: 1,
   footnote: 1,
@@ -71,13 +77,20 @@ export interface NodeAddressed {
 export function bindNodeIds(root: OoxmlNode, addressed: NodeAddressed): TreeDocOp | null {
   const bound: OoxmlNode[] = [];
   const op = { ...addressed.op } as Record<string, unknown>;
+  // Array fields collect every target that names them, in target order.
+  const collected = new Map<string, string[]>();
   for (const target of addressed.targets) {
     const scope = target.within === undefined ? root : bound[target.within];
     if (!scope) return null;
     const node = elements(scope, target.localName)[target.index];
     if (!node) return null;
     bound.push(node);
-    op[target.field] = target.array ? [node.id] : node.id;
+    if (target.array) {
+      const ids = collected.get(target.field) ?? [];
+      ids.push(node.id);
+      collected.set(target.field, ids);
+      op[target.field] = [...ids];
+    } else op[target.field] = node.id;
   }
   return op as unknown as TreeDocOp;
 }
@@ -200,11 +213,15 @@ export function planStructureEdit(
       };
     case 'insertColumn':
     case 'deleteColumn':
-    case 'cellFill': {
+    case 'cellFill':
+    case 'mergeCells':
+    case 'splitCell': {
       const tables = elements(root, 'tbl');
       if (tables.length === 0) return null;
       const table = Math.floor(random() * tables.length);
       const within = tables[table]!;
+      if (kind === 'mergeCells' || kind === 'splitCell')
+        return planCellStructure(kind, table, within, random);
       if (kind === 'cellFill') {
         const cell = pickOf('tc', within);
         return cell === null
@@ -261,4 +278,43 @@ export function planStructureEdit(
       };
     }
   }
+}
+
+/**
+ * Merge two cells of one table, or split one. The store refuses a ragged rectangle or a split
+ * the cell cannot take, and a refused edit is an ordinary outcome here: the two cells are
+ * picked near each other, so most merges hold.
+ */
+function planCellStructure(
+  kind: 'mergeCells' | 'splitCell',
+  table: number,
+  within: OoxmlNode,
+  random: () => number
+): NodeAddressed | null {
+  const cells = elements(within, 'tc').length;
+  if (cells === 0) return null;
+  const first = Math.floor(random() * cells);
+  const tableTarget: NodeTarget = { field: 'tableId', localName: 'tbl', index: table };
+  if (kind === 'splitCell') {
+    const rows = 1 + Math.floor(random() * 2);
+    const columns = rows === 1 ? 2 + Math.floor(random() * 2) : 1 + Math.floor(random() * 2);
+    return {
+      kind: 'node',
+      op: { op: 'splitTableCell', tableId: '', cellId: '', rows, columns } as unknown as TreeDocOp,
+      targets: [tableTarget, { field: 'cellId', localName: 'tc', index: first, within: 0 }],
+    };
+  }
+  if (cells < 2) return null;
+  const reach = 1 + Math.floor(random() * 4);
+  const second = Math.min(cells - 1, first + reach);
+  if (second === first) return null;
+  return {
+    kind: 'node',
+    op: { op: 'mergeTableCells', tableId: '', cellIds: [] } as unknown as TreeDocOp,
+    targets: [
+      tableTarget,
+      { field: 'cellIds', localName: 'tc', index: first, within: 0, array: true },
+      { field: 'cellIds', localName: 'tc', index: second, within: 0, array: true },
+    ],
+  };
 }

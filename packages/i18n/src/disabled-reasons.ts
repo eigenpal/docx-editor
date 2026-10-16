@@ -32,8 +32,27 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'a comment needs a selected range': 'disabledReason.commentSelection',
   // Keyed on `NO_COMMENT_DRAFT_VIEW` in the engine's comment draft chrome.
   'no comment draft view is registered': 'disabledReason.noCommentDraftView',
+  // Sentences earlier releases gave; hosts that override their keys keep working.
   'cell merge is not supported yet': 'disabledReason.mergeUnsupported',
   'cell split is not supported yet': 'disabledReason.splitUnsupported',
+  // Keyed on the cell merge and split refusals in the engine's `table-cell-structure-plan.ts`
+  // and `table-command-plan.ts`; the sentences must stay the same.
+  'select two or more cells that form a rectangle to merge them':
+    'disabledReason.mergeNeedsRectangle',
+  'select two or more cells to merge them': 'disabledReason.mergeNeedsSelection',
+  'select one cell to split it': 'disabledReason.splitNeedsOneCell',
+  'a merged cell splits only into a number of rows that divides its rows':
+    'disabledReason.splitRowsNotDivisor',
+  'the cell is too narrow to split into that many columns': 'disabledReason.cellTooNarrow',
+  'this table has no column grid, so the cell splits only into a divisor of its columns':
+    'disabledReason.splitNeedsGrid',
+  'the cells have a tracked change; accept or reject it first': 'disabledReason.cellHasRevision',
+  'suggesting cannot merge or split cells; stop suggesting to change the table structure':
+    'disabledReason.cellStructureSuggesting',
+  'this table uses a legacy horizontal merge the editor cannot change':
+    'disabledReason.legacyMerge',
+  'this table has a cell the editor cannot place in the grid':
+    'disabledReason.tableGridUnplaceable',
   'image changes are not supported in suggesting mode': 'disabledReason.imageSuggesting',
   // Keyed on the equation lane's `can` refusals, which the equation popover shows.
   'compact linear editing cannot preserve this equation source formatting':

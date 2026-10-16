@@ -115,6 +115,7 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // caret control. Show-all / form-fill / inspector are surface chrome, not commands — see
   // the special cases in `toolbarCommandState` / `runToolbarCommand`.
   'contentControl.remove': { type: 'removeContentControl' },
+  'table.mergeCells': { type: 'mergeCells' },
 };
 
 /**
@@ -185,6 +186,9 @@ const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // The Watermark dialog: whether the document's headers can carry a watermark is the
   // engine's question, which text or picture is the dialog's. Never executed.
   'insert.watermark': { type: 'setWatermark', watermark: { text: 'DRAFT' } },
+  // The Split Cells dialog: whether the cell splits is the engine's question, into how many
+  // rows and columns is the dialog's. Never executed.
+  'table.splitCell': { type: 'splitCell', rows: 1, cols: 2 },
 };
 
 /**
@@ -563,6 +567,21 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       // command" and stays grey the day the engine starts authoring tables.
       if (id === 'table.insert' && shapeProbe.type === 'insertTable') {
         const judged: CanResult = editor.can(shapeProbe);
+        return judged.ok
+          ? { id, enabled: true, disabledReason: null, active: false }
+          : { id, enabled: false, disabledReason: judged.reason, active: false };
+      }
+      // The Split cells dialog supplies the counts. A cell too narrow for two columns may
+      // still split into rows: two, or as many as a merged cell spans when two does not
+      // divide them.
+      if (id === 'table.splitCell' && shapeProbe.type === 'splitCell') {
+        let judged: CanResult = editor.can(shapeProbe);
+        const limits = judged.ok ? null : editor.query({ type: 'splitCellConfig' });
+        for (const rows of limits ? [2, limits.maxRows] : []) {
+          if (judged.ok || rows < 2) break;
+          const byRows = editor.can({ type: 'splitCell', rows, cols: 1 });
+          if (byRows.ok) judged = byRows;
+        }
         return judged.ok
           ? { id, enabled: true, disabledReason: null, active: false }
           : { id, enabled: false, disabledReason: judged.reason, active: false };

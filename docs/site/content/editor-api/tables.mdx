@@ -5,7 +5,7 @@ category: 'Editing API'
 order: 57
 ---
 
-Use `Body.tables` or `Range.tables` to discover tables in the addressed scope. `Table`, `TableRow`, and `TableCell` are proxies with separate collections. You can edit rectangular tables. Structural edits can fail on merged or otherwise unsupported tables.
+Use `Body.tables` or `Range.tables` to discover tables in the addressed scope. `Table`, `TableRow`, and `TableCell` are proxies with separate collections. You can edit rectangular tables, merge cells, and split them. Structural edits can fail on tables with an unsupported structure.
 
 Text in a vertical merge over three or more protected body rows can continue across pages. Each row retains its own fixed or minimum height. The text and cached field values retain the original head cell address on every page. Center and bottom alignment apply within each page fragment. This path supports nonoverlapping merges over the same rows, horizontal text, and supported paragraph and run formatting. Drawings, notes, nested tables, manual breaks, floating tables, and unknown content retain their existing layout. If the last row of the merge has a minimum height, it grows to hold the remaining text. If that row cannot split, it moves to the next page. If it is also taller than a page, it starts on a new page and then splits. Exact spans that cannot hold the complete text on their page fragments retain clipping.
 
@@ -89,6 +89,36 @@ source.insertRows('Before', 1, [['Item', 'Price']]);
 await context.sync();
 ```
 
+## Merge and split cells
+
+| Member | Behavior |
+| --- | --- |
+| `Table.mergeCells(topRow, firstCell, bottomRow, lastCell)` | Merge a rectangle of cells into one; return the merged `TableCell` |
+| `TableCell.split(rowCount, columnCount)` | Split a cell into rows and columns of equal size; return `void` |
+
+`mergeCells()` takes two cells by zero-based row index and in-row cell index, the way `rows.items[r].cells` lists them, and merges the rectangle they span. A merged cell counts once in its row. `bottomRow` must not be above `topRow`, but either cell can lie further left. The rectangle grows to include whole merged cells. If a cell crosses the rectangle's edge, or the rectangle holds only one cell, the merge refuses with `InvalidArgument` and the diagnostic code `edit.table-merge-not-rectangle`. The merged cell keeps the content of every cell that had content, in reading order. You can edit the returned cell in the same sync.
+
+`split()` takes counts from 1 through 63. New columns get equal widths, and cells in other rows widen so they keep their width. A cell that is merged over several rows splits only into a number of rows that divides its row count. Splitting a one-row cell into rows adds rows to the table, and the other cells of that row stay merged across the new rows. The first new cell keeps the content. Counts the cell cannot take refuse with `InvalidArgument` and the diagnostic code `edit.table-split-unsupported`, for example columns narrower than the minimum column width.
+
+For example, build a table with a merged header row:
+
+```ts
+const table = context.document.body.getRange('End').insertTable(3, 3, 'After', [
+  ['Quarterly results', '', ''],
+  ['Region', 'Q1', 'Q2'],
+  ['North', '10', '12'],
+]);
+await context.sync();
+const header = table.mergeCells(0, 0, 0, 2);
+header.value = 'Quarterly results';
+header.verticalAlignment = 'Center';
+await context.sync();
+```
+
+Merge and split have no tracked form. In `TrackAll` or `TrackMineOnly` mode, both refuse with `NotSupported`. Cells with a pending cell revision refuse with `NotImplemented`.
+
+In collaboration, merge and split synchronize, undo, and survive reconnect and reopen. Text that a participant types into an empty cell while another participant merges it away is discarded. Concurrent merges, splits, and column edits of one table converge, but they can leave a row that ends before the last grid column. Column edits keep that row ending where it does. A merge or split that needs the missing part of that row refuses. Merged tables still accept `addRows()`, `insertRows()`, `addColumns()` without values, `deleteRows()`, and `deleteColumns()`. A deleted column narrows a merged cell that spans it.
+
 ## Format tables and cells
 
 `Table.style` uses an existing table style name. `Table.headerRowCount` sets the number of leading header rows, from zero through the row count. Zero removes the header flags. Cell formatting exposes these properties:
@@ -111,7 +141,7 @@ await context.sync();
 
 ## Handle unsupported structures
 
-Structural edits can fail on merged grids, protected content, nested preserved structures, and pending revisions. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
+Structural edits can fail on legacy horizontal merges, protected content, nested preserved structures, and pending revisions. Value matrices and column widths refuse on tables with merged cells. Adding columns or deleting some columns requires an existing table grid. Deleting all columns can still remove a table without a grid. A matching TypeScript signature does not guarantee an edit works on every table. Table value replacement does not silently discard unsupported cell content. Inspect and edit a smaller cell-body range when that preserves the intended structure.
 
 Complete table insertion, cell value replacement, row additions, and partial row deletions support native revisions. An author can configure a complete proposed table while it has no foreign revisions. Existing table properties and columns require permanent edits. Tracked table and cell value replacement refuse in collaboration. In collaboration, a tracked replacement must remain within one paragraph. Tracked text and font edits can operate inside eligible cell paragraphs. A pending tracked row insertion or deletion blocks tracked text edits throughout that row. See [Tracked changes](/docs/2.x/editor-api/revisions).
 

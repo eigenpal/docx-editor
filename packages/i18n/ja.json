@@ -23,6 +23,16 @@
     "noCommentDraftView": "ここではコメントを追加できません",
     "mergeUnsupported": "セルの結合はサポートされていません",
     "splitUnsupported": "セルの分割はサポートされていません",
+    "mergeNeedsRectangle": "結合するには、四角形になる 2 つ以上のセルを選択してください",
+    "mergeNeedsSelection": "結合するには 2 つ以上のセルを選択してください",
+    "splitNeedsOneCell": "分割するセルを 1 つ選択してください",
+    "splitRowsNotDivisor": "結合されたセルは、その行数を割り切れる行数にのみ分割できます",
+    "cellTooNarrow": "セルの幅が狭すぎるため、その列数には分割できません",
+    "splitNeedsGrid": "この表には列グリッドがないため、セルはまたがる列数を割り切れる列数にのみ分割できます",
+    "cellHasRevision": "これらのセルには変更履歴があります。先に承諾または却下してください。",
+    "cellStructureSuggesting": "セルの結合や分割を行うには提案モードをオフにしてください。これらの変更は提案できません。",
+    "legacyMerge": "この表は、ここでは変更できない古い形式の結合セルを使用しています",
+    "tableGridUnplaceable": "この表には列グリッドに収まらないセルがあります",
     "imageSuggesting": "提案モードでは画像を変更できません",
     "equationSourceFormatting": "行形式で編集すると、この数式の書式が失われます",
     "equationSuggesting": "提案モードでは数式を変更できません",
@@ -437,6 +447,13 @@
       "refused": "ブックマークを変更できませんでした。",
       "duplicates": "{count, plural, other {ほかに # か所がこの名前を使用しています。}}リンクとジャンプは最初のものを使用します。",
       "keepFirst": "最初のものを残す"
+    },
+    "splitCell": {
+      "columns": "列数",
+      "rows": "行数",
+      "range": "1 から {max} までの整数を入力してください",
+      "oneCell": "2 つ以上のセルに分割してください",
+      "submit": "分割"
     }
   },
   "comments": {

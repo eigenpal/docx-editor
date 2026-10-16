@@ -29,6 +29,7 @@ import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import type { ToolbarSlotPartComponent } from './parts';
 import { ToolbarSeparator } from './parts';
+import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import { Slot } from './Slot';
 import { ToolbarHexColorPickerBody } from './ColorSplit';
 import { useTableChromeProviderVisible, useTableChromeSlot } from './useTableChrome';
@@ -887,6 +888,14 @@ export function TableChromeGroup({
           return <Fragment key={Part.docxSlot}>{override}</Fragment>;
         }
         return <Part key={Part.docxSlot} />;
+      })}
+      {[ToolbarTableMergeCells, ToolbarTableSplitCell].map((Part) => {
+        const override = overrides.get(Part.docxSlot);
+        return override ? (
+          <Fragment key={Part.docxSlot}>{override}</Fragment>
+        ) : (
+          <Part key={Part.docxSlot} />
+        );
       })}
     </>
   );

@@ -51,6 +51,9 @@ import {
 // - textbox server 17: a note deleted after two peers created the notes part at once
 // - server concurrent 8, server denseImages 8, peer textbox 1: the caret mapped by text
 //   lost its place when peers split and joined its paragraph; it now follows its characters
+// - tableCells server 29: a peer split a paragraph in a cell merged away twice, and the tail
+//   showed nowhere; adoption now follows a chain of merged cells
+// - tableCells peer 4 and 13, server 30: text a merge moved out of a column a peer deleted
 const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number }[] = [
   { config: 'sequential', delivery: 'in-order', seed: 1 },
   { config: 'sequential', delivery: 'in-order', seed: 2 },
@@ -109,6 +112,10 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'concurrent', delivery: 'server', seed: 8 },
   { config: 'denseImages', delivery: 'server', seed: 8 },
   { config: 'textbox', delivery: 'peer', seed: 1 },
+  { config: 'tableCells', delivery: 'server', seed: 29 },
+  { config: 'tableCells', delivery: 'server', seed: 30 },
+  { config: 'tableCells', delivery: 'peer', seed: 4 },
+  { config: 'tableCells', delivery: 'peer', seed: 13 },
 ];
 
 /**

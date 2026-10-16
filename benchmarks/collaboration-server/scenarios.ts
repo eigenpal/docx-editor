@@ -67,6 +67,13 @@ export const SCENARIO_CONFIGS = {
   textbox: { replicas: 3, steps: 200, undoChance: 0.06, documentPath: TEXTBOX_DOCUMENT },
   // Small documents that each hold one kind of structure, edited densely.
   denseTable: { ...DENSE, documentPath: fixture('table-cell-selection-drag.docx') },
+  // Cell merge and split against typing, row and column edits, undo, and late joiners.
+  tableCells: {
+    ...DENSE,
+    steps: 160,
+    documentPath: fixture('table-cell-selection-drag.docx'),
+    weights: { mergeCells: 6, splitCell: 6, insertColumn: 2, deleteColumn: 2, cellFill: 1 },
+  },
   denseImages: { ...DENSE, documentPath: fixture('images-wrap-sides.docx') },
   denseControls: { ...DENSE, documentPath: fixture('block-sdt-showcase.docx') },
   denseLinks: { ...DENSE, documentPath: fixture('hyperlink-demo.docx') },

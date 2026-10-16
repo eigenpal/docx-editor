@@ -170,17 +170,18 @@ describe('table chrome command-state parity (Task 9 fix round 1)', () => {
     assertChromeParity(editor, 'table.borderTarget', 'all', DEFAULT_TABLE_CHROME_DRAFT);
   });
 
-  test('merged table keeps border chrome enabled while insertColumn refuses', () => {
+  test('legacy merged table keeps border chrome enabled while insertColumn refuses', () => {
     const merged =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2400"/><w:gridCol w:w="3600"/></w:tblGrid>' +
-      `<w:tr><w:tc>${p('A1')}</w:tc><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr>${p('span')}</w:tc></w:tr></w:tbl>`;
+      `<w:tr><w:tc><w:tcPr><w:hMerge w:val="restart"/></w:tcPr>${p('A1')}</w:tc>` +
+      `<w:tc><w:tcPr><w:hMerge/></w:tcPr>${p('span')}</w:tc></w:tr></w:tbl>`;
     const editor = mount(merged);
     caret(editor, paragraphByText(editor, 'A1'));
     expect(tableChromeToolbarState(editor, 'table.borderTarget').enabled).toBe(true);
     const structural = { type: 'insertColumn' as const, where: 'right' as const };
     const can = editor.can(structural);
     expect(tableCommandToolbarState(editor.surface, structural).disabledReason).toBe(can.reason);
-    expect(can.reason).toBe('this table has merged cells');
+    expect(can.reason).toBe('this table uses a legacy horizontal merge the editor cannot change');
   });
 
   test('repeated header row keeps border chrome enabled while explicit insertRow refuses', () => {

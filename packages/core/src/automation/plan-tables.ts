@@ -9,6 +9,7 @@ import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import type { AutomationErrorCode, AutomationHandle, AutomationValue } from './protocol.ts';
 import type { PlannedOperation } from './plan.ts';
 import { resolveSpanRef, storyOfSpanRef } from './spans.ts';
+import { mergeTargetCell } from '../store/store/tree-op-table-merge.ts';
 import {
   tableNodes,
   tableRead,
@@ -42,10 +43,12 @@ const TABLE_OPS = new Set([
   'getTableRows',
   'getTableCells',
   'getTableCell',
+  'getMergedTableCell',
   'getTableCellProperties',
   'getTableCellBody',
   'updateTable',
   'updateTableCell',
+  'splitTableCell',
   'insertTable',
 ]);
 function paragraphs(root: OoxmlNode): Set<string> {
@@ -219,6 +222,25 @@ export function planTableOperation(
         ? query({ kind: 'handle', handle: handles.tableCell(id, reads.story) })
         : refuse('invalid-handle', 'cell-not-found');
     }
+    case 'getMergedTableCell': {
+      const first = data.cellIds[operation.topRow]?.[operation.firstCell];
+      const last = data.cellIds[operation.bottomRow]?.[operation.lastCell];
+      if (!first || !last || operation.bottomRow < operation.topRow)
+        return refuse('unsupported-content', 'invalid-table-index');
+      const merged = mergeTargetCell(
+        reads.part,
+        table.id,
+        first === last ? [first] : [first, last]
+      );
+      if (merged.ok) {
+        return query({ kind: 'handle', handle: handles.tableCell(merged.cellId, reads.story) });
+      }
+      // The same codes the merge itself refuses with, though this read runs first.
+      return refuse(
+        merged.reason === 'cell-has-revision' ? 'unsupported-revision' : 'unsupported-content',
+        merged.reason
+      );
+    }
     case 'getTableCellBody':
       return query({ kind: 'handle', handle: handles.body(reads.story, target.nodeId) });
     case 'getTableCellProperties': {
@@ -237,19 +259,27 @@ export function planTableOperation(
     }
     case 'insertTableRows':
     case 'updateTable':
-    case 'updateTableCell': {
+    case 'updateTableCell':
+    case 'splitTableCell': {
       let mutation: AutomationTableMutation =
-        operation.op === 'insertTableRows'
+        operation.op === 'splitTableCell'
           ? {
-              kind: 'insertRows',
-              rowId: target.nodeId,
-              location: operation.location,
-              count: operation.count,
-              ...(operation.values ? { values: operation.values } : {}),
+              kind: 'splitCell',
+              cellId: target.nodeId,
+              rowCount: operation.rowCount,
+              columnCount: operation.columnCount,
             }
-          : operation.op === 'updateTable'
-            ? operation.mutation
-            : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
+          : operation.op === 'insertTableRows'
+            ? {
+                kind: 'insertRows',
+                rowId: target.nodeId,
+                location: operation.location,
+                count: operation.count,
+                ...(operation.values ? { values: operation.values } : {}),
+              }
+            : operation.op === 'updateTable'
+              ? operation.mutation
+              : { ...operation.properties, kind: 'cell', cellId: target.nodeId };
       if (mutation.kind === 'properties' && mutation.styleId !== undefined) {
         const wanted = mutation.styleId;
         if (typeof wanted !== 'string' || wanted.trim().length === 0)
@@ -275,7 +305,7 @@ export function planTableOperation(
       const planned = planTableMutation(reads, table.id, mutation, revision);
       if (!planned.ok)
         return refuse(
-          planned.reason === 'unsupported-revision'
+          planned.reason === 'unsupported-revision' || planned.reason === 'cell-has-revision'
             ? 'unsupported-revision'
             : planned.reason === 'tracked-table-deletion-unsupported' ||
                 planned.reason === 'unsupported-tracked-table-operation'
@@ -306,6 +336,7 @@ export function planTableOperation(
           },
         ],
         answer: (post) => {
+          // The merged cell is the rectangle's top-left cell, which keeps its identity.
           if (mutation.kind !== 'addRows' && mutation.kind !== 'insertRows')
             return { kind: 'applied' };
           const current = post.story(reads.story);

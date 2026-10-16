@@ -453,6 +453,14 @@ export {
   withTabStop,
   trapTabWithin,
 } from './paragraph-dialog-fields.ts';
+export {
+  SPLIT_CELL_FALLBACK_MAX,
+  initialSplitCellCounts,
+  readSplitCellCounts,
+  type SplitCellCountProblem,
+  type SplitCellCounts,
+  type SplitCellLimits,
+} from './split-cell-dialog-model.ts';
 export { TEXT_FORM_FORMATS } from '../store/store/text-form-field-options.ts';
 
 export type {

@@ -119,7 +119,11 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.section-mark':
     'The edit would remove a section break that holds page layout settings. Remove the section break on its own.',
   'edit.table-structure-unsupported':
-    'The table edit is not supported for this table shape, for example a table with merged cells. Change the merge first.',
+    'The table edit is not supported for this table shape, for example a legacy horizontal merge, a row that starts or ends with an authored gap, or cells that do not fit the column grid. Edit that row or table directly.',
+  'edit.table-merge-not-rectangle':
+    'The cells to merge do not form a rectangle, or the rectangle holds only one cell. Name the top-left and bottom-right cells of a rectangle that no merged cell crosses, then merge again.',
+  'edit.table-split-unsupported':
+    'The cell cannot split into these counts. A cell merged over several rows splits into a number of rows that divides its rows, each new column must keep the minimum column width, and a table without a column grid splits into a divisor of the columns the cell spans.',
   'edit.table-insert-refused':
     'A table cannot be inserted at the selection, for example inside a field or a locked content control. Move the caret first.',
   'edit.table-of-contents-refused':

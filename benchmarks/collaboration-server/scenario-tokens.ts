@@ -12,6 +12,7 @@
 // back: a peer who moved the text at the same time must not bring it back.
 
 import {
+  type OoxmlNode,
   type OoxmlPackage,
   type TreeDocOp,
   type TreePackageStore,
@@ -37,6 +38,22 @@ const DELETING = new Set<string>([
   'deleteDrawing',
 ]);
 
+/** Deletions of table structure: they remove the cells that hold text, not the text. */
+const STRUCTURE_DELETING = new Set<string>(['deleteTableRow', 'deleteTableColumn']);
+
+/** Each paragraph in `table`, by the id of the innermost cell that holds it. */
+function paragraphCells(table: OoxmlNode): Map<string, string> {
+  const cells = new Map<string, string>();
+  const walk = (node: OoxmlNode, cell: string | null): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph' && cell !== null) cells.set(node.id, cell);
+    const inner = node.kind === 'tableCell' ? node.id : cell;
+    for (const child of node.children) walk(child, inner);
+  };
+  walk(table, null);
+  return cells;
+}
+
 /** Whether any part of `pkg` holds a paragraph with `id`. */
 function hasParagraph(pkg: OoxmlPackage, id: string): boolean {
   for (const part of pkg.parts.values()) {
@@ -60,6 +77,17 @@ export class TypedTokens {
   private readonly deleters = new Map<string, Set<number>>();
   /** Tokens already reported as vanished, so each is reported once. */
   private readonly vanished = new Set<string>();
+  /**
+   * Paragraphs a cell merge moved into another cell, and tokens a row or column deletion took
+   * out of view. A merge moves whole paragraphs out of the cells it removes, so text in them,
+   * typed before or concurrently, survives a concurrent deletion of the cell they came from:
+   * the merge put them somewhere the deletion did not reach. Text deletions still win.
+   */
+  private readonly mergedAway = new Set<string>();
+  private readonly structureDeleted = new Set<string>();
+  /** The edit between `beforeEdit` and `afterEdit`, and the cells its table's paragraphs were in. */
+  private editing: { readonly op: TreeDocOp; readonly cells: Map<string, string> | null } | null =
+    null;
 
   /** The edit with a fresh token added to its typed text, or the edit as it is. */
   tag(addressed: Addressed): { readonly addressed: Addressed; readonly token: string | null } {
@@ -85,6 +113,12 @@ export class TypedTokens {
    * `afterEdit` to compare. Null for any other edit.
    */
   beforeEdit(store: TreePackageStore, op: TreeDocOp): Set<string> | null {
+    const table =
+      op.op === 'mergeTableCells' ? findNode(store.bodyStore().part.root, op.tableId) : null;
+    this.editing = {
+      op,
+      cells: table ? paragraphCells(table) : null,
+    };
     return DELETING.has(op.op) ? this.shownIn(store.currentPackage(), () => true) : null;
   }
 
@@ -93,11 +127,22 @@ export class TypedTokens {
    * was deleted by it. Each is excused from showing, and must not show again.
    */
   afterEdit(store: TreePackageStore, before: ReadonlySet<string> | null, replica: number): void {
+    const editing = this.editing;
+    this.editing = null;
+    if (editing?.cells && editing.op.op === 'mergeTableCells') {
+      const table = findNode(store.bodyStore().part.root, editing.op.tableId);
+      const after = table ? paragraphCells(table) : new Map<string, string>();
+      for (const [paragraph, cell] of editing.cells) {
+        const now = after.get(paragraph);
+        if (now !== undefined && now !== cell) this.mergedAway.add(paragraph);
+      }
+    }
     if (!before) return;
     const after = this.shownIn(store.currentPackage(), () => true);
     for (const token of before) {
       if (after.has(token)) continue;
       this.excused.add(token);
+      if (editing && STRUCTURE_DELETING.has(editing.op.op)) this.structureDeleted.add(token);
       this.deletedBy.set(token, replica);
       const deleters = this.deleters.get(token) ?? new Set<number>();
       deleters.add(replica);
@@ -230,7 +275,8 @@ export class TypedTokens {
       const name = `typed token ${tokenNumber(token)} of replica ${typed.replica}`;
       if (count > 1) problems.push(`${name} shows ${count} times`);
       const deleter = this.deletedBy.get(token);
-      if (count > 0 && deleter !== undefined) {
+      const keptByMerge = this.mergedAway.has(typed.paragraph) && this.structureDeleted.has(token);
+      if (count > 0 && deleter !== undefined && !keptByMerge) {
         problems.push(`${name} shows again after replica ${deleter} deleted it`);
       }
       const store = packages[typed.replica];

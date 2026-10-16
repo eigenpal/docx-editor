@@ -531,7 +531,7 @@ describe('insertTableColumn', () => {
     ).toBe('table-has-merge');
   });
 
-  test('refuses merged tables with hMerge and vMerge', () => {
+  test('refuses legacy hMerge tables and accepts vMerge tables', () => {
     const partH = load(
       `<w:tbl><w:tblGrid><w:gridCol w:w="2400"/></w:tblGrid>` +
         `<w:tr><w:tc><w:tcPr><w:hMerge w:val="1"/></w:tcPr><w:p/></w:tc></w:tr></w:tbl>`
@@ -561,7 +561,7 @@ describe('insertTableColumn', () => {
         gridColumnId: colV!,
         where: 'left',
       })
-    ).toBe('table-has-merge');
+    ).toBeNull();
   });
 
   test('refuses irregular rows and grid/cell count mismatch', () => {

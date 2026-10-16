@@ -33,13 +33,22 @@ export type AutomationAuthoringOperation =
       readonly rowIndex: number;
       readonly cellIndex: number;
     }
+  /** The cell a merge of this rectangle merges into, read before the merge applies. */
+  | {
+      readonly op: 'getMergedTableCell';
+      readonly table: AutomationHandle;
+      readonly topRow: number;
+      readonly firstCell: number;
+      readonly bottomRow: number;
+      readonly lastCell: number;
+    }
   | { readonly op: 'getTableCellProperties' | 'getTableCellBody'; readonly cell: AutomationHandle }
   | {
       readonly op: 'updateTable';
       readonly table: AutomationHandle;
       readonly mutation: Exclude<
         import('./tables.ts').AutomationTableMutation,
-        { kind: 'cell' } | { kind: 'insertRows' }
+        { kind: 'cell' } | { kind: 'insertRows' } | { kind: 'splitCell' }
       >;
     }
   | {
@@ -52,6 +61,13 @@ export type AutomationAuthoringOperation =
         >,
         'kind' | 'cellId'
       >;
+    }
+  /** Split one cell into `rowCount` by `columnCount` cells. */
+  | {
+      readonly op: 'splitTableCell';
+      readonly cell: AutomationHandle;
+      readonly rowCount: number;
+      readonly columnCount: number;
     }
   | {
       readonly op: 'insertTable';

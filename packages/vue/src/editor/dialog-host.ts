@@ -24,9 +24,10 @@ import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from './DocxEditorWatermark';
 import { DocxEditorBookmarkDialog } from './DocxEditorBookmark';
+import { DocxEditorSplitCellDialog } from './DocxEditorSplitCell';
 import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 import { DocxEditorRevisionMarkupDialog } from './DocxEditorRevisionMarkupDialog';
-type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark';
+type DialogKind = 'pageSetup' | 'paragraph' | 'watermark' | 'bookmark' | 'splitCell';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
 function createHost(config: () => DocxEditorPopups | undefined) {
   const target = shallowRef<HTMLElement | null>(null);
@@ -204,6 +205,11 @@ export const DialogHost = defineComponent({
               ? p.popups?.bookmark
                 ? renderPopup(p.popups.bookmark, { open: true, onClose: host.close })
                 : h(DocxEditorBookmarkDialog, { open: true, onClose: host.close })
+              : null,
+            host.active.value === 'splitCell' && p.popups?.splitCell !== false
+              ? p.popups?.splitCell
+                ? renderPopup(p.popups.splitCell, { open: true, onClose: host.close })
+                : h(DocxEditorSplitCellDialog, { open: true, onClose: host.close })
               : null,
             host.revisionSession.value && p.popups?.revisionMarkup !== false
               ? p.popups?.revisionMarkup

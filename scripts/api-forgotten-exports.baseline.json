@@ -536,6 +536,7 @@
       "RulerPageSetup",
       "RulerTabStop",
       "ScrollPageInfo",
+      "SplitCellDialogRoot",
       "TextFormFieldDialogRoot",
       "TitleBarProps",
       "TitleBarRightProps",

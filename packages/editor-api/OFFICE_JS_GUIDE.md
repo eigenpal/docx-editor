@@ -418,6 +418,30 @@ await runtime.run(async (context) => {
 
 `TableRow.insertRows('Before', count, values)` and `'After'` support ordinary source rows beside unrelated merged headers. Merged source rows and crossing vertical merges refuse. Keep each row insertion as the only write in its sync. Sync before editing returned rows. For more information, see [Tables and cells](https://docx-editor.dev/docs/2.x/editor-api/tables).
 
+## Merge and split cells
+
+`Table.mergeCells(topRow, firstCell, bottomRow, lastCell)` merges a rectangle and returns the merged cell. Edits to that cell can share the sync. `TableCell.split(rowCount, columnCount)` splits one cell. A ragged rectangle refuses with `InvalidArgument` and `innerError.code` `edit.table-merge-not-rectangle`. A split the cell cannot take refuses with `InvalidArgument` and `edit.table-split-unsupported`. Both refuse with `NotSupported` in a tracking mode. Do not turn tracking off to make them succeed.
+
+```ts
+import { DocxEditor, isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+const runtime = await DocxEditor.createServer(bytes);
+await runtime.run(async (context) => {
+  const table = context.document.body.tables.getFirst();
+  const header = table.mergeCells(0, 0, 0, 2);
+  header.value = 'Quarterly results';
+  try {
+    await context.sync();
+  } catch (error) {
+    if (!isDocxEditorError(error)) throw error;
+    // A merged cell crosses the rectangle: read the table again and pick its real corners.
+    const reason = error.debugInfo.innerError;
+    if (reason?.code !== 'edit.table-merge-not-rectangle') throw error;
+    feedback.push(reason.message);
+  }
+});
+```
+
 ## Pictures and page fields
 
 Insert a manual line break with `range.insertBreak('Line', 'After')` or `\v` in inserted text. Call `await context.sync()` after queuing the write. Manual line breaks support `TrackMineOnly` and text edits in the same sync. Single-line content controls refuse manual line breaks. Reads report manual line breaks as `\v`, column breaks as U+000E, and paragraph separators as `\r`. Text writes refuse U+000E and paragraph separators. Do not flatten these characters before sending read text back to the document.

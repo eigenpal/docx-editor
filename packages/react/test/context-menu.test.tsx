@@ -670,6 +670,8 @@ describe('table context rows (Task 10)', () => {
     'table.insertRowBelow',
     'table.insertColumnLeft',
     'table.insertColumnRight',
+    'table.mergeCells',
+    'table.splitCell',
     'table.deleteRow',
     'table.deleteColumn',
     'table.deleteTable',
@@ -697,8 +699,6 @@ describe('table context rows (Task 10)', () => {
     const tableStart = slots.indexOf('table.insertRowAbove');
     expect(tableStart).toBeGreaterThan(-1);
     expect(slots.slice(tableStart, tableStart + TABLE_ROW_IDS.length)).toEqual([...TABLE_ROW_IDS]);
-    expect(slots).not.toContain('table.mergeCells');
-    expect(slots).not.toContain('table.splitCell');
   });
 
   test('destructive table rows carry the destructive treatment before cell alignment', () => {
@@ -768,7 +768,7 @@ describe('table context rows (Task 10)', () => {
     expect(panel(view)).toBeNull();
   });
 
-  test('merged-table column insertion is disabled with the engine reason', () => {
+  test('a span past the column grid disables column insertion with the engine reason', () => {
     const { view, editor } = mountDocument(MERGED_TABLE);
     act(() => {
       const paragraphId = editor().surface!.session.paragraphIds()[0]!;
@@ -780,7 +780,9 @@ describe('table context rows (Task 10)', () => {
     rightClick(view);
     const row = rowNamed(view, 'table.insertColumnRight');
     expect(row.getAttribute('aria-disabled')).toBe('true');
-    expect(row.getAttribute('title')).toBe('this table has merged cells');
+    expect(row.getAttribute('title')).toBe(
+      "This table has a cell that doesn't fit its column grid"
+    );
   });
 
   test('a Fragment-wrapped table row override still replaces its row in place', () => {

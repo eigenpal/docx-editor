@@ -62,6 +62,8 @@ export type EditDiagnosticCode =
   | 'edit.field-structure'
   | 'edit.section-mark'
   | 'edit.table-structure-unsupported'
+  | 'edit.table-merge-not-rectangle'
+  | 'edit.table-split-unsupported'
   | 'edit.table-insert-refused'
   | 'edit.table-of-contents-refused'
   | 'edit.unsupported-content'

@@ -51,6 +51,7 @@ export {
   type TableChromePartProps,
 } from './TableControls';
 export { TableChromeProvider } from './useTableChrome';
+export { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 export type { ToolbarTranslate } from './toolbar-context';
 export type { ToolbarReviewersProps } from './Reviewers';
 export {

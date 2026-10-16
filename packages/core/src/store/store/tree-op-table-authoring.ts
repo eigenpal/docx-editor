@@ -1,4 +1,4 @@
-// Lossless table style, repeated headers, and rectangular grid widths.
+// Lossless table style, repeated headers, and grid widths; merged cells take their spans' sum.
 import { createNodeIdAllocator, replaceNode, type EditOptions } from '../package/ooxml-edit.ts';
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import {
@@ -17,6 +17,7 @@ import {
 import { isWmlElement, wmlChildNamed } from './tree-op-table-shared.ts';
 import { readEditableTableTopology } from './tree-op-table-topology.ts';
 import { MIN_TABLE_COLUMN_WIDTH_TWIPS } from './table-constraints.ts';
+import { resizedGridCells, validateTableResizeGrid } from './table-resize-grid.ts';
 import type { TreeDocOp, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 
 type Op = Extract<TreeDocOp, { op: 'setTableProperties' }>;
@@ -42,12 +43,14 @@ export function validateTableProperties(part: OoxmlPart, op: Op): TreeOpRejectio
   )
     return 'invalidArgs';
   if (op.columnWidthsTwips !== undefined) {
-    if (hasMerge) return 'table-has-merge';
+    // Merged cells take the sum of the columns they span, so the grid must place them.
+    const merged = hasMerge ? validateTableResizeGrid(result.topology) : null;
+    if (merged) return merged;
     if (
       !Array.isArray(op.columnWidthsTwips) ||
       op.columnWidthsTwips.length !== gridColumns.length ||
       gridColumns.length === 0 ||
-      rows.some(({ cells }) => cells.length !== gridColumns.length)
+      (!hasMerge && rows.some(({ cells }) => cells.length !== gridColumns.length))
     )
       return 'invalidArgs';
     if (
@@ -138,6 +141,13 @@ export function applyTableProperties(part: OoxmlPart, op: Op, options?: EditOpti
       leaf(wmlChildNamed(updated, 'tblPr') ?? fresh('tblPr'), 'tblStyle', { val: op.styleId })
     );
   const replacements = new Map<string, OoxmlNode>();
+  const cellWidths = new Map<string, number>();
+  if (op.columnWidthsTwips) {
+    const widths = new Map(op.columnWidthsTwips.map((width, index) => [index, width]));
+    for (const { cell, width } of resizedGridCells(result.topology, widths)) {
+      cellWidths.set(cell.id, width);
+    }
+  }
   rows.forEach(({ row, cells }, rowIndex) => {
     let edited: OoxmlElement = row;
     if (op.headerRowCount !== undefined) {
@@ -161,13 +171,13 @@ export function applyTableProperties(part: OoxmlPart, op: Op, options?: EditOpti
     }
     if (op.columnWidthsTwips) {
       const cellMap = new Map(
-        cells.map((cell, index) => [
+        cells.map((cell) => [
           cell.id,
           patch(
             cell,
             'tcPr',
             leaf(wmlChildNamed(cell, 'tcPr') ?? fresh('tcPr'), 'tcW', {
-              w: String(op.columnWidthsTwips![index]),
+              w: String(cellWidths.get(cell.id)),
               type: 'dxa',
             })
           ),

@@ -162,6 +162,7 @@ import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
 import { ShallowRef } from 'vue';
 import { SlotsType } from 'vue';
+import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
@@ -1618,6 +1619,110 @@ export interface ContextMenuItemProps {
     shortcut?: string;
 }
 
+// @public
+export const ContextMenuMergeCells: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        destructive: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        destructive: boolean;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        destructive: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        destructive: boolean;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    destructive: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    destructive: boolean;
+    hidden: boolean;
+    icon: VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>;
+    labelKey: string;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    docxRow: string;
+};
+
 // @public (undocumented)
 export const ContextMenuPaste: vue.DefineComponent<vue.ExtractPropTypes<{
     className: {
@@ -2106,6 +2211,95 @@ export const ContextMenuSelectAll: {
     }>;
     labelKey: string;
     shortcutKey: string;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuSplitCell: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        className: string;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        hidden: {
+            default: undefined;
+            type: BooleanConstructor;
+        };
+        icon: {
+            default: undefined;
+            type: PropType<VNode>;
+        };
+        labelKey: {
+            default: undefined;
+            type: StringConstructor;
+        };
+    }>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, {
+        className: string;
+        hidden: boolean;
+        icon: VNode<vue.RendererNode, vue.RendererElement, {
+            [key: string]: any;
+        }>;
+        labelKey: string;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    className: {
+        default: undefined;
+        type: StringConstructor;
+    };
+    hidden: {
+        default: undefined;
+        type: BooleanConstructor;
+    };
+    icon: {
+        default: undefined;
+        type: PropType<VNode>;
+    };
+    labelKey: {
+        default: undefined;
+        type: StringConstructor;
+    };
+}>> & Readonly<{}>, () => vue_jsx_runtime.JSX.Element | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    className: string;
+    hidden: boolean;
+    icon: VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>;
+    labelKey: string;
 }, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
     docxRow: string;
 };
@@ -2627,6 +2821,8 @@ export interface DocxEditorContextMenuNamespace {
     // (undocumented)
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
+    readonly MergeCells: typeof ContextMenuMergeCells;
+    // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
     // (undocumented)
     readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
@@ -2642,6 +2838,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly Separator: typeof MenuSeparator;
     // (undocumented)
     readonly Slot: typeof MenuItem;
+    // (undocumented)
+    readonly SplitCell: typeof ContextMenuSplitCell;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
 }
@@ -3298,6 +3496,7 @@ export interface DocxEditorNamespace {
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     // (undocumented)
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
     // (undocumented)
@@ -3939,6 +4138,7 @@ export interface DocxEditorPopups {
     paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
     print?: DocxEditorPopup<DocxEditorPrintDialogProps>;
     revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
+    splitCell?: DocxEditorPopup<DocxEditorSplitCellDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
     watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
@@ -4418,6 +4618,111 @@ export interface DocxEditorRulerProps {
 export const DocxEditorShell: DocxEditorNamespace;
 
 // @public
+export const DocxEditorSplitCellDialog: {
+    new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        readonly children: PropType<DocxEditorChildren>;
+        readonly className: {
+            readonly default: undefined;
+            readonly type: StringConstructor;
+        };
+        readonly onClose: {
+            readonly required: true;
+            readonly type: PropType<() => void>;
+        };
+        readonly open: {
+            readonly required: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly preset: {
+            readonly default: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, vue.PublicProps, {
+        readonly className: string;
+        readonly preset: boolean;
+    }, true, {}, {}, vue.GlobalComponents, vue.GlobalDirectives, string, {}, any, vue.ComponentProvideOptions, {
+        B: {};
+        C: {};
+        D: {};
+        Defaults: {};
+        M: {};
+        P: {};
+    }, Readonly<vue.ExtractPropTypes<{
+        readonly children: PropType<DocxEditorChildren>;
+        readonly className: {
+            readonly default: undefined;
+            readonly type: StringConstructor;
+        };
+        readonly onClose: {
+            readonly required: true;
+            readonly type: PropType<() => void>;
+        };
+        readonly open: {
+            readonly required: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly preset: {
+            readonly default: true;
+            readonly type: BooleanConstructor;
+        };
+        readonly style: PropType<CSSProperties>;
+    }>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, {
+        readonly className: string;
+        readonly preset: boolean;
+    }>;
+    __isFragment?: never;
+    __isTeleport?: never;
+    __isSuspense?: never;
+} & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    readonly children: PropType<DocxEditorChildren>;
+    readonly className: {
+        readonly default: undefined;
+        readonly type: StringConstructor;
+    };
+    readonly onClose: {
+        readonly required: true;
+        readonly type: PropType<() => void>;
+    };
+    readonly open: {
+        readonly required: true;
+        readonly type: BooleanConstructor;
+    };
+    readonly preset: {
+        readonly default: true;
+        readonly type: BooleanConstructor;
+    };
+    readonly style: PropType<CSSProperties>;
+}>> & Readonly<{}>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, {
+    readonly className: string;
+    readonly preset: boolean;
+}, {}, string, {}, vue.GlobalComponents, vue.GlobalDirectives, string, vue.ComponentProvideOptions> & vue.VNodeProps & vue.AllowedComponentProps & vue.ComponentCustomProps & {
+    Apply: vue.DefineComponent<DialogPartProps>;
+    Body: vue.DefineComponent<DialogPartProps>;
+    Cancel: vue.DefineComponent<DialogPartProps>;
+    Error: vue.DefineComponent<DialogPartProps>;
+    Field: vue.DefineComponent<DialogPartProps & {
+        name: "columns" | "rows";
+    }>;
+    Footer: vue.DefineComponent<DialogPartProps>;
+    Header: vue.DefineComponent<DialogPartProps>;
+    Reset: vue.DefineComponent<DialogPartProps>;
+    Title: vue.DefineComponent<DialogPartProps>;
+};
+
+// @public
+export interface DocxEditorSplitCellDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
 export const DocxEditorTextFormFieldDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         children: PropType<DocxEditorChildren>;
@@ -4604,6 +4909,8 @@ export interface DocxEditorToolbarNamespace {
     readonly TableCellFill: TableCellFillNamespace;
     // (undocumented)
     readonly TableInsert: ToolbarPartComponent;
+    readonly TableMergeCells: ToolbarPartComponent;
+    readonly TableSplitCell: ToolbarPartComponent;
     // (undocumented)
     readonly Underline: ToolbarPartComponent;
     // (undocumented)
@@ -6610,6 +6917,12 @@ export interface SlotProps {
 }
 
 // @public
+export interface SplitCellDialogFields {
+    columns: string;
+    rows: string;
+}
+
+// @public
 export type TableAction = 'addRowAbove' | 'addRowBelow' | 'addColumnLeft' | 'addColumnRight' | 'deleteRow' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'deleteTable' | 'selectTable' | 'selectRow' | 'selectColumn' | 'borderAll' | 'borderOutside' | 'borderInside' | 'borderNone' | 'borderTop' | 'borderBottom' | 'borderLeft' | 'borderRight' | {
     color: string | null;
     type: 'cellFillColor';
@@ -7626,6 +7939,14 @@ export function useScopeClassName(): '' | 'docx-editor ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSplitCellDialog(): UseSplitCellDialogReturn;
+
+// @public
+export interface UseSplitCellDialogReturn extends UseDialogReturn<SplitCellDialogFields> {
+    readonly limits: SplitCellLimits | null;
+}
 
 // @public (undocumented)
 export function useTableBorderTargetLabel(): ComputedRef<string>;

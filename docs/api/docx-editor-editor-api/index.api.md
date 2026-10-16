@@ -1538,6 +1538,7 @@ export class Table extends ModelObject implements PromisedItem {
     hydrateAddress(address: ObjectAddress): void;
     // @internal (undocumented)
     hydrateNull(): void;
+    mergeCells(topRow: number, firstCell: number, bottomRow: number, lastCell: number): TableCell;
     // (undocumented)
     protected onLoad(request: ResolvedLoadOptions): void;
     // @internal (undocumented)
@@ -1567,6 +1568,7 @@ export class TableCell extends ModelObject implements PromisedItem {
     static promised(context: RequestContext, label: string, nullable?: boolean): TableCell;
     get shadingColor(): string;
     set shadingColor(value: string);
+    split(rowCount: number, columnCount: number): void;
     get value(): string;
     set value(value: string);
     get verticalAlignment(): VerticalAlignment | 'Top' | 'Center' | 'Bottom' | 'Mixed';

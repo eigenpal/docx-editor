@@ -12,7 +12,7 @@ function spanOf(cell: OoxmlTableCellNode): number {
   return value && /^\d{1,4}$/.test(value) ? Number(value) : 0;
 }
 
-/** Resizing changes grid widths without adding or removing merged cells. */
+/** Resizing changes grid widths without adding or removing merged cells; spans stay valid. */
 export function validateTableResizeGrid(topology: EditableTableTopology): TreeOpRejection | null {
   if (!topology.grid || topology.gridColumns.length === 0) return 'unknown-grid-column';
   if (topology.rows.length === 0) return 'tree-invariant';
@@ -26,11 +26,8 @@ export function validateTableResizeGrid(topology: EditableTableTopology): TreeOp
     let columns = 0;
     for (const cell of cells) {
       const properties = wmlChildNamed(cell, 'tcPr');
-      if (
-        properties &&
-        (wmlChildNamed(properties, 'hMerge') || wmlChildNamed(properties, 'vMerge'))
-      )
-        return 'table-has-merge';
+      // A vertical merge keeps its column interval in every row, so widths stay consistent.
+      if (properties && wmlChildNamed(properties, 'hMerge')) return 'table-has-merge';
       const span = spanOf(cell);
       if (span < 1 || span > topology.gridColumns.length - columns) return 'tree-invariant';
       columns += span;

@@ -207,6 +207,7 @@ export const CONTENT_REMOVING_OPS: ReadonlySet<string> = new Set([
   'authorTable',
   'deleteTableRow',
   'deleteTableColumn',
+  'mergeTableCells',
   'removeContentControl',
   'removeRepeatingSectionItem',
 ]);

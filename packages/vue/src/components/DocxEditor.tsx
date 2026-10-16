@@ -48,6 +48,7 @@ import { DocxEditorPageSetupDialog } from '../editor/DocxEditorPageSetup';
 import { DocxEditorParagraphDialog } from '../editor/DocxEditorParagraphDialog';
 import { DocxEditorWatermarkDialog } from '../editor/DocxEditorWatermark';
 import { DocxEditorBookmarkDialog } from '../editor/DocxEditorBookmark';
+import { DocxEditorSplitCellDialog } from '../editor/DocxEditorSplitCell';
 import { DocxEditorPageNumber, PageNumberTranslationContext } from '../editor/DocxEditorPageNumber';
 import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorOpenFailure, warnOpenFailureActions } from '../editor/DocxEditorOpenFailure';
@@ -225,6 +226,8 @@ export interface DocxEditorNamespace {
   readonly WatermarkDialog: typeof DocxEditorWatermarkDialog;
   /** Bookmark dialog — list, add, delete and go to bookmarks. */
   readonly BookmarkDialog: typeof DocxEditorBookmarkDialog;
+  /** Split cells dialog — split the cell at the selection into columns and rows. */
+  readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
   readonly PageNumber: typeof DocxEditorPageNumber;
   readonly FontNotice: typeof DocxEditorFontNotice;
   /** The dialog that explains a file the editor refused to open. Mounted by default. */
@@ -700,6 +703,7 @@ export const DocxEditor = Object.assign(DocxEditorImpl, {
   ParagraphDialog: DocxEditorParagraphDialog,
   WatermarkDialog: DocxEditorWatermarkDialog,
   BookmarkDialog: DocxEditorBookmarkDialog,
+  SplitCellDialog: DocxEditorSplitCellDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   OpenFailure: DocxEditorOpenFailure,

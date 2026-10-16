@@ -201,6 +201,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'insertTable',
       'updateTable',
       'updateTableCell',
+      'splitTableCell',
       'setInlinePicture',
       'deleteInlinePicture',
       'insertField',

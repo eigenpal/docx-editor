@@ -11,6 +11,7 @@ import {
   type Ref,
   type VNode,
 } from 'vue';
+import { ToolbarTableMergeCells, ToolbarTableSplitCell } from './TableCellStructure';
 import type { TableBorderStyle } from '@docx-editor.dev/core/contracts/editor';
 import type { TableChromeDraft } from '@docx-editor.dev/core/editor';
 import {
@@ -841,6 +842,11 @@ export const TableChromeGroup = defineComponent({
         <>
           {props.separator ? <ToolbarSeparator /> : null}
           {entries.map((Part) => {
+            const override = props.overrides.get(Part.docxSlot);
+            if (override) return <Fragment key={Part.docxSlot}>{override}</Fragment>;
+            return h(Part, { key: Part.docxSlot });
+          })}
+          {[ToolbarTableMergeCells, ToolbarTableSplitCell].map((Part) => {
             const override = props.overrides.get(Part.docxSlot);
             if (override) return <Fragment key={Part.docxSlot}>{override}</Fragment>;
             return h(Part, { key: Part.docxSlot });

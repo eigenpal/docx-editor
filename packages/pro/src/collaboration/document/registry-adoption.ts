@@ -12,6 +12,9 @@ import {
   nodeRecordTombstoned,
 } from './schema.ts';
 
+/** The most survivors one adoption walks through; a longer chain is not a document's. */
+const MAX_SURVIVOR_CHAIN = 1024;
+
 /**
  * Which children each join survivor adopts from the tombstones that name it. Derived from
  * the replicated `replacedBy` and `deleted` fields, never replicated itself.
@@ -84,17 +87,37 @@ export class AdoptionIndex {
   }
 
   private recompute(survivorId: LogicalId): void {
+    // Survivors chain: a cell merged into another can itself be merged away later, and a
+    // child a peer added to the first one has to show where the last one went. Each survivor
+    // on the chain recomputes in turn. Every value here is remote input, so the walk stops at
+    // a cycle and after a bounded number of links.
+    const visiting = new Set<LogicalId>();
+    let current: LogicalId | undefined = survivorId;
+    while (current !== undefined && !visiting.has(current) && visiting.size < MAX_SURVIVOR_CHAIN) {
+      visiting.add(current);
+      this.recomputeOne(current);
+      // A survivor that is a tombstone itself passes what it adopts on to its own survivor.
+      current = this.survivorOf.get(current);
+    }
+  }
+
+  private recomputeOne(survivorId: LogicalId): void {
     const extras: LogicalId[] = [];
+    const seen = new Set<LogicalId>();
     const sources = bySurvivorEdge(this.nodes, this.sources.get(survivorId));
     for (const tombstoneId of sources) {
       const rec = this.nodes.get(tombstoneId);
       if (!rec) continue;
-      for (const childId of childArrayOf(rec)?.toArray() ?? []) {
+      // What the tombstone listed, then what it adopted as a survivor itself.
+      const listed = childArrayOf(rec)?.toArray() ?? [];
+      for (const childId of [...listed, ...(this.adoptees.get(tombstoneId) ?? [])]) {
+        if (seen.has(childId)) continue;
         if (this.reads.isTombstoned(childId) || !this.nodes.has(childId)) continue;
         // A join drops the removed paragraph's `w:pPr`. Adopting that property node onto the
         // survivor produced two `paragraphProperties` children, which `known-node-invariant`
         // refused, so the receiving replica never installed the joined tree.
         if (!this.isContentWitness(childId)) continue;
+        seen.add(childId);
         extras.push(childId);
       }
     }

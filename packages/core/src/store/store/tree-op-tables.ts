@@ -84,13 +84,13 @@ const TR_PR_STRIP = new Set(['ins', 'del', 'trPrChange']);
 const TC_PR_STRIP = new Set(['vMerge', 'hMerge', 'cellIns', 'cellDel', 'cellMerge', 'tcPrChange']);
 const COLUMN_TC_PR_STRIP = new Set([...TC_PR_STRIP, 'gridSpan']);
 
-const SAFE_TRPR_LEAVES: readonly string[] = CT_TRPR_SEQUENCE.filter(
+export const SAFE_TRPR_LEAVES: readonly string[] = CT_TRPR_SEQUENCE.filter(
   (name) => !TR_PR_STRIP.has(name)
 );
 const SAFE_TCPR_LEAVES: readonly string[] = CT_TCPR_SEQUENCE.filter(
   (name) => !TC_PR_STRIP.has(name)
 );
-const COLUMN_SAFE_TCPR_LEAVES: readonly string[] = CT_TCPR_SEQUENCE.filter(
+export const COLUMN_SAFE_TCPR_LEAVES: readonly string[] = CT_TCPR_SEQUENCE.filter(
   (name) => !COLUMN_TC_PR_STRIP.has(name)
 );
 
@@ -165,7 +165,7 @@ interface RowInsertionPlan {
   readonly continuations: ReadonlySet<number>;
 }
 
-function mapTopologyRejection(
+export function mapTopologyRejection(
   reason: 'unknown-table' | 'duplicate-property-container' | 'duplicate-node-id' | 'resource-limit'
 ): TreeOpRejection {
   if (reason === 'duplicate-node-id') return 'unknown-table';
@@ -260,7 +260,7 @@ function projectWmlAttributes(
   return projected;
 }
 
-function freshWmlElement(
+export function freshWmlElement(
   localName: string,
   nextId: () => string,
   wml: WmlFreshNamespaceContext,
@@ -343,7 +343,7 @@ export function withTrackedRowMarker(
   return Object.freeze({ ...row, children }) as OoxmlTableRowNode;
 }
 
-function freshTableRow(
+export function freshTableRow(
   nextId: () => string,
   children: readonly OoxmlNode[],
   wml: WmlFreshNamespaceContext
@@ -360,7 +360,7 @@ function freshTableRow(
   } as OoxmlTableRowNode;
 }
 
-function freshTableCell(
+export function freshTableCell(
   nextId: () => string,
   children: readonly OoxmlNode[],
   wml: WmlFreshNamespaceContext
@@ -465,7 +465,7 @@ function projectPropertyLeaf(
   return projectSimplePropertyLeaf(source, nextId, wml);
 }
 
-function copySafePropertyContainer(
+export function copySafePropertyContainer(
   container: OoxmlElement,
   allowedLeaves: readonly string[],
   nextId: () => string,
@@ -540,7 +540,7 @@ function planRowInsertion(
   return { sourceRow, cellCount: cells.length, structureBudget, continuations };
 }
 
-function emptyParagraph(
+export function emptyParagraph(
   part: OoxmlPart,
   targetTable: OoxmlElement,
   nextId: () => string,
@@ -969,7 +969,9 @@ function tableHasColumnMergeMarkers(topology: EditableTableTopology): boolean {
   return false;
 }
 
-function validateRegularColumnTable(topology: EditableTableTopology): TreeOpRejection | null {
+export function validateRegularColumnTable(
+  topology: EditableTableTopology
+): TreeOpRejection | null {
   if (tableHasColumnMergeMarkers(topology)) return 'table-has-merge';
   if (topology.rows.length === 0) return 'tree-invariant';
   const cellCount = topology.rows[0]!.cells.length;
@@ -997,7 +999,7 @@ function referenceGridWidthTwips(
   return readTcWidthTwipsForGrid(topology.rows[0]!.cells[columnIndex]!);
 }
 
-function freshGridCol(
+export function freshGridCol(
   nextId: () => string,
   wml: WmlFreshNamespaceContext,
   widthTwips: string | undefined
@@ -1088,7 +1090,7 @@ function firstParagraphId(cell: OoxmlTableCellNode): string | null {
   return paragraph?.id ?? null;
 }
 
-function tableWithDeclaredWmlBinding(
+export function tableWithDeclaredWmlBinding(
   table: OoxmlElement,
   part: OoxmlPart,
   wml: WmlFreshNamespaceContext

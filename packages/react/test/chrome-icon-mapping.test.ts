@@ -58,6 +58,8 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'table.borderStyle': 'border_horizontal',
   'table.borderWidth': 'line_weight',
   'table.cellFill': 'format_color_fill',
+  'table.mergeCells': 'call_merge',
+  'table.splitCell': 'call_split',
   'insert.textBox': 'format_shapes',
   'insert.footnote': 'superscript',
   'insert.endnote': 'edit_note',

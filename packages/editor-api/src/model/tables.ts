@@ -35,7 +35,7 @@ function location(value: 'Start' | 'End', target: string): 'start' | 'end' {
   return value === 'Start' ? 'start' : 'end';
 }
 
-/** A canonical rectangular table. Reads require load() and sync(). @public */
+/** A canonical table. Reads require load() and sync(). @public */
 export class Table extends ModelObject implements PromisedItem {
   #rows: TableRowCollection | undefined;
   /** @internal */
@@ -209,6 +209,46 @@ export class Table extends ModelObject implements PromisedItem {
       mutation: { kind: 'deleteColumns', index: columnIndex, count: columnCount },
     }));
   }
+  /**
+   * Merge the rectangle that the cells at `(topRow, firstCell)` and `(bottomRow, lastCell)`
+   * span into one cell. Cell indexes count the cells of each row, as `rows.items[r].cells`
+   * lists them, so a merged cell counts once. `bottomRow` must not be above `topRow`; either
+   * cell can lie further left. The rectangle grows to whole merged cells; a cell that crosses
+   * its edge, or a rectangle of one cell, refuses with `InvalidArgument` and the diagnostic
+   * code `edit.table-merge-not-rectangle`. The merged cell keeps every non-empty cell's content
+   * in reading order. Edits to the returned cell can share the sync. A pending cell revision
+   * refuses with `NotImplemented`; tracking modes refuse with `NotSupported`, because a merge
+   * has no tracked form.
+   */
+  mergeCells(topRow: number, firstCell: number, bottomRow: number, lastCell: number): TableCell {
+    const label = `${this.path.label}.mergeCells`;
+    integer(topRow, label);
+    integer(firstCell, label);
+    integer(bottomRow, label);
+    integer(lastCell, label);
+    if (bottomRow < topRow) fail({ code: 'InvalidArgument', target: label });
+    // The merged cell keeps its identity, so a read before the merge names it, and edits to
+    // it can share this sync.
+    const cell = TableCell.promised(this.context, label);
+    this.read(
+      label,
+      () => ({
+        op: 'getMergedTableCell',
+        table: this.path.handle(),
+        topRow,
+        firstCell,
+        bottomRow,
+        lastCell,
+      }),
+      (answer) => cell.hydrateAddress({ kind: 'handle', handle: hydratedHandle(answer, label) })
+    );
+    this.command('mergeCells', () => ({
+      op: 'updateTable',
+      table: this.path.handle(),
+      mutation: { kind: 'mergeCells', topRow, firstCell, bottomRow, lastCell },
+    }));
+    return cell;
+  }
   /** Delete this table and its contents through the canonical document transaction. */
   delete(): void {
     this.command('delete', () => ({
@@ -304,7 +344,7 @@ export class TableRow extends ModelObject implements PromisedItem {
   }
 }
 
-/** An ordinary table cell. Column width uses points and changes the whole grid column. @public */
+/** A table cell. Column width uses points and changes the whole grid column. @public */
 export class TableCell extends ModelObject implements PromisedItem {
   #body: Body | undefined;
   /** @internal */
@@ -396,6 +436,26 @@ export class TableCell extends ModelObject implements PromisedItem {
       op: 'updateTableCell',
       cell: this.path.handle(),
       properties: { verticalAlignment: value },
+    }));
+  }
+  /**
+   * Split this cell into `rowCount` rows and `columnCount` columns of equal width. Counts run
+   * from 1 to 63. A cell merged over several rows splits only into a divisor of them; a
+   * one-row cell adds rows to the table. Counts the cell cannot take, such as columns narrower
+   * than the minimum width, refuse with `InvalidArgument` and the diagnostic code
+   * `edit.table-split-unsupported`. Tracking modes refuse with `NotSupported`.
+   */
+  split(rowCount: number, columnCount: number): void {
+    const label = `${this.path.label}.split`;
+    integer(rowCount, label, 1);
+    integer(columnCount, label, 1);
+    if (rowCount > 63 || columnCount > 63 || rowCount * columnCount < 2)
+      fail({ code: 'InvalidArgument', target: label });
+    this.command('split', () => ({
+      op: 'splitTableCell',
+      cell: this.path.handle(),
+      rowCount,
+      columnCount,
     }));
   }
   protected override onLoad(request: ResolvedLoadOptions): void {

@@ -71,6 +71,9 @@ import {
   validateTableResizeOp,
   validateTableCellPropertyOp,
 } from './tree-op-tables.ts';
+import { validateMergeTableCells } from './tree-op-table-merge.ts';
+import { validateSplitTableCell } from './tree-op-table-split.ts';
+import { addressesMergedColumns, validateMergedColumnOp } from './tree-op-table-merged-columns.ts';
 import {
   bodyNodeOf,
   governingSectionOwnerId,
@@ -494,8 +497,12 @@ export function validateTreeOp(
   if (op.op === 'authorTable') return validateTableAuthoring(part, op);
   if (op.op === 'setTableProperties') return validateTableProperties(part, op);
   if (op.op === 'insertTableRow' || op.op === 'deleteTableRow') return validateTableRowOp(part, op);
-  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn')
+  if (op.op === 'insertTableColumn' || op.op === 'deleteTableColumn') {
+    if (addressesMergedColumns(part, op)) return validateMergedColumnOp(part, op);
     return validateTableColumnOp(part, op);
+  }
+  if (op.op === 'mergeTableCells') return validateMergeTableCells(part, op);
+  if (op.op === 'splitTableCell') return validateSplitTableCell(part, op);
   if (
     op.op === 'setTableColumnWidths' ||
     op.op === 'setTableRightEdgeWidth' ||

@@ -39,6 +39,20 @@ export type AutomationTableMutation =
       readonly index: number;
       readonly count: number;
     }
+  | {
+      /** Merge the rectangle from one cell to another, by row and in-row cell index. */
+      readonly kind: 'mergeCells';
+      readonly topRow: number;
+      readonly firstCell: number;
+      readonly bottomRow: number;
+      readonly lastCell: number;
+    }
+  | {
+      readonly kind: 'splitCell';
+      readonly cellId: string;
+      readonly rowCount: number;
+      readonly columnCount: number;
+    }
   | { readonly kind: 'delete' }
   | { readonly kind: 'properties'; readonly styleId?: string; readonly headerRowCount?: number }
   | {
@@ -199,10 +213,22 @@ function validMutation(value: AutomationTableMutation): boolean {
     delete: ['kind'],
     properties: ['kind', 'styleId', 'headerRowCount'],
     cell: ['kind', 'cellId', 'value', 'columnWidth', 'shadingColor', 'verticalAlignment'],
+    mergeCells: ['kind', 'topRow', 'firstCell', 'bottomRow', 'lastCell'],
+    splitCell: ['kind', 'cellId', 'rowCount', 'columnCount'],
   };
   if (value.kind === 'values' && !Array.isArray(value.values)) return false;
   const keys = allowed[value.kind];
   if (!keys || !Object.keys(value).every((key) => keys.includes(key))) return false;
+  if (value.kind === 'mergeCells')
+    return [value.topRow, value.firstCell, value.bottomRow, value.lastCell].every(
+      (index) => Number.isInteger(index) && index >= 0
+    );
+  if (value.kind === 'splitCell')
+    return (
+      typeof value.cellId === 'string' &&
+      Number.isInteger(value.rowCount) &&
+      Number.isInteger(value.columnCount)
+    );
   if (value.kind === 'cell')
     return (
       typeof value.cellId === 'string' &&
@@ -270,9 +296,25 @@ export function planTableMutation(
   const initial = topology;
   if (!initial.ok) return { ok: false, reason: initial.reason };
   // Row deletion hands a vertical merge that starts in a removed row to the row below.
+  // Columns are placed on the grid, so merged cells widen or narrow. Values and a cell's column
+  // width are read by cell index, which merged cells do not keep.
+  const merged = initial.topology.hasMerge;
   if (
-    initial.topology.hasMerge &&
-    !['delete', 'properties', 'addRows', 'insertRows', 'deleteRows'].includes(mutation.kind)
+    merged &&
+    (![
+      'delete',
+      'properties',
+      'addRows',
+      'insertRows',
+      'deleteRows',
+      'addColumns',
+      'deleteColumns',
+      'cell',
+      'mergeCells',
+      'splitCell',
+    ].includes(mutation.kind) ||
+      (mutation.kind === 'addColumns' && mutation.values !== undefined) ||
+      (mutation.kind === 'cell' && mutation.columnWidth !== undefined))
   )
     return { ok: false, reason: 'table-has-merge' };
   let part: OoxmlPart = reads.part;
@@ -341,10 +383,32 @@ export function planTableMutation(
     mutation.kind !== 'addRows' &&
     mutation.kind !== 'insertRows' &&
     mutation.kind !== 'deleteRows' &&
+    mutation.kind !== 'mergeCells' &&
+    mutation.kind !== 'splitCell' &&
+    !merged &&
     current.rows.some(({ cells }) => cells.length !== cols)
   )
     return { ok: false, reason: 'nonrectangular-table' };
-  if (mutation.kind === 'delete') error = apply({ op: 'deleteBlock', blockId: tableId });
+  if (mutation.kind === 'mergeCells') {
+    // Corners by row and in-row cell index, the way the cell collections list them.
+    const first = current.rows[mutation.topRow]?.cells[mutation.firstCell];
+    const last = current.rows[mutation.bottomRow]?.cells[mutation.lastCell];
+    if (!first || !last || mutation.bottomRow < mutation.topRow)
+      return { ok: false, reason: 'invalid-table-index' };
+    // One cell named twice is a rectangle of one cell, which the merge refuses as such.
+    const cellIds = first.id === last.id ? [first.id] : [first.id, last.id];
+    error = apply({ op: 'mergeTableCells', tableId, cellIds });
+  } else if (mutation.kind === 'splitCell') {
+    if (!current.rows.some(({ cells }) => cells.some((cell) => cell.id === mutation.cellId)))
+      return { ok: false, reason: 'unknown-cell' };
+    error = apply({
+      op: 'splitTableCell',
+      tableId,
+      cellId: mutation.cellId,
+      rows: mutation.rowCount,
+      columns: mutation.columnCount,
+    });
+  } else if (mutation.kind === 'delete') error = apply({ op: 'deleteBlock', blockId: tableId });
   else if (mutation.kind === 'properties')
     error = apply({
       op: 'setTableProperties',
@@ -489,7 +553,9 @@ export function planTableMutation(
           for (let c = 0; c < mutation.values[r]!.length && !error; c++) {
             const ri = isRows ? insertionIndex + r : r;
             const ci = !isRows && mutation.location === 'end' ? cols + c : c;
-            error = writeCell(t.rows[ri]!.cells[ci]!, mutation.values[r]![c]!);
+            // A row copied from merged cells has fewer cells than the grid has columns.
+            const target = t.rows[ri]?.cells[ci];
+            error = target ? writeCell(target, mutation.values[r]![c]!) : 'nonrectangular-table';
           }
     }
   }

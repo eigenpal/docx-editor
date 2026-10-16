@@ -700,6 +700,20 @@ export type TreeDocOp =
       readonly gridColumnId: string;
     }
   | {
+      /** Merge cells covering one rectangle into its top-left cell, content in reading order. */
+      readonly op: 'mergeTableCells';
+      readonly tableId: string;
+      readonly cellIds: readonly string[];
+    }
+  | {
+      /** Split one cell into `rows` by `columns` equal cells; a one-row cell adds rows. */
+      readonly op: 'splitTableCell';
+      readonly tableId: string;
+      readonly cellId: string;
+      readonly rows: number;
+      readonly columns: number;
+    }
+  | {
       /**
        * Resize one internal divider between two adjacent canonical grid columns.
        * Preserves the pair total and sets fixed table layout.
@@ -1249,8 +1263,18 @@ export type TreeOpRejection =
    * mapping cannot be trusted and the inserted row would not match it.
    */
   | 'row-hides-cell'
-  /** Column edit refused because the table carries horizontal or vertical merges. */
+  /** The table carries a legacy `w:hMerge`, which grid edits cannot place. */
   | 'table-has-merge'
+  /** The cells to merge do not cover one rectangle, or cover only one cell. */
+  | 'cells-not-rectangle'
+  /** A cell merged over several rows splits only into a divisor of them. */
+  | 'split-rows-not-divisor'
+  /** The cells hold a tracked cell insertion, deletion, or merge. */
+  | 'cell-has-revision'
+  /** The split cells would be narrower than the minimum column width. */
+  | 'cell-too-narrow'
+  /** Without `w:tblGrid`, a cell splits only into a divisor of the columns it spans. */
+  | 'split-needs-grid'
   /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */
   | 'unknown-grid-column'
   /** The operation would exceed bounded table topology limits. */

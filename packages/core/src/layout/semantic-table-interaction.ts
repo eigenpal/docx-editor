@@ -141,25 +141,52 @@ export interface TableInteractionIndex {
 }
 
 const indexCache = new WeakMap<SemanticLayout, TableInteractionIndex>();
-const mergedTablesCache = new WeakMap<TableInteractionIndex, ReadonlySet<string>>();
 
-function tablesWithMergedCells(index: TableInteractionIndex): ReadonlySet<string> {
+interface MergedTableColumns {
+  /** Grid column index to its `w:gridCol` id, read from the cells that start there. */
+  readonly ids: ReadonlyMap<number, string>;
+  /** In RTL a merged cell's physical start can name the wrong grid boundary. */
+  readonly rtl: boolean;
+}
+
+const mergedTablesCache = new WeakMap<
+  TableInteractionIndex,
+  ReadonlyMap<string, MergedTableColumns>
+>();
+
+/** Tables with merged cells, with the grid column ids their dividers resize. */
+function tablesWithMergedCells(
+  index: TableInteractionIndex
+): ReadonlyMap<string, MergedTableColumns> {
   const cached = mergedTablesCache.get(index);
   if (cached) return cached;
-  const merged = new Set<string>();
+  const merged = new Map<string, { ids: Map<number, string>; rtl: boolean; merged: boolean }>();
   for (const occurrence of index.occurrences) {
-    if (
-      occurrence.row.cells.some(
-        (cell) =>
-          (cell.gridSpan > 1 && cell.logicalGridColumn !== undefined) ||
-          cell.vMergeContinue ||
-          (cell.rowSpan ?? 1) > 1
-      )
-    )
-      merged.add(occurrence.table.tableId);
+    let entry = merged.get(occurrence.table.tableId);
+    if (!entry) {
+      entry = { ids: new Map(), rtl: false, merged: false };
+      merged.set(occurrence.table.tableId, entry);
+    }
+    for (const cell of occurrence.row.cells) {
+      if (cell.logicalGridColumn !== undefined) entry.rtl = true;
+      if (cell.gridSpan > 1 || cell.vMergeContinue || (cell.rowSpan ?? 1) > 1) entry.merged = true;
+      if (cell.gridColumnId !== undefined) entry.ids.set(cell.gridColumn, cell.gridColumnId);
+    }
   }
-  mergedTablesCache.set(index, merged);
-  return merged;
+  const result = new Map<string, MergedTableColumns>();
+  for (const [tableId, entry] of merged) {
+    if (entry.merged) result.set(tableId, { ids: entry.ids, rtl: entry.rtl });
+  }
+  mergedTablesCache.set(index, result);
+  return result;
+}
+
+/** Whether a cell edge of this row falls on grid boundary `edgeIndex`. */
+function rowHasBoundaryAt(row: TableRowFragmentRecord, edgeIndex: number): boolean {
+  return (
+    row.cells.some((cell) => cell.gridColumn === edgeIndex) ||
+    row.cells.some((cell) => cell.gridColumn + cell.gridSpan === edgeIndex)
+  );
 }
 
 const DIVIDER_HIT_PX = 4;
@@ -440,15 +467,19 @@ function dividerHit(
   ) {
     return null;
   }
-  // Vertical merges remain unsupported. In RTL, a merged cell's physical
-  // start can expose its logical leading ID on the wrong grid boundary. Do not
-  // advertise a divider that the command cannot execute, including on other rows.
-  if (tablesWithMergedCells(index).has(table.tableId)) return null;
+  // In a table with merged cells a divider shows only where this row has a cell edge, and it
+  // names the grid columns on either side from any row. In RTL a merged cell's physical start
+  // can name the wrong grid boundary, so those tables keep no divider.
+  const merged = tablesWithMergedCells(index).get(table.tableId);
+  if (merged?.rtl) return null;
   for (let edgeIndex = 1; edgeIndex < table.columnEdges.length - 1; edgeIndex += 1) {
     const edgeX = table.columnEdges[edgeIndex]!;
     if (Math.abs(localX - edgeX) > DIVIDER_HIT_PX) continue;
-    const left = gridColumnIdAt(occ.row, edgeIndex - 1);
-    const right = gridColumnIdAt(occ.row, edgeIndex);
+    if (merged && !rowHasBoundaryAt(occ.row, edgeIndex)) continue;
+    const left = merged
+      ? (merged.ids.get(edgeIndex - 1) ?? null)
+      : gridColumnIdAt(occ.row, edgeIndex - 1);
+    const right = merged ? (merged.ids.get(edgeIndex) ?? null) : gridColumnIdAt(occ.row, edgeIndex);
     if (!left || !right) continue;
     return {
       kind: 'columnDivider',

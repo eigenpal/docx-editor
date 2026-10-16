@@ -158,6 +158,7 @@ import { SEARCH_HIGHLIGHT_PRIORITY } from '@docx-editor.dev/core/editor';
 import { SEARCH_HIGHLIGHT_SET } from '@docx-editor.dev/core/editor';
 import { SEARCH_MATCH_LIMIT } from '@docx-editor.dev/core/editor';
 import { SectionProperties } from '@docx-editor.dev/core/editor';
+import { SplitCellLimits } from '@docx-editor.dev/core/editor';
 import { SupportedImageMime } from '@docx-editor.dev/core/editor';
 import { SurfaceFormatting } from '@docx-editor.dev/core/editor';
 import { SurfaceHyperlink } from '@docx-editor.dev/core/editor';
@@ -422,6 +423,11 @@ export interface ContextMenuItemProps {
 }
 
 // @public
+export const ContextMenuMergeCells: ((input: ContextMenuTableRowProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
 export function ContextMenuPaste(input: ContextMenuCommandProps): react.JSX.Element | null;
 
 // @public (undocumented)
@@ -456,6 +462,11 @@ export const ContextMenuRefreshTocPageNumbers: ((input: ContextMenuCommandProps)
 
 // @public
 export const ContextMenuSelectAll: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
+export const ContextMenuSplitCell: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
 
@@ -735,6 +746,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly InsertRowBelow: typeof ContextMenuInsertRowBelow;
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
+    readonly MergeCells: typeof ContextMenuMergeCells;
+    // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
     // (undocumented)
     readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
@@ -748,6 +761,8 @@ export interface DocxEditorContextMenuNamespace {
     // (undocumented)
     readonly Separator: typeof MenuSeparator;
     readonly Slot: typeof MenuItem;
+    // (undocumented)
+    readonly SplitCell: typeof ContextMenuSplitCell;
     // (undocumented)
     readonly Submenu: typeof MenuSubmenu;
 }
@@ -1046,6 +1061,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<DocxEdito
     readonly RevisionMarkupDialog: typeof DocxEditorRevisionMarkupDialog;
     // (undocumented)
     readonly Root: typeof DocxEditorRoot;
+    readonly SplitCellDialog: typeof DocxEditorSplitCellDialog;
     readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
     // (undocumented)
     readonly Toolbar: typeof DocxEditorToolbar;
@@ -1337,6 +1353,7 @@ export interface DocxEditorPopups {
     print?: DocxEditorPopup<DocxEditorPrintDialogProps>;
     // (undocumented)
     revisionMarkup?: DocxEditorPopup<DocxEditorRevisionMarkupDialogProps>;
+    splitCell?: DocxEditorPopup<DocxEditorSplitCellDialogProps>;
     // (undocumented)
     textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
     watermark?: DocxEditorPopup<DocxEditorWatermarkDialogProps>;
@@ -1557,6 +1574,40 @@ export function DocxEditorShell(input: {
 }): react.JSX.Element;
 
 // @public
+export const DocxEditorSplitCellDialog: typeof SplitCellDialogRoot & {
+    Apply: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Body: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Cancel: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Error: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Field: (props: DialogPartProps & {
+        name: "columns" | "rows";
+    }) => react.ReactNode;
+    Footer: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Header: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+    Title: (props: DialogPartProps & {
+        name?: "columns" | "rows" | undefined;
+    }) => string | number | bigint | boolean | react.JSX.Element | Iterable<react.ReactNode> | Promise<string | number | bigint | boolean | Iterable<react.ReactNode> | ReactElement<unknown, string | react.JSXElementConstructor<any>> | react.ReactPortal | null | undefined> | null;
+};
+
+// @public
+export interface DocxEditorSplitCellDialogProps extends DialogCustomizationProps {
+    onClose: () => void;
+    open: boolean;
+}
+
+// @public
 export const DocxEditorTextFormFieldDialog: typeof TextFormFieldDialogRoot & {
     Apply: (props: DialogPartProps & {
         name?: keyof TextFormFieldDialogFields | undefined;
@@ -1702,6 +1753,8 @@ export interface DocxEditorToolbarNamespace {
     readonly TableCellFill: TableCellFillNamespace;
     // (undocumented)
     readonly TableInsert: ToolbarPartComponent;
+    readonly TableMergeCells: ToolbarPartComponent;
+    readonly TableSplitCell: ToolbarPartComponent;
     // (undocumented)
     readonly Underline: ToolbarPartComponent;
     // (undocumented)
@@ -2785,6 +2838,12 @@ export interface SlotProps extends HTMLAttributes<HTMLElement> {
 }
 
 // @public
+export interface SplitCellDialogFields {
+    columns: string;
+    rows: string;
+}
+
+// @public
 export type TableAction = 'addRowAbove' | 'addRowBelow' | 'addColumnLeft' | 'addColumnRight' | 'deleteRow' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'deleteTable' | 'selectTable' | 'selectRow' | 'selectColumn' | 'borderAll' | 'borderOutside' | 'borderInside' | 'borderNone' | 'borderTop' | 'borderBottom' | 'borderLeft' | 'borderRight' | {
     color: string | null;
     type: 'cellFillColor';
@@ -3562,6 +3621,14 @@ export function useScopeClassName(): '' | 'docx-editor ';
 
 // @public
 export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
+
+// @public
+export function useSplitCellDialog(): UseSplitCellDialogReturn;
+
+// @public
+export interface UseSplitCellDialogReturn extends UseDialogReturn<SplitCellDialogFields> {
+    readonly limits: SplitCellLimits | null;
+}
 
 // @public
 export function useTableBorderTargetLabel(): string;

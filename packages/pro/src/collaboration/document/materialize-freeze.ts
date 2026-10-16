@@ -286,6 +286,9 @@ export function expandAncestors(
   };
   while (pending.length > 0) {
     const id = pending.pop()!;
+    // A tombstone's adopted children show under its survivor, through a chain of survivors.
+    const own = registry.isTombstoned(id) ? registry.replacedByOf(id) : null;
+    if (own !== null) climb(own);
     // Climb every parent that lists this node, not only the one `parentOf` resolves. After a
     // concurrent split or join, the node can be listed by a hidden or tombstoned parent and
     // shown under another; climbing only the resolved parent left the one that shows it

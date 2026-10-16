@@ -32,6 +32,9 @@ export type CommandGate =
   | { ok: true; tablePlan?: import('./table-command-plan.ts').TableCommandPlan }
   | { ok: false; refusal: Exclude<ExecResult, { ok: true }> };
 import { tableContextAt } from '@docx-editor.dev/core/layout';
+import { tableAnchorAt } from '../layout/semantic-cell-selection.ts';
+import { splitCellLimits } from '../store/store/tree-op-table-split.ts';
+import { SUGGESTING_CELL_STRUCTURE_REFUSAL } from './table-cell-structure-plan.ts';
 import {
   isTableEditorCommand,
   planTableCommand,
@@ -267,6 +270,14 @@ export function tableCommandState(
   const settings = settingsPartOf(surface.session.currentPackage());
   if (plan.ok && plan.ops.some((op) => formsProtectionRefusal(input.part, settings, op))) {
     plan = { ok: false, code: 'locked', reason: FORMS_WRITE_REASON };
+  }
+  // Asked here too, so chrome greys out instead of offering a press the surface refuses.
+  if (
+    plan.ok &&
+    surface.editingMode() === 'suggest' &&
+    (command.type === 'mergeCells' || command.type === 'splitCell')
+  ) {
+    plan = { ok: false, code: 'unsupported', reason: SUGGESTING_CELL_STRUCTURE_REFUSAL };
   }
   return plan.ok
     ? { can: { ok: true }, plan }
@@ -633,6 +644,18 @@ export function tableContextOf(surface: PaginatedSurface | null): TableContext |
     rowIndex: cells ? cells.rows.from : context.rowIndex,
     columnIndex: cells ? cells.columns.from : context.columnIndex,
   };
+}
+
+/** How far the cell at the caret splits, for a split dialog; null when it does not split. */
+export function splitCellConfigOf(
+  surface: PaginatedSurface | null
+): { maxRows: number; maxCols: number } | null {
+  if (!surface) return null;
+  const input = buildTableCommandPlannerInput({ type: 'splitCell', rows: 1, cols: 2 }, surface);
+  const anchor = tableAnchorAt(input.layout, input.selection.head.paragraphId, input.cellSelection);
+  if (!anchor || anchor.cellIds.length > 1) return null;
+  const limits = splitCellLimits(input.part, anchor.tableId, anchor.cellId);
+  return limits ? { ...limits } : null;
 }
 
 /** Half-point reshape of `snapshot().formatting` for `getSelectionFormatting`. */

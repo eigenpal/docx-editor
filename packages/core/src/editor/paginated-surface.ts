@@ -213,6 +213,7 @@ import type {
 } from './paginated-surface-contract.ts';
 import type { ExecResult, SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { TableCommandPlan } from './table-command-plan.ts';
+import { SUGGESTING_CELL_STRUCTURE_REFUSAL } from './table-cell-structure-plan.ts';
 import {
   clampedToDocument,
   collapsedAt,
@@ -2988,6 +2989,11 @@ export function mountPaginatedSurface(
     if (editingMode === 'suggest' && ops.some(removesControl)) {
       return 'suggesting cannot remove a content control outright';
     }
+    // Cell merge and split have no tracked form either, so applying them would be untracked.
+    const restructuresCells = (op: TreeDocOp) =>
+      op.op === 'mergeTableCells' || op.op === 'splitTableCell';
+    if (editingMode === 'suggest' && ops.some(restructuresCells))
+      return SUGGESTING_CELL_STRUCTURE_REFUSAL;
     return null;
   }
 
