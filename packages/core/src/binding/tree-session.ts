@@ -1060,7 +1060,7 @@ export function openTreeSessionFromPackage(
               : null;
           const localRevisions =
             patchParagraphId && reviewCache && filtering.patchable(patchParagraphId)
-              ? filtering.filtered(derive.revisionItemsOfParagraph(store.part, patchParagraphId))
+              ? derive.revisionItemsOfParagraph(store.part, patchParagraphId)
               : null;
           if (
             patchParagraphId &&
@@ -1073,7 +1073,8 @@ export function openTreeSessionFromPackage(
               reviewCache.items,
               paragraphOrder,
               patchParagraphId,
-              localRevisions
+              localRevisions,
+              filtering.filtered
             );
           } else {
             paragraphOrder = paragraphOrderOfPart(store.part);

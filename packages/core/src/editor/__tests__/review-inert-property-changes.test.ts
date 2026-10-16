@@ -448,6 +448,43 @@ describe('property changes that change nothing', () => {
     expect(view.count()).toBe(1);
   });
 
+  test('typing beside a record shared with a text box keeps its card', () => {
+    const shared = `w:id="${id++}" ${STAMP}`;
+    const run = (text: string) =>
+      `<w:r><w:rPr><w:b w:val="0"/><w:rPrChange ${shared}><w:rPr/></w:rPrChange></w:rPr><w:t>${text}</w:t></w:r>`;
+    const box =
+      '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:100pt;height:40pt"><v:textbox><w:txbxContent>' +
+      `<w:p>${run('boxed')}</w:p>` +
+      '</w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+    using view = mount(p('', box) + p('') + p('', run('body')));
+    expect(view.count()).toBe(1);
+    const paragraphId = view.editor.surface!.session.paragraphIds()[2]!;
+    const at = { paragraphId, offset: 2 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    expect(view.editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(true);
+    expect(view.count()).toBe(1);
+  });
+
+  test('typing in the inert half of a listed shared paragraph change keeps both bars', () => {
+    const shared = `w:id="${id++}" ${STAMP}`;
+    const aligned = (value: string, text: string) =>
+      `<w:p><w:pPr><w:jc w:val="${value}"/><w:pPrChange ${shared}><w:pPr/></w:pPrChange></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    using view = mount(aligned('left', 'left') + p('') + aligned('center', 'mid'));
+    expect(view.count()).toBe(1);
+    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(2);
+    const paragraphId = view.editor.surface!.session.paragraphIds()[0]!;
+    const at = { paragraphId, offset: 2 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    expect(view.editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(true);
+    expect(view.count()).toBe(1);
+    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(2);
+    const live = view.editor.surface!.session.reviewItems();
+    const derived = collectReviewItems({ storyPart: view.editor.surface!.session.part() });
+    const ranges = (items: typeof live) =>
+      items.map((item) => (item.kind === 'revision' ? item.ranges : null));
+    expect(ranges(live)).toEqual(ranges(derived));
+  });
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

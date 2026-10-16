@@ -93,14 +93,34 @@ export function canApplyLocalReviewPatch(
   for (const local of localRevisions) {
     if (keptRangelessKeys.has(reviewItemKey(local))) return false;
   }
+  // A formatting change whose record also sits outside this paragraph (one id shared with a text
+  // box, say) is decided over all its sites, which a walk of the paragraph cannot see.
+  const localSites = new Set(localRevisions.flatMap((item) => revisionSiteNodeIdsOf(item)));
+  for (const item of cached) {
+    if (
+      item.kind === 'revision' &&
+      item.revisionKind === 'format' &&
+      isRevisionWhollyInParagraph(item, dirtyParagraphId) &&
+      revisionSiteNodeIdsOf(item).some((id) => !localSites.has(id))
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 
+/**
+ * `cached` with the dirty paragraph's revisions replaced by `localRevisions`. Pieces of a cached
+ * group are taken into the group first; `filterLocal` then decides over the rest, so a piece
+ * whose group is listed is never decided on its own.
+ */
 export function patchLocalReviewItems(
   cached: readonly ReviewItem[],
   paragraphOrder: ReadonlyMap<string, number>,
   dirtyParagraphId: string,
-  localRevisions: readonly ReviewRevisionItem[]
+  localRevisions: readonly ReviewRevisionItem[],
+  filterLocal: (items: readonly ReviewRevisionItem[]) => readonly ReviewRevisionItem[] = (items) =>
+    items
 ): ReviewItem[] {
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
   if (dirtyRank === undefined) return [...cached];
@@ -113,8 +133,9 @@ export function patchLocalReviewItems(
     dirtyParagraphId,
     localRevisions
   );
-  const local =
-    absorbed.size > 0 ? localRevisions.filter((item) => !absorbed.has(item)) : localRevisions;
+  const local = filterLocal(
+    absorbed.size > 0 ? localRevisions.filter((item) => !absorbed.has(item)) : localRevisions
+  );
 
   for (const cachedItem of cached) {
     const item = (cachedItem.kind === 'revision' && groups.get(cachedItem)) || cachedItem;
