@@ -18,11 +18,19 @@ export function limitBodyBlocks<T>(
   all: readonly T[],
   options: { readonly bodyBlockLimit?: number; readonly session?: LayoutSession }
 ): { readonly blocks: readonly T[]; readonly all: readonly T[] } {
+  // An edit since the last pass that added or removed blocks moves the cut by as many, so the
+  // prefix still ends where it did: a paragraph split at the cut stays laid out. Where in the
+  // body the edit was is not known here; a cut that moves past an edit after it only lays out
+  // a few blocks more or less, which the next step evens out.
+  const previous = options.session ? bodyBlockCounts.get(options.session) : undefined;
+  const limit =
+    options.bodyBlockLimit === undefined
+      ? undefined
+      : Math.max(1, options.bodyBlockLimit + (previous === undefined ? 0 : all.length - previous));
   if (options.session) {
     bodyBlockCounts.set(options.session, all.length);
     bodyBlockLists.set(options.session, all);
   }
-  const limit = options.bodyBlockLimit;
   return { blocks: limit === undefined || limit >= all.length ? all : all.slice(0, limit), all };
 }
 

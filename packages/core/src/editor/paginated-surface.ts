@@ -1371,6 +1371,7 @@ export function mountPaginatedSurface(
     drawingLinkById: (drawingNodeId) => drawingLinkByIdFromLayout(currentLayout, drawingNodeId),
     setSelection: (position) => setSelection(collapsedAt(position)),
     whenLaidOut: (position, retry) => laterOnOpening(position, retry),
+    beginJump: () => beginReveal(),
     enterStoryFor: (paragraphId) => enterStoryHolding(paragraphId),
     // Viewing makes no range from a press, so a range left over from editing is no drag.
     isCollapsedSelection: () =>

@@ -541,6 +541,64 @@ describe('a large open laid out in slices', () => {
     }
   }, 60_000);
 
+  test('Enter at the end of the laid-out pages, then Backspace, joins the paragraphs again', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = signature(surface.layout()).map((row) => row.split('|')[1]!);
+      const last = laidOut[laidOut.length - 1]!;
+      const text = surface.session.storyText({ kind: 'body' })!.split('\n');
+      const end = {
+        paragraphId: last,
+        offset: text[surface.session.paragraphIds().indexOf(last)]!.length,
+      };
+      surface.setSelection({ anchor: end, head: end });
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toHaveLength(301);
+      // The new paragraph is laid out, so the caret in it has a place to stand.
+      surface.deleteBackward();
+      expect(surface.session.paragraphIds()).toHaveLength(300);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a jump to a near bookmark replaces one still waiting for a far page', () => {
+    const parts: string[] = [
+      '<w:p><w:bookmarkStart w:id="1" w:name="Near"/><w:r><w:t>Near target</w:t></w:r>' +
+        '<w:bookmarkEnd w:id="1"/></w:p>',
+    ];
+    for (let index = 0; index < 299; index += 1)
+      parts.push(paragraph(`Paragraph ${index}`, '<w:pageBreakBefore/>'));
+    parts.push(
+      '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:bookmarkStart w:id="2" w:name="Far"/>' +
+        '<w:r><w:t>Far target</w:t></w:r><w:bookmarkEnd w:id="2"/></w:p>'
+    );
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+    const surface = slicedMount(bytes);
+    try {
+      expect(surface.bookmarkEditing.goTo('Far')).toBe(true);
+      expect(surface.bookmarkEditing.goTo('Near')).toBe(true);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The far page is laid out; nobody waits for it any more.
+      }
+      expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[0]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a long table after the first slice is hashed a row at a time', () => {
     const bytes = longTableDocx();
     const surface = slicedMount(bytes);

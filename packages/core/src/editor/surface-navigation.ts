@@ -45,6 +45,8 @@ export interface NavigationDeps {
   /** Sanitized `a:hlinkClick` on a painted drawing, keyed by drawing node id. */
   readonly drawingLinkById?: (drawingNodeId: string) => SurfaceHyperlink | null;
   readonly setSelection: (position: { paragraphId: string; offset: number }) => void;
+  /** Start of every jump: a newer jump replaces one still waiting for its page. */
+  readonly beginJump?: () => void;
   /**
    * During a large open, wait for a target the layout has not reached and `retry` the jump
    * once it has. False when there is nothing to wait for.
@@ -164,6 +166,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     // doing it afterwards would measure the target against the story the reader was leaving.
     // A story that cannot be opened (a header in a read-only document) is shown without
     // moving the caret into it, when the caller asks for that.
+    deps.beginJump?.();
     const entered = !deps.enterStoryFor || deps.enterStoryFor(position.paragraphId);
     if (!entered && !options?.orShow) return false;
     const layout = deps.layout();
