@@ -236,6 +236,11 @@ export function startOpeningSlices(
           if (rows > 0 && (host.now() >= deadline || host.inputPending())) return false;
           warmLayoutNodeDigests([hashQueue[hashed++]!]);
         }
+        // An edit during the hashing can have moved the cut past the limit chosen before it.
+        if (nextLimit <= host.limit()!) {
+          nextLimit = null;
+          continue;
+        }
         host.setLimit(nextLimit);
         pass = host.prefixPass(nextLimit);
         nextLimit = null;

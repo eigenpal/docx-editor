@@ -715,7 +715,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (reviewEnabled && container && surface) {
           const published = surface;
           warmAnchorsWhenIdle(published, hostWindowOf(container), () => {
-            if (surface === published) anchorIndexOf(published.publishedLayout());
+            // Nothing to anchor without review items: the rail skips the index then too.
+            if (surface === published && published.session.reviewItems().length > 0)
+              anchorIndexOf(published.publishedLayout());
           });
         }
         const displayModeMoved =

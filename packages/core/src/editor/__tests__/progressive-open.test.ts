@@ -588,6 +588,26 @@ describe('a large open laid out in slices', () => {
     }
   }, 60_000);
 
+  test('a collaborator deleting paragraphs past the cut leaves the laid-out pages in place', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = new Set(signature(surface.layout()).map((row) => row.split('|')[1]!));
+      // Forty joins near the end of the body, far past the pages laid out so far.
+      for (let join = 0; join < 40; join += 1) {
+        const ids = surface.session.paragraphIds();
+        surface.session.applyTreeOps([
+          { op: 'joinParagraphs', firstId: ids[250]!, secondId: ids[251]! },
+        ]);
+      }
+      surface.flushPendingInput();
+      const after = new Set(signature(surface.layout()).map((row) => row.split('|')[1]!));
+      for (const id of laidOut) expect(after.has(id)).toBe(true);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a jump to a near bookmark replaces one still waiting for a far page', () => {
     const parts: string[] = [
       '<w:p><w:bookmarkStart w:id="1" w:name="Near"/><w:r><w:t>Near target</w:t></w:r>' +
