@@ -81,3 +81,25 @@ function register(
     }
   }
 }
+
+const warmsPending = new WeakSet<object>();
+
+/**
+ * Run `warm` once the window is idle, at most once at a time per `key`.
+ *
+ * A layout can replace every page record without a change a host hears about (a background
+ * pass settling footnote reserves does). The review rail then re-anchors every page on the
+ * next keystroke instead, and that keystroke waited for it. Warming the index in idle time
+ * moves that work off the keystroke.
+ */
+export function warmAnchorsWhenIdle(key: object, view: Window, warm: () => void): void {
+  if (warmsPending.has(key)) return;
+  warmsPending.add(key);
+  const run = (): void => {
+    warmsPending.delete(key);
+    warm();
+  };
+  if (typeof view.requestIdleCallback === 'function')
+    view.requestIdleCallback(run, { timeout: 1000 });
+  else view.setTimeout(run, 200);
+}

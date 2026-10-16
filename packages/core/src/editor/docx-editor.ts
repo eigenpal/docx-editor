@@ -94,7 +94,7 @@ import {
   resolveDefaultSurfaceMeasurer,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
-import { createAnchorIndex } from './docx-editor-anchors.ts';
+import { createAnchorIndex, warmAnchorsWhenIdle } from './docx-editor-anchors.ts';
 import type { PendingTextFormInput } from './surface-text-form-fields.ts';
 import { saveEditorDocument } from './docx-editor-save.ts';
 import {
@@ -712,6 +712,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         protection.sync();
         liveFonts.schedule();
+        if (reviewEnabled && container && surface) {
+          const published = surface;
+          warmAnchorsWhenIdle(published, hostWindowOf(container), () => {
+            if (surface === published) anchorIndexOf(published.publishedLayout());
+          });
+        }
         const displayModeMoved =
           reviewEnabled && reviewDisplayMode !== surface.revisionDisplayMode();
         if (displayModeMoved) reviewDisplayMode = surface.revisionDisplayMode();
