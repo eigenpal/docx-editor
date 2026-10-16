@@ -40,6 +40,7 @@ import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-
 import { reviewWriteRefusal } from './review-write-refusal.ts';
 import { withReviewItemFilter } from '../binding/review-item-filter.ts';
 import {
+  inertPropertyChangeInputsOf,
   inertPropertyChanges,
   withoutInertPropertyChanges,
 } from '../layout/review-inert-property-changes.ts';
@@ -70,6 +71,8 @@ interface ReviewCommandDependencies {
   visible(): readonly ReviewItem[];
   /** Whether the author filter shows `author`'s changes. */
   authorVisible(author: string): boolean;
+  /** Whether a tracked change predicate narrows the changes shown. */
+  predicateActive(): boolean;
   scope(item: ReviewItem): StoryScope;
   /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
@@ -155,20 +158,27 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const session = deps.surface()?.session;
     // A document-wide decision with no keys resolves every site already.
     if (!session || command.keys !== undefined || command.scope === 'document') return [];
-    const pkg = session.currentPackage();
-    const inputs = {
-      pkg,
-      stylesRoot: stylesPartOf(pkg)?.root ?? null,
-      numberingRoot: session.numberingRoot(),
-    };
+    // A tracked change predicate decides over listed changes only. These have no card for it to
+    // decide over, so a decision it narrows leaves them pending.
+    if (deps.predicateActive()) return [];
+    const inputs = inertPropertyChangeInputsOf(session.currentPackage());
     const inert = session
       .storyParts()
       .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs));
-    // By author only: a tracked change predicate decides over listed changes, and these have
-    // no card for it to decide over.
     const records = inert.filter((item) => deps.authorVisible(item.author));
     for (const item of records) selected.add(reviewItemKey(item));
     return records;
+  };
+  /** The keys of the records with no card in `scopes`' parts. */
+  const unlistedKeysIn = (scopes: readonly { readonly part: OoxmlPart }[]): Set<string> => {
+    const session = deps.surface()?.session;
+    if (!session) return new Set();
+    const inputs = inertPropertyChangeInputsOf(session.currentPackage());
+    return new Set(
+      scopes
+        .flatMap(({ part }) => inertPropertyChanges(revisionItemsOf(part), inputs))
+        .map(reviewItemKey)
+    );
   };
   /** The parts a bulk review command reaches, with the keys it selects in each. */
   const selection = (
@@ -250,10 +260,12 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     }));
     const plans: { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[] = [];
     let remaining = 0;
+    // Records with no card resolve silently: a result names only changes a caller could list.
+    const unlisted = withUnlisted ? unlistedKeysIn(scopes) : new Set<string>();
     for (const { scope, part, keys } of scopes) {
       const plan = planRevisionBatch(part, command.action, unfilteredDocument ? undefined : keys);
-      resolved.push(...plan.result.resolved);
-      skipped.push(...plan.result.skipped);
+      for (const entry of plan.result.resolved) if (!unlisted.has(entry.key)) resolved.push(entry);
+      for (const entry of plan.result.skipped) if (!unlisted.has(entry.key)) skipped.push(entry);
       remaining += plan.result.remaining;
       plans.push({ scope, part, ops: plan.ops });
     }

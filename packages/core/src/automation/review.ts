@@ -35,8 +35,10 @@ import type {
 } from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
-import { withoutInertPropertyChanges } from '../layout/review-inert-property-changes.ts';
-import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import {
+  inertPropertyChangeInputsOf,
+  withoutInertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -122,13 +124,7 @@ export function listedRevisionItemsInStory(
   pkg: OoxmlPackage | null
 ): readonly ReviewRevisionItem[] {
   const items = revisionItemsInStory(reads);
-  return pkg
-    ? withoutInertPropertyChanges(items, {
-        pkg,
-        stylesRoot: stylesPartOf(pkg)?.root ?? null,
-        numberingRoot: numberingRootOf(pkg),
-      })
-    : items;
+  return pkg ? withoutInertPropertyChanges(items, inertPropertyChangeInputsOf(pkg)) : items;
 }
 
 /**

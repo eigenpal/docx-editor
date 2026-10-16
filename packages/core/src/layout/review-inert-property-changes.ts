@@ -14,6 +14,7 @@ import {
 } from './revision-property-effect.ts';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { linkRevisionReplies } from '../store/store/review-reads.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { findParagraphProperties } from './style-definition-reader.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -28,6 +29,11 @@ export interface InertPropertyChangeInputs {
   readonly pkg: OoxmlPackage;
   readonly stylesRoot: OoxmlElement | null;
   readonly numberingRoot: OoxmlElement | null;
+}
+
+/** The inputs for `pkg`: its own styles and numbering parts, as every reader picks them. */
+export function inertPropertyChangeInputsOf(pkg: OoxmlPackage): InertPropertyChangeInputs {
+  return { pkg, stylesRoot: stylesPartOf(pkg)?.root ?? null, numberingRoot: numberingRootOf(pkg) };
 }
 
 /** How far up a change element can sit below its paragraph: rPr, run, wrappers, paragraph. */

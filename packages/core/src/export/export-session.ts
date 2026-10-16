@@ -530,13 +530,16 @@ export function openDocumentForExport(
       return runLayout(mode, revisionRestarts + 1, deadline);
     };
 
-    // Records the review artifacts leave out paint no markup, as in the editor.
-    const viewFilter = withHiddenRevisionSites(
+    // Records the review artifacts leave out paint no markup, as in the editor. Only the views
+    // that paint markup need to know which they are.
+    const baseFilter =
       mode === 'simple-markup'
         ? withPlainResolvedMarkup(revisionAuthorFilter)
-        : revisionAuthorFilter,
-      unlistedReviewSites(pkg)
-    );
+        : revisionAuthorFilter;
+    const viewFilter =
+      mode === 'all-markup' || mode === 'simple-markup'
+        ? withHiddenRevisionSites(baseFilter, unlistedReviewSites(pkg))
+        : baseFilter;
     let fieldLinkState = state.fieldLinks.get(mode);
     if (!fieldLinkState || fieldLinkState.revision !== revision || fieldLinkState.pkg !== pkg) {
       // Cached paragraph lines can survive a live-view revision. Keep the registry's monotonic

@@ -15,8 +15,10 @@ import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
 import { listedRevisionItemsInStory, revisionItemsInStory } from './review.ts';
-import { inertPropertyChanges } from '../layout/review-inert-property-changes.ts';
-import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import {
+  inertPropertyChangeInputsOf,
+  inertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
 import { revisionItemsOf } from '../store/store/review-reads.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
@@ -225,7 +227,10 @@ export function revisionAuthorPlan(
     };
   const selection = batchSelection(operation, handles, packageReads);
   if (!selection.ok) return selection;
-  const keys = selection.keys ?? storyKeysWithoutUnlisted(selection, packageReads.package);
+  const keys =
+    operation.revisions === undefined
+      ? storyKeysWithoutUnlisted(selection, packageReads.package)
+      : selection.keys;
   const plan = planRevisionAuthorChange(
     selection.reads.part,
     attribution,
@@ -237,26 +242,27 @@ export function revisionAuthorPlan(
 }
 
 /**
- * A whole-story author change names every change of the scoped derivation except records with
- * no card, which keep their author. Undefined, meaning every change, when there are none.
+ * A whole-story author change names every change of the story except records with no card,
+ * which keep their author. The story's own keys when it chose them (a body with text boxes),
+ * else every key of the scoped derivation; `selection.keys` unchanged when there are none.
  */
 function storyKeysWithoutUnlisted(
-  selection: { readonly reads: AutomationStoryReads; readonly scopeRoot?: OoxmlNode | undefined },
+  selection: {
+    readonly reads: AutomationStoryReads;
+    readonly keys: readonly string[] | undefined;
+    readonly scopeRoot?: OoxmlNode | undefined;
+  },
   pkg: OoxmlPackage | null
-): string[] | undefined {
-  if (!pkg) return undefined;
+): readonly string[] | undefined {
+  if (!pkg) return selection.keys;
   const { part } = selection.reads;
   const root = selection.scopeRoot;
   const items = revisionItemsOf(root && root.kind !== 'textValue' ? { ...part, root } : part);
   const unlisted = new Set(
-    inertPropertyChanges(items, {
-      pkg,
-      stylesRoot: stylesPartOf(pkg)?.root ?? null,
-      numberingRoot: numberingRootOf(pkg),
-    }).map(reviewItemKey)
+    inertPropertyChanges(items, inertPropertyChangeInputsOf(pkg)).map(reviewItemKey)
   );
-  if (unlisted.size === 0) return undefined;
-  return items.map(reviewItemKey).filter((key) => !unlisted.has(key));
+  if (unlisted.size === 0) return selection.keys;
+  return (selection.keys ?? items.map(reviewItemKey)).filter((key) => !unlisted.has(key));
 }
 
 /** Count pending decisions after mutation, when adjacent surviving changes may regroup. */

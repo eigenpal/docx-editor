@@ -98,11 +98,14 @@ const UNCOMPARED: Readonly<Record<string, ReadonlySet<string>>> = {
   ]),
 };
 
-/** `CT_OnOff` properties: a false value is the same as no value at all. */
+/**
+ * `CT_OnOff` properties that are off when absent, so a false value is the same as no value.
+ * Properties that are on when absent, such as `w:snapToGrid` and `w:widowControl`, are not here:
+ * their false value is a real change.
+ */
 const ON_OFF = new Set<string>([
   'dstrike',
   'noProof',
-  'snapToGrid',
   'webHidden',
   'specVanish',
   'rtl',

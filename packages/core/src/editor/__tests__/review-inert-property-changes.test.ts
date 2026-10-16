@@ -142,6 +142,8 @@ describe('property changes that change nothing', () => {
       0,
     ],
     ['an indent in character units', p(ppr('<w:ind w:leftChars="0"/>', '')), 1],
+    ['snapping to the grid turned off', p(ppr('<w:snapToGrid w:val="0"/>', '')), 1],
+    ['widow control turned off', p(ppr('<w:widowControl w:val="0"/>', '')), 1],
     [
       'a no-op inside a table',
       `<w:tbl><w:tr><w:tc>${p(ppr('<w:jc w:val="left"/>', ''))}</w:tc></w:tr></w:tbl>`,
@@ -228,6 +230,40 @@ describe('property changes that change nothing', () => {
       (element) => element.textContent
     );
     expect(marked.join('')).toContain('added');
+  });
+
+  test('typing in a paragraph of a joined format change keeps one card with fresh ranges', () => {
+    const later = 'w:author="Ada" w:date="2026-05-01T10:00:00Z"';
+    const centered = (stamp: string) =>
+      `<w:pPr><w:jc w:val="center"/><w:pPrChange w:id="${id++}" ${stamp}><w:pPr/></w:pPrChange></w:pPr>`;
+    using view = mount(p(centered(STAMP)) + p(centered(later)) + p(centered(STAMP)));
+    expect(view.count()).toBe(1);
+    const paragraphId = view.editor.surface!.session.paragraphIds()[1]!;
+    const at = { paragraphId, offset: 2 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    expect(view.editor.exec({ type: 'insertText', text: 'abc' }).ok).toBe(true);
+    const listed = view.editor.surface!.session.reviewItems();
+    const derived = collectReviewItems({ storyPart: view.editor.surface!.session.part() });
+    expect(listed).toHaveLength(1);
+    expect(listed.map((item) => (item.kind === 'revision' ? item.ranges : null))).toEqual(
+      derived.map((item) => (item.kind === 'revision' ? item.ranges : null))
+    );
+  });
+
+  test('accept all reports only the changes it listed', () => {
+    using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
+    const result = view.editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' });
+    expect(result).toMatchObject({ ok: true, revisions: { remaining: 0 } });
+    expect((result as { revisions: { resolved: unknown[] } }).revisions.resolved).toHaveLength(1);
+    expect(view.xml()).not.toContain('pPrChange');
+  });
+
+  test('accept all under a tracked change predicate leaves unlisted records pending', () => {
+    using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
+    view.editor.setTrackedChangesFilter((item) => item.revisionKind === 'format');
+    expect(view.editor.exec({ type: 'resolveAllReviewChanges', action: 'accept' }).ok).toBe(true);
+    expect(view.xml()).toContain('pPrChange');
+    expect(view.count()).toBe(0);
   });
 
   test('typing in the paragraph keeps the record unlisted', () => {

@@ -8,6 +8,8 @@
 // a live one, is worse than a slower keystroke.
 
 import {
+  registerRevisionSiteNodeIds,
+  revisionSiteNodeIdsOf,
   reviewItemKey,
   reviewItemPositionRank,
   type ReviewCommentItem,
@@ -105,8 +107,17 @@ export function patchLocalReviewItems(
 
   const patched: ReviewItem[] = [];
   let insertAt: number | null = null;
+  const { groups, absorbed } = absorbedIntoGroups(
+    cached,
+    paragraphOrder,
+    dirtyParagraphId,
+    localRevisions
+  );
+  const local =
+    absorbed.size > 0 ? localRevisions.filter((item) => !absorbed.has(item)) : localRevisions;
 
-  for (const item of cached) {
+  for (const cachedItem of cached) {
+    const item = (cachedItem.kind === 'revision' && groups.get(cachedItem)) || cachedItem;
     if (item.kind === 'revision' && isRevisionWhollyInParagraph(item, dirtyParagraphId)) {
       if (insertAt === null) insertAt = patched.length;
       continue;
@@ -119,11 +130,11 @@ export function patchLocalReviewItems(
   }
 
   if (insertAt === null) insertAt = patched.length;
-  if (localRevisions.length > 0) {
+  if (local.length > 0) {
     const orderedLocalRevisions =
-      localRevisions.length < 2
-        ? [...localRevisions]
-        : [...localRevisions].sort(
+      local.length < 2
+        ? [...local]
+        : [...local].sort(
             (a, b) =>
               reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
           );
@@ -144,6 +155,63 @@ function isRevisionWhollyInParagraph(item: ReviewRevisionItem, paragraphId: stri
       (range) => range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
     )
   );
+}
+
+/**
+ * A paragraph-property change that spans paragraphs, as one review decision. A text-local edit
+ * leaves every paragraph's properties as they were, so the group still holds.
+ */
+function isParagraphPropertyGroup(item: ReviewRevisionItem): boolean {
+  return item.revisionKind === 'format' && item.formattingKind === 'pPrChange';
+}
+
+/**
+ * The cached paragraph-property groups that cross the dirty paragraph, each rebuilt with that
+ * paragraph's fresh ranges, and the local items they take in. A paragraph walk sees only its
+ * own part of such a group, as an item of its own; the cached group already holds it.
+ */
+function absorbedIntoGroups(
+  cached: readonly ReviewItem[],
+  paragraphOrder: ReadonlyMap<string, number>,
+  dirtyParagraphId: string,
+  localRevisions: readonly ReviewRevisionItem[]
+): {
+  readonly groups: ReadonlyMap<ReviewRevisionItem, ReviewRevisionItem>;
+  readonly absorbed: ReadonlySet<ReviewRevisionItem>;
+} {
+  const groups = new Map<ReviewRevisionItem, ReviewRevisionItem>();
+  const absorbed = new Set<ReviewRevisionItem>();
+  const groupOfSite = new Map<string, ReviewRevisionItem>();
+  for (const item of cached) {
+    if (
+      item.kind === 'revision' &&
+      isParagraphPropertyGroup(item) &&
+      revisionCrossesParagraphBoundary(item, dirtyParagraphId)
+    ) {
+      for (const id of revisionSiteNodeIdsOf(item)) groupOfSite.set(id, item);
+    }
+  }
+  if (groupOfSite.size === 0) return { groups, absorbed };
+  for (const local of localRevisions) {
+    const ids = revisionSiteNodeIdsOf(local);
+    const group = ids.length > 0 ? groupOfSite.get(ids[0]!) : undefined;
+    if (!group || !ids.every((id) => groupOfSite.get(id) === group)) continue;
+    absorbed.add(local);
+    const base = groups.get(group) ?? group;
+    const ranges = [
+      ...base.ranges.filter((range) => range.start.paragraphId !== dirtyParagraphId),
+      ...local.ranges,
+    ].sort(
+      (a, b) =>
+        (paragraphOrder.get(a.start.paragraphId) ?? 0) -
+          (paragraphOrder.get(b.start.paragraphId) ?? 0) || a.start.offset - b.start.offset
+    );
+    groups.set(
+      group,
+      registerRevisionSiteNodeIds({ ...base, ranges }, revisionSiteNodeIdsOf(group))
+    );
+  }
+  return { groups, absorbed };
 }
 
 function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): boolean {
@@ -323,7 +391,11 @@ export function localReviewPatchParagraphId(
     // Full derivation, not the fast path: the paragraph walk cannot see this item's markup,
     // so patching would delete a decision the document still holds.
     if (revisionAnchoredOutsideParagraph(item, paragraphId)) return null;
-    if (revisionCrossesParagraphBoundary(item, paragraphId)) return null;
+    if (
+      revisionCrossesParagraphBoundary(item, paragraphId) &&
+      !(change.impact === 'text-local' && isParagraphPropertyGroup(item))
+    )
+      return null;
   }
   return paragraphId;
 }
