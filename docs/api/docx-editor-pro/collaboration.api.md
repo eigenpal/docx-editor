@@ -169,6 +169,14 @@ export interface CompactCollaborationStateOptions {
 }
 
 // @public
+export function createCollaborationState(document: Uint8Array, options: CreateCollaborationStateOptions): Promise<Uint8Array>;
+
+// @public
+export interface CreateCollaborationStateOptions {
+    readonly documentId: string;
+}
+
+// @public
 export function createDocumentCollaboration(options: CreateDocumentCollaborationOptions): Promise<DocumentCollaborationHandle>;
 
 // @public

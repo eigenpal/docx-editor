@@ -417,8 +417,9 @@ export function App() {
         name: joined.person.name,
         color: joined.person.color,
       },
-      // The first tab seeds the room from these bytes; every later tab ignores them and
-      // takes the document the server already holds.
+      // `server/server.ts` seeds every new room itself, so every tab joins the document the
+      // server holds and uploads nothing. These bytes seed the room only on a server that
+      // leaves new rooms empty.
       bootstrap: { kind: 'create-or-join', document: bytes } as const,
     };
   }, [bytes, joined, left]);

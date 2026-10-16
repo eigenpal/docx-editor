@@ -280,6 +280,20 @@ Copy the shrunk file into `replays/` with a name that says what it exercises. Th
 
 Each case in `replays/open/` still fails, and the replay test does not run it. Its seed is in the `OPEN` list in `scenario-regressions.ts`, where `bun test --todo` runs it. When a fix makes a case pass, move the file into `replays/` and the seed back into `CLEAN`.
 
+## Check server-seeded rooms
+
+A Hocuspocus server sends every document update to every connection, including the connection that sent it. A participant that seeds a new room therefore uploads the whole room state and receives it back. A server that seeds the room with `createCollaborationState` sends the room once, and no participant uploads it.
+
+`seed-transfer.test.ts` measures this on a real Hocuspocus server in the test process. The server counts the bytes of each connection. The tests check that the participant that opens a server-seeded room receives the room once and uploads nothing, and that another participant still receives the whole document. A control test shows the seed echo when a participant seeds the room.
+
+`seed-transfer-fuzz.ts` runs seeded scenarios on the same server. Each seed chooses how participants open a new room, who leaves while the server loads it, who aborts a join, and a run of inserts, disconnects, reconnects, late joins, and departures. When every participant leaves, the server unloads the room and loads it from storage again. At the end, every replica must hold the server's state, the document must equal the seed plus the inserts, the room must record one seed, and no participant may send a seed-sized sync message or receive more than one. The network runs in real time, so two runs of one seed can interleave differently.
+
+Run 50 seeds from seed 1:
+
+```bash
+bun seed-transfer-fuzz.ts 1 50
+```
+
 ## Unit tests
 
 The analysis, the keystroke model, the seeded scenarios, and the replayed cases have tests:
