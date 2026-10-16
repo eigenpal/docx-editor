@@ -37,6 +37,9 @@ describe('server-seeded rooms', () => {
     // Seed 5 loses the stored state at the end.
     const result = await runSeedScenario(5, { refuseLostRooms: false });
     expect(result.summary).toContain('lose storage');
-    expect(result.problems.length).toBeGreaterThan(0);
+    expect(result.problems).toContain('the server seeded the lost room again');
+    expect(result.problems).toContain(
+      'the reconnecting participant reported error:room-generation-changed, not saved-room-unavailable'
+    );
   }, 60_000);
 });

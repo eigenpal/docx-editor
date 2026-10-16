@@ -54,14 +54,8 @@ export async function roomIsKnown(documentName: string): Promise<boolean> {
  */
 export async function writeNewFile(file: string, bytes: Uint8Array): Promise<boolean> {
   const temporary = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
-  const handle = await open(temporary, 'wx');
   try {
-    await handle.writeFile(bytes);
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
+    await writeDurably(temporary, bytes, 'wx');
     // `link` fails with EEXIST when the file exists, so two creators cannot both win.
     await link(temporary, file);
     return true;
@@ -69,7 +63,19 @@ export async function writeNewFile(file: string, bytes: Uint8Array): Promise<boo
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
     throw error;
   } finally {
-    await unlink(temporary);
+    // Whatever happened, the temporary name goes: after a link the file keeps the bytes.
+    await unlink(temporary).catch(() => undefined);
+  }
+}
+
+/** Write `bytes` to a new file and wait for them to reach the disk. */
+async function writeDurably(file: string, bytes: Uint8Array, flags: 'w' | 'wx'): Promise<void> {
+  const handle = await open(file, flags);
+  try {
+    await handle.writeFile(bytes);
+    await handle.sync();
+  } finally {
+    await handle.close();
   }
 }
 
@@ -80,14 +86,14 @@ export async function writeNewFile(file: string, bytes: Uint8Array): Promise<boo
 export async function writeAtomically(file: string, bytes: Uint8Array): Promise<void> {
   // A name of its own: two writes of one room at once must not share a temporary file.
   const temporary = `${file}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
-  const handle = await open(temporary, 'w');
   try {
-    await handle.writeFile(bytes);
-    await handle.sync();
-  } finally {
-    await handle.close();
+    await writeDurably(temporary, bytes, 'w');
+    await rename(temporary, file);
+  } catch (error) {
+    // A failed write must not leave its temporary file behind.
+    await unlink(temporary).catch(() => undefined);
+    throw error;
   }
-  await rename(temporary, file);
   // The rename reaches the disk with its directory. Windows cannot open a directory to sync it,
   // and makes a rename durable without that.
   const directory = await open(path.dirname(file), 'r').catch(() => null);
