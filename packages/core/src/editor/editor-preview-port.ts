@@ -31,12 +31,10 @@ import {
   isTrackedEdit,
   trackedReplacementLanding,
 } from './surface-tracked-ops.ts';
+import { revisionDateNow } from '../automation/revision-date.ts';
 
 const REVIEW_REQUIRED = 'review-module-required';
 const UNSUPPORTED = 'preview-operation-unsupported';
-
-/** One timestamp per edit, the format the live surface writes: seconds, UTC. */
-const trackedDate = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
 
 /**
  * The fork's port. `display` is read per write, so a markup setting the reader changes while
@@ -65,7 +63,7 @@ export function previewForkPort(
   const attributed = (ops: readonly TreeDocOp[]): readonly TreeDocOp[] => {
     const author = suggestingAuthor();
     if (author === undefined) return ops;
-    return attributeTrackedOps(ops, { author, date: trackedDate() }, formattingTracked());
+    return attributeTrackedOps(ops, { author, date: revisionDateNow() }, formattingTracked());
   };
   return {
     ...base,
@@ -79,7 +77,7 @@ export function previewForkPort(
       if (end <= start) return start;
       const paragraph = paragraphInFork(store, paragraphId);
       if (!paragraph) return start;
-      return trackedReplacementLanding(paragraph, start, end, author, trackedDate());
+      return trackedReplacementLanding(paragraph, start, end, author, revisionDateNow());
     },
     apply(staged: AutomationStagedOps, scope, packageEdits = [], requiresReview = false) {
       // The live surface's order: its mode rules, the review module, then attribution and the

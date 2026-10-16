@@ -66,6 +66,4 @@ With `preset` set to `false`, the rail adds no defaults. Root parts that you pas
 - As a direct child of `DocxEditorReview`.
 - Inside your own card component, as in the example. It still renders only while the draft is open.
 
-Without `top`, the box sits where the packaged card stack puts it. That position comes from the packaged cards, not yours. When you render your own cards, pass `top` from your own stack. The example places the box at the selection's anchor. To keep it clear of your cards, add an entry with the key of your choice and the anchor `selectionAnchorY` to the list that you pass to `useStackedReviewPositions`, in document order.
-
-In Vue, the same parts and hooks come from `@docx-editor.dev/pro/vue`. Write `:preset="false"`.
+Without `top`, the box sits where the packaged card stack puts it. In the narrow compact rail it takes the compact card's `left` either way, so it does not overflow the marker strip. That position comes from the packaged cards, not yours. When you render your own cards, pass `top` from your own stack. The example places the box at the selection's anchor. To keep it clear of your cards, add an entry with the key of your choice and the anchor `selectionAnchorY` to the list that you pass to `useStackedReviewPositions`, in document order.

@@ -227,7 +227,8 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       props: {
         /** Rail-local `top` in CSS pixels. Omit it to use the packaged card stack's position. */
         top: { type: Number as PropType<number | undefined>, default: undefined },
-        left: { type: Number as PropType<number | null>, default: null },
+        /** Rail-local `left`. Omit it to follow the compact rail; null keeps the column. */
+        left: { type: Number as PropType<number | null | undefined>, default: undefined },
         className: String,
         hidden: Boolean,
       },
@@ -237,7 +238,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
           if (props.hidden || !rail.value.drafting) return null;
           return h(ReviewDraftBox, {
             top: props.top ?? rail.value.composeTop ?? 0,
-            left: props.left,
+            left: props.left === undefined ? rail.value.composeLeft : props.left,
             className: props.className,
           });
         };

@@ -6,12 +6,24 @@
 // - the reviewed ALLOWLIST in `scripts/lib/packages.mjs`, for symbols that are meant to stay
 //   unexported here (owned by another package, or internal machinery), with a reason beside it;
 // - the BASELINE in `scripts/api-forgotten-exports.baseline.json`, for warnings that existed
-//   when the gate was introduced. It only shrinks: `api:extract` drops entries that no longer
-//   warn, and a new warning fails until the type is exported (or, after review, recorded with
-//   `node scripts/api-extractor.mjs --local --record-forgotten-exports`).
+//   when the gate was introduced. A new warning fails until the type is exported. Only an
+//   explicit `node scripts/api-extractor.mjs --local --record-forgotten-exports` run rewrites
+//   the file: it drops entries that no longer warn and, after review, records new ones.
+//
+// MATCHING IS COUNTED. `Foo$1` is the declaration bundler's rename for a second declaration
+// named `Foo`, and which copy gets the suffix depends on emit order, so `$N` is normalized away.
+// The baseline then lists `Foo` once per declaration, and a run that reports more `Foo`s than
+// the baseline lists fails: a new `Foo$1` cannot hide behind a baselined `Foo`. Every other
+// suffix, such as `_2` or a real name like `Level_1`, is kept as written.
 
 const FORGOTTEN_EXPORT_RE =
   /^(?<entry>[^:]+): The symbol "(?<symbol>[^"]+)" needs to be exported by the entry point /;
+
+function counts(symbols) {
+  const result = new Map();
+  for (const symbol of symbols) result.set(symbol, (result.get(symbol) ?? 0) + 1);
+  return result;
+}
 
 function toSortedPairs(entries) {
   return entries.sort((a, b) =>
@@ -24,10 +36,8 @@ export function parseForgottenExportMessage(message) {
   if (!match?.groups) return null;
   return {
     entry: match.groups.entry,
-    // `Foo$1` and `Foo_2` are the declaration bundler's renames for a second declaration
-    // named `Foo`. Which copy gets the suffix depends on emit order, so the baseline keys on
-    // the name a reader wrote.
-    symbol: match.groups.symbol.replace(/(?:\$\d+|_\d+)$/, ''),
+    // Only the bundler's `$N` rename; see the counted matching above.
+    symbol: match.groups.symbol.replace(/\$\d+$/, ''),
   };
 }
 
@@ -46,50 +56,47 @@ export function evaluateForgottenExportPolicy({
   const allowlisted = new Map(
     Object.entries(allowlist).map(([entry, symbols]) => [entry, new Set(symbols)])
   );
-
   const baselined = new Map(
-    Object.entries(baseline).map(([entry, symbols]) => [entry, new Set(symbols)])
+    Object.entries(baseline).map(([entry, symbols]) => [entry, counts(symbols)])
   );
 
   const seen = new Map();
-  const unallowlisted = [];
+  const unparsed = [];
   for (const message of messages) {
     const parsed = parseForgottenExportMessage(message);
     if (!parsed) {
-      unallowlisted.push({ entry: '<unparsed>', symbol: message });
+      unparsed.push({ entry: '<unparsed>', symbol: message });
       continue;
     }
-    const perEntry = seen.get(parsed.entry) ?? new Set();
-    perEntry.add(parsed.symbol);
+    const perEntry = seen.get(parsed.entry) ?? new Map();
+    perEntry.set(parsed.symbol, (perEntry.get(parsed.symbol) ?? 0) + 1);
     seen.set(parsed.entry, perEntry);
-    if (
-      !allowlisted.get(parsed.entry)?.has(parsed.symbol) &&
-      !baselined.get(parsed.entry)?.has(parsed.symbol)
-    ) {
-      unallowlisted.push(parsed);
+  }
+
+  const unallowlisted = [...unparsed];
+  for (const [entry, symbols] of seen) {
+    for (const [symbol, count] of symbols) {
+      if (allowlisted.get(entry)?.has(symbol)) continue;
+      const known = baselined.get(entry)?.get(symbol) ?? 0;
+      for (let extra = known; extra < count; extra += 1) unallowlisted.push({ entry, symbol });
     }
   }
 
   const staleAllowlist = [];
   const forbiddenAllowlist = [];
   for (const [entry, symbols] of allowlisted) {
-    const seenForEntry = seen.get(entry) ?? new Set();
     for (const symbol of symbols) {
-      if (protectedSet.has(symbol)) {
-        forbiddenAllowlist.push({ entry, symbol });
-      }
-      if (!seenForEntry.has(symbol)) {
-        staleAllowlist.push({ entry, symbol });
-      }
+      if (protectedSet.has(symbol)) forbiddenAllowlist.push({ entry, symbol });
+      if (!seen.get(entry)?.has(symbol)) staleAllowlist.push({ entry, symbol });
     }
   }
 
   const staleBaseline = [];
   for (const [entry, symbols] of baselined) {
-    const seenForEntry = seen.get(entry) ?? new Set();
-    for (const symbol of symbols) {
+    for (const [symbol, count] of symbols) {
       if (protectedSet.has(symbol)) forbiddenAllowlist.push({ entry, symbol });
-      if (!seenForEntry.has(symbol)) staleBaseline.push({ entry, symbol });
+      const reported = seen.get(entry)?.get(symbol) ?? 0;
+      for (let extra = reported; extra < count; extra += 1) staleBaseline.push({ entry, symbol });
     }
   }
 
@@ -107,21 +114,23 @@ export function evaluateForgottenExportPolicy({
  * diffs cleanly.
  */
 export function nextForgottenExportBaseline({ baseline = {}, policy, record = false }) {
-  const next = new Map(
-    Object.entries(baseline).map(([entry, symbols]) => [entry, new Set(symbols)])
-  );
-  for (const { entry, symbol } of policy.staleBaseline) next.get(entry)?.delete(symbol);
+  const next = new Map(Object.entries(baseline).map(([entry, symbols]) => [entry, [...symbols]]));
+  for (const { entry, symbol } of policy.staleBaseline) {
+    const symbols = next.get(entry);
+    const at = symbols?.indexOf(symbol) ?? -1;
+    if (at >= 0) symbols.splice(at, 1);
+  }
   if (record) {
     for (const { entry, symbol } of policy.unallowlisted) {
       if (entry === '<unparsed>') continue;
-      const symbols = next.get(entry) ?? new Set();
-      symbols.add(symbol);
+      const symbols = next.get(entry) ?? [];
+      symbols.push(symbol);
       next.set(entry, symbols);
     }
   }
   const result = {};
   for (const entry of [...next.keys()].sort()) {
-    const symbols = [...next.get(entry)].sort();
+    const symbols = next.get(entry).sort();
     if (symbols.length > 0) result[entry] = symbols;
   }
   return result;

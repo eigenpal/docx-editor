@@ -23,6 +23,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { ReactNode } from 'react';
 import { act, cleanup, render } from '@testing-library/react';
 import { DocxEditorContent, DocxEditorRoot, DocxEditorViewport } from '@docx-editor.dev/react';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { reviewModule } from '../index.ts';
 import { DocxEditorReview, useReviewItem } from '../react/index.ts';
 import { strToU8, zipSync } from 'fflate';
@@ -168,5 +169,47 @@ describe('the compact card', () => {
     );
     expect(card.querySelector('[data-testid="host-render"]')?.textContent).toBe('Check this.');
     expect(card.querySelector('[data-testid="review-card"]')).toBeNull();
+  });
+
+  test('a Draft inside host content takes the compact left, like the packaged one', async () => {
+    let instance: DocxEditorInstance | null = null;
+    function HostCards() {
+      return <DocxEditorReview.Draft top={10} />;
+    }
+    const view = render(
+      <DocxEditorRoot
+        document={COMMENTED_SOURCE}
+        modules={[reviewModule()]}
+        author="Reviewer"
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview preset={false}>
+            <DocxEditorReview.AddComment />
+            <HostCards />
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const rail = () => view.container.querySelector('[data-testid="review-rail"]');
+    await waitFor(() => rail()?.hasAttribute('data-compact') === true);
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await waitFor(
+      () => view.container.querySelector('[data-testid="review-add-comment"]') !== null
+    );
+    act(() => {
+      (view.container.querySelector('[data-testid="review-add-comment"]') as HTMLElement).click();
+    });
+    await waitFor(() => view.container.querySelector('[data-testid="review-draft"]') !== null);
+    const slot = view.container.querySelector('[data-testid="review-draft"]')!
+      .parentElement as HTMLElement;
+    expect(slot.classList.contains('docx-review__slot--compact')).toBe(true);
+    expect(slot.style.left).not.toBe('');
+    expect(slot.style.top).toBe('10px');
   });
 });

@@ -18,8 +18,8 @@ export function GlossaryMarks({ terms }: { terms: readonly string[] }) {
 }
 ```
 
-Use a unique `name` for each set. Two calls with the same name replace each other's ranges. Set `activeIndex` in the options to show one range in the active color, for example the current result of your own search list.
+Keep a function source stable with `useCallback`.
 
-In Vue, import `useHighlights` from `@docx-editor.dev/vue`. A function source that reads refs runs again when they change.
+Use a unique `name` for each set. Two calls with the same name replace each other's ranges. Set `activeIndex` in the options to show one range in the active color, for example the current result of your own search list.
 
 Outside a component, call `watchHighlights(editor, name, source, options)` from `@docx-editor.dev/core/editor`, or `editor.setHighlights` for a fixed set.

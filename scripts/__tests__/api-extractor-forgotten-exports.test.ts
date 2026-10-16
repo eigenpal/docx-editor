@@ -94,7 +94,7 @@ describe('forgotten export policy', () => {
     expect(result.staleAllowlist).toEqual([]);
   });
 
-  test('keys renamed duplicate declarations on the written name', () => {
+  test('normalizes only the bundler $N rename, and keeps real suffixes', () => {
     expect(
       policy.parseForgottenExportMessage(
         'index: The symbol "ToolbarButton$1" needs to be exported by the entry point index.d.ts'
@@ -102,9 +102,32 @@ describe('forgotten export policy', () => {
     ).toEqual({ entry: 'index', symbol: 'ToolbarButton' });
     expect(
       policy.parseForgottenExportMessage(
-        'index: The symbol "HorizontalRulerProps_2" needs to be exported by the entry point index.d.ts'
+        'index: The symbol "Level_1" needs to be exported by the entry point index.d.ts'
       )
-    ).toEqual({ entry: 'index', symbol: 'HorizontalRulerProps' });
+    ).toEqual({ entry: 'index', symbol: 'Level_1' });
+  });
+
+  test('a new Foo$1 cannot hide behind a baselined Foo', () => {
+    const result = policy.evaluateForgottenExportPolicy({
+      packageName: '@docx-editor.dev/react',
+      isLocal: false,
+      allowlist: {},
+      baseline: { index: ['Foo'] },
+      messages: [
+        'index: The symbol "Foo" needs to be exported by the entry point index.d.ts',
+        'index: The symbol "Foo$1" needs to be exported by the entry point index.d.ts',
+      ],
+    });
+    expect(result.unallowlisted).toEqual([{ entry: 'index', symbol: 'Foo' }]);
+    const both = policy.evaluateForgottenExportPolicy({
+      packageName: '@docx-editor.dev/react',
+      isLocal: false,
+      allowlist: {},
+      baseline: { index: ['Foo', 'Foo'] },
+      messages: ['index: The symbol "Foo$1" needs to be exported by the entry point index.d.ts'],
+    });
+    expect(both.unallowlisted).toEqual([]);
+    expect(both.staleBaseline).toEqual([{ entry: 'index', symbol: 'Foo' }]);
   });
 
   test('rejects baselining package-owned public symbols', () => {

@@ -14,6 +14,7 @@ import type { PlannedOperation } from './plan.ts';
 import type { AutomationErrorCode, AutomationValue } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { resolveSpanRef, storyOfSpanRef } from './spans.ts';
+import { revisionDateNow } from './revision-date.ts';
 
 const PARAGRAPH_BREAKING = /[\r\n\u2028\u2029]/u;
 const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
@@ -62,18 +63,15 @@ export function validatePlannedCommentFields(input: {
   return null;
 }
 
-/** `@w:date` is written to the second, as the editor's own comment writes are. */
-const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
-
 /**
  * Canonical `@w:date` for a staged comment write, after validation succeeded. A write that
  * names no date is stamped with the current time, as a tracked change is, so every comment the
  * automation layer creates records when it was written.
  */
 export function stagedCommentDate(date: unknown): string {
-  if (date === undefined) return secondsPrecisionNow();
+  if (date === undefined) return revisionDateNow();
   const normalized = normalizeCommentDateValue(date);
-  return normalized.ok ? normalized.value : secondsPrecisionNow();
+  return normalized.ok ? normalized.value : revisionDateNow();
 }
 
 /** Innermost table cell containing a paragraph, or null for ordinary story flow. */

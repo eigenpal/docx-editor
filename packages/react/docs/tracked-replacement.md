@@ -4,6 +4,8 @@
 
 In a browser host, find the text with `editor.findMatches` and replace one match with the `replaceMatch` command. In suggesting mode, the replacement is a tracked change as the editor's `author`. The selection and the scroll position do not move.
 
+`findMatches` also returns matches in headers, footers, notes, and text boxes. Those matches have a `scope`. `replaceMatch` replaces text only in the story that the reader has open, and refuses the others, so the example keeps body matches: the ones without a `scope`.
+
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
 
@@ -11,7 +13,7 @@ export function ProposeTerm({ from, to }: { from: string; to: string }) {
   const editor = useDocxEditor();
   const run = () => {
     if (!editor || !editor.setEditingMode('suggesting').ok) return;
-    const [match] = editor.findMatches(from, { matchCase: true });
+    const match = editor.findMatches(from, { matchCase: true }).find((found) => !found.scope);
     if (match) editor.exec({ type: 'replaceMatch', match, text: to });
   };
   return <button onClick={run}>Propose {to}</button>;

@@ -36,6 +36,8 @@ export interface ReviewRailValue {
   readonly cardClassName: string | undefined;
   readonly readOnly: boolean;
   readonly composeTop: number | null;
+  /** The compose box's rail-local `left` in the compact rail, or null in the full column. */
+  readonly composeLeft: number | null;
   /** Whether a comment draft is open. A `Draft` part renders only while it is. */
   readonly drafting: boolean;
   readonly review: ReviewActions;
@@ -87,6 +89,7 @@ const INERT_RAIL: ReviewRailValue = {
   cardClassName: undefined,
   readOnly: false,
   composeTop: null,
+  composeLeft: null,
   drafting: false,
   review: INERT_REVIEW,
   allItems: [],

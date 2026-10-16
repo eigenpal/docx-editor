@@ -484,6 +484,7 @@ function ReviewRoot({
       endDraft,
       drafting: draftAnchorY !== null,
       composeTop,
+      composeLeft: compact ? metrics.compactCardLeft : null,
       commentMarkers,
       revisionsIn,
     }),
@@ -505,6 +506,8 @@ function ReviewRoot({
       endDraft,
       draftAnchorY,
       composeTop,
+      compact,
+      metrics.compactCardLeft,
       commentMarkers,
       revisionsIn,
     ]

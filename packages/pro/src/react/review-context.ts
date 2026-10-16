@@ -107,6 +107,8 @@ export interface ReviewRailValue {
    * anchor. A `Draft` part without its own `top` uses it.
    */
   readonly composeTop: number | null;
+  /** The compose box's rail-local `left` in the compact rail, or null in the full column. */
+  readonly composeLeft: number | null;
   /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
   readonly commentMarkers: CommentMarkerStyle;
   /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
@@ -186,6 +188,7 @@ export const INERT_RAIL: ReviewRailValue = {
   endDraft: () => {},
   drafting: false,
   composeTop: null,
+  composeLeft: null,
   commentMarkers: 'icon',
   revisionsIn: 'pane',
 };

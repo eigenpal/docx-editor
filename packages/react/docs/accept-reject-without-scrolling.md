@@ -2,7 +2,7 @@
 
 # Accept or reject without scrolling
 
-When your own list drives the scroll, open an item with `useReview().setActive(key, { reveal: false })`. The caret moves to the item, and the page stays where it is. Then resolve the item with `accept(item)` or `reject(item)`. A review write does not scroll either.
+When your own list drives the scroll, open an item with `useReview().setActive(key, { reveal: false })`. The caret moves to the item, and the page stays where it is. Then resolve the item with `accept(item)` or `reject(item)`. Review writes such as accept, reject, and comment never scroll the page.
 
 ```tsx
 import { useReview, type ReviewItemView } from '@docx-editor.dev/pro/react';
@@ -12,10 +12,22 @@ export function ChangeRow({ item }: { item: ReviewItemView }) {
   return (
     <li onClick={() => setActive(item.key, { reveal: false })}>
       {item.text}
-      <button onClick={() => accept(item)} disabled={item.readOnly}>
+      <button
+        disabled={item.readOnly}
+        onClick={(event) => {
+          event.stopPropagation();
+          accept(item);
+        }}
+      >
         Accept
       </button>
-      <button onClick={() => reject(item)} disabled={item.readOnly}>
+      <button
+        disabled={item.readOnly}
+        onClick={(event) => {
+          event.stopPropagation();
+          reject(item);
+        }}
+      >
         Reject
       </button>
     </li>
@@ -23,17 +35,27 @@ export function ChangeRow({ item }: { item: ReviewItemView }) {
 }
 ```
 
-`accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. Read `useReview().lastRefusal` for the diagnostic code.
+The buttons stop the click from reaching the row, so a decision does not also activate the item. `accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. Read `useReview().lastRefusal` for the diagnostic code.
 
-Other values of `reveal` choose where the item lands: `'centerIfNeeded'` (the default), `'nearest'`, or `'start'`. Add `announce: true` to open the packaged balloon or card for the item.
+`reveal` takes `false` or one of four placements:
 
-In Vue, import `useReview` from `@docx-editor.dev/pro/vue`.
+| Value | Where the item lands |
+| --- | --- |
+| `'centerIfNeeded'` (default) | Stays still when the item is on screen; centered when it has to travel. |
+| `'center'` | Always centered. |
+| `'nearest'` | The smallest scroll that brings it into view. |
+| `'start'` | Near the top of the viewport. |
+
+Add `announce: true` to open the packaged balloon or card for the item.
 
 ## Decide in a headless pipeline
 
 The editing API has no viewport. Load the revisions and call `Revision.accept()` or `Revision.reject()`.
 
 ```ts
+import { DocxEditor } from '@docx-editor.dev/editor-api';
+
+const runtime = await DocxEditor.createServer(bytes, { author: 'Review bot' });
 await runtime.run(async (context) => {
   const revisions = context.document.body.revisions;
   revisions.load('items/author');
@@ -43,4 +65,6 @@ await runtime.run(async (context) => {
   }
   await context.sync();
 });
+const saved = await runtime.save();
+runtime.dispose();
 ```

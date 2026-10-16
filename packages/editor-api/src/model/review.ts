@@ -829,7 +829,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
         op: 'setRevisionAuthorBatch',
         body,
         author,
-        ...(date === undefined ? {} : { date: date.toISOString() }),
+        // Written to the second, as every other revision date is.
+        ...(date === undefined ? {} : { date: `${date.toISOString().slice(0, 19)}Z` }),
         ...(authors === undefined ? {} : { authors: [...authors] }),
         ...(targets === undefined
           ? {}

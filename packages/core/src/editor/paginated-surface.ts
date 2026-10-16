@@ -342,6 +342,7 @@ export type {
   ReviewWriteIntent,
   SurfaceFormatting,
 } from './paginated-surface-contract.ts';
+import { revisionDateNow } from '../automation/revision-date.ts';
 
 /** Body blocks a sliced opening lays out at mount, before its first yield. */
 const PROGRESSIVE_OPEN_FIRST_BLOCKS = 64;
@@ -391,10 +392,6 @@ export function mountPaginatedSurface(
   let formattingOutsideToc = false;
   /** Separates a decision's key from its per-range index. A NUL cannot occur in either. */
   const RANGE_SUFFIX = '\u0000range\u0000';
-  /** One timestamp per edit. The clock is the host's; the store never reads one. */
-  // SECONDS precision, like Word. Milliseconds are valid `xsd:dateTime` but no other editor
-  // writes them, and two revisions differing only in milliseconds never group.
-  const trackedDate = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
   // Editor seam creates the canvas; layout only consumes the injected context.
   let defaults = options.measurer
     ? null
@@ -1608,7 +1605,7 @@ export function mountPaginatedSurface(
       return publishRefusal(`${kind} requires non-empty text`);
     if (kind !== 'deletion' && /[\r\n\v\f\u2028\u2029]/.test(text))
       return publishRefusal(`${kind} requires text without a paragraph mark`);
-    const revision = { author: writer, date: trackedDate() };
+    const revision = { author: writer, date: revisionDateNow() };
     const range = orderedRange();
     const collapsed =
       range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
@@ -3056,7 +3053,7 @@ export function mountPaginatedSurface(
   function trackedOps(ops: readonly TreeDocOp[]): TreeDocOp[] {
     const author = trackedAuthorOrNone();
     if (author === undefined) return [...ops];
-    return attributeTrackedOps(ops, { author, date: trackedDate() }, formattingTracked());
+    return attributeTrackedOps(ops, { author, date: revisionDateNow() }, formattingTracked());
   }
 
   /**
@@ -4333,7 +4330,7 @@ export function mountPaginatedSurface(
     cellSelection: () => cellSelection,
     editingMode: () => editingMode,
     author: () => author,
-    trackedDate,
+    trackedDate: revisionDateNow,
     storyScope,
     paragraphOrder,
     flushPendingInputAndLayout,
@@ -4679,7 +4676,7 @@ export function mountPaginatedSurface(
       };
       const separatorAuthor = trackedAuthorOrNone();
       const separatorRevision = separatorAuthor
-        ? { author: separatorAuthor, date: trackedDate() }
+        ? { author: separatorAuthor, date: revisionDateNow() }
         : undefined;
       const separatorStyles = session.documentStyles();
       const existingSeparatorStyle = listParagraphStyleId(separatorStyles);
@@ -5700,7 +5697,7 @@ export function mountPaginatedSurface(
       selectionMark,
       editingMode: () => editingMode,
       author: () => author,
-      trackedDate,
+      trackedDate: revisionDateNow,
       decodePort: () => decodePort,
       actorId: () => collaborationSession?.identity.actorId,
     }),

@@ -604,6 +604,7 @@ const ReviewRoot = defineComponent({
         cardClassName: props.card?.className,
         readOnly: readOnly.value,
         composeTop: composeTop.value,
+        composeLeft: compact.value ? metrics.value.compactCardLeft : null,
         drafting: draftAnchorY.value !== null,
         review: reviewActions.value,
         allItems: allReview.items.value,

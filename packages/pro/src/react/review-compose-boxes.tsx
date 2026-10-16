@@ -33,6 +33,7 @@ interface ComposePartDeps {
     readonly endDraft: () => void;
     readonly drafting: boolean;
     readonly composeTop: number | null;
+    readonly composeLeft: number | null;
     readonly measure: (node: HTMLElement | null, key: string) => void;
     readonly readOnly: boolean;
     readonly draftAuthor: string | null;
@@ -58,8 +59,9 @@ export interface ReviewDraftProps extends ReviewPartProps {
   top?: number;
   /**
    * Rail-local `left` for the COMPACT rail, where the strip is 32px wide and a box laid
-   * out at column width would be cut by the viewport's edge. Null keeps the box in the
-   * rail's own column, which is right whenever the column exists.
+   * out at column width would be cut by the viewport's edge. Omit it to use the compact
+   * card's position in the compact rail and the rail's own column otherwise. Null keeps the
+   * box in the rail's own column.
    */
   left?: number | null;
 }
@@ -85,9 +87,15 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
    * @public
    */
   function ReviewDraft(props: ReviewDraftProps) {
-    const { drafting, composeTop } = deps.useRail();
+    const { drafting, composeTop, composeLeft } = deps.useRail();
     if (props.hidden || !drafting) return null;
-    return <ReviewDraftBox {...props} top={props.top ?? composeTop ?? 0} />;
+    return (
+      <ReviewDraftBox
+        {...props}
+        top={props.top ?? composeTop ?? 0}
+        left={props.left === undefined ? composeLeft : props.left}
+      />
+    );
   }
   ReviewDraft.docxReviewPart = 'Draft' as const;
 

@@ -2,7 +2,7 @@
 
 # Comment on found text
 
-In a browser host, find the text with `editor.findMatches`, select the first match with `editor.selectMatch`, and then call `useReview().comment`. The comment is written as the editor's `author`, so set `author` on the editor and add `reviewModule()` to its modules.
+In a browser host, find the text with `editor.findMatches`, select the first match with `editor.selectMatch`, and then call `useReview().comment`. The comment is written as the editor's `author`, so set `author` on the editor and add `reviewModule()` to its modules. `selectMatch` opens the header, footer, or note that holds the match, so a match in any story works.
 
 ```tsx
 import { useDocxEditor } from '@docx-editor.dev/react';
@@ -20,8 +20,6 @@ export function CommentOnTerm({ term }: { term: string }) {
 ```
 
 `comment` returns `false` when the editor refuses the write. Read `useReview().lastRefusal` for the diagnostic code.
-
-In Vue, import the same names from `@docx-editor.dev/vue` and `@docx-editor.dev/pro/vue`. `useDocxEditor()` returns a ref, so read `editor.value`.
 
 ## Comment in a headless pipeline
 

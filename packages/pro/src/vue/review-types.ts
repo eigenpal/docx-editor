@@ -50,7 +50,10 @@ export interface ReviewDraftProps extends ReviewPartProps {
    * your own when you render your own cards, so the box stacks with them.
    */
   top?: number;
-  /** Rail-local `left` for the compact rail. Null keeps the box in the rail's own column. */
+  /**
+   * Rail-local `left` for the compact rail. Omit it to use the compact card's position in the
+   * compact rail and the rail's own column otherwise. Null keeps the box in the rail's column.
+   */
   left?: number | null;
 }
 

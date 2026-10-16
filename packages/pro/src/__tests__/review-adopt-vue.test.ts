@@ -47,7 +47,8 @@ test('adopt records the editor author, or the author and date passed', async () 
     const date = new Date('2026-10-08T09:30:00Z');
     expect(review.adopt(review.items.value[0]!, { date })).toBe(true);
     const first = editor.getReviewItems()[0]!;
-    expect(first.kind === 'revision' && first.date).toBe(date.toISOString());
+    // Written to the second, as every other revision date is.
+    expect(first.kind === 'revision' && first.date).toBe('2026-10-08T09:30:00Z');
     expect(review.adopt(review.items.value[0]!, { date: new Date('soon') })).toBe(false);
     expect(review.adopt([])).toBe(false);
   } finally {

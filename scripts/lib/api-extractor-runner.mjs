@@ -197,6 +197,8 @@ export function runApiExtractor(options) {
     additionalEntryPoints,
   });
 
+  /** @type {{ nextForgottenExportBaseline?: Record<string, string[]> }} */
+  const runResult = {};
   let totalErrors = 0;
   let totalWarnings = 0;
   const driftedEntries = [];
@@ -278,21 +280,22 @@ export function runApiExtractor(options) {
       messages: forgotten,
       protectedSymbols: [...protectedForgottenSymbols],
     });
-    if (isLocal && forgottenExportBaselinePath) {
-      // Local runs keep the baseline exact: entries that stopped warning are dropped, and a
-      // reviewed `--record-forgotten-exports` run adds the new ones.
-      const next = nextForgottenExportBaseline({
+    if (recordForgottenExports) {
+      // The caller writes the baseline once, after every package has run.
+      runResult.nextForgottenExportBaseline = nextForgottenExportBaseline({
         baseline,
         policy,
-        record: recordForgottenExports,
+        record: true,
       });
-      writeForgottenExportBaselineFile(forgottenExportBaselinePath, pkg.name, next);
-      if (recordForgottenExports) policy.unallowlisted = [];
-      if (policy.staleBaseline.length > 0) {
-        console.log(
-          `  forgotten-export baseline: dropped ${policy.staleBaseline.length} entr${policy.staleBaseline.length === 1 ? 'y' : 'ies'} that no longer warn`
-        );
-      }
+      policy.unallowlisted = [];
+      policy.staleBaseline = [];
+    } else if (isLocal && policy.staleBaseline.length > 0) {
+      // Local declaration output is not the CI's, so a local run reports stale entries and
+      // leaves the file alone. `api:check` in CI is the run that fails on them.
+      console.log(
+        `  forgotten-export baseline: ${policy.staleBaseline.length} entr${policy.staleBaseline.length === 1 ? 'y no longer warns' : 'ies no longer warn'}. ` +
+          'Run `node scripts/api-extractor.mjs --local --record-forgotten-exports` to prune.'
+      );
       policy.staleBaseline = [];
     }
     if (
@@ -303,14 +306,16 @@ export function runApiExtractor(options) {
     ) {
       console.error(`\nForgotten export policy failure in ${pkg.name}:`);
       if (policy.unallowlisted.length > 0) {
-        console.error(`  New forgotten exports (export these types from the entry point):`);
+        console.error(
+          `  New forgotten exports (export these types from the entry point, or after review run \`node scripts/api-extractor.mjs --local --record-forgotten-exports\`):`
+        );
         for (const item of policy.unallowlisted) {
           console.error(`    - ${item.entry}: ${item.symbol}`);
         }
       }
       if (policy.staleBaseline.length > 0) {
         console.error(
-          `  Baseline entries no longer reported (run \`bun run api:extract\` to prune them):`
+          '  Baseline entries no longer reported (run `node scripts/api-extractor.mjs --local --record-forgotten-exports` to prune them):'
         );
         for (const item of policy.staleBaseline) {
           console.error(`    - ${item.entry}: ${item.symbol}`);
@@ -359,20 +364,10 @@ export function runApiExtractor(options) {
   if (totalErrors > 0) {
     process.exit(1);
   }
+  return runResult;
 }
 
 function readForgottenExportBaselineFile(filePath) {
   if (!fs.existsSync(filePath)) return {};
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function writeForgottenExportBaselineFile(filePath, packageName, entries) {
-  const current = readForgottenExportBaselineFile(filePath);
-  if (Object.keys(entries).length > 0) current[packageName] = entries;
-  else delete current[packageName];
-  const sorted = {};
-  for (const name of Object.keys(current).sort()) sorted[name] = current[name];
-  const text = `${JSON.stringify(sorted, null, 2)}\n`;
-  const previous = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null;
-  if (previous !== text) fs.writeFileSync(filePath, text);
 }

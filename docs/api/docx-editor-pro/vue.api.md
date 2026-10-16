@@ -712,8 +712,8 @@ export const DocxEditorReview: {
         className: StringConstructor;
         hidden: BooleanConstructor;
         left: {
-            default: null;
-            type: PropType<number | null>;
+            default: undefined;
+            type: PropType<number | null | undefined>;
         };
         top: {
             default: undefined;
@@ -725,8 +725,8 @@ export const DocxEditorReview: {
         className: StringConstructor;
         hidden: BooleanConstructor;
         left: {
-            default: null;
-            type: PropType<number | null>;
+            default: undefined;
+            type: PropType<number | null | undefined>;
         };
         top: {
             default: undefined;
@@ -734,7 +734,7 @@ export const DocxEditorReview: {
         };
     }>> & Readonly<{}>, {
         hidden: boolean;
-        left: number | null;
+        left: number | null | undefined;
         top: number | undefined;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Empty: vue.DefineComponent<vue.ExtractPropTypes<{

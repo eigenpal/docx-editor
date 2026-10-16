@@ -6,6 +6,7 @@ import {
   parsePage,
   replaceSection,
   rewriteLinks,
+  selectFramework,
 } from '../sync-agent-docs.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -31,6 +32,25 @@ describe('agent docs sync', () => {
       '# T\n\n## Which\n\nnew\n\n## Next\n\nkeep\n'
     );
     expect(() => replaceSection(text, '## Missing', 'new', 'x.md')).toThrow('x.md');
+  });
+
+  test('keeps one framework, or both under labels', () => {
+    const text =
+      'Intro\n\n<FrameworkTabs>\n<Framework value="react">\n\nR code\n\n</Framework>\n' +
+      '<Framework value="vue">\n\nV code\n\n</Framework>\n</FrameworkTabs>\n\nAfter';
+    expect(selectFramework(text, 'react')).toBe('Intro\n\nR code\n\nAfter');
+    expect(selectFramework(text, 'vue')).toBe('Intro\n\nV code\n\nAfter');
+    expect(selectFramework(text, 'both')).toBe(
+      'Intro\n\n**React**\n\nR code\n\n**Vue**\n\nV code\n\nAfter'
+    );
+    expect(() => selectFramework('<Framework value="react">', 'react')).toThrow();
+  });
+
+  test('reads CRLF sources as LF', () => {
+    expect(parsePage("---\r\ntitle: 'T'\r\n---\r\n\r\nBody\r\n", 'p.mdx')).toEqual({
+      title: 'T',
+      body: 'Body\n',
+    });
   });
 
   test('reads the frontmatter title', () => {
