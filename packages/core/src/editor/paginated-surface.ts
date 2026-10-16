@@ -962,13 +962,15 @@ export function mountPaginatedSurface(
   const markupSettings = createSurfaceRevisionMarkup(
     options.revisionMarkup,
     // Records the review queue leaves out paint no markup, so nothing marks a missing card.
-    () =>
-      reviewView.filter(
-        withHiddenRevisionSites(
-          revisionAuthorVisibility.filterForSession(session),
-          hiddenReviewSitesOf(session.reviewItems())
-        )
-      ),
+    () => {
+      const base = revisionAuthorVisibility.filterForSession(session);
+      const view = reviewDisplayMode();
+      return reviewView.filter(
+        view === 'all-markup' || view === 'simple-markup'
+          ? withHiddenRevisionSites(base, hiddenReviewSitesOf(session.reviewItems()))
+          : base
+      );
+    },
     () => flushPendingInputAndLayout(),
     () => {
       furnitureSource = createCurrentFurnitureSource(revisionFilter());

@@ -126,7 +126,9 @@ export function mergeConsecutiveParagraphPropertyChanges(
     return registerRevisionSiteNodeIds(
       {
         ...first,
-        id: group.map((item) => item.id).join('+'),
+        // First, last and size name a chain of neighbours: a key stays short however many
+        // paragraphs the change covers.
+        id: `${first.id}+${group.length}+${group[group.length - 1]!.id}`,
         addresses,
         // Nesting is part of the chain key, so every member shares the first one's.
         ranges: group.flatMap((item) => item.ranges),

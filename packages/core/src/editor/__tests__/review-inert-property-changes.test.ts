@@ -5,6 +5,7 @@ import {
   collectReviewItems,
   findNode,
   revisionItemsOf,
+  reviewItemKey,
   serializeOoxmlPart,
 } from '../../store/index.ts';
 
@@ -256,6 +257,20 @@ describe('property changes that change nothing', () => {
     expect(result).toMatchObject({ ok: true, revisions: { remaining: 0 } });
     expect((result as { revisions: { resolved: unknown[] } }).revisions.resolved).toHaveLength(1);
     expect(view.xml()).not.toContain('pPrChange');
+  });
+
+  test('a key that names an unlisted record still resolves it', () => {
+    using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
+    const [hidden] = revisionItemsOf(view.editor.surface!.session.part());
+    expect(hidden).toMatchObject({ formattingKind: 'pPrChange' });
+    const result = view.editor.exec({
+      type: 'resolveAllReviewChanges',
+      action: 'accept',
+      keys: [reviewItemKey(hidden!)],
+    });
+    expect(result).toMatchObject({ ok: true });
+    expect(view.xml().split('pPrChange').length - 1).toBe(2);
+    expect(view.count()).toBe(1);
   });
 
   test('accept all under a tracked change predicate leaves unlisted records pending', () => {

@@ -20,7 +20,10 @@ import {
   inertPropertyChangeInputsOf,
   withoutInertPropertyChanges,
 } from '../layout/review-inert-property-changes.ts';
-import { isPotentialRevisionElement } from '../store/store/tree-op-revisions.ts';
+import {
+  collectRevisionSites,
+  isPotentialRevisionElement,
+} from '../store/store/tree-op-revisions.ts';
 import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
 import {
   forEachSemanticDrawing,
@@ -614,7 +617,14 @@ const NO_SITES: ReadonlySet<string> = new Set();
 export function unlistedReviewSites(pkg: OoxmlPackage): ReadonlySet<string> {
   let sites = unlistedSitesByPackage.get(pkg);
   if (!sites) {
-    sites = exportReviewQueue(pkg)?.unlistedSites ?? NO_SITES;
+    // Only property changes are ever unlisted, so a package without one needs no derivation.
+    const main = pkg.parts.get(pkg.mainDocumentPart);
+    const holdsPropertyChanges =
+      main !== undefined &&
+      [main, ...storyParts(pkg, main)].some((part) =>
+        collectRevisionSites(part).some((site) => site.propertyChange)
+      );
+    sites = (holdsPropertyChanges && exportReviewQueue(pkg)?.unlistedSites) || NO_SITES;
     unlistedSitesByPackage.set(pkg, sites);
   }
   return sites;

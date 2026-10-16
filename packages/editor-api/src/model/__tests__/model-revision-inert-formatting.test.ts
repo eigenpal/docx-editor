@@ -68,6 +68,39 @@ test('a batch answer counts only the revisions a caller can list', async () => {
   }
 });
 
+test('a tracked edit over another author’s unlisted property change refuses', async () => {
+  const run =
+    '<w:p><w:r><w:rPr><w:b w:val="0"/><w:rPrChange w:id="9" w:author="Grace" w:date="2026-03-01T10:00:00Z"><w:rPr/></w:rPrChange></w:rPr><w:t>Hidden words</w:t></w:r></w:p>';
+  const server = await createServer(docx(run), { author: 'Reviewer' });
+  try {
+    const outcome = await server.run(async (context) => {
+      context.document.revisions.load('items');
+      const matches = context.document.body.search('Hidden', { matchCase: true });
+      matches.load('items');
+      await context.sync();
+      const listed = context.document.revisions.items.length;
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      matches.items[0]!.insertText('Shown', 'Replace');
+      try {
+        await context.sync();
+        return { listed, error: null };
+      } catch (error) {
+        const { code, debugInfo } = error as {
+          code: string;
+          debugInfo?: { innerError?: { code?: string } };
+        };
+        return { listed, error: { code, inner: debugInfo?.innerError?.code } };
+      }
+    });
+    expect(outcome).toEqual({
+      listed: 0,
+      error: { code: 'NotImplemented', inner: 'edit.tracked-foreign-revision-unsupported' },
+    });
+  } finally {
+    server.dispose();
+  }
+});
+
 test('a story-wide author change leaves the unlisted property change alone', async () => {
   const server = await createServer(docx(BODY), { author: 'Reviewer' });
   try {
