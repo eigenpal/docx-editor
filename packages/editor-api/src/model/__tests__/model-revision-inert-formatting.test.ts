@@ -48,3 +48,37 @@ for (const action of ['acceptAll', 'rejectAll'] as const) {
     }
   });
 }
+
+test('a batch answer counts only the revisions a caller can list', async () => {
+  const server = await createServer(docx(BODY + aligned(3, 'right', 'Right')), {
+    author: 'Reviewer',
+  });
+  try {
+    await server.run(async (context) => {
+      const revisions = context.document.revisions;
+      revisions.load('items');
+      await context.sync();
+      expect(revisions.items).toHaveLength(2);
+      const result = revisions.resolve('accept', [revisions.items[0]!]);
+      await context.sync();
+      expect(result.value.remaining).toBe(1);
+    });
+  } finally {
+    server.dispose();
+  }
+});
+
+test('a story-wide author change leaves the unlisted property change alone', async () => {
+  const server = await createServer(docx(BODY), { author: 'Reviewer' });
+  try {
+    await server.run(async (context) => {
+      context.document.revisions.setAuthor('Lin');
+      await context.sync();
+    });
+    const xml = strFromU8(unzipSync(new Uint8Array(await server.save()))['word/document.xml']!);
+    expect(xml.split('w:author="Lin"').length - 1).toBe(1);
+    expect(xml).toContain('w:author="Ada"');
+  } finally {
+    server.dispose();
+  }
+});

@@ -14,7 +14,7 @@ import type { AutomationOperation } from './operations.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
-import { revisionItemsInStory } from './review.ts';
+import { listedRevisionItemsInStory, revisionItemsInStory } from './review.ts';
 import { planNarrowRevisionDecision, type RevisionDecisionLedger } from './review-scope.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
 
@@ -220,10 +220,14 @@ export function revisionAuthorPlan(
     };
   const selection = batchSelection(operation, handles, packageReads);
   if (!selection.ok) return selection;
+  // A whole-story change names the listed changes, so records with no card keep their author.
+  const keys =
+    selection.keys ??
+    listedRevisionItemsInStory(selection.reads, packageReads.package).map(reviewItemKey);
   const plan = planRevisionAuthorChange(
     selection.reads.part,
     attribution,
-    selection.keys,
+    keys,
     selection.scopeRoot,
     operation.authors
   );
@@ -239,7 +243,7 @@ export function revisionBatchAnswer(
 ): import('./protocol.ts').AutomationValue {
   const target = revisionDecisionTarget({ op: 'acceptAllRevisions', body }, handles, post);
   if (!target.ok) throw new Error('resolved story disappeared');
-  const remaining = revisionItemsInStory(target.reads).length;
+  const remaining = listedRevisionItemsInStory(target.reads, post.package).length;
   return { kind: 'revisionBatch', result: { ...result, remaining } };
 }
 

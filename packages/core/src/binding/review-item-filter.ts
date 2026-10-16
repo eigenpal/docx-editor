@@ -8,7 +8,7 @@
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import type { ReviewItem } from '../store/store/review-items.ts';
+import { revisionSiteNodeIdsOf, type ReviewItem } from '../store/store/review-items.ts';
 
 /** What the pass reads besides the queue. */
 export interface ReviewItemFilterInputs {
@@ -51,10 +51,31 @@ interface FilteredWith {
   readonly numberingRoot: OoxmlElement | null;
 }
 
+/** The revision sites each published queue leaves out, keyed by the queue itself. */
+const hiddenSites = new WeakMap<readonly ReviewItem[], ReadonlySet<string>>();
+const NO_SITES: ReadonlySet<string> = new Set();
+
 /**
- * The session's pass for one derivation: `filtered` runs `model`'s filter, or hands the list
- * back when it has none. `sameFilter` says whether `previous` was filtered against the same
- * inputs. The fast paths reuse filtered items, so they hold only while it is true.
+ * The revision sites `items` leaves out: records still in the document that have no card.
+ * Paint leaves them unmarked, so no change bar or format mark points at a missing card.
+ * Empty for a queue this lane did not publish.
+ */
+export function hiddenReviewSitesOf(items: readonly ReviewItem[]): ReadonlySet<string> {
+  return hiddenSites.get(items) ?? NO_SITES;
+}
+
+function sitesOf(items: readonly ReviewItem[]): string[] {
+  return items.flatMap((item) => (item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : []));
+}
+
+/**
+ * The session's pass for one derivation.
+ *
+ * `filtered` runs `model`'s filter, or hands the list back when it has none. `sameFilter` says
+ * whether `previous` was filtered against the same inputs; the fast paths reuse filtered items,
+ * so they hold only while it is true. `publish` records which sites the final queue leaves out:
+ * a full derivation's own, or, for a queue patched from `previousItems`, the earlier ones
+ * updated by the last list `filtered` saw.
  */
 export function reviewItemFiltering(
   model: ReviewModuleContribution,
@@ -64,6 +85,10 @@ export function reviewItemFiltering(
 ): {
   readonly filtered: <T extends ReviewItem>(list: readonly T[]) => readonly T[];
   readonly sameFilter: boolean;
+  readonly publish: (
+    items: readonly ReviewItem[],
+    previousItems: readonly ReviewItem[] | undefined
+  ) => readonly ReviewItem[];
 } {
   const filter = reviewItemFilterOf(model);
   const inputs = {
@@ -71,10 +96,39 @@ export function reviewItemFiltering(
     stylesRoot: current.stylesPart?.root ?? null,
     numberingRoot: current.numberingRoot,
   };
+  let last: { result: object; removed: string[]; kept: string[] } | null = null;
   return {
-    filtered: (list) => (filter ? filter(list, inputs) : list),
+    filtered: (list) => {
+      if (!filter) return list;
+      const kept = filter(list, inputs);
+      const keptSet = new Set<object>(kept);
+      last = {
+        result: kept,
+        removed: sitesOf(list.filter((item) => !keptSet.has(item))),
+        kept: sitesOf(kept),
+      };
+      return kept;
+    },
     sameFilter:
       previous?.stylesPart === current.stylesPart &&
       previous?.numberingRoot === current.numberingRoot,
+    publish: (items, previousItems) => {
+      if (!filter || hiddenSites.has(items)) return items;
+      const local = last as { result: object; removed: string[]; kept: string[] } | null;
+      if (local?.result === items) {
+        hiddenSites.set(items, new Set(local.removed));
+        return items;
+      }
+      const before = previousItems ? hiddenReviewSitesOf(previousItems) : NO_SITES;
+      if (!local || (local.removed.length === 0 && !local.kept.some((id) => before.has(id)))) {
+        hiddenSites.set(items, before);
+        return items;
+      }
+      const next = new Set(before);
+      for (const id of local.kept) next.delete(id);
+      for (const id of local.removed) next.add(id);
+      hiddenSites.set(items, next);
+      return items;
+    },
   };
 }

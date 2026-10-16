@@ -113,6 +113,25 @@ export function revisionItemsInStory(reads: AutomationStoryReads): readonly Revi
 }
 
 /**
+ * The story's items a caller can list: {@link revisionItemsInStory} without the property changes
+ * that leave the formatting unchanged, as the editor's review queue lists them. With no package,
+ * every item. Collection decisions still resolve the others, because they name every item.
+ */
+export function listedRevisionItemsInStory(
+  reads: AutomationStoryReads,
+  pkg: OoxmlPackage | null
+): readonly ReviewRevisionItem[] {
+  const items = revisionItemsInStory(reads);
+  return pkg
+    ? withoutInertPropertyChanges(items, {
+        pkg,
+        stylesRoot: stylesPartOf(pkg)?.root ?? null,
+        numberingRoot: numberingRootOf(pkg),
+      })
+    : items;
+}
+
+/**
  * The decisions of one story, in document order.
  *
  * Omits `readOnly` items and structural cards whose Word subtype this protocol cannot name.
@@ -124,16 +143,7 @@ export function revisionReads(
   pkg: OoxmlPackage | null
 ): readonly AutomationRevisionRead[] {
   const found: AutomationRevisionRead[] = [];
-  const items = revisionItemsInStory(reads);
-  // A property change that resolves to the same formatting is not listed, as in the editor's
-  // review queue. Collection decisions still resolve it, because they name every item.
-  const listed = pkg
-    ? withoutInertPropertyChanges(items, {
-        pkg,
-        stylesRoot: stylesPartOf(pkg)?.root ?? null,
-        numberingRoot: numberingRootOf(pkg),
-      })
-    : items;
+  const listed = listedRevisionItemsInStory(reads, pkg);
   for (const item of listed) {
     if (item.readOnly) continue;
     const rowChange = item.structuralChanges?.length === 1 ? item.structuralChanges[0] : undefined;

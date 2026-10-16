@@ -48,29 +48,23 @@ function isCandidate(item: ReviewItem): item is ReviewRevisionItem {
     item.kind === 'revision' &&
     item.revisionKind === 'format' &&
     (item.formattingKind === 'pPrChange' || item.formattingKind === 'rPrChange') &&
+    // A record nobody can resolve keeps its card, which says why it stays in the file.
+    !item.readOnly &&
     item.ranges.length > 0
   );
 }
 
-/** The paragraph holding `id`, or null when a table cell or nothing holds it first. */
+/** The paragraph holding `id`, or null when it sits in a table cell or in no paragraph. */
 function paragraphAbove(part: OoxmlPart, id: string): OoxmlElement | null {
+  let paragraph: OoxmlElement | null = null;
   let current = parentNodeOf(part, id);
   for (let depth = 0; current && depth < MAX_ANCESTORS; depth += 1) {
-    if (current.kind === 'paragraph') {
-      // Table styles are not resolved by the check, so content in a table always lists.
-      for (
-        let above = parentNodeOf(part, current.id);
-        above;
-        above = parentNodeOf(part, above.id)
-      ) {
-        if (above.kind === 'tableCell') return null;
-      }
-      return current;
-    }
+    // Table styles are not resolved by the check, so content in a table always lists.
     if (current.kind === 'tableCell') return null;
+    if (current.kind === 'paragraph') paragraph ??= current;
     current = parentNodeOf(part, current.id);
   }
-  return null;
+  return current ? null : paragraph;
 }
 
 function paragraphProperties(paragraph: OoxmlElement): OoxmlElement | undefined {

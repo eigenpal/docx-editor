@@ -153,7 +153,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     selected: Set<string>
   ): readonly ReviewRevisionItem[] => {
     const session = deps.surface()?.session;
-    if (!session || command.keys !== undefined) return [];
+    // A document-wide decision with no keys resolves every site already.
+    if (!session || command.keys !== undefined || command.scope === 'document') return [];
     const pkg = session.currentPackage();
     const inputs = {
       pkg,
@@ -163,9 +164,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const inert = session
       .storyParts()
       .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs));
-    const records = (command.scope === 'document' ? inert : deps.visibleOf(inert)).filter(
-      (item): item is ReviewRevisionItem => item.kind === 'revision'
-    );
+    const records = deps
+      .visibleOf(inert)
+      .filter((item): item is ReviewRevisionItem => item.kind === 'revision');
     for (const item of records) selected.add(reviewItemKey(item));
     return records;
   };

@@ -63,6 +63,7 @@ function mount(body: string, comments = false) {
   });
   return {
     editor,
+    container,
     count: () => editor.getReviewItems({ pairReplacements: false, placement: false }).length,
     xml: () => serializeOoxmlPart(editor.surface!.session.part()),
     [Symbol.dispose]: () => {
@@ -197,6 +198,21 @@ describe('property changes that change nothing', () => {
     expect(items).toHaveLength(1);
     expect(items[0]!.item).toMatchObject({ kind: 'comment' });
     expect(items[0]!.item).not.toHaveProperty('parentRevisionId');
+  });
+
+  test('an unlisted record paints no change bar and no format mark', () => {
+    using view = mount(
+      p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>unlisted paragraph</w:t></w:r>') +
+        p(ppr('<w:jc w:val="center"/>', ''), '<w:r><w:t>listed paragraph</w:t></w:r>') +
+        p('', rpr('<w:b w:val="0"/>', '', 'unlisted run'))
+    );
+    const formatBars = view.container.querySelectorAll('.docx-change-bar-format');
+    expect(formatBars).toHaveLength(1);
+    const marked = [...view.container.querySelectorAll<HTMLElement>('.docx-revision')].map(
+      (element) => element.textContent
+    );
+    expect(marked.join('')).toContain('listed paragraph');
+    expect(marked.join('')).not.toContain('unlisted');
   });
 
   test('typing in the paragraph keeps the record unlisted', () => {
