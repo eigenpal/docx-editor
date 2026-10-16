@@ -327,7 +327,15 @@ function* layoutInModeSteps(
   // NOTEREF fields number against THIS walk's section bounds paired with the notes input's
   // per-section properties — the pairing `attachNotesToLayout` numbers the note areas with,
   // so field and area agree by construction.
-  const refFields = resolveBodyRefFields(part, blocks, sections, optionsWithLists);
+  // An opening prefix resolves over the whole body, like the list items above: a field before
+  // the cut whose target lies after it keeps its final value, its calibration verdict (sticky
+  // for the session) is the one the full pass takes, and every prefix shares one context.
+  const refFields = resolveBodyRefFields(
+    part,
+    allBlocks,
+    blocks === allBlocks ? sections : enumerateDocumentSectionsFromBlocks(part, allBlocks).sections,
+    optionsWithLists
+  );
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
   function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {

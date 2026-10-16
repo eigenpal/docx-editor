@@ -301,6 +301,30 @@ describe('a renumbering edit repaints dependent REF fields incrementally', () =>
     expect(textsOf(freshOpen)).toContain('see 2');
   });
 
+  test('an opening prefix that cuts off the target still calibrates the field live', () => {
+    // The opening lays out growing prefixes on one session. A prefix that ends before the
+    // bookmark must resolve the field against the whole body: a value computed from the
+    // prefix alone misses the target, and its verdict sticks to the cache for the session.
+    const before = load(
+      refParagraph(' REF target \\r ', '2') +
+        numbered('<w:r><w:t>gone soon</w:t></w:r>') +
+        numbered(bookmarked('target', 'The section')) +
+        '<w:p><w:r><w:t>tail</w:t></w:r></w:p>'
+    );
+    const options = {
+      measurer,
+      numberingIndex,
+      session: createLayoutSession(),
+      cache: createParagraphLayoutCache(),
+    };
+    const prefix = layoutSemanticDocument(before, 1, { ...options, bodyBlockLimit: 1 });
+    expect(textsOf(prefix)).toEqual(['see 2']);
+    expect(textsOf(layoutSemanticDocument(before, 1, options))).toContain('see 2');
+
+    const after = withBlocks(before, (blocks) => blocks.filter((_, index) => index !== 1));
+    expect(textsOf(layoutSemanticDocument(after, 2, options))).toContain('see 1');
+  });
+
   test('a no-change pass over a REF document returns the previous pages by identity', () => {
     const part = load(body);
     const options = {
