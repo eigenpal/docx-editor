@@ -110,13 +110,17 @@ function groupRowRevisions(
   );
   if (rowSites.size === 0) return [...items];
   const sitesById = new Map(sites.map((site) => [site.node.id, site]));
-  const paragraphLengths = new Map<string, number>();
-  for (const location of locations.values()) {
-    paragraphLengths.set(
-      location.paragraphId,
-      Math.max(paragraphLengths.get(location.paragraphId) ?? 0, location.end)
-    );
-  }
+  // Built on first use: only a nested row marker reads it, and it walks every site location.
+  let paragraphLengths: Map<string, number> | undefined;
+  const paragraphLength = (id: string): number => {
+    if (!paragraphLengths) {
+      paragraphLengths = new Map();
+      for (const { paragraphId, end } of locations.values()) {
+        paragraphLengths.set(paragraphId, Math.max(paragraphLengths.get(paragraphId) ?? 0, end));
+      }
+    }
+    return paragraphLengths.get(id) ?? 0;
+  };
   const groups: RowGroup[] = [];
   const nestedRows = new Map<string, OoxmlElement>();
   const completeNestedRows = new Set<string>();
@@ -274,7 +278,7 @@ function groupRowRevisions(
       };
       visit(nestedRows.get(id)!);
       if (last) {
-        const position = { paragraphId: last.id, offset: paragraphLengths.get(last.id) ?? 0 };
+        const position = { paragraphId: last.id, offset: paragraphLength(last.id) };
         ranges.push({ partName: part.name, start: position, end: position });
       }
     }
@@ -310,7 +314,7 @@ function groupRowRevisions(
         ranges.push({
           partName: part.name,
           start: { paragraphId: node.id, offset: 0 },
-          end: { paragraphId: node.id, offset: paragraphLengths.get(node.id) ?? 0 },
+          end: { paragraphId: node.id, offset: paragraphLength(node.id) },
         });
         preview.push(textUnder(node));
         return;
