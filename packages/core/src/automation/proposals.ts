@@ -60,8 +60,6 @@ export function proposalRevisionError(
   tracked?: {
     readonly author: string;
     readonly strikesMark?: boolean;
-    readonly collaborative?: boolean;
-    readonly insertsAt?: number;
   }
 ): AutomationError | null {
   // Shared note parts can group one revision identity across several stories. Check the
@@ -151,16 +149,10 @@ export function proposalRevisionError(
 }
 
 /** Why a tracked edit cannot touch a pending revision. */
-type ProposalRevisionRule =
-  | 'deleted-text-only'
-  | 'collaborative-insertion'
-  | 'foreign-revision'
-  | 'own-pending';
+type ProposalRevisionRule = 'deleted-text-only' | 'foreign-revision' | 'own-pending';
 
 const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
   'deleted-text-only': 'a tracked deletion or replacement needs live text, not only deleted text',
-  'collaborative-insertion':
-    "in a collaboration session, the API refuses strikes over another author's pending insertion or deletion, and edits that start inside or right after one",
   'foreign-revision':
     "the edit touches another author's pending paragraph mark, formatting, move, or structure",
   'own-pending': "the edit would merge with or cover the author's own pending change",
@@ -169,7 +161,6 @@ const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
 /** Public diagnostic codes, which the editing API reports in `debugInfo.innerError`. */
 const RULE_CODES: Readonly<Record<ProposalRevisionRule, EditDiagnosticCode>> = {
   'deleted-text-only': 'edit.tracked-deleted-text-only',
-  'collaborative-insertion': 'edit.tracked-foreign-revision-unsupported',
   'foreign-revision': 'edit.tracked-foreign-revision-unsupported',
   'own-pending': 'edit.tracked-own-pending-change',
 };

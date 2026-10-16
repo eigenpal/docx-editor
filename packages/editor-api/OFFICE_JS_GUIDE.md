@@ -308,7 +308,7 @@ Standard `insertText('', 'Replace')` means deletion, and an empty insertion is a
 
 ### Edit another author's pending text
 
-A counterparty's pending insertion is ordinary text to a tracked edit. Replace it, delete part of it, or write inside it. Your changes record under the runtime author, and each author's change stays a separate decision. New text inside their insertion splits it, so their insertion becomes two revisions, one on each side of your text. To accept or reject all of their insertion, decide both revisions, or pass both to `revisions.resolve(action, [first, second])`. In a collaboration session, the API refuses strikes over another author's pending insertion or deletion, and edits that start inside or right after one, with `edit.tracked-foreign-revision-unsupported`. In the following example, the agent replaces a counterparty's proposed term, then rejects only its own revisions:
+A counterparty's pending insertion is ordinary text to a tracked edit. Replace it, delete part of it, or write inside it. Your changes record under the runtime author, and each author's change stays a separate decision. New text inside their insertion splits it, so their insertion becomes two revisions, one on each side of your text. To accept or reject all of their insertion, decide both revisions, or pass both to `revisions.resolve(action, [first, second])`. The same edits work in a collaboration session; a participant's concurrent accept or reject of the counterparty's change applies to all of that change and to nothing else. In the following example, the agent replaces a counterparty's proposed term, then rejects only its own revisions:
 
 ```ts
 // Create runtime with author: 'Avery Chen' before this example.
@@ -339,7 +339,7 @@ These tracked edits fail with `NotImplemented`. Read `error.debugInfo.innerError
 | `innerError.code` | Edit |
 | --- | --- |
 | `edit.tracked-deleted-text-only` | A deletion or replacement that covers only deleted text and no paragraph mark |
-| `edit.tracked-foreign-revision-unsupported` | An edit that touches another author's paragraph mark, formatting, move, or structural change; new text inside a link or content control within their insertion; or, in a collaboration session, strikes over another author's pending insertion or deletion, and edits that start inside or right after one |
+| `edit.tracked-foreign-revision-unsupported` | An edit that touches another author's paragraph mark, formatting, move, or structural change, or new text inside a link or content control within their insertion |
 | `edit.tracked-own-pending-change` | An edit that covers or borders your own pending change |
 
 The range that a tracked `insertText()` returns names your own pending insertion. With tracking on, replacing or deleting that range fails with `edit.tracked-own-pending-change`, because the edit would cover your own pending text. Write the final text in one call, or reject your revision and write again.

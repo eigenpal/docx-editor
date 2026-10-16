@@ -112,8 +112,7 @@ export function planProposal(
   handles: AutomationHandleTable,
   packageReads: AutomationPackageReads,
   claim: (story: AutomationStoryReads, paragraphId: string) => PlannedOperation | null,
-  trackedRangeReplacement = true,
-  collaborative = false
+  trackedRangeReplacement = true
 ): PlannedOperation {
   const refuse = (
     code: AutomationErrorCode,
@@ -184,9 +183,7 @@ export function planProposal(
           undefined,
           // Another author's text may hold the struck text. A range that only reaches the
           // next paragraph's start writes nothing there and keeps the strict boundary.
-          end > start
-            ? { author: revision.author, strikesMark: index < ids.length - 1, collaborative }
-            : undefined
+          end > start ? { author: revision.author, strikesMark: index < ids.length - 1 } : undefined
         ) ?? (index < ids.length - 1 ? markStrikeRefusal(reads.part, paragraphId) : null);
       if (error) return { ok: false, error };
       // A range that ends at a paragraph's start writes nothing there, so deleting adjacent
@@ -244,13 +241,7 @@ export function planProposal(
     tracked && insertion ? operation.author.trim() : undefined,
     insertion && start === (story.value.rawText(paragraphId) ?? '').length,
     tracked && !insertion && end > start ? operation.author.trim() : undefined,
-    tracked
-      ? {
-          author: operation.author.trim(),
-          collaborative,
-          ...(!deletion && operation.text.length > 0 ? { insertsAt: insertion ? start : end } : {}),
-        }
-      : undefined
+    tracked ? { author: operation.author.trim() } : undefined
   );
   if (revisionError) return { ok: false, error: revisionError };
   if (!deletion) {

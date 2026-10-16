@@ -55,6 +55,7 @@ import {
   typedAfterMoved,
   type TextIdentities,
 } from './paragraph-text-identity.ts';
+import { rebaseRevisions } from './paragraph-text-revisions.ts';
 import { writeInlineText } from './paragraph-text-view.ts';
 import { positionsNow, type FollowingText } from './paragraph-text-follow.ts';
 import { placeFollowingText } from './paragraph-text-placement.ts';
@@ -178,6 +179,17 @@ export function insertFollowing(
   if (item) textMarksOf(text.doc!).markFollow(item.id.client, item.id.clock, value.length, anchor);
 }
 
+/** The attributes of each position of a shared text, hidden positions too. */
+function attributesByPosition(text: Y.Text): InlineAttributes[] {
+  const out: InlineAttributes[] = [];
+  for (const op of text.toDelta() as { insert: unknown; attributes?: InlineAttributes }[]) {
+    const attributes = op.attributes ?? {};
+    const length = typeof op.insert === 'string' ? op.insert.length : 1;
+    for (let at = 0; at < length; at += 1) out.push(attributes);
+  }
+  return out;
+}
+
 /** How one attributes object changes into another, and what it changes from. */
 interface AttributeChange {
   readonly changes: Record<string, string | null>;
@@ -194,9 +206,18 @@ function writeParagraphText(
   after: readonly Token[],
   steps: readonly Step[],
   identities: TextIdentities | null,
-  hasShownCopy: (identity: string) => boolean
+  hasShownCopy: (identity: string) => boolean,
+  /** `wanted` written over `have`: `rebaseRevisions` for this paragraph. */
+  rebase: (have: InlineAttributes, wanted: InlineAttributes, inserted: boolean) => InlineAttributes
 ): void {
   const blocks = blocksOf(before, steps);
+  // What an insert at a position takes from its left: the attributes of the item before it.
+  let shared: InlineAttributes[] | null = null;
+  const leftOf = (position: number): InlineAttributes => {
+    if (position <= 0) return {};
+    shared ??= attributesByPosition(text);
+    return shared[position - 1] ?? {};
+  };
   // The characters of one run share one attributes object on each side, so a comparison per
   // pair of objects, not per character, keeps a keystroke in a long paragraph cheap.
   const compared = new Map<InlineAttributes, Map<InlineAttributes, AttributeChange | null>>();
@@ -205,7 +226,7 @@ function writeParagraphText(
     if (!row) compared.set(from, (row = new Map()));
     let change = row.get(to);
     if (change === undefined) {
-      const changes = attributeChanges(from, to);
+      const changes = attributeChanges(from, rebase(from, to, false));
       change = changes && {
         changes,
         key: JSON.stringify(changes),
@@ -257,10 +278,12 @@ function writeParagraphText(
     let follow = followAnchorAt(identities, position);
     // Characters with equal attributes are one insert; each embed is its own.
     let embeds = 0;
+    let left = leftOf(position);
     for (const group of groups(inserted, (token) =>
       typeof token.insert === 'string' ? `c${attributeSignature(token.attributes)}` : `e${embeds++}`
     )) {
-      const first = group[0]!;
+      const first = { ...group[0]!, attributes: rebase(left, group[0]!.attributes, true) };
+      left = first.attributes;
       if (typeof first.insert !== 'string') {
         const typed =
           identities && position === (deleted.length > 0 ? deleted[0]! : block.after)
@@ -444,6 +467,16 @@ function adoptFollowingText(
       else runs.push([piece]);
     }
     let insertAt = start;
+    // A copy takes the revision attributes of the character it lands after, as typing does
+    // (`rebaseRevisions`), so it writes no marker for another author's revision.
+    const landing = (at: number, attributes: Record<string, string>): InlineAttributes =>
+      rebaseRevisions(
+        at > 0 ? (attributesByPosition(text)[at - 1] ?? {}) : {},
+        attributes,
+        true,
+        registry.limits,
+        paragraphId
+      );
     for (const run of runs) {
       const first = run[0]!;
       if (first.kind === 'embed') {
@@ -457,14 +490,15 @@ function adoptFollowingText(
           movedOut.push(from);
           if (from < insertAt) insertAt -= 1;
         }
-        text.insertEmbed(insertAt, first.embed, { ...first.attributes });
+        text.insertEmbed(insertAt, first.embed, { ...landing(insertAt, first.attributes) });
         landed.set(first.position, insertAt);
         insertAt += 1;
         continue;
       }
       const value = run.map((piece) => (piece.kind === 'char' ? piece.value : '')).join('');
-      if (first.identity) insertCopy(text, insertAt, value, first.attributes, first.identity);
-      else text.insert(insertAt, value, first.attributes);
+      const attributes = landing(insertAt, first.attributes);
+      if (first.identity) insertCopy(text, insertAt, value, attributes, first.identity);
+      else text.insert(insertAt, value, attributes);
       run.forEach((piece, offset) => landed.set(piece.position, insertAt + offset));
       insertAt += value.length;
     }
@@ -850,7 +884,9 @@ export function applyInlinePlan(
     }
     const text = registry.inline.textOf(id);
     const shown = text ? registry.inline.viewOf(id).shown(text) : null;
-    const before = text ? tokensOfText(text, shown?.hidden) : [];
+    const before = text
+      ? tokensOfText(text, shown?.hidden, { limits: registry.limits, paragraphId: id })
+      : [];
     writes.push({
       id,
       record,
@@ -885,7 +921,8 @@ export function applyInlinePlan(
       write.shownIdentities,
       // A copy in this paragraph counts too: a later split can move it, and the typed text
       // must stay where its author saw it, not follow the deleted character it sits behind.
-      (identity) => registry.inline.follow.shownCopy(identity) !== null
+      (identity) => registry.inline.follow.shownCopy(identity) !== null,
+      (have, wanted, inserted) => rebaseRevisions(have, wanted, inserted, registry.limits, write.id)
     );
     registry.inline.follow.invalidate(write.id);
   }
