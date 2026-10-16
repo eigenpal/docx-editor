@@ -198,7 +198,7 @@ async function leaveRoom() {
 </Framework>
 </FrameworkTabs>
 
-With `create-or-join`, every peer uses the same room and bootstrap settings. Each peer must use a unique `actorId`. The first peer seeds the empty room from `document`. Later peers join the existing room. Use `create` or `join` when each host already knows its role.
+With `create-or-join`, every peer uses the same room and bootstrap settings. Each peer must use a unique `actorId`. The first peer seeds the empty room from `document`. Later peers join the existing room. Use `create` or `join` when each host already knows its role. A Hocuspocus server can seed new rooms itself; for more information, see [Seed new rooms on a server](#seed-new-rooms-on-a-server).
 
 With Hocuspocus, `create` waits for the server's state before it seeds. If the room already holds a document, `create` fails with `already-initialized` and seeds nothing. If the server does not answer within `syncedTimeoutMs`, `create` fails with `initialization-timeout`.
 
@@ -703,6 +703,8 @@ const server = new Server({
         candidate.destroy();
       }
     }
+    // Send the loaded state to nobody before the first participant joins.
+    document.flush();
     return document;
   },
   async beforeHandleMessage(payload) {
@@ -710,6 +712,8 @@ const server = new Server({
   },
 });
 ```
+
+Hocuspocus 4.6 holds back an update smaller than `flushMaxBytes` until its next turn, and then sends it to every connection. Without `document.flush()`, the state that `onLoadDocument` applies reaches the first participant twice: once in its own sync, and once more as an update. Call `document.flush()` at the end of the server's own `onLoadDocument`, which runs after the hooks of extensions.
 
 Preparation preserves formatting markers; it does not validate a room or authenticate a client. The example validates saved data in a temporary document before loading it. Storage and validation failures stop loading. Keep the saved state for recovery. Add [client admission checks](/docs/2.x/pro/collaboration-versions#check-clients-before-synchronization) before production use.
 
@@ -730,6 +734,58 @@ export const prepareRoomDocument: Extension = {
 List it with your other extensions, for example `extensions: [prepareRoomDocument, database]`.
 
 A server that only relays updates, and holds no `Y.Doc`, needs no preparation.
+
+## Seed new rooms on a server
+
+With a `create` or `create-or-join` bootstrap, the first participant seeds an empty room from its own `document` bytes. On Hocuspocus, that participant uploads the whole room state, and the server sends the same state back to it, because Hocuspocus sends every update to every connection, the sender included. The room state of a document is often larger than its `.docx` file.
+
+If your server knows which document a room edits, seed the room on the server instead. Pass the `.docx` bytes and the room name to `createCollaborationState` when the server loads a room that has no stored state. It returns the room's Yjs state. Store that state before any participant syncs, then apply it to the room document. Participants find the room seeded and join it with `join` or `create-or-join`. No participant uploads the document, and each participant receives it once.
+
+The example uses the `roomFile` and `readSavedRoom` functions from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). `readDocumentFor` stands for your application's lookup of the document that a room edits.
+
+```ts
+import { rename, writeFile } from 'node:fs/promises';
+import { Server } from '@hocuspocus/server';
+import * as Y from 'yjs';
+import {
+  checkCollaborationRoomGeneration,
+  createCollaborationState,
+  prepareCollaborationServerDocument,
+} from '@docx-editor.dev/pro/collaboration';
+
+// Resolves with the `.docx` bytes that a new room starts from.
+declare function readDocumentFor(documentName: string): Promise<Uint8Array>;
+
+const server = new Server({
+  async onLoadDocument({ documentName, document }) {
+    prepareCollaborationServerDocument(document);
+    const file = roomFile(documentName);
+    let state = await readSavedRoom(file);
+    if (!state) {
+      state = await createCollaborationState(await readDocumentFor(documentName), {
+        documentId: documentName,
+      });
+      // Store the new room first, so a restart loads it instead of seeding another.
+      await writeFile(`${file}.tmp`, state);
+      await rename(`${file}.tmp`, file);
+    }
+    Y.applyUpdate(document, state);
+    document.flush();
+    return document;
+  },
+  async beforeHandleMessage(payload) {
+    checkCollaborationRoomGeneration(payload);
+  },
+});
+```
+
+The example omits the validation of saved rooms. Keep it from the earlier example in production.
+
+Each seed carries a new room generation ID. If the server loses a room's stored state and seeds it again, `checkCollaborationRoomGeneration` refuses a participant that still holds the earlier room with `room-generation-changed`. That participant keeps its document and can save a copy. Without the refusal, its state would merge into the new room as a second copy of the document.
+
+Hocuspocus loads a room once for each server process, so participants that open a new room at the same time all join one seed. If several server processes can load the same room, let only one of them seed it: for example, write the new state to storage with a create-only write, and load the stored state when that write fails.
+
+`createCollaborationState` throws `CollaborationSchemaError` when the bytes are not a usable `.docx` package or exceed the baseline size limit, or when the document ID is empty.
 
 ## Compact rooms on a server
 
@@ -764,6 +820,7 @@ const server = new Server({
       await rename(`${file}.tmp`, file);
     }
     Y.applyUpdate(document, compacted ?? new Uint8Array(saved));
+    document.flush();
     return document;
   },
   async beforeHandleMessage(payload) {
@@ -806,7 +863,7 @@ One server process or one page can host many rooms, for example one room for eac
 Keep tenants apart in these places:
 
 - Give each document its own room name. On Hocuspocus, the room name is the `documentName`, so an `onAuthenticate` hook that checks the tenant of the name keeps one tenant out of another tenant's rooms.
-- Call `prepareCollaborationServerDocument`, `compactCollaborationState`, and `checkCollaborationRoomGeneration` for each room. They read only the room document or message that you pass.
+- Call `prepareCollaborationServerDocument`, `createCollaborationState`, `compactCollaborationState`, and `checkCollaborationRoomGeneration` for each room. They read only the room document or message that you pass.
 - Create one awareness instance for each room. Presence travels with the awareness instance, so a shared instance would show one room's carets in another.
 
 The collaboration hooks keep one room for each hook call. This holds for pages with several React roots, including server-rendered roots that hydrate the same component tree, and for Vue composables called outside a component, for example in a store that holds one room for each tenant.

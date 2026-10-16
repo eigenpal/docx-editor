@@ -12,10 +12,12 @@
 // Hocuspocus v4 targets Node, not Bun.
 
 import { mkdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { Server } from '@hocuspocus/server';
 import {
   checkCollaborationRoomGeneration,
   compactCollaborationState,
+  createCollaborationState,
   prepareCollaborationServerDocument,
   readCollaborationDocument,
 } from '@docx-editor.dev/pro/collaboration';
@@ -31,6 +33,9 @@ import { loadStoredDemoDocument } from './stored-room.ts';
 import { DATA_DIR, ROOM_ID, roomFile, writeAtomically } from './room-files.ts';
 
 const PORT = Number(process.env.PORT ?? 1234);
+
+/** The document every new room starts from: the one the app serves as `/sample.docx`. */
+const SEED_FILE = path.join(import.meta.dirname, '../../vite/public/sample.docx');
 
 /**
  * The shared secret the demo client sends as its Hocuspocus token.
@@ -70,10 +75,15 @@ const { config, rooms } = withCollaborationTelemetry(
     },
 
     /**
-     * Seed a newly opened room from disk. A room nobody has saved yet stays empty.
+     * Load a room from disk, or seed a new one from the demo document.
      *
      * A room that has grown well past its content is compacted first, into a new generation:
      * nobody is connected yet, so no edit is in flight. The new state is stored at once.
+     *
+     * The server seeds a new room itself. A participant could seed it instead, but Hocuspocus
+     * sends every update to every connection, the sender included: that participant would
+     * upload the whole document and then download it again. A real server looks up the
+     * document a room edits in its own storage.
      */
     async onLoadDocument({ documentName, document }) {
       // First, before any update reaches it, so the server never writes a change of its own.
@@ -89,7 +99,19 @@ const { config, rooms } = withCollaborationTelemetry(
         const compacted = await compactCollaborationState(new Uint8Array(stored)).catch(() => null);
         if (compacted) await writeAtomically(file, compacted);
         loadStoredDemoDocument(document, compacted ?? new Uint8Array(stored));
+      } else {
+        const state = await createCollaborationState(new Uint8Array(await readFile(SEED_FILE)), {
+          documentId: documentName,
+        });
+        // Stored before anyone syncs, so a restart loads this room instead of seeding another.
+        await mkdir(DATA_DIR, { recursive: true });
+        await writeAtomically(file, state);
+        Y.applyUpdate(document, state);
       }
+      // Hocuspocus holds back a small update until its next turn and then sends it to every
+      // connection, which by then includes the first participant. Send the loaded room to
+      // nobody now, so that participant receives it once, in its own sync.
+      document.flush();
       return document;
     },
 

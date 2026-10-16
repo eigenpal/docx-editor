@@ -80,6 +80,9 @@ const server = new Server({
     }).catch(() => null);
     if (compacted) await writeFile(file, compacted);
     Y.applyUpdate(document, compacted ?? new Uint8Array(stored));
+    // Send the loaded room to nobody before the first participant joins. Otherwise Hocuspocus
+    // sends it to that participant on its next turn, after the participant's own sync.
+    document.flush();
     return document;
   },
 
