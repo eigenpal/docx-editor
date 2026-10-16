@@ -1,0 +1,16 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Extension-style content types such as image/.png are ignored, so a picture of that type drops from a rich copy and paste.",
+  "after": "Extension-style content types resolve where uncontested and yield to a conflicting record. Pasted pictures of that type land under their sniffed standard type.",
+  "reason": "Shared operations, identities, fields, and package serialization stay unchanged. A seeding participant may now write an extension-style value into the existing content-type maps. Released readers accept any string there, so every participant in a room reads the same lookup; a room seeded by a released participant keeps the lookup it wrote. A paste replicates the sniffed standard type through the existing resource effects. Packages that open for released readers still open. The regression covers current participants; the release fixture has no extension-style types.",
+  "tests": [
+    "packages/core/src/store/__tests__/content-types.test.ts",
+    "packages/core/src/store/__tests__/package-open-tolerance.test.ts",
+    "packages/core/src/store/__tests__/clipboard-fragment-media-types.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-package-tolerance.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-paste.test.ts"
+  ],
+  "changeset": "extension-style-content-types",
+  "migration": null
+}

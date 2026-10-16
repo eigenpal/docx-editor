@@ -93,7 +93,7 @@ function formattedFragment(): Uint8Array {
   });
 }
 
-function imageFragment(): Uint8Array {
+function imageFragment(declaredType = 'image/png'): Uint8Array {
   const picture =
     `<a:graphic xmlns:a="${A}"><a:graphicData uri="${PIC}">` +
     `<pic:pic xmlns:pic="${PIC}"><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/>` +
@@ -106,7 +106,7 @@ function imageFragment(): Uint8Array {
       `<Types xmlns="${CT}">` +
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
-        '<Default Extension="png" ContentType="image/png"/>' +
+        `<Default Extension="png" ContentType="${declaredType}"/>` +
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
         '</Types>'
     ),
@@ -292,30 +292,33 @@ describe('clipboard paste replicates the story and package resources', () => {
     harness.expectConverged(alice, bob);
   });
 
-  test('an inline image brings media bytes, the relationship, and the drawing', async () => {
-    const { alice, bob } = await harness.pair(hostDoc());
-    const journals = pasteOn(alice, imageFragment());
-    const source = harness.packageOf(alice);
-    const peer = harness.packageOf(bob);
+  test.each(['image/png', 'image/.png'])(
+    'an inline image declared %s brings media bytes, the relationship, and the drawing',
+    async (declaredType) => {
+      const { alice, bob } = await harness.pair(hostDoc());
+      const journals = pasteOn(alice, imageFragment(declaredType));
+      const source = harness.packageOf(alice);
+      const peer = harness.packageOf(bob);
 
-    expect(allText(source)).toContain('Pic');
-    expect(allText(peer)).toContain('Pic');
-    expect(mediaPng(source)).toBeDefined();
-    expect(mediaPng(peer)).toBeDefined();
-    expect([...mediaPng(peer)!]).toEqual([...PNG_1X1]);
-    expect(hasRelType(source, IMG)).toBe(true);
-    expect(hasRelType(peer, IMG)).toBe(true);
-    expect(
-      journals.some((journal) => journal.effects.some((effect) => effect.kind === 'putBinary'))
-    ).toBe(true);
-    expect(
-      journals.some((journal) =>
-        journal.effects.some((effect) => effect.kind === 'putRelationship')
-      )
-    ).toBe(true);
-    expectPackagesEqual(source, peer);
-    harness.expectConverged(alice, bob);
-  });
+      expect(allText(source)).toContain('Pic');
+      expect(allText(peer)).toContain('Pic');
+      expect(mediaPng(source)).toBeDefined();
+      expect(mediaPng(peer)).toBeDefined();
+      expect([...mediaPng(peer)!]).toEqual([...PNG_1X1]);
+      expect(hasRelType(source, IMG)).toBe(true);
+      expect(hasRelType(peer, IMG)).toBe(true);
+      expect(
+        journals.some((journal) => journal.effects.some((effect) => effect.kind === 'putBinary'))
+      ).toBe(true);
+      expect(
+        journals.some((journal) =>
+          journal.effects.some((effect) => effect.kind === 'putRelationship')
+        )
+      ).toBe(true);
+      expectPackagesEqual(source, peer);
+      harness.expectConverged(alice, bob);
+    }
+  );
 
   test('a paragraph style not in the target arrives as styles.xml plus the relationship', async () => {
     const { alice, bob } = await harness.pair(hostDoc());

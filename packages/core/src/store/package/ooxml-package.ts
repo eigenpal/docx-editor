@@ -44,6 +44,7 @@ import {
 import {
   buildTolerantContentTypeIndex,
   governedByIgnoredRecord,
+  isConventionalMime,
   resolveContentType,
   type ContentTypeIndex,
   type DefaultRecord,
@@ -566,6 +567,8 @@ export function* readOoxmlPackageSteps(
     // Media SVG stays raw bytes — tree parsing would break D9 byte identity for parts.
     if (contentType.toLowerCase() === 'image/svg+xml') continue;
     if (!XML_CONTENT_TYPE_RE.test(contentType)) continue;
+    // An extension-style type (`image/.svg+xml`) names no XML vocabulary: its part stays bytes.
+    if (!isConventionalMime(contentType)) continue;
     if (parts.size >= maxXmlParts) return { ok: false, reason: 'too-many-xml-parts' };
     // Re-normalize even though `readZip` already did: this is the name that becomes a node
     // identity prefix, and it must not be reachable through a second, unchecked route.

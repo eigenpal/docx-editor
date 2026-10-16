@@ -205,6 +205,22 @@ const DECLARED_MIME_ALIASES: Readonly<Record<string, string>> = {
   'image/x-bmp': 'image/bmp',
 };
 
+/** The type an extension-style subtype (`image/.jpg`, written by some producers) stands for. */
+const EXTENSION_SUBTYPE_MIMES: ReadonlyMap<string, string> = new Map([
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['jpe', 'image/jpeg'],
+  ['gif', 'image/gif'],
+  ['bmp', 'image/bmp'],
+  ['webp', 'image/webp'],
+  ['svg', 'image/svg+xml'],
+  ['tif', 'image/tiff'],
+  ['tiff', 'image/tiff'],
+  ['emf', 'image/x-emf'],
+  ['wmf', 'image/x-wmf'],
+]);
+
 /**
  * The content type fragment media is admitted under, or null to drop it.
  *
@@ -217,9 +233,12 @@ const DECLARED_MIME_ALIASES: Readonly<Record<string, string>> = {
 function admittedMediaMime(bytes: Uint8Array, declaredType: string): string | null {
   const sniffed = sniffImageMime(bytes);
   if (sniffed === 'unknown') return null;
-  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declaredType)
-    ? DECLARED_MIME_ALIASES[declaredType]!
+  const declared = declaredType.startsWith('image/.')
+    ? (EXTENSION_SUBTYPE_MIMES.get(declaredType.slice('image/.'.length)) ?? declaredType)
     : declaredType;
+  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declared)
+    ? DECLARED_MIME_ALIASES[declared]!
+    : declared;
   if (normalizedDeclared !== sniffed) return null;
   if (SUPPORTED_RASTER_MIMES.has(sniffed)) {
     if (!validateEmbeddedImageBytes(bytes, sniffed as SupportedImageMime)) return null;
