@@ -1,3 +1,4 @@
+import { withoutUnlistedChanges } from './revision-hidden-sites.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
 import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
@@ -74,6 +75,17 @@ export function projectRevisionFormatting(
   filter?: RevisionAuthorFilter,
   depth = 0
 ): OoxmlElement {
+  const projected = projectedFormatting(node, mode, filter, depth);
+  // A block leaves out the records the review queue does not list, after any other projection.
+  return depth === 0 ? withoutUnlistedChanges(projected, filter) : projected;
+}
+
+function projectedFormatting(
+  node: OoxmlElement,
+  mode: RevisionDisplayMode,
+  filter?: RevisionAuthorFilter,
+  depth = 0
+): OoxmlElement {
   if ((mode === 'all-markup' && !revisionFilterSelects(filter)) || depth >= MAX_XML_DEPTH)
     return node;
   // Leaf elements and text containers cannot hold a tracked formatting record.
@@ -135,7 +147,7 @@ export function projectRevisionFormatting(
     const result =
       child.kind === 'textValue' || child.localName.endsWith('PrChange')
         ? child
-        : projectRevisionFormatting(child, mode, filter, depth + 1);
+        : projectedFormatting(child, mode, filter, depth + 1);
     if (result !== child) projected ??= children.slice(0, index);
     projected?.push(result);
   }

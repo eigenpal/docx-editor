@@ -260,10 +260,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
   ) => {
     const { scopes, missing, unfilteredDocument, silent } = selection(command, withUnlisted);
     const resolved: RevisionBatchResult['resolved'][number][] = [];
-    const skipped: RevisionBatchResult['skipped'][number][] = missing.map((key) => ({
-      key,
-      reason: 'unknown-revision',
-    }));
+    const skipped: RevisionBatchResult['skipped'][number][] = missing
+      .filter((key) => !silent.has(key))
+      .map((key) => ({ key, reason: 'unknown-revision' }));
     const plans: { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[] = [];
     let remaining = 0;
     for (const { scope, part, keys } of scopes) {

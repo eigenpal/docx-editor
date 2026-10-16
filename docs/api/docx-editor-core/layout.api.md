@@ -3421,6 +3421,11 @@ export interface RevisionFilter {
     readonly resolvedMarkup?: 'plain';
     // (undocumented)
     readonly revisionMarkup?: ResolvedRevisionMarkup;
+    // @internal
+    readonly unlisted?: {
+        readonly paragraphs: ReadonlySet<string>;
+        readonly sites: ReadonlySet<string>;
+    };
 }
 
 // @public

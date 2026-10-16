@@ -536,9 +536,11 @@ export function openDocumentForExport(
       mode === 'simple-markup'
         ? withPlainResolvedMarkup(revisionAuthorFilter)
         : revisionAuthorFilter;
+    const unlisted =
+      mode === 'all-markup' || mode === 'simple-markup' ? unlistedReviewSites(pkg) : null;
     const viewFilter =
-      mode === 'all-markup' || mode === 'simple-markup'
-        ? withHiddenRevisionSites(baseFilter, unlistedReviewSites(pkg))
+      unlisted && unlisted.sites.size > 0
+        ? withHiddenRevisionSites(baseFilter, unlisted)
         : baseFilter;
     let fieldLinkState = state.fieldLinks.get(mode);
     if (!fieldLinkState || fieldLinkState.revision !== revision || fieldLinkState.pkg !== pkg) {

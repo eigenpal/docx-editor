@@ -30,6 +30,9 @@ function holdsParagraphBelow(node: OoxmlNode): boolean {
  * paragraphs, such as a bookmark end, do not separate them.
  */
 export function followingSiblingParagraphs(part: OoxmlPart): ReadonlyMap<string, string> {
+  // One walk per root: both the break merge and the property merge of a derivation ask.
+  const known = followingByRoot.get(part.root);
+  if (known) return known;
   const following = new Map<string, string>();
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
@@ -44,8 +47,11 @@ export function followingSiblingParagraphs(part: OoxmlPart): ReadonlyMap<string,
     }
   };
   visit(part.root, 0);
+  followingByRoot.set(part.root, following);
   return following;
 }
+
+const followingByRoot = new WeakMap<OoxmlNode, ReadonlyMap<string, string>>();
 
 export function mergeParagraphBreakEdits(
   items: readonly ReviewRevisionItem[],

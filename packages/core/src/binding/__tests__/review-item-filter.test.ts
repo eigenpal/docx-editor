@@ -71,7 +71,13 @@ describe('reviewItemFiltering', () => {
     const hiding = withReviewItemFilter(model(), (list) => list.filter((item) => item.id !== 'a'));
     const site = (id: string) =>
       registerRevisionSiteNodeIds(
-        { kind: 'revision', id, revisionKind: 'format', formattingKind: 'pPrChange' } as never,
+        {
+          kind: 'revision',
+          id,
+          revisionKind: 'format',
+          formattingKind: 'pPrChange',
+          ranges: [],
+        } as never,
         [`node-${id}`]
       ) as ReviewItem;
     const first = [site('a'), site('b')];
@@ -81,7 +87,7 @@ describe('reviewItemFiltering', () => {
     const two = reviewItemFiltering(hiding, pkg, inputs, { ...inputs, items: published });
     const again = two.publish(two.filtered([site('a'), site('b')]));
     expect(again).not.toBe(published);
-    expect([...hiddenReviewSitesOf(published)]).toEqual(['node-a']);
+    expect([...hiddenReviewSitesOf(published).sites]).toEqual(['node-a']);
     expect(hiddenReviewSitesOf(again)).toBe(hiddenReviewSitesOf(published));
   });
 });

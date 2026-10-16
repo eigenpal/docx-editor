@@ -281,6 +281,28 @@ describe('property changes that change nothing', () => {
     expect(view.count()).toBe(0);
   });
 
+  test('a suggestion typed in a group\u2019s first paragraph keeps the derived order', () => {
+    const centered = () =>
+      `<w:pPr><w:jc w:val="center"/><w:pPrChange w:id="${id++}" ${STAMP}><w:pPr/></w:pPrChange></w:pPr>`;
+    using view = mount(p(centered()) + p(centered()) + p(centered()));
+    const order = () =>
+      view.editor
+        .surface!.session.reviewItems()
+        .map((item) => (item.kind === 'revision' ? item.revisionKind : item.kind));
+    expect(order()).toEqual(['format']);
+    view.editor.surface!.setEditingMode('suggest');
+    const paragraphId = view.editor.surface!.session.paragraphIds()[0]!;
+    const at = { paragraphId, offset: 1 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    expect(view.editor.exec({ type: 'insertText', text: 'z' }).ok).toBe(true);
+    const derived = collectReviewItems({ storyPart: view.editor.surface!.session.part() });
+    const expected = derived.map((item) =>
+      item.kind === 'revision' ? item.revisionKind : item.kind
+    );
+    expect(expected).toEqual(['insert', 'format']);
+    expect(order()).toEqual(expected);
+  });
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

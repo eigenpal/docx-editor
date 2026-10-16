@@ -25,6 +25,7 @@ import {
   isPotentialRevisionElement,
 } from '../store/store/tree-op-revisions.ts';
 import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
+import type { UnlistedRevisionSites } from '../layout/revision-hidden-sites.ts';
 import {
   forEachSemanticDrawing,
   forEachSemanticStory,
@@ -580,8 +581,8 @@ interface ExportReviewQueue {
   readonly derivation: ReturnType<typeof createExportReviewDerivationScope>;
   /** The listed items: property changes that leave the formatting unchanged are left out. */
   readonly items: readonly ReviewItem[];
-  /** The revision sites of the items left out, which paint leaves unmarked. */
-  readonly unlistedSites: ReadonlySet<string>;
+  /** The records of the items left out and their paragraphs, which paint leaves unmarked. */
+  readonly unlistedSites: UnlistedRevisionSites;
 }
 
 /** One transient review derivation of `pkg`, or null when it holds no review markup. */
@@ -601,20 +602,26 @@ function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
   });
   const items = withoutInertPropertyChanges(all, inertPropertyChangeInputsOf(pkg));
   const listed = new Set(items.map((item) => item.id));
-  const unlistedSites = new Set(
-    all.flatMap((item) =>
-      item.kind === 'revision' && !listed.has(item.id) ? revisionSiteNodeIdsOf(item) : []
-    )
-  );
+  const unlistedItems = all.filter((item) => item.kind === 'revision' && !listed.has(item.id));
+  const unlistedSites = {
+    sites: new Set(
+      unlistedItems.flatMap((item) => (item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : []))
+    ),
+    paragraphs: new Set(
+      unlistedItems.flatMap((item) =>
+        item.kind === 'revision' ? item.ranges.map((range) => range.start.paragraphId) : []
+      )
+    ),
+  };
   return { parts, derivation, items, unlistedSites };
 }
 
 /** Only the site ids are kept per package, so no derivation outlives the call that needed it. */
-const unlistedSitesByPackage = new WeakMap<OoxmlPackage, ReadonlySet<string>>();
-const NO_SITES: ReadonlySet<string> = new Set();
+const unlistedSitesByPackage = new WeakMap<OoxmlPackage, UnlistedRevisionSites>();
+const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Set() };
 
 /** The revision sites an export of `pkg` leaves unmarked, because they have no review item. */
-export function unlistedReviewSites(pkg: OoxmlPackage): ReadonlySet<string> {
+export function unlistedReviewSites(pkg: OoxmlPackage): UnlistedRevisionSites {
   let sites = unlistedSitesByPackage.get(pkg);
   if (!sites) {
     // Only property changes are ever unlisted, so a package without one needs no derivation.

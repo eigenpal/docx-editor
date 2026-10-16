@@ -159,7 +159,7 @@ import { rangesOnPages } from '../layout/selection-rects.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { withHiddenRevisionSites } from '../layout/revision-hidden-sites.ts';
-import { hiddenReviewSitesOf } from '../binding/review-item-filter.ts';
+import { liveHiddenReviewSites } from '../binding/review-item-filter.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
@@ -967,7 +967,7 @@ export function mountPaginatedSurface(
       const view = reviewDisplayMode();
       return reviewView.filter(
         view === 'all-markup' || view === 'simple-markup'
-          ? withHiddenRevisionSites(base, hiddenReviewSitesOf(session.reviewItems()))
+          ? withHiddenRevisionSites(base, liveHiddenReviewSites(session))
           : base
       );
     },

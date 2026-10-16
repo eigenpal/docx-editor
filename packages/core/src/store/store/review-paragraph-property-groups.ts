@@ -6,6 +6,7 @@
 // A different author, a different value on either side, or any block between them keeps them
 // apart. Every site stays in the item, so the decision still resolves all of them.
 import { canonicalOoxmlFingerprint } from '../package/ooxml-serialize.ts';
+import { stableHash } from '../comparators/canonical.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   registerRevisionSiteNodeIds,
@@ -126,9 +127,9 @@ export function mergeConsecutiveParagraphPropertyChanges(
     return registerRevisionSiteNodeIds(
       {
         ...first,
-        // First, last and size name a chain of neighbours: a key stays short however many
-        // paragraphs the change covers.
-        id: `${first.id}+${group.length}+${group[group.length - 1]!.id}`,
+        // The first member and a digest of every member: short however many paragraphs the
+        // change covers, and different for any other set of members.
+        id: `${first.id}+${stableHash(group.map((item) => item.id))}`,
         addresses,
         // Nesting is part of the chain key, so every member shares the first one's.
         ranges: group.flatMap((item) => item.ranges),

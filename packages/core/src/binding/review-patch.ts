@@ -140,6 +140,22 @@ export function patchLocalReviewItems(
           );
     patched.splice(insertAt, 0, ...orderedLocalRevisions);
   }
+  // A group that starts in the dirty paragraph sits where the derivation puts it among that
+  // paragraph's own items: by position, as the full derivation orders them.
+  if (groups.size > 0) {
+    const slots: number[] = [];
+    patched.forEach((item, index) => {
+      const start = item.kind === 'revision' ? item.ranges[0]?.start : undefined;
+      if (start?.paragraphId === dirtyParagraphId) slots.push(index);
+    });
+    const ordered = slots
+      .map((index) => patched[index]!)
+      .sort(
+        (a, b) =>
+          reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
+      );
+    slots.forEach((index, at) => (patched[index] = ordered[at]!));
+  }
   // RE-LINKED, because the local revisions were derived from one paragraph and carry no
   // replies. Splicing them in as-is dropped the link between a tracked change and the comment
   // answering it, so a keystroke in that paragraph tore the reply out into a card of its own —

@@ -51,21 +51,58 @@ interface FilteredWith {
   readonly numberingRoot: OoxmlElement | null;
 }
 
-/** The revision sites each published queue leaves out, keyed by the queue itself. */
-const hiddenSites = new WeakMap<readonly ReviewItem[], ReadonlySet<string>>();
-const NO_SITES: ReadonlySet<string> = new Set();
+/** Records with no card, by change-element node id, and the paragraphs that hold them. */
+export interface HiddenReviewSites {
+  readonly sites: ReadonlySet<string>;
+  /** May hold more paragraphs than still hold a record; it narrows a search, never decides. */
+  readonly paragraphs: ReadonlySet<string>;
+}
+
+/** The records each published queue leaves out, keyed by the queue itself. */
+const hiddenSites = new WeakMap<readonly ReviewItem[], HiddenReviewSites>();
+const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Set() };
 
 /**
- * The revision sites `items` leaves out: records still in the document that have no card.
- * Paint leaves them unmarked, so no change bar or format mark points at a missing card.
- * Empty for a queue this lane did not publish.
+ * The records `items` leaves out: still in the document, with no card. Paint leaves them
+ * unmarked, so no change bar or format mark points at a missing card. Empty for a queue this
+ * lane did not publish.
  */
-export function hiddenReviewSitesOf(items: readonly ReviewItem[]): ReadonlySet<string> {
+export function hiddenReviewSitesOf(items: readonly ReviewItem[]): HiddenReviewSites {
   return hiddenSites.get(items) ?? NO_SITES;
+}
+
+const live = new WeakMap<object, HiddenReviewSites>();
+
+/**
+ * The records `session`'s current queue leaves out, read when used: one object for the session's
+ * lifetime, so a filter that captured it once stays current.
+ */
+export function liveHiddenReviewSites(session: {
+  reviewItems(): readonly ReviewItem[];
+}): HiddenReviewSites {
+  let sites = live.get(session);
+  if (!sites) {
+    sites = {
+      get sites() {
+        return hiddenReviewSitesOf(session.reviewItems()).sites;
+      },
+      get paragraphs() {
+        return hiddenReviewSitesOf(session.reviewItems()).paragraphs;
+      },
+    };
+    live.set(session, sites);
+  }
+  return sites;
 }
 
 function sitesOf(items: readonly ReviewItem[]): string[] {
   return items.flatMap((item) => (item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : []));
+}
+
+function paragraphsOf(items: readonly ReviewItem[]): string[] {
+  return items.flatMap((item) =>
+    item.kind === 'revision' ? item.ranges.map((range) => range.start.paragraphId) : []
+  );
 }
 
 /** Whether a filter could leave `item` out: only property changes are ever left out. */
@@ -77,11 +114,17 @@ function couldHide(item: ReviewItem): boolean {
   );
 }
 
+function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const id of right) if (!left.has(id)) return false;
+  return true;
+}
+
 /** `next` when its contents differ from `before`, else `before`, so identity means content. */
-function settled(before: ReadonlySet<string>, next: ReadonlySet<string>): ReadonlySet<string> {
-  if (before.size !== next.size) return next;
-  for (const id of next) if (!before.has(id)) return next;
-  return before;
+function settled(before: HiddenReviewSites, next: HiddenReviewSites): HiddenReviewSites {
+  return sameSet(before.sites, next.sites) && sameSet(before.paragraphs, next.paragraphs)
+    ? before
+    : next;
 }
 
 /**
@@ -112,16 +155,19 @@ export function reviewItemFiltering(
     numberingRoot: current.numberingRoot,
   };
   const before = previous ? hiddenReviewSitesOf(previous.items) : NO_SITES;
-  let last: { result: object; removed: string[]; kept: string[] } | null = null;
+  type Pass = { result: object; removed: string[]; paragraphs: string[]; kept: string[] };
+  let last: Pass | null = null;
   return {
     filtered: (list) => {
       if (!filter) return list;
       const kept = filter(list, inputs);
       // By id: relinking replies after the filter gives kept items new objects.
       const keptIds = new Set(kept.map((item) => item.id));
+      const removed = list.filter((item) => !keptIds.has(item.id));
       last = {
         result: kept,
-        removed: sitesOf(list.filter((item) => !keptIds.has(item.id))),
+        removed: sitesOf(removed),
+        paragraphs: paragraphsOf(removed),
         kept: sitesOf(kept),
       };
       return kept;
@@ -130,22 +176,28 @@ export function reviewItemFiltering(
       previous !== null &&
       previous.stylesPart === current.stylesPart &&
       (previous.numberingRoot === current.numberingRoot ||
-        (before.size === 0 && !previous.items.some(couldHide))),
+        (before.sites.size === 0 && !previous.items.some(couldHide))),
     publish: (items) => {
       if (!filter || hiddenSites.has(items)) return items;
-      const local = last as { result: object; removed: string[]; kept: string[] } | null;
+      const local = last as Pass | null;
       if (local?.result === items) {
-        hiddenSites.set(items, settled(before, new Set(local.removed)));
+        const fresh = { sites: new Set(local.removed), paragraphs: new Set(local.paragraphs) };
+        hiddenSites.set(items, settled(before, fresh));
         return items;
       }
-      if (!local || (local.removed.length === 0 && !local.kept.some((id) => before.has(id)))) {
+      if (
+        !local ||
+        (local.removed.length === 0 && !local.kept.some((id) => before.sites.has(id)))
+      ) {
         hiddenSites.set(items, before);
         return items;
       }
-      const next = new Set(before);
-      for (const id of local.kept) next.delete(id);
-      for (const id of local.removed) next.add(id);
-      hiddenSites.set(items, settled(before, next));
+      const sites = new Set(before.sites);
+      for (const id of local.kept) sites.delete(id);
+      for (const id of local.removed) sites.add(id);
+      const paragraphs = new Set(before.paragraphs);
+      for (const id of local.paragraphs) paragraphs.add(id);
+      hiddenSites.set(items, settled(before, { sites, paragraphs }));
       return items;
     },
   };
