@@ -109,6 +109,8 @@ export const STARTS_WITH_BREAKING_SPACE = /^[^\S\u00a0\u2007\u202f\ufeff]/;
 
 /** Every kinsoku member and every ideographic range sits at or above this code unit. */
 const FIRST_IDEOGRAPHIC_UNIT = 0x2e80;
+/** The first combining mark. No code point below it joins the cluster before it. */
+const FIRST_CLUSTER_EXTENDER_UNIT = 0x0300;
 
 /**
  * UTF-16 positions where a grapheme cluster starts, for vetoing a cut inside one.
@@ -234,8 +236,8 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
 /**
  * Whether a cluster boundary exists between two adjacent code points, memoized by the pair.
  *
- * Only reached at a piece seam whose neighbours are at or above the ideographic range, so
- * Latin placement never pays for it.
+ * Only reached at a piece seam that starts at or above U+0300, so ASCII placement never pays
+ * for it.
  */
 const clusterBreakCache = new Map<number, boolean>();
 let clusterBreakEpoch = -1;
@@ -304,7 +306,16 @@ export function lineOpenDecisionAt(
   // so the pre-ideographic decision above is final. This is the hot path for pure-Latin
   // text — no decode, no set lookups. (A surrogate unit is above the threshold.)
   const lastUnit = lastEmitted.length === 0 ? 0 : lastEmitted.charCodeAt(lastEmitted.length - 1);
-  if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && candidate.charCodeAt(0) < FIRST_IDEOGRAPHIC_UNIT) {
+  const firstUnit = candidate.charCodeAt(0);
+  if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
+    // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below
+    // U+0300 no code point extends a cluster, so ASCII seams skip the check.
+    if (
+      lastUnit !== 0 &&
+      firstUnit >= FIRST_CLUSTER_EXTENDER_UNIT &&
+      !clusterBreaksBetween(lastUnit, firstUnit)
+    )
+      return 'forbidden';
     return opportunity ? 'opens' : 'continues';
   }
   if (lastUnit === 0x09) return 'opens';

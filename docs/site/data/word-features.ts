@@ -287,6 +287,18 @@ export const wordFeatures: WordFeature[] = [
     docsLink: '/docs/2.x/word-fidelity',
   },
   {
+    id: 'paragraphs.dictionary-word-breaks',
+    name: 'Thai, Lao, Khmer, and Myanmar word breaking',
+    category: 'paragraphs',
+    editing: 'preserved',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Lines wrap between dictionary words in Thai, Lao, Khmer, and Myanmar text without spaces. Table AutoFit sizes columns by the widest word, not the whole phrase. Word boundaries ignore formatting and tracked-change boundaries inside a word. Line breaks never separate tone marks, vowel signs, or combining marks from their base letter. A word wider than the line breaks between characters. Word boundaries come from Intl.Segmenter with ICU dictionary data. Runtimes without that data wrap these scripts only at spaces and dashes. Digits, Latin letters, and punctuation next to these scripts keep their own break rules.',
+    docsLink: '/docs/2.x/word-fidelity',
+  },
+  {
     id: 'paragraphs.spacing',
     name: 'Line & paragraph spacing',
     category: 'paragraphs',

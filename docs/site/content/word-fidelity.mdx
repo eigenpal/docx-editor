@@ -294,6 +294,12 @@ The configured font resolver also receives faces used by SYMBOL fields and numbe
 
 Paragraph `w:bidi` controls alignment and the order of groups with different run directions. Run `w:rtl` controls the directional context within each group. Unmarked numeric text such as `1 980` keeps its left-to-right order in right-to-left paragraphs. Arabic, Hebrew, and Arabic-Indic digits retain their Unicode direction within that context. Authored Unicode direction controls use paragraph-wide Unicode ordering. Selection and caret positions follow the displayed text without changing source offsets.
 
+### Thai, Lao, Khmer, and Myanmar word breaking
+
+Thai, Lao, Khmer, and Myanmar text puts no spaces between words. Lines in these scripts wrap at dictionary word boundaries. Table AutoFit uses the widest word as the narrowest column content. Formatting changes and tracked changes inside a word do not add or remove a break position. A line never starts with a tone mark, vowel sign, or combining mark. A word wider than the line breaks between characters.
+
+Word boundaries come from `Intl.Segmenter` with ICU dictionary data for each script. Major browsers, Bun, and Node.js builds with full ICU data, which is the default, include this data. The editor checks each script once. If the runtime has no `Intl.Segmenter` or no dictionary data for a script, text in that script wraps only at spaces and dashes.
+
 ### East Asian typography
 
 East Asian layout keeps punctuation, graphemes, and full-width number groups together across formatting changes. Justified lines distribute inter-character spacing through the same geometry used for paint and caret placement.

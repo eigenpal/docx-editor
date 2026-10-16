@@ -1,7 +1,10 @@
 // Paragraph-wide boundary analysis. A formatting, revision, or font-slot seam is
 // not a Unicode boundary: segment the visible text once, then map cuts to pieces.
+// East Asian text and dictionary-script text (Thai, Lao, Khmer, Myanmar; see
+// `dictionary-word-breaks.ts`) both take this path.
 import type { FieldAwarePiece } from './field-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
+import { dictionaryWordBreaks, hasDictionaryScriptText } from './dictionary-word-breaks.ts';
 import {
   CJK_NO_BREAK_AFTER,
   CJK_NO_BREAK_BEFORE,
@@ -51,13 +54,16 @@ export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): CjkParagraphBreaks | null {
-  if (
-    !policy.characterWrap &&
-    !pieces.some(
+  const eastAsianParagraph =
+    policy.characterWrap ||
+    pieces.some(
       (piece) =>
         /[\u1100-\u11ff\u2e80-\ud7ff\uf900-\uffef\u{20000}-\u{323af}]/u.test(piece.text) ||
         eastAsianLanguage(piece.props)
-    )
+    );
+  if (
+    !eastAsianParagraph &&
+    !pieces.some((piece) => isText(piece) && hasDictionaryScriptText(piece.text))
   )
     return null;
   const starts = new Map<FieldAwarePiece, number>();
@@ -72,6 +78,11 @@ export function cjkParagraphBreaks(
     total += text.length;
   }
   const text = strings.join('');
+  // Thai, Lao, Khmer, and Myanmar words, found once over the whole paragraph. A paragraph
+  // with no East Asian text and no dictionary cut keeps the per-run rules unchanged.
+  const dictionaryCuts = dictionaryWordBreaks(text);
+  if (!eastAsianParagraph && dictionaryCuts.length === 0) return null;
+  const dictionary = new Set(dictionaryCuts);
   const clusters = segmentGraphemes(text);
   const decisions = new Map<number, LineOpenDecision>([
     [0, 'opens'],
@@ -191,6 +202,7 @@ export function cjkParagraphBreaks(
     const koreanWord = isHangul(beforeBase) && isHangul(after) && !wrapCharacters;
     const opens =
       latinCuts.has(at) ||
+      dictionary.has(at) ||
       /\s$/u.test(left.text) ||
       /^\s/u.test(right.text) ||
       (eastAsian && !koreanWord) ||
