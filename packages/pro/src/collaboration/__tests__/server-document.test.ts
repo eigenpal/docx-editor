@@ -133,6 +133,9 @@ describe('createCollaborationState', () => {
     await expect(
       createCollaborationState(collaborationDocx(), { documentId: '  ' })
     ).rejects.toMatchObject({ code: 'invalid-document-id' });
+    await expect(
+      createCollaborationState(collaborationDocx(), { documentId: 'r'.repeat(257) })
+    ).rejects.toMatchObject({ code: 'invalid-document-id' });
   });
 
   test('refuses a document over maxBytes before it builds the room', async () => {
@@ -151,7 +154,7 @@ describe('createCollaborationState', () => {
     for (const maxBytes of [0, -1, 1.5, 21 * 1024 * 1024]) {
       await expect(
         createCollaborationState(bytes, { documentId: 'room', maxBytes })
-      ).rejects.toMatchObject({ code: 'invalid-bound' });
+      ).rejects.toBeInstanceOf(TypeError);
     }
   });
 });

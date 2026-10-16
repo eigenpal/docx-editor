@@ -54,7 +54,7 @@ The app wraps the token in this demo's JSON authentication envelope:
 
 Only the tab that starts a room sends `createRoom`. A production server derives that permission from the signed token instead.
 
-`shared/admission.ts` creates and validates that envelope. In `onAuthenticate`, the server checks the secret and calls `assertCollaborationFormatCompatibility(collaborationVersion)` before Hocuspocus allows synchronization. Import the version from the installed package; transmit it unchanged. Missing, malformed, and incompatible versions are refused. The example also accepts compatible clients using its previous `versions` envelope. Pass the encoded string as `token`, or return it from a callback to refresh credentials on reconnection.
+`shared/admission.ts` creates and validates that envelope. In `onAuthenticate`, the server checks the secret and calls `assertCollaborationFormatCompatibility(collaborationVersion)` before Hocuspocus allows synchronization. Import the version from the installed package; transmit it unchanged. Missing, malformed, and incompatible versions are refused. The example also accepts compatible clients that send its previous `versions` envelope. Those clients can join existing rooms, but they cannot start one, because that envelope has no `createRoom` field. Pass the encoded string as `token`, or return it from a callback to refresh credentials on reconnection.
 
 These self-reported versions prevent accidental connections between incompatible builds. They do not prove which code a client runs. A production server should verify a signed token, derive identity and room permissions from it, and enforce its deployment policy separately.
 
