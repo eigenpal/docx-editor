@@ -174,6 +174,7 @@ export function createCollaborationState(document: Uint8Array, options: CreateCo
 // @public
 export interface CreateCollaborationStateOptions {
     readonly documentId: string;
+    readonly maxBytes?: number;
 }
 
 // @public

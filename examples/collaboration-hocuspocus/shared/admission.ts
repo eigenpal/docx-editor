@@ -10,13 +10,31 @@ export function admissionError(reason: string): Error & { readonly reason: strin
   return Object.assign(new Error(reason), { reason });
 }
 
-/** This example's authentication envelope; the provider's public token contract stays a string. */
-export function encodeDemoToken(token: string): string {
-  return JSON.stringify({ token, collaborationVersion: COLLABORATION_FORMAT_VERSION });
+/**
+ * This example's authentication envelope; the provider's public token contract stays a string.
+ *
+ * `createRoom` asks the server to create the room when it does not know it. Only the tab that
+ * starts a new room sends it. A real server derives this permission from the signed token.
+ */
+export function encodeDemoToken(
+  token: string,
+  options: { readonly createRoom?: boolean } = {}
+): string {
+  return JSON.stringify({
+    token,
+    collaborationVersion: COLLABORATION_FORMAT_VERSION,
+    ...(options.createRoom ? { createRoom: true } : {}),
+  });
+}
+
+/** What an admitted connection may do. */
+export interface DemoAdmission {
+  /** The client asked to create the room if the server does not know it. */
+  readonly createRoom: boolean;
 }
 
 /** Authenticate and reject incompatible clients before Hocuspocus allows document sync. */
-export function authenticateDemoToken(encoded: string, expectedToken: string): void {
+export function authenticateDemoToken(encoded: string, expectedToken: string): DemoAdmission {
   // A valid raw secret from the previous demo is still an incompatible handshake,
   // including secrets that themselves happen to be valid JSON.
   if (encoded === expectedToken) throw admissionError('collaboration-format-mismatch');
@@ -50,4 +68,5 @@ export function authenticateDemoToken(encoded: string, expectedToken: string): v
     if (error instanceof CollaborationSchemaError) throw admissionError(error.code);
     throw error;
   }
+  return { createRoom: 'createRoom' in envelope && envelope.createRoom === true };
 }

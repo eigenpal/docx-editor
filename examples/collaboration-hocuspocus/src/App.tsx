@@ -62,8 +62,13 @@ const SERVER_URL = import.meta.env.VITE_COLLAB_URL ?? 'ws://127.0.0.1:1234';
  * `onAuthenticate`. A real app sends a signed token for the signed-in user; pass a callback
  * instead of a string and the provider re-evaluates it on every reconnect, which is how an
  * expiring token renews.
+ *
+ * The tab that starts a room asks the server to create it. An invite link only joins: the
+ * server refuses a room it does not know.
  */
-const TOKEN = encodeDemoToken(import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token');
+const SECRET = import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token';
+const CREATE_TOKEN = encodeDemoToken(SECRET, { createRoom: true });
+const JOIN_TOKEN = encodeDemoToken(SECRET);
 
 /**
  * Give up on the first sync after eight seconds rather than the default thirty.
@@ -110,6 +115,8 @@ interface Joined {
   readonly roomId: string;
   /** Unique per attachment, so two tabs of one person are two carets. */
   readonly actorId: string;
+  /** This tab started the room, so the server may create it. */
+  readonly creating: boolean;
 }
 
 /**
@@ -410,7 +417,7 @@ export function App() {
     return {
       url: SERVER_URL,
       roomId: joined.roomId,
-      token: TOKEN,
+      token: joined.creating ? CREATE_TOKEN : JOIN_TOKEN,
       syncedTimeoutMs: SYNC_TIMEOUT_MS,
       identity: {
         actorId: joined.actorId,
@@ -427,12 +434,13 @@ export function App() {
   const collaboration = useHocuspocusCollaboration({ modules: MODULES, room });
 
   const join = useCallback((person: Person) => {
-    const roomId = roomFromUrl() ?? createCollaborationRoomId();
+    const invited = roomFromUrl();
+    const roomId = invited ?? createCollaborationRoomId();
     const url = new URL(location.href);
     url.search = '';
     url.searchParams.set('room', roomId);
     history.replaceState(null, '', url);
-    setJoined({ person, roomId, actorId: actorIdFor(person) });
+    setJoined({ person, roomId, actorId: actorIdFor(person), creating: invited === null });
   }, []);
 
   const leave = useCallback(

@@ -26,7 +26,23 @@ describe('demo admission before sync', () => {
       token: TOKEN,
       collaborationVersion: COLLABORATION_FORMAT_VERSION,
     });
-    expect(() => authenticateDemoToken(encoded, TOKEN)).not.toThrow();
+    expect(authenticateDemoToken(encoded, TOKEN)).toEqual({ createRoom: false });
+  });
+
+  test('only the tab that starts a room asks the server to create it', () => {
+    const encoded = encodeDemoToken(TOKEN, { createRoom: true });
+    expect(JSON.parse(encoded)).toEqual({
+      token: TOKEN,
+      collaborationVersion: COLLABORATION_FORMAT_VERSION,
+      createRoom: true,
+    });
+    expect(authenticateDemoToken(encoded, TOKEN)).toEqual({ createRoom: true });
+    const loose = JSON.stringify({
+      token: TOKEN,
+      collaborationVersion: COLLABORATION_FORMAT_VERSION,
+      createRoom: 'yes',
+    });
+    expect(authenticateDemoToken(loose, TOKEN)).toEqual({ createRoom: false });
   });
 
   test('keeps compatible clients using the previous envelope working', () => {
@@ -134,6 +150,14 @@ describe('demo version recovery', () => {
         context
       ).body
     ).toContain('COLLAB_TOKEN');
+  });
+  test('an invite to a room the server does not know says so', () => {
+    const message = failureMessage(
+      { code: 'initialization-aborted', detail: 'authentication failed: unknown-room' },
+      context
+    );
+    expect(message.title).toBe('This room does not exist.');
+    expect(message.body).not.toContain('COLLAB_TOKEN');
   });
   test.each(['saved-room-unavailable', 'invalid-saved-room'])(
     'explains saved-room failure %s without token advice',

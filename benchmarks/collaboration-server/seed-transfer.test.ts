@@ -173,15 +173,46 @@ describe('a new room on a Hocuspocus server', () => {
     }
   });
 
-  test('a room seeded again after its state was lost refuses the earlier replica', async () => {
-    // Without a new generation, the earlier replica would merge a second copy of the document,
-    // and every participant would report `concurrent-seed`.
+  test('a known room whose stored state is lost is refused, and its edits stay with the participant', async () => {
+    // Seeding it again would replace the edit below with the original file.
+    const room = await server('server', paragraphsDocx(['Original']));
+    const roomId = createCollaborationRoomId();
+    const editor = await join(room, 'editor', roomId, { kind: 'join' });
+    editor.insert(0, 0.999, ' EDITED');
+    await settled(editor);
+    await until(() => storedTexts(room, roomId)[0] === 'Original EDITED', 'the edit to be stored');
+    editor.disconnect();
+    await until(() => room.document(roomId) === undefined, 'the server to unload the room');
+    room.storage.delete(roomId);
+    await editor.reconnect();
+    await until(
+      () => editor.statuses.includes('error:saved-room-unavailable'),
+      'the participant to be refused'
+    );
+    expect(paragraphTexts(editor.store)).toEqual(['Original EDITED']);
+    await expect(
+      join(room, 'late', roomId, { kind: 'create-or-join', document: SAMPLE })
+    ).rejects.toMatchObject({ code: 'saved-room-unavailable' });
+    expect(room.seeds()).toBe(1);
+    expect(room.storage.has(roomId)).toBe(false);
+
+    // Restoring the stored state lets the participant continue, edit included.
+    room.storage.set(roomId, Y.encodeStateAsUpdate(editor.room.ydoc));
+    const restored = await join(room, 'restored', roomId, { kind: 'join' });
+    expect(paragraphTexts(restored.store)).toEqual(['Original EDITED']);
+  });
+
+  test('a room seeded again after its record and state were lost refuses the earlier replica', async () => {
+    // The last defense: the new seed has a new generation, so the earlier replica is refused
+    // instead of merging a second copy of the document, which every participant would report
+    // as `concurrent-seed`.
     const room = await server('server', paragraphsDocx(['Only paragraph']));
     const roomId = createCollaborationRoomId();
     const first = await join(room, 'first', roomId, { kind: 'join' });
     first.disconnect();
     await until(() => room.document(roomId) === undefined, 'the server to unload the room');
     room.storage.delete(roomId);
+    room.created.delete(roomId);
     const later = await join(room, 'later', roomId, { kind: 'join' });
     await first.reconnect();
     await until(
@@ -193,6 +224,11 @@ describe('a new room on a Hocuspocus server', () => {
     expect(later.statuses.filter((status) => status.startsWith('error'))).toEqual([]);
   });
 });
+
+function storedTexts(room: SeedServer, roomId: string): string[] {
+  if (!room.storage.has(roomId)) return [];
+  return docxParagraphTexts(readCollaborationDocument(stored(room, roomId)));
+}
 
 function stored(room: SeedServer, roomId: string): Y.Doc {
   const state = room.storage.get(roomId);

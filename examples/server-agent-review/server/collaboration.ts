@@ -24,10 +24,12 @@ const server = new Server({
     prepareCollaborationServerDocument(document);
     const file = path.join(DATA_DIR, 'rooms', `${requireRoomId(documentName)}.ydoc`);
     await loadStoredReviewRoom(document, file);
-    // Send the loaded room to nobody before the first participant joins. Otherwise Hocuspocus
-    // sends it to that participant on its next turn, after the participant's own sync.
-    document.flush();
     return document;
+  },
+  // Send the loaded room to nobody before the first participant joins. Otherwise Hocuspocus
+  // sends it to that participant on its next turn, after the participant's own sync.
+  async afterLoadDocument({ document }) {
+    document.flush();
   },
   // A client holding a generation from before a compaction is refused before it merges.
   async beforeHandleMessage(payload) {
