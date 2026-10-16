@@ -77,6 +77,24 @@ export function tableRevisionRemoves(site: RevisionSite, action: 'accept' | 'rej
     : name === 'ins' || name === 'cellIns';
 }
 
+/**
+ * The ids of every ancestor of `ids`, with `ids` themselves. A walk that only acts on tables and
+ * rows holding removed cells or rows can skip every other subtree, and still visit in document
+ * order: a long document is mostly paragraphs no table decision reaches.
+ */
+export function ancestorIdsOf(part: OoxmlPart, ids: Iterable<string>): ReadonlySet<string> {
+  const ancestors = new Set<string>();
+  for (const id of ids) {
+    let current: string | undefined = id;
+    while (current !== undefined && !ancestors.has(current)) {
+      ancestors.add(current);
+      current = parentNodeOf(part, current)?.id;
+    }
+  }
+  ancestors.add(part.root.id);
+  return ancestors;
+}
+
 /** Exact removed cells/rows/tables and the selected markers responsible for their removal. */
 export function tableRevisionRemovals(
   part: OoxmlPart,
@@ -91,8 +109,10 @@ export function tableRevisionRemovals(
       removed.set(target.id, [...(removed.get(target.id) ?? []), site.node.id]);
   }
   if (!removed.size) return removed;
+  // Only an ancestor of a removed cell or row can lose all its rows or cells.
+  const ancestors = ancestorIdsOf(part, removed.keys());
   const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue' || removed.has(node.id)) return;
+    if (node.kind === 'textValue' || removed.has(node.id) || !ancestors.has(node.id)) return;
     for (const child of node.children) visit(child);
     if (node.kind !== 'table' && node.kind !== 'tableRow' && !isTableWrapper(node)) return;
     const children =
@@ -138,8 +158,10 @@ export function tableRevisionNeighbours(
   const removed = tableRevisionRemovals(part, sites, action);
   const neighbours = new Map<string, readonly string[]>();
   if (!removed.size) return neighbours;
+  // A table or row with no removed row or cell gives no neighbour.
+  const ancestors = ancestorIdsOf(part, removed.keys());
   const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue' || removed.has(node.id)) return;
+    if (node.kind === 'textValue' || removed.has(node.id) || !ancestors.has(node.id)) return;
     if (node.kind === 'table') {
       let precedingRemovals: readonly string[] = [];
       for (const row of tableChildren(node, 'tableRow')) {

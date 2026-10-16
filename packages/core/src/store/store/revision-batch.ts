@@ -7,6 +7,7 @@ import {
   tableRevisionRemovals,
   tableRevisionNeighbours,
   tableMergeDependencies,
+  ancestorIdsOf,
 } from './revision-table-plan.ts';
 import { paragraphMergeSources } from './revision-paragraph-merge.ts';
 import { preservedRevisionProperty } from './revision-property-records.ts';
@@ -197,7 +198,10 @@ export function planRevisionBatch(
       if (property.localName === 'tcPr') owners.set(property.id, markerIndex);
     }
   }
+  // A subtree holding no site and no owner joins nothing, so the walk keeps to their ancestors.
+  const reached = ancestorIdsOf(scopedPart, [...indices.keys(), ...owners.keys()]);
   const visit = (node: OoxmlNode, ancestor?: number): void => {
+    if (!reached.has(node.id)) return;
     const site = indices.get(node.id);
     const owner = owners.get(node.id);
     if (site !== undefined && owner !== undefined) join(owner, site);
