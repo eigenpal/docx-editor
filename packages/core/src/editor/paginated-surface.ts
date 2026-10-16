@@ -159,6 +159,7 @@ import { rangesOnPages } from '../layout/selection-rects.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
 import { withUnlistedRecords } from './surface-unlisted-filter.ts';
+import { createFurnitureFilterMemo } from './surface-furniture-filter.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
@@ -1007,8 +1008,7 @@ export function mountPaginatedSurface(
    */
   const fieldLinks = createFieldLinkRegistry();
   type SurfaceFurnitureOptions = Parameters<typeof createFurnitureSource>[0];
-  /** The filter key each furniture source was made with. */
-  const furnitureKeys = new WeakMap<object, string | undefined>();
+  const furnitureFilters = createFurnitureFilterMemo();
   const createCurrentFurnitureSource = (
     authorFilter?: RevisionAuthorFilter,
     fieldCodes = showFieldCodes
@@ -1032,7 +1032,7 @@ export function mountPaginatedSurface(
       linkProjectors,
       projectFieldLink: (spec) => fieldLinks.project(spec),
     } satisfies SurfaceFurnitureOptions & Record<keyof SurfaceFurnitureOptions, unknown>);
-    furnitureKeys.set(source, authorFilter?.cacheKey);
+    furnitureFilters.record(source, authorFilter);
     return source;
   };
   furnitureSource = createCurrentFurnitureSource(revisionFilter());
@@ -1414,11 +1414,11 @@ export function mountPaginatedSurface(
     bodyBlockLimit?: number
   ): LayoutSteps<SemanticLayout> {
     const activeAuthorFilter = context ? context.authorFilter : revisionFilter();
-    // Furniture keeps the filter it was made with, so a filter that moved remakes it.
-    if (!context && activeAuthorFilter?.cacheKey !== furnitureKeys.get(furnitureSource))
+    const usesLive = !context || context.furnitureSource === furnitureSource;
+    if (usesLive && furnitureFilters.moved(furnitureSource, activeAuthorFilter))
       furnitureSource = createCurrentFurnitureSource(activeAuthorFilter);
     const activeLayoutSession = context?.layoutSession ?? layoutSession;
-    const activeFurnitureSource = context?.furnitureSource ?? furnitureSource;
+    const activeFurnitureSource = usesLive || !context ? furnitureSource : context.furnitureSource;
     if (scope) attachListResolveChangeEvidence(activeLayoutSession, scope);
     // Any full layout of the live session completes an opening still in slices.
     if (!context && bodyBlockLimit === undefined) openingBlockLimit = null;

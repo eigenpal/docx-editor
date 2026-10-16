@@ -3423,6 +3423,7 @@ export interface RevisionFilter {
     readonly revisionMarkup?: ResolvedRevisionMarkup;
     // @internal
     readonly unlisted?: {
+        readonly key: string;
         readonly paragraphs: ReadonlySet<string>;
         readonly sites: ReadonlySet<string>;
     };

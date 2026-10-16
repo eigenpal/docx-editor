@@ -8,7 +8,8 @@
 import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { revisionSiteNodeIdsOf, type ReviewItem } from '../store/store/review-items.ts';
+import type { ReviewItem } from '../store/store/review-items.ts';
+import { stylesAndNumberingKey, unlistedSitesOf } from '../store/store/review-unlisted-sites.ts';
 
 /** What the pass reads besides the queue. */
 export interface ReviewItemFilterInputs {
@@ -56,11 +57,13 @@ export interface HiddenReviewSites {
   readonly sites: ReadonlySet<string>;
   /** May hold more paragraphs than still hold a record; it narrows a search, never decides. */
   readonly paragraphs: ReadonlySet<string>;
+  /** Names the styles and numbering the records were decided against. */
+  readonly key: string;
 }
 
 /** The records each published queue leaves out, keyed by the queue itself. */
 const hiddenSites = new WeakMap<readonly ReviewItem[], HiddenReviewSites>();
-const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Set() };
+const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Set(), key: '' };
 
 /**
  * The records `items` leaves out: still in the document, with no card. Paint leaves them
@@ -69,16 +72,6 @@ const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Set() };
  */
 export function hiddenReviewSitesOf(items: readonly ReviewItem[]): HiddenReviewSites {
   return hiddenSites.get(items) ?? NO_SITES;
-}
-
-function sitesOf(items: readonly ReviewItem[]): string[] {
-  return items.flatMap((item) => (item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : []));
-}
-
-function paragraphsOf(items: readonly ReviewItem[]): string[] {
-  return items.flatMap((item) =>
-    item.kind === 'revision' ? item.ranges.map((range) => range.start.paragraphId) : []
-  );
 }
 
 /** Whether a filter could leave `item` out: only property changes are ever left out. */
@@ -98,7 +91,9 @@ function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean
 
 /** `next` when its contents differ from `before`, else `before`, so identity means content. */
 function settled(before: HiddenReviewSites, next: HiddenReviewSites): HiddenReviewSites {
-  return sameSet(before.sites, next.sites) && sameSet(before.paragraphs, next.paragraphs)
+  return before.key === next.key &&
+    sameSet(before.sites, next.sites) &&
+    sameSet(before.paragraphs, next.paragraphs)
     ? before
     : next;
 }
@@ -131,6 +126,7 @@ export function reviewItemFiltering(
     numberingRoot: current.numberingRoot,
   };
   const before = previous ? hiddenReviewSitesOf(previous.items) : NO_SITES;
+  const key = stylesAndNumberingKey(inputs.stylesRoot, inputs.numberingRoot);
   type Pass = { result: object; removed: string[]; paragraphs: string[]; kept: string[] };
   let last: Pass | null = null;
   return {
@@ -139,12 +135,12 @@ export function reviewItemFiltering(
       const kept = filter(list, inputs);
       // By id: relinking replies after the filter gives kept items new objects.
       const keptIds = new Set(kept.map((item) => item.id));
-      const removed = list.filter((item) => !keptIds.has(item.id));
+      const removed = unlistedSitesOf(list.filter((item) => !keptIds.has(item.id)));
       last = {
         result: kept,
-        removed: sitesOf(removed),
-        paragraphs: paragraphsOf(removed),
-        kept: sitesOf(kept),
+        removed: removed.sites,
+        paragraphs: removed.paragraphs,
+        kept: unlistedSitesOf(kept).sites,
       };
       return kept;
     },
@@ -157,13 +153,22 @@ export function reviewItemFiltering(
       if (!filter || hiddenSites.has(items)) return items;
       const local = last as Pass | null;
       if (local?.result === items) {
-        const fresh = { sites: new Set(local.removed), paragraphs: new Set(local.paragraphs) };
+        const fresh = {
+          sites: new Set(local.removed),
+          paragraphs: new Set(local.paragraphs),
+          key,
+        };
         hiddenSites.set(items, settled(before, fresh));
         return items;
       }
+      if (!local) {
+        hiddenSites.set(items, before.key === key ? before : { ...before, key });
+        return items;
+      }
       if (
-        !local ||
-        (local.removed.length === 0 && !local.kept.some((id) => before.sites.has(id)))
+        before.key === key &&
+        local.removed.length === 0 &&
+        !local.kept.some((id) => before.sites.has(id))
       ) {
         hiddenSites.set(items, before);
         return items;
@@ -173,7 +178,7 @@ export function reviewItemFiltering(
       for (const id of local.removed) sites.add(id);
       const paragraphs = new Set(before.paragraphs);
       for (const id of local.paragraphs) paragraphs.add(id);
-      hiddenSites.set(items, settled(before, { sites, paragraphs }));
+      hiddenSites.set(items, settled(before, { sites, paragraphs, key }));
       return items;
     },
   };

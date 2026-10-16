@@ -51,7 +51,7 @@ function mount(body: string, comments = false, header?: string) {
       {
         id: 'review',
         review: {
-          displayModes: ['all-markup', 'proposed', 'original'],
+          displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
           collectReviewItems,
           revisionItemsOfParagraph: (part, id) => {
             const paragraph = findNode(part, id);
@@ -320,6 +320,19 @@ describe('property changes that change nothing', () => {
     );
     expect(marked.join('')).toContain('Listed header');
     expect(marked.join('')).not.toContain('Unlisted');
+  });
+
+  test('Simple Markup draws no change bar for an unlisted record', () => {
+    using view = mount(
+      // Plain paragraphs between them: bars on touching lines merge into one.
+      p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>unlisted paragraph</w:t></w:r>') +
+        p('') +
+        p(ppr('<w:jc w:val="center"/>', ''), '<w:r><w:t>listed paragraph</w:t></w:r>') +
+        p('') +
+        p('', rpr('<w:b w:val="0"/>', '', 'unlisted run'))
+    );
+    expect(view.editor.exec({ type: 'setReviewDisplayMode', mode: 'simple-markup' }).ok).toBe(true);
+    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(1);
   });
 
   test('typing in the paragraph keeps the record unlisted', () => {

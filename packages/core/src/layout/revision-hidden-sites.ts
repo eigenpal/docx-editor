@@ -12,7 +12,7 @@ import {
   type OoxmlNode,
 } from '../store/package/ooxml-tree.ts';
 import { EMPTY_REVISION_AUTHOR_SET, type RevisionAuthorFilter } from './revision-projection.ts';
-import { stableHash } from '../store/comparators/canonical.ts';
+import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
 
 /** Records with no card, by change-element node id, and the paragraphs that hold them. */
 export type UnlistedRevisionSites = NonNullable<RevisionAuthorFilter['unlisted']>;
@@ -22,8 +22,13 @@ const NO_FILTER = {};
 
 /**
  * `base` carrying `unlisted`, the same object for the same pair, or `base` itself when there is
- * nothing to leave out. The cache key moves only when the records left out do: a caller that
- * keeps one set object while its contents stay the same keeps layout caches warm.
+ * nothing to leave out.
+ *
+ * The cache key names the styles and numbering the records were decided against, not the
+ * records: the key keeps a block cached with them left out apart from the canonical block, and
+ * moves when a style or list edit can change which records are left out without changing their
+ * paragraphs. Any other change to the records comes with a new paragraph node, so a key over
+ * the records themselves only relaid the whole document out when a paragraph split copied one.
  */
 export function withHiddenRevisionSites(
   base: RevisionAuthorFilter | undefined,
@@ -36,7 +41,7 @@ export function withHiddenRevisionSites(
   if (!filter) {
     filter = Object.freeze({
       ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET }),
-      cacheKey: `${base?.cacheKey ?? ''}|unlisted:${stableHash([...unlisted.sites].sort())}`,
+      cacheKey: `${base?.cacheKey ?? ''}|unlisted:${unlisted.key}`,
       unlisted,
     });
     byUnlisted.set(unlisted, filter);
@@ -56,7 +61,7 @@ function isUnlistedChange(node: OoxmlNode, sites: ReadonlySet<string>): boolean 
 }
 
 function strip(node: OoxmlNode, sites: ReadonlySet<string>, depth: number): OoxmlNode {
-  if (node.kind === 'textValue' || depth > 64) return node;
+  if (node.kind === 'textValue' || depth >= MAX_XML_DEPTH) return node;
   let children: OoxmlNode[] | null = null;
   node.children.forEach((child, index) => {
     const next = isUnlistedChange(child, sites) ? null : strip(child, sites, depth + 1);

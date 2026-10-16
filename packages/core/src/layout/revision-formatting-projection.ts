@@ -120,8 +120,12 @@ function projectedFormatting(
     const recorded = projection === 'original' ? recordedProperties(change) : null;
     if (projection === 'proposed') children = children.filter((child) => child !== change);
     // A change the VIEW resolved is a site for Simple Markup; one the filter resolved is not.
+    // A record the review queue leaves out is no change site either: Simple Markup draws no
+    // bar for a change that has no card.
     resolvedChange =
-      projection === 'proposed' && (!filter || revisionIncluded(filter, attribution))
+      projection === 'proposed' &&
+      (!filter || revisionIncluded(filter, attribution)) &&
+      !filter?.unlisted?.sites.has(change.id)
         ? attribution
         : null;
     if (recorded !== null) {

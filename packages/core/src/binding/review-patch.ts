@@ -145,6 +145,7 @@ export function patchLocalReviewItems(
   if (groups.size > 0) {
     const slots: number[] = [];
     patched.forEach((item, index) => {
+      // Comments too: the derivation orders comments and revisions together by position.
       const start = item.kind === 'revision' ? item.ranges[0]?.start : undefined;
       if (start?.paragraphId === dirtyParagraphId) slots.push(index);
     });

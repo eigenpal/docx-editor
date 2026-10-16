@@ -112,6 +112,8 @@ export interface RevisionFilter {
   readonly unlisted?: {
     readonly sites: ReadonlySet<string>;
     readonly paragraphs: ReadonlySet<string>;
+    /** Names the styles and numbering the records were decided against. */
+    readonly key: string;
   };
 }
 

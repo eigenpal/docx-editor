@@ -24,7 +24,8 @@ import {
   collectRevisionSites,
   isPotentialRevisionElement,
 } from '../store/store/tree-op-revisions.ts';
-import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
+import { stylesAndNumberingKey, unlistedSitesOf } from '../store/store/review-unlisted-sites.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { UnlistedRevisionSites } from '../layout/revision-hidden-sites.ts';
 import {
   forEachSemanticDrawing,
@@ -602,23 +603,18 @@ function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
   });
   const items = withoutInertPropertyChanges(all, inertPropertyChangeInputsOf(pkg));
   const listed = new Set(items.map((item) => item.id));
-  const unlistedItems = all.filter((item) => item.kind === 'revision' && !listed.has(item.id));
+  const unlisted = unlistedSitesOf(all.filter((item) => !listed.has(item.id)));
   const unlistedSites = {
-    sites: new Set(
-      unlistedItems.flatMap((item) => (item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : []))
-    ),
-    paragraphs: new Set(
-      unlistedItems.flatMap((item) =>
-        item.kind === 'revision' ? item.ranges.map((range) => range.start.paragraphId) : []
-      )
-    ),
+    sites: new Set(unlisted.sites),
+    paragraphs: new Set(unlisted.paragraphs),
+    key: stylesAndNumberingKey(stylesPartOf(pkg)?.root ?? null, numberingRootOf(pkg)),
   };
   return { parts, derivation, items, unlistedSites };
 }
 
 /** Only the site ids are kept per package, so no derivation outlives the call that needed it. */
 const unlistedSitesByPackage = new WeakMap<OoxmlPackage, UnlistedRevisionSites>();
-const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Set() };
+const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Set(), key: '' };
 
 /** The revision sites an export of `pkg` leaves unmarked, because they have no review item. */
 export function unlistedReviewSites(pkg: OoxmlPackage): UnlistedRevisionSites {
