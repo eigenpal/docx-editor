@@ -37,7 +37,7 @@ flowchart LR
 | Task | Guide |
 | --- | --- |
 | Connect two editors | [Collaboration quickstart](/docs/2.x/collaboration) |
-| Use a room server | [Hocuspocus setup](#connect-to-a-hocuspocus-server) and [server document preparation](#prepare-the-room-document-on-a-server) |
+| Use a room server | [Hocuspocus setup](#connect-to-a-hocuspocus-server), [server document preparation](#prepare-the-room-document-on-a-server), and [server seeding](#seed-new-rooms-on-a-server) |
 | Show connection state and participants | [Status and participants](#show-status-and-participants) |
 | Recover local work | [Replica recovery](#recover-a-diverged-replica) and [offline editing](#edit-offline) |
 | Connect a server agent | [Server agent redlines](#let-a-server-agent-propose-redlines) |
@@ -631,6 +631,8 @@ export function ServerBackedEditor({
 }
 ```
 
+If your server seeds new rooms, pass `bootstrap: { kind: 'join' }` instead. For more information, see [Seed new rooms on a server](#seed-new-rooms-on-a-server).
+
 `token` reaches the server’s `onAuthenticate` hook. If tokens expire, pass a callback that reads the latest credential. The provider calls it for each reconnection.
 
 Changing a token string in `room` does not reconnect the hook. `rejoin` reuses the options from the last connection attempt. Use a token callback for renewal, or preserve local work and call `connect` with updated credentials.
@@ -823,6 +825,7 @@ async function seedRoom(documentName: string, stateFile: string): Promise<Uint8A
   if (!docx) throw refusal('unknown-room');
   let state: Uint8Array;
   try {
+    // Runs on this thread for brevity. See "Plan for the cost of a seed".
     state = await createCollaborationState(docx, {
       documentId: documentName,
       maxBytes: MAX_SEED_BYTES,
