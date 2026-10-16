@@ -524,6 +524,23 @@ describe('a large open laid out in slices', () => {
     }
   }, 60_000);
 
+  test('Delete at the end of the last laid-out paragraph joins the next one', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = signature(surface.layout()).map((row) => row.split('|')[1]!);
+      const last = laidOut[laidOut.length - 1]!;
+      const text = surface.session.storyText({ kind: 'body' })!.split('\n');
+      const index = surface.session.paragraphIds().indexOf(last);
+      const end = { paragraphId: last, offset: text[index]!.length };
+      surface.setSelection({ anchor: end, head: end });
+      surface.deleteForward();
+      expect(surface.session.paragraphIds()).toHaveLength(299);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a long table after the first slice is hashed a row at a time', () => {
     const bytes = longTableDocx();
     const surface = slicedMount(bytes);
