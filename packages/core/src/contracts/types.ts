@@ -1,34 +1,10 @@
 import type { HistoryGroupOutcome } from './editor-scope.ts';
 import type { RevisionAuthorResult, RevisionBatchResult } from './editor.ts';
-// Types the contract's signatures hand out that live in other lanes. Re-exported here, the
-// module `contracts/editor` and `contracts/types` both re-export verbatim, so a consumer can
-// name every type a contract method returns from the entry that declares the method.
+// Contract types that `types.ts` signatures hand out. The ones from other lanes are re-exported
+// by `editor.ts`, because this file may not import those lanes.
 export type { HistoryGroupOutcome, RevisionAuthorResult, RevisionBatchResult };
-export type { CollaborationFailureCode, CollaborationStatus } from '../collaboration/index.ts';
 export type * from './revision-markup.ts';
 export type * from './review-pane.ts';
-export type {
-  DocumentProtectionEdit,
-  DocumentProtectionState,
-} from '../store/package/document-protection.ts';
-export type {
-  ReviewPosition,
-  ReviewRange,
-  ReviewRevisionItem,
-  ReviewRevisionKind,
-} from '../store/store/review-items.ts';
-export type { RevisionAddress } from '../store/store/tree-op-revision-attribution.ts';
-export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-export type {
-  RevisionBatchEntry,
-  RevisionBatchSkipDetail,
-  RevisionBatchSkipReason,
-} from '../store/store/revision-batch.ts';
-export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
-export type {
-  RevisionAuthorEntry,
-  RevisionAuthorSkipReason,
-} from '../store/store/revision-author-change.ts';
 /**
  * Shared types for the `@docx-editor.dev/core` contract. Type-only, zero runtime.
  *

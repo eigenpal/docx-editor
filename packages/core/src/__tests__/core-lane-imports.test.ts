@@ -37,12 +37,6 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   { file: 'contracts/editor.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'store' },
   { file: 'contracts/editor.ts', to: 'collaboration' },
-  // Re-exports of the store, layout and collaboration types that the contract's own signatures
-  // hand out, so a consumer names every returned type from the entry that declares the
-  // method. Type-only and erased, the same coupling as `contracts/editor.ts` above.
-  { file: 'contracts/types.ts', to: 'collaboration' },
-  { file: 'contracts/types.ts', to: 'layout' },
-  { file: 'contracts/types.ts', to: 'store' },
   // The review view vocabulary (`ReviewDisplayMode`) is the layout's projection union widened
   // by Simple Markup: the contract names it, the layout owns it. Erased, like the edges above.
   { file: 'contracts/editor-review.ts', to: 'layout' },

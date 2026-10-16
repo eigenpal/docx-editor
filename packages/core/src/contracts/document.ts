@@ -29,6 +29,20 @@ import type {
   Extent,
   RunFormatting,
 } from './types';
+// Declared in the store lane; `editor.ts` re-exports them for the contract.
+export type {
+  ReviewPosition,
+  ReviewRange,
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+  RevisionAddress,
+  RevisionAuthorEntry,
+  RevisionAuthorSkipReason,
+  RevisionBatchEntry,
+  RevisionBatchSkipDetail,
+  RevisionBatchSkipReason,
+  RevisionSiteRefusal,
+} from './editor.ts';
 
 // Re-exported because the signatures below hand every one of them to a caller. This entry
 // point is meant to be usable on its own — an automation host or a tool layer names it
@@ -62,20 +76,9 @@ export type {
   ParagraphDisagreements,
   ParagraphFlags,
   ParagraphTabStop,
-  ReviewPosition,
-  ReviewRange,
-  ReviewRevisionItem,
-  ReviewRevisionKind,
   Revision,
-  RevisionAddress,
-  RevisionAuthorEntry,
   RevisionAuthorResult,
-  RevisionAuthorSkipReason,
-  RevisionBatchEntry,
   RevisionBatchResult,
-  RevisionBatchSkipDetail,
-  RevisionBatchSkipReason,
-  RevisionSiteRefusal,
   RevisionType,
   Run,
   RunFormatting,

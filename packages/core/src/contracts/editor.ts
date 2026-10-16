@@ -14,6 +14,14 @@ import type { ZoomMode } from './editor-zoom.ts';
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
 import type { TextMatch } from './editor-text-match.ts';
 export type { TextMatch } from './editor-text-match.ts';
+import type { EditorFontErrorCode, FontFaceRequest } from './editor-fonts.ts';
+export type {
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
+} from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
 export type {
@@ -151,6 +159,24 @@ export type {
   ReviewRevisionItem,
 } from '../store/store/review-items.ts';
 export type { RevisionAddress } from '@docx-editor.dev/core/store';
+// Named by the review, protection and collaboration results in `types.ts`, which may not import
+// these lanes itself; `types-barrel.ts` and `document.ts` re-export them from here.
+export type { CollaborationFailureCode, CollaborationStatus } from '../collaboration/index.ts';
+export type {
+  DocumentProtectionEdit,
+  DocumentProtectionState,
+} from '../store/package/document-protection.ts';
+export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+export type {
+  RevisionBatchEntry,
+  RevisionBatchSkipDetail,
+  RevisionBatchSkipReason,
+} from '../store/store/revision-batch.ts';
+export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
+export type {
+  RevisionAuthorEntry,
+  RevisionAuthorSkipReason,
+} from '../store/store/revision-author-change.ts';
 export type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 export type {
   DrawingHorizontalReferenceFrame,
@@ -207,77 +233,6 @@ export interface DocumentHandle {
  * where a new array per render rebuilds the editor per render.
  */
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
-
-/** A concrete font face requested by authored document content. */
-export interface FontFaceRequest {
-  readonly family: string;
-  readonly weight: number;
-  readonly style: 'normal' | 'italic';
-}
-
-/** Immutable, byte-backed font face supplied to layout and browser paint. */
-export interface FontSource {
-  readonly request: FontFaceRequest;
-  readonly id: string;
-  readonly bytes: Uint8Array;
-  readonly hash: string;
-  readonly faceIndex: number;
-  readonly availability?: 'available' | 'forbidden';
-}
-
-/** An explicit authored-font substitution. No implicit platform fallback is performed. */
-export interface FontSourceSubstitution {
-  readonly from: FontFaceRequest;
-  readonly to: FontFaceRequest;
-  /** Word line-box metrics for the requested face, expressed as em ratios. */
-  readonly lineMetrics?: {
-    readonly heightEm: number;
-    readonly baselineEm: number;
-  };
-}
-
-/**
- * Public font source configuration sampled when an adapter mounts. It must be immutable for that
- * editor lifetime; remount the adapter to replace bytes or substitutions atomically.
- */
-export interface FontConfiguration {
-  /** Selectable provider families, independent of loaded bytes. Listing them performs no fetch. */
-  readonly supportedFamilies?: readonly string[];
-  readonly epoch: number;
-  readonly maxFontBytes: number;
-  readonly sources: readonly FontSource[];
-  readonly substitutions?: readonly FontSourceSubstitution[];
-  readonly defaultFont: {
-    readonly family: string;
-    readonly sizeHalfPoints: number;
-  };
-  readonly language?: string;
-}
-
-/**
- * Why a font was not admitted.
- *
- * Distinguished rather than collapsed because the responses differ: `overLimit` and `malformed`
- * are the caller's own bytes, while `forbidden` and `hashMismatch` mean the source was not what
- * it claimed and the load should not be retried. `wasmUnavailable` alone is a HOST fault — the
- * shaper's WASM never loaded, `diagnostic` carries the remedy — surface it as a setup error.
- */
-export type EditorFontErrorCode =
-  | 'initializationFailed'
-  | 'wasmUnavailable'
-  | 'missing'
-  | 'forbidden'
-  | 'overLimit'
-  | 'malformed'
-  | 'hashMismatch'
-  | 'metadataMismatch'
-  | 'fontFaceLoadFailed'
-  | 'unsupportedFaceIndex'
-  | 'missingFont'
-  | 'hashInvalid'
-  | 'fontMismatch'
-  | 'unsupportedFace'
-  | 'loadFailed';
 
 /** Typed adapter error reported both through `onFontError` and accessible alert UI. */
 export class EditorFontError extends Error {
