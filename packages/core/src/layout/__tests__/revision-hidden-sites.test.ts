@@ -6,7 +6,7 @@ import { revisionAuthorFilter } from '../revision-projection.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const unlisted = (sites: string[], key = '1:2') => ({
   sites: new Set(sites),
-  paragraphs: new Set<string>(),
+  paragraphs: new Map<string, string>(),
   key,
 });
 
@@ -31,6 +31,22 @@ describe('withHiddenRevisionSites', () => {
     expect(one?.cacheKey).not.toBe('');
   });
 
+  test('a resolved view also keys on which records each paragraph holds', () => {
+    const held = (records: string) => ({
+      sites: new Set(['a']),
+      paragraphs: new Map([['p', records]]),
+      key: '1:2',
+    });
+    const one = held('a');
+    const two = held('a\u0000b');
+    expect(withHiddenRevisionSites(undefined, one)?.cacheKey).toBe(
+      withHiddenRevisionSites(undefined, two)?.cacheKey
+    );
+    expect(withHiddenRevisionSites(undefined, one, true)?.cacheKey).not.toBe(
+      withHiddenRevisionSites(undefined, two, true)?.cacheKey
+    );
+  });
+
   test('strips only the named records of a named paragraph', () => {
     const read = readOoxmlPart(
       `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="left"/><w:pPrChange w:id="1" w:author="Ada"><w:pPr/></w:pPrChange></w:pPr></w:p></w:body></w:document>`,
@@ -41,7 +57,7 @@ describe('withHiddenRevisionSites', () => {
     const change = element(element(paragraph.children[0]).children[1]);
     const filter = withHiddenRevisionSites(undefined, {
       sites: new Set([change.id]),
-      paragraphs: new Set([paragraph.id]),
+      paragraphs: new Map([[paragraph.id, change.id]]),
       key: '1:2',
     });
     const stripped = withoutUnlistedChanges(paragraph, filter);

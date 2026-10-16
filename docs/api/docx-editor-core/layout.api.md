@@ -3424,7 +3424,7 @@ export interface RevisionFilter {
     // @internal
     readonly unlisted?: {
         readonly key: string;
-        readonly paragraphs: ReadonlySet<string>;
+        readonly paragraphs: ReadonlyMap<string, string>;
         readonly sites: ReadonlySet<string>;
     };
 }

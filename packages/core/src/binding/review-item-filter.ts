@@ -9,7 +9,11 @@ import type { ReviewModuleContribution } from '../contracts/modules.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import type { ReviewItem } from '../store/store/review-items.ts';
-import { stylesAndNumberingKey, unlistedSitesOf } from '../store/store/review-unlisted-sites.ts';
+import {
+  paragraphsTouchedBy,
+  stylesAndNumberingKey,
+  unlistedSitesOf,
+} from '../store/store/review-unlisted-sites.ts';
 
 /** What the pass reads besides the queue. */
 export interface ReviewItemFilterInputs {
@@ -55,15 +59,18 @@ interface FilteredWith {
 /** Records with no card, by change-element node id, and the paragraphs that hold them. */
 export interface HiddenReviewSites {
   readonly sites: ReadonlySet<string>;
-  /** May hold more paragraphs than still hold a record; it narrows a search, never decides. */
-  readonly paragraphs: ReadonlySet<string>;
+  /**
+   * Each paragraph a left-out item touches, keyed by the sorted site ids of those items. A
+   * paragraph whose key changes lays its markup out again, even when the paragraph did not.
+   */
+  readonly paragraphs: ReadonlyMap<string, string>;
   /** Names the styles and numbering the records were decided against. */
   readonly key: string;
 }
 
 /** The records each published queue leaves out, keyed by the queue itself. */
 const hiddenSites = new WeakMap<readonly ReviewItem[], HiddenReviewSites>();
-const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Set(), key: '' };
+const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Map(), key: '' };
 
 /**
  * The records `items` leaves out: still in the document, with no card. Paint leaves them
@@ -89,11 +96,17 @@ function sameSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean
   return true;
 }
 
+function sameMap(left: ReadonlyMap<string, string>, right: ReadonlyMap<string, string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const [id, value] of right) if (left.get(id) !== value) return false;
+  return true;
+}
+
 /** `next` when its contents differ from `before`, else `before`, so identity means content. */
 function settled(before: HiddenReviewSites, next: HiddenReviewSites): HiddenReviewSites {
   return before.key === next.key &&
     sameSet(before.sites, next.sites) &&
-    sameSet(before.paragraphs, next.paragraphs)
+    sameMap(before.paragraphs, next.paragraphs)
     ? before
     : next;
 }
@@ -127,7 +140,13 @@ export function reviewItemFiltering(
   };
   const before = previous ? hiddenReviewSitesOf(previous.items) : NO_SITES;
   const key = stylesAndNumberingKey(inputs.stylesRoot, inputs.numberingRoot);
-  type Pass = { result: object; removed: string[]; paragraphs: string[]; kept: string[] };
+  type Pass = {
+    result: object;
+    removed: string[];
+    paragraphs: Map<string, string>;
+    touched: string[];
+    kept: string[];
+  };
   let last: Pass | null = null;
   return {
     filtered: (list) => {
@@ -140,6 +159,7 @@ export function reviewItemFiltering(
         result: kept,
         removed: removed.sites,
         paragraphs: removed.paragraphs,
+        touched: paragraphsTouchedBy(list),
         kept: unlistedSitesOf(kept).sites,
       };
       return kept;
@@ -153,11 +173,7 @@ export function reviewItemFiltering(
       if (!filter || hiddenSites.has(items)) return items;
       const local = last as Pass | null;
       if (local?.result === items) {
-        const fresh = {
-          sites: new Set(local.removed),
-          paragraphs: new Set(local.paragraphs),
-          key,
-        };
+        const fresh = { sites: new Set(local.removed), paragraphs: local.paragraphs, key };
         hiddenSites.set(items, settled(before, fresh));
         return items;
       }
@@ -176,8 +192,10 @@ export function reviewItemFiltering(
       const sites = new Set(before.sites);
       for (const id of local.kept) sites.delete(id);
       for (const id of local.removed) sites.add(id);
-      const paragraphs = new Set(before.paragraphs);
-      for (const id of local.paragraphs) paragraphs.add(id);
+      // The patched paragraph's entries are its own walk's answer now.
+      const paragraphs = new Map(before.paragraphs);
+      for (const id of local.touched) paragraphs.delete(id);
+      for (const [id, value] of local.paragraphs) paragraphs.set(id, value);
       hiddenSites.set(items, settled(before, { sites, paragraphs, key }));
       return items;
     },

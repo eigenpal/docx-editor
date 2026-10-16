@@ -13,38 +13,60 @@ import {
 } from '../store/package/ooxml-tree.ts';
 import { EMPTY_REVISION_AUTHOR_SET, type RevisionAuthorFilter } from './revision-projection.ts';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
+import { stableHash } from '../store/comparators/canonical.ts';
 
 /** Records with no card, by change-element node id, and the paragraphs that hold them. */
 export type UnlistedRevisionSites = NonNullable<RevisionAuthorFilter['unlisted']>;
 
-const composed = new WeakMap<object, WeakMap<UnlistedRevisionSites, RevisionAuthorFilter>>();
+const composed = new WeakMap<
+  object,
+  WeakMap<UnlistedRevisionSites, { all?: RevisionAuthorFilter; resolved?: RevisionAuthorFilter }>
+>();
+const recordsKeys = new WeakMap<UnlistedRevisionSites, string>();
+
+/** A key over which records each paragraph holds. */
+function recordsKey(unlisted: UnlistedRevisionSites): string {
+  let key = recordsKeys.get(unlisted);
+  if (key === undefined) {
+    key = stableHash([...unlisted.paragraphs].sort(([a], [b]) => a.localeCompare(b)));
+    recordsKeys.set(unlisted, key);
+  }
+  return key;
+}
 const NO_FILTER = {};
 
 /**
  * `base` carrying `unlisted`, the same object for the same pair, or `base` itself when there is
  * nothing to leave out.
  *
- * The cache key names the styles and numbering the records were decided against, not the
- * records: the key keeps a block cached with them left out apart from the canonical block, and
- * moves when a style or list edit can change which records are left out without changing their
- * paragraphs. Any other change to the records comes with a new paragraph node, so a key over
- * the records themselves only relaid the whole document out when a paragraph split copied one.
+ * The cache key keeps a block cached with the records left out apart from the canonical block.
+ * In All Markup it names only the styles and numbering the records were decided against: there,
+ * leaving a record out changes the paragraph's content, which content-keyed layout caches see,
+ * so a key over the records would relay the whole document out whenever a paragraph split
+ * copied one. A resolved view (`resolved`, as Simple Markup is) has already dropped the records
+ * from the content and keeps only a change site beside it, which those caches do not see, so
+ * its key also names which records each paragraph holds.
  */
 export function withHiddenRevisionSites(
   base: RevisionAuthorFilter | undefined,
-  unlisted: UnlistedRevisionSites
+  unlisted: UnlistedRevisionSites,
+  resolved = false
 ): RevisionAuthorFilter | undefined {
   if (unlisted.sites.size === 0) return base;
   const byUnlisted = composed.get(base ?? NO_FILTER) ?? new WeakMap();
   composed.set(base ?? NO_FILTER, byUnlisted);
-  let filter = byUnlisted.get(unlisted);
+  const views = byUnlisted.get(unlisted) ?? {};
+  byUnlisted.set(unlisted, views);
+  const slot = resolved ? 'resolved' : 'all';
+  let filter = views[slot];
   if (!filter) {
+    const records = resolved ? `:${recordsKey(unlisted)}` : '';
     filter = Object.freeze({
       ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET }),
-      cacheKey: `${base?.cacheKey ?? ''}|unlisted:${unlisted.key}`,
+      cacheKey: `${base?.cacheKey ?? ''}|unlisted:${unlisted.key}${records}`,
       unlisted,
     });
-    byUnlisted.set(unlisted, filter);
+    views[slot] = filter;
   }
   return filter;
 }

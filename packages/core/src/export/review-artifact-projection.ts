@@ -606,7 +606,7 @@ function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
   const unlisted = unlistedSitesOf(all.filter((item) => !listed.has(item.id)));
   const unlistedSites = {
     sites: new Set(unlisted.sites),
-    paragraphs: new Set(unlisted.paragraphs),
+    paragraphs: unlisted.paragraphs,
     key: stylesAndNumberingKey(stylesPartOf(pkg)?.root ?? null, numberingRootOf(pkg)),
   };
   return { parts, derivation, items, unlistedSites };
@@ -614,7 +614,7 @@ function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
 
 /** Only the site ids are kept per package, so no derivation outlives the call that needed it. */
 const unlistedSitesByPackage = new WeakMap<OoxmlPackage, UnlistedRevisionSites>();
-const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Set(), key: '' };
+const NO_SITES: UnlistedRevisionSites = { sites: new Set(), paragraphs: new Map(), key: '' };
 
 /** The revision sites an export of `pkg` leaves unmarked, because they have no review item. */
 export function unlistedReviewSites(pkg: OoxmlPackage): UnlistedRevisionSites {

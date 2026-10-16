@@ -111,7 +111,8 @@ export interface RevisionFilter {
    */
   readonly unlisted?: {
     readonly sites: ReadonlySet<string>;
-    readonly paragraphs: ReadonlySet<string>;
+    /** Each paragraph that holds one, keyed by the records it holds. */
+    readonly paragraphs: ReadonlyMap<string, string>;
     /** Names the styles and numbering the records were decided against. */
     readonly key: string;
   };

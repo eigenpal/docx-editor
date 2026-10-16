@@ -360,6 +360,38 @@ describe('property changes that change nothing', () => {
     });
   }
 
+  for (const [from, to, beforeBars, afterBars] of [
+    ['Normal', 'Strong', 0, 2],
+    ['Strong', 'Normal', 2, 0],
+  ] as const) {
+    test(`Simple Markup follows a record split over paragraphs when one changes (${from} to ${to})`, () => {
+      // One record in two paragraphs: listed only while the second paragraph's site changes.
+      const shared = `w:id="${id++}" ${STAMP}`;
+      const run = (on: string, text: string) =>
+        `<w:r><w:rPr>${on}<w:rPrChange ${shared}><w:rPr/></w:rPrChange></w:rPr><w:t>${text}</w:t></w:r>`;
+      using view = mount(
+        p('', run('<w:b w:val="0"/>', 'first')) +
+          p('') +
+          p(
+            `<w:pPr>${style(from === 'Normal' ? 'Normal' : 'Strong')}</w:pPr>`,
+            run('<w:b w:val="0"/>', 'second')
+          ) +
+          p('') +
+          // Another unlisted record, so the set of unlisted records never empties.
+          p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>other</w:t></w:r>')
+      );
+      expect(view.editor.exec({ type: 'setReviewDisplayMode', mode: 'simple-markup' }).ok).toBe(
+        true
+      );
+      expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(beforeBars);
+      const paragraphId = view.editor.surface!.session.paragraphIds()[2]!;
+      const at = { paragraphId, offset: 1 };
+      view.editor.surface!.setSelection({ anchor: at, head: at });
+      expect(view.editor.exec({ type: 'setParagraphStyle', styleId: to }).ok).toBe(true);
+      expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(afterBars);
+    });
+  }
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

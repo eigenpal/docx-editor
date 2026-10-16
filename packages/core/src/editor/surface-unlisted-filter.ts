@@ -16,6 +16,10 @@ export function withUnlistedRecords(
   session: { reviewItems(): readonly ReviewItem[] }
 ): RevisionAuthorFilter | undefined {
   return view === 'all-markup' || view === 'simple-markup'
-    ? withHiddenRevisionSites(base, hiddenReviewSitesOf(session.reviewItems()))
+    ? withHiddenRevisionSites(
+        base,
+        hiddenReviewSitesOf(session.reviewItems()),
+        view === 'simple-markup'
+      )
     : base;
 }
