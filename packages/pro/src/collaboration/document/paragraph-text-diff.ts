@@ -345,17 +345,28 @@ function dropScatteredLetters(steps: Step[], before: readonly Token[]): Step[] {
       for (const step of group) if (step.op === 'ins') inserted += 1;
       return Math.max(inserted, group.length - inserted);
     };
-    const deletes = (group: Step[] | undefined): boolean =>
-      group !== undefined && group.some((step) => step.op === 'del');
+    // A replacement removes letters of the text it types over, in the revisions the kept
+    // letters are in. Letters that go from other revisions, or struck letters, go by a decision,
+    // as an accept or reject of a change makes: the letters between them stay where they are.
+    const deletes = (group: Step[] | undefined, kept: ReadonlySet<string>): boolean =>
+      group !== undefined &&
+      group.some((step) => {
+        if (step.op !== 'del') return false;
+        const token = before[step.before]!;
+        return !isStruck(token) && kept.has(token.trail ?? '');
+      });
     let changed = false;
     const out: Step[] = [];
     groups.forEach((group, index) => {
+      const kept = new Set(
+        group.map((step) => (step.op === 'eq' ? (before[step.before]!.trail ?? '') : ''))
+      );
       const scattered =
         group[0]!.op === 'eq' &&
         group.length <= size(groups[index - 1]) &&
         group.length <= size(groups[index + 1]) &&
         // Only a replacement scatters letters: text typed in between deletes nothing.
-        (deletes(groups[index - 1]) || deletes(groups[index + 1])) &&
+        (deletes(groups[index - 1], kept) || deletes(groups[index + 1], kept)) &&
         group.every((step) => step.op === 'eq' && isPlainLetter(before[step.before]!));
       if (!scattered) {
         for (const step of group) out.push(step);
@@ -430,6 +441,19 @@ function sameLetters(
     i += 1;
     j += 1;
   }
+}
+
+const STRUCK_TEXT = /"l":"del(Text|InstrText)"/;
+const STRUCK_REVISION = /\\"l\\":\\"(del|moveFrom)\\"/;
+
+/**
+ * Whether a character is struck: it sits in deleted text, a `w:delText` or `w:delInstrText`
+ * element, or belongs to a deletion. A peer's concurrent strike can leave either one alone.
+ */
+function isStruck(token: Token): boolean {
+  const text = token.attributes.t;
+  if (typeof text === 'string' && STRUCK_TEXT.test(text)) return true;
+  return token.trail !== undefined && STRUCK_REVISION.test(token.trail);
 }
 
 function equalCount(steps: readonly Step[]): number {

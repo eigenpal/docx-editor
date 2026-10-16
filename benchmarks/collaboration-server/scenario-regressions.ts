@@ -111,6 +111,11 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'textbox', delivery: 'peer', seed: 1 },
   // A decision on a pending change once missed text a peer typed or linked inside or after
   // the change at the same time, and later text could join the change.
+  // An accept or reject of every change rewrote text between two stretches it removed, and the
+  // copy brought back text a peer deleted or rejected at the same time.
+  { config: 'tracked', delivery: 'server', seed: 2 },
+  { config: 'tracked', delivery: 'server', seed: 14 },
+  { config: 'tracked', delivery: 'server', seed: 18 },
   { config: 'tracked', delivery: 'server', seed: 3 },
   { config: 'tracked', delivery: 'server', seed: 6 },
   { config: 'tracked', delivery: 'server', seed: 8 },
@@ -130,14 +135,8 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
   [
-    // An accept of every change rewrites text that sits between deleted characters, and the
-    // copy brings back text a peer rejected at the same time.
-    {
-      config: 'tracked',
-      delivery: 'server',
-      seed: 2,
-      case: 'accept-all-rewrites-text-a-peer-rejects',
-    },
+    // An undo of a reject restores the insertion as copies, a peer's typing inside it follows
+    // them, and the undo of a later edit takes the adopted copy of that typing away.
     {
       config: 'trackedEverything',
       delivery: 'peer',
