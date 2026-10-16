@@ -1914,10 +1914,11 @@ function* layoutBlocksPass(
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
       const tailHolds = mark && reserveResume.tailHolds(mark, pages.length);
-      if (mark && tailHolds && flowCheckpointsMatch(mark, checkpoints[index]!)) {
-        // The in-page flow matches. At delta 0 the previous pages are appended by identity;
-        // at a nonzero delta the tail is identical content `delta` sheets away and is reused
-        // through `remapPage`, gated by `convergenceTailShiftAllowed`.
+      if (mark && tailHolds) {
+        // At delta 0 the previous pages are appended by identity; at a nonzero delta the tail
+        // is identical content `delta` sheets away and is reused through `remapPage`, gated by
+        // `convergenceTailShiftAllowed`. Asked first: it reads no flow state, and the compare
+        // of the open page's fragments is wasted on a tail it refuses.
         const delta = pages.length - mark.pageCount;
         const shiftable = convergenceTailShiftAllowed({
           delta,
@@ -1933,7 +1934,7 @@ function* layoutBlocksPass(
           hasNoteReserves: pageBottomReserves !== undefined,
           hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
         });
-        if (shiftable) {
+        if (shiftable && flowCheckpointsMatch(mark, checkpoints[index]!)) {
           const tail =
             delta === 0
               ? previous!.pages.slice(mark.pageCount)
