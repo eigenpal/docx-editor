@@ -19,7 +19,7 @@ import {
   patchLocalReviewItems,
 } from './review-patch.ts';
 import { createReviewItemsMemo } from './review-items-memo.ts';
-import { reviewItemFilterOf } from './review-item-filter.ts';
+import { reviewItemFiltering } from './review-item-filter.ts';
 import {
   addPackageComment,
   deletePackageComments,
@@ -207,6 +207,9 @@ export function openTreeSessionFromPackage(
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
     pkg: OoxmlPackage;
+    /** The styles and numbering `items` were filtered against. */
+    stylesPart: OoxmlPart | undefined;
+    numberingRoot: OoxmlElement | null;
   } | null = null;
   /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
@@ -1030,16 +1033,20 @@ export function openTreeSessionFromPackage(
           // capability module can do.
           customNodePayloads: customNodePayloadsAcrossStories(),
         };
+        const { stylesPart, numberingRoot } = memoInputs;
+        const { filtered, sameFilter } = reviewItemFiltering(derive, pkg, memoInputs, reviewCache);
         const derived = (): readonly ReviewItem[] =>
           reviewItemsMemo.get(memoInputs) ??
-          derive.collectReviewItems({
-            storyPart: store.part,
-            furnitureParts: memoInputs.furnitureParts,
-            stylesPart: memoInputs.stylesPart,
-            commentsPart,
-            commentsExtendedPart,
-            customNodePayloads: memoInputs.customNodePayloads,
-          });
+          filtered(
+            derive.collectReviewItems({
+              storyPart: store.part,
+              furnitureParts: memoInputs.furnitureParts,
+              stylesPart: memoInputs.stylesPart,
+              commentsPart,
+              commentsExtendedPart,
+              customNodePayloads: memoInputs.customNodePayloads,
+            })
+          );
         const inputs = {
           part: store.part,
           commentsPart,
@@ -1055,6 +1062,7 @@ export function openTreeSessionFromPackage(
         if (
           reviewCache &&
           lastChange &&
+          sameFilter &&
           reviewQueueKeptByStructure(lastChange, reviewCache, reviewCache.items, inputs)
         ) {
           items = reviewCache.items;
@@ -1064,8 +1072,8 @@ export function openTreeSessionFromPackage(
               ? localReviewPatchParagraphId(lastChange, reviewCache, reviewCache.items, inputs)
               : null;
           const localRevisions =
-            patchParagraphId && reviewCache
-              ? derive.revisionItemsOfParagraph(store.part, patchParagraphId)
+            patchParagraphId && reviewCache && sameFilter
+              ? filtered(derive.revisionItemsOfParagraph(store.part, patchParagraphId))
               : null;
           if (
             patchParagraphId &&
@@ -1086,11 +1094,6 @@ export function openTreeSessionFromPackage(
           }
         }
 
-        const filter = reviewItemFilterOf(derive);
-        if (filter) {
-          const { stylesPart, numberingRoot } = memoInputs;
-          items = filter(items, { pkg, stylesRoot: stylesPart?.root ?? null, numberingRoot });
-        }
         reviewItemsMemo.set(memoInputs, items);
         reviewCache = {
           revisionKey,
@@ -1101,6 +1104,8 @@ export function openTreeSessionFromPackage(
           commentsPart,
           commentsExtendedPart,
           pkg,
+          stylesPart,
+          numberingRoot,
         };
         return reviewCache.items;
       },

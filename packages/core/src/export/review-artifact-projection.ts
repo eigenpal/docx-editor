@@ -16,6 +16,8 @@ import {
   type ReviewRange,
 } from '@docx-editor.dev/core/store';
 import { createExportReviewDerivationScope } from '../store/store/review-export-derivation.ts';
+import { withoutInertPropertyChanges } from '../layout/review-inert-property-changes.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { isPotentialRevisionElement } from '../store/store/tree-op-revisions.ts';
 import {
   forEachSemanticDrawing,
@@ -579,12 +581,16 @@ export function projectReviewArtifacts(
   const commentsPart = pkg.parts.get(commentPartNameOf(pkg, main.name));
   if (!hasReviewMarkup(parts, commentsPart)) return [];
   const derivation = createExportReviewDerivationScope();
-  const items = derivation.collectReviewItems({
-    storyPart: main,
-    furnitureParts,
-    commentsPart,
-    commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, main.name)),
-  });
+  // Property changes that leave the formatting unchanged are not review items here either.
+  const items = withoutInertPropertyChanges(
+    derivation.collectReviewItems({
+      storyPart: main,
+      furnitureParts,
+      commentsPart,
+      commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, main.name)),
+    }),
+    { pkg, stylesRoot: stylesPartOf(pkg)?.root ?? null, numberingRoot: numberingRootOf(pkg) }
+  );
   // The overwhelmingly common export has no review artifacts. Do not build a paragraph/page
   // occurrence index over a large settled layout unless there is something to place.
   if (items.length === 0) return [];

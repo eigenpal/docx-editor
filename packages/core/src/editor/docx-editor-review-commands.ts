@@ -42,7 +42,7 @@ import { withReviewItemFilter } from '../binding/review-item-filter.ts';
 import {
   inertPropertyChanges,
   withoutInertPropertyChanges,
-} from './review-inert-property-changes.ts';
+} from '../layout/review-inert-property-changes.ts';
 import { revisionItemsOf } from '../store/store/review-reads.ts';
 import {
   findReviewPlacement,
@@ -68,6 +68,8 @@ interface ReviewCommandDependencies {
   viewing(): boolean;
   placements(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
   visible(): readonly ReviewItem[];
+  /** The items among `items` by authors the review filter shows. */
+  visibleOf(items: readonly ReviewRevisionItem[]): readonly ReviewItem[];
   scope(item: ReviewItem): StoryScope;
   /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
@@ -142,9 +144,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       ?.session.reviewItems()
       .filter((item): item is ReviewRevisionItem => item.kind === 'revision') ?? [];
   /**
-   * Property changes the queue leaves out because they change nothing. A bulk decision that
-   * names no keys clears them too; with `scope: 'visible'`, only those by an author it shows.
-   * Their keys join `selected`.
+   * Property changes the queue leaves out because they change nothing. Accept All and Reject All
+   * with no keys clear them too; with `scope: 'visible'`, only those by an author the filter
+   * shows. Their keys join `selected`. Read only when the decision runs, never for `can`.
    */
   const unlistedRecords = (
     command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
@@ -158,21 +160,20 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       stylesRoot: stylesPartOf(pkg)?.root ?? null,
       numberingRoot: session.numberingRoot(),
     };
-    const authors =
-      command.scope === 'document'
-        ? undefined
-        : new Set(
-            deps.visible().flatMap((item) => (item.kind === 'revision' ? [item.author] : []))
-          );
-    const records = session
+    const inert = session
       .storyParts()
-      .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs))
-      .filter((item) => !authors || authors.has(item.author));
+      .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs));
+    const records = (command.scope === 'document' ? inert : deps.visibleOf(inert)).filter(
+      (item): item is ReviewRevisionItem => item.kind === 'revision'
+    );
     for (const item of records) selected.add(reviewItemKey(item));
     return records;
   };
   /** The parts a bulk review command reaches, with the keys it selects in each. */
-  const selection = (command: { scope?: 'visible' | 'document'; keys?: readonly string[] }) => {
+  const selection = (
+    command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
+    withUnlisted = false
+  ) => {
     const items = all();
     // A paired replacement's key selects both of its halves. The paired queue is read once,
     // however many pair keys the command names.
@@ -207,7 +208,8 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           keys: [],
         });
     }
-    for (const item of [...items, ...unlistedRecords(command, selected)]) {
+    const unlisted = withUnlisted ? unlistedRecords(command, selected) : [];
+    for (const item of [...items, ...unlisted]) {
       const scope = deps.scope(item);
       const part = partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]);
       if (!part) continue;
@@ -235,8 +237,11 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     }
     return { groups, partOps };
   };
-  const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
-    const { scopes, missing, unfilteredDocument } = selection(command);
+  const bulkPlan = (
+    command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>,
+    withUnlisted = false
+  ) => {
+    const { scopes, missing, unfilteredDocument } = selection(command, withUnlisted);
     const resolved: RevisionBatchResult['resolved'][number][] = [];
     const skipped: RevisionBatchResult['skipped'][number][] = missing.map((key) => ({
       key,
@@ -575,7 +580,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return result;
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
-    const { groups, partOps, result } = bulkPlan(command);
+    const { groups, partOps, result } = bulkPlan(command, true);
     let applied: { committed: boolean; reason?: unknown } | undefined;
     const refused = surface.commitReviewOps((historyToken) => {
       applied = surface.session.applyTreeOpsAtomic(groups, { partOps, historyToken });

@@ -5,6 +5,7 @@
 // same earlier properties and the same new properties, they are one decision to the reviewer.
 // A different author, a different value on either side, or any block between them keeps them
 // apart. Every site stays in the item, so the decision still resolves all of them.
+import { canonicalOoxmlFingerprint } from '../package/ooxml-serialize.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 import {
   registerRevisionSiteNodeIds,
@@ -17,24 +18,6 @@ import type { RevisionSite } from './tree-op-revisions.ts';
 /** Paragraph-property children that are not paragraph properties of the change itself. */
 const NOT_COMPARED = new Set(['pPrChange', 'rPr', 'sectPr']);
 
-/** A structural fingerprint: names, sorted attributes and children, in order. */
-function fingerprint(node: OoxmlNode, out: string[], depth: number): void {
-  if (node.kind === 'textValue') {
-    out.push(JSON.stringify(node.value));
-    return;
-  }
-  if (depth > 32) {
-    out.push('…');
-    return;
-  }
-  const attributes = node.attributes
-    .map((attribute) => `${attribute.namespaceUri ?? ''}|${attribute.localName}=${attribute.value}`)
-    .sort();
-  out.push(`<${node.namespaceUri ?? ''}|${node.localName} ${attributes.join(' ')}>`);
-  for (const child of node.children) fingerprint(child, out, depth + 1);
-  out.push('>');
-}
-
 function propertiesFingerprint(properties: OoxmlNode | undefined): string {
   if (!properties || properties.kind === 'textValue') return '';
   const out: string[] = [];
@@ -46,9 +29,9 @@ function propertiesFingerprint(properties: OoxmlNode | undefined): string {
     ) {
       continue;
     }
-    fingerprint(child, out, 0);
+    out.push(canonicalOoxmlFingerprint(child));
   }
-  return out.join('');
+  return out.join('\u0000');
 }
 
 /** What the change does: its new properties and the earlier ones it recorded. */

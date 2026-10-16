@@ -35,6 +35,8 @@ import type {
 } from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
+import { withoutInertPropertyChanges } from '../layout/review-inert-property-changes.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -117,9 +119,22 @@ export function revisionItemsInStory(reads: AutomationStoryReads): readonly Revi
  * That listing is not the collection decision set: store-resolvable structural revisions are
  * still resolved by collection accept/reject.
  */
-export function revisionReads(reads: AutomationStoryReads): readonly AutomationRevisionRead[] {
+export function revisionReads(
+  reads: AutomationStoryReads,
+  pkg: OoxmlPackage | null
+): readonly AutomationRevisionRead[] {
   const found: AutomationRevisionRead[] = [];
-  for (const item of revisionItemsInStory(reads)) {
+  const items = revisionItemsInStory(reads);
+  // A property change that resolves to the same formatting is not listed, as in the editor's
+  // review queue. Collection decisions still resolve it, because they name every item.
+  const listed = pkg
+    ? withoutInertPropertyChanges(items, {
+        pkg,
+        stylesRoot: stylesPartOf(pkg)?.root ?? null,
+        numberingRoot: numberingRootOf(pkg),
+      })
+    : items;
+  for (const item of listed) {
     if (item.readOnly) continue;
     const rowChange = item.structuralChanges?.length === 1 ? item.structuralChanges[0] : undefined;
     const type =

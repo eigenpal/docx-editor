@@ -7,15 +7,14 @@
 //
 // The answer is CONSERVATIVE. Any input this module cannot compare with certainty reads as a
 // real change: different style or numbering references, structured children such as tab stops
-// or borders that differ, content in a table (its table style is not resolved here), or a
-// numbering reference whose level cannot be resolved. A real change must never be hidden.
+// or borders that differ, indents in character units, content in a table (its table style is
+// not resolved here), or a numbering reference whose level cannot be resolved. A real change
+// must never be hidden.
 
-import {
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-  type OoxmlNode,
-} from '../store/package/ooxml-tree.ts';
+import { canonicalOoxmlFingerprint } from '../store/package/ooxml-serialize.ts';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import type { OoxmlProperty } from '../store/store/tree-op-types.ts';
+import { readNumPr, withNumberingStyleLinks } from './list-resolve.ts';
 import { propertiesOf } from './paragraph-flow.ts';
 import {
   buildStyleCascadeTable,
@@ -23,7 +22,6 @@ import {
   cascadeRunProperties,
   type StyleCascadeTable,
 } from './style-cascade.ts';
-import { styleChain } from './style-chain.ts';
 import { STYLE_TOGGLE_PROPERTIES } from './style-toggles.ts';
 import {
   buildNumberingIndex,
@@ -50,9 +48,10 @@ export function propertyChangeContext(
   contexts.set(stylesRoot ?? NO_ROOT, byStyles);
   let context = byStyles.get(numberingRoot ?? NO_ROOT);
   if (!context) {
+    const table = buildStyleCascadeTable(stylesRoot);
     context = {
-      table: buildStyleCascadeTable(stylesRoot),
-      numbering: buildNumberingIndex(numberingRoot),
+      table,
+      numbering: withNumberingStyleLinks(buildNumberingIndex(numberingRoot), table),
     };
     byStyles.set(numberingRoot ?? NO_ROOT, context);
   }
@@ -65,6 +64,38 @@ const RUN_SKIPPED = new Set(['rPrChange', 'ins', 'del', 'moveFrom', 'moveTo']);
 
 /** Properties whose attributes inherit one by one; every other element replaces as a whole. */
 const ATTRIBUTE_MERGED = new Set(['ind', 'spacing', 'rFonts', 'lang']);
+
+/**
+ * Attributes that name one value together: stating either replaces both. `w:firstLine` and
+ * `w:hanging` are one first-line offset (§17.3.1.12), and each `w:rFonts` slot has a font and a
+ * theme spelling.
+ */
+const SHARED_SLOTS: Readonly<Record<string, readonly (readonly string[])[]>> = {
+  ind: [['firstLine', 'hanging']],
+  rFonts: [
+    ['ascii', 'asciiTheme'],
+    ['hAnsi', 'hAnsiTheme'],
+    ['eastAsia', 'eastAsiaTheme'],
+    ['cs', 'cstheme'],
+  ],
+};
+
+/** Second spellings of one attribute, read as the first (§17.3.1.12). */
+const ALIASES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  ind: { start: 'left', end: 'right' },
+};
+
+/** Attributes this module cannot compare: indents in character units. */
+const UNCOMPARED: Readonly<Record<string, ReadonlySet<string>>> = {
+  ind: new Set([
+    'startChars',
+    'endChars',
+    'leftChars',
+    'rightChars',
+    'firstLineChars',
+    'hangingChars',
+  ]),
+};
 
 /** `CT_OnOff` properties: a false value is the same as no value at all. */
 const ON_OFF = new Set<string>([
@@ -113,18 +144,49 @@ function isDefault(localName: string, attribute: string, value: string, bidi: bo
   }
 }
 
-/** The resolved properties as a comparable string; later properties win. */
-function resolvedKey(properties: readonly OoxmlProperty[], skipped: ReadonlySet<string>): string {
+/** One property's attributes, with aliases folded and on/off values spelled out. */
+function normalizedAttributes(property: OoxmlProperty): Record<string, string> | null {
+  const aliases = ALIASES[property.localName];
+  const uncompared = UNCOMPARED[property.localName];
+  const attributes: Record<string, string> = {};
+  for (const [name, value] of Object.entries(property.attributes ?? {})) {
+    if (uncompared?.has(name)) return null;
+    const canonical = aliases?.[name] ?? name;
+    // The first spelling wins when a property states both, as the layout reads it.
+    if (canonical !== name && property.attributes?.[canonical] !== undefined) continue;
+    attributes[canonical] = value;
+  }
+  if (ON_OFF.has(property.localName) && attributes.val === undefined) attributes.val = 'true';
+  return attributes;
+}
+
+function merged(
+  localName: string,
+  previous: Record<string, string>,
+  next: Record<string, string>
+): Record<string, string> {
+  const result = { ...previous };
+  for (const slot of SHARED_SLOTS[localName] ?? []) {
+    if (slot.some((name) => next[name] !== undefined)) for (const name of slot) delete result[name];
+  }
+  return Object.assign(result, next);
+}
+
+/** The resolved properties as a comparable string, later properties winning; null if unsure. */
+function resolvedKey(
+  properties: readonly OoxmlProperty[],
+  skipped: ReadonlySet<string>
+): string | null {
   const resolved = new Map<string, Record<string, string>>();
   for (const property of properties) {
     if (skipped.has(property.localName)) continue;
-    const attributes: Record<string, string> = { ...property.attributes };
-    if (ON_OFF.has(property.localName) && attributes.val === undefined) attributes.val = 'true';
+    const attributes = normalizedAttributes(property);
+    if (!attributes) return null;
     const previous = resolved.get(property.localName);
     resolved.set(
       property.localName,
       previous && ATTRIBUTE_MERGED.has(property.localName)
-        ? { ...previous, ...attributes }
+        ? merged(property.localName, previous, attributes)
         : attributes
     );
   }
@@ -142,23 +204,6 @@ function resolvedKey(properties: readonly OoxmlProperty[], skipped: ReadonlySet<
   return entries.sort().join(' ');
 }
 
-function fingerprint(node: OoxmlNode, out: string[], depth: number): void {
-  if (node.kind === 'textValue') {
-    out.push(JSON.stringify(node.value));
-    return;
-  }
-  if (depth > 32) {
-    out.push('…');
-    return;
-  }
-  const attributes = node.attributes
-    .map((attribute) => `${attribute.namespaceUri ?? ''}|${attribute.localName}=${attribute.value}`)
-    .sort();
-  out.push(`<${node.namespaceUri ?? ''}|${node.localName} ${attributes.join(' ')}>`);
-  for (const child of node.children) fingerprint(child, out, depth + 1);
-  out.push('>');
-}
-
 /**
  * The children a flat property list cannot represent: elements with children of their own
  * (tab stops, borders, numbering references) and foreign elements. They must match exactly.
@@ -170,9 +215,9 @@ function structuredChildren(properties: OoxmlElement | undefined, skipped: Reado
     const wml = child.namespaceUri === WML_NAMESPACE_URI;
     if (wml && skipped.has(child.localName)) continue;
     if (wml && !child.children.some((grandchild) => grandchild.kind !== 'textValue')) continue;
-    fingerprint(child, out, 0);
+    out.push(canonicalOoxmlFingerprint(child));
   }
-  return out.join('');
+  return out.join('\u0000');
 }
 
 function styleReference(properties: readonly OoxmlProperty[], localName: string): string {
@@ -192,32 +237,20 @@ function childElement(parent: OoxmlElement | undefined, localName: string) {
 
 /**
  * The numbering level's `w:pPr` for a paragraph, `null` when it has no numbering, or
- * `undefined` when it names numbering this context cannot resolve.
+ * `undefined` when it names numbering this context cannot resolve. The reference inherits
+ * through the style chain as layout reads it.
  */
 function numberingLevelProperties(
   context: PropertyChangeContext,
   paragraphProperties: OoxmlElement | undefined
 ): OoxmlElement | null | undefined {
-  let numId: string | undefined;
-  let ilvl: string | undefined;
-  const read = (properties: OoxmlElement | undefined) => {
-    const numPr = childElement(properties, 'numPr');
-    const id = childElement(numPr, 'numId')?.attributes.find((a) => a.localName === 'val');
-    const level = childElement(numPr, 'ilvl')?.attributes.find((a) => a.localName === 'val');
-    if (id) numId = id.value;
-    if (level) ilvl = level.value;
-  };
-  const styleId =
-    styleReference(propertiesOf(paragraphProperties), 'pStyle') ||
-    context.table.defaultParagraphStyleId;
-  if (styleId) {
-    for (const style of styleChain(context.table, styleId, 'paragraph')) {
-      read(style.paragraphPropertiesNode);
-    }
-  }
-  read(paragraphProperties);
-  if (numId === undefined || numId === '0') return null;
-  const level = resolveNumberingLevel(context.numbering, numId, Number(ilvl ?? '0'));
+  const nodes = cascadeParagraphWithNumbering(
+    context.table,
+    paragraphProperties
+  ).paragraphPropertyNodes;
+  const reference = readNumPr(nodes);
+  if (!reference || reference.numId === '0') return null;
+  const level = resolveNumberingLevel(context.numbering, reference.numId, reference.ilvl);
   return (level && numberingParagraphProperties(level.level)) ?? undefined;
 }
 
@@ -247,9 +280,10 @@ export function paragraphChangeIsInert(
   current: OoxmlElement
 ): boolean {
   const previous = childElement(change, 'pPr');
-  const currentProps = propertiesOf(current);
-  const previousProps = propertiesOf(previous);
-  if (styleReference(currentProps, 'pStyle') !== styleReference(previousProps, 'pStyle')) {
+  if (
+    styleReference(propertiesOf(current), 'pStyle') !==
+    styleReference(propertiesOf(previous), 'pStyle')
+  ) {
     return false;
   }
   if (
@@ -259,8 +293,7 @@ export function paragraphChangeIsInert(
     return false;
   }
   const after = resolveParagraph(context, current);
-  const before = resolveParagraph(context, previous);
-  return after !== null && after === before;
+  return after !== null && after === resolveParagraph(context, previous);
 }
 
 /**
@@ -294,5 +327,6 @@ export function runChangeIsInert(
   ).runProperties;
   const resolve = (direct: readonly OoxmlProperty[]) =>
     resolvedKey(cascadeRunProperties(inherited, direct, context.table), RUN_SKIPPED);
-  return resolve(currentProps) === resolve(previousProps);
+  const after = resolve(currentProps);
+  return after !== null && after === resolve(previousProps);
 }

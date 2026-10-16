@@ -6,20 +6,28 @@
 // in the file, and Accept All or Reject All over the whole document still clears them, because
 // that resolves every site in each story rather than the listed items.
 
-import type { ReviewItemFilter, ReviewItemFilterInputs } from '../binding/review-item-filter.ts';
 import {
   paragraphChangeIsInert,
   propertyChangeContext,
   runChangeIsInert,
   type PropertyChangeContext,
-} from '../layout/revision-property-effect.ts';
+} from './revision-property-effect.ts';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
+import { linkRevisionReplies } from '../store/store/review-reads.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
   revisionSiteNodeIdsOf,
   type ReviewItem,
   type ReviewRevisionItem,
 } from '../store/store/review-items.ts';
+
+/** The package a queue was derived from, with its styles and numbering roots. */
+export interface InertPropertyChangeInputs {
+  readonly pkg: OoxmlPackage;
+  readonly stylesRoot: OoxmlElement | null;
+  readonly numberingRoot: OoxmlElement | null;
+}
 
 /** How far up a change element can sit below its paragraph: rPr, run, wrappers, paragraph. */
 const MAX_ANCESTORS = 64;
@@ -94,7 +102,7 @@ function siteIsInert(part: OoxmlPart, id: string, context: PropertyChangeContext
 
 function isInert(
   item: ReviewItem,
-  inputs: ReviewItemFilterInputs,
+  inputs: InertPropertyChangeInputs,
   context: PropertyChangeContext
 ): boolean {
   if (!isCandidate(item)) return false;
@@ -103,12 +111,17 @@ function isInert(
   return !!part && ids.length > 0 && ids.every((id) => siteIsInert(part, id, context));
 }
 
-export const withoutInertPropertyChanges: ReviewItemFilter = (items, inputs) => {
+export function withoutInertPropertyChanges<T extends ReviewItem>(
+  items: readonly T[],
+  inputs: InertPropertyChangeInputs
+): readonly T[] {
   if (!items.some(isCandidate)) return items;
   const context = propertyChangeContext(inputs.stylesRoot, inputs.numberingRoot);
   const kept = items.filter((item) => !isInert(item, inputs, context));
-  return kept.length === items.length ? items : kept;
-};
+  // A comment on exactly the hidden change's characters answered that card; relink so it hangs
+  // on whatever card now holds those characters, or stands alone.
+  return kept.length === items.length ? items : linkRevisionReplies(kept);
+}
 
 /**
  * The records {@link withoutInertPropertyChanges} leaves out, for a bulk decision that names no
@@ -116,7 +129,7 @@ export const withoutInertPropertyChanges: ReviewItemFilter = (items, inputs) => 
  */
 export function inertPropertyChanges(
   items: readonly ReviewRevisionItem[],
-  inputs: ReviewItemFilterInputs
+  inputs: InertPropertyChangeInputs
 ): readonly ReviewRevisionItem[] {
   if (!items.some(isCandidate)) return [];
   const context = propertyChangeContext(inputs.stylesRoot, inputs.numberingRoot);
