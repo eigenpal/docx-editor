@@ -158,8 +158,7 @@ import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
-import { withHiddenRevisionSites } from '../layout/revision-hidden-sites.ts';
-import { liveHiddenReviewSites } from '../binding/review-item-filter.ts';
+import { withUnlistedRecords } from './surface-unlisted-filter.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
 import { scopeSession, surfaceFieldResultsScope } from './field-results-scope.ts';
@@ -962,15 +961,14 @@ export function mountPaginatedSurface(
   const markupSettings = createSurfaceRevisionMarkup(
     options.revisionMarkup,
     // Records the review queue leaves out paint no markup, so nothing marks a missing card.
-    () => {
-      const base = revisionAuthorVisibility.filterForSession(session);
-      const view = reviewDisplayMode();
-      return reviewView.filter(
-        view === 'all-markup' || view === 'simple-markup'
-          ? withHiddenRevisionSites(base, liveHiddenReviewSites(session))
-          : base
-      );
-    },
+    () =>
+      reviewView.filter(
+        withUnlistedRecords(
+          revisionAuthorVisibility.filterForSession(session),
+          reviewDisplayMode(),
+          session
+        )
+      ),
     () => flushPendingInputAndLayout(),
     () => {
       furnitureSource = createCurrentFurnitureSource(revisionFilter());
@@ -1009,11 +1007,13 @@ export function mountPaginatedSurface(
    */
   const fieldLinks = createFieldLinkRegistry();
   type SurfaceFurnitureOptions = Parameters<typeof createFurnitureSource>[0];
+  /** The filter key each furniture source was made with. */
+  const furnitureKeys = new WeakMap<object, string | undefined>();
   const createCurrentFurnitureSource = (
     authorFilter?: RevisionAuthorFilter,
     fieldCodes = showFieldCodes
-  ): ReturnType<typeof createFurnitureSource> =>
-    createFurnitureSource({
+  ): ReturnType<typeof createFurnitureSource> => {
+    const source = createFurnitureSource({
       session,
       measurer,
       producer,
@@ -1032,6 +1032,9 @@ export function mountPaginatedSurface(
       linkProjectors,
       projectFieldLink: (spec) => fieldLinks.project(spec),
     } satisfies SurfaceFurnitureOptions & Record<keyof SurfaceFurnitureOptions, unknown>);
+    furnitureKeys.set(source, authorFilter?.cacheKey);
+    return source;
+  };
   furnitureSource = createCurrentFurnitureSource(revisionFilter());
 
   interface LayoutDocumentContext {
@@ -1411,6 +1414,9 @@ export function mountPaginatedSurface(
     bodyBlockLimit?: number
   ): LayoutSteps<SemanticLayout> {
     const activeAuthorFilter = context ? context.authorFilter : revisionFilter();
+    // Furniture keeps the filter it was made with, so a filter that moved remakes it.
+    if (!context && activeAuthorFilter?.cacheKey !== furnitureKeys.get(furnitureSource))
+      furnitureSource = createCurrentFurnitureSource(activeAuthorFilter);
     const activeLayoutSession = context?.layoutSession ?? layoutSession;
     const activeFurnitureSource = context?.furnitureSource ?? furnitureSource;
     if (scope) attachListResolveChangeEvidence(activeLayoutSession, scope);

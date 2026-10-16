@@ -71,30 +71,6 @@ export function hiddenReviewSitesOf(items: readonly ReviewItem[]): HiddenReviewS
   return hiddenSites.get(items) ?? NO_SITES;
 }
 
-const live = new WeakMap<object, HiddenReviewSites>();
-
-/**
- * The records `session`'s current queue leaves out, read when used: one object for the session's
- * lifetime, so a filter that captured it once stays current.
- */
-export function liveHiddenReviewSites(session: {
-  reviewItems(): readonly ReviewItem[];
-}): HiddenReviewSites {
-  let sites = live.get(session);
-  if (!sites) {
-    sites = {
-      get sites() {
-        return hiddenReviewSitesOf(session.reviewItems()).sites;
-      },
-      get paragraphs() {
-        return hiddenReviewSitesOf(session.reviewItems()).paragraphs;
-      },
-    };
-    live.set(session, sites);
-  }
-  return sites;
-}
-
 function sitesOf(items: readonly ReviewItem[]): string[] {
   return items.flatMap((item) => (item.kind === 'revision' ? revisionSiteNodeIdsOf(item) : []));
 }

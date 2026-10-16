@@ -24,28 +24,29 @@ const NUMBERING = `<w:numbering xmlns:w="${W}">
 
 const COMMENT = `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Grace" w:date="2026-03-02T10:00:00Z"><w:p><w:r><w:t>Why bold?</w:t></w:r></w:p></w:comment></w:comments>`;
 
-function docx(body: string, comments = false): Uint8Array {
+function docx(body: string, comments = false, header?: string): Uint8Array {
   const rel = (id: string, type: string, target: string) =>
     `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
   const parts: Record<string, string> = {
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>`,
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/><Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/><Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/><Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/></Types>`,
     '_rels/.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rel('rId1', 'officeDocument', 'word/document.xml')}</Relationships>`,
-    'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rel('rId1', 'styles', 'styles.xml')}${rel('rId2', 'numbering', 'numbering.xml')}${comments ? rel('rId3', 'comments', 'comments.xml') : ''}</Relationships>`,
-    'word/document.xml': `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="${W}"><w:body>${body}<w:sectPr/></w:body></w:document>`,
+    'word/_rels/document.xml.rels': `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rel('rId1', 'styles', 'styles.xml')}${rel('rId2', 'numbering', 'numbering.xml')}${comments ? rel('rId3', 'comments', 'comments.xml') : ''}${header ? rel('rId4', 'header', 'header1.xml') : ''}</Relationships>`,
+    'word/document.xml': `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>${body}<w:sectPr>${header ? '<w:headerReference w:type="default" r:id="rId4"/>' : ''}</w:sectPr></w:body></w:document>`,
     'word/styles.xml': STYLES,
     'word/numbering.xml': NUMBERING,
     ...(comments ? { 'word/comments.xml': COMMENT } : {}),
+    ...(header ? { 'word/header1.xml': `<w:hdr xmlns:w="${W}">${header}</w:hdr>` } : {}),
   };
   return zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])));
 }
 
-function mount(body: string, comments = false) {
+function mount(body: string, comments = false, header?: string) {
   const container = document.createElement('div');
   document.body.append(container);
   const editor = createDocxEditor({
     container,
     author: 'Ada',
-    document: docx(body, comments),
+    document: docx(body, comments, header),
     modules: [
       {
         id: 'review',
@@ -301,6 +302,24 @@ describe('property changes that change nothing', () => {
     );
     expect(expected).toEqual(['insert', 'format']);
     expect(order()).toEqual(expected);
+  });
+
+  test('an unlisted record in a header paints no change bar', () => {
+    using view = mount(
+      p('', '<w:r><w:t>Body</w:t></w:r>'),
+      false,
+      p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>Unlisted header</w:t></w:r>') +
+        p(ppr('<w:jc w:val="center"/>', ''), '<w:r><w:t>Listed header</w:t></w:r>')
+    );
+    expect(view.count()).toBe(1);
+    const header = view.container.querySelector<HTMLElement>('[data-docx-hf]');
+    expect(header).not.toBeNull();
+    expect(view.container.querySelectorAll('.docx-change-bar-format')).toHaveLength(1);
+    const marked = [...view.container.querySelectorAll<HTMLElement>('.docx-revision')].map(
+      (element) => element.textContent
+    );
+    expect(marked.join('')).toContain('Listed header');
+    expect(marked.join('')).not.toContain('Unlisted');
   });
 
   test('typing in the paragraph keeps the record unlisted', () => {

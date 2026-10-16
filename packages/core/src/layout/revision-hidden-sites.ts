@@ -3,7 +3,8 @@
 // A property change that resolves to the same formatting has no review card, so its paragraph
 // gets no change bar and its text no format mark either. The filter carries the records as data:
 // only the paragraphs that hold one project without it, and every other block keeps the
-// unfiltered fast path, because a selecting filter projects the whole story.
+// unfiltered fast path, because a selecting filter projects the whole story. The cache key
+// names the records, so a block cached with them left out is never served as the canonical one.
 
 import {
   WML_NAMESPACE_URI,
@@ -11,6 +12,7 @@ import {
   type OoxmlNode,
 } from '../store/package/ooxml-tree.ts';
 import { EMPTY_REVISION_AUTHOR_SET, type RevisionAuthorFilter } from './revision-projection.ts';
+import { stableHash } from '../store/comparators/canonical.ts';
 
 /** Records with no card, by change-element node id, and the paragraphs that hold them. */
 export type UnlistedRevisionSites = NonNullable<RevisionAuthorFilter['unlisted']>;
@@ -19,21 +21,22 @@ const composed = new WeakMap<object, WeakMap<UnlistedRevisionSites, RevisionAuth
 const NO_FILTER = {};
 
 /**
- * `base` carrying `unlisted`, the same object for the same pair. `unlisted` may be live, its
- * sets read when a block projects, so a filter captured once still leaves out what the queue
- * leaves out now. The cache key does not move: a paragraph whose record changes whether it is
- * listed is a new node, or its styles changed, and either relays it out anyway.
+ * `base` carrying `unlisted`, the same object for the same pair, or `base` itself when there is
+ * nothing to leave out. The cache key moves only when the records left out do: a caller that
+ * keeps one set object while its contents stay the same keeps layout caches warm.
  */
 export function withHiddenRevisionSites(
   base: RevisionAuthorFilter | undefined,
   unlisted: UnlistedRevisionSites
 ): RevisionAuthorFilter | undefined {
+  if (unlisted.sites.size === 0) return base;
   const byUnlisted = composed.get(base ?? NO_FILTER) ?? new WeakMap();
   composed.set(base ?? NO_FILTER, byUnlisted);
   let filter = byUnlisted.get(unlisted);
   if (!filter) {
     filter = Object.freeze({
-      ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET, cacheKey: '' }),
+      ...(base ?? { hiddenAuthors: EMPTY_REVISION_AUTHOR_SET }),
+      cacheKey: `${base?.cacheKey ?? ''}|unlisted:${stableHash([...unlisted.sites].sort())}`,
       unlisted,
     });
     byUnlisted.set(unlisted, filter);
