@@ -19,7 +19,7 @@
 // ICU dictionaries, so they can differ between ICU versions; layout is deterministic for
 // one runtime, not across runtimes.
 
-import { clusterBreaksBetween } from './cjk-line-break.ts';
+import { clusterBreaksBetween, isStackingSign } from './cjk-line-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { createIntlWordBoundary, isIntlWordSegmenterAvailable } from './word-segment.ts';
 
@@ -52,8 +52,20 @@ export function dictionaryScriptOf(cp: number): DictionaryScript | null {
   return null;
 }
 
-/** A cheap prefilter: whether the text can hold any dictionary-script letter. */
-const DICTIONARY_SCRIPT_TEXT = /[ก-๎ກ-ໟက-႟ក-៝ꧠ-ꧾꩠ-ꩿ]/u;
+/**
+ * The script of a phrase or sentence mark with line-break class BA (break after): Thai
+ * U+0E5A–U+0E5B, Khmer U+17D4–U+17D5, U+17D8, U+17DA, and Myanmar U+104A–U+104B.
+ */
+export function breakAfterSignScript(cp: number): DictionaryScript | null {
+  if (cp === 0x0e5a || cp === 0x0e5b) return 'thai';
+  if (cp === 0x17d4 || cp === 0x17d5 || cp === 0x17d8 || cp === 0x17da) return 'khmer';
+  if (cp === 0x104a || cp === 0x104b) return 'myanmar';
+  return null;
+}
+
+/** A cheap prefilter: whether the text can hold any dictionary-script letter or mark. */
+const DICTIONARY_SCRIPT_TEXT =
+  /[\u0e01-\u0e5b\u0e81-\u0edf\u1000-\u109f\u1780-\u17dd\ua9e0-\ua9fe\uaa60-\uaa7f]/u;
 
 /** Whether the text holds a letter of a dictionary script. */
 export function hasDictionaryScriptText(text: string): boolean {
@@ -253,7 +265,8 @@ function cutsOfRun(run: string, segmenter: DictionaryWordSegmenter): readonly nu
 /**
  * Dictionary word-break opportunities in paragraph text: strictly increasing UTF-16 offsets
  * inside `(0, text.length)`, each with a letter of the same dictionary script on both sides
- * and at a grapheme cluster boundary.
+ * and at a grapheme cluster boundary, plus the break after a phrase or sentence mark of these
+ * scripts (`៕`, `။`, `๚`) that text follows directly.
  *
  * A cut never separates a base letter from its vowel signs or tone marks, never falls beside
  * a space, digit, punctuation, or other script (those keep their own rules), and never comes
@@ -280,8 +293,22 @@ function paragraphCuts(text: string, segmenter: DictionaryWordSegmenter): readon
   let budget = MAX_PARAGRAPH_UNITS;
   let index = 0;
   while (index < text.length && budget > 0) {
-    const script = dictionaryScriptOf(text.charCodeAt(index));
+    const unit = text.charCodeAt(index);
+    const script = dictionaryScriptOf(unit);
     if (script === null) {
+      // A sentence or phrase mark of these scripts (UAX #14 class BA) breaks after itself,
+      // unless a space, zero-width space, or another such mark follows and breaks later.
+      const signScript = breakAfterSignScript(unit);
+      const next = text.charCodeAt(index + 1);
+      if (
+        signScript !== null &&
+        index + 1 < text.length &&
+        next !== 0x20 &&
+        next !== 0x200b &&
+        breakAfterSignScript(next) === null &&
+        isDictionaryWordBreakSupported(signScript)
+      )
+        out.push(index + 1);
       index += 1;
       continue;
     }
@@ -301,5 +328,9 @@ function paragraphCuts(text: string, segmenter: DictionaryWordSegmenter): readon
   // The segmenter is replaceable; a cut the active grapheme boundary does not also give is
   // dropped. Clusters in these scripts join by pairwise rules (marks extend the letter before
   // them), so the two code points around a cut decide, without segmenting the whole text.
-  return out.filter((cut) => clusterBreaksBetween(text.charCodeAt(cut - 1), text.charCodeAt(cut)));
+  return out.filter(
+    (cut) =>
+      !isStackingSign(text.charCodeAt(cut - 1)) &&
+      clusterBreaksBetween(text.charCodeAt(cut - 1), text.charCodeAt(cut))
+  );
 }

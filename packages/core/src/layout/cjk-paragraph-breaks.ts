@@ -18,6 +18,7 @@ import {
   isIdeographicForLineBreak,
   lastCodePointOf,
   NO_BREAK_CHARACTER,
+  isStackingSign,
   wordBoundaries,
   ZERO_WIDTH_SPACE,
   type LineOpenDecision,
@@ -145,8 +146,9 @@ export function cjkParagraphBreaks(
       decisions.set(at, 'opens');
       continue;
     }
-    // UAX #14 LB7: no break before a zero-width space; the break comes after it.
-    if (right.text === ZERO_WIDTH_SPACE) {
+    // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
+    // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base.
+    if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before)) {
       decisions.set(at, 'forbidden');
       continue;
     }

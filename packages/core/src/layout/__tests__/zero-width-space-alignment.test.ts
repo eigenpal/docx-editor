@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { layoutSemanticDocument, type SemanticLayout } from '../index.ts';
+import { caretBoxOnLine, layoutSemanticDocument, type SemanticLayout } from '../index.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
 import type { TextMeasurer } from '../semantic-records.ts';
 
@@ -22,8 +22,13 @@ const MEASURE = 55;
 function document(jc: string, text: string, rtl = false): OoxmlPart {
   const pPr = `<w:pPr>${rtl ? '<w:bidi/>' : ''}<w:jc w:val="${jc}"/></w:pPr>`;
   const rPr = `<w:rPr>${rtl ? '<w:rtl/>' : ''}<w:sz w:val="22"/></w:rPr>`;
+  // `~` separates runs.
+  const runs = text
+    .split('~')
+    .map((part) => `<w:r>${rPr}<w:t xml:space="preserve">${part}</w:t></w:r>`)
+    .join('');
   const body =
-    `<w:p>${pPr}<w:r>${rPr}<w:t xml:space="preserve">${text}</w:t></w:r></w:p>` +
+    `<w:p>${pPr}${runs}</w:p>` +
     '<w:sectPr><w:pgSz w:w="1500" w:h="20000"/>' +
     '<w:pgMar w:top="200" w:right="200" w:bottom="200" w:left="200"/></w:sectPr>';
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
@@ -84,5 +89,25 @@ describe('a space before a zero-width space hangs in alignment', () => {
       expect(lay('both', spaced, true)).toEqual(lay('both', plain, true));
       expect(lay('left', spaced, true)).toEqual(lay('left', plain, true));
     }
+  });
+
+  test('on a justified line the caret after a stretched space is at its painted end', () => {
+    const carets = (text: string) => {
+      const layout = layoutSemanticDocument(document('both', text), 1, { measurer });
+      const fragment = layout.pages[0]!.fragments.find((entry) => entry.kind === 'paragraph');
+      if (fragment?.kind !== 'paragraph') throw new Error('no paragraph');
+      const line = fragment.lines[0]!;
+      const out: number[] = [];
+      for (let offset = line.range.start; offset <= line.range.end; offset++)
+        out.push(Math.round(caretBoxOnLine(line, offset, measurer)!.x * 10) / 10);
+      return out;
+    };
+    // The zero-width space in the same run as the space, or in a run of its own: offset 3
+    // (between the space and the zero-width space) and offset 4 are one visible position.
+    const together = carets('aa \u200b~bb \u200b~cc \u200b~dd \u200b~eeeeeeee');
+    const apart = carets('aa ~\u200b~bb ~\u200b~cc ~\u200b~dd ~\u200b~eeeeeeee');
+    expect(together).toEqual(apart);
+    expect(together[3]).toBeCloseTo(together[4]!, 5);
+    expect(together[3]).toBeGreaterThan(18.5);
   });
 });

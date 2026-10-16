@@ -332,6 +332,70 @@ describe('public runtime support API', () => {
   });
 });
 
+describe('Lao, Khmer, and Myanmar sentences', () => {
+  // Word lengths in UTF-16 units, at 6pt each: Lao 4 3 4 4 3 6 4, Khmer 9 2 12 2 6 7, and
+  // Myanmar 10 4 3 12 4 7.
+  const LAO = 'ພາສາລາວເປັນພາສາທີ່ສວຍງາມຫຼາຍ';
+  const KHMER = 'ភាសាខ្មែរជាភាសាផ្លូវការនៃប្រទេសកម្ពុជា';
+  const MYANMAR = 'မြန်မာဘာသာစကားသည်ရုံးသုံးဘာသာစကားဖြစ်သည်';
+
+  test('wrap at dictionary words', () => {
+    expect(linesOf(`<w:p>${run(LAO)}</w:p>`, 60)).toEqual([
+      'ພາສາລາວ',
+      'ເປັນພາສາ',
+      'ທີ່ສວຍງາມ',
+      'ຫຼາຍ',
+    ]);
+    expect(linesOf(`<w:p>${run(KHMER)}</w:p>`, 72)).toEqual([
+      'ភាសាខ្មែរជា',
+      'ភាសាផ្លូវការ',
+      'នៃប្រទេស',
+      'កម្ពុជា',
+    ]);
+    expect(linesOf(`<w:p>${run(MYANMAR)}</w:p>`, 84)).toEqual([
+      'မြန်မာဘာသာစကား',
+      'သည်',
+      'ရုံးသုံးဘာသာ',
+      'စကားဖြစ်သည်',
+    ]);
+  });
+
+  test('size AutoFit by the widest word', () => {
+    expect(minimumOf(`<w:p>${run(LAO)}</w:p>`)).toBeCloseTo(36, 5);
+    expect(minimumOf(`<w:p>${run(KHMER)}</w:p>`)).toBeCloseTo(72, 5);
+    expect(minimumOf(`<w:p>${run(MYANMAR)}</w:p>`)).toBeCloseTo(72, 5);
+  });
+
+  test('a run seam inside a word does not change the lines', () => {
+    expect(
+      linesOf(`<w:p>${run('ភាសាខ្')}${run('មែរជាភាសាផ្លូវការនៃប្រទេសកម្ពុជា', '<w:b/>')}</w:p>`, 72)
+    ).toEqual(linesOf(`<w:p>${run(KHMER)}</w:p>`, 72));
+  });
+
+  test('a Khmer coeng or Myanmar virama stack never splits, even in an oversized word', () => {
+    for (const width of [12, 18, 24, 30]) {
+      for (const text of ['ភាសាខ្មែរ', 'ប្រទេសកម្ពុជា', 'ကမ္ဘာ']) {
+        const lines = linesOf(`<w:p>${run(text)}</w:p>`, width);
+        expect(lines.join('')).toBe(text);
+        for (const line of lines.slice(0, -1)) expect(line).not.toMatch(/[\u17d2\u1039]$/u);
+      }
+      // Split right after the coeng: the seam is no break either.
+      const seam = linesOf(`<w:p>${run('ភាសាខ្')}${run('មែរ')}</w:p>`, width);
+      for (const line of seam.slice(0, -1)) expect(line).not.toMatch(/\u17d2$/u);
+    }
+  });
+
+  test('a line may end after a sentence mark that text follows', () => {
+    expect(dictionaryWordBreaks('ភាសា។ខ្មែរ')).toEqual([5]);
+    expect(dictionaryWordBreaks('စကား။ဘာသာ')).toEqual([5]);
+    expect(dictionaryWordBreaks('ภาษา๚ไทย')).toEqual([5]);
+    // A space after the mark breaks later, after the space.
+    expect(dictionaryWordBreaks('ភាសា។ ខ្មែរ')).toEqual([]);
+    expect(linesOf(`<w:p>${run('ភាសា។ខ្មែរ')}</w:p>`, 36)).toEqual(['ភាសា។', 'ខ្មែរ']);
+    expect(minimumOf(`<w:p>${run('ភាសា។ខ្មែរ')}</w:p>`)).toBeCloseTo(30, 5);
+  });
+});
+
 describe('Thai table AutoFit minimum', () => {
   test('the widest Thai word is the minimum segment, not the whole sentence', () => {
     // Widest words are อยาก and ข้าว, four units each.

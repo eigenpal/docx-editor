@@ -102,6 +102,13 @@ export const BREAK_AFTER_DASH: ReadonlySet<string> = new Set(['-', '‐', '–',
  */
 export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
 
+/**
+ * Whether the code point stacks the next consonant under the one before it: the Khmer coeng
+ * (U+17D2) and the Myanmar virama (U+1039). Grapheme rules end a cluster after them, but a
+ * line break there would tear a stacked consonant from its base, so no break follows them.
+ */
+export const isStackingSign = (cp: number | undefined): boolean => cp === 0x17d2 || cp === 0x1039;
+
 /** U+200B ZERO WIDTH SPACE: an invisible break opportunity, common in Thai and Khmer text. */
 export const ZERO_WIDTH_SPACE = '\u200b';
 
@@ -244,7 +251,7 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   // No line starts with a zero-width space, even after an emergency cut, nor with a space
   // that ink follows. A cut where only line-end whitespace remains hangs that whitespace.
   const next = text.charCodeAt(index);
-  if (next === 0x200b) return false;
+  if (next === 0x200b || isStackingSign(text.charCodeAt(index - 1))) return false;
   if (next === 0x20 && withoutLineEndWhitespace(text).length > index) return false;
   return cjkCutAllowedBetween(lastCodePointOf(text.slice(0, index)), text.codePointAt(index));
 }
@@ -326,7 +333,7 @@ export function lineOpenDecisionAt(
   const lastUnit = lastEmitted.length === 0 ? 0 : lastEmitted.charCodeAt(lastEmitted.length - 1);
   const firstUnit = candidate.charCodeAt(0);
   // UAX #14 LB7: never break before a zero-width space, even after a space.
-  if (firstUnit === 0x200b && lastUnit !== 0) return 'forbidden';
+  if ((firstUnit === 0x200b && lastUnit !== 0) || isStackingSign(lastUnit)) return 'forbidden';
   if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
     // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below
     // U+0300 no code point extends a cluster, so ASCII seams skip the check.

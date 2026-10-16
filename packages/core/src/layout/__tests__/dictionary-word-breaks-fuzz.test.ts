@@ -93,6 +93,7 @@ function oracleDictionaryCuts(text: string): Set<number> {
 }
 
 const DASHES = '-‐–—';
+const BREAK_AFTER_SIGNS = '\u0e5a\u0e5b\u17d4\u17d5\u17d8\u17da\u104a\u104b';
 
 /** Legal breaks, never before a space: after a space run, a zero-width space, or a dash. */
 function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<number> {
@@ -104,6 +105,15 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
     if (ch === ' ' && next !== undefined && next !== ' ' && next !== '\u200b') legal.add(i + 1);
     // ZW SP* ÷: after a zero-width space, past the spaces that follow it.
     if (ch === '\u200b' && next !== undefined && next !== ' ' && next !== '\u200b')
+      legal.add(i + 1);
+    // A phrase or sentence mark (UAX #14 class BA) breaks after itself before text.
+    if (
+      BREAK_AFTER_SIGNS.includes(ch) &&
+      next !== undefined &&
+      next !== ' ' &&
+      next !== '\u200b' &&
+      !BREAK_AFTER_SIGNS.includes(next)
+    )
       legal.add(i + 1);
     if (ch === '\t') {
       if (i > 0) legal.add(i);
@@ -171,19 +181,35 @@ const SEPARATORS = [' ', ' ', '-', '  ', '\u200b', '\u200b', '\u00a0', ' \u200b'
 type Rand = () => number;
 const pick = <T>(rand: Rand, items: readonly T[]): T => items[Math.floor(rand() * items.length)]!;
 
+/** Words of whole Lao, Khmer, and Myanmar sentences, with their sentence marks. */
+const SCRIPT_WORDS: readonly (readonly string[])[] = [
+  ['ພາສາ', 'ລາວ', 'ເປັນ', 'ທີ່', 'ສວຍງາມ', 'ຫຼາຍ', 'ປະເທດ', 'ຂອງ'],
+  ['ភាសា', 'ខ្មែរ', 'ជា', 'ផ្លូវការ', 'នៃ', 'ប្រទេស', 'កម្ពុជា', 'ស្រុក', '។', '៕'],
+  ['မြန်မာ', 'ဘာသာ', 'စကား', 'သည်', 'ရုံးသုံး', 'ဖြစ်', 'ကမ္ဘာ', 'နိုင်ငံ', '။', '၊'],
+];
+
 function randomText(rand: Rand): string {
   const count = 2 + Math.floor(rand() * 14);
+  // A quarter of the paragraphs are whole Lao, Khmer, or Myanmar sentences.
+  const script = rand() < 0.25 ? pick(rand, SCRIPT_WORDS) : null;
   let text = '';
   for (let i = 0; i < count; i++) {
     if (i > 0 && rand() < 0.15) text += pick(rand, SEPARATORS);
-    text += rand() < 0.8 ? pick(rand, THAI_WORDS) : pick(rand, OTHER_WORDS);
+    text += script
+      ? pick(rand, script)
+      : rand() < 0.8
+        ? pick(rand, THAI_WORDS)
+        : pick(rand, OTHER_WORDS);
   }
   return text.trim() || 'ฉัน';
 }
 
 /** Seams anywhere, including inside a grapheme cluster, or only between clusters. */
 function randomSplit(text: string, rand: Rand, clusterAligned = false): string[] {
-  const starts = segmentGraphemes(text).map((cluster) => cluster.utf16From);
+  // A Khmer coeng or Myanmar virama joins the next cluster to its own, as layout keeps them.
+  const starts = segmentGraphemes(text)
+    .map((cluster) => cluster.utf16From)
+    .filter((at) => !/[\u17d2\u1039]/u.test(text[at - 1] ?? ''));
   const seams = new Set<number>();
   const count = Math.floor(rand() * 5);
   for (let i = 0; i < count; i++)
@@ -279,6 +305,11 @@ function checkBreaks(
   const words = wordsOf(text, legal);
   let taken = 0;
   for (const offset of offsets) {
+    // A Khmer coeng or Myanmar virama stacks the next consonant: never break after one.
+    expect(
+      /[\u17d2\u1039]/u.test(text[offset - 1] ?? ''),
+      `${where}: break ${offset} after a stack`
+    ).toBe(false);
     expect(clusterStarts.has(offset), `${where}: break ${offset} inside a cluster`).toBe(true);
     if (dictionary.has(offset)) taken += 1;
     if (legal.has(offset) || chopExempt(offset)) continue;
