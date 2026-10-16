@@ -214,11 +214,7 @@ for (const compressed of [false, true]) {
     expect(editor.snapshot().editingMode).toBe('editing');
     expect(container.textContent).toContain('Updated delivery date');
 
-    // Let the scheduler finish naturally. exec/save/layout readers would flush it and
-    // hide a cancelled continuation, while synthetic events ignore CSS pointer blocking.
-    const deadline = Date.now() + 1000;
-    while (container.hasAttribute('data-docx-opening-preview') && Date.now() < deadline)
-      await new Promise((resolve) => setTimeout(resolve, 10));
+    // Success must mean input is ready, without polling or a command that flushes opening.
     expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);
     expect(editor.surface).not.toBeNull();
     expect(editor.snapshot().isOpening).toBe(false);
@@ -237,6 +233,64 @@ for (const compressed of [false, true]) {
     expect(editor.surface!.session.bodyText()).toContain('After refresh ');
   });
 }
+
+test('serializes queued large results and permits immediate capture after completion', async () => {
+  const { container, editor, refresh } = open();
+  const submission = await refresh.capture();
+  const first = refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) });
+  const second = refresh.applyUpdate({ submission, sequence: 2, bytes: refreshFixture(2, true) });
+  expect(await first).toMatchObject({ ok: true });
+  expect(await second).toMatchObject({ ok: true });
+  refresh.finish(submission);
+  expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);
+  expect(editor.snapshot().isOpening).toBe(false);
+  expect(editor.surface!.session.bodyText()).toContain('Updated review date');
+  expect(await refresh.capture()).toHaveProperty('bytes');
+});
+
+test('a completion observer can switch to another deferred document without losing its scheduler', async () => {
+  const { container, editor, refresh } = open();
+  const submission = await refresh.capture();
+  let sawPreview = false;
+  let switched = false;
+  editor.on('selectionChange', () => {
+    if (container.hasAttribute('data-docx-opening-preview')) sawPreview = true;
+    else if (sawPreview && !switched && refresh.snapshot().phase === 'refreshing') {
+      switched = true;
+      editor.load(refreshFixture(2, true));
+    }
+  });
+  expect(
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) })
+  ).toMatchObject({ code: 'document-changed' });
+  expect(switched).toBe(true);
+  const deadline = Date.now() + 3000;
+  while ((!editor.surface || editor.snapshot().isOpening) && Date.now() < deadline)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(editor.surface).not.toBeNull();
+  expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);
+  expect(editor.surface!.session.bodyText()).toContain('Updated review date');
+});
+
+test('an opening continuation failure resolves through recovery', async () => {
+  const { container, editor, refresh } = open();
+  const submission = await refresh.capture();
+  const original = container.removeAttribute.bind(container);
+  let failed = false;
+  container.removeAttribute = (name) => {
+    if (name === 'data-docx-opening-preview' && container.hasAttribute(name) && !failed) {
+      failed = true;
+      throw new Error('opening continuation failed');
+    }
+    original(name);
+  };
+  expect(
+    await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) })
+  ).toMatchObject({ code: 'load-failed', recovered: true });
+  expect(failed).toBe(true);
+  expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);
+  expect(editor.surface!.session.bodyText()).not.toContain('Updated delivery date');
+});
 
 test('a deferred mounting exception resolves through recovery', async () => {
   const { container, editor, refresh } = open();

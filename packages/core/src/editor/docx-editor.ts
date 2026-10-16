@@ -260,6 +260,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const fontShaping = sampleFontShapingOptions(config.fontShaping);
   let refreshHost: RefreshHost | undefined = undefined;
   let deferredRefreshBytes: Uint8Array | null = null;
+  /** A mounted refresh whose opening slices must finish before success is reported. */
+  let openingRefreshBytes: Uint8Array | null = null;
   /** The opening document's session between the prepare and mount tasks, for font work. */
   let preparedFontSession: TreeDocxSessionView | null = null;
   let mountedSeq = -1;
@@ -300,9 +302,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     mount: (bytes) => mountBytes(bytes),
     continueOpen: (budgetMs) => {
       if (!surface) return true;
-      const done = diagnostics.continueOpen(() => preparedOpen.continueOpen(surface!, budgetMs));
-      if (done) diagnostics.openSettled(surface);
-      return done;
+      try {
+        const done = diagnostics.continueOpen(() => preparedOpen.continueOpen(surface!, budgetMs));
+        if (done) {
+          diagnostics.openSettled(surface);
+          const bytes = openingRefreshBytes;
+          openingRefreshBytes = null;
+          if (bytes) refreshHost?.mounted(bytes);
+        }
+        return done;
+      } catch (error) {
+        const bytes = openingRefreshBytes;
+        openingRefreshBytes = null;
+        if (!bytes) throw error;
+        diagnostics.openCrashed(error);
+        refreshHost?.mounted(bytes, error);
+        return true;
+      }
     },
     // Fonts resolved before the mount are laid out once, by the mount; see `preparedOpenHook`.
     prepare: preparedOpen.preparedOpenHook(
@@ -605,7 +621,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       mountBytesNow(...args);
-      refreshHost?.mounted(args[0]);
+      if (refreshing && surface && preparedOpen.stillOpening(surface))
+        openingRefreshBytes = args[0];
+      else refreshHost?.mounted(args[0]);
     } catch (error) {
       diagnostics.openCrashed(error);
       refreshHost?.mounted(args[0], error);
@@ -798,7 +816,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function loadBytes(bytes: Uint8Array, immediate = false): void {
     // A deferred refresh re-enters from its scheduled mount. Keep that scheduler alive
     // so its remaining opening slices clear the preview and restore pointer input.
-    if (!immediate) openScheduler.cancel();
+    if (!immediate) {
+      openScheduler.cancel();
+      openingRefreshBytes = null;
+    }
     // Keep the live font resources intact until a deferred refresh actually mounts.
     openFailure.clear();
     preparedFontSession = null;
@@ -2489,6 +2510,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     },
     cancelLoad: () => {
       deferredRefreshBytes = null;
+      openingRefreshBytes = null;
       openScheduler.cancel();
     },
   });
