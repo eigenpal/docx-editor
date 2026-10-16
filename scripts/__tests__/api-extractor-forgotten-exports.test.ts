@@ -162,4 +162,18 @@ describe('forgotten export policy', () => {
       index: ['Fresh', 'Kept'],
     });
   });
+
+  test('a new Foo$1 cannot hide behind an allowlisted Foo', () => {
+    const result = policy.evaluateForgottenExportPolicy({
+      packageName: '@docx-editor.dev/pro',
+      isLocal: false,
+      allowlist: { index: ['Foo'] },
+      messages: [
+        'index: The symbol "Foo" needs to be exported by the entry point index.d.ts',
+        'index: The symbol "Foo$1" needs to be exported by the entry point index.d.ts',
+      ],
+    });
+    expect(result.unallowlisted).toEqual([{ entry: 'index', symbol: 'Foo' }]);
+    expect(result.staleAllowlist).toEqual([]);
+  });
 });

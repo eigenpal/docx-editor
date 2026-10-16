@@ -23,7 +23,7 @@ function run() {
 </template>
 ```
 
-`comment` returns `false` when the editor refuses the write. Read `useReview().lastRefusal` for the diagnostic code.
+`comment` returns `false` when the editor refuses the write. `useReview()` returns `lastRefusal` as a ref, so read `lastRefusal.value?.code` in script, or `lastRefusal?.code` in the template.
 
 ## Comment in a headless pipeline
 

@@ -25,7 +25,7 @@ function run() {
 </template>
 ```
 
-Suggesting mode needs an editor `author`. Without one, `setEditingMode('suggesting')` refuses. To replace every match in one undo step, use `editor.exec({ type: 'replaceAllMatches', query, text })`.
+Suggesting mode needs an editor `author`. Without one, `setEditingMode('suggesting')` refuses. To replace every match in one undo step, run the `replaceAllMatches` command, `{ type: 'replaceAllMatches', query, text }`, through the editor's `exec`.
 
 ## Replace in a headless pipeline
 

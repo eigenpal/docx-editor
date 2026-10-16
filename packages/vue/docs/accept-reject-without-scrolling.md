@@ -21,7 +21,9 @@ const { setActive, accept, reject } = useReview();
 </template>
 ```
 
-The buttons stop the click from reaching the row, so a decision does not also activate the item. `accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. Read `useReview().lastRefusal` for the diagnostic code.
+`accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. `useReview()` returns `lastRefusal` as a ref, so read `lastRefusal.value?.code` in script, or `lastRefusal?.code` in the template.
+
+The buttons stop the click from reaching the row, so a decision does not also activate the item.
 
 `reveal` takes `false` or one of four placements:
 

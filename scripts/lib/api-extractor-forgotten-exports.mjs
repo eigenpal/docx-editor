@@ -53,8 +53,10 @@ export function evaluateForgottenExportPolicy({
   void isLocal;
 
   const protectedSet = new Set(protectedSymbols);
+  // Counted like the baseline: listing `Foo` once excuses one `Foo`, so a second declaration
+  // reported as `Foo$1` still fails until it is listed again.
   const allowlisted = new Map(
-    Object.entries(allowlist).map(([entry, symbols]) => [entry, new Set(symbols)])
+    Object.entries(allowlist).map(([entry, symbols]) => [entry, counts(symbols)])
   );
   const baselined = new Map(
     Object.entries(baseline).map(([entry, symbols]) => [entry, counts(symbols)])
@@ -76,8 +78,8 @@ export function evaluateForgottenExportPolicy({
   const unallowlisted = [...unparsed];
   for (const [entry, symbols] of seen) {
     for (const [symbol, count] of symbols) {
-      if (allowlisted.get(entry)?.has(symbol)) continue;
-      const known = baselined.get(entry)?.get(symbol) ?? 0;
+      const known =
+        (allowlisted.get(entry)?.get(symbol) ?? 0) + (baselined.get(entry)?.get(symbol) ?? 0);
       for (let extra = known; extra < count; extra += 1) unallowlisted.push({ entry, symbol });
     }
   }
@@ -85,9 +87,10 @@ export function evaluateForgottenExportPolicy({
   const staleAllowlist = [];
   const forbiddenAllowlist = [];
   for (const [entry, symbols] of allowlisted) {
-    for (const symbol of symbols) {
+    for (const [symbol, count] of symbols) {
       if (protectedSet.has(symbol)) forbiddenAllowlist.push({ entry, symbol });
-      if (!seen.get(entry)?.has(symbol)) staleAllowlist.push({ entry, symbol });
+      const reported = seen.get(entry)?.get(symbol) ?? 0;
+      for (let extra = reported; extra < count; extra += 1) staleAllowlist.push({ entry, symbol });
     }
   }
 
@@ -95,7 +98,10 @@ export function evaluateForgottenExportPolicy({
   for (const [entry, symbols] of baselined) {
     for (const [symbol, count] of symbols) {
       if (protectedSet.has(symbol)) forbiddenAllowlist.push({ entry, symbol });
-      const reported = seen.get(entry)?.get(symbol) ?? 0;
+      const reported = Math.max(
+        0,
+        (seen.get(entry)?.get(symbol) ?? 0) - (allowlisted.get(entry)?.get(symbol) ?? 0)
+      );
       for (let extra = reported; extra < count; extra += 1) staleBaseline.push({ entry, symbol });
     }
   }

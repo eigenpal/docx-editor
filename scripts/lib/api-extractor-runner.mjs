@@ -290,8 +290,10 @@ export function runApiExtractor(options) {
       policy.unallowlisted = [];
       policy.staleBaseline = [];
     } else if (isLocal && policy.staleBaseline.length > 0) {
-      // Local declaration output is not the CI's, so a local run reports stale entries and
-      // leaves the file alone. `api:check` in CI is the run that fails on them.
+      // `api:extract` only reports stale entries and leaves the file alone: a local build's
+      // declarations can differ from the next one's. `api:check` (CI mode) fails on them, and
+      // the pre-commit hook runs `api:check`, so a stale entry also blocks a local commit until
+      // `node scripts/api-extractor.mjs --local --record-forgotten-exports` prunes it.
       console.log(
         `  forgotten-export baseline: ${policy.staleBaseline.length} entr${policy.staleBaseline.length === 1 ? 'y no longer warns' : 'ies no longer warn'}. ` +
           'Run `node scripts/api-extractor.mjs --local --record-forgotten-exports` to prune.'

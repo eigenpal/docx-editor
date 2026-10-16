@@ -35,7 +35,9 @@ export function ChangeRow({ item }: { item: ReviewItemView }) {
 }
 ```
 
-The buttons stop the click from reaching the row, so a decision does not also activate the item. `accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. Read `useReview().lastRefusal` for the diagnostic code.
+`accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. Read `useReview().lastRefusal` for the diagnostic code.
+
+The buttons stop the click from reaching the row, so a decision does not also activate the item.
 
 `reveal` takes `false` or one of four placements:
 
