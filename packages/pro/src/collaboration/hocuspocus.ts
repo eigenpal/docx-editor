@@ -240,9 +240,12 @@ export async function createHocuspocusCollaboration(
   // A token the server later rejects (an expired JWT on reconnect) stops replication for
   // good: surface it as a terminal session error rather than a silent stall.
   const onAuthenticationFailed = (event: { readonly reason: string }): void => {
+    // The server's reason travels as the detail, as it does on the join path, so a host can
+    // tell a retired room from an expired credential.
     session.setTransportStatus(
       'error',
-      isCollaborationFailureCode(event.reason) ? event.reason : 'authentication-failed'
+      isCollaborationFailureCode(event.reason) ? event.reason : 'authentication-failed',
+      `authentication failed: ${event.reason}`
     );
   };
   connectedProvider.on('authenticationFailed', onAuthenticationFailed);

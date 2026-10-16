@@ -7,7 +7,6 @@ import type * as Y from 'yjs';
 import { keepFormattingMarkers } from './document/yjs-items.ts';
 import { validateDocumentId } from './document-awareness.ts';
 import { seedGeneration } from './room-generation.ts';
-import { CollaborationSchemaError } from './errors.ts';
 import { MAX_BASELINE_BYTES } from './legacy-compatibility.ts';
 
 /**
@@ -40,7 +39,8 @@ export interface CreateCollaborationStateOptions {
   /**
    * Refuse a file whose size, or whose expanded package size, is over this many bytes, with
    * `baseline-too-large`. The check runs before any part is parsed. Default and maximum
-   * `MAX_BASELINE_BYTES` (20 MiB).
+   * `MAX_BASELINE_BYTES` (20 MiB). A value that is not a whole number in that range throws
+   * `TypeError`.
    */
   readonly maxBytes?: number;
 }
@@ -75,7 +75,9 @@ export interface CreateCollaborationStateOptions {
  *
  * Throws `CollaborationSchemaError`: `baseline-too-large` for a file over `maxBytes`,
  * `invalid-baseline` for a file that is not a usable `.docx` package, and
- * `invalid-document-id` or `invalid-bound` for invalid options.
+ * `invalid-document-id` for a document ID that is empty or longer than 256 characters.
+ * Throws `TypeError` for a `maxBytes` that is not a whole number from 1 to
+ * `MAX_BASELINE_BYTES`.
  *
  * @param document - The `.docx` bytes the room starts from.
  * @param options - The room's document ID and size limit.
@@ -89,7 +91,8 @@ export async function createCollaborationState(
   const documentId = validateDocumentId(options.documentId);
   const maxBytes = options.maxBytes ?? MAX_BASELINE_BYTES;
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > MAX_BASELINE_BYTES) {
-    throw new CollaborationSchemaError('invalid-bound', 'maxBytes');
+    // A configuration mistake, not shared state: thrown as other invalid options are.
+    throw new TypeError(`maxBytes must be a whole number of bytes from 1 to ${MAX_BASELINE_BYTES}`);
   }
   return seedGeneration(document, documentId, maxBytes);
 }

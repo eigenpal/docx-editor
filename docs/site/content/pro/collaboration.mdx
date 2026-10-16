@@ -639,7 +639,7 @@ Changing a token string in `room` does not reconnect the hook. `rejoin` reuses t
 
 The provider preserves recognized collaboration failure codes from the server both during the initial join and after reconnecting. For `collaboration-format-mismatch`, follow the [upgrade guide](/docs/2.x/pro/collaboration-versions); refreshing credentials cannot resolve a version mismatch.
 
-An unrecognized authentication refusal produces `initialization-aborted` during initialization or `authentication-failed` after joining. For a rejected credential, refresh it before calling `rejoin`. A `transport-disconnected` failure recovers on its own.
+An unrecognized authentication refusal produces `initialization-aborted` during initialization or `authentication-failed` after joining. Both keep the server's reason in `detail` for logs. For a rejected credential, refresh it before calling `rejoin`. A `transport-disconnected` failure recovers on its own.
 
 `syncedTimeoutMs` limits the initial sync wait. Its default is 30 seconds. A timeout produces `initialization-timeout`. The bootstrap `signal` covers the whole join, the server's load of the room included. An aborted join fails with `initialization-aborted`, also when the room is already present.
 
@@ -750,7 +750,7 @@ Seed a room only when your application knows that the room is new. A second seed
 The following server keeps three kinds of files. The application writes a room's `.docx` file when it creates the room. The server writes the room's state, and a record that it seeded the room. Keep the records apart from the state, for example in your database, so that losing the state does not also lose the record. Every write of new state is create-only, so two server processes that load one new room at the same time keep one seed. When the server loads stored state that has no record, it writes the record, so a crash between the two writes does not leave a room unprotected.
 
 ```ts
-import { link, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { link, open, readFile, rename, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Server } from '@hocuspocus/server';
@@ -814,6 +814,23 @@ async function writeNew(file: string, bytes: Uint8Array): Promise<boolean> {
   }
 }
 
+/** Replace a file. A unique temporary name keeps two overlapping writes apart. */
+async function writeReplacing(file: string, bytes: Uint8Array): Promise<void> {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    const handle = await open(temporary, 'wx');
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temporary, file);
+  } finally {
+    await unlink(temporary).catch(() => undefined);
+  }
+}
+
 /** Write the room's seed record if it has none. */
 async function recordSeeded(documentName: string): Promise<void> {
   const record = fileOf(SEEDED_DIR, documentName, '.seeded');
@@ -872,8 +889,7 @@ const server = new Server({
   },
   async onStoreDocument({ documentName, document }) {
     const stateFile = fileOf(ROOMS_DIR, documentName, '.ydoc');
-    await writeFile(`${stateFile}.tmp`, Y.encodeStateAsUpdate(document));
-    await rename(`${stateFile}.tmp`, stateFile);
+    await writeReplacing(stateFile, Y.encodeStateAsUpdate(document));
   },
 });
 
@@ -896,7 +912,7 @@ With `@hocuspocus/extension-database`, seed the room in `fetch`. When the room h
 - Seed in a worker thread or a job queue with a small concurrency limit, not on the thread that serves rooms. `createCollaborationState` takes bytes and returns bytes, so it can run in any worker.
 - Seed when the application creates the room, if you can, rather than when the first participant opens it.
 
-`createCollaborationState` throws `CollaborationSchemaError`: `baseline-too-large` for a document over `maxBytes`, `invalid-baseline` for bytes that are not a usable `.docx` package, `invalid-document-id` for an empty room name, and `invalid-bound` for an invalid `maxBytes`.
+`createCollaborationState` throws `CollaborationSchemaError`: `baseline-too-large` for a document over `maxBytes`, `invalid-baseline` for bytes that are not a usable `.docx` package, and `invalid-document-id` for a room name that is empty or longer than 256 characters. It throws `TypeError` for a `maxBytes` that is not a whole number from 1 to 20 MiB.
 
 ## Compact rooms on a server
 
@@ -906,10 +922,11 @@ Compact a room when the server loads it, before any participant syncs. Pass the 
 
 Every Hocuspocus server that holds rooms must also call `checkCollaborationRoomGeneration` from `beforeHandleMessage`. A participant that still holds the previous generation is refused before any of its state merges into the new one.
 
-The example uses the `roomFile` and `readSavedRoom` functions from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). It writes the new state to a temporary file and renames it, so a crash during the write keeps the old state.
+The example uses the `roomFile` and `readSavedRoom` functions from [Prepare the room document on a server](#prepare-the-room-document-on-a-server). It writes the new state to a temporary file with a unique name and renames it, so a crash during the write keeps the old state, and two overlapping writes cannot mix.
 
 ```ts
-import { rename, writeFile } from 'node:fs/promises';
+import { open, rename, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import {
@@ -917,6 +934,23 @@ import {
   compactCollaborationState,
   prepareCollaborationServerDocument,
 } from '@docx-editor.dev/pro/collaboration';
+
+/** Replace a file. A unique temporary name keeps two overlapping writes apart. */
+async function writeReplacing(file: string, bytes: Uint8Array): Promise<void> {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    const handle = await open(temporary, 'wx');
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temporary, file);
+  } finally {
+    await unlink(temporary).catch(() => undefined);
+  }
+}
 
 const server = new Server({
   async onLoadDocument({ documentName, document }) {
@@ -926,10 +960,7 @@ const server = new Server({
     if (!saved) return document;
     // Stop on validation failure. Keep the stored state unchanged.
     const compacted = await compactCollaborationState(saved);
-    if (compacted) {
-      await writeFile(`${file}.tmp`, compacted);
-      await rename(`${file}.tmp`, file);
-    }
+    if (compacted) await writeReplacing(file, compacted);
     Y.applyUpdate(document, compacted ?? new Uint8Array(saved));
     return document;
   },

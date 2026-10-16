@@ -151,14 +151,17 @@ describe('demo version recovery', () => {
       ).body
     ).toContain('COLLAB_TOKEN');
   });
-  test('an invite to a room the server does not know says so', () => {
-    const message = failureMessage(
-      { code: 'initialization-aborted', detail: 'authentication failed: unknown-room' },
-      context
-    );
-    expect(message.title).toBe('This room does not exist.');
-    expect(message.body).not.toContain('COLLAB_TOKEN');
-  });
+  test.each(['initialization-aborted', 'authentication-failed'] as const)(
+    'a room the server does not know says so, on a join or a reconnect (%s)',
+    (code) => {
+      const message = failureMessage(
+        { code, detail: 'authentication failed: unknown-room' },
+        context
+      );
+      expect(message.title).toBe('This room does not exist.');
+      expect(message.body).not.toContain('COLLAB_TOKEN');
+    }
+  );
   test.each(['saved-room-unavailable', 'invalid-saved-room'])(
     'explains saved-room failure %s without token advice',
     (reason) => {

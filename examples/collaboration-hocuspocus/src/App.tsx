@@ -42,6 +42,7 @@ import { encodeDemoToken } from '../shared/admission';
 import { failureMessage } from '../shared/failure-message';
 import { exampleText as t } from '../../shared/example-text';
 import { roomAddress } from './room-address';
+import { roomToken } from './room-token';
 
 /**
  * Anonymous diagnostics. In development, the console prints each one with its hint, such as why
@@ -416,6 +417,14 @@ export function App() {
     error: loadError,
   } = useDocxSource(invited ? null : DOCUMENT_URL, { fonts: packagedFonts() });
 
+  // One token callback per joined room. A starting tab asks to create the room only until
+  // its first sync; every reconnect after it only joins (`room-token.ts`).
+  const tokens = useMemo(
+    () =>
+      roomToken({ create: CREATE_TOKEN, join: JOIN_TOKEN, creating: joined?.creating ?? false }),
+    [joined]
+  );
+
   // Only the room's identity keys the connection, so this object does not need to be stable —
   // but building it in a memo keeps the branch that decides "no room yet" in one place.
   const room = useMemo(() => {
@@ -424,7 +433,7 @@ export function App() {
     return {
       url: SERVER_URL,
       roomId: joined.roomId,
-      token: joined.creating ? CREATE_TOKEN : JOIN_TOKEN,
+      token: tokens.token,
       syncedTimeoutMs: SYNC_TIMEOUT_MS,
       identity: {
         actorId: joined.actorId,
@@ -439,7 +448,7 @@ export function App() {
           ? ({ kind: 'create-or-join', document: bytes } as const)
           : ({ kind: 'join' } as const),
     };
-  }, [bytes, joined, left]);
+  }, [bytes, joined, left, tokens]);
 
   const collaboration = useHocuspocusCollaboration({ modules: MODULES, room });
 
@@ -454,9 +463,10 @@ export function App() {
   const connected = collaboration.document !== null;
   useEffect(() => {
     if (!joined) return;
+    if (connected) tokens.markJoined();
     const next = roomAddress({ href: location.href, ...joined, connected });
     if (next) history.replaceState(null, '', next);
-  }, [joined, connected]);
+  }, [joined, connected, tokens]);
 
   const leave = useCallback(
     (nextDocument: Uint8Array) => {

@@ -221,6 +221,8 @@ describe('createHocuspocusCollaboration', () => {
     // need opposite responses from the host, so they cannot share a code.
     expect(room.session.statusSnapshot().reason).toMatchObject({
       code: 'authentication-failed',
+      // The server's reason stays readable, as on the join path, for diagnostics.
+      detail: 'authentication failed: token expired',
     });
     room.destroy();
     // A destroyed room no longer listens: a late auth event must not throw or resurrect it.
