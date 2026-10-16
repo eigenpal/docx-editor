@@ -7,6 +7,12 @@
 //   node scripts/api-extractor.mjs --local                  # all packages, write snapshots
 //   node scripts/api-extractor.mjs --package <name>         # one package, CI mode
 //   node scripts/api-extractor.mjs --package <name> --local # one package, write
+//   node scripts/api-extractor.mjs --local --record-forgotten-exports
+//       # also record every NEW forgotten export in the baseline (review the diff first)
+//
+// Forgotten exports: every package reports them. A warning not in the package's reviewed
+// allowlist (`scripts/lib/packages.mjs`) or in `scripts/api-forgotten-exports.baseline.json`
+// fails the run. `--local` prunes baseline entries that no longer warn; CI fails on them.
 //
 // Per-package `package.json` scripts delegate here with `--package <name>`
 // so `bun run --filter '<pkg>' api:extract` still works the way every
@@ -23,6 +29,16 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const args = process.argv.slice(2);
 const isLocal = args.includes('--local');
+const recordForgottenExports = args.includes('--record-forgotten-exports');
+if (recordForgottenExports && !isLocal) {
+  console.error('--record-forgotten-exports writes the baseline, so it requires --local');
+  process.exit(1);
+}
+const forgottenExportBaselinePath = path.join(
+  repoRoot,
+  'scripts',
+  'api-forgotten-exports.baseline.json'
+);
 const pkgArgIdx = args.indexOf('--package');
 // `--package` requires a following value. Without this guard,
 // `... --package` (no value) and `... --package --local` would silently
@@ -71,6 +87,8 @@ for (const pkg of targets) {
     isLocal,
     buildHint: buildHintFor(pkg),
     tsconfigPath: pkg.tsconfigPath ? path.join(repoRoot, pkg.tsconfigPath) : undefined,
-    forgottenExports: pkg.forgottenExports,
+    forgottenExports: pkg.forgottenExports ?? 'warning',
+    forgottenExportBaselinePath,
+    recordForgottenExports,
   });
 }

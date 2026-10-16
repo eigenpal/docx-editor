@@ -36,6 +36,7 @@ export {
   type DocxEditorReviewNamespace,
   type ReviewActionProps,
   type ReviewBalloonProps,
+  type ReviewDraftProps,
   type ReviewMarkersProps,
   type ReviewPartProps,
   type ReviewProps,

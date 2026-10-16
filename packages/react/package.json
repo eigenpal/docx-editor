@@ -15,6 +15,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "src/styles",
     "!dist/metafile-*.json",
     "THIRD_PARTY_NOTICES.md"

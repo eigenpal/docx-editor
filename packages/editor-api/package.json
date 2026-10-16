@@ -39,6 +39,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "!dist/metafile-*.json",
     "LICENSE.md",
     "OFFICE_JS_GUIDE.md",

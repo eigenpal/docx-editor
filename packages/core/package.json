@@ -132,6 +132,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "licenses",
     "!dist/metafile-*.json",
     "README.md",

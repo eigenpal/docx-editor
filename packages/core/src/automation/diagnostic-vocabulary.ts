@@ -48,6 +48,7 @@ export type EditDiagnosticCode =
   | 'edit.tracked-operation-unsupported'
   | 'edit.tracking-mode-unsupported'
   | 'edit.tracking-author-required'
+  | 'edit.comment-author-required'
   | 'edit.tracking-unsupported-host'
   | 'edit.revision-unsupported'
   | 'edit.tracking-required'

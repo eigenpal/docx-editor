@@ -341,6 +341,12 @@ export class Range extends ModelObject implements PromisedItem {
    * draws between them — whether the new text becomes part of this range — has no meaning for a
    * snapshot. Both pairs are accepted because source-compatible code uses all four; what a caller
    * gets back is a range naming the text that was written, in every case.
+   *
+   * In a React or Vue host, replace a found match in the editor itself with
+   * `editor.exec({ type: 'replaceMatch', match, text })` on a match from `editor.findMatches`.
+   * In suggesting mode it records a tracked replacement as the editor's author.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   insertText(
     text: string,
@@ -395,7 +401,14 @@ export class Range extends ModelObject implements PromisedItem {
    *
    * The author is the identity the runtime was opened with. Empty comment text, a missing author,
    * stale endpoints, and ranges crossing a table-cell boundary are refused rather than authored
-   * approximately. A collapsed range creates an insertion-point comment.
+   * approximately. A collapsed range creates an insertion-point comment. A missing author refuses
+   * with `NotSupported` and `debugInfo.innerError.code` `edit.comment-author-required`.
+   *
+   * In a React or Vue host with the review module, use `useReview().comment` from
+   * `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` instead. It comments on the
+   * editor's selection as the editor's author.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
    */
   insertComment(commentText: string): Comment {
     const target = `${this.path.label}.insertComment`;
@@ -404,7 +417,7 @@ export class Range extends ModelObject implements PromisedItem {
     }
     const author = this.internals.author;
     if (typeof author !== 'string' || author.trim().length === 0) {
-      fail({ code: 'NotSupported', target });
+      fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
     }
     const created = Comment.promised(this.context, target, false);
     this.commandAnswering(

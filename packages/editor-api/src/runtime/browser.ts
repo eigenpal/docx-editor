@@ -40,7 +40,11 @@ export interface CreateBrowserOptions {
    *
    * Required to reply to a comment: `CT_TrackChange` makes `@w:author` mandatory, and the editor
    * does not expose a signed-in identity to automation. Omitted means comment writes refuse with
-   * `NotSupported`; ordinary document reads and writes are unaffected.
+   * `NotSupported` and the diagnostic `edit.comment-author-required`; ordinary document reads
+   * and writes are unaffected.
+   *
+   * To build a review UI over this editor, use `useReview()` from `@docx-editor.dev/pro/react`
+   * or `@docx-editor.dev/pro/vue` instead. It comments and replies as the editor's author.
    */
   readonly author?: string;
   /**

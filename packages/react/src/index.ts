@@ -297,7 +297,11 @@ export {
   type DocxEditorPageNumberProps,
   PageNumberTranslationContext,
 } from './editor/DocxEditorPageNumber';
-export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
+export {
+  useScopedChromeAnchor,
+  type ScopedChromeAnchor,
+  type ScopedChromeAnchorPlacement,
+} from './editor/useScopedChromeAnchor';
 export {
   ToolbarContext,
   useToolbarContext,
@@ -489,7 +493,20 @@ export type {
 } from '@docx-editor.dev/core/contracts/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
 
-export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export {
+  Toolbar,
+  ToolbarButton,
+  ToolbarGroup,
+  type ToolbarProps,
+  type SelectionFormatting,
+  type FormattingAction,
+} from './components/Toolbar';
+export type { TableAction } from './components/ui/TableToolbar';
+export type { FontOption } from './lib/fontOptions';
+export type { ListState, ListType } from './lib/listState';
+export type { ParagraphAlignment } from './components/ui/AlignmentButtons';
+export type { DocumentStyleSummary } from './lib/stylePreview';
+export type { DocxEditorRefCallback } from './docx-editor-ref-callback';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 export { PageIndicator, type PageIndicatorProps } from './components/DocxEditor/PageIndicator';

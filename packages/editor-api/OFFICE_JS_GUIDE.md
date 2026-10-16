@@ -2,6 +2,8 @@
 
 The public document model follows a documented subset of Word's Office.js API. Host creation, authentication, collaboration transport, and job lifetime belong outside that model.
 
+Use this API for headless, server, and agent pipelines. To build a review UI in a React or Vue host, use `useReview()` and `DocxEditorReview` from `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` instead. For the task-by-task choice, see `docs/index.md` in this package.
+
 ## A complete server example
 
 This function returns a DOCX containing one pending replacement. Supply the agent's author name. The `finally` block disposes the runtime after the job.

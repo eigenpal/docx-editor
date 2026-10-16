@@ -2271,6 +2271,9 @@ export { DocumentSearchNavigateOptions }
 
 export { DocumentSearchOptions }
 
+// @public
+export type DocumentStyleSummary = ReturnType<Editor['getDocumentStyles']>[number];
+
 export { DocxDocument }
 
 // @public (undocumented)
@@ -4070,6 +4073,9 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
+// @public (undocumented)
+export type DocxEditorRefCallback<T> = (node: T | null) => void;
+
 // @public
 export const DocxEditorRevisionMarkup: vue.DefineComponent<vue.ExtractPropTypes<{
     cells: PropType<RevisionMarkupOptions['cells']>;
@@ -5019,6 +5025,16 @@ export { FontLoadFailure }
 
 export { FontLoadFailureReason }
 
+// @public
+export interface FontOption {
+    // (undocumented)
+    category?: 'sans-serif' | 'serif' | 'monospace' | 'other';
+    // (undocumented)
+    fontFamily: string;
+    // (undocumented)
+    name: string;
+}
+
 export { FontOrigin }
 
 export { FontResolutionRequest }
@@ -5035,6 +5051,30 @@ export { FontSource }
 export { FontSourceSubstitution }
 
 export { FontUrlSource }
+
+// @public @deprecated (undocumented)
+export type FormattingAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'superscript' | 'subscript' | 'clearFormatting' | 'bulletList' | 'numberedList' | 'indent' | 'outdent' | 'insertLink' | 'setRtl' | 'setLtr' | {
+    type: 'fontFamily';
+    value: string;
+} | {
+    type: 'fontSize';
+    value: number;
+} | {
+    type: 'textColor';
+    value: ColorValue | string;
+} | {
+    type: 'highlightColor';
+    value: string;
+} | {
+    type: 'alignment';
+    value: ParagraphAlignment;
+} | {
+    type: 'lineSpacing';
+    value: number;
+} | {
+    type: 'applyStyle';
+    value: string;
+};
 
 export { generateRulerTicks }
 
@@ -5455,6 +5495,21 @@ export interface IndentUpdate {
 export function isFieldLink(link: SurfaceHyperlink): boolean;
 
 export { isFontResolver }
+
+// @public (undocumented)
+export interface ListState {
+    // (undocumented)
+    isInList: boolean;
+    // (undocumented)
+    level: number;
+    // (undocumented)
+    numId?: number;
+    // (undocumented)
+    type: ListType;
+}
+
+// @public
+export type ListType = 'bullet' | 'numbered' | 'none';
 
 export { loadFonts }
 
@@ -6293,6 +6348,9 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+// @public
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
+
 export { ParagraphFlagState }
 
 export { ParagraphFormatRead }
@@ -6482,6 +6540,9 @@ export interface ScopedChromeAnchor {
     readonly style: ShallowRef<CSSProperties>;
 }
 
+// @public
+export type ScopedChromeAnchorPlacement = 'before' | 'after' | 'story-label';
+
 export { ScrollToAnchorOptions }
 
 export { SEARCH_DEBOUNCE_MS }
@@ -6491,6 +6552,42 @@ export { SEARCH_HIGHLIGHT_PRIORITY }
 export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
+
+// @public @deprecated (undocumented)
+export interface SelectionFormatting {
+    // (undocumented)
+    alignment?: ParagraphAlignment;
+    // (undocumented)
+    bidi?: boolean;
+    // (undocumented)
+    bold?: boolean;
+    // (undocumented)
+    color?: string;
+    // (undocumented)
+    fontFamily?: string;
+    // (undocumented)
+    fontSize?: number;
+    // (undocumented)
+    highlight?: string;
+    // (undocumented)
+    indentLeft?: number;
+    // (undocumented)
+    italic?: boolean;
+    // (undocumented)
+    lineSpacing?: number;
+    // (undocumented)
+    listState?: ListState;
+    // (undocumented)
+    strike?: boolean;
+    // (undocumented)
+    styleId?: string;
+    // (undocumented)
+    subscript?: boolean;
+    // (undocumented)
+    superscript?: boolean;
+    // (undocumented)
+    underline?: boolean;
+}
 
 // @public
 export const Slot: vue.DefineComponent<{}, () => VNode<vue.RendererNode, vue.RendererElement, {
@@ -6510,6 +6607,24 @@ export interface SlotProps {
     // (undocumented)
     style?: CSSProperties;
 }
+
+// @public
+export type TableAction = 'addRowAbove' | 'addRowBelow' | 'addColumnLeft' | 'addColumnRight' | 'deleteRow' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'deleteTable' | 'selectTable' | 'selectRow' | 'selectColumn' | 'borderAll' | 'borderOutside' | 'borderInside' | 'borderNone' | 'borderTop' | 'borderBottom' | 'borderLeft' | 'borderRight' | {
+    color: string | null;
+    type: 'cellFillColor';
+} | {
+    color: string;
+    type: 'borderColor';
+} | {
+    size: number;
+    type: 'borderWidth';
+} | {
+    color: string;
+    side: 'top' | 'bottom' | 'left' | 'right' | 'all';
+    size: number;
+    style: string;
+    type: 'cellBorder';
+};
 
 // @public (undocumented)
 export interface TableBorderColorNamespace extends TableChromePartComponent {
@@ -7509,7 +7624,7 @@ export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedR
 export function useScopeClassName(): '' | 'docx-editor ';
 
 // @public
-export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: AnchorPlacement): ScopedChromeAnchor;
+export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
 
 // @public (undocumented)
 export function useTableBorderTargetLabel(): ComputedRef<string>;

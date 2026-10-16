@@ -1,0 +1,46 @@
+<!-- Generated from docs/site/content/recipes by scripts/sync-agent-docs.mjs. Edit the source and run `bun run docs:agent`. -->
+
+# Accept or reject without scrolling
+
+When your own list drives the scroll, open an item with `useReview().setActive(key, { reveal: false })`. The caret moves to the item, and the page stays where it is. Then resolve the item with `accept(item)` or `reject(item)`. A review write does not scroll either.
+
+```tsx
+import { useReview, type ReviewItemView } from '@docx-editor.dev/pro/react';
+
+export function ChangeRow({ item }: { item: ReviewItemView }) {
+  const { setActive, accept, reject } = useReview();
+  return (
+    <li onClick={() => setActive(item.key, { reveal: false })}>
+      {item.text}
+      <button onClick={() => accept(item)} disabled={item.readOnly}>
+        Accept
+      </button>
+      <button onClick={() => reject(item)} disabled={item.readOnly}>
+        Reject
+      </button>
+    </li>
+  );
+}
+```
+
+`accept` and `reject` return `false` when the editor refuses the decision, for example in viewing mode. Read `useReview().lastRefusal` for the diagnostic code.
+
+Other values of `reveal` choose where the item lands: `'centerIfNeeded'` (the default), `'nearest'`, or `'start'`. Add `announce: true` to open the packaged balloon or card for the item.
+
+In Vue, import `useReview` from `@docx-editor.dev/pro/vue`.
+
+## Decide in a headless pipeline
+
+The editing API has no viewport. Load the revisions and call `Revision.accept()` or `Revision.reject()`.
+
+```ts
+await runtime.run(async (context) => {
+  const revisions = context.document.body.revisions;
+  revisions.load('items/author');
+  await context.sync();
+  for (const revision of revisions.items) {
+    if (revision.author === 'Review bot') revision.accept();
+  }
+  await context.sync();
+});
+```

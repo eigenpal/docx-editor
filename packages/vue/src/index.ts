@@ -344,7 +344,11 @@ export {
   type NormalizedImagePayload,
 } from './editor/images';
 
-export { useScopedChromeAnchor, type ScopedChromeAnchor } from './editor/useScopedChromeAnchor';
+export {
+  useScopedChromeAnchor,
+  type ScopedChromeAnchor,
+  type ScopedChromeAnchorPlacement,
+} from './editor/useScopedChromeAnchor';
 
 export { HorizontalRuler, type HorizontalRulerProps } from './components/ui/HorizontalRuler';
 export { VerticalRuler, RULER_WIDTH, type VerticalRulerProps } from './components/ui/VerticalRuler';
@@ -466,7 +470,20 @@ export {
   type RulerUnit,
 } from './rulerTicks';
 
-export { Toolbar, ToolbarButton, ToolbarGroup, type ToolbarProps } from './components/Toolbar';
+export {
+  Toolbar,
+  ToolbarButton,
+  ToolbarGroup,
+  type ToolbarProps,
+  type SelectionFormatting,
+  type FormattingAction,
+  type TableAction,
+  type ParagraphAlignment,
+} from './components/Toolbar';
+export type { ListState, ListType } from './lib/listState';
+export type { FontOption } from './lib/fontOptions';
+export type { DocumentStyleSummary } from './lib/stylePreview';
+export type { DocxEditorRefCallback } from './docx-editor-ref-callback';
 export { DocxEditorShell } from './components/DocxEditor/DocxEditorShell';
 export { TitleBar, MenuBar, DocumentName, Logo, TitleBarRight } from './components/TitleBar';
 

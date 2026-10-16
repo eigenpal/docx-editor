@@ -39,6 +39,21 @@ export interface ReviewBalloonProps {
   hidden?: boolean;
 }
 
+/**
+ * Props of `DocxEditorReview.Draft`.
+ *
+ * @public
+ */
+export interface ReviewDraftProps extends ReviewPartProps {
+  /**
+   * Rail-local `top` in CSS pixels. Omit it to use the packaged card stack's position. Pass
+   * your own when you render your own cards, so the box stacks with them.
+   */
+  top?: number;
+  /** Rail-local `left` for the compact rail. Null keeps the box in the rail's own column. */
+  left?: number | null;
+}
+
 /** @public */
 export interface ReviewMarkersProps extends ReviewPartProps {
   scale?: number;

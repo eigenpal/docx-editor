@@ -106,6 +106,8 @@ The engine calculates it without the DOM, as it does for card anchors. Use it to
 
 The packaged `DocxEditorReview.AddComment` and `DocxEditorReview.Draft` parts provide this workflow in Vue and React.
 
+Put `DocxEditorReview.AddComment` as a direct child of `DocxEditorReview`, so the rail positions it. `DocxEditorReview.Draft` renders only while a draft is open. It can be a direct child, or part of your own card content. Without `top`, the draft sits where the packaged card stack puts it, so pass `top` when you render your own cards. For an example, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
+
 ### Create a comment with editor-api
 
 The document API uses the EigenPal Pro License. It creates comments from an explicit range.

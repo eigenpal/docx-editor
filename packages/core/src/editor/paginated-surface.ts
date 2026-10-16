@@ -5122,73 +5122,84 @@ export function mountPaginatedSurface(
       flushPendingInputAndLayout();
       const caretParagraph = selection.head.paragraphId;
       const beforeText = textOf(caretParagraph);
-      return commit(
-        // Reported as a RESULT, not a boolean: `commit` reads the refusal reason off it, and
-        // a boolean made every refused accept clear `lastRejection` instead of setting it.
-        () => {
-          // Resolving a revision or writing a comment is a WRITE, so viewing refuses it here
-          // too. These paths reach the store through the session directly rather than
-          // through `applyOps`, so the lane gate above never sees them.
-          if (editingMode === 'view') {
-            return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
-          }
-          if (
-            collaborationSession &&
-            (intent === undefined || !REPLICABLE_REVIEW_WRITES.has(intent))
-          ) {
-            return {
-              committed: false,
-              rejected: true,
-              opCount: 0,
-              reason: 'experimental-collaboration-body-text-only',
-            };
-          }
-          // The READINESS gate the typing lane asks (`applyJournaledOps`). Review writes
-          // reach the store past `applyOps`, so without this a disconnected replica still
-          // committed a comment locally and never replicated it. The ops are opaque here —
-          // the callback builds them — so the gate sees an empty batch: its readiness and
-          // attachment ladder still answers, which is the half this lane was missing.
-          if (collaborationSession) {
-            const collaborationRefusal = collaborationSession.gateOperations([], storyScope());
-            if (collaborationRefusal) {
-              return { committed: false, rejected: true, opCount: 0, reason: collaborationRefusal };
+      // No caret follow: a review write does not move the reader, even when the caret sits
+      // off screen at an item a host opened with `reveal: false`.
+      let refusal: string | null = null;
+      withoutCaretFollow(() => {
+        refusal = commit(
+          // Reported as a RESULT, not a boolean: `commit` reads the refusal reason off it, and
+          // a boolean made every refused accept clear `lastRejection` instead of setting it.
+          () => {
+            // Resolving a revision or writing a comment is a WRITE, so viewing refuses it here
+            // too. These paths reach the store through the session directly rather than
+            // through `applyOps`, so the lane gate above never sees them.
+            if (editingMode === 'view') {
+              return { committed: false, rejected: true, opCount: 0, reason: VIEWING_REFUSAL };
             }
+            if (
+              collaborationSession &&
+              (intent === undefined || !REPLICABLE_REVIEW_WRITES.has(intent))
+            ) {
+              return {
+                committed: false,
+                rejected: true,
+                opCount: 0,
+                reason: 'experimental-collaboration-body-text-only',
+              };
+            }
+            // The READINESS gate the typing lane asks (`applyJournaledOps`). Review writes
+            // reach the store past `applyOps`, so without this a disconnected replica still
+            // committed a comment locally and never replicated it. The ops are opaque here —
+            // the callback builds them — so the gate sees an empty batch: its readiness and
+            // attachment ladder still answers, which is the half this lane was missing.
+            if (collaborationSession) {
+              const collaborationRefusal = collaborationSession.gateOperations([], storyScope());
+              if (collaborationRefusal) {
+                return {
+                  committed: false,
+                  rejected: true,
+                  opCount: 0,
+                  reason: collaborationRefusal,
+                };
+              }
+            }
+            // Bound to the collaboration actor: review writes mint comment and content-control
+            // ids outside `applyOps`, so nothing else would bind one. Two peers commenting on
+            // the same snapshot would otherwise both take `w:id="${highest + 1}"`.
+            const actor = collaborationSession?.identity.actorId;
+            const result = runWithTransactionActor(actor, () => run(commitHistoryGroup.value));
+            const reason = typeof result.reason === 'string' ? { reason: result.reason } : {};
+            const ok = result.committed;
+            return { committed: ok, rejected: !ok, opCount: 0, ...reason };
+          },
+          () => {
+            // The layout is FLUSHED first, because the clamp needs post-edit lengths and this
+            // thunk runs before the repaint. Resolving a revision can remove the very characters
+            // the caret was in; an offset left past the end refuses every keystroke that follows
+            // it, which is what made the document look frozen after an Accept.
+            flushLayout();
+            // Raise the flag AGAIN. It is one-shot, `commit` raised it before this thunk ran,
+            // and the flush above consumed it — so the render that follows read the stale DOM
+            // selection back over the clamp and the caret jumped to the paragraph start.
+            selectionSync.noteModelMoved();
+            // Clamped within the story the READER is in, for the reason `applyAutomationOps`
+            // states below: the body's paragraph list is the wrong ruler while a header or a
+            // note is open, and clamping to it moved the caret into the document while the
+            // scope stayed on the furniture — after which every keystroke was refused as
+            // `unknown-paragraph`. Accepting a header card is exactly that situation.
+            const order = paragraphOrder();
+            if (order.length === 0) return null;
+            const mapped = mapSelectionAcrossText(
+              selection,
+              caretParagraph,
+              beforeText,
+              textOf(caretParagraph)
+            );
+            return clampedToDocument(editingLayout(), order, mapped);
           }
-          // Bound to the collaboration actor: review writes mint comment and content-control
-          // ids outside `applyOps`, so nothing else would bind one. Two peers commenting on
-          // the same snapshot would otherwise both take `w:id="${highest + 1}"`.
-          const actor = collaborationSession?.identity.actorId;
-          const result = runWithTransactionActor(actor, () => run(commitHistoryGroup.value));
-          const reason = typeof result.reason === 'string' ? { reason: result.reason } : {};
-          const ok = result.committed;
-          return { committed: ok, rejected: !ok, opCount: 0, ...reason };
-        },
-        () => {
-          // The layout is FLUSHED first, because the clamp needs post-edit lengths and this
-          // thunk runs before the repaint. Resolving a revision can remove the very characters
-          // the caret was in; an offset left past the end refuses every keystroke that follows
-          // it, which is what made the document look frozen after an Accept.
-          flushLayout();
-          // Raise the flag AGAIN. It is one-shot, `commit` raised it before this thunk ran,
-          // and the flush above consumed it — so the render that follows read the stale DOM
-          // selection back over the clamp and the caret jumped to the paragraph start.
-          selectionSync.noteModelMoved();
-          // Clamped within the story the READER is in, for the reason `applyAutomationOps`
-          // states below: the body's paragraph list is the wrong ruler while a header or a
-          // note is open, and clamping to it moved the caret into the document while the
-          // scope stayed on the furniture — after which every keystroke was refused as
-          // `unknown-paragraph`. Accepting a header card is exactly that situation.
-          const order = paragraphOrder();
-          if (order.length === 0) return null;
-          const mapped = mapSelectionAcrossText(
-            selection,
-            caretParagraph,
-            beforeText,
-            textOf(caretParagraph)
-          );
-          return clampedToDocument(editingLayout(), order, mapped);
-        }
-      );
+        );
+      });
+      return refusal;
     },
 
     revisionDisplayMode: reviewDisplayMode,

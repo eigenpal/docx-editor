@@ -535,6 +535,9 @@ export { DocumentSearchNavigateOptions }
 
 export { DocumentSearchOptions }
 
+// @public
+export type DocumentStyleSummary = ReturnType<Editor['getDocumentStyles']>[number];
+
 export { DocxDocument }
 
 // @public (undocumented)
@@ -1414,6 +1417,9 @@ export interface DocxEditorRef {
     }): EditorSnapshot;
 }
 
+// @public (undocumented)
+export type DocxEditorRefCallback<T> = (node: T | null) => void;
+
 // @public
 export function DocxEditorRevisionMarkup(props: DocxEditorRevisionMarkupProps): null;
 
@@ -1897,6 +1903,16 @@ export { FontLoadFailure }
 
 export { FontLoadFailureReason }
 
+// @public
+export interface FontOption {
+    // (undocumented)
+    category?: 'sans-serif' | 'serif' | 'monospace' | 'other';
+    // (undocumented)
+    fontFamily: string;
+    // (undocumented)
+    name: string;
+}
+
 export { FontOrigin }
 
 export { FontResolutionRequest }
@@ -1913,6 +1929,30 @@ export { FontSource }
 export { FontSourceSubstitution }
 
 export { FontUrlSource }
+
+// @public
+export type FormattingAction = 'bold' | 'italic' | 'underline' | 'strikethrough' | 'superscript' | 'subscript' | 'clearFormatting' | 'bulletList' | 'numberedList' | 'indent' | 'outdent' | 'insertLink' | 'setRtl' | 'setLtr' | {
+    type: 'fontFamily';
+    value: string;
+} | {
+    type: 'fontSize';
+    value: number;
+} | {
+    type: 'textColor';
+    value: ColorValue | string;
+} | {
+    type: 'highlightColor';
+    value: string;
+} | {
+    type: 'alignment';
+    value: ParagraphAlignment;
+} | {
+    type: 'lineSpacing';
+    value: number;
+} | {
+    type: 'applyStyle';
+    value: string;
+};
 
 export { generateRulerTicks }
 
@@ -2085,6 +2125,21 @@ export interface IndentUpdate {
 export function isFieldLink(link: SurfaceHyperlink): boolean;
 
 export { isFontResolver }
+
+// @public (undocumented)
+export interface ListState {
+    // (undocumented)
+    isInList: boolean;
+    // (undocumented)
+    level: number;
+    // (undocumented)
+    numId?: number;
+    // (undocumented)
+    type: ListType;
+}
+
+// @public
+export type ListType = 'bullet' | 'numbered' | 'none';
 
 export { loadFonts }
 
@@ -2497,6 +2552,9 @@ export interface PaginatedDocxEditorShellProps {
     readonly source: Uint8Array;
 }
 
+// @public
+export type ParagraphAlignment = 'left' | 'center' | 'right' | 'both' | 'distribute';
+
 export { ParagraphFlagState }
 
 export { ParagraphFormatRead }
@@ -2678,6 +2736,9 @@ export interface ScopedChromeAnchor {
     readonly style: CSSProperties;
 }
 
+// @public
+export type ScopedChromeAnchorPlacement = 'before' | 'after' | 'story-label';
+
 export { ScrollToAnchorOptions }
 
 export { SEARCH_DEBOUNCE_MS }
@@ -2687,6 +2748,26 @@ export { SEARCH_HIGHLIGHT_PRIORITY }
 export { SEARCH_HIGHLIGHT_SET }
 
 export { SEARCH_MATCH_LIMIT }
+
+// @public
+export interface SelectionFormatting {
+    alignment?: ParagraphAlignment;
+    bidi?: boolean;
+    bold?: boolean;
+    color?: string;
+    fontFamily?: string;
+    fontSize?: number;
+    highlight?: string;
+    indentLeft?: number;
+    italic?: boolean;
+    lineSpacing?: number;
+    listState?: ListState;
+    strike?: boolean;
+    styleId?: string;
+    subscript?: boolean;
+    superscript?: boolean;
+    underline?: boolean;
+}
 
 // @public
 export function Slot(input: SlotProps): ReactElement<unknown, string | react.JSXElementConstructor<any>> | null;
@@ -2701,6 +2782,62 @@ export interface SlotProps extends HTMLAttributes<HTMLElement> {
     // (undocumented)
     style?: CSSProperties;
 }
+
+// @public
+export type TableAction = 'addRowAbove' | 'addRowBelow' | 'addColumnLeft' | 'addColumnRight' | 'deleteRow' | 'deleteColumn' | 'mergeCells' | 'splitCell' | 'deleteTable' | 'selectTable' | 'selectRow' | 'selectColumn' | 'borderAll' | 'borderOutside' | 'borderInside' | 'borderNone' | 'borderTop' | 'borderBottom' | 'borderLeft' | 'borderRight' | {
+    color: string | null;
+    type: 'cellFillColor';
+} | {
+    color: string;
+    type: 'borderColor';
+} | {
+    size: number;
+    type: 'borderWidth';
+} | {
+    color: string;
+    side: 'top' | 'bottom' | 'left' | 'right' | 'all';
+    size: number;
+    style: string;
+    type: 'cellBorder';
+} | {
+    align: 'top' | 'center' | 'bottom';
+    type: 'cellVerticalAlign';
+} | {
+    margins: {
+        bottom?: number;
+        left?: number;
+        right?: number;
+        top?: number;
+    };
+    type: 'cellMargins';
+} | {
+    direction: string | null;
+    type: 'cellTextDirection';
+} | {
+    type: 'toggleNoWrap';
+} | {
+    height: number | null;
+    rule?: 'auto' | 'atLeast' | 'exact';
+    type: 'rowHeight';
+} | {
+    type: 'toggleHeaderRow';
+} | {
+    type: 'distributeColumns';
+} | {
+    type: 'autoFitContents';
+} | {
+    props: {
+        justification?: 'left' | 'center' | 'right' | null;
+        width?: number | null;
+        widthType?: string | null;
+    };
+    type: 'tableProperties';
+} | {
+    type: 'openTableProperties';
+} | {
+    styleId: string;
+    type: 'applyTableStyle';
+};
 
 // @public
 export interface TableBorderColorNamespace extends TableChromePartComponent {
@@ -3423,7 +3560,7 @@ export interface UseRevisionMarkupDialogReturn extends UseDialogReturn<ResolvedR
 export function useScopeClassName(): '' | 'docx-editor ';
 
 // @public
-export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: AnchorPlacement): ScopedChromeAnchor;
+export function useScopedChromeAnchor(findAnchor: (viewport: HTMLElement) => HTMLElement | null, placement: ScopedChromeAnchorPlacement): ScopedChromeAnchor;
 
 // @public
 export function useTableBorderTargetLabel(): string;

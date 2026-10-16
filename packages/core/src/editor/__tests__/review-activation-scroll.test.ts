@@ -158,4 +158,24 @@ describe('activation and the viewport', () => {
       dispose();
     }
   });
+
+  // The caret sits at the item, off screen. Resolving it must not scroll there either.
+  for (const action of ['accept', 'reject'] as const) {
+    test(`${action}ing an item opened with reveal: false does not scroll`, async () => {
+      const { editor, scroller, dispose } = mount();
+      try {
+        const { key } = farItem(editor);
+        expect(editor.setActiveReviewItem(key, { reveal: false }).ok).toBe(true);
+        const result =
+          action === 'accept' ? editor.acceptReviewItem(key) : editor.rejectReviewItem(key);
+        expect(result.ok).toBe(true);
+        await settle();
+        scroller.dispatchEvent(new Event('scroll'));
+        await settle();
+        expect(scroller.scrollTop).toBe(0);
+      } finally {
+        dispose();
+      }
+    });
+  }
 });

@@ -36,6 +36,8 @@ export interface ReviewRailValue {
   readonly cardClassName: string | undefined;
   readonly readOnly: boolean;
   readonly composeTop: number | null;
+  /** Whether a comment draft is open. A `Draft` part renders only while it is. */
+  readonly drafting: boolean;
   readonly review: ReviewActions;
   readonly allItems: readonly ReviewItemView[];
   readonly authorSlots: ReadonlyMap<string, number>;
@@ -85,6 +87,7 @@ const INERT_RAIL: ReviewRailValue = {
   cardClassName: undefined,
   readOnly: false,
   composeTop: null,
+  drafting: false,
   review: INERT_REVIEW,
   allItems: [],
   authorSlots: new Map(),

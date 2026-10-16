@@ -111,6 +111,16 @@ const faceKey = (family: string, weight: number, style: string): string =>
   `${family.trim().toLowerCase()} ${weight} ${style}`;
 
 export { GOOGLE_FONTS_REVISION, GOOGLE_FONT_CATALOG, type GoogleFontFace };
+// The package entry's types this entry's signatures name, so a consumer importing only
+// `@docx-editor.dev/fonts/google` can write them down.
+export type {
+  DefaultFontFaceRequest,
+  DefaultFontSource,
+  DefaultFontSubstitution,
+  FontOriginRequest,
+  FontResolverMark,
+  ResolvedFontFace,
+} from './index.ts';
 
 /** Every family the catalog can serve, sorted — the set a font picker may offer. */
 export const GOOGLE_FONT_FAMILIES: readonly string[] = Object.freeze([
