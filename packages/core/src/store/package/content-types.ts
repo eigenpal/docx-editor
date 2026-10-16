@@ -80,6 +80,28 @@ export function isConventionalMime(value: string): boolean {
   );
 }
 
+/** The type an extension-style image subtype (`image/.jpg`, written by some producers) means. */
+const EXTENSION_SUBTYPE_IMAGE_TYPES: ReadonlyMap<string, string> = new Map([
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['jpe', 'image/jpeg'],
+  ['gif', 'image/gif'],
+  ['bmp', 'image/bmp'],
+  ['webp', 'image/webp'],
+  ['svg', 'image/svg+xml'],
+  ['tif', 'image/tiff'],
+  ['tiff', 'image/tiff'],
+  ['emf', 'image/x-emf'],
+  ['wmf', 'image/x-wmf'],
+]);
+
+/** The standard type for a known extension-style image type; any other type unchanged. */
+export function standardImageType(type: string): string {
+  if (!/^image\/\./i.test(type)) return type;
+  return EXTENSION_SUBTYPE_IMAGE_TYPES.get(asciiFold(type.slice('image/.'.length))) ?? type;
+}
+
 /** ASCII-case-insensitive extension key (leading dot removed; ASCII-only fold). */
 export function extensionKey(extension: string): string {
   return asciiFold(extension.replace(/^\./, ''));

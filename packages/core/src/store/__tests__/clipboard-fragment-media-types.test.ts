@@ -2,7 +2,7 @@
 // like any other picture. The signature still decides: a claim the bytes contradict drops.
 
 import { describe, expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { serializeOoxmlPart } from '../package/ooxml-tree.ts';
 import { extractFragmentPackage } from '../store/clipboard-fragment-extract.ts';
 import {
@@ -93,6 +93,15 @@ describe('clipboard media with an extension-style content type', () => {
       expect(media).toEqual(['/word/media/image1.png']);
     }
   );
+
+  test('the copied package declares the standard type, so any reader admits the picture', () => {
+    const source = loadPackage(pictureSource('image/.png', 'PNG', ONE_PIXEL_PNG));
+    const extracted = extractFragmentPackage(source, fullBodyCoverage(source));
+    if (!extracted.ok) throw new Error('extraction failed');
+    const types = strFromU8(unzipSync(extracted.bytes)['[Content_Types].xml']!);
+    expect(types).toContain('ContentType="image/png"');
+    expect(types).not.toContain('image/.png');
+  });
 
   test('a TIFF picture declared image/.tif survives copy and paste', () => {
     const { documentXml, media } = copyAndPaste('image/.tif', 'tif', MINIMAL_TIFF);
