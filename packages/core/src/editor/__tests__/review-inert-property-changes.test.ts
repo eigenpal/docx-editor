@@ -539,6 +539,31 @@ describe('property changes that change nothing', () => {
     expect(derived.length).toBe(2);
   });
 
+  test('typing in a text box with no revision keeps the cached queue', () => {
+    const box =
+      '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:100pt;height:40pt"><v:textbox><w:txbxContent>' +
+      '<w:p><w:r><w:t>boxed</w:t></w:r></w:p>' +
+      '</w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+    using view = mount(p('', box) + p('') + p(ppr('<w:jc w:val="center"/>', '')));
+    expect(view.count()).toBe(1);
+    const part = view.editor.surface!.session.part();
+    const visit = (node: (typeof part.root.children)[number], inBox: boolean): string | null => {
+      if (node.kind === 'textValue') return null;
+      if (inBox && node.kind === 'paragraph') return node.id;
+      for (const child of node.children) {
+        const found = visit(child, inBox || node.localName === 'txbxContent');
+        if (found) return found;
+      }
+      return null;
+    };
+    const at = { paragraphId: visit(part.root, false)!, offset: 2 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    const before = derivations;
+    expect(view.editor.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
+    expect(view.count()).toBe(1);
+    expect(derivations).toBe(before);
+  });
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

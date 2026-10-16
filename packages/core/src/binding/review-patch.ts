@@ -112,7 +112,7 @@ export function canApplyLocalReviewPatch(
 
 /**
  * `cached` with the dirty paragraph's revisions replaced by `localRevisions`, or null when the
- * paragraph has no place in `paragraphOrder`. Pieces of a cached
+ * paragraph has no place in `paragraphOrder` and holds a revision. Pieces of a cached
  * group are taken into the group first; `filterLocal` then decides over the rest, so a piece
  * whose group is listed is never decided on its own.
  */
@@ -124,10 +124,11 @@ export function patchLocalReviewItems(
   filterLocal: (items: readonly ReviewRevisionItem[]) => readonly ReviewRevisionItem[] = (items) =>
     items
 ): ReviewItem[] | null {
-  // A paragraph outside the story's own order (one in a text box) has no place to splice into:
-  // the caller derives the whole queue instead of keeping the cached one.
+  // A paragraph outside the story's own order (one in a text box) has no place to splice into.
+  // With no revision of its own the cached queue still holds; with one, the caller derives the
+  // whole queue instead.
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
-  if (dirtyRank === undefined) return null;
+  if (dirtyRank === undefined) return localRevisions.length === 0 ? [...cached] : null;
 
   const patched: ReviewItem[] = [];
   let insertAt: number | null = null;
