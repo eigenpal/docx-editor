@@ -12,6 +12,7 @@ import type { BlockFragmentRecord, SemanticLayout } from '../../layout/semantic-
 import { createDocxEditor } from '../docx-editor.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
 import { layoutNodeTokenVisitTestRecorder } from '../../layout/layout-cache.ts';
+import { setDeferredLayoutForTest } from '../surface-deferred-layout.ts';
 import {
   completeProgressiveOpen,
   continueProgressiveOpen,
@@ -402,6 +403,80 @@ describe('a large open laid out in slices', () => {
     }
   }, 60_000);
 
+  /** One page per paragraph: enough later pages for a final flush to defer them. */
+  function pagePerParagraphDocx(count: number): Uint8Array {
+    const parts: string[] = [];
+    for (let index = 0; index < count; index += 1)
+      parts.push(paragraph(`Paragraph ${index}`, '<w:pageBreakBefore/>'));
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+  }
+
+  test('a forced finish after an edit leaves nothing pending and shows the edited document', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const surface = mounted.surface;
+    const reference = mountPaginatedSurface(document.createElement('div'), bytes);
+    if (!reference.ok) throw new Error(reference.reason);
+    const restore = setDeferredLayoutForTest(0, 0);
+    try {
+      // Right after the mount: the pages on screen are the first slice's few, so the final
+      // flush has many later pages to leave to a background pass.
+      const split = (target: typeof surface) => {
+        const ids = target.session.paragraphIds();
+        target.session.applyTreeOps([
+          { op: 'splitParagraph', paragraphId: ids[ids.length - 1]!, offset: 1 },
+        ]);
+      };
+      split(surface);
+      split(reference.surface);
+      expect(completeProgressiveOpen(surface)).toBe(true);
+      // Nothing is left to a background pass.
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
+      restore();
+      reference.surface.flushPendingInput();
+      expect(signature(surface.layout())).toEqual(signature(reference.surface.layout()));
+    } finally {
+      restore();
+      surface.destroy();
+      reference.surface.destroy();
+    }
+  }, 60_000);
+
+  test('a surface destroyed while a deferred pass runs leaves no pending marker', () => {
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, docx(), {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const restore = setDeferredLayoutForTest(0, 0);
+    try {
+      const surface = mounted.surface;
+      const first = { paragraphId: surface.session.paragraphIds()[0]!, offset: 1 };
+      surface.setSelection({ anchor: first, head: first });
+      surface.splitParagraph();
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(true);
+      surface.destroy();
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
   test('a long table after the first slice is hashed a row at a time', () => {
     const bytes = longTableDocx();
     const surface = slicedMount(bytes);
@@ -409,7 +484,10 @@ describe('a large open laid out in slices', () => {
     try {
       let most = 0;
       do recorder.reset();
-      while (!continueProgressiveOpen(surface, 0) && ((most = Math.max(most, recorder.nodeVisits)), true));
+      while (
+        !continueProgressiveOpen(surface, 0) &&
+        ((most = Math.max(most, recorder.nodeVisits)), true)
+      );
       // The table has 600 rows of about a dozen nodes each. Hashed whole, one slice visited
       // all of them; a row at a time, no slice visits more than a few rows' worth.
       expect(most).toBeGreaterThan(0);

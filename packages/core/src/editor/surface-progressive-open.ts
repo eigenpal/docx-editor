@@ -216,6 +216,9 @@ export function startOpeningSlices(
         const total = host.bodyBlockCount();
         if (total !== undefined && limit >= total) {
           host.finish();
+          // The final flush can itself leave later pages to a background pass; a reader of
+          // the whole pagination needs those too.
+          if (force && host.busy()) host.finishBusy();
           return true;
         }
         if (nextLimit === null) {

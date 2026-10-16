@@ -5750,6 +5750,7 @@ export function mountPaginatedSurface(
       if (destroyed) return;
       destroyed = true;
       stopOpening();
+      openingBlockLimit = null; // So cancelling a deferred pass clears the pending marker.
       deferredLayout.cancel();
       canonicalLayout.cancel();
       // Typed-but-unflushed text lands before teardown, so a detach-then-save
