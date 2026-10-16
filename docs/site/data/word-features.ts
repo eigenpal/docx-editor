@@ -295,7 +295,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Lines wrap between dictionary words in Thai, Lao, Khmer, and Myanmar text without spaces. Table AutoFit sizes columns by the widest word, not the whole phrase. Word boundaries ignore formatting and tracked-change boundaries inside a word. Line breaks never separate tone marks, vowel signs, or combining marks from their base letter. A word wider than the line breaks between characters. Word boundaries come from Intl.Segmenter with ICU dictionary data. Runtimes without that data wrap these scripts only at spaces and dashes. Digits, Latin letters, and punctuation next to these scripts keep their own break rules.',
+      'Lines wrap between dictionary words in Thai, Lao, Khmer, and Myanmar text without spaces, in body text, table cells, and field results. Table AutoFit sizes columns by the widest word, not the whole phrase. Word boundaries ignore formatting and tracked-change boundaries inside a word. Line breaks never split a grapheme cluster, so tone marks and vowel signs stay with their base letter. A word wider than the line breaks between grapheme clusters. Lines can end after a zero-width space in any script. Fields, pictures, punctuation, and no-break spaces next to these scripts follow the Latin text rules. Word boundaries come from Intl.Segmenter with ICU dictionary data, so they can differ between ICU versions. Runtimes without that data, such as small-icu Node.js builds and Hermes, wrap these scripts only at spaces, zero-width spaces, and dashes. isDictionaryWordBreakSupported reports support, and setDictionaryWordSegmenter installs another dictionary.',
     docsLink: '/docs/2.x/word-fidelity',
   },
   {

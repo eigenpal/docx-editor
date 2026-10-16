@@ -92,7 +92,7 @@ export function justifyCjkSpans(
     if (
       previous.text.endsWith(' ') ||
       ((isCjk(before) || isCjk(after)) &&
-        breaks?.decision(pieces[index]!, 0) === 'opens' &&
+        breaks?.decision(pieces[index]!, 0, previous.text, current.text) === 'opens' &&
         cjkCutAllowedBetween(before, after) &&
         !/[\u00a0\u202f\u2060\ufeff]/u.test(previous.text.slice(-1) + current.text[0]))
     )

@@ -101,6 +101,9 @@ export const BREAK_AFTER_DASH: ReadonlySet<string> = new Set(['-', '‐', '–',
  */
 export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
 
+/** U+200B ZERO WIDTH SPACE: an invisible break opportunity, common in Thai and Khmer text. */
+export const ZERO_WIDTH_SPACE = '\u200b';
+
 // Whitespace that ends a word at a seam: every JavaScript `\s` except the no-break
 // characters above, which `\s` also matches (U+2060 is not `\s`).
 /** A breaking space at a run's end or start: the break opportunities a run seam offers. */
@@ -152,7 +155,8 @@ function mergeBoundaries(latin: readonly number[], cjk: readonly number[]): numb
 }
 
 /**
- * Break points inside a piece: after each run of spaces (words stay whole), after a dash
+ * Break points inside a piece: after each run of spaces (words stay whole) and each zero-width
+ * space (never before one), after a dash
  * that sits between non-space text, with each tab as its own atom so tab-stop geometry can
  * size `\t` independently of neighbouring text — and, when `ideographic` allows it,
  * between ideographic characters, where UAX #14 allows a line to end (kinsoku vetoes
@@ -171,14 +175,17 @@ export function wordBoundaries(text: string, ideographic: boolean): number[] {
     if (ch === '\t') {
       if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
       boundaries.push(index + 1);
-    } else if (ch === ' ') {
-      boundaries.push(index + 1);
+    } else if (ch === ' ' || ch === ZERO_WIDTH_SPACE) {
+      // UAX #14 class ZW: a break opportunity after a zero-width space, never before it,
+      // not even after a space.
+      if (text[index + 1] !== ZERO_WIDTH_SPACE) boundaries.push(index + 1);
     } else if (
       BREAK_AFTER_DASH.has(ch) &&
       index > 0 &&
       text[index - 1] !== ' ' &&
       index + 1 < text.length &&
       text[index + 1] !== ' ' &&
+      text[index + 1] !== ZERO_WIDTH_SPACE &&
       !BREAK_AFTER_DASH.has(text[index + 1]!)
     ) {
       boundaries.push(index + 1);
@@ -230,18 +237,21 @@ export function cjkCutAllowedBetween(
  */
 export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
+  // No line starts with a zero-width space, even after an emergency cut.
+  if (text.charCodeAt(index) === 0x200b) return false;
   return cjkCutAllowedBetween(lastCodePointOf(text.slice(0, index)), text.codePointAt(index));
 }
 
 /**
- * Whether a cluster boundary exists between two adjacent code points, memoized by the pair.
+ * Whether a cluster boundary exists between two adjacent code points, under the active
+ * grapheme boundary, memoized by the pair.
  *
- * Only reached at a piece seam that starts at or above U+0300, so ASCII placement never pays
- * for it.
+ * Asked at a piece seam whose second code point is at or above U+0300, and at each
+ * dictionary word cut. ASCII seams never reach it.
  */
 const clusterBreakCache = new Map<number, boolean>();
 let clusterBreakEpoch = -1;
-function clusterBreaksBetween(before: number, after: number): boolean {
+export function clusterBreaksBetween(before: number, after: number): boolean {
   const epoch = graphemeBoundaryEpoch();
   if (clusterBreakEpoch !== epoch || clusterBreakCache.size >= 2048) {
     clusterBreakCache.clear();
@@ -299,6 +309,7 @@ export function lineOpenDecisionAt(
     afterIntraPieceCut ||
     lastEmitted === '' ||
     ENDS_WITH_BREAKING_SPACE.test(lastEmitted) ||
+    lastEmitted.endsWith(ZERO_WIDTH_SPACE) ||
     STARTS_WITH_BREAKING_SPACE.test(candidate) ||
     (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
       !BREAK_AFTER_DASH.has(candidate[0]!));
@@ -307,6 +318,8 @@ export function lineOpenDecisionAt(
   // text — no decode, no set lookups. (A surrogate unit is above the threshold.)
   const lastUnit = lastEmitted.length === 0 ? 0 : lastEmitted.charCodeAt(lastEmitted.length - 1);
   const firstUnit = candidate.charCodeAt(0);
+  // UAX #14 LB7: never break before a zero-width space, even after a space.
+  if (firstUnit === 0x200b && lastUnit !== 0) return 'forbidden';
   if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
     // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below
     // U+0300 no code point extends a cluster, so ASCII seams skip the check.

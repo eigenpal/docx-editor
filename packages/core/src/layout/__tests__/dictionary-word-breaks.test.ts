@@ -9,10 +9,12 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import {
   dictionaryScriptOf,
-  dictionaryScriptSupported,
+  isDictionaryWordBreakSupported,
   dictionaryWordBreaks,
+  resetDictionaryWordSegmenter,
   setDictionaryWordSegmenter,
 } from '../dictionary-word-breaks.ts';
+import * as layoutApi from '../index.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
 import { paragraphMinimumWidthPt } from '../table-autofit-widths.ts';
@@ -37,7 +39,13 @@ const linesOf = (body: string, width: number): string[] =>
     line.spans.map((span) => span.text).join('')
   );
 
-const run = (text: string, props = '') =>
+const fieldResult = (instruction: string, result: string) =>
+  `<w:r><w:fldChar w:fldCharType="begin"/></w:r>` +
+  `<w:r><w:instrText xml:space="preserve"> ${instruction} </w:instrText></w:r>` +
+  `<w:r><w:fldChar w:fldCharType="separate"/></w:r>${run(result)}` +
+  `<w:r><w:fldChar w:fldCharType="end"/></w:r>`;
+
+const run = (text: string, props = ''): string =>
   `<w:r><w:rPr>${props}<w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">${text}</w:t></w:r>`;
 
 const minimumOf = (body: string): number =>
@@ -55,14 +63,14 @@ const minimumOf = (body: string): number =>
 // "I want to eat rice today": ฉัน|อยาก|กิน|ข้าว|วัน|นี้ (3, 4, 3, 4, 3, 3 units).
 const SENTENCE = 'ฉันอยากกินข้าววันนี้';
 
-afterEach(() => setDictionaryWordSegmenter(undefined));
+afterEach(() => resetDictionaryWordSegmenter());
 
 describe('dictionary word boundaries', () => {
   test('this runtime has dictionary data for every supported script', () => {
-    expect(dictionaryScriptSupported('thai')).toBe(true);
-    expect(dictionaryScriptSupported('lao')).toBe(true);
-    expect(dictionaryScriptSupported('khmer')).toBe(true);
-    expect(dictionaryScriptSupported('myanmar')).toBe(true);
+    expect(isDictionaryWordBreakSupported('thai')).toBe(true);
+    expect(isDictionaryWordBreakSupported('lao')).toBe(true);
+    expect(isDictionaryWordBreakSupported('khmer')).toBe(true);
+    expect(isDictionaryWordBreakSupported('myanmar')).toBe(true);
   });
 
   test('a Thai sentence splits into its words', () => {
@@ -92,7 +100,7 @@ describe('dictionary word boundaries', () => {
   test('a segmenter cut inside a grapheme cluster is dropped', () => {
     // A segmenter that cuts after every code unit: the probe rejects it as no dictionary.
     setDictionaryWordSegmenter((run) => Array.from({ length: run.length - 1 }, (_, i) => i + 1));
-    expect(dictionaryScriptSupported('thai')).toBe(false);
+    expect(isDictionaryWordBreakSupported('thai')).toBe(false);
     expect(dictionaryWordBreaks(SENTENCE)).toEqual([]);
   });
 
@@ -163,7 +171,7 @@ describe('Thai line wrapping', () => {
     // One word: it is chopped at the margin at grapheme boundaries, never inside a cluster.
     expect(fallback).toEqual(['ฉันอยากกิ', 'นข้าววัน', 'นี้']);
     for (const line of fallback) expect(line).not.toMatch(/^\p{M}/u);
-    setDictionaryWordSegmenter(undefined);
+    resetDictionaryWordSegmenter();
     expect(linesOf(`<w:p>${run(SENTENCE)}</w:p>`, 54)).toEqual(['ฉันอยาก', 'กินข้าว', 'วันนี้']);
   });
 });
@@ -185,6 +193,96 @@ describe('run seams inside a grapheme cluster', () => {
     setDictionaryWordSegmenter(null);
     for (const line of linesOf(`<w:p>${run('ข้าวမ')}${run('ြန်မာ')}</w:p>`, 30))
       expect(line).not.toMatch(/^\u103c/u);
+  });
+});
+
+describe('fields and other layout-owned atoms in dictionary-script paragraphs', () => {
+  test('Latin punctuation around a field keeps the rules of a Latin paragraph', () => {
+    const thai = `<w:p>${run('ฉันอยาก see p(')}${fieldResult('REF x', '12')}${run(').')}</w:p>`;
+    const latin = `<w:p>${run('xxxxxxx see p(')}${fieldResult('REF x', '12')}${run(').')}</w:p>`;
+    for (let width = 30; width <= 90; width += 6) {
+      // The Thai words may split where the Latin word chops; from "p(" on, the lines match.
+      const tail = (lines: string[]) => lines.slice(lines.findIndex((line) => line.includes('p(')));
+      expect(tail(linesOf(thai, width))).toEqual(tail(linesOf(latin, width)));
+      if (width >= 42) expect(linesOf(thai, width).at(-1)!.endsWith('p(12).')).toBe(true);
+    }
+  });
+
+  test('a page number between Thai words does not open a line on its own', () => {
+    const body = `<w:p>${run('ราคา')}<w:fldSimple w:instr="PAGE">${run('5')}</w:fldSimple>${run('บาท')}</w:p>`;
+    expect(linesOf(body, 54)).toEqual(['ราคา5บาท']);
+  });
+
+  test('a Thai field result wraps and sizes AutoFit at its words', () => {
+    for (const body of [
+      `<w:p>${fieldResult('REF heading', SENTENCE)}</w:p>`,
+      `<w:p><w:fldSimple w:instr="DOCPROPERTY Title">${run(SENTENCE)}</w:fldSimple></w:p>`,
+      `<w:p>${fieldResult('MERGEFIELD name', SENTENCE)}</w:p>`,
+    ]) {
+      expect(linesOf(body, 48)).toEqual(['ฉันอยาก', 'กินข้าว', 'วันนี้']);
+      expect(minimumOf(body)).toBeCloseTo(24, 5);
+    }
+  });
+});
+
+describe('zero-width space', () => {
+  const spaced = 'ฉัน\u200bอยาก\u200bกิน\u200bข้าว\u200bวัน\u200bนี้';
+
+  test('a line may end after a zero-width space and never starts with one', () => {
+    const lines = linesOf(`<w:p>${run(spaced)}</w:p>`, 60);
+    expect(lines).toEqual(['ฉัน\u200bอยาก\u200b', 'กิน\u200bข้าว\u200b', 'วัน\u200bนี้']);
+    // Never before a zero-width space, even after a space.
+    expect(linesOf(`<w:p>${run('alpha \u200bbeta')}</w:p>`, 42)).toEqual(['alpha \u200b', 'beta']);
+    const khmer = linesOf(`<w:p>${run('ភាសា\u200bខ្មែរ\u200bគឺជា\u200bភាសា')}</w:p>`, 60);
+    for (const line of khmer) expect(line.startsWith('\u200b')).toBe(false);
+  });
+
+  test('it breaks Latin text and AutoFit segments too, also without dictionary data', () => {
+    expect(linesOf(`<w:p>${run('alpha\u200bbeta')}</w:p>`, 42)).toEqual(['alpha\u200b', 'beta']);
+    setDictionaryWordSegmenter(null);
+    // ฉัน plus its zero-width space is the widest of the six words at four units.
+    expect(minimumOf(`<w:p>${run(spaced)}</w:p>`)).toBeCloseTo(30, 5);
+    expect(minimumOf(`<w:p>${run('ฉัน\u200b')}${run('อยาก')}</w:p>`)).toBeCloseTo(24, 5);
+  });
+});
+
+describe('a dash that opens a run', () => {
+  test('breaks after itself when text precedes it in the run before', () => {
+    expect(linesOf(`<w:p>${run('ALPHA')}${run('-PRIME')}</w:p>`, 42)).toEqual(['ALPHA-', 'PRIME']);
+    expect(linesOf(`<w:p>${run('ประเทศ')}${run('-ข้าว')}</w:p>`, 30)).toEqual([
+      'ประเท',
+      'ศ-',
+      'ข้าว',
+    ]);
+    expect(minimumOf(`<w:p>${run('กิน')}${run('-word word')}</w:p>`)).toBeCloseTo(24, 5);
+  });
+});
+
+describe('public runtime support API', () => {
+  test('the layout entry exports detection and the segmenter hooks', () => {
+    expect(layoutApi.isDictionaryWordBreakSupported('thai')).toBe(true);
+    layoutApi.setDictionaryWordSegmenter(null);
+    expect(layoutApi.isDictionaryWordBreakSupported('thai')).toBe(false);
+    layoutApi.resetDictionaryWordSegmenter();
+    expect(layoutApi.isDictionaryWordBreakSupported('thai')).toBe(true);
+  });
+
+  test('an installed segmenter supplies the words, and one that throws gives none', () => {
+    // A host dictionary that knows only "ฉัน|อยาก|กิน|ข้าว|วันนี้".
+    setDictionaryWordSegmenter((text) =>
+      text === 'ฉันอยากกินข้าว' ? [3, 7, 10] : text === SENTENCE ? [3, 7, 10, 14] : []
+    );
+    expect(dictionaryWordBreaks(SENTENCE)).toEqual([3, 7, 10, 14]);
+    setDictionaryWordSegmenter((text) => {
+      if (text === 'ฉันอยากกินข้าว') return [3, 7, 10];
+      throw new Error('no data');
+    });
+    expect(dictionaryWordBreaks(SENTENCE)).toEqual([]);
+    // Offsets outside the run, unordered, or fractional are ignored.
+    setDictionaryWordSegmenter((text) =>
+      text === 'ฉันอยากกินข้าว' ? [3, 7, 10] : [0, 99, 7, 3, 2.5, 14]
+    );
+    expect(dictionaryWordBreaks(SENTENCE)).toEqual([7, 14]);
   });
 });
 

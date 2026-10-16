@@ -13,13 +13,20 @@
 //
 // Runtime requirement: `Intl.Segmenter` with ICU dictionary data for the script. Each
 // script is probed once with a known phrase. Where the constructor is absent, or the probe
-// does not find dictionary words (an ICU build without the break dictionaries, or a
-// per-character polyfill), that script gets no cuts and keeps the space and dash rules.
+// does not find dictionary words, that script gets no cuts and keeps the space, dash, and
+// zero-width-space rules. That covers Node.js built with `small-icu` or without Intl, React
+// Native on Hermes, and per-character polyfills. Break positions come from the runtime's
+// ICU dictionaries, so they can differ between ICU versions; layout is deterministic for
+// one runtime, not across runtimes.
 
+import { clusterBreaksBetween } from './cjk-line-break.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { createIntlWordBoundary, isIntlWordSegmenterAvailable } from './word-segment.ts';
 
-/** The scripts that take dictionary word breaks. */
+/**
+ * The scripts that take dictionary word breaks.
+ * @public
+ */
 export type DictionaryScript = 'thai' | 'lao' | 'khmer' | 'myanmar';
 
 /**
@@ -54,8 +61,11 @@ export function hasDictionaryScriptText(text: string): boolean {
 }
 
 /**
- * The replaceable segmenter: interior word boundaries of one single-script run, as UTF-16
- * offsets into it, strictly increasing and inside `(0, run.length)`.
+ * A dictionary word segmenter: the interior word boundaries of one single-script run of Thai,
+ * Lao, Khmer, or Myanmar letters, as strictly increasing UTF-16 offsets inside
+ * `(0, run.length)`. Offsets outside that range, out of order, or inside a grapheme cluster
+ * are ignored. A segmenter that throws gives that run no boundaries.
+ * @public
  */
 export type DictionaryWordSegmenter = (run: string) => readonly number[];
 
@@ -79,6 +89,9 @@ const MAX_PARAGRAPH_UNITS = 65_536;
 /** Only runs up to this length are cached; the cache is cleared when it fills. */
 const MAX_CACHED_RUN_UNITS = 512;
 const MAX_CACHED_RUNS = 4096;
+/** Paragraph texts up to this length keep their cuts, as runs do, in a bounded cache. */
+const MAX_CACHED_TEXT_UNITS = 8192;
+const MAX_CACHED_TEXTS = 256;
 
 function intlSegmenter(): DictionaryWordSegmenter | null {
   if (!isIntlWordSegmenterAvailable()) return null;
@@ -101,15 +114,35 @@ let override: DictionaryWordSegmenter | null | undefined;
 let defaultSegmenter: DictionaryWordSegmenter | null | undefined;
 let support: Partial<Record<DictionaryScript, boolean>> = {};
 const runCache = new Map<string, readonly number[]>();
+const textCache = new Map<string, readonly number[]>();
 
 /**
- * Replace the segmenter, for tests. `null` simulates a runtime without `Intl.Segmenter`;
- * `undefined` restores the default. Clears the probe results and the run cache.
+ * Install the dictionary word segmenter that line breaking and table AutoFit use, for a
+ * runtime whose `Intl.Segmenter` lacks dictionary data (React Native on Hermes, or Node.js
+ * built with `small-icu`). `null` turns dictionary word breaks off: these scripts then wrap
+ * only at spaces, zero-width spaces, and dashes.
+ *
+ * Install it before layout. Layout sessions keep the lines they cached under the previous
+ * segmenter. Each script is probed again through the new segmenter. Call
+ * {@link resetDictionaryWordSegmenter} to restore `Intl.Segmenter`.
+ * @public
  */
-export function setDictionaryWordSegmenter(segmenter: DictionaryWordSegmenter | null | undefined) {
+export function setDictionaryWordSegmenter(segmenter: DictionaryWordSegmenter | null): void {
   override = segmenter;
   support = {};
   runCache.clear();
+  textCache.clear();
+}
+
+/**
+ * Restore the default dictionary word segmenter, `Intl.Segmenter` at the invariant locale.
+ * @public
+ */
+export function resetDictionaryWordSegmenter(): void {
+  override = undefined;
+  support = {};
+  runCache.clear();
+  textCache.clear();
 }
 
 function activeSegmenter(): DictionaryWordSegmenter | null {
@@ -119,11 +152,15 @@ function activeSegmenter(): DictionaryWordSegmenter | null {
 }
 
 /**
- * Whether this runtime finds dictionary words in the script: the probe phrase must split into
- * at least two words, and into fewer words than it has user-perceived characters, so a
- * per-character fallback does not count as dictionary data.
+ * Whether line breaking and table AutoFit find dictionary words in the script.
+ *
+ * True when the active segmenter splits a known phrase into at least two words and into fewer
+ * words than it has user-perceived characters, so a per-character fallback does not count.
+ * When false, text in the script wraps only at spaces, zero-width spaces, and dashes. The
+ * result is probed once per script and segmenter.
+ * @public
  */
-export function dictionaryScriptSupported(script: DictionaryScript): boolean {
+export function isDictionaryWordBreakSupported(script: DictionaryScript): boolean {
   const known = support[script];
   if (known !== undefined) return known;
   const segmenter = activeSegmenter();
@@ -141,6 +178,8 @@ export function dictionaryScriptSupported(script: DictionaryScript): boolean {
   return supported;
 }
 
+const NO_CUTS: readonly number[] = [];
+
 /** Interior cuts of one run, windowed so the cost per call stays bounded. */
 function cutsOfRun(run: string, segmenter: DictionaryWordSegmenter): readonly number[] {
   const cacheable = run.length <= MAX_CACHED_RUN_UNITS;
@@ -154,9 +193,15 @@ function cutsOfRun(run: string, segmenter: DictionaryWordSegmenter): readonly nu
     const to = Math.min(run.length, from + WINDOW_UNITS);
     const last = to === run.length;
     let next = to;
-    for (const cut of segmenter(run.slice(from, to))) {
+    let found: readonly number[];
+    try {
+      found = segmenter(run.slice(from, to));
+    } catch {
+      found = NO_CUTS;
+    }
+    for (const cut of found) {
       const at = from + cut;
-      if (at <= from || at >= to) continue;
+      if (!Number.isInteger(at) || at <= from || at >= to) continue;
       // A boundary near a cut-off window end may be an artifact of the missing context.
       if (!last && at > to - WINDOW_MARGIN_UNITS) break;
       if (cuts.length === 0 || at > cuts[cuts.length - 1]!) cuts.push(at);
@@ -175,8 +220,6 @@ function cutsOfRun(run: string, segmenter: DictionaryWordSegmenter): readonly nu
   return cuts;
 }
 
-const NO_CUTS: readonly number[] = [];
-
 /**
  * Dictionary word-break opportunities in paragraph text: strictly increasing UTF-16 offsets
  * inside `(0, text.length)`, each with a letter of the same dictionary script on both sides
@@ -190,6 +233,18 @@ export function dictionaryWordBreaks(text: string): readonly number[] {
   if (!hasDictionaryScriptText(text)) return NO_CUTS;
   const segmenter = activeSegmenter();
   if (!segmenter) return NO_CUTS;
+  const cacheable = text.length <= MAX_CACHED_TEXT_UNITS;
+  const cached = cacheable ? textCache.get(text) : undefined;
+  if (cached) return cached;
+  const cuts = paragraphCuts(text, segmenter);
+  if (cacheable) {
+    if (textCache.size >= MAX_CACHED_TEXTS) textCache.clear();
+    textCache.set(text, cuts);
+  }
+  return cuts;
+}
+
+function paragraphCuts(text: string, segmenter: DictionaryWordSegmenter): readonly number[] {
   const out: number[] = [];
   let budget = MAX_PARAGRAPH_UNITS;
   let index = 0;
@@ -202,7 +257,7 @@ export function dictionaryWordBreaks(text: string): readonly number[] {
     // Every dictionary code point is in the BMP, so a run is a plain code-unit range.
     let end = index + 1;
     while (end < text.length && dictionaryScriptOf(text.charCodeAt(end)) === script) end += 1;
-    if (end - index > 1 && dictionaryScriptSupported(script)) {
+    if (end - index > 1 && isDictionaryWordBreakSupported(script)) {
       const length = Math.min(end - index, budget);
       budget -= length;
       for (const cut of cutsOfRun(text.slice(index, index + length), segmenter)) {
@@ -212,9 +267,8 @@ export function dictionaryWordBreaks(text: string): readonly number[] {
     index = end;
   }
   if (out.length === 0) return NO_CUTS;
-  // The segmenter is replaceable, and a grapheme cluster can be wider than its rules; a cut
-  // the active grapheme boundary does not also give is dropped.
-  const clusterStarts = new Set<number>();
-  for (const cluster of segmentGraphemes(text)) clusterStarts.add(cluster.utf16From);
-  return out.filter((cut) => clusterStarts.has(cut));
+  // The segmenter is replaceable; a cut the active grapheme boundary does not also give is
+  // dropped. Clusters in these scripts join by pairwise rules (marks extend the letter before
+  // them), so the two code points around a cut decide, without segmenting the whole text.
+  return out.filter((cut) => clusterBreaksBetween(text.charCodeAt(cut - 1), text.charCodeAt(cut)));
 }

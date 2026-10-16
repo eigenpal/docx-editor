@@ -1,12 +1,22 @@
-// Dictionary word cuts mapped from paragraph text back to the pieces that hold it, for
-// callers that walk pieces one at a time (table AutoFit minimums). Paragraph break analysis
-// maps the same cuts itself (`cjk-paragraph-breaks.ts`).
+// Word cuts found in paragraph text and mapped back to the pieces that hold it, shared by
+// line breaking (`dictionary-paragraph-breaks.ts`) and table AutoFit minimums.
+//
+// Plain text is segmented across pieces, so a formatting or revision seam inside a word adds
+// no cut and a seam between words keeps its cut. The space, zero-width-space, dash, and tab
+// rules read the same text, so a dash that opens a run still breaks after itself. A
+// layout-owned piece (a field result, picture, equation, or positional tab) is a barrier in
+// that text, as in the East Asian analysis; a field result is segmented on its own, so its
+// words wrap and size AutoFit like the words of a run.
 
+import { BREAK_AFTER_DASH, wordBoundaries } from './cjk-line-break.ts';
 import { dictionaryWordBreaks, hasDictionaryScriptText } from './dictionary-word-breaks.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 
-/** Text that maps one-to-one to model offsets; every other piece is a barrier. */
-const isPlainText = (piece: FieldAwarePiece): boolean =>
+/**
+ * Whether a piece is text that maps one-to-one to model offsets. Every other piece is a
+ * barrier in paragraph-wide break analysis.
+ */
+export const isParagraphText = (piece: FieldAwarePiece): boolean =>
   !piece.projected &&
   !piece.positionalTab &&
   !piece.inlineDrawing &&
@@ -14,50 +24,116 @@ const isPlainText = (piece: FieldAwarePiece): boolean =>
   piece.end - piece.start === piece.text.length;
 
 /**
- * Each piece's dictionary cuts as offsets into its own text, in `(0, text.length]`. A cut at
- * `text.length` is the seam to the next piece. Null when the paragraph has none.
- *
- * Hidden pieces add no text, as they add no width. Layout-owned atoms (fields, pictures,
- * equations, tabs) join the text as one object replacement character, so no word runs across
- * them.
+ * Paragraph text for break analysis, and where each piece starts in it. Plain text joins as
+ * itself, every other non-empty piece as one U+FFFC, and a skipped piece adds nothing.
  */
-export function dictionaryCutsByPiece(
-  pieces: readonly FieldAwarePiece[]
-): ReadonlyMap<FieldAwarePiece, ReadonlySet<number>> | null {
-  if (!pieces.some((piece) => isPlainText(piece) && hasDictionaryScriptText(piece.text))) {
-    return null;
-  }
-  const starts: number[] = [];
+export function paragraphBreakText(
+  pieces: readonly FieldAwarePiece[],
+  skip: (piece: FieldAwarePiece) => boolean = () => false
+): { readonly text: string; readonly starts: ReadonlyMap<FieldAwarePiece, number> } {
+  const starts = new Map<FieldAwarePiece, number>();
   const strings: string[] = [];
   let total = 0;
   for (const piece of pieces) {
-    starts.push(total);
-    const text = piece.style.hidden
+    starts.set(piece, total);
+    const text = skip(piece)
       ? ''
-      : isPlainText(piece)
+      : isParagraphText(piece)
         ? piece.text
-        : piece.text.length > 0
-          ? '￼'
-          : '';
+        : '￼'.repeat(Math.min(piece.text.length, 1));
     strings.push(text);
     total += text.length;
   }
-  const cuts = dictionaryWordBreaks(strings.join(''));
-  if (cuts.length === 0) return null;
-  const byPiece = new Map<FieldAwarePiece, Set<number>>();
-  let pieceIndex = 0;
-  for (const cut of cuts) {
-    // The first piece whose text ends at or after the cut: a seam belongs to the piece before
-    // it, and an empty piece at the seam is never reached first.
-    while (pieceIndex < pieces.length && starts[pieceIndex]! + strings[pieceIndex]!.length < cut)
-      pieceIndex += 1;
-    const piece = pieces[pieceIndex];
-    if (!piece) break;
-    let set = byPiece.get(piece);
-    if (!set) byPiece.set(piece, (set = new Set()));
-    set.add(cut - starts[pieceIndex]!);
+  return { text: strings.join(''), starts };
+}
+
+/** Dictionary cuts per piece. */
+export interface PieceDictionaryCuts {
+  /**
+   * The piece's break boundaries: the space, zero-width-space, dash, and tab rules of
+   * `wordBoundaries` read over the paragraph text (so a dash that opens a run still breaks
+   * after itself), plus the dictionary cuts, ending at `text.length`. A layout-owned piece
+   * reads its own text.
+   */
+  boundaries(piece: FieldAwarePiece): readonly number[];
+  /** Cuts as offsets into the piece's own text, in `(0, text.length]`; the end is a seam. */
+  of(piece: FieldAwarePiece): ReadonlySet<number> | undefined;
+  /** Whether a cut falls where the piece starts: the seam before it is a word boundary. */
+  startsAtCut(piece: FieldAwarePiece): boolean;
+}
+
+/**
+ * Each piece's word cuts over the paragraph text, or null when per-piece `wordBoundaries`
+ * already give every cut: the paragraph has no dictionary cut and no run that opens with a
+ * dash. `skip` drops pieces that add no text, such as hidden runs, as they add no width.
+ */
+export function paragraphWordCuts(
+  pieces: readonly FieldAwarePiece[],
+  skip: (piece: FieldAwarePiece) => boolean = () => false
+): PieceDictionaryCuts | null {
+  // A dash that opens a run breaks after itself only when the text before it is known.
+  const runOpensWithDash = pieces.some(
+    (piece, index) =>
+      index > 0 && !skip(piece) && isParagraphText(piece) && BREAK_AFTER_DASH.has(piece.text[0]!)
+  );
+  if (
+    !runOpensWithDash &&
+    !pieces.some((piece) => !skip(piece) && hasDictionaryScriptText(piece.text))
+  )
+    return null;
+  const { text, starts } = paragraphBreakText(pieces, skip);
+  const cuts = new Set(dictionaryWordBreaks(text));
+  const byPiece = new Map<FieldAwarePiece, ReadonlySet<number>>();
+  const opening = new Set<FieldAwarePiece>();
+  for (const piece of pieces) {
+    if (skip(piece) || piece.text.length === 0) continue;
+    const own = new Set<number>();
+    if (isParagraphText(piece)) {
+      const start = starts.get(piece)!;
+      if (cuts.has(start)) opening.add(piece);
+      for (let offset = 1; offset <= piece.text.length; offset++)
+        if (cuts.has(start + offset)) own.add(offset);
+    } else if (hasDictionaryScriptText(piece.text)) {
+      for (const cut of dictionaryWordBreaks(piece.text)) own.add(cut);
+    }
+    if (own.size > 0) byPiece.set(piece, own);
   }
-  return byPiece;
+  if (byPiece.size === 0 && !runOpensWithDash) return null;
+  let paragraphCuts: readonly number[] | undefined;
+  const boundaries = new Map<FieldAwarePiece, readonly number[]>();
+  const boundariesOf = (piece: FieldAwarePiece): readonly number[] => {
+    const own = byPiece.get(piece);
+    if (!isParagraphText(piece) || skip(piece)) {
+      const base = wordBoundaries(piece.text, false);
+      return own ? withDictionaryCuts(base, own) : base;
+    }
+    // No ideographic pass: a paragraph with East Asian text takes the East Asian analysis.
+    paragraphCuts ??= wordBoundaries(text, false);
+    const start = starts.get(piece)!;
+    const end = start + piece.text.length;
+    // The first paragraph cut inside the piece.
+    let low = 0;
+    let high = paragraphCuts.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (paragraphCuts[mid]! <= start) low = mid + 1;
+      else high = mid;
+    }
+    const base: number[] = [];
+    for (let at = low; at < paragraphCuts.length && paragraphCuts[at]! < end; at++)
+      base.push(paragraphCuts[at]! - start);
+    base.push(piece.text.length);
+    return own ? withDictionaryCuts(base, own) : base;
+  };
+  return {
+    boundaries(piece) {
+      let found = boundaries.get(piece);
+      if (!found) boundaries.set(piece, (found = boundariesOf(piece)));
+      return found;
+    },
+    of: (piece) => byPiece.get(piece),
+    startsAtCut: (piece) => opening.has(piece),
+  };
 }
 
 /** Merge a piece's dictionary cuts into its strictly increasing word boundaries. */

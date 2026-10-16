@@ -27,8 +27,9 @@ import {
   ENDS_WITH_BREAKING_SPACE,
   STARTS_WITH_BREAKING_SPACE,
   wordBoundaries,
+  ZERO_WIDTH_SPACE,
 } from './cjk-line-break.ts';
-import { dictionaryCutsByPiece, withDictionaryCuts } from './dictionary-piece-cuts.ts';
+import { paragraphWordCuts } from './dictionary-piece-cuts.ts';
 import { measureInlineDrawing, type InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
@@ -198,9 +199,10 @@ function sameKey(a: MinimumKey, b: MinimumKey): boolean {
 /**
  * The widest segment of a paragraph that no line break may split, plus its indents.
  *
- * Break opportunities are spaces, tabs, line breaks, the dash rule of
- * {@link wordBoundaries}, and the dictionary word boundaries of Thai, Lao, Khmer, and Myanmar
- * text where the runtime's `Intl.Segmenter` has them (`dictionary-word-breaks.ts`). An ideographic run counts as one segment here: an autofit column
+ * Break opportunities are spaces, zero-width spaces, tabs, line breaks, the dash rule of
+ * {@link wordBoundaries}, and the dictionary word boundaries of Thai, Lao, Khmer, and
+ * Myanmar text where the runtime's `Intl.Segmenter` has them (`dictionary-word-breaks.ts`).
+ * An ideographic run counts as one segment here: an autofit column
  * widens to keep it whole, although line breaking may still wrap it inside the column. A
  * segment runs across source runs, field results, and hidden text, measured in the face each
  * piece paints. A positive first-line indent counts against the first segment.
@@ -329,7 +331,7 @@ export function paragraphContentWidthsPt(
   let dashPending = false;
   // Thai, Lao, Khmer, and Myanmar words are segments too, found over the paragraph text as
   // line breaking finds them, so a run seam inside a word does not split it.
-  const dictionaryCuts = dictionaryCutsByPiece(pieces);
+  const dictionaryCuts = paragraphWordCuts(pieces, (piece) => piece.style.hidden === true);
   for (const piece of pieces) {
     if (piece.style.hidden) continue;
     // A drawing that is not an inline atom (anchored, hidden, unresolved) takes no width in
@@ -377,9 +379,8 @@ export function paragraphContentWidthsPt(
       continue;
     }
     let from = 0;
-    const cuts = dictionaryCuts?.get(piece);
-    const boundaries = wordBoundaries(piece.text, false);
-    for (const to of cuts ? withDictionaryCuts(boundaries, cuts) : boundaries) {
+    const cuts = dictionaryCuts?.of(piece);
+    for (const to of dictionaryCuts?.boundaries(piece) ?? wordBoundaries(piece.text, false)) {
       const candidate = piece.text.slice(from, to);
       from = to;
       if (candidate.length === 0) continue;
@@ -415,6 +416,7 @@ export function paragraphContentWidthsPt(
         ink.length < candidate.length ||
         to < piece.text.length ||
         ENDS_WITH_BREAKING_SPACE.test(candidate) ||
+        candidate.endsWith(ZERO_WIDTH_SPACE) ||
         cuts?.has(to)
       )
         close();
