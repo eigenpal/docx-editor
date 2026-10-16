@@ -485,6 +485,60 @@ describe('property changes that change nothing', () => {
     expect(ranges(live)).toEqual(ranges(derived));
   });
 
+  test('typing beside an insertion shared with a text box keeps it acceptable', () => {
+    const shared = `w:id="${id++}" ${STAMP}`;
+    const inserted = (text: string) => `<w:ins ${shared}><w:r><w:t>${text}</w:t></w:r></w:ins>`;
+    const box =
+      '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:100pt;height:40pt"><v:textbox><w:txbxContent>' +
+      `<w:p>${inserted('boxed')}</w:p>` +
+      '</w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+    using view = mount(
+      p('', box) +
+        p('') +
+        p('', `<w:r><w:t xml:space="preserve">Body </w:t></w:r>${inserted('added')}`)
+    );
+    const paragraphId = view.editor.surface!.session.paragraphIds()[2]!;
+    const at = { paragraphId, offset: 1 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    expect(view.editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(true);
+    const keys = view.editor
+      .getReviewItems({ pairReplacements: false, placement: false })
+      .map((entry) => entry.key);
+    expect(keys).toHaveLength(1);
+    const result = view.editor.exec({ type: 'resolveAllReviewChanges', action: 'accept', keys });
+    expect(result.ok).toBe(true);
+    expect(view.xml()).not.toContain('<w:ins');
+  });
+
+  test('a suggestion typed in a text box gets its card', () => {
+    const box =
+      '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:100pt;height:40pt"><v:textbox><w:txbxContent>' +
+      '<w:p><w:r><w:t>boxed</w:t></w:r></w:p>' +
+      '</w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+    using view = mount(p('', box) + p('') + p(ppr('<w:jc w:val="center"/>', '')));
+    expect(view.count()).toBe(1);
+    const part = view.editor.surface!.session.part();
+    const boxed = (() => {
+      const visit = (node: (typeof part.root.children)[number], inBox: boolean): string | null => {
+        if (node.kind === 'textValue') return null;
+        if (inBox && node.kind === 'paragraph') return node.id;
+        for (const child of node.children) {
+          const found = visit(child, inBox || node.localName === 'txbxContent');
+          if (found) return found;
+        }
+        return null;
+      };
+      return visit(part.root, false)!;
+    })();
+    view.editor.surface!.setEditingMode('suggest');
+    const at = { paragraphId: boxed, offset: 2 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    expect(view.editor.exec({ type: 'insertText', text: 'Q' }).ok).toBe(true);
+    const derived = collectReviewItems({ storyPart: view.editor.surface!.session.part() });
+    expect(view.editor.surface!.session.reviewItems()).toHaveLength(derived.length);
+    expect(derived.length).toBe(2);
+  });
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

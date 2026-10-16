@@ -79,7 +79,8 @@ function itemStartParagraphRank(
 export function canApplyLocalReviewPatch(
   cached: readonly ReviewItem[],
   localRevisions: readonly ReviewRevisionItem[],
-  dirtyParagraphId: string
+  dirtyParagraphId: string,
+  part: OoxmlPart
 ): boolean {
   for (const local of localRevisions) {
     if (local.ranges.length === 0) return false;
@@ -93,15 +94,15 @@ export function canApplyLocalReviewPatch(
   for (const local of localRevisions) {
     if (keptRangelessKeys.has(reviewItemKey(local))) return false;
   }
-  // A formatting change whose record also sits outside this paragraph (one id shared with a text
-  // box, say) is decided over all its sites, which a walk of the paragraph cannot see.
+  // A change whose record also sits outside this paragraph (one id shared with a text box, say)
+  // is one decision over all its sites, which a walk of the paragraph cannot see. A site the edit
+  // removed is simply gone; one that still exists elsewhere needs the whole derivation.
   const localSites = new Set(localRevisions.flatMap((item) => revisionSiteNodeIdsOf(item)));
   for (const item of cached) {
     if (
       item.kind === 'revision' &&
-      item.revisionKind === 'format' &&
       isRevisionWhollyInParagraph(item, dirtyParagraphId) &&
-      revisionSiteNodeIdsOf(item).some((id) => !localSites.has(id))
+      revisionSiteNodeIdsOf(item).some((id) => !localSites.has(id) && findNode(part, id))
     ) {
       return false;
     }
@@ -110,7 +111,8 @@ export function canApplyLocalReviewPatch(
 }
 
 /**
- * `cached` with the dirty paragraph's revisions replaced by `localRevisions`. Pieces of a cached
+ * `cached` with the dirty paragraph's revisions replaced by `localRevisions`, or null when the
+ * paragraph has no place in `paragraphOrder`. Pieces of a cached
  * group are taken into the group first; `filterLocal` then decides over the rest, so a piece
  * whose group is listed is never decided on its own.
  */
@@ -121,9 +123,11 @@ export function patchLocalReviewItems(
   localRevisions: readonly ReviewRevisionItem[],
   filterLocal: (items: readonly ReviewRevisionItem[]) => readonly ReviewRevisionItem[] = (items) =>
     items
-): ReviewItem[] {
+): ReviewItem[] | null {
+  // A paragraph outside the story's own order (one in a text box) has no place to splice into:
+  // the caller derives the whole queue instead of keeping the cached one.
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
-  if (dirtyRank === undefined) return [...cached];
+  if (dirtyRank === undefined) return null;
 
   const patched: ReviewItem[] = [];
   let insertAt: number | null = null;

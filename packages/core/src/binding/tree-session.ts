@@ -1066,16 +1066,23 @@ export function openTreeSessionFromPackage(
             patchParagraphId &&
             reviewCache &&
             localRevisions &&
-            canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)
+            canApplyLocalReviewPatch(
+              reviewCache.items,
+              localRevisions,
+              patchParagraphId,
+              store.part
+            )
           ) {
             paragraphOrder = reviewCache.paragraphOrder ?? paragraphOrderOfPart(store.part);
-            items = patchLocalReviewItems(
+            const patched = patchLocalReviewItems(
               reviewCache.items,
               paragraphOrder,
               patchParagraphId,
               localRevisions,
               filtering.filtered
             );
+            if (!patched) paragraphOrder = paragraphOrderOfPart(store.part);
+            items = patched ?? derived();
           } else {
             paragraphOrder = paragraphOrderOfPart(store.part);
             items = derived();
