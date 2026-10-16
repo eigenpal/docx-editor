@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Hosts replace the editor instance to remove resolved font resources.",
+  "after": "Hosts replace local font resources while retaining the same editor session.",
+  "reason": "Only local font resources, measurement caches, and painted geometry change. The setter writes no shared state, operations, node identities, or awareness payloads.",
+  "tests": [
+    "packages/core/src/editor/__tests__/set-fonts.test.ts",
+    "packages/pro/src/collaboration/__tests__/set-fonts-editors.test.ts"
+  ],
+  "changeset": "replace-font-resources",
+  "migration": null
+}

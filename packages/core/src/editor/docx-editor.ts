@@ -11,6 +11,7 @@ import { reviewChangesLocked } from './command-protection.ts';
 import { resolvedFontMeasurement } from './resolved-font-measurement.ts';
 import { updateSurfaceMeasurement } from './surface-measurement.ts';
 import { createLiveFontResolution, liveFontFamilies } from './live-font-resolution.ts';
+import { createFontResolutionLifetime } from './font-resolution-lifetime.ts';
 import { composeFontOrigins, defineFontResolver } from './font-resolver.ts';
 import {
   createReviewCommands,
@@ -432,18 +433,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
   // Each async result belongs to one document load.
   let loadSeq = 0;
+  let fontRequestSeq = 0;
+  const fontLifetime = createFontResolutionLifetime();
+  let configuredFonts = config.fonts;
   // Retain catalog metadata separately from byte admission and shaping.
   let resolvedFontConfiguration: FontConfigurationBase | undefined;
   const fontConfiguration = (): FontConfigurationBase | undefined =>
-    typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
+    typeof configuredFonts === 'function' ? resolvedFontConfiguration : configuredFonts;
   const liveFonts = createLiveFontResolution(
     () => {
       const session = preparedFontSession ?? surface?.session;
       if (destroyed || !session) return null;
       const caret = preparedFontSession ? undefined : snapshotNow().formatting?.fontFamily;
       return {
-        generation: loadSeq,
-        dynamic: typeof config.fonts === 'function',
+        generation: fontLifetime.generation,
+        dynamic: typeof configuredFonts === 'function',
         families: () =>
           liveFontFamilies(session, caret, configuredDefaultFontFamily(fontConfiguration())),
       };
@@ -617,7 +621,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     try {
       if (deferredRefreshBytes === args[0]) {
         deferredRefreshBytes = null;
-        loadBytes(args[0], true);
+        loadBytes(args[0], { immediate: true, continueDeferredRefresh: true });
         return;
       }
       mountBytesNow(...args);
@@ -813,7 +817,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   /** A NEW document: forget the previous document's measurer, then mount. */
-  function loadBytes(bytes: Uint8Array, immediate = false): void {
+  function loadBytes(
+    bytes: Uint8Array,
+    options: { immediate?: boolean; continueDeferredRefresh?: boolean } = {}
+  ): void {
+    const immediate = options.immediate ?? false;
+    // Completing an earlier deferred refresh is not a new host request.
+    if (!options.continueDeferredRefresh) fontRequestSeq += 1;
     // A deferred refresh re-enters from its scheduled mount. Keep that scheduler alive
     // so its remaining opening slices clear the preview and restore pointer input.
     if (!immediate) {
@@ -835,38 +845,47 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // open publishes `isOpening`, so the loading page uses the full centred workspace.
     reviewPaneOpen = false;
     loadSeq += 1;
-    reviewAuthorSlots = createStableReviewAuthorSlots();
-    reviewAuthorVisibility.showAll();
-    shapedMeasurer = undefined;
-    shapedProducer = undefined;
-    // An on-demand answer describes the document that asked for it. Carrying it into the
-    // next one would offer the previous file's families in this file's font picker.
-    resolvedFontConfiguration = undefined;
-    coveredFontFamilies = new Set();
-    documentSubstitutedFamilies = new Set();
-    disposeEmbeddedFaces();
-    disposeShapedFonts();
-    disposeShapedFonts = () => {};
-    // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
-    // guard will refuse to touch state, so the flag must reset here or a load that
-    // starts no font work of its own reports `resolving: true` forever.
-    fontsResolving = false;
-    // BEFORE the mount, so the initial paint materializes the pages actually in view.
-    // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
-    // function for the SAME document and must keep the reader's place.
-    if (container && !refreshHost?.source) scrollToDocumentStart(container);
-    // A big live open yields a frame first and drops the old document now: no stale chrome.
-    if (!immediate && container && openScheduler.shouldYield(bytes)) {
-      teardownSurface();
-      openScheduler.schedule(bytes);
-    } else mountBytes(bytes);
+    const lifetime = fontLifetime.advance();
+    try {
+      reviewAuthorSlots = createStableReviewAuthorSlots();
+      reviewAuthorVisibility.showAll();
+      shapedMeasurer = undefined;
+      shapedProducer = undefined;
+      // An on-demand answer describes the document that asked for it. Carrying it into the
+      // next one would offer the previous file's families in this file's font picker.
+      resolvedFontConfiguration = undefined;
+      coveredFontFamilies = new Set();
+      documentSubstitutedFamilies = new Set();
+      disposeEmbeddedFaces();
+      disposeShapedFonts();
+      disposeShapedFonts = () => {};
+      // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
+      // guard will refuse to touch state, so the flag must reset here or a load that
+      // starts no font work of its own reports `resolving: true` forever.
+      fontsResolving = false;
+      // BEFORE the mount, so the initial paint materializes the pages actually in view.
+      // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
+      // function for the SAME document and must keep the reader's place.
+      if (container && !refreshHost?.source) scrollToDocumentStart(container);
+      // A big live open yields a frame first and drops the old document now: no stale chrome.
+      if (!immediate && container && openScheduler.shouldYield(bytes)) {
+        teardownSurface();
+        openScheduler.schedule(bytes);
+      } else mountBytes(bytes);
+    } finally {
+      lifetime.cancelPrevious();
+    }
   }
 
-  function reportFontError(error: EditorFontError, sequence = loadSeq): void {
+  function reportFontError(
+    error: EditorFontError,
+    sequence = loadSeq,
+    generation = fontLifetime.generation
+  ): void {
     reportEditorFontError(
       error,
       { config, events, diagnostics },
-      () => !destroyed && sequence === loadSeq
+      () => !destroyed && sequence === loadSeq && generation === fontLifetime.generation
     );
   }
 
@@ -878,8 +897,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     mounted: { readonly session: preparedOpen.FontSession },
     families: readonly string[]
   ): Promise<void> {
-    const reportForLoad = (error: EditorFontError) => reportFontError(error, seq);
-    const configured = config.fonts;
+    const lifetime = fontLifetime.capture();
+    const current = () => !destroyed && seq === loadSeq && lifetime.current();
+    const reportForLoad = (error: EditorFontError) =>
+      reportFontError(error, seq, lifetime.generation);
+    const configured = configuredFonts;
     const embedded = mounted.session.embeddedFonts();
     // The zero-config, nothing-embedded common case does NO font work at all: no
     if (!configured && embedded.length === 0) return;
@@ -891,11 +913,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // the resolver is told what the file actually asks for and can skip everything
       // else. A resolver that throws lands in this function's catch and degrades to the
       // fixed measurer, exactly like a failed byte source.
-      const { plan: documentFonts, request } = documentFontResolutionRequest(
+      const { plan: documentFonts, request: documentRequest } = documentFontResolutionRequest(
         mounted.session,
         families,
         fontConfiguration()
       );
+      const request = { ...documentRequest, signal: lifetime.signal };
       // Installed families keep their own face; only missing ones fall back. Without a canvas
       // to probe with (headless), nothing counts as installed.
       const canProbe =
@@ -917,8 +940,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         typeof configured === 'function' ? normalizeFontResolverResult(raw) : raw;
       // Awaiting handed control back: this load may have been superseded (or the editor
       // destroyed) while the resolver ran; installing its answer would overwrite newer fonts.
-      if (destroyed || seq !== loadSeq) {
-        if (seq === loadSeq) fontsResolving = false;
+      if (!current()) {
+        if (seq === loadSeq && lifetime.current()) fontsResolving = false;
         return;
       }
       resolvedFontConfiguration = raw;
@@ -989,9 +1012,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // and clear the in-flight flag only if this load is still the current one. Reads
       // `shaping` at call time, so it disposes whichever snapshot the caller just built.
       const supersededNow = (): boolean => {
-        if (!destroyed && seq === loadSeq) return false;
+        if (current()) return false;
         disposeLayoutShaping(shaping);
-        if (seq === loadSeq) fontsResolving = false;
+        if (seq === loadSeq && lifetime.current()) fontsResolving = false;
         return true;
       };
       if (supersededNow()) return;
@@ -1104,7 +1127,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         fontFaceEnvironmentOf(container?.ownerDocument),
         fonts.substitutions ?? []
       );
-      if (destroyed || seq !== loadSeq) {
+      if (!current()) {
         registration.dispose();
         supersededNow();
         return;
@@ -1141,7 +1164,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           fallbackResolution,
           scaleOf(),
           ++fontMeasurementEpoch,
-          (error) => !destroyed && seq === loadSeq && reportFontError(error)
+          (error) => current() && reportForLoad(error)
         );
         shapedMeasurer = measurement.measurer;
         shapedProducer = measurement.producer;
@@ -1154,13 +1177,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
           });
         }
-        if (destroyed || seq !== loadSeq) {
+        if (!current()) {
           registration.dispose();
           disposeLayoutShaping(shaping);
           return;
         }
       } catch (error) {
-        if (!destroyed && seq === loadSeq) {
+        if (current()) {
           ({
             embeddedFaces,
             coveredFontFamilies,
@@ -1180,7 +1203,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       emitSelectionChange();
     } catch (error) {
-      if (destroyed || seq !== loadSeq) return;
+      if (!current()) return;
       fontsResolving = false;
       bump();
       reportForLoad(toEditorFontError(error));
@@ -1800,6 +1823,48 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       resolving: fontsResolving || stillOpening(),
       ...(shapedMeasurer && shapedProducer && !stillOpening() ? { producer: shapedProducer } : {}),
     }),
+
+    async setFonts(fonts) {
+      if (destroyed) throw editorError('destroyed', 'a destroyed editor cannot replace fonts');
+      const request = ++fontRequestSeq;
+      openScheduler.flush();
+      surface?.flushPendingInput();
+      if (destroyed || request !== fontRequestSeq) return;
+      const lifetime = fontLifetime.advance();
+      try {
+        configuredFonts = fonts;
+        resolvedFontConfiguration = undefined;
+        shapedMeasurer = undefined;
+        shapedProducer = undefined;
+        coveredFontFamilies = new Set();
+        documentSubstitutedFamilies = new Set();
+        disposeEmbeddedFaces();
+        disposeShapedFonts();
+        disposeShapedFonts = () => {};
+        fontsResolving = false;
+        if (surface) {
+          const fallback = resolveDefaultSurfaceMeasurer(scaleOf(), {
+            context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
+          });
+          updateSurfaceMeasurement(
+            surface,
+            {
+              measurer: fallback.measurer,
+              producer: `${fallback.producer}+fonts:${++fontMeasurementEpoch}`,
+              fontAlias: undefined,
+              defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
+            },
+            false
+          );
+        }
+        if (destroyed || !lifetime.current()) return;
+        bump();
+        emitSelectionChange();
+      } finally {
+        lifetime.cancelPrevious();
+      }
+      if (!destroyed && lifetime.current()) await liveFonts.schedule(true);
+    },
 
     attach(el, options) {
       const refusal = attachTargetRefusal(el);
@@ -2480,6 +2545,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroy() {
       refreshHost?.invalidate();
       destroyed = true;
+      fontLifetime.dispose();
       suggestingReporter.dispose();
       openScheduler.cancel();
       zoomLane.detach();
