@@ -1374,6 +1374,7 @@ export interface DocxEditorProps {
     fontShaping?: FontShapingOptions;
     hyperlinkPopup?: boolean;
     i18n?: Translations;
+    imageDecodePort?: ImageDecodePort;
     readonly loadingIndicator?: DocxEditorChildren;
     locale?: string;
     lockedControlNavigation?: LockedControlNavigation;

@@ -4030,6 +4030,7 @@ export interface DocxEditorProps {
     hyperlinkPopup?: boolean;
     // (undocumented)
     i18n?: Translations;
+    imageDecodePort?: ImageDecodePort;
     locale?: string;
     lockedControlNavigation?: LockedControlNavigation;
     // (undocumented)

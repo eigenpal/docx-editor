@@ -9,6 +9,8 @@ The editor displays inline and floating DrawingML pictures (`w:drawing` with `pi
 
 The editor releases image elements and object URLs when their pages leave the painted viewport. Pages kept visible for the selection retain their images. Returning to a page recreates its images from the original package resources. Saving preserves the original media.
 
+Pass an `ImageDecodePort` through `imageDecodePort` on `DocxEditor` to use a custom image decoder in React or Vue. You can also set this option on each adapter's root component.
+
 ## Supported formats
 
 | Format | Insert | Layout & paint | Round-trip |
