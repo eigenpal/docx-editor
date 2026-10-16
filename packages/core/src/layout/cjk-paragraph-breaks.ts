@@ -65,6 +65,18 @@ export interface CjkParagraphBreaks {
   cutAllowed(piece: FieldAwarePiece, candidateStart: number, index: number): boolean;
 }
 
+/**
+ * Whether a seam puts a repetition mark after a letter. The paragraph table holds U+FFFC for
+ * a field or picture, so the seam reads the real text placed before the piece instead.
+ */
+function repetitionMarkGluedAt(lastEmitted: string, text: string): boolean {
+  return (
+    lastEmitted.length > 0 &&
+    isRepetitionMark(text.codePointAt(0) ?? 0) &&
+    !/[\s\u200b\-\u2010\u2013\u2014]$/u.test(lastEmitted)
+  );
+}
+
 export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
@@ -149,7 +161,7 @@ export function cjkParagraphBreaks(
     }
     // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
     // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base.
-    // A repetition mark opens a line only after a space, zero-width space, or dash.
+    // A repetition mark opens a line only after a space, zero-width space, tab, or dash.
     const repeats = isRepetitionMark(after) && !latinCuts.has(at) && !/\s$/u.test(left.text);
     if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before) || repeats) {
       decisions.set(at, 'forbidden');
@@ -244,8 +256,12 @@ export function cjkParagraphBreaks(
   }
   return {
     boundaries: (piece) => boundaries.get(piece)!,
-    decision: (piece, offset) =>
-      !isText(piece) ? 'opens' : (decisions.get(starts.get(piece)! + offset) ?? 'forbidden'),
+    decision: (piece, offset, lastEmitted) =>
+      offset === 0 && repetitionMarkGluedAt(lastEmitted, piece.text)
+        ? 'forbidden'
+        : !isText(piece)
+          ? 'opens'
+          : (decisions.get(starts.get(piece)! + offset) ?? 'forbidden'),
     cutAllowed: (piece, candidateStart, index) =>
       decisions.get(starts.get(piece)! + candidateStart + index) !== 'forbidden' &&
       decisions.has(starts.get(piece)! + candidateStart + index),

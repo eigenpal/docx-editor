@@ -113,7 +113,7 @@ export const isStackingSign = (cp: number | undefined): boolean => cp === 0x17d2
  * Marks that repeat or abbreviate the word before them: Thai U+0E46 and U+0E2F, Lao U+0EC6
  * and U+0EAF, and Khmer U+17D7. A segmenter may report a word boundary before them, but no
  * dictionary cut or emergency cut falls there, whatever segmenter is installed; only a space,
- * zero-width space, or dash before one breaks.
+ * zero-width space, tab, or dash before one breaks.
  */
 export const isRepetitionMark = (cp: number): boolean =>
   cp === 0x0e46 || cp === 0x0e2f || cp === 0x0ec6 || cp === 0x0eaf || cp === 0x17d7;
@@ -344,7 +344,7 @@ export function lineOpenDecisionAt(
   const firstUnit = candidate.charCodeAt(0);
   // UAX #14 LB7: never break before a zero-width space, even after a space.
   if ((firstUnit === 0x200b && lastUnit !== 0) || isStackingSign(lastUnit)) return 'forbidden';
-  // A repetition mark opens a line only after a space, zero-width space, or dash.
+  // A repetition mark opens a line only after a space, zero-width space, tab, or dash.
   if (!opportunity && isRepetitionMark(firstUnit)) return 'forbidden';
   if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
     // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below

@@ -444,6 +444,25 @@ describe('repetition and abbreviation marks', () => {
     }
   });
 
+  test('stay with a field result beside them, in East Asian paragraphs too', () => {
+    for (const width of [24, 30, 36, 42]) {
+      for (const body of [
+        `${fieldResult('REF x', 'ต่าง')}${run('ๆนานา')}`,
+        `${run('中文')}${fieldResult('REF x', 'ต่าง')}${run('ๆนานา')}`,
+        `${run('中')}${fieldResult('REF x', 'តិច')}${run('ៗគ្នា')}`,
+        `${run('中文ต่าง')}${fieldResult('REF x', 'ๆนานา')}`,
+        `${run('ต่าง')}${fieldResult('REF x', 'ๆนานา')}`,
+      ])
+        for (const line of linesOf(`<w:p>${body}</w:p>`, width))
+          expect(line, `${body} at ${width}`).not.toMatch(/^[ๆៗ]/u);
+    }
+    // After a space the mark may follow on the same line, or open the next one.
+    expect(linesOf(`<w:p>${run('中文 ')}${fieldResult('REF x', 'ๆนานา')}</w:p>`, 24)).toEqual([
+      '中文 ๆ',
+      'นานา',
+    ]);
+  });
+
   test('stay with their word in AutoFit', () => {
     // ផ្សេងៗ is six units and ຊ້າໆ four; no cut falls before ຯ or ៗ.
     expect(minimumOf(`<w:p>${run('ខ្មែរ ផ្សេងៗ ភាសា')}</w:p>`)).toBeCloseTo(36, 5);
