@@ -8,6 +8,7 @@ import type { LayoutSession } from './layout-session.ts';
 
 const bodyBlockCounts = new WeakMap<LayoutSession, number>();
 const bodyBlockLists = new WeakMap<LayoutSession, readonly unknown[]>();
+const movedLimits = new WeakMap<LayoutSession, number>();
 
 /**
  * `all` cut to `bodyBlockLimit`, recording the uncut count on the session. List numbering
@@ -30,8 +31,17 @@ export function limitBodyBlocks<T>(
   if (options.session) {
     bodyBlockCounts.set(options.session, all.length);
     bodyBlockLists.set(options.session, all);
+    if (limit !== undefined) movedLimits.set(options.session, limit);
   }
   return { blocks: limit === undefined || limit >= all.length ? all : all.slice(0, limit), all };
+}
+
+/**
+ * The cut a sliced open keeps after a pass on `session`: `current` moved by the edits that pass
+ * saw, so the next pass cuts at the same place. Null stays null: the open has finished.
+ */
+export function bodyBlockLimitAfter(session: LayoutSession, current: number | null): number | null {
+  return current === null ? null : (movedLimits.get(session) ?? current);
 }
 
 /** The body block count the last pass on `session` saw, or undefined before any pass. */

@@ -67,7 +67,7 @@ import { createCanonicalLayout } from './surface-canonical-layout.ts';
 import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
 import { litReviewKeys, reviewItemsByKey } from './review-replacement-pairs.ts';
-import { bodyBlockCountOf, bodyBlocksOf } from '../layout/body-block-limit.ts';
+import { bodyBlockCountOf, bodyBlockLimitAfter, bodyBlocksOf } from '../layout/body-block-limit.ts';
 import {
   createContentControlWidgetSessions,
   contentControlValueOps,
@@ -1720,6 +1720,7 @@ export function mountPaginatedSurface(
         openingBlockLimit ?? undefined
       );
       const layout = deferredLayout.run(steps, scope.revision, timedLayout(scope));
+      openingBlockLimit = bodyBlockLimitAfter(layoutSession, openingBlockLimit);
       lastLayoutMs = now() - began;
       return layout;
     },
@@ -4975,8 +4976,7 @@ export function mountPaginatedSurface(
       }
       // At the end of a paragraph, Delete pulls the NEXT one up — the mirror of Backspace at
       // offset zero, and the reason a document can be flattened without reaching for a mouse.
-      // The last laid-out paragraph of a large open: its successor needs the rest laid out.
-      if (paragraphOrder().at(-1) === position.paragraphId) completeProgressiveOpen(surface);
+      if (paragraphOrder().at(-1) === position.paragraphId) completeProgressiveOpen(surface); // Its successor needs the rest of a large open laid out.
       const order = paragraphOrder();
       const next = order[order.indexOf(position.paragraphId) + 1];
       if (!next) return;

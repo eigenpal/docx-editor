@@ -563,6 +563,31 @@ describe('a large open laid out in slices', () => {
     }
   }, 60_000);
 
+  test('paragraphs typed at the end of the laid-out pages stay laid out edit after edit', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = signature(surface.layout()).map((row) => row.split('|')[1]!);
+      const last = laidOut[laidOut.length - 1]!;
+      const text = surface.session.storyText({ kind: 'body' })!.split('\n');
+      const end = {
+        paragraphId: last,
+        offset: text[surface.session.paragraphIds().indexOf(last)]!.length,
+      };
+      surface.setSelection({ anchor: end, head: end });
+      surface.splitParagraph();
+      surface.type('x');
+      surface.splitParagraph();
+      surface.type('y');
+      expect(progressiveOpenPending(surface)).toBe(true);
+      const rows = signature(surface.layout());
+      expect(rows.some((row) => row.split('|')[2] === 'x')).toBe(true);
+      expect(rows.some((row) => row.split('|')[2] === 'y')).toBe(true);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a jump to a near bookmark replaces one still waiting for a far page', () => {
     const parts: string[] = [
       '<w:p><w:bookmarkStart w:id="1" w:name="Near"/><w:r><w:t>Near target</w:t></w:r>' +
