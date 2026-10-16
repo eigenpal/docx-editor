@@ -81,12 +81,14 @@ export class UndoGroups {
     return this.current !== null;
   }
 
-  begin(destroyed: boolean, editorAttached: boolean): CollaborationUndoGroup {
-    if (destroyed) throw new CollaborationUndoGroupError('collaboration-session-destroyed');
+  begin(destroyed: () => boolean, editorAttached: boolean): CollaborationUndoGroup {
+    if (destroyed()) throw new CollaborationUndoGroupError('collaboration-session-destroyed');
     if (editorAttached) throw new CollaborationUndoGroupError('editor-attached');
     if (this.current !== null) throw new CollaborationUndoGroupError('undo-group-already-open');
     // A journal still queued belongs to the writes before the group, not to its first step.
     this.flush();
+    // The flush runs host code (a status listener can destroy the room), so check again.
+    if (destroyed()) throw new CollaborationUndoGroupError('collaboration-session-destroyed');
     const token = {};
     this.current = token;
     this.capture.pin(Symbol('collaboration-undo-group'));

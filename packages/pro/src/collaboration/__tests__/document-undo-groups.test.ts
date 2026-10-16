@@ -500,4 +500,27 @@ describe('undo groups', () => {
     }
     expect(results[1]).toEqual(results[0]!);
   });
+
+  test('a begin whose flush destroys the session refuses and leaves no group open', async () => {
+    const { alice } = await pair();
+    alice.detach();
+    let destroyOnFlush = false;
+    alice.room.session.attach({
+      ...alice.port,
+      flushPendingJournals: () => {
+        alice.port.flushPendingJournals();
+        // A status listener can destroy the room while the session flushes.
+        if (destroyOnFlush) {
+          destroyOnFlush = false;
+          alice.room.destroy();
+        }
+      },
+    });
+    destroyOnFlush = true;
+    expect(() => alice.room.session.beginUndoGroup()).toThrow(
+      expect.objectContaining({ code: 'collaboration-session-destroyed' })
+    );
+    expect(alice.room.session.undoGroupOpen).toBe(false);
+    expect(alice.room.session.status()).toBe('destroyed');
+  });
 });

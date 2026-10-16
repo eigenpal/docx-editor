@@ -526,7 +526,8 @@ class Run {
       ...(steps[0]!.ungrouped ? { ungrouped: true } : {}),
     };
     // Undo of a split removes the paragraph it created, and with it what a person typed
-    // there. That is the split's own undo rule, not the group's, so those tokens are exempt.
+    // there (#1398). That is the split's own undo rule, not the group's, so those tokens are
+    // exempt.
     const inCreated = textBefore
       .filter((_, index) => group.created.has(idsBefore[index]!))
       .join('\n');

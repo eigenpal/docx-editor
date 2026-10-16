@@ -116,11 +116,6 @@ export class HistoryGroupCapture {
     if (this.pinned === undefined) this.reset();
   }
 
-  /** Whether a host undo group is open. */
-  get isPinned(): boolean {
-    return this.pinned !== undefined;
-  }
-
   /** Open a host undo group. Its first write starts a new item, however recent the last one. */
   pin(group: HistoryGroup): void {
     this.undoManager.stopCapturing();
