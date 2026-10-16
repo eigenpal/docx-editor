@@ -385,6 +385,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // What the last emitted tick reported, so a publish that moved nothing observable stays
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
+  /** The revision the last surface publish showed; see the idle anchor warm-up. */
+  let lastPublishedRevision: number | undefined;
   const views = createEditorViews({
     surface: () => surface,
     destroyed: () => destroyed,
@@ -712,7 +714,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         protection.sync();
         liveFonts.schedule();
-        if (reviewEnabled && container && surface) {
+        // Only a publish that moved no revision: an edit's publish reaches the rail through
+        // `change`, which rebuilds the anchors anyway, and warming those too only made garbage.
+        const publishedRevision = surface?.session.packageRevision();
+        const revisionMoved = publishedRevision !== lastPublishedRevision;
+        lastPublishedRevision = publishedRevision;
+        if (reviewEnabled && container && surface && !revisionMoved) {
           const published = surface;
           warmAnchorsWhenIdle(published, hostWindowOf(container), () => {
             // Nothing to anchor without review items: the rail skips the index then too.
