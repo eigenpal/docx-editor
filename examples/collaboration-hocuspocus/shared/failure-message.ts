@@ -6,6 +6,8 @@ export interface DemoFailureMessage {
   readonly body: string;
   readonly command?: string;
   readonly documentation?: { readonly url: string; readonly label: string };
+  /** Offer to connect again: the failure can pass on its own, such as a server that starts. */
+  readonly retry?: boolean;
 }
 
 /** English copy for this demo's recovery screen, shared with its admission tests. */
@@ -38,6 +40,7 @@ export function failureMessage(
       title: t('collaborationDemo.serverRecovery.timeoutTitle'),
       body: t('collaborationDemo.serverRecovery.timeoutBody', { serverUrl: connection.serverUrl }),
       command: connection.serverCommand,
+      retry: true,
     };
   }
   // The server refuses an invite to a room it does not know with the demo reason
