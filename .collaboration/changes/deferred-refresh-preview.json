@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A deferred external refresh cancels its opening slices and leaves the document preview blocking pointer input.",
+  "after": "A deferred external refresh completes its opening slices and restores document input.",
+  "reason": "External document refresh refuses collaborative sessions. This change preserves the opening scheduler only for an external refresh mount. Shared operations, identities, serialization, and collaboration formats stay unchanged.",
+  "tests": [
+    "packages/core/src/editor/__tests__/document-refresh-input.test.ts",
+    "packages/core/src/editor/__tests__/document-refresh.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-deferred-open.test.ts"
+  ],
+  "changeset": "deferred-refresh-preview",
+  "migration": null
+}

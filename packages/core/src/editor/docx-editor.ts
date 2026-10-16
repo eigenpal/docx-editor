@@ -796,8 +796,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** A NEW document: forget the previous document's measurer, then mount. */
   function loadBytes(bytes: Uint8Array, immediate = false): void {
+    // A deferred refresh re-enters from its scheduled mount. Keep that scheduler alive
+    // so its remaining opening slices clear the preview and restore pointer input.
+    if (!immediate) openScheduler.cancel();
     // Keep the live font resources intact until a deferred refresh actually mounts.
-    openScheduler.cancel();
     openFailure.clear();
     preparedFontSession = null;
     deferredRefreshBytes = null;

@@ -4,7 +4,7 @@ import { createDocumentRefresh } from '../document-refresh.ts';
 import { refreshFixture, refreshMetadata } from './document-refresh-fixture.ts';
 import { formFieldDocx } from './form-field-docx.fixture.ts';
 import { collectReviewItems } from '../../store/index.ts';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, unzipSync, zipSync } from 'fflate';
 
 const dispose: (() => void)[] = [];
 afterEach(() => {
@@ -194,6 +194,49 @@ test('undo cannot write while a deferred refresh is pending', async () => {
   expect(editor.exec({ type: 'insertText', text: 'Blocked' }).ok).toBe(false);
   expect((await applying).ok).toBe(true);
 });
+
+for (const compressed of [false, true]) {
+  test(`a deferred refresh finishes opening and accepts input (compressed: ${compressed})`, async () => {
+    const { container, editor, refresh } = open();
+    const submission = await refresh.capture();
+    const large = refreshFixture(1, true);
+    const bytes = compressed ? zipSync(unzipSync(large)) : large;
+    if (compressed) expect(bytes.byteLength).toBeLessThan(512 * 1024);
+    else expect(bytes.byteLength).toBeGreaterThan(512 * 1024);
+
+    const applying = refresh.applyUpdate({ submission, sequence: 1, bytes });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(refresh.snapshot().phase).toBe('refreshing');
+    expect(await applying).toMatchObject({ ok: true });
+    refresh.finish(submission);
+    expect(editor.snapshot().editingMode).toBe('editing');
+    expect(container.textContent).toContain('Updated delivery date');
+
+    // Let the scheduler finish naturally. exec/save/layout readers would flush it and
+    // hide a cancelled continuation, while synthetic events ignore CSS pointer blocking.
+    const deadline = Date.now() + 1000;
+    while (container.hasAttribute('data-docx-opening-preview') && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);
+    expect(editor.surface).not.toBeNull();
+    expect(editor.snapshot().isOpening).toBe(false);
+
+    const pages = container.querySelector<HTMLElement>('.docx-pages')!;
+    expect(pages.contentEditable).toBe('true');
+    pages.dispatchEvent(
+      new InputEvent('beforeinput', {
+        bubbles: true,
+        cancelable: true,
+        inputType: 'insertText',
+        data: 'After refresh ',
+      })
+    );
+    editor.surface!.flushPendingInput();
+    expect(editor.surface!.session.bodyText()).toContain('After refresh ');
+  });
+}
 
 test('a deferred mounting exception resolves through recovery', async () => {
   const { container, editor, refresh } = open();
