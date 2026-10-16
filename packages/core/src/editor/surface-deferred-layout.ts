@@ -45,6 +45,11 @@ export interface DeferredLayoutHost {
   pageAfterView(): number | undefined;
   /** The layout on screen now. */
   current(): SemanticLayout | null;
+  /**
+   * Whether the layout on screen stops before the end of the document, as during an opening.
+   * Its later pages do not exist yet, so a pass defers however few of them there are.
+   */
+  partial?(): boolean;
   /** The model revision now; a finished pass for an older one is not published. */
   revision(): number;
   /** Publish a finished layout of the current revision. */
@@ -176,6 +181,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
       const deadline = began + foregroundMs;
       const after = pageAfterViewForTest ?? host.pageAfterView();
       const previous = host.current();
+      const partial = host.partial?.() === true;
       let progress: LayoutProgress | null = null;
       for (;;) {
         const next = steps.next();
@@ -190,7 +196,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
           progress.pages.length <= after ||
           host.now() < deadline ||
           !previous ||
-          previous.pages.length - progress.pages.length < MIN_DEFERRED_PAGES
+          (!partial && previous.pages.length - progress.pages.length < MIN_DEFERRED_PAGES)
         )
           continue;
         // The completed pages, then the previous layout's pages after them, until the pass

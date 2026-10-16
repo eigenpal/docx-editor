@@ -11,8 +11,8 @@ describe('nextPrefixLimit', () => {
   test('a step holds a fixed amount of text, at least a few blocks', () => {
     const blocks = Array.from({ length: 10_000 }, () => paragraph(1_000));
     const first = nextPrefixLimit(0, blocks.length, (index) => blocks[index]);
-    expect(first).toBe(150);
-    expect(nextPrefixLimit(first, blocks.length, (index) => blocks[index])).toBe(300);
+    expect(first).toBe(60);
+    expect(nextPrefixLimit(first, blocks.length, (index) => blocks[index])).toBe(120);
     const short = Array.from({ length: 100 }, () => paragraph(1));
     expect(nextPrefixLimit(0, short.length, (index) => short[index])).toBe(100);
   });

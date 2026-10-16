@@ -6,6 +6,7 @@ import {
   type AutomationPaginationSnapshot,
 } from '../automation/pagination.ts';
 import { documentReads } from '../automation/reads.ts';
+import { completeProgressiveOpen } from './surface-progressive-open.ts';
 // Automation over an editor that is already open.
 //
 // This is an ADAPTER, not a second host: it builds the neutral lane's port over the live
@@ -254,6 +255,8 @@ function sessionPort(
       fieldPaginationPackage = null;
       const surface = editor.surface;
       if (!surface) return;
+      // Page fields read the whole pagination, which a large open may still be laying out.
+      completeProgressiveOpen(surface);
       const layout = surface.layout();
       fieldPagination = paginationSnapshotOf(layout);
       fieldPaginationPackage = sync()?.currentPackage() ?? null;

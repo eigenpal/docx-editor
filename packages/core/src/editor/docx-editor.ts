@@ -22,7 +22,8 @@ import { canEditorViewCommand, createEditorViews } from './docx-editor-view-comm
 import { bindCommentDraftRequests } from './comment-draft-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
-import { attachTargetRefusal, registerEditorHost } from './host-realm.ts';
+import { attachTargetRefusal, hostWindowOf, registerEditorHost } from './host-realm.ts';
+import { continueOpeningLayout } from './docx-editor-opening-layout.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
@@ -265,8 +266,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** The opening document's session between the prepare and mount tasks, for font work. */
   let preparedFontSession: TreeDocxSessionView | null = null;
   let mountedSeq = -1;
-  const stillOpening = () =>
-    preparedFontSession !== null || (!!surface && preparedOpen.stillOpening(surface));
+  const stillOpening = () => preparedFontSession !== null;
   const hostConfig = createDocxEditorHostConfigState(config);
   let author = normalizeEditorAuthor(config.author);
   let container: HTMLElement | null = config.container ?? null;
@@ -300,26 +300,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** Defers a big document's open behind a painted frame; see `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
-    continueOpen: (budgetMs) => {
-      if (!surface) return true;
-      try {
-        const done = diagnostics.continueOpen(() => preparedOpen.continueOpen(surface!, budgetMs));
-        if (done) {
-          diagnostics.openSettled(surface);
-          const bytes = openingRefreshBytes;
-          openingRefreshBytes = null;
-          if (bytes) refreshHost?.mounted(bytes);
-        }
-        return done;
-      } catch (error) {
-        const bytes = openingRefreshBytes;
-        openingRefreshBytes = null;
-        if (!bytes) throw error;
-        diagnostics.openCrashed(error);
-        refreshHost?.mounted(bytes, error);
-        return true;
-      }
-    },
     // Fonts resolved before the mount are laid out once, by the mount; see `preparedOpenHook`.
     prepare: preparedOpen.preparedOpenHook(
       () => preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config),
@@ -769,7 +749,37 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
     else adoptDocumentTracking();
     sweepCustomNodePayloadsOnOpen(surface, modules);
-    if (!preparedOpen.stillOpening(surface)) diagnostics.openSettled(surface);
+    // A large open ends at the mount; its remaining pages lay out behind the live pages.
+    const opened = surface;
+    /** Set when a refresh's opening failed and was reported to the refresh host. */
+    let refreshFailed = false;
+    if (!preparedOpen.stillOpening(opened)) diagnostics.openSettled(opened);
+    else
+      continueOpeningLayout(opened, {
+        current: () => surface,
+        view: () => hostWindowOf(container),
+        slice: (run) => {
+          try {
+            return diagnostics.continueOpen(run);
+          } catch (error) {
+            // A refresh reports its failure to the refresh host; any other open throws.
+            const bytes = openingRefreshBytes;
+            openingRefreshBytes = null;
+            if (!bytes) throw error;
+            diagnostics.openCrashed(error);
+            refreshHost?.mounted(bytes, error);
+            refreshFailed = true;
+            return true;
+          }
+        },
+        settled: () => {
+          if (refreshFailed) return;
+          const bytes = openingRefreshBytes;
+          openingRefreshBytes = null;
+          diagnostics.openSettled(opened);
+          if (bytes) refreshHost?.mounted(bytes);
+        },
+      });
     mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
     // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`
@@ -1813,7 +1823,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return mountGeneration;
     },
     get surface() {
-      return surface && preparedOpen.stillOpening(surface) ? null : surface;
+      return surface;
     },
 
     ...views.popupChrome.setters,

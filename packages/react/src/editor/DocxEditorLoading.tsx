@@ -85,8 +85,8 @@ export interface DocxEditorLoadingProps {
   style?: CSSProperties;
   /**
    * Your own loading indicator, in place of the packaged spinner. The packaged screen keeps
-   * its page and centers this on it. With `overlay`, it then moves onto the document's first
-   * page while a large document lays out its remaining pages, and scrolls with it.
+   * its page and centers this on it. With `overlay`, it then moves below the laid-out pages
+   * while a large document lays out its remaining pages, and scrolls with them.
    *
    * Include text for screen readers, as the packaged indicator does.
    *
@@ -98,8 +98,8 @@ export interface DocxEditorLoadingProps {
   /**
    * The whole first loading screen, in place of the packaged page. Compose your own around
    * `DocxEditor.Loading.Spinner` to keep the packaged indicator beside your own copy. To
-   * change only the indicator, and keep it on the first page as the document opens, use
-   * `indicator`.
+   * change only the indicator, and keep it below the laid-out pages as the document opens,
+   * use `indicator`.
    */
   children?: DocxEditorChildren;
 }
@@ -142,10 +142,10 @@ export function warnLoadingIndicatorWithoutChrome(): void {
 }
 
 /**
- * The element on the first page that holds the indicator while a large document lays out
- * its remaining pages, or null. Only the overlay registers: the packaged frame has one.
+ * The element below the laid-out pages that holds the indicator while a large document lays
+ * out its remaining pages, or null. Only the overlay registers: the packaged frame has one.
  */
-function useFirstPageIndicator(enabled: boolean): HTMLElement | null {
+function useOpeningIndicator(enabled: boolean): HTMLElement | null {
   const editor = useDocxEditor();
   const [element, setElement] = useState<HTMLElement | null>(null);
   useEffect(() => {
@@ -169,18 +169,18 @@ function DocxEditorLoadingImpl({
 }: DocxEditorLoadingProps) {
   const showLoading = useEditorState(selectShowLoading);
   const pageSize = useEditorState(selectLoadingPageSize, sameLoadingPageSize);
-  const firstPage = useFirstPageIndicator(overlay);
+  const below = useOpeningIndicator(overlay);
   const { t } = useTranslation();
-  if (!when && !showLoading) return null;
-
   const status = indicator ?? (
     <>
       <DocxEditorLoadingSpinner />
       <span className="docx-editor-sr-only">{t('loading.label')}</span>
     </>
   );
-  // The first pages show: the indicator moves onto the first page, and the overlay steps aside.
-  if (firstPage) return createPortal(status, firstPage);
+  // The first pages show and take input, so the opening state is over; the indicator moves
+  // below the laid-out pages until the last one is laid out.
+  if (below) return createPortal(status, below);
+  if (!when && !showLoading) return null;
 
   const classes = `docx-editor docx-editor__loading${
     overlay ? ' docx-editor__loading--overlay' : ''
@@ -234,7 +234,7 @@ export interface DocxEditorLoadingComponent {
  * LARGE document opens — the engine mounts it behind one painted frame precisely so this
  * screen can paint before the blocking parse and layout — it holds until the pages land;
  * pass `overlay` to pin it over the previous document for that window. With `overlay`, once
- * the first pages show, the indicator moves onto the first page until the rest are laid out.
+ * the first pages show, the indicator moves below the laid-out pages until the rest are laid out.
  * Pass `indicator` to replace only the spinner, in both places:
  *
  * ```tsx

@@ -5113,28 +5113,15 @@ a.docx-hyperlink:focus-visible {
 
 /* Once the opening document has mounted and lays out its remaining pages, the engine marks
    its container for exactly that phase. The overlay steps aside, so the scroll container
-   scrolls. The pages show muted and take no pointer input, and the indicator sits on the
-   FIRST PAGE (`.docx-opening-indicator`), so it scrolls with the document instead of
-   floating over it. */
+   scrolls and the pages take input. The indicator sits in a band BELOW THE LAST LAID-OUT
+   PAGE (`.docx-opening-indicator`), so it scrolls with the document instead of floating
+   over it. */
 :where(:has([data-docx-opening-preview])) > .docx-editor__loading--overlay {
   display: none;
 }
 
-[data-docx-opening-preview] .docx-pages {
-  pointer-events: none;
-}
-
-[data-docx-opening-preview] .docx-page::before {
-  position: absolute;
-  inset: 0;
-  z-index: var(--doc-z-overlay);
-  background: color-mix(in srgb, var(--doc-page-bg-rendered) 55%, transparent);
-  content: '';
-}
-
-/* The loading indicator over the first page: a real element the engine positions on the
-   page's own box, so a host can render its own content into it. Only its content takes
-   pointer input, so a host can offer a button there. */
+/* A real element the engine positions below the laid-out pages, so a host can render its own
+   content into it. Only its content takes pointer input, so a host can offer a button there. */
 .docx-opening-indicator {
   position: absolute;
   z-index: var(--doc-z-overlay);

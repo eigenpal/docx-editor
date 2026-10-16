@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "A large document laid out every page before it took input; edits waited for the opening to end.",
+  "after": "The first pages take input while the remaining pages lay out in the background; local and remote edits during that time lay out the pages laid out so far, and the opening then continues.",
+  "reason": "Only local layout scheduling changed. The shared document format, operations, and room state are the same, so released clients share rooms unchanged.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-deferred-open.test.ts",
+    "packages/core/src/editor/__tests__/progressive-open.test.ts"
+  ],
+  "changeset": "long-document-open-speed",
+  "migration": null
+}

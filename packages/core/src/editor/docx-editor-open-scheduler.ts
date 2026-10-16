@@ -240,7 +240,12 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
           if (hooks.continueOpen) hooks.scheduled();
         };
         if (hooks.continueOpen) queueTask(slice, viewOf());
-        else scheduled = null;
+        else if (scheduled === entry) {
+          // The open ends at the mount; `isOpening` moved, so the facade publishes it. A load
+          // the mount itself started is another entry, and stays scheduled.
+          scheduled = null;
+          hooks.scheduled();
+        }
       };
       const raf = timers.requestAnimationFrame(() => {
         if (fallback !== null) timers.clearTimeout(fallback);

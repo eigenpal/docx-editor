@@ -66,17 +66,19 @@ async function until(check: () => boolean, timeoutMs = 20000): Promise<void> {
 }
 
 describe('the loading indicator on the first page', () => {
-  test('shows the packaged spinner on the first page until the open ends', () => {
+  test('shows the packaged spinner below the laid-out pages until the open ends', () => {
     const { container, surface } = slicedMount();
     try {
       const indicator = indicatorOf(container);
       expect(indicator).not.toBeNull();
-      // A sibling of the pages, so the page painter keeps it, on the first page's own box.
+      // A sibling of the pages, so the page painter keeps it, in the band below the last
+      // laid-out page, where the next pages appear.
+      const pages = container.querySelector<HTMLElement>(':scope > .docx-pages')!;
       const page = container.querySelector<HTMLElement>('.docx-page[data-page-index="0"]')!;
       expect(indicator!.hidden).toBe(false);
       expect(indicator!.style.width).toBe(page.style.width);
-      expect(indicator!.style.height).toBe(page.style.height);
-      expect(indicator!.style.top).toBe(page.style.top);
+      expect(indicator!.style.left).toBe(page.style.left);
+      expect(indicator!.style.top).toBe(pages.style.height);
       expect(indicator!.querySelector('.docx-editor__loading-spinner')).not.toBeNull();
       while (!continueProgressiveOpen(surface, 0)) {
         // One slice at a time.
@@ -120,7 +122,10 @@ describe('the loading indicator on the first page', () => {
     const container = document.createElement('div');
     editor.attach(container);
     // Recorded at the call: the slices are queued tasks that can end the open before a poll.
-    await until(() => !editor.snapshot().isOpening && editor.surface !== null);
+    // The indicator stays until the last page is laid out, after `isOpening` turned false.
+    await until(
+      () => editor.surface !== null && !container.hasAttribute('data-docx-layout-pending')
+    );
     expect(published.length).toBe(2);
     expect(published[0]!.closest('.docx-opening-indicator')).not.toBeNull();
     expect(published[1]).toBeNull();
