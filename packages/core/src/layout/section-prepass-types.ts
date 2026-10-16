@@ -1,6 +1,7 @@
 // The prepass shapes one section's block flow reads: each block prepared once per width and
 // producer, and the section-wide results kept on the session between passes.
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
+import type { FlowKeyIntern } from './flow-key-intern.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphKeeps } from './pagination-keeps.ts';
@@ -88,5 +89,7 @@ export interface SectionPrepass {
    */
   readonly refToken: string;
   readonly flowKeys: string[];
+  /** The extended flow keys by base key and suffix, which the next pass answers from. */
+  readonly flowKeyIntern: FlowKeyIntern;
   readonly terminalTextTables: TerminalTextTableGroup | undefined;
 }

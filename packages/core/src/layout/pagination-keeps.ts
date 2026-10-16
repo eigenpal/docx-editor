@@ -26,6 +26,7 @@ import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { createKeepRangeIndex, type KeepRange } from './pagination-keep-index.ts';
+import { extendedFlowKey } from './flow-key-intern.ts';
 
 /** Extra retries for line retreat; this does not limit keep-chain membership. */
 export const KEEP_BREAK_RETRY_ALLOWANCE = 8;
@@ -636,7 +637,7 @@ export function listMarkerFlowKeys(
     const marker = markerAt(index);
     if (marker === undefined) continue;
     if (flow === keys) flow = [...keys];
-    flow[index] = `${flow[index]}~mk~${marker}`;
+    flow[index] = extendedFlowKey(flow[index]!, '~mk~', marker);
   }
   return flow;
 }
@@ -674,7 +675,7 @@ export function contextualSpacingFlowKeys(
     const before = neighbourStyleAt(index, -1) === style;
     const after = neighbourStyleAt(index, 1) === style;
     if (flow === keys) flow = [...keys];
-    flow[index] = `${flow[index]}~cs~${before ? 1 : 0}${after ? 1 : 0}`;
+    flow[index] = extendedFlowKey(flow[index]!, '~cs~', `${before ? 1 : 0}${after ? 1 : 0}`);
   }
   return flow;
 }
@@ -721,7 +722,7 @@ export function borderGroupFlowKeys(
     const above = index > 0 && groupKeyAt(index - 1) === group;
     const below = index + 1 < keys.length && groupKeyAt(index + 1) === group;
     if (flow === keys) flow = [...keys];
-    flow[index] = `${flow[index]}~bg~${above ? 1 : 0}${below ? 1 : 0}`;
+    flow[index] = extendedFlowKey(flow[index]!, '~bg~', `${above ? 1 : 0}${below ? 1 : 0}`);
   }
   return flow;
 }
@@ -752,7 +753,7 @@ export function tocFieldFlowKeys(keys: string[], verdictAt: (index: number) => s
     const verdict = verdictAt(index);
     if (verdict === '') continue;
     if (flow === keys) flow = [...keys];
-    flow[index] = `${flow[index]}~toc~${verdict}`;
+    flow[index] = extendedFlowKey(flow[index]!, '~toc~', verdict);
   }
   return flow;
 }
@@ -851,7 +852,11 @@ export function keepNextFlowKeys(
   }
   const flow = [...keys];
   for (const index of heads)
-    flow[index] = `${keys[index]}~kn~${flags[index]! & 2 ? plain[index + 1] : through[index + 1]}`;
+    flow[index] = extendedFlowKey(
+      keys[index]!,
+      '~kn~',
+      flags[index]! & 2 ? plain[index + 1]! : through[index + 1]!
+    );
   return flow;
 }
 

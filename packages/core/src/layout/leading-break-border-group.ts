@@ -21,6 +21,7 @@ import type { RefFieldContext } from './field-ref.ts';
 import type { PreparedBlock } from './section-prepass-types.ts';
 import { cascadeRunProperties } from './style-cascade.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
+import { extendedFlowKey } from './flow-key-intern.ts';
 
 type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
 
@@ -145,7 +146,7 @@ export function createLeadingBreakGroups(
       for (let index = 0; index + 1 < prepared.length; index += 1) {
         if (!leaves(prepared[index], prepared[index + 1])) continue;
         if (flow === keys) flow = [...keys];
-        flow[index] = `${flow[index]}~lbg`;
+        flow[index] = extendedFlowKey(flow[index]!, '~lbg', '');
       }
       return flow;
     },

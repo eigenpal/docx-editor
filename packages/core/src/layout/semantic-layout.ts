@@ -1036,6 +1036,7 @@ function* layoutBlocksPass(
       flowKeys: flow,
       keepsNext,
       markerTexts,
+      flowKeyIntern,
     } = sectionFlowKeys({
       prepared,
       keys,
@@ -1047,6 +1048,7 @@ function* layoutBlocksPass(
       tocIds,
       leadingBreakFlowKeys: leadingBreakGroups.flowKeys,
       keptTables,
+      flowKeyIntern: prepassMemo?.flowKeyIntern,
     });
 
     return {
@@ -1084,6 +1086,7 @@ function* layoutBlocksPass(
       tocToken,
       refToken: refFields?.valuesToken ?? '',
       flowKeys: flow,
+      flowKeyIntern,
       terminalTextTables,
     };
   }
