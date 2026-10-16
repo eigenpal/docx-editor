@@ -75,13 +75,20 @@ function paragraphAbove(part: OoxmlPart, id: string): OoxmlElement | null {
   return current ? null : paragraph;
 }
 
-function siteIsInert(part: OoxmlPart, id: string, context: PropertyChangeContext): boolean {
+function siteIsInert(
+  part: OoxmlPart,
+  id: string,
+  context: PropertyChangeContext,
+  located: ReadonlySet<string>
+): boolean {
   const change = findNode(part, id);
   if (!change || change.kind === 'textValue') return false;
   const current = parentNodeOf(part, id);
   if (!current) return false;
   const paragraph = paragraphAbove(part, current.id);
-  if (!paragraph) return false;
+  // A site in a paragraph the item has no range in (a text box shares the record's id) could not
+  // be left unmarked on the page, so the record keeps its card.
+  if (!paragraph || !located.has(paragraph.id)) return false;
   const pPr = findParagraphProperties(paragraph);
   const known = answers.get(change);
   if (known && known.context === context && known.current === current && known.paragraph === pPr) {
@@ -103,7 +110,8 @@ function isInert(
   if (!isCandidate(item)) return false;
   const part = inputs.pkg.parts.get(item.ranges[0]!.partName);
   const ids = revisionSiteNodeIdsOf(item);
-  return !!part && ids.length > 0 && ids.every((id) => siteIsInert(part, id, context));
+  const located = new Set(item.ranges.map((range) => range.start.paragraphId));
+  return !!part && ids.length > 0 && ids.every((id) => siteIsInert(part, id, context, located));
 }
 
 export function withoutInertPropertyChanges<T extends ReviewItem>(

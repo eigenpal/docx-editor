@@ -40,6 +40,9 @@ function docx(body: string, comments = false, header?: string): Uint8Array {
   return zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, strToU8(v)])));
 }
 
+/** Full review derivations so far, across every mounted editor. */
+let derivations = 0;
+
 function mount(body: string, comments = false, header?: string) {
   const container = document.createElement('div');
   document.body.append(container);
@@ -52,7 +55,10 @@ function mount(body: string, comments = false, header?: string) {
         id: 'review',
         review: {
           displayModes: ['all-markup', 'simple-markup', 'proposed', 'original'],
-          collectReviewItems,
+          collectReviewItems: (input) => {
+            derivations += 1;
+            return collectReviewItems(input);
+          },
           revisionItemsOfParagraph: (part, id) => {
             const paragraph = findNode(part, id);
             return paragraph?.kind === 'paragraph'
@@ -413,6 +419,33 @@ describe('property changes that change nothing', () => {
     expect(view.editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
     expect(view.count()).toBe(1);
     expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(2);
+  });
+
+  test('typing in an unlisted paragraph-property group keeps the fast patch', () => {
+    const left = () => p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>member</w:t></w:r>');
+    using view = mount(left() + left() + left() + left());
+    expect(view.count()).toBe(0);
+    const paragraphId = view.editor.surface!.session.paragraphIds()[1]!;
+    const at = { paragraphId, offset: 2 };
+    view.editor.surface!.setSelection({ anchor: at, head: at });
+    const before = derivations;
+    for (const text of ['a', 'b', 'c']) {
+      expect(view.editor.exec({ type: 'insertText', text }).ok).toBe(true);
+      expect(view.count()).toBe(0);
+    }
+    expect(derivations).toBe(before);
+  });
+
+  test('a record shared with a text box keeps its card', () => {
+    const shared = `w:id="${id++}" ${STAMP}`;
+    const run = (text: string) =>
+      `<w:r><w:rPr><w:b w:val="0"/><w:rPrChange ${shared}><w:rPr/></w:rPrChange></w:rPr><w:t>${text}</w:t></w:r>`;
+    const box =
+      '<w:r><w:pict><v:shape xmlns:v="urn:schemas-microsoft-com:vml" style="width:100pt;height:40pt"><v:textbox><w:txbxContent>' +
+      `<w:p>${run('boxed')}</w:p>` +
+      '</w:txbxContent></v:textbox></v:shape></w:pict></w:r>';
+    using view = mount(p('', box) + p('') + p('', run('body')));
+    expect(view.count()).toBe(1);
   });
 
   test('typing in the paragraph keeps the record unlisted', () => {

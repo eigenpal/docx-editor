@@ -11,7 +11,11 @@ import { revisionSiteNodeIdsOf, type ReviewItem } from './review-items.ts';
 export function unlistedSitesOf(items: readonly ReviewItem[]): {
   readonly sites: string[];
   readonly paragraphs: Map<string, string>;
-  /** Paragraphs an item touches that also touches another paragraph. */
+  /**
+   * Paragraphs an item touches that also touches another paragraph. A paragraph-property group
+   * is not counted: a text-local edit leaves every member's properties as they were, so its
+   * members stay left out together, and a patch of one member keeps that answer.
+   */
   readonly spanning: string[];
 } {
   const sites: string[] = [];
@@ -22,7 +26,8 @@ export function unlistedSitesOf(items: readonly ReviewItem[]): {
     const own = revisionSiteNodeIdsOf(item);
     for (const id of own) sites.push(id);
     const touched = new Set(item.ranges.map((range) => range.start.paragraphId));
-    if (touched.size > 1) for (const id of touched) spanning.push(id);
+    const propertyGroup = item.revisionKind === 'format' && item.formattingKind === 'pPrChange';
+    if (touched.size > 1 && !propertyGroup) for (const id of touched) spanning.push(id);
     for (const range of item.ranges) {
       const list = byParagraph.get(range.start.paragraphId) ?? [];
       for (const id of own) list.push(id);
