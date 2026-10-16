@@ -29,13 +29,23 @@ const originalProjections = new WeakMap<OoxmlElement, OoxmlElement>();
  */
 const resolvedFormatChanges = new WeakMap<OoxmlElement, RevisionAttribution>();
 
-/** The tracked formatting change a resolved view accepted into this `rPr` / `pPr`, if any. */
+/**
+ * The tracked formatting change a resolved view accepted into this `rPr` / `pPr`, if any.
+ *
+ * A record the review queue leaves out is no change site: Simple Markup draws no bar for a
+ * change that has no card. Decided here, at read time, not in the cached projection, because
+ * whether a run's record is listed also depends on its paragraph, a node the projection of the
+ * run does not see.
+ */
 export function resolvedFormatChangeOf(
-  properties: OoxmlNode | undefined
+  properties: OoxmlNode | undefined,
+  filter?: RevisionAuthorFilter
 ): RevisionAttribution | null {
-  return properties && properties.kind !== 'textValue'
-    ? (resolvedFormatChanges.get(properties) ?? null)
-    : null;
+  const change =
+    properties && properties.kind !== 'textValue'
+      ? (resolvedFormatChanges.get(properties) ?? null)
+      : null;
+  return change && filter?.unlisted?.sites.has(change.nodeId) ? null : change;
 }
 
 function named(node: OoxmlNode, name: string): boolean {
@@ -57,13 +67,13 @@ export function resolvedParagraphMarkChangeSites(
   if (mode === 'all-markup' || paragraph.kind === 'textValue') return [];
   const sites = [...resolvedChangeSites(paragraphMarkRevisionsOf(paragraph), mode, filter)];
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const paragraphChange = resolvedFormatChangeOf(pPr);
+  const paragraphChange = resolvedFormatChangeOf(pPr, filter);
   if (paragraphChange) sites.push(paragraphChange);
   const rPr =
     pPr && pPr.kind !== 'textValue'
       ? pPr.children.find((child) => child.kind === 'runProperties')
       : undefined;
-  const markChange = resolvedFormatChangeOf(rPr);
+  const markChange = resolvedFormatChangeOf(rPr, filter);
   if (markChange) sites.push(markChange);
   return sites;
 }
@@ -120,12 +130,8 @@ function projectedFormatting(
     const recorded = projection === 'original' ? recordedProperties(change) : null;
     if (projection === 'proposed') children = children.filter((child) => child !== change);
     // A change the VIEW resolved is a site for Simple Markup; one the filter resolved is not.
-    // A record the review queue leaves out is no change site either: Simple Markup draws no
-    // bar for a change that has no card.
     resolvedChange =
-      projection === 'proposed' &&
-      (!filter || revisionIncluded(filter, attribution)) &&
-      !filter?.unlisted?.sites.has(change.id)
+      projection === 'proposed' && (!filter || revisionIncluded(filter, attribution))
         ? attribution
         : null;
     if (recorded !== null) {

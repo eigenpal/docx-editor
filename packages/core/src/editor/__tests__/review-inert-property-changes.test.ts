@@ -335,6 +335,31 @@ describe('property changes that change nothing', () => {
     expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(1);
   });
 
+  for (const [from, to, before, after] of [
+    ['Normal', 'Strong', 0, 1],
+    ['Strong', 'Normal', 1, 0],
+  ] as const) {
+    test(`Simple Markup follows a run record when its paragraph style changes (${from} to ${to})`, () => {
+      using view = mount(
+        p(`<w:pPr>${style(from)}</w:pPr>`, rpr('<w:b w:val="0"/>', '', 'run')) +
+          p('') +
+          // Another unlisted record, so the set of unlisted records never empties.
+          p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>other</w:t></w:r>')
+      );
+      expect(view.editor.exec({ type: 'setReviewDisplayMode', mode: 'simple-markup' }).ok).toBe(
+        true
+      );
+      expect(view.count()).toBe(before);
+      expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(before);
+      const paragraphId = view.editor.surface!.session.paragraphIds()[0]!;
+      const at = { paragraphId, offset: 1 };
+      view.editor.surface!.setSelection({ anchor: at, head: at });
+      expect(view.editor.exec({ type: 'setParagraphStyle', styleId: to }).ok).toBe(true);
+      expect(view.count()).toBe(after);
+      expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(after);
+    });
+  }
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

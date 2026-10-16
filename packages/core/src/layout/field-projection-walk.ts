@@ -447,7 +447,8 @@ export function unmergedPiecesOfParagraphForDisplay(
     const props = runPropertiesOf(run, inheritedRunProperties, cascadeRuns);
     const style = resolveRunStyle(props, themeFonts);
     runFormatSite = resolvedFormatChangeOf(
-      run.children.find((child) => child.kind === 'runProperties')
+      run.children.find((child) => child.kind === 'runProperties'),
+      authorFilter
     );
 
     // Direction-only text supplies a fallback style until visible result text arrives.
