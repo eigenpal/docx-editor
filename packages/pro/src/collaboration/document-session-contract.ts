@@ -53,25 +53,34 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
 
   /**
    * Open an explicit undo group: every local write this session publishes until `end()` is
-   * one undo step.
+   * one undo step. For a server or headless replica, such as an agent's.
    *
    * Without a group, local writes that land within 500 ms of each other share one undo step.
    * A group replaces that timing rule. Its first write starts a new step, however soon it
    * follows the previous write. Its later writes join that step, however long the group
-   * stays open. The first write after `end()` starts a new step. Each boundary first
-   * publishes queued local writes, so they land on the correct side of it.
+   * stays open. The first write after `end()` starts a new step.
+   *
+   * Each boundary publishes the writes that are already committed. A runtime commits its
+   * queued commands only at `context.sync()`, so call `end()` after `runtime.run()` resolves,
+   * not inside the callback before its last sync.
    *
    * - Undo and redo refuse while the group is open: `undo()` and `redo()` return false, and
-   *   `canUndo()` and `canRedo()` report false. End the group first.
+   *   `canUndo()` and `canRedo()` report false. {@link DocumentCollaborationSession.undoGroupOpen}
+   *   tells this refusal apart from an empty history. End the group first.
    * - A refused write does not end the group. Later writes join the same step as the
    *   earlier ones. To revert the whole operation, end the group and call `undo()` once.
    * - Only local writes join the group. Other participants' edits stay out of it, and an
-   *   undo of the group keeps them.
-   * - Destroying the session closes an open group.
+   *   undo of the group keeps them. When they removed everything the group wrote, its undo
+   *   changes nothing and never reverts an older step.
+   * - Once a session has opened a group, every undo or redo steps exactly one step, grouped
+   *   or not.
+   * - Destroying the session, or attaching an editor to it, closes an open group.
    *
    * @throws CollaborationUndoGroupError with `undo-group-already-open` when this session
-   * already has an open group, or `collaboration-session-destroyed` after `destroy()`.
-   * Groups do not nest. Give each concurrent operation its own session.
+   * already has an open group, `editor-attached` when an editor that people edit through is
+   * attached (use the editor's `beginHistoryGroup()` there), or
+   * `collaboration-session-destroyed` after `destroy()`. Groups do not nest. Give each
+   * concurrent operation its own session.
    *
    * @example
    * ```ts
@@ -88,4 +97,7 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    * ```
    */
   beginUndoGroup(): CollaborationUndoGroup;
+
+  /** Whether an undo group from {@link DocumentCollaborationSession.beginUndoGroup} is open. */
+  readonly undoGroupOpen: boolean;
 }

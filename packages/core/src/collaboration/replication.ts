@@ -57,6 +57,11 @@ export type CollaborationApplyResult =
  */
 export interface CollaborationDocumentPort {
   readonly documentId: string;
+  /**
+   * True for the port of an editor that people edit through, which shows undo state to
+   * them. False or absent for a headless or server replica. Optional.
+   */
+  readonly interactive?: boolean;
   paragraphs(): readonly CollaborationParagraph[];
   paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
   /**

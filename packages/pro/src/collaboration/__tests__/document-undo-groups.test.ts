@@ -40,7 +40,7 @@ const doc = () =>
       .join('') + '<w:sectPr/>'
   );
 
-async function pair(): Promise<{ alice: Peer; bob: Peer }> {
+async function pair(): Promise<{ alice: Peer; bob: Peer; pause: () => void; resume: () => void }> {
   setSystemTime(new Date(now));
   return harness.pair(doc());
 }
@@ -375,6 +375,61 @@ describe('undo groups', () => {
     expect(texts(bob).join('|')).not.toContain('[one]');
     expect(alice.room.session.redo()).toBe(true);
     expect(texts(alice).join('|')).toContain('[one]');
+    harness.expectConverged(alice, bob);
+  });
+
+  test('after a group, an emptied ungrouped step undoes to nothing, never the group', async () => {
+    const { alice, bob } = await pair();
+    const group = alice.room.session.beginUndoGroup();
+    type(alice, 0, 'GROUP ');
+    group.end();
+    elapse(1_000);
+    type(alice, 1, 'XYZ');
+    harness.apply(bob, [
+      { op: 'deleteText', paragraphId: harness.paragraphIdAt(bob, 1), start: 0, end: 3 },
+    ]);
+    expect(undo(alice)).toBe(true);
+    expect(texts(alice)[0]).toBe('GROUP Alpha');
+    expect(undo(alice)).toBe(true);
+    expect(texts(alice)[0]).toBe('Alpha');
+    harness.expectConverged(alice, bob);
+  });
+
+  test('undoGroupOpen tells an open group apart from an empty history', async () => {
+    const { alice } = await pair();
+    expect(alice.room.session.undoGroupOpen).toBe(false);
+    const group = alice.room.session.beginUndoGroup();
+    expect(alice.room.session.undoGroupOpen).toBe(true);
+    type(alice, 0, 'A');
+    expect(alice.room.session.undo()).toBe(false);
+    expect(alice.room.session.undoGroupOpen).toBe(true);
+    group.end();
+    expect(alice.room.session.undoGroupOpen).toBe(false);
+    expect(alice.room.session.undo()).toBe(true);
+  });
+
+  test('an undo removes typing that a concurrent split moved and a peer then edited', async () => {
+    const { alice, bob, pause, resume } = await pair();
+    pause();
+    harness.apply(bob, [
+      { op: 'splitParagraph', paragraphId: harness.paragraphIdAt(bob, 0), offset: 0 },
+    ]);
+    harness.apply(alice, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 0), offset: 1, text: '(one)' },
+    ]);
+    resume();
+    // Bob edits the paragraph the split moved Alice's typing to, which copies it there.
+    expect(texts(bob).slice(0, 2)).toEqual(['', 'A(one)lpha']);
+    harness.apply(bob, [
+      { op: 'insertText', paragraphId: harness.paragraphIdAt(bob, 1), offset: 8, text: '[two]' },
+    ]);
+    expect(texts(alice).slice(0, 2)).toEqual(['', 'A(one)lp[two]ha']);
+    expect(undo(alice)).toBe(true);
+    expect(texts(alice).join('|')).not.toContain('(one)');
+    expect(texts(alice).join('|')).toContain('[two]');
+    expect(alice.room.session.redo()).toBe(true);
+    const shown = texts(alice).join('|');
+    expect(shown.split('(one)').length - 1).toBe(1);
     harness.expectConverged(alice, bob);
   });
 });

@@ -266,6 +266,8 @@ class DocumentSession implements DocumentCollaborationSession {
     const refused = this.refuseAttach(port);
     if (refused) return refused;
     this.clearAttachWatchdog();
+    // An editor shows undo state to its user, which an open group would leave wrong.
+    if (port.interactive === true) this.undoGroups.close();
     this.port = port;
     this.publishSharedToPort();
     const stopJournal = port.observePrimitiveJournal((journal) => {
@@ -401,7 +403,11 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   beginUndoGroup(): CollaborationUndoGroup {
-    return this.undoGroups.begin(this.destroyed);
+    return this.undoGroups.begin(this.destroyed, this.port?.interactive === true);
+  }
+
+  get undoGroupOpen(): boolean {
+    return this.undoGroups.isOpen;
   }
 
   private popHistory(direction: 'undo' | 'redo'): boolean {
@@ -417,7 +423,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.historySelections.startPop();
     const from = Y.getState(this.ydoc.store, this.ydoc.clientID);
     this.registry.takeUnlisted();
-    stepHistory(this.registry, this.undoManager, direction, () => {
+    stepHistory(this.registry, this.undoManager, direction, this.undoGroups.used, () => {
       this.registry.normalizeRestoredSplitTextAnchors();
       markRestoredText(this.ydoc, from);
     });

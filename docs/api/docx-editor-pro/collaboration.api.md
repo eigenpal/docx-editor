@@ -174,7 +174,7 @@ export class CollaborationUndoGroupError extends Error {
 }
 
 // @public
-export type CollaborationUndoGroupErrorCode = 'undo-group-already-open' | 'collaboration-session-destroyed';
+export type CollaborationUndoGroupErrorCode = 'undo-group-already-open' | 'editor-attached' | 'collaboration-session-destroyed';
 
 // @public
 export function compactCollaborationState(state: Uint8Array, options?: CompactCollaborationStateOptions): Promise<Uint8Array | null>;
@@ -210,6 +210,7 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
     resourceUsage(): CollaborationResourceUsage;
     setIdentity(update: CollaborationIdentityUpdate): void;
     setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: CollaborationFailureCode, detail?: string): void;
+    readonly undoGroupOpen: boolean;
 }
 
 // @public

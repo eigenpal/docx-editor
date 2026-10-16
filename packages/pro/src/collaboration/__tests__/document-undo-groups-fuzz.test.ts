@@ -14,6 +14,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // - One undo removes every token the undone group typed, and keeps every other token that
 //   was present: the person's and the agent's earlier groups'.
 // - An undo followed at once by a redo restores the text exactly.
+// - Undo and redo refuse while a group is open, and change nothing.
+// - An ungrouped agent write keeps the timing rule and never joins a group's step.
 // - Replicas converge, and the saved document reopens with the same text.
 //
 // Undo and redo near text that a person's split moved have open defects that do not depend
@@ -24,7 +26,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // - `UNDO_GROUP_FUZZ_SHRINK=<seed>` reduces that seed's failure to the fewest actions and
 //   prints them.
 // - `UNDO_GROUP_FUZZ_TRACE=1` prints every action with both replicas' paragraphs.
-import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
+import { afterAll, afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import { readOoxmlPackage, type TreeDocOp } from '@docx-editor.dev/core/store';
 import type { CanonicalPrimitiveJournal } from '@docx-editor.dev/core/collaboration/replication';
 import { readCollaborationDocument } from '../document-read.ts';
@@ -109,6 +111,8 @@ export type Action =
   | { readonly kind: 'elapse'; readonly ms: number }
   | { readonly kind: 'edit'; readonly who: Who; readonly edit: Edit }
   | { readonly kind: 'personUndo' | 'personRedo' | 'agentRedo' }
+  /** Undo and redo while the agent's group is open: both refuse and change nothing. */
+  | { readonly kind: 'agentUndoOpen' }
   /** Undo the agent's last group. `redo` redoes it at once; `typing` types while held back. */
   | { readonly kind: 'agentUndo'; readonly redo: boolean; readonly typing: Edit | null };
 
@@ -145,8 +149,25 @@ function bracketed(name: string, before: string | undefined, after: string | und
   return `${pair[0]}${name}${pair[1]}`;
 }
 
+/** `offset`, moved to the end of any token of `text` it falls inside. */
+function outsideTokens(text: string, offset: number, tokens: ReadonlySet<string>): number {
+  let at = offset;
+  for (let moved = true; moved; ) {
+    moved = false;
+    for (const token of tokens) {
+      for (let from = text.indexOf(token); from >= 0; from = text.indexOf(token, from + 1)) {
+        if (from < at && at < from + token.length) {
+          at = from + token.length;
+          moved = true;
+        }
+      }
+    }
+  }
+  return at;
+}
+
 /** Bind an edit to `peer`'s current paragraphs, or null when it no longer applies. */
-function bind(peer: Peer, edit: Edit): TreeDocOp | null {
+function bind(peer: Peer, edit: Edit, tokens: ReadonlySet<string>): TreeDocOp | null {
   const paragraphs = texts(peer);
   if (paragraphs.length === 0) return null;
   const index = Math.min(edit.paragraph, paragraphs.length - 1);
@@ -159,8 +180,11 @@ function bind(peer: Peer, edit: Edit): TreeDocOp | null {
   switch (edit.kind) {
     case 'type': {
       const text = paragraphs[index]!;
-      const token = bracketed(edit.token, text[offset - 1], text[offset]);
-      return { op: 'insertText', paragraphId, offset, text: token };
+      // Typing never lands inside a token: its text would then not show whole, and the
+      // oracles could not tell what an undo kept.
+      const at = outsideTokens(text, offset, tokens);
+      const token = bracketed(edit.token, text[at - 1], text[at]);
+      return { op: 'insertText', paragraphId, offset: at, text: token };
     }
     case 'split':
       return { op: 'splitParagraph', paragraphId, offset };
@@ -191,10 +215,23 @@ function bind(peer: Peer, edit: Edit): TreeDocOp | null {
   }
 }
 
+const EMPTY_STATS = {
+  undoChecks: 0,
+  tokenChecks: 0,
+  tokensExempt: 0,
+  redoExact: 0,
+  redoTokensMoved: 0,
+  openRefusals: 0,
+  ungroupedSteps: 0,
+};
+const totals = { ...EMPTY_STATS };
+
 interface Group {
   readonly tokens: string[];
   /** Paragraphs the group's splits created. Its undo removes them, with what they hold. */
   readonly created: Set<string>;
+  /** A step of ungrouped writes, which the timing rule shapes. */
+  readonly ungrouped?: boolean;
 }
 
 /** Two replicas, the agent's open group, and what the oracles know. */
@@ -217,6 +254,11 @@ class Run {
    * some checks relax once text moved.
    */
   private moved = false;
+  /** How often each check ran, and how often an exemption applied. */
+  readonly stats = { ...EMPTY_STATS };
+  /** When the agent's last ungrouped write landed, and whether the next one may join it. */
+  private lastUngrouped = 0;
+  private mergeable = false;
   /** The agent's groups that hold a step, oldest first, and the ones it undid. */
   readonly done: Group[] = [];
   private readonly undone: Group[] = [];
@@ -299,7 +341,7 @@ class Run {
 
   /** Returns the paragraph the edit addressed, or null when it no longer applies. */
   private personEdit(edit: Edit): string | null {
-    const op = bind(this.person, edit);
+    const op = bind(this.person, edit, this.everyToken);
     if (!op) return null;
     this.asPerson(() => `person ${JSON.stringify(op)} ${this.write(this.person, op)}`);
     if (op.op === 'splitParagraph' || op.op === 'deleteBlock') {
@@ -310,20 +352,41 @@ class Run {
   }
 
   private agentEdit(edit: Edit): void {
-    // The agent writes only inside groups, so each of its undo steps is one group. A shrunk
-    // action list can drop a group's begin; its writes are dropped with it.
-    if (!this.group) return;
-    const op = bind(this.agent, edit);
+    const op = bind(this.agent, edit, this.everyToken);
     if (!op) return;
     const before = new Set(paragraphIds(this.agent));
+    const steps = this.undoSteps();
     const ok = this.write(this.agent, op);
     this.note(`agent ${JSON.stringify(op)} ${ok}`);
-    if (!ok || !this.group) return;
-    for (const id of paragraphIds(this.agent)) if (!before.has(id)) this.group.created.add(id);
+    if (!ok) return;
+    // An ungrouped write keeps the timing rule: it starts a step of its own, or joins the
+    // ungrouped step right below it when that step is less than 500 ms old. It never joins
+    // a group's step.
+    let group = this.group;
+    if (!group) {
+      const added = this.undoSteps() - steps;
+      const top = this.done[this.done.length - 1];
+      if (added === 1) {
+        group = { tokens: [], created: new Set(), ungrouped: true };
+        this.stats.ungroupedSteps += 1;
+        this.done.push(group);
+        this.undone.length = 0;
+      } else if (added === 0 && op.op === 'insertText') {
+        if (!top?.ungrouped || this.now - this.lastUngrouped >= 500 || !this.mergeable) {
+          this.fail('an ungrouped write joined a step it should not join');
+          return;
+        }
+        group = top;
+      }
+      this.lastUngrouped = this.now;
+      this.mergeable = true;
+    }
+    if (!group) return;
+    for (const id of paragraphIds(this.agent)) if (!before.has(id)) group.created.add(id);
     if (op.op === 'insertText') {
       this.everyToken.add(op.text);
-      this.group.tokens.push(op.text);
-      this.landed = true;
+      group.tokens.push(op.text);
+      if (group === this.group) this.landed = true;
     }
   }
 
@@ -342,6 +405,7 @@ class Run {
         return;
       case 'begin':
         if (this.handle) return;
+        this.mergeable = false;
         this.handle = this.agent.room.session.beginUndoGroup();
         this.group = { tokens: [], created: new Set() };
         this.groupSteps = this.undoSteps();
@@ -362,9 +426,27 @@ class Run {
         }
         this.handle = null;
         this.group = null;
+        this.mergeable = false;
+        return;
+      }
+      case 'agentUndoOpen': {
+        if (!this.handle) return;
+        const before = JSON.stringify(texts(this.agent));
+        const steps = this.undoSteps();
+        const session = this.agent.room.session;
+        const refused =
+          !session.canUndo() && !session.canRedo() && !session.undo() && !session.redo();
+        this.note('agent undo and redo while open');
+        if (!refused || !session.undoGroupOpen)
+          this.fail('undo or redo ran while a group was open');
+        this.stats.openRefusals += 1;
+        if (JSON.stringify(texts(this.agent)) !== before || this.undoSteps() !== steps) {
+          this.fail('a refused undo or redo changed the document or its history');
+        }
         return;
       }
       case 'refuse':
+        this.mergeable = false;
         this.tap?.({
           effects: [
             {
@@ -397,6 +479,7 @@ class Run {
         if (this.agent.room.session.redo()) {
           this.agent.port.flushPendingJournals();
           this.note('agent redo');
+          this.mergeable = false;
           this.undone.pop();
           this.done.push(group);
         }
@@ -441,6 +524,7 @@ class Run {
     if (this.undoSteps() !== stepsBefore - 1) {
       this.fail(`one undo took ${stepsBefore - this.undoSteps()} steps off the stack`);
     }
+    this.mergeable = false;
     this.done.pop();
     this.undone.push(group);
     if (!action.typing && action.redo) {
@@ -449,20 +533,20 @@ class Run {
       this.note('agent redo');
       this.done.push(group);
       this.undone.pop();
-      // Once a person's split moved text, a redo can write the group's text in another
-      // place, or show it again where a person removed it (#1394). Then only the other
-      // characters are compared.
-      const sorted = (lines: string[]): string => {
-        let text = lines.join('');
+      // The text must read exactly as before. Once a person's split moved text, a redo can
+      // write the group's own tokens in another place, or show one again where a person
+      // removed it (#1394). Only then, and only the group's tokens, may differ.
+      const without = (lines: string[]): string => {
+        let text = lines.join('\n');
         for (const token of group.tokens) text = text.split(token).join('');
-        return [...text].sort().join('');
+        return text;
       };
       const after = texts(this.agent);
-      if (
-        this.moved
-          ? sorted(after) !== sorted(textBefore)
-          : JSON.stringify(after) !== JSON.stringify(textBefore)
-      ) {
+      const exact = JSON.stringify(after) === JSON.stringify(textBefore);
+      if (exact) this.stats.redoExact += 1;
+      else if (this.moved && without(after) === without(textBefore))
+        this.stats.redoTokensMoved += 1;
+      else {
         this.fail(
           `undo then redo changed the text: ${JSON.stringify(textBefore)} -> ${JSON.stringify(texts(this.agent))}`
         );
@@ -485,14 +569,18 @@ class Run {
     }
     this.settle();
     for (const replica of [this.agent, this.person]) {
+      this.stats.undoChecks += 1;
+      this.stats.tokenChecks += group.tokens.length;
       for (const token of present(replica, group.tokens)) {
-        if (!this.uncertain.has(token) && !concurrentCopy) {
-          this.fail(`undo left the group's token ${token}`);
-        }
+        if (this.uncertain.has(token) || concurrentCopy) this.stats.tokensExempt += 1;
+        else this.fail(`undo left the group's token ${token}`);
       }
       const kept = present(replica, others);
       for (const token of others) {
-        if (!kept.has(token) && !this.uncertain.has(token)) {
+        this.stats.tokenChecks += 1;
+        if (kept.has(token)) continue;
+        if (this.uncertain.has(token)) this.stats.tokensExempt += 1;
+        else {
           this.fail(
             `undo removed ${token}, which the group did not type: ${JSON.stringify(textBefore)} -> ${JSON.stringify(texts(replica))}`
           );
@@ -549,11 +637,13 @@ async function runSeed(seed: number): Promise<{ problems: string[]; actions: Act
     await run.perform(action);
   };
   let counter = 0;
+  // Names of one width: a token that loses a character never reads as another token.
+  const name = (prefix: string): string => `${prefix}${String((counter += 1)).padStart(4, '0')}`;
   const personAction = (onlyTyping: boolean): Action | null => {
     const roll = random();
     if (!onlyTyping && roll < 0.12) return { kind: 'personUndo' };
     if (!onlyTyping && roll < 0.18) return { kind: 'personRedo' };
-    const token = onlyTyping || roll < 0.6 ? `p${(counter += 1)}` : null;
+    const token = onlyTyping || roll < 0.6 ? name('p') : null;
     const edit = run.randomEdit('person', random, token);
     return edit ? { kind: 'edit', who: 'person', edit } : null;
   };
@@ -566,18 +656,29 @@ async function runSeed(seed: number): Promise<{ problems: string[]; actions: Act
       for (let at = 0; at < writes; at += 1) {
         if (random() < 0.25) await perform({ kind: 'pause' });
         if (random() < 0.1) await perform({ kind: 'refuse' });
-        const token = random() < 0.7 ? `a${(counter += 1)}` : null;
+        const token = random() < 0.7 ? name('a') : null;
         const edit = run.randomEdit('agent', random, token);
         if (edit) await perform({ kind: 'edit', who: 'agent', edit });
         if (random() < 0.6) await perform(personAction(false));
         if (random() < 0.5) await perform({ kind: 'resume' });
+        if (random() < 0.15) await perform({ kind: 'agentUndoOpen' });
         await perform({ kind: 'elapse', ms: pick(GAPS) });
       }
       await perform({ kind: 'end' });
+    } else if (roll < 0.6) {
+      // Ungrouped agent writes between groups keep the timing rule.
+      const writes = 1 + Math.floor(random() * 3);
+      for (let at = 0; at < writes; at += 1) {
+        const token = random() < 0.8 ? name('a') : null;
+        const edit = run.randomEdit('agent', random, token);
+        if (edit) await perform({ kind: 'edit', who: 'agent', edit });
+        if (random() < 0.4) await perform(personAction(false));
+        await perform({ kind: 'elapse', ms: pick(GAPS) });
+      }
     } else if (roll < 0.7 && run.done.length > 0) {
       const typing = random() < 0.3;
       const redo = !typing && random() < 0.4;
-      const edit = typing ? run.randomEdit('person', random, `p${(counter += 1)}`) : null;
+      const edit = typing ? run.randomEdit('person', random, name('p')) : null;
       await perform({ kind: 'agentUndo', redo, typing: edit });
     } else if (roll < 0.78) {
       await perform({ kind: 'agentRedo' });
@@ -589,6 +690,7 @@ async function runSeed(seed: number): Promise<{ problems: string[]; actions: Act
   }
   if (!run.failed) await run.finish();
   const problems = run.problems.map((problem) => `seed ${seed}: ${problem}`);
+  for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += run.stats[key];
   harness.cleanup();
   return { problems, actions };
 }
@@ -651,6 +753,10 @@ describe('undo groups fuzz', () => {
     }, 600_000);
     return;
   }
+  afterAll(() => {
+    // How much each oracle checked. Exemptions should stay a small share of the checks.
+    console.warn(`undo group fuzz checks: ${JSON.stringify(totals)}`);
+  });
   for (let seed = FROM; seed < FROM + SEEDS; seed += 1) {
     test(`seed ${seed}`, async () => {
       const { problems } = await runSeed(seed);

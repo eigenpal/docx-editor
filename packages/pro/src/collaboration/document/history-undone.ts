@@ -14,13 +14,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * that step clears exactly those marks.
  */
 import * as Y from 'yjs';
-import { parseClientClock, type LogicalId } from './identity.ts';
+import type { LogicalId } from './identity.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { RESTORE_ORIGIN } from './paragraph-text-restore.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
-import { itemIdentity } from './paragraph-text-identity.ts';
+import { textMarksOf } from './paragraph-text-marks.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -107,6 +107,8 @@ export function stepHistory(
   registry: DocumentRegistry,
   history: HistoryStack,
   direction: 'undo' | 'redo',
+  /** Step every step alone, as a group step is: the session has used undo groups. */
+  alone: boolean,
   afterStep: () => void
 ): void {
   const stack = direction === 'undo' ? history.undoStack : history.redoStack;
@@ -122,7 +124,7 @@ export function stepHistory(
   // Yjs pops steps until one changes something. When other participants already removed
   // everything a group wrote, that would revert the group's older steps too. A group step
   // is stepped alone: with nothing left to reverse, it is popped and changes nothing.
-  const grouped = popped?.meta.get(GROUP_STEP) === true;
+  const grouped = alone || popped?.meta.get(GROUP_STEP) === true;
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
   } else {
@@ -190,6 +192,7 @@ function changesOf(step: StackItemShape): number {
  */
 function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined): DeletedRun[] {
   const follow = registry.inline.follow;
+  const marks = textMarksOf(registry.doc);
   const copied: DeletedRun[] = [...((runsOf(step, COPY_RUNS) as DeletedRun[] | undefined) ?? [])];
   const add = (client: number, from: number, to: number): void => {
     const last = copied[copied.length - 1];
@@ -204,16 +207,24 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
     for (let clock = run.clock; clock < runEnd; ) {
       const item = structAt(registry.doc, { client: run.client, clock });
       const end = item ? Math.min(item.id.clock + item.length, runEnd) : clock + 1;
-      if (item?.deleted) {
-        // A redo writes characters again under new IDs and marks them with the identity they
-        // had. A copy of them carries that identity, so the record names identities too.
+      // A peer that edits the paragraph a move took typed text to writes a copy of it there,
+      // and the original, still live, no longer shows. Removing the original alone would
+      // leave that copy in view, so typed text counts live too. Text a redo wrote again
+      // counts only once deleted.
+      const live = item !== null && !item.deleted && !marks.origin('restore', run.client, clock);
+      if (item?.deleted || live) {
+        // A redo writes this author's characters again under new IDs, with a restore mark
+        // naming the identity they had, and a copy of them carries that identity. Only that
+        // mark is followed: a step's other inserts, such as copies its own split wrote of
+        // another author's text, keep their own IDs, so the record never hides that text.
         const identities: { client: number; clock: number }[] = [];
         for (let at = clock; at < end; at += 1) {
-          const key =
-            item.parent instanceof Y.Text
-              ? itemIdentity(item.parent, item, at - item.id.clock)
-              : `${run.client}:${at}`;
-          identities.push(parseClientClock(key) ?? { client: run.client, clock: at });
+          const restored = marks.origin('restore', run.client, at);
+          identities.push(
+            restored !== null && restored.client === run.client
+              ? { client: restored.client, clock: restored.clock + (at - restored.firstClock) }
+              : { client: run.client, clock: at }
+          );
         }
         if (identities.some(({ client, clock: at }) => follow.shownCopy(`${client}:${at}`))) {
           for (const identity of identities)

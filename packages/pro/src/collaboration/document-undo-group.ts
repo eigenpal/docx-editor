@@ -9,6 +9,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // that land close together become one step and one long operation becomes several. A group
 // replaces the clock for its lifetime: its first write starts a new step, every later write
 // joins that step, and the first write after the group starts another.
+//
+// Groups are for replicas no person edits through, such as a server agent's. An editor shows
+// undo state to its user and has its own history groups, so a session that an editor
+// attached refuses a group instead of showing an undo that silently does nothing.
 import type { HistoryGroupCapture } from './document/history-group-capture.ts';
 
 /**
@@ -17,11 +21,14 @@ import type { HistoryGroupCapture } from './document/history-group-capture.ts';
  * - `undo-group-already-open`: this session already has an open group. Groups do not nest
  *   and two operations cannot share one session's group. End the open group first, or give
  *   each concurrent operation its own session.
+ * - `editor-attached`: an editor that people edit through is attached to this session. Use
+ *   the editor's own `beginHistoryGroup()` there.
  * - `collaboration-session-destroyed`: the session was destroyed.
  * @public
  */
 export type CollaborationUndoGroupErrorCode =
   | 'undo-group-already-open'
+  | 'editor-attached'
   | 'collaboration-session-destroyed';
 
 /**
@@ -47,11 +54,14 @@ export class CollaborationUndoGroupError extends Error {
  * @public
  */
 export interface CollaborationUndoGroup {
-  /** `closed` after `end()` or after the session is destroyed. */
+  /** `closed` after `end()`, after the session is destroyed, or after an editor attaches. */
   readonly state: 'open' | 'closed';
   /**
-   * Publish queued local writes into the group, then close it. Reverts nothing. Safe to call
-   * more than once, and after the session is destroyed.
+   * Publish committed local writes into the group, then close it. Reverts nothing. Safe to
+   * call more than once, and after the session is destroyed.
+   *
+   * Commands a runtime still queues are not committed yet. Call `end()` after
+   * `runtime.run()` resolves, so its last `context.sync()` lands inside the group.
    */
   end(): void;
 }
@@ -59,6 +69,11 @@ export interface CollaborationUndoGroup {
 /** The session's one open group, if any. */
 export class UndoGroups {
   private current: object | null = null;
+  /**
+   * The session has opened a group. From then on every undo step is stepped alone, so one
+   * undo never reverts more than its own step, grouped or not.
+   */
+  used = false;
 
   constructor(
     private readonly capture: HistoryGroupCapture,
@@ -71,9 +86,11 @@ export class UndoGroups {
     return this.current !== null;
   }
 
-  begin(destroyed: boolean): CollaborationUndoGroup {
+  begin(destroyed: boolean, editorAttached: boolean): CollaborationUndoGroup {
     if (destroyed) throw new CollaborationUndoGroupError('collaboration-session-destroyed');
+    if (editorAttached) throw new CollaborationUndoGroupError('editor-attached');
     if (this.current !== null) throw new CollaborationUndoGroupError('undo-group-already-open');
+    this.used = true;
     // A journal still queued belongs to the writes before the group, not to its first step.
     this.flush();
     const token = {};
@@ -96,7 +113,7 @@ export class UndoGroups {
     });
   }
 
-  /** Session teardown: an open group closes without another flush. */
+  /** Session teardown or an editor's attach: an open group closes without another flush. */
   close(): void {
     if (this.current === null) return;
     this.current = null;
