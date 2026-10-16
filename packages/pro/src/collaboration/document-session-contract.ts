@@ -70,9 +70,9 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    * - A refused write does not end the group. Later writes join the same step as the
    *   earlier ones. To revert the whole operation, end the group and call `undo()` once.
    * - Only local writes join the group. Other participants' edits stay out of it, and an
-   *   undo of the group keeps them, except that it removes each paragraph the group
-   *   inserted, with any text others typed in it. When they removed everything the group
-   *   wrote, its undo changes nothing and never reverts an older step.
+   *   undo of the group keeps them. It can also remove text that others typed in a
+   *   paragraph the group inserted (#1398). When they removed everything the group wrote,
+   *   its undo changes nothing and never reverts an older step.
    * - An undo of an ungrouped step never reverts a group's step below it. Ungrouped history
    *   otherwise undoes as it does without groups. If a peer removed everything that the top
    *   ungrouped step wrote, that `undo()` changes nothing and returns true. Call `undo()`

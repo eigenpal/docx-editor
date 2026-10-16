@@ -1077,7 +1077,7 @@ The [server agent review example](https://github.com/eigenpal/docx-editor/tree/m
 
 ## Undo an agent operation
 
-Each session has its own undo history, so an agent's undo reverts only the agent's edits. An undo that removes a paragraph the agent inserted also removes text that others typed in that paragraph. Without a group, the session merges local writes that land less than 500 milliseconds (ms) apart into one undo step. Two quick operations can then become one step, and one slow operation can become several.
+Each session has its own undo history, so an agent's undo reverts only the agent's edits. An undo can also remove text that others typed in a paragraph the agent inserted (#1398). Without a group, the session merges local writes that land less than 500 milliseconds (ms) apart into one undo step. Two quick operations can then become one step, and one slow operation can become several.
 
 To make one logical operation exactly one undo step, open an undo group on the agent's session before the operation, and end the group when the operation finishes:
 
@@ -1096,7 +1096,7 @@ try {
   group.end();
 }
 
-// Later, revert the whole operation and keep other participants' edits:
+// Later, revert the whole operation and keep other participants' edits, except as noted below:
 room.session.undo();
 ```
 
@@ -1106,7 +1106,7 @@ A group follows these rules:
 - `beginUndoGroup()` and `group.end()` publish committed local writes first, so each write lands on the correct side of the boundary. A runtime commits queued commands only at `context.sync()`. Call `group.end()` after `runtime.run()` resolves, not inside the callback.
 - `undo()` and `redo()` return `false` while a group is open, and `canUndo()` and `canRedo()` report `false`. `session.undoGroupOpen` is `true` then, so you can tell this refusal apart from an empty history. End the group first.
 - A refused write does not end the group. Later writes in the group join the same step as the earlier ones. To revert the whole operation, end the group and call `undo()` once.
-- Other participants' edits never join the group, and an undo of the group keeps them, with one exception: the undo removes each paragraph the group inserted, including text that others typed in it later. If others remove everything that the group wrote, an undo of the group changes nothing. It never reverts an older step instead.
+- Other participants' edits never join the group, and an undo of the group keeps them. It can also remove text that others typed in a paragraph the group inserted (#1398). If others remove everything that the group wrote, an undo of the group changes nothing. It never reverts an older step instead.
 - An undo of an ungrouped write never reverts a group's step below it. Otherwise, ungrouped writes undo as they do without groups. If a peer removed everything that the top ungrouped step wrote, that `undo()` changes nothing and returns `true`. Call `undo()` again to revert the group.
 - `group.end()` is safe to call more than once. `room.destroy()` closes an open group.
 - Groups are for sessions that no person edits through. A session that an editor is attached to refuses a group, and an editor that attaches closes an open group. In a browser editor, use `editor.beginHistoryGroup()` instead.
