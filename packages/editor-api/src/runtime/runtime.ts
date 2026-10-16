@@ -95,10 +95,12 @@ export interface RunOptions {
    *
    * Browser runtime only. A server or collaborative runtime refuses the run with
    * `NotSupported` before the callback starts. To make one operation of a collaborative
-   * server runtime one undo step, open `beginUndoGroup()` on its collaboration session. A closed handle, or a handle from another
-   * editor, refuses with `InvalidArgument` and `target: 'historyGroup'` before the callback
-   * starts. A handle that closes during the run refuses the next `context.sync()` the same way,
-   * and that sync writes nothing. Runs without this option never join a group.
+   * server runtime one undo step, open `beginUndoGroup()` on its collaboration session.
+   *
+   * A closed handle, or a handle from another editor, refuses with `InvalidArgument` and
+   * `target: 'historyGroup'` before the callback starts. A handle that closes during the run
+   * refuses the next `context.sync()` the same way, and that sync writes nothing. Runs without
+   * this option never join a group.
    *
    * The run has no `ExecResult`. The whole run is one write of the group: after the callback
    * finishes, `historyGroup.lastOutcome` holds its outcome, which is `split` if any sync split

@@ -423,7 +423,7 @@ class DocumentSession implements DocumentCollaborationSession {
     this.historySelections.startPop();
     const from = Y.getState(this.ydoc.store, this.ydoc.clientID);
     this.registry.takeUnlisted();
-    stepHistory(this.registry, this.undoManager, direction, this.undoGroups.used, () => {
+    stepHistory(this.registry, this.undoManager, direction, () => {
       this.registry.normalizeRestoredSplitTextAnchors();
       markRestoredText(this.ydoc, from);
     });

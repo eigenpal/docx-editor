@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
 import type { CanonicalPrimitiveJournal } from '@docx-editor.dev/core/collaboration/replication';
 import { CollaborationUndoGroupError } from '../document-undo-group.ts';
+import { textMarksOf } from '../document/paragraph-text-marks.ts';
 import {
   createPeerHarness,
   nodeText,
@@ -431,5 +432,50 @@ describe('undo groups', () => {
     const shown = texts(alice).join('|');
     expect(shown.split('(one)').length - 1).toBe(1);
     harness.expectConverged(alice, bob);
+  });
+
+  test('an undo of a long paste reads its marks per insert, not per character', async () => {
+    const { alice } = await pair();
+    const marks = textMarksOf(alice.ydoc);
+    const follow = (
+      alice.room.session as unknown as {
+        registry: { inline: { follow: { shownCopy(identity: string): unknown } } };
+      }
+    ).registry.inline.follow;
+    let lookups = 0;
+    const origin = marks.origin.bind(marks);
+    const shownCopy = follow.shownCopy.bind(follow);
+    marks.origin = (...args) => ((lookups += 1), origin(...args));
+    follow.shownCopy = (identity) => ((lookups += 1), shownCopy(identity));
+    try {
+      type(alice, 0, 'x'.repeat(200_000));
+      lookups = 0;
+      expect(undo(alice)).toBe(true);
+      expect(texts(alice)[0]).toBe('Alpha');
+      expect(lookups).toBeLessThan(50);
+    } finally {
+      marks.origin = origin;
+      follow.shownCopy = shownCopy;
+    }
+  });
+
+  test('an earlier group leaves ungrouped undo as it is without groups', async () => {
+    const results: string[][] = [];
+    for (const openGroupFirst of [false, true]) {
+      const { alice, bob } = await pair();
+      if (openGroupFirst) alice.room.session.beginUndoGroup().end();
+      elapse(1_000);
+      type(alice, 0, 'AAA');
+      elapse(1_000);
+      type(alice, 1, 'BBB');
+      elapse(1_000);
+      harness.apply(bob, [
+        { op: 'deleteText', paragraphId: harness.paragraphIdAt(bob, 1), start: 0, end: 3 },
+      ]);
+      expect(undo(alice)).toBe(true);
+      results.push(texts(alice));
+      harness.cleanup();
+    }
+    expect(results[1]).toEqual(results[0]!);
   });
 });

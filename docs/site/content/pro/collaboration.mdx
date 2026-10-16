@@ -860,6 +860,8 @@ import type {
 } from '@docx-editor.dev/core/collaboration/replication';
 ```
 
+If your port's host shows undo state to a person, as an editor does, set `interactive: true` on the port. The session then refuses `beginUndoGroup()` with `editor-attached` and closes an open group when the port attaches.
+
 For status, participant, and remote selection types, import `@docx-editor.dev/core/collaboration`. You do not need the replication contracts for these controls.
 
 ## Integrate a custom Yjs provider
@@ -1105,7 +1107,7 @@ A group follows these rules:
 - `undo()` and `redo()` return `false` while a group is open, and `canUndo()` and `canRedo()` report `false`. `session.undoGroupOpen` is `true` then, so you can tell this refusal apart from an empty history. End the group first.
 - A refused write does not end the group. Later writes in the group join the same step as the earlier ones. To revert the whole operation, end the group and call `undo()` once.
 - Other participants' edits never join the group. If they remove everything that the group wrote, an undo of the group changes nothing. It never reverts an older step instead.
-- After a session opens its first group, each undo and redo reverts exactly one step, grouped or not.
+- An undo of an ungrouped write never reverts a group's step below it. Otherwise, ungrouped writes undo as they do without groups.
 - `group.end()` is safe to call more than once. `room.destroy()` closes an open group.
 - Groups are for sessions that no person edits through. A session that an editor is attached to refuses a group, and an editor that attaches closes an open group. In a browser editor, use `editor.beginHistoryGroup()` instead.
 - Groups do not nest. `beginUndoGroup()` throws `CollaborationUndoGroupError` while the session has an open group. Give each concurrent operation its own session.

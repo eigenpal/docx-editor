@@ -107,8 +107,6 @@ export function stepHistory(
   registry: DocumentRegistry,
   history: HistoryStack,
   direction: 'undo' | 'redo',
-  /** Step every step alone, as a group step is: the session has used undo groups. */
-  alone: boolean,
   afterStep: () => void
 ): void {
   const stack = direction === 'undo' ? history.undoStack : history.redoStack;
@@ -122,13 +120,15 @@ export function stepHistory(
   // A step for copies alone that Yjs later merged an edit into has that edit to reverse too.
   const copiesOnly = popped?.meta.get(COPIES_ONLY) === true && changesOf(popped) === 0;
   // Yjs pops steps until one changes something. When other participants already removed
-  // everything a group wrote, that would revert the group's older steps too. A group step
-  // is stepped alone: with nothing left to reverse, it is popped and changes nothing.
-  const grouped = alone || popped?.meta.get(GROUP_STEP) === true;
+  // everything a step wrote, that would revert older steps too. A group's step must never
+  // be reverted that way: a group step is stepped alone, and with nothing left to reverse
+  // it is popped and changes nothing. An ungrouped step may still pass over ungrouped
+  // steps below it that changed nothing, as without groups, but stops above a group step.
+  const grouped = popped?.meta.get(GROUP_STEP) === true;
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
   } else {
-    const below = grouped ? stack.splice(0, stack.length - 1) : [];
+    const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
     try {
       if (direction === 'undo') history.undo();
       else history.redo();
@@ -176,6 +176,58 @@ export function stepHistory(
   history.stopCapturing();
 }
 
+/**
+ * The identities of one author's characters `[from, to)` of `client`, as spans.
+ *
+ * A redo writes this author's characters again under new IDs, with a restore mark naming the
+ * identity they had, and a copy of them carries that identity. Only that mark is followed: a
+ * step's other inserts, such as copies its own split wrote of another author's text, keep
+ * their own IDs, so a record never hides that text.
+ */
+function identitySpans(
+  marks: ReturnType<typeof textMarksOf>,
+  client: number,
+  from: number,
+  to: number
+): { client: number; from: number; to: number }[] {
+  const spans: { client: number; from: number; to: number }[] = [];
+  for (let at = from; at < to; ) {
+    const restored = marks.origin('restore', client, at);
+    if (restored === null || restored.client !== client) {
+      // Without a mark here, the rest of the insert has none either: a mark covers whole
+      // inserts.
+      const end = restored === null ? to : Math.min(to, restored.firstClock + restored.length);
+      spans.push({ client, from: at, to: end });
+      at = end;
+      continue;
+    }
+    const end = Math.min(to, restored.firstClock + restored.length);
+    const start = restored.clock + (at - restored.firstClock);
+    spans.push({ client: restored.client, from: start, to: start + (end - at) });
+    at = end;
+  }
+  return spans;
+}
+
+/** Whether a paragraph shows a copy of any character of `client` in `[from, to)`. */
+function hasShownCopy(
+  follow: { shownCopy(identity: string): unknown },
+  client: number,
+  from: number,
+  to: number
+): boolean {
+  for (let at = from; at < to; at += 1) if (follow.shownCopy(`${client}:${at}`)) return true;
+  return false;
+}
+
+/** How many steps lie at or below the topmost group step under the top one, or 0. */
+function aboveLastGroupStep(stack: readonly StackItemShape[]): number {
+  for (let index = stack.length - 2; index >= 0; index -= 1) {
+    if (stack[index]!.meta.get(GROUP_STEP) === true) return index + 1;
+  }
+  return 0;
+}
+
 /** How many runs of items a step reverses: what it inserted and what it deleted. */
 function changesOf(step: StackItemShape): number {
   const shape = step as { insertions?: unknown; deletions?: unknown };
@@ -193,14 +245,13 @@ function changesOf(step: StackItemShape): number {
 function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined): DeletedRun[] {
   const follow = registry.inline.follow;
   const marks = textMarksOf(registry.doc);
-  const copied: DeletedRun[] = [...((runsOf(step, COPY_RUNS) as DeletedRun[] | undefined) ?? [])];
+  const copied: { client: number; from: number; to: number }[] = (
+    (runsOf(step, COPY_RUNS) as DeletedRun[] | undefined) ?? []
+  ).map((run) => ({ ...run }));
   const add = (client: number, from: number, to: number): void => {
     const last = copied[copied.length - 1];
-    if (last && last.client === client && last.to === from) {
-      copied[copied.length - 1] = { ...last, to };
-    } else {
-      copied.push({ client, from, to });
-    }
+    if (last && last.client === client && last.to === from) last.to = to;
+    else copied.push({ client, from, to });
   };
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
     const runEnd = run.clock + run.length;
@@ -211,25 +262,16 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
       // and the original, still live, no longer shows. Removing the original alone would
       // leave that copy in view, so typed text counts live too. Text a redo wrote again
       // counts only once deleted.
-      const live = item !== null && !item.deleted && !marks.origin('restore', run.client, clock);
-      if (item?.deleted || live) {
-        // A redo writes this author's characters again under new IDs, with a restore mark
-        // naming the identity they had, and a copy of them carries that identity. Only that
-        // mark is followed: a step's other inserts, such as copies its own split wrote of
-        // another author's text, keep their own IDs, so the record never hides that text.
-        const identities: { client: number; clock: number }[] = [];
-        for (let at = clock; at < end; at += 1) {
-          const restored = marks.origin('restore', run.client, at);
-          identities.push(
-            restored !== null && restored.client === run.client
-              ? { client: restored.client, clock: restored.clock + (at - restored.firstClock) }
-              : { client: run.client, clock: at }
-          );
-        }
-        if (identities.some(({ client, clock: at }) => follow.shownCopy(`${client}:${at}`))) {
-          for (const identity of identities)
-            add(identity.client, identity.clock, identity.clock + 1);
-        }
+      if (item?.deleted || (item && !marks.origin('restore', run.client, clock))) {
+        const spans = identitySpans(marks, run.client, clock, end);
+        // Spans first, characters only where an index run holds a copy: an undo of a long
+        // paste reads its marks once per insert, not once per character.
+        const shown = spans.some(
+          (span) =>
+            follow.holdsCopyIn(span.client, span.from, span.to) &&
+            hasShownCopy(follow, span.client, span.from, span.to)
+        );
+        if (shown) for (const span of spans) add(span.client, span.from, span.to);
       }
       clock = end;
     }

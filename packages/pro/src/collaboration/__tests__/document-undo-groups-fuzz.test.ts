@@ -493,23 +493,10 @@ class Run {
 
   private agentUndo(action: Extract<Action, { kind: 'agentUndo' }>): void {
     this.settle();
-    const group = this.done[this.done.length - 1];
-    if (!group || this.handle) return;
-    // Undo of a split removes the paragraph it created, and with it what a person typed
-    // there. That is the split's own undo rule, not the group's, so those tokens are exempt.
-    const ids = paragraphIds(this.agent);
-    const inCreated = texts(this.agent)
-      .filter((_, index) => group.created.has(ids[index]!))
-      .join('\n');
-    // Text the removal joins back can still be lost by a later undo (#1393).
-    for (const token of this.everyToken) if (inCreated.includes(token)) this.uncertain.add(token);
-    const others = present(
-      this.agent,
-      [...this.everyToken].filter(
-        (token) => !group.tokens.includes(token) && !inCreated.includes(token)
-      )
-    );
+    if (this.done.length === 0 || this.handle) return;
+    const idsBefore = paragraphIds(this.agent);
     const textBefore = texts(this.agent);
+    const presentBefore = present(this.agent, this.everyToken);
     if (action.typing) {
       this.paused = true;
       this.controls.pause();
@@ -521,9 +508,36 @@ class Run {
     }
     this.agent.port.flushPendingJournals();
     this.note('agent undo');
-    if (this.undoSteps() !== stepsBefore - 1) {
-      this.fail(`one undo took ${stepsBefore - this.undoSteps()} steps off the stack`);
+    // A group's step goes alone. An ungrouped step may take ungrouped steps below it that
+    // changed nothing, as without groups, but never a group's step.
+    const taken = stepsBefore - this.undoSteps();
+    const steps = this.done.slice(-Math.max(taken, 1));
+    if (
+      taken < 1 ||
+      (taken > 1 && steps.some((step) => !step.ungrouped)) ||
+      (!steps[steps.length - 1]!.ungrouped && taken !== 1)
+    ) {
+      this.fail(`one undo took ${taken} steps off the stack`);
+      return;
     }
+    const group: Group = {
+      tokens: steps.flatMap((step) => step.tokens),
+      created: new Set(steps.flatMap((step) => [...step.created])),
+      ...(steps[0]!.ungrouped ? { ungrouped: true } : {}),
+    };
+    // Undo of a split removes the paragraph it created, and with it what a person typed
+    // there. That is the split's own undo rule, not the group's, so those tokens are exempt.
+    const inCreated = textBefore
+      .filter((_, index) => group.created.has(idsBefore[index]!))
+      .join('\n');
+    // Text the removal joins back can still be lost by a later undo (#1393).
+    for (const token of this.everyToken) if (inCreated.includes(token)) this.uncertain.add(token);
+    const others = new Set(
+      [...presentBefore].filter(
+        (token) => !group.tokens.includes(token) && !inCreated.includes(token)
+      )
+    );
+    this.done.splice(-steps.length, steps.length - 1);
     this.mergeable = false;
     this.done.pop();
     this.undone.push(group);

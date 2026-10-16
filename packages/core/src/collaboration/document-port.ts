@@ -40,7 +40,9 @@ export interface CreateCollaborationDocumentPortOptions {
   readonly documentId: string;
   /**
    * The port belongs to an editor that people edit through, so it shows undo state to them.
-   * See {@link CollaborationDocumentPort.interactive}. Default false.
+   * Set it for such a host: a full-document session then refuses `beginUndoGroup()` with
+   * `editor-attached`, and attaching the port closes an open undo group. See
+   * {@link CollaborationDocumentPort.interactive}. Default false.
    */
   readonly interactive?: boolean;
 }

@@ -69,11 +69,6 @@ export interface CollaborationUndoGroup {
 /** The session's one open group, if any. */
 export class UndoGroups {
   private current: object | null = null;
-  /**
-   * The session has opened a group. From then on every undo step is stepped alone, so one
-   * undo never reverts more than its own step, grouped or not.
-   */
-  used = false;
 
   constructor(
     private readonly capture: HistoryGroupCapture,
@@ -90,7 +85,6 @@ export class UndoGroups {
     if (destroyed) throw new CollaborationUndoGroupError('collaboration-session-destroyed');
     if (editorAttached) throw new CollaborationUndoGroupError('editor-attached');
     if (this.current !== null) throw new CollaborationUndoGroupError('undo-group-already-open');
-    this.used = true;
     // A journal still queued belongs to the writes before the group, not to its first step.
     this.flush();
     const token = {};

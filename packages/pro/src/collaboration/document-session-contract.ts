@@ -72,8 +72,8 @@ export interface DocumentCollaborationSession extends EditorCollaborationSession
    * - Only local writes join the group. Other participants' edits stay out of it, and an
    *   undo of the group keeps them. When they removed everything the group wrote, its undo
    *   changes nothing and never reverts an older step.
-   * - Once a session has opened a group, every undo or redo steps exactly one step, grouped
-   *   or not.
+   * - An undo of an ungrouped step never reverts a group's step below it. Ungrouped history
+   *   otherwise undoes as it does without groups.
    * - Destroying the session, or attaching an editor to it, closes an open group.
    *
    * @throws CollaborationUndoGroupError with `undo-group-already-open` when this session
