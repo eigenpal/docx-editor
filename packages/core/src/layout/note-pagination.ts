@@ -2686,13 +2686,14 @@ export function* layoutSemanticDocumentWithNotesSteps<Opts extends NotesBodyOpti
   } else {
     const appliedFingerprints = new Set<string>([seedFingerprint]);
     // Adoption budget for this body-part identity, carried across session passes so the
-    // iteration continues where the previous pass stopped instead of restarting.
+    // iteration continues where the previous pass stopped instead of restarting. A copy, so a
+    // dropped pass that is put back leaves the previous budget as it was.
     const spent =
       notesMemo &&
       notesMemo.reflowSpent &&
       notesMemo.reflowSpent.part === part &&
       notesMemo.reflowSpent.limit === searchLimit
-        ? notesMemo.reflowSpent
+        ? { ...notesMemo.reflowSpent }
         : { part, limit: searchLimit, adopted: 0 };
     if (notesMemo) notesMemo.reflowSpent = spent;
     let adoptedThisPass = 0;

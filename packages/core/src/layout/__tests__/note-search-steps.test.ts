@@ -151,10 +151,10 @@ function staleSeedScenario() {
 }
 
 describe('footnote search as steps', () => {
-  test('progress pages carry their note areas and cannot be put back', () => {
+  test('progress pages carry their note areas and can be put back', () => {
     const { steps } = staleSeedScenario();
     const first = steps.next().value as LayoutProgress;
-    expect(first.restorable).toBe(false);
+    expect(first.restorable).not.toBe(false);
     expect(typeof first.wrapUp).toBe('function');
     const shown = first.finalize!(first.pages);
     const notePages = shown.pages.filter((p) => (p.footnotes?.notes ?? []).length > 0);

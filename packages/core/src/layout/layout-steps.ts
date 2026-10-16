@@ -20,8 +20,8 @@ export interface LayoutProgress {
   readonly pages: readonly PageRecord[];
   readonly finalize?: (pages: readonly PageRecord[]) => SemanticLayout;
   /**
-   * False when the pass advances state in place (section sessions, the notes search), so a
-   * host that pauses it must finish it before laying out again; it cannot put it back.
+   * False when the pass advances state that `snapshotLayoutSession` does not cover, so a host
+   * that pauses it must finish it before laying out again; it cannot put it back.
    */
   readonly restorable?: boolean;
   /**

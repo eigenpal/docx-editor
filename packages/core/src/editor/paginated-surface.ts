@@ -68,6 +68,7 @@ import { drainLayoutSteps, type LayoutSteps } from '../layout/layout-steps.ts';
 import { createReviewOrderIndex } from './surface-review-order.ts';
 import { litReviewKeys, reviewItemsByKey } from './review-replacement-pairs.ts';
 import { bodyBlockCountOf, bodyBlockLimitAfter, bodyBlocksOf } from '../layout/body-block-limit.ts';
+import { snapshotLayoutSession } from '../layout/layout-session-snapshot.ts';
 import {
   createContentControlWidgetSessions,
   contentControlValueOps,
@@ -1104,11 +1105,7 @@ export function mountPaginatedSurface(
     partial: () => openingBlockLimit !== null,
     revision: () => session.packageRevision(),
     publish: (layout) => fieldScope.wrap(() => publishLayout(layout))(),
-    // A pass replaces the session's fields and never mutates them, so a shallow copy restores it.
-    snapshot: () => {
-      const saved = { ...layoutSession };
-      return () => void Object.assign(layoutSession, saved);
-    },
+    snapshot: () => snapshotLayoutSession(layoutSession),
     // Marks the container while later pages still show the previous layout.
     pendingChanged: (pending) =>
       container.toggleAttribute('data-docx-layout-pending', pending || openingBlockLimit !== null),

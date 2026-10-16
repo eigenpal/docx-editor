@@ -49,6 +49,15 @@ export function rememberReserveContext(
   });
 }
 
+/** Save the reserve record behind `session`'s checkpoints; the answer puts it back. */
+export function saveReserveContext(session: LayoutSession): () => void {
+  const saved = reserveContexts.get(session);
+  return () => {
+    if (saved) reserveContexts.set(session, saved);
+    else reserveContexts.delete(session);
+  };
+}
+
 /**
  * The first section-local page whose reserve differs from the previous pass, when the rest of
  * the context is the same. Undefined when anything else in the context moved, or when the
