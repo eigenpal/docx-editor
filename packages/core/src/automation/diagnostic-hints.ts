@@ -93,7 +93,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.tracking-author-required':
     'TrackMineOnly needs an author for each tracked change. Pass the author option to createServer or createBrowser. The author set on the editor does not apply to an editing API batch.',
   'edit.comment-author-required':
-    "A comment or reply from the editing API needs an author. Pass the author option to createServer or createBrowser. In a React or Vue host with the review module, use useReview().comment or useReview().reply instead, which write as the editor's author.",
+    'A comment or reply from the editing API needs an author. Pass the author option to createServer or createBrowser. In a React or Vue host with the review module, use useReview().comment or useReview().reply instead, which write as the author set on the editor.',
   'edit.tracking-unsupported-host':
     'This automation host does not support change tracking. The runtimes from createServer and from a mounted editor both support TrackMineOnly.',
   'edit.revision-unsupported':
