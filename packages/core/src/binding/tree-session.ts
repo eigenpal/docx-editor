@@ -1059,7 +1059,7 @@ export function openTreeSessionFromPackage(
               ? localReviewPatchParagraphId(lastChange, reviewCache, reviewCache.items, inputs)
               : null;
           const localRevisions =
-            patchParagraphId && reviewCache && filtering.sameFilter
+            patchParagraphId && reviewCache && filtering.patchable(patchParagraphId)
               ? filtering.filtered(derive.revisionItemsOfParagraph(store.part, patchParagraphId))
               : null;
           if (

@@ -11,13 +11,18 @@ import { revisionSiteNodeIdsOf, type ReviewItem } from './review-items.ts';
 export function unlistedSitesOf(items: readonly ReviewItem[]): {
   readonly sites: string[];
   readonly paragraphs: Map<string, string>;
+  /** Paragraphs an item touches that also touches another paragraph. */
+  readonly spanning: string[];
 } {
   const sites: string[] = [];
+  const spanning: string[] = [];
   const byParagraph = new Map<string, string[]>();
   for (const item of items) {
     if (item.kind !== 'revision') continue;
     const own = revisionSiteNodeIdsOf(item);
     for (const id of own) sites.push(id);
+    const touched = new Set(item.ranges.map((range) => range.start.paragraphId));
+    if (touched.size > 1) for (const id of touched) spanning.push(id);
     for (const range of item.ranges) {
       const list = byParagraph.get(range.start.paragraphId) ?? [];
       for (const id of own) list.push(id);
@@ -28,7 +33,7 @@ export function unlistedSitesOf(items: readonly ReviewItem[]): {
   for (const [paragraphId, list] of byParagraph) {
     paragraphs.set(paragraphId, [...new Set(list)].sort().join('\u0000'));
   }
-  return { sites, paragraphs };
+  return { sites, paragraphs, spanning };
 }
 
 /** The paragraphs `items` touch, for replacing their entries in a patched map. */

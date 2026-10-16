@@ -66,11 +66,21 @@ export interface HiddenReviewSites {
   readonly paragraphs: ReadonlyMap<string, string>;
   /** Names the styles and numbering the records were decided against. */
   readonly key: string;
+  /**
+   * Paragraphs a left-out item touches together with another paragraph. A paragraph walk sees
+   * only its own part of such an item, so an edit there has to derive the whole queue.
+   */
+  readonly spanning: ReadonlySet<string>;
 }
 
 /** The records each published queue leaves out, keyed by the queue itself. */
 const hiddenSites = new WeakMap<readonly ReviewItem[], HiddenReviewSites>();
-const NO_SITES: HiddenReviewSites = { sites: new Set(), paragraphs: new Map(), key: '' };
+const NO_SITES: HiddenReviewSites = {
+  sites: new Set(),
+  paragraphs: new Map(),
+  key: '',
+  spanning: new Set(),
+};
 
 /**
  * The records `items` leaves out: still in the document, with no card. Paint leaves them
@@ -106,7 +116,8 @@ function sameMap(left: ReadonlyMap<string, string>, right: ReadonlyMap<string, s
 function settled(before: HiddenReviewSites, next: HiddenReviewSites): HiddenReviewSites {
   return before.key === next.key &&
     sameSet(before.sites, next.sites) &&
-    sameMap(before.paragraphs, next.paragraphs)
+    sameMap(before.paragraphs, next.paragraphs) &&
+    sameSet(before.spanning, next.spanning)
     ? before
     : next;
 }
@@ -130,6 +141,9 @@ export function reviewItemFiltering(
 ): {
   readonly filtered: <T extends ReviewItem>(list: readonly T[]) => readonly T[];
   readonly sameFilter: boolean;
+  /** Whether the local patch of `paragraphId` holds: the filter's inputs are the same, and no
+   * left-out item spans that paragraph and another. */
+  readonly patchable: (paragraphId: string) => boolean;
   readonly publish: (items: readonly ReviewItem[]) => readonly ReviewItem[];
 } {
   const filter = reviewItemFilterOf(model);
@@ -144,10 +158,16 @@ export function reviewItemFiltering(
     result: object;
     removed: string[];
     paragraphs: Map<string, string>;
+    spanning: string[];
     touched: string[];
     kept: string[];
   };
   let last: Pass | null = null;
+  const sameFilter =
+    previous !== null &&
+    previous.stylesPart === current.stylesPart &&
+    (previous.numberingRoot === current.numberingRoot ||
+      (before.sites.size === 0 && !previous.items.some(couldHide)));
   return {
     filtered: (list) => {
       if (!filter) return list;
@@ -159,21 +179,24 @@ export function reviewItemFiltering(
         result: kept,
         removed: removed.sites,
         paragraphs: removed.paragraphs,
+        spanning: removed.spanning,
         touched: paragraphsTouchedBy(list),
         kept: unlistedSitesOf(kept).sites,
       };
       return kept;
     },
-    sameFilter:
-      previous !== null &&
-      previous.stylesPart === current.stylesPart &&
-      (previous.numberingRoot === current.numberingRoot ||
-        (before.sites.size === 0 && !previous.items.some(couldHide))),
+    sameFilter,
+    patchable: (paragraphId) => sameFilter && !before.spanning.has(paragraphId),
     publish: (items) => {
       if (!filter || hiddenSites.has(items)) return items;
       const local = last as Pass | null;
       if (local?.result === items) {
-        const fresh = { sites: new Set(local.removed), paragraphs: local.paragraphs, key };
+        const fresh = {
+          sites: new Set(local.removed),
+          paragraphs: local.paragraphs,
+          key,
+          spanning: new Set(local.spanning),
+        };
         hiddenSites.set(items, settled(before, fresh));
         return items;
       }
@@ -196,7 +219,10 @@ export function reviewItemFiltering(
       const paragraphs = new Map(before.paragraphs);
       for (const id of local.touched) paragraphs.delete(id);
       for (const [id, value] of local.paragraphs) paragraphs.set(id, value);
-      hiddenSites.set(items, settled(before, { sites, paragraphs, key }));
+      const spanning = new Set(before.spanning);
+      for (const id of local.touched) spanning.delete(id);
+      for (const id of local.spanning) spanning.add(id);
+      hiddenSites.set(items, settled(before, { sites, paragraphs, key, spanning }));
       return items;
     },
   };

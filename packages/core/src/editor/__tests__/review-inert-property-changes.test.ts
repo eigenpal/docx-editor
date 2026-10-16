@@ -392,6 +392,29 @@ describe('property changes that change nothing', () => {
     });
   }
 
+  test('an edit that lists a record split over paragraphs marks every paragraph', () => {
+    const shared = `w:id="${id++}" ${STAMP}`;
+    const run = (text: string) =>
+      `<w:r><w:rPr><w:b w:val="0"/><w:rPrChange ${shared}><w:rPr/></w:rPrChange></w:rPr><w:t>${text}</w:t></w:r>`;
+    using view = mount(
+      p('', run('first')) +
+        p('') +
+        p('', run('second')) +
+        p('') +
+        p(ppr('<w:jc w:val="left"/>', ''), '<w:r><w:t>other</w:t></w:r>')
+    );
+    expect(view.count()).toBe(0);
+    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(0);
+    const paragraphId = view.editor.surface!.session.paragraphIds()[2]!;
+    view.editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 3 },
+    });
+    expect(view.editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+    expect(view.count()).toBe(1);
+    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(2);
+  });
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);
