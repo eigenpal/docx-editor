@@ -3715,6 +3715,8 @@ export interface SemanticLayoutOptions {
     readonly pageBottomReserves?: ReadonlyMap<number, number>;
     // @internal
     readonly pageBottomReservesFromPreviousPass?: boolean;
+    // @internal
+    readonly pageBottomReservesFollowFlow?: boolean;
     readonly paragraphLineUnitPt?: number;
     readonly producer?: string;
     readonly projectFieldLink?: FieldLinkProjector;

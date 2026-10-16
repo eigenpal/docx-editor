@@ -7,7 +7,7 @@
 // newer edit drop such a pass instead of first finishing it.
 
 import type { LayoutSession } from './layout-session.ts';
-import { saveReserveContext } from './note-reserve-resume.ts';
+import { saveReserveContext, takeReadReserves } from './note-reserve-resume.ts';
 import { takeMovedSeedReserves } from './note-reserves.ts';
 
 /** Save `session`, its section sessions and its notes memo; the answer puts them back. */
@@ -27,5 +27,6 @@ export function snapshotLayoutSession(session: LayoutSession): () => void {
     if (notes && notesFields) Object.assign(notes, notesFields);
     // Recorded and taken within one pass: a dropped pass may leave one behind.
     takeMovedSeedReserves(session);
+    takeReadReserves(session);
   };
 }

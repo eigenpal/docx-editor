@@ -612,7 +612,8 @@ function* layoutBlocksPass(
     session,
     contextFor,
     pageBottomReserves,
-    pageIndexStart
+    pageIndexStart,
+    options.pageBottomReservesFollowFlow === true
   );
   const context = reserveResume.context;
   const startPageParity = pageIndexStart & 1;
@@ -699,8 +700,8 @@ function* layoutBlocksPass(
     // the document page at `pageIndexStart + index`. A continuous section's local page 0
     // IS the previous section's last sheet: both passes read the same document slot, so
     // every flow sharing the sheet stops above the same note area.
-    contentHeightOf(pageBottomReserves?.get(pageIndexStart + index) ?? 0, index);
-  const noteReserveHere = () => pageBottomReserves?.get(pageIndexStart + pages.length);
+    contentHeightOf(reserveResume.reserveAt(index) ?? 0, index);
+  const noteReserveHere = () => reserveResume.reserveAt(pages.length);
   /** The same band with the footnote reserve ignored — the table paginator's recovery. */
   const unreservedContentHeight = (): number => contentHeightOf(0);
 
@@ -1913,6 +1914,8 @@ function* layoutBlocksPass(
     // into line once the page it disturbed has been completed.
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
+      // A seeded notes pass reads reserves, and reuses a moved tail, by how far the flow moved.
+      if (mark) reserveResume.followShift(pages.length - mark.pageCount);
       const tailHolds = mark && reserveResume.tailHolds(mark, pages.length);
       if (mark && tailHolds) {
         // At delta 0 the previous pages are appended by identity; at a nonzero delta the tail
@@ -1920,6 +1923,7 @@ function* layoutBlocksPass(
         // `convergenceTailShiftAllowed`. Asked first: it reads no flow state, and the compare
         // of the open page's fragments is wasted on a tail it refuses.
         const delta = pages.length - mark.pageCount;
+        const shiftedTail = delta !== 0 ? reserveResume.shiftedTail(mark, pages.length) : undefined;
         const shiftable = convergenceTailShiftAllowed({
           delta,
           titlePage: furniture?.titlePage === true,
@@ -1931,10 +1935,11 @@ function* layoutBlocksPass(
           firstPageBorders:
             options.sectionPageBorders !== undefined &&
             options.sectionPageBorders.display !== 'allPages',
-          hasNoteReserves: pageBottomReserves !== undefined,
+          hasNoteReserves: pageBottomReserves !== undefined && !shiftedTail,
           hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
         });
         if (shiftable && flowCheckpointsMatch(mark, checkpoints[index]!)) {
+          if (shiftedTail) reserveResume.adoptShiftedTail(shiftedTail);
           const tail =
             delta === 0
               ? previous!.pages.slice(mark.pageCount)

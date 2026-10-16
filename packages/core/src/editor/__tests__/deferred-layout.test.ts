@@ -43,7 +43,7 @@ function docx(): Uint8Array {
 const FN_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
 
 /** Several sections, with a footnote every 40 paragraphs. */
-function sectionsAndNotesDocx(): Uint8Array {
+function sectionsAndNotesDocx(sections = true): Uint8Array {
   const paragraphs: string[] = [];
   const notes: string[] = [
     '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>',
@@ -60,7 +60,8 @@ function sectionsAndNotesDocx(): Uint8Array {
       note > 0
         ? `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="${note}"/></w:r>`
         : '';
-    const sectionEnd = index % 300 === 299 && index < 899 ? '<w:pPr><w:sectPr/></w:pPr>' : '';
+    const sectionEnd =
+      sections && index % 300 === 299 && index < 899 ? '<w:pPr><w:sectPr/></w:pPr>' : '';
     paragraphs.push(`<w:p>${sectionEnd}<w:r><w:t>Paragraph ${index}</w:t></w:r>${reference}</w:p>`);
   }
   return zipSync({
@@ -202,27 +203,28 @@ describe('pages after the screen finish in the background', () => {
     }
   });
 
-  test('with sections and footnotes, a second edit drops the pass and still ends cold', async () => {
-    const { surface, container, dispose } = mount(sectionsAndNotesDocx());
-    try {
-      const opened = linesOf(surface);
-      expect(opened.some((line) => line.includes('|notes|'))).toBe(true);
-      splitFirst(surface);
-      // Deferred: the second edit below drops this pass instead of finishing it.
-      expect(container.hasAttribute('data-docx-layout-pending')).toBe(true);
-      splitFirst(surface, 2);
-      const cold = coldLines(surface);
-      expect(await settled(surface, cold)).toEqual(cold);
+  for (const sections of [true, false])
+    test(`with ${sections ? 'sections and ' : ''}footnotes, a second edit drops the pass and still ends cold`, async () => {
+      const { surface, container, dispose } = mount(sectionsAndNotesDocx(sections));
+      try {
+        const opened = linesOf(surface);
+        expect(opened.some((line) => line.includes('|notes|'))).toBe(true);
+        splitFirst(surface);
+        // Deferred: the second edit below drops this pass instead of finishing it.
+        expect(container.hasAttribute('data-docx-layout-pending')).toBe(true);
+        splitFirst(surface, 2);
+        const cold = coldLines(surface);
+        expect(await settled(surface, cold)).toEqual(cold);
 
-      splitFirst(surface, 3);
-      surface.undo();
-      surface.undo();
-      surface.undo();
-      expect(await settled(surface, opened)).toEqual(opened);
-    } finally {
-      dispose();
-    }
-  });
+        splitFirst(surface, 3);
+        surface.undo();
+        surface.undo();
+        surface.undo();
+        expect(await settled(surface, opened)).toEqual(opened);
+      } finally {
+        dispose();
+      }
+    });
 
   test('a pass reports its layout time once, background slices included, when it ends', async () => {
     const container = document.createElement('div');

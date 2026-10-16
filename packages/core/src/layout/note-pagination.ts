@@ -67,7 +67,6 @@ import {
   noteColumnBudgetPt,
   recordFootnoteReserve,
   RESERVE_BOUNDARY_BACKOFF_PT,
-  takeMovedSeedReserves,
 } from './note-reserves.ts';
 export { notesReserveContextKey };
 import {
@@ -82,6 +81,7 @@ import { splitNoteFragments } from './note-splitting.ts';
 import { evictsReferenceLine } from './note-eviction-guard.ts';
 import { continuedRowId } from './note-table-reference-band.ts';
 import { holdOutReserveNeed } from './note-reserve-holdout.ts';
+import { firstNotesRound } from './note-first-round.ts';
 import { fingerprintNotesInput } from './note-input-fingerprint.ts';
 import { reindexAndRestackPages } from './page-restacking.ts';
 import type {
@@ -2640,19 +2640,33 @@ export function* layoutSemanticDocumentWithNotesSteps<Opts extends NotesBodyOpti
       }
     );
   let seeded = optionsWithLists.session?.notePageBottomReserves;
-  let usedReserves: ReadonlyMap<number, number> = seeded
-    ? compactFootnoteReserves(seeded)
-    : new Map();
+  let { layout: bodyLayout, used: usedReserves } = yield* firstNotesRound(
+    optionsWithLists.session,
+    seeded ?? undefined,
+    (reserves, follow) =>
+      bodySteps({
+        ...optionsWithLists,
+        noteMarks,
+        pageBottomReserves: reserves,
+        ...(seeded ? { pageBottomReservesFromPreviousPass: true } : {}),
+        ...(follow ? { pageBottomReservesFollowFlow: true } : {}),
+      }),
+    (layout, reserves) => {
+      const limit = (optionsWithLists as { bodyBlockLimit?: number }).bodyBlockLimit ?? -1;
+      const orphan = notesMemo?.orphanPolicyPart === part && notesMemo.orphanPolicyLimit === limit;
+      const at = computeFootnoteReservesWithPolicy(
+        layout,
+        allHits,
+        notesInput,
+        noteMarks,
+        notesMemo,
+        reserves,
+        orphan
+      );
+      return at.stable && footnoteReservesEqual(at.reserves, reserves);
+    }
+  );
   let fallbackReasons: NotePaginationFallbackReason[] = [];
-  let bodyLayout: SemanticLayout = yield* bodySteps({
-    ...optionsWithLists,
-    noteMarks,
-    pageBottomReserves: usedReserves,
-    ...(seeded ? { pageBottomReservesFromPreviousPass: true } : {}),
-  });
-  // The seed at the page indices this pass laid it out at, when sections moved it.
-  const movedSeed = takeMovedSeedReserves(optionsWithLists.session);
-  if (movedSeed) usedReserves = compactFootnoteReserves(movedSeed);
   if (noteBodyGeometryChanged(optionsWithLists.session, bodyLayout, part)) {
     seeded = undefined;
     usedReserves = new Map();
@@ -2901,42 +2915,7 @@ export function provisionalNoteMarks(
   return buildMarkContext(footnoteSites, endnoteSites, input);
 }
 
-/**
- * Note stories run the same paragraph walk as the body, so they inherit the body's link
- * projector seams and document properties unless the notes input pinned its own — without which
- * a `w:hyperlink`, HYPERLINK field, or document-property field in a footnote painted as dead or
- * blank text while the body's twin resolved.
- */
-export function inheritNotesLayoutInput(
-  notes: NotesLayoutInput,
-  body: {
-    readonly projectLink?: NotesLayoutInput['projectLink'];
-    readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
-    /** Field-code inspection projection. @internal */
-    readonly showFieldCodes?: boolean;
-    readonly documentProperties?: NotesLayoutInput['documentProperties'];
-    readonly refFields?: NotesLayoutInput['refFields'];
-    readonly displayMode?: NotesLayoutInput['displayMode'];
-    readonly revisionAuthorFilter?: NotesLayoutInput['revisionAuthorFilter'];
-  }
-): NotesLayoutInput {
-  const projectLink = notes.projectLink ?? body.projectLink;
-  const projectFieldLink = notes.projectFieldLink ?? body.projectFieldLink;
-  const documentProperties = notes.documentProperties ?? body.documentProperties;
-  const refFields = notes.refFields ?? body.refFields;
-  const displayMode = notes.displayMode ?? body.displayMode;
-  const revisionAuthorFilter = notes.revisionAuthorFilter ?? body.revisionAuthorFilter;
-  return {
-    ...notes,
-    ...(projectLink ? { projectLink } : {}),
-    ...(projectFieldLink ? { projectFieldLink } : {}),
-    showFieldCodes: notes.showFieldCodes ?? body.showFieldCodes,
-    ...(documentProperties ? { documentProperties } : {}),
-    ...(refFields ? { refFields } : {}),
-    ...(displayMode ? { displayMode } : {}),
-    ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
-  };
-}
+export { inheritNotesLayoutInput } from './note-layout-input.ts';
 
 export {
   resolveFootnoteProperties,

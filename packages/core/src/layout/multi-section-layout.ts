@@ -13,6 +13,7 @@ import { characterHeaderPageToken } from './character-header-pages.ts';
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { recordMovedSeedReserves } from './note-reserves.ts';
+import { sectionReadCollector } from './note-reserve-resume.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
@@ -485,6 +486,8 @@ export function* layoutMultiSectionDocumentSteps(
       ? options.pageBottomReserves
       : undefined;
   const movedSeed = seed ? new Map<number, number>() : undefined;
+  /** What each seeded section read, where it differs from what it was given. */
+  const sectionReads = sectionReadCollector();
   const pages: PageRecord[] = [];
   const remappedAll: PageRecord[] = [];
   const newSpans: SectionStackSpan[] = [];
@@ -674,6 +677,7 @@ export function* layoutMultiSectionDocumentSteps(
       revision
     );
     sectionShells.push({ startIndex, at: laid.overflowShellAt });
+    sectionReads.take(sectionSession);
     lineCounter = laid.lineCounter;
     flowCursorY = laid.endCursorY;
     flowSpaceAfter = laid.endSpaceAfter;
@@ -919,6 +923,7 @@ export function* layoutMultiSectionDocumentSteps(
   });
   registerParityPlan(finalized, evenAndOddHeaders, sheetStarts, runningAfter);
   if (movedSeed && session) recordMovedSeedReserves(session, movedSeed);
+  sectionReads.report(session, movedSeed ?? options.pageBottomReserves);
 
   retainOnce();
   return finalized;

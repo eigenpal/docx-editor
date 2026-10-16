@@ -13,6 +13,7 @@ import {
 } from '../index.ts';
 import type { LayoutSession } from '../layout-session.ts';
 import { takeMovedSeedReserves } from '../note-reserves.ts';
+import { takeReadReserves, withReadReserves } from '../note-reserve-resume.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -64,13 +65,15 @@ function lay(
   part: OoxmlPart,
   reserves: ReadonlyMap<number, number>,
   session?: LayoutSession,
-  fromPreviousPass = false
+  fromPreviousPass = false,
+  followFlow = false
 ): SemanticLayout {
   return layoutSemanticDocument(part, 1, {
     measurer,
     producer: 'test',
     pageBottomReserves: reserves,
     ...(fromPreviousPass ? { pageBottomReservesFromPreviousPass: true } : {}),
+    ...(followFlow ? { pageBottomReservesFollowFlow: true } : {}),
     ...(session ? { session } : {}),
   });
 }
@@ -190,5 +193,68 @@ describe('a seeded notes pass over several sections', () => {
     expect(shift).toBe(1);
     expect([...moved!]).toEqual([...seed].map(([page, height]) => [page + shift, height]));
     expect(signature(resumed)).toEqual(signature(lay(after, moved!)));
+  });
+});
+
+describe('a seeded notes pass whose tail moved by whole pages', () => {
+  const before = partOf(filler(120, 'p') + sectPr);
+  const seed = new Map([
+    [4, 20],
+    [9, 30],
+  ]);
+  /** `before` with one page's worth of lines added to its fourth paragraph, ids kept. */
+  function grown(): OoxmlPart {
+    const linesOf = (part: OoxmlPart) =>
+      lay(part, new Map()).pages.map((page) =>
+        page.fragments.reduce(
+          (count, fragment) => count + (fragment.kind === 'paragraph' ? fragment.lines.length : 0),
+          0
+        )
+      );
+    const linesPerPage = linesOf(before)[1]!;
+    const total = (part: OoxmlPart) => linesOf(part).reduce((sum, count) => sum + count, 0);
+    const body = before.root.kind === 'textValue' ? undefined : before.root.children[0];
+    const paragraph = body && body.kind !== 'textValue' ? body.children[3] : undefined;
+    for (let words = 1; words < 200; words += 1) {
+      const edited = applyTreeOp(before, {
+        op: 'insertText',
+        paragraphId: paragraph!.id,
+        offset: 3,
+        text: ' word'.repeat(words),
+      });
+      if (!edited.ok) throw new Error(edited.reason);
+      if (total(edited.part) - total(before) === linesPerPage) return edited.part;
+    }
+    throw new Error('no edit adds one page of lines');
+  }
+
+  test('reuses the tail with the reserves it was laid out under, and reports them', () => {
+    const after = grown();
+    const session = createLayoutSession();
+    const first = lay(before, seed, session);
+    expect(takeReadReserves(session)).toBeUndefined();
+
+    const resumed = lay(after, seed, session, true, true);
+    const shift = takeReadReserves(session);
+    expect(shift).toBeDefined();
+    expect(resumed.pages.length).toBe(first.pages.length + 1);
+    // The seed's note pages moved one page later with the tail that carries them.
+    const used = withReadReserves(seed, shift!);
+    expect([...used].sort((a, b) => a[0] - b[0])).toEqual([
+      [5, 20],
+      [10, 30],
+    ]);
+    expect(session.stats.reusedPages).toBeGreaterThan(0);
+    // Exactly the layout of a fresh pass under the reserves it reported.
+    expect(signature(resumed)).toEqual(signature(lay(after, used)));
+  });
+
+  test('without a seed the tail is laid out again under the reserves given', () => {
+    const after = grown();
+    const session = createLayoutSession();
+    lay(before, seed, session);
+    const resumed = lay(after, seed, session);
+    expect(takeReadReserves(session)).toBeUndefined();
+    expect(signature(resumed)).toEqual(signature(lay(after, seed)));
   });
 });
