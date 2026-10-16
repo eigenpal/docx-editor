@@ -19,7 +19,12 @@
 // ICU dictionaries, so they can differ between ICU versions; layout is deterministic for
 // one runtime, not across runtimes.
 
-import { CJK_NO_BREAK_BEFORE, clusterBreaksBetween, isStackingSign } from './cjk-line-break.ts';
+import {
+  CJK_NO_BREAK_BEFORE,
+  clusterBreaksBetween,
+  isRepetitionMark,
+  isStackingSign,
+} from './cjk-line-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { createIntlWordBoundary, isIntlWordSegmenterAvailable } from './word-segment.ts';
 
@@ -80,6 +85,8 @@ const NO_LINE_START_AFTER_SIGN =
  * point may start a line. The one rule both line breaking and table AutoFit use.
  */
 export function breaksAfterSign(sign: number, next: number): boolean {
+  // U+FFFC stands in for a field or picture whose own text decides (`paragraphWordCuts`).
+  if (next === 0xfffc) return false;
   const script = breakAfterSignScript(sign);
   if (script === null || breakAfterSignScript(next) !== null) return false;
   if (CJK_NO_BREAK_BEFORE.has(next)) return false;
@@ -349,6 +356,7 @@ function paragraphCuts(text: string, segmenter: DictionaryWordSegmenter): readon
   return out.filter(
     (cut) =>
       !isStackingSign(text.charCodeAt(cut - 1)) &&
+      !isRepetitionMark(text.charCodeAt(cut)) &&
       clusterBreaksBetween(text.charCodeAt(cut - 1), text.charCodeAt(cut))
   );
 }

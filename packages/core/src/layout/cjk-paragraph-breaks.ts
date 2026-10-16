@@ -18,6 +18,7 @@ import {
   isIdeographicForLineBreak,
   lastCodePointOf,
   NO_BREAK_CHARACTER,
+  isRepetitionMark,
   isStackingSign,
   wordBoundaries,
   ZERO_WIDTH_SPACE,
@@ -148,7 +149,9 @@ export function cjkParagraphBreaks(
     }
     // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
     // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base.
-    if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before)) {
+    // A repetition mark opens a line only after a space, zero-width space, or dash.
+    const repeats = isRepetitionMark(after) && !latinCuts.has(at) && !/\s$/u.test(left.text);
+    if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before) || repeats) {
       decisions.set(at, 'forbidden');
       continue;
     }

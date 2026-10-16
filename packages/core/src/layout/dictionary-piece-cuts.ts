@@ -9,7 +9,11 @@
 // words wrap and size AutoFit like the words of a run.
 
 import { BREAK_AFTER_DASH, wordBoundaries } from './cjk-line-break.ts';
-import { dictionaryWordBreaks, hasDictionaryScriptText } from './dictionary-word-breaks.ts';
+import {
+  breaksAfterSign,
+  dictionaryWordBreaks,
+  hasDictionaryScriptText,
+} from './dictionary-word-breaks.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 
 /**
@@ -97,6 +101,26 @@ export function paragraphWordCuts(
       for (const cut of dictionaryWordBreaks(piece.text)) own.add(cut);
     }
     if (own.size > 0) byPiece.set(piece, own);
+  }
+  // A seam beside a field or picture: the paragraph text holds U+FFFC there, so the real
+  // first and last characters decide a sentence-mark break, as line breaking decides it.
+  let previous: FieldAwarePiece | undefined;
+  for (const piece of pieces) {
+    if (skip(piece) || piece.text.length === 0) continue;
+    if (
+      previous &&
+      (!isParagraphText(previous) || !isParagraphText(piece)) &&
+      breaksAfterSign(
+        previous.text.charCodeAt(previous.text.length - 1),
+        piece.text.codePointAt(0)!
+      )
+    ) {
+      const own = new Set(byPiece.get(previous));
+      own.add(previous.text.length);
+      byPiece.set(previous, own);
+      opening.add(piece);
+    }
+    previous = piece;
   }
   if (byPiece.size === 0 && !runOpensWithDash) return null;
   let paragraphCuts: readonly number[] | undefined;

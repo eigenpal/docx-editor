@@ -419,6 +419,64 @@ describe('Lao, Khmer, and Myanmar sentences', () => {
   });
 });
 
+describe('repetition and abbreviation marks', () => {
+  test('never start a line at a dictionary cut or an emergency cut', () => {
+    expect(linesOf(`<w:p>${run('ខ្មែរ ផ្សេងៗ ភាសា')}</w:p>`, 66)).toEqual([
+      'ខ្មែរ ',
+      'ផ្សេងៗ ភាសា',
+    ]);
+    for (const width of [18, 24, 30, 36, 42]) {
+      for (const text of [
+        'ພາສາລາວຊ້າໆມາ',
+        'ຫຼວງພະບາງຯເປັນ',
+        'ភាសាតិចៗគ្នា',
+        'ต่างๆนานา',
+        'กรุงเทพฯเป็น',
+      ]) {
+        for (const line of linesOf(`<w:p>${run(text)}</w:p>`, width))
+          expect(line, `${text} at ${width}`).not.toMatch(/^[ๆฯໆຯៗ]/u);
+        // A run seam before the mark is no break either.
+        const at = text.search(/[ๆฯໆຯៗ]/u);
+        const split = `<w:p>${run(text.slice(0, at))}${run(text.slice(at), '<w:b/>')}</w:p>`;
+        for (const line of linesOf(split, width))
+          expect(line, `${text} split at ${width}`).not.toMatch(/^[ๆฯໆຯៗ]/u);
+      }
+    }
+  });
+
+  test('stay with their word in AutoFit', () => {
+    // ផ្សេងៗ is six units and ຊ້າໆ four; no cut falls before ຯ or ៗ.
+    expect(minimumOf(`<w:p>${run('ខ្មែរ ផ្សេងៗ ភាសា')}</w:p>`)).toBeCloseTo(36, 5);
+    expect(minimumOf(`<w:p>${run('ຊ້າໆ')}</w:p>`)).toBeCloseTo(24, 5);
+    for (const text of ['ຫຼວງພະບາງຯເປັນ', 'ភាសាខ្មែរៗ', 'ພາສາລາວຊ້າໆມາ'])
+      expect(dictionaryWordBreaks(text).includes(text.search(/[ໆຯៗ]/u)), text).toBe(false);
+  });
+
+  test('a segmenter that cuts before the mark is overruled', () => {
+    setDictionaryWordSegmenter((text) =>
+      text === 'ฉันอยากกินข้าว' ? [3, 7, 10] : text === 'ต่างๆนานา' ? [4, 5] : []
+    );
+    expect(dictionaryWordBreaks('ต่างๆนานา')).toEqual([5]);
+  });
+});
+
+describe('a sentence mark at a field seam', () => {
+  // Line breaking and AutoFit read the field's own text at the seam, not a placeholder.
+  test('a field that ends in a mark breaks before the text after it, in both', () => {
+    const body = `<w:p>${fieldResult('QUOTE', 'ភាសា។')}${run('ខ្មែរគឺជា')}</w:p>`;
+    expect(linesOf(body, 36)).toEqual(['ភាសា។', 'ខ្មែរ', 'គឺជា']);
+    expect(minimumOf(body)).toBeCloseTo(30, 5);
+  });
+
+  test('a field that starts with a closing quote stays with the mark, in both', () => {
+    const body = `<w:p>${run('ភាសា។')}${fieldResult('QUOTE', '”ខ្មែរ')}</w:p>`;
+    const plain = `<w:p>${run('ភាសា។')}${run('”ខ្មែរ')}</w:p>`;
+    expect(linesOf(body, 36)).toEqual(linesOf(plain, 36));
+    expect(minimumOf(body)).toBeCloseTo(minimumOf(plain), 5);
+    expect(minimumOf(body)).toBeCloseTo(66, 5);
+  });
+});
+
 describe('Thai table AutoFit minimum', () => {
   test('the widest Thai word is the minimum segment, not the whole sentence', () => {
     // Widest words are อยาก and ข้าว, four units each.

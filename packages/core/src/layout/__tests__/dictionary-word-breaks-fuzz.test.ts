@@ -34,7 +34,6 @@ import {
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import {
-  breaksAfterSign,
   resetDictionaryWordSegmenter,
   setDictionaryWordSegmenter,
 } from '../dictionary-word-breaks.ts';
@@ -87,13 +86,18 @@ function oracleDictionaryCuts(text: string): Set<number> {
     let end = index + 1;
     while (end < text.length && scriptIndex(text[end]!) === script) end += 1;
     for (const part of segmenter.segment(text.slice(index, end)))
-      if (part.index > 0) cuts.add(index + part.index);
+      // A repetition or abbreviation mark never starts a line.
+      if (part.index > 0 && !ORACLE_NO_LINE_START.includes(text[index + part.index]!))
+        cuts.add(index + part.index);
     index = end;
   }
   return cuts;
 }
 
 const DASHES = '-‐–—';
+const ORACLE_SIGNS = '\u0e5a\u0e5b\u17d4\u17d5\u17d8\u17da\u104a\u104b';
+/** Thai vowels that follow a consonant, and the repetition and abbreviation marks. */
+const ORACLE_NO_LINE_START = '\u0e30\u0e32\u0e33\u0e45\u0e46\u0e2f\u0ec6\u0eaf\u17d7';
 
 /** Legal breaks, never before a space: after a space run, a zero-width space, or a dash. */
 function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<number> {
@@ -106,9 +110,14 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
     // ZW SP* ÷: after a zero-width space, past the spaces that follow it.
     if (ch === '\u200b' && next !== undefined && next !== ' ' && next !== '\u200b')
       legal.add(i + 1);
-    // A phrase or sentence mark (UAX #14 class BA) breaks after itself before a character
-    // that may start a line. The class table is the engine's one helper, not a copy.
-    if (next !== undefined && breaksAfterSign(ch.charCodeAt(0), next.codePointAt(0)!))
+    // A phrase or sentence mark (UAX #14 class BA) breaks after itself before a letter or
+    // digit that may start a line: the oracle's own table, not the engine's.
+    if (
+      next !== undefined &&
+      ORACLE_SIGNS.includes(ch) &&
+      /^[\p{L}\p{N}]$/u.test(next) &&
+      !ORACLE_NO_LINE_START.includes(next)
+    )
       legal.add(i + 1);
     if (ch === '\t') {
       if (i > 0) legal.add(i);
@@ -178,7 +187,7 @@ const pick = <T>(rand: Rand, items: readonly T[]): T => items[Math.floor(rand() 
 
 /** Words of whole Lao, Khmer, and Myanmar sentences, with their sentence marks. */
 const SCRIPT_WORDS: readonly (readonly string[])[] = [
-  ['ພາສາ', 'ລາວ', 'ເປັນ', 'ທີ່', 'ສວຍງາມ', 'ຫຼາຍ', 'ປະເທດ', 'ຂອງ'],
+  ['ພາສາ', 'ລາວ', 'ເປັນ', 'ທີ່', 'ສວຍງາມ', 'ຫຼາຍ', 'ປະເທດ', 'ຂອງ', 'ຊ້າໆ', 'ຫຼວງພະບາງຯ'],
   [
     'ភាសា',
     'ខ្មែរ',
@@ -188,6 +197,8 @@ const SCRIPT_WORDS: readonly (readonly string[])[] = [
     'ប្រទេស',
     'កម្ពុជា',
     'ស្រុក',
+    'ផ្សេងៗ',
+    'តិចៗ',
     '។',
     '៕',
     '។»',
@@ -195,7 +206,7 @@ const SCRIPT_WORDS: readonly (readonly string[])[] = [
     '។!',
   ],
   ['မြန်မာ', 'ဘာသာ', 'စကား', 'သည်', 'ရုံးသုံး', 'ဖြစ်', 'ကမ္ဘာ', 'နိုင်ငံ', '။', '၊', '။)', '၊!'],
-  ['ภาษา', 'ไทย', 'กิน', 'ข้าว', '๚', '๚”', '๚ะ', '๛', '๚)'],
+  ['ภาษา', 'ไทย', 'กิน', 'ข้าว', '๚', '๚”', '๚ะ', '๛', '๚)', 'ต่างๆ', 'กรุงเทพฯ'],
 ];
 
 function randomText(rand: Rand): string {
@@ -216,10 +227,15 @@ function randomText(rand: Rand): string {
 
 /** Seams anywhere, including inside a grapheme cluster, or only between clusters. */
 function randomSplit(text: string, rand: Rand, clusterAligned = false): string[] {
-  // A Khmer coeng or Myanmar virama joins the next cluster to its own, as layout keeps them.
+  // A Khmer coeng or Myanmar virama joins the next cluster to its own, and a repetition mark
+  // joins the cluster before it, as layout keeps them.
   const starts = segmentGraphemes(text)
     .map((cluster) => cluster.utf16From)
-    .filter((at) => !/[\u17d2\u1039]/u.test(text[at - 1] ?? ''));
+    .filter(
+      (at) =>
+        !/[\u17d2\u1039]/u.test(text[at - 1] ?? '') &&
+        !/[\u0e46\u0e2f\u0ec6\u0eaf\u17d7]/u.test(text[at] ?? '')
+    );
   const seams = new Set<number>();
   const count = Math.floor(rand() * 5);
   for (let i = 0; i < count; i++)
@@ -321,6 +337,14 @@ function checkBreaks(
       `${where}: break ${offset} after a stack`
     ).toBe(false);
     expect(clusterStarts.has(offset), `${where}: break ${offset} inside a cluster`).toBe(true);
+    // A repetition or abbreviation mark starts a line only after a space, zero-width space,
+    // tab, or dash: never at a dictionary cut or an emergency cut.
+    expect(
+      offset < text.length &&
+        '\u0e46\u0e2f\u0ec6\u0eaf\u17d7'.includes(text[offset]!) &&
+        !/[ \t\u200b\-‐–—]/u.test(text[offset - 1] ?? ''),
+      `${where}: line ${offset} starts with a repetition mark`
+    ).toBe(false);
     if (dictionary.has(offset)) taken += 1;
     if (legal.has(offset) || chopExempt(offset)) continue;
     const word = words.find(([start, end]) => start < offset && offset < end);
