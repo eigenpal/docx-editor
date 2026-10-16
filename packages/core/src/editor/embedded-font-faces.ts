@@ -149,8 +149,30 @@ export async function registerEmbeddedFontFaces(
 
   const aliases = new Map<string, string>();
   const added: { readonly set: FontFaceSetLike; readonly face: FontFaceLike }[] = [];
-  /** What each accepted face was made from, so `showIn` can make it again elsewhere. */
-  const accepted: { alias: string; bytes: Uint8Array; descriptors: FaceDescriptors }[] = [];
+  /**
+   * What each accepted face was made from, so `showIn` can make it again elsewhere. The SOURCE,
+   * not its bytes: a source can hand out a fresh copy on each read, and keeping one copy per
+   * face for a window that may never open held every document font once more.
+   */
+  const accepted: { alias: string; source: FontSource; descriptors: FaceDescriptors }[] = [];
+  const browserBytesOf = (face: FontSource): Uint8Array => {
+    const bytes = face.bytes;
+    const isCollection =
+      bytes.length >= 4 &&
+      bytes[0] === 0x74 &&
+      bytes[1] === 0x74 &&
+      bytes[2] === 0x63 &&
+      bytes[3] === 0x66;
+    if (isCollection && face.faceIndex === 0 && !boundedStructuralFontValidator(bytes, 0).valid)
+      throw new Error('Invalid collection face');
+    if (!isCollection && face.faceIndex !== 0)
+      throw new Error('Font face index requires a collection');
+    // FontFace selects the first face from an unchanged collection. Keep its signature and
+    // all tables; only other faces require materialization.
+    return isCollection && face.faceIndex !== 0
+      ? materializeCollectionFace(bytes, face.faceIndex)
+      : bytes;
+  };
   await Promise.all(
     [...byFamily].map(async ([family, faces]) => {
       const alias = aliasForFamily(faces.map((face) => `${face.hash}:face:${face.faceIndex}`));
@@ -158,26 +180,7 @@ export async function registerEmbeddedFontFaces(
       await Promise.all(
         faces.map(async (face) => {
           try {
-            const isCollection =
-              face.bytes.length >= 4 &&
-              face.bytes[0] === 0x74 &&
-              face.bytes[1] === 0x74 &&
-              face.bytes[2] === 0x63 &&
-              face.bytes[3] === 0x66;
-            if (
-              isCollection &&
-              face.faceIndex === 0 &&
-              !boundedStructuralFontValidator(face.bytes, 0).valid
-            )
-              throw new Error('Invalid collection face');
-            // FontFace selects the first face from an unchanged collection. Keep its
-            // signature and all tables; only other faces require materialization.
-            const browserBytes =
-              isCollection && face.faceIndex !== 0
-                ? materializeCollectionFace(face.bytes, face.faceIndex)
-                : face.bytes;
-            if (!isCollection && face.faceIndex !== 0)
-              throw new Error('Font face index requires a collection');
+            const browserBytes = browserBytesOf(face);
             const descriptors: FaceDescriptors = {
               weight: String(face.request.weight),
               style: face.request.style,
@@ -186,7 +189,7 @@ export async function registerEmbeddedFontFaces(
             await fontFace.load();
             fontSet.add(fontFace);
             added.push({ set: fontSet, face: fontFace });
-            accepted.push({ alias, bytes: browserBytes, descriptors });
+            accepted.push({ alias, source: face, descriptors });
             anyLoaded = true;
           } catch {
             // Paint fidelity is best-effort; the face still measures shaped.
@@ -221,9 +224,9 @@ export async function registerEmbeddedFontFaces(
       const target = fontFaceEnvironmentOf(doc);
       if (!target.fontSet || !target.createFontFace || shownIn.has(target.fontSet)) return;
       shownIn.add(target.fontSet);
-      for (const { alias, bytes, descriptors } of accepted) {
+      for (const { alias, source, descriptors } of accepted) {
         try {
-          const face = target.createFontFace(alias, bytes, descriptors);
+          const face = target.createFontFace(alias, browserBytesOf(source), descriptors);
           // Added before it loads: a set renders a face as soon as its bytes parse, and text
           // already painted under the alias re-renders then.
           target.fontSet.add(face);
@@ -260,8 +263,18 @@ export function admittedFontSources(
   for (const source of sources) {
     const resolved = snapshot.resolve(source.request);
     if (resolved instanceof FontResolutionError || resolved.id !== source.id) continue;
-    const { id, bytes, hash, faceIndex } = resolved;
-    admitted.push({ request: source.request, id, bytes, hash, faceIndex });
+    const { id, hash, faceIndex } = resolved;
+    admitted.push({
+      request: source.request,
+      id,
+      // Read when a face is registered: the owned copy is handed out fresh then, and nothing
+      // keeps a second copy of every font for the document's lifetime.
+      get bytes() {
+        return resolved.bytes;
+      },
+      hash,
+      faceIndex,
+    });
   }
   return admitted;
 }
