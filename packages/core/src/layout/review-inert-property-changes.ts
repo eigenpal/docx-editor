@@ -14,6 +14,7 @@ import {
 } from './revision-property-effect.ts';
 import { findNode, parentNodeOf } from '../store/package/ooxml-edit.ts';
 import { linkRevisionReplies } from '../store/store/review-reads.ts';
+import { findParagraphProperties } from './style-definition-reader.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { OoxmlElement, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
@@ -60,18 +61,12 @@ function paragraphAbove(part: OoxmlPart, id: string): OoxmlElement | null {
   let current = parentNodeOf(part, id);
   for (let depth = 0; current && depth < MAX_ANCESTORS; depth += 1) {
     // Table styles are not resolved by the check, so content in a table always lists.
-    if (current.kind === 'tableCell') return null;
+    // A cell demoted to a generic node is still a cell.
+    if (current.kind === 'tableCell' || current.localName === 'tc') return null;
     if (current.kind === 'paragraph') paragraph ??= current;
     current = parentNodeOf(part, current.id);
   }
   return current ? null : paragraph;
-}
-
-function paragraphProperties(paragraph: OoxmlElement): OoxmlElement | undefined {
-  for (const child of paragraph.children) {
-    if (child.kind !== 'textValue' && child.localName === 'pPr') return child;
-  }
-  return undefined;
 }
 
 function siteIsInert(part: OoxmlPart, id: string, context: PropertyChangeContext): boolean {
@@ -81,7 +76,7 @@ function siteIsInert(part: OoxmlPart, id: string, context: PropertyChangeContext
   if (!current) return false;
   const paragraph = paragraphAbove(part, current.id);
   if (!paragraph) return false;
-  const pPr = paragraphProperties(paragraph);
+  const pPr = findParagraphProperties(paragraph);
   const known = answers.get(change);
   if (known && known.context === context && known.current === current && known.paragraph === pPr) {
     return known.inert;

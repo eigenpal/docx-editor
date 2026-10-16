@@ -23,6 +23,7 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { STYLE_TOGGLE_PROPERTIES } from './style-toggles.ts';
+import { findParagraphProperties, findRunProperties } from './style-definition-reader.ts';
 import {
   buildNumberingIndex,
   resolveNumberingLevel,
@@ -228,13 +229,6 @@ function styleReference(properties: readonly OoxmlProperty[], localName: string)
   return value;
 }
 
-function childElement(parent: OoxmlElement | undefined, localName: string) {
-  for (const child of parent?.children ?? []) {
-    if (child.kind !== 'textValue' && child.localName === localName) return child;
-  }
-  return undefined;
-}
-
 /**
  * The numbering level's `w:pPr` for a paragraph, `null` when it has no numbering, or
  * `undefined` when it names numbering this context cannot resolve. The reference inherits
@@ -279,7 +273,7 @@ export function paragraphChangeIsInert(
   change: OoxmlElement,
   current: OoxmlElement
 ): boolean {
-  const previous = childElement(change, 'pPr');
+  const previous = findParagraphProperties(change);
   if (
     styleReference(propertiesOf(current), 'pStyle') !==
     styleReference(propertiesOf(previous), 'pStyle')
@@ -308,7 +302,7 @@ export function runChangeIsInert(
   current: OoxmlElement,
   paragraph: OoxmlElement | undefined
 ): boolean {
-  const previous = childElement(change, 'rPr');
+  const previous = findRunProperties(change);
   const currentProps = propertiesOf(current);
   const previousProps = propertiesOf(previous);
   if (styleReference(currentProps, 'rStyle') !== styleReference(previousProps, 'rStyle')) {

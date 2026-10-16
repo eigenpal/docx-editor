@@ -15,6 +15,11 @@ import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
 import { listedRevisionItemsInStory, revisionItemsInStory } from './review.ts';
+import { inertPropertyChanges } from '../layout/review-inert-property-changes.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { revisionItemsOf } from '../store/store/review-reads.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { planNarrowRevisionDecision, type RevisionDecisionLedger } from './review-scope.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
 
@@ -220,10 +225,7 @@ export function revisionAuthorPlan(
     };
   const selection = batchSelection(operation, handles, packageReads);
   if (!selection.ok) return selection;
-  // A whole-story change names the listed changes, so records with no card keep their author.
-  const keys =
-    selection.keys ??
-    listedRevisionItemsInStory(selection.reads, packageReads.package).map(reviewItemKey);
+  const keys = selection.keys ?? storyKeysWithoutUnlisted(selection, packageReads.package);
   const plan = planRevisionAuthorChange(
     selection.reads.part,
     attribution,
@@ -232,6 +234,29 @@ export function revisionAuthorPlan(
     operation.authors
   );
   return { ok: true as const, reads: selection.reads, ...plan };
+}
+
+/**
+ * A whole-story author change names every change of the scoped derivation except records with
+ * no card, which keep their author. Undefined, meaning every change, when there are none.
+ */
+function storyKeysWithoutUnlisted(
+  selection: { readonly reads: AutomationStoryReads; readonly scopeRoot?: OoxmlNode | undefined },
+  pkg: OoxmlPackage | null
+): string[] | undefined {
+  if (!pkg) return undefined;
+  const { part } = selection.reads;
+  const root = selection.scopeRoot;
+  const items = revisionItemsOf(root && root.kind !== 'textValue' ? { ...part, root } : part);
+  const unlisted = new Set(
+    inertPropertyChanges(items, {
+      pkg,
+      stylesRoot: stylesPartOf(pkg)?.root ?? null,
+      numberingRoot: numberingRootOf(pkg),
+    }).map(reviewItemKey)
+  );
+  if (unlisted.size === 0) return undefined;
+  return items.map(reviewItemKey).filter((key) => !unlisted.has(key));
 }
 
 /** Count pending decisions after mutation, when adjacent surviving changes may regroup. */

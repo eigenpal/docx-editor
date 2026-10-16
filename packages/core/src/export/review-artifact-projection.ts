@@ -19,6 +19,7 @@ import { createExportReviewDerivationScope } from '../store/store/review-export-
 import { withoutInertPropertyChanges } from '../layout/review-inert-property-changes.ts';
 import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { isPotentialRevisionElement } from '../store/store/tree-op-revisions.ts';
+import { revisionSiteNodeIdsOf } from '../store/store/review-items.ts';
 import {
   forEachSemanticDrawing,
   forEachSemanticStory,
@@ -569,28 +570,63 @@ function artifactOf(
   };
 }
 
+interface ExportReviewQueue {
+  readonly parts: readonly OoxmlPart[];
+  readonly derivation: ReturnType<typeof createExportReviewDerivationScope>;
+  /** The listed items: property changes that leave the formatting unchanged are left out. */
+  readonly items: readonly ReviewItem[];
+  /** The revision sites of the items left out, which paint leaves unmarked. */
+  readonly unlistedSites: ReadonlySet<string>;
+}
+
+const queues = new WeakMap<OoxmlPackage, ExportReviewQueue | null>();
+
+/** One review derivation per package, shared by the artifacts and the paint filter. */
+function exportReviewQueue(pkg: OoxmlPackage): ExportReviewQueue | null {
+  if (queues.has(pkg)) return queues.get(pkg)!;
+  const main = pkg.parts.get(pkg.mainDocumentPart);
+  const furnitureParts = main ? storyParts(pkg, main) : [];
+  const parts = main ? [main, ...furnitureParts] : [];
+  const commentsPart = main ? pkg.parts.get(commentPartNameOf(pkg, main.name)) : undefined;
+  let queue: ExportReviewQueue | null = null;
+  if (main && hasReviewMarkup(parts, commentsPart)) {
+    const derivation = createExportReviewDerivationScope();
+    const all = derivation.collectReviewItems({
+      storyPart: main,
+      furnitureParts,
+      commentsPart,
+      commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, main.name)),
+    });
+    const items = withoutInertPropertyChanges(all, {
+      pkg,
+      stylesRoot: stylesPartOf(pkg)?.root ?? null,
+      numberingRoot: numberingRootOf(pkg),
+    });
+    const listed = new Set(items.map((item) => item.id));
+    const unlistedSites = new Set(
+      all.flatMap((item) =>
+        item.kind === 'revision' && !listed.has(item.id) ? revisionSiteNodeIdsOf(item) : []
+      )
+    );
+    queue = { parts, derivation, items, unlistedSites };
+  }
+  queues.set(pkg, queue);
+  return queue;
+}
+
+/** The revision sites an export of `pkg` leaves unmarked, because they have no review item. */
+export function unlistedReviewSites(pkg: OoxmlPackage): ReadonlySet<string> {
+  return exportReviewQueue(pkg)?.unlistedSites ?? new Set();
+}
+
 /** Project every core review item without exposing OOXML nodes or mutation addresses. @internal */
 export function projectReviewArtifacts(
   layout: SemanticLayout,
   pkg: OoxmlPackage
 ): readonly SemanticReviewArtifactRecord[] {
-  const main = pkg.parts.get(pkg.mainDocumentPart);
-  if (!main) return [];
-  const furnitureParts = storyParts(pkg, main);
-  const parts = [main, ...furnitureParts];
-  const commentsPart = pkg.parts.get(commentPartNameOf(pkg, main.name));
-  if (!hasReviewMarkup(parts, commentsPart)) return [];
-  const derivation = createExportReviewDerivationScope();
-  // Property changes that leave the formatting unchanged are not review items here either.
-  const items = withoutInertPropertyChanges(
-    derivation.collectReviewItems({
-      storyPart: main,
-      furnitureParts,
-      commentsPart,
-      commentsExtendedPart: pkg.parts.get(commentsExtendedPartNameOf(pkg, main.name)),
-    }),
-    { pkg, stylesRoot: stylesPartOf(pkg)?.root ?? null, numberingRoot: numberingRootOf(pkg) }
-  );
+  const queue = exportReviewQueue(pkg);
+  if (!queue) return [];
+  const { parts, derivation, items } = queue;
   // The overwhelmingly common export has no review artifacts. Do not build a paragraph/page
   // occurrence index over a large settled layout unless there is something to place.
   if (items.length === 0) return [];

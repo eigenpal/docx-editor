@@ -215,6 +215,21 @@ describe('property changes that change nothing', () => {
     expect(marked.join('')).not.toContain('unlisted');
   });
 
+  test('an insertion around an unlisted change keeps its card and its mark', () => {
+    const run = rpr('<w:b w:val="0"/>', '', 'added');
+    using view = mount(
+      `<w:p><w:r><w:t xml:space="preserve">kept </w:t></w:r><w:commentRangeStart w:id="0"/><w:ins w:id="${id++}" ${STAMP}>${run}</w:ins><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>`,
+      true
+    );
+    const items = view.editor.getReviewItems({ pairReplacements: false, placement: false });
+    expect(items.map((entry) => entry.item.kind)).toEqual(['revision', 'comment']);
+    expect(items[0]!.item).toMatchObject({ revisionKind: 'insert', text: 'added' });
+    const marked = [...view.container.querySelectorAll<HTMLElement>('.docx-revision')].map(
+      (element) => element.textContent
+    );
+    expect(marked.join('')).toContain('added');
+  });
+
   test('typing in the paragraph keeps the record unlisted', () => {
     using view = mount(p(ppr('<w:jc w:val="left"/>', '')) + p(ppr('<w:jc w:val="center"/>', '')));
     expect(view.count()).toBe(1);

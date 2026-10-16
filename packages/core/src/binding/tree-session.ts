@@ -1081,7 +1081,7 @@ export function openTreeSessionFromPackage(
           }
         }
 
-        reviewItemsMemo.set(memoInputs, (items = filtering.publish(items, reviewCache?.items)));
+        reviewItemsMemo.set(memoInputs, (items = filtering.publish(items)));
         reviewCache = {
           revisionKey,
           bodyRevision: store.revision,

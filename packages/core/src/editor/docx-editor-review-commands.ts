@@ -68,8 +68,8 @@ interface ReviewCommandDependencies {
   viewing(): boolean;
   placements(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
   visible(): readonly ReviewItem[];
-  /** The items among `items` by authors the review filter shows. */
-  visibleOf(items: readonly ReviewRevisionItem[]): readonly ReviewItem[];
+  /** Whether the author filter shows `author`'s changes. */
+  authorVisible(author: string): boolean;
   scope(item: ReviewItem): StoryScope;
   /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
@@ -164,9 +164,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const inert = session
       .storyParts()
       .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs));
-    const records = deps
-      .visibleOf(inert)
-      .filter((item): item is ReviewRevisionItem => item.kind === 'revision');
+    // By author only: a tracked change predicate decides over listed changes, and these have
+    // no card for it to decide over.
+    const records = inert.filter((item) => deps.authorVisible(item.author));
     for (const item of records) selected.add(reviewItemKey(item));
     return records;
   };
@@ -547,7 +547,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           revisions: {
             ...result,
             resolved: [],
-            remaining: result.remaining + result.resolved.length,
+            // The listed queue, as a decision that runs reports it: records with no card are
+            // not pending decisions to a caller.
+            remaining: all().length,
           },
         };
       }
