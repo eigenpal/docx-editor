@@ -159,24 +159,6 @@ export type {
   ReviewRevisionItem,
 } from '../store/store/review-items.ts';
 export type { RevisionAddress } from '@docx-editor.dev/core/store';
-// Named by the review, protection and collaboration results in `types.ts`, which may not import
-// these lanes itself; `types-barrel.ts` and `document.ts` re-export them from here.
-export type { CollaborationFailureCode, CollaborationStatus } from '../collaboration/index.ts';
-export type {
-  DocumentProtectionEdit,
-  DocumentProtectionState,
-} from '../store/package/document-protection.ts';
-export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-export type {
-  RevisionBatchEntry,
-  RevisionBatchSkipDetail,
-  RevisionBatchSkipReason,
-} from '../store/store/revision-batch.ts';
-export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
-export type {
-  RevisionAuthorEntry,
-  RevisionAuthorSkipReason,
-} from '../store/store/revision-author-change.ts';
 export type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
 export type {
   DrawingHorizontalReferenceFrame,

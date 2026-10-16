@@ -61,6 +61,28 @@ describe('the lane DAG is well formed (task 10.1)', () => {
     }
   });
 
+  test('type-only edges name real lanes, never the lane itself, and never repeat a value edge', () => {
+    for (const lane of laneNames) {
+      for (const dependency of CORE_LANES[lane].mayImportTypes ?? []) {
+        expect({ lane, dependency, known: laneNames.includes(dependency) }).toEqual({
+          lane,
+          dependency,
+          known: true,
+        });
+        expect(dependency).not.toBe(lane);
+        expect(CORE_LANES[lane].mayImport).not.toContain(dependency);
+      }
+    }
+  });
+
+  test('the cycle walk follows value edges only', () => {
+    // `contracts` names store types and the store names contract types: a type-level loop that
+    // the build erases. The order must still exist, and contracts must still come first.
+    expect(CORE_LANES.contracts.mayImportTypes).toContain('store');
+    const order = laneTopologicalOrder();
+    expect(order.indexOf('contracts')).toBeLessThan(order.indexOf('layout'));
+  });
+
   test('no lane depends on itself', () => {
     for (const lane of laneNames) {
       expect(CORE_LANES[lane].mayImport).not.toContain(lane);

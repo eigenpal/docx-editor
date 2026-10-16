@@ -29,7 +29,7 @@ import type {
   Extent,
   RunFormatting,
 } from './types';
-// Declared in the store lane; `editor.ts` re-exports them for the contract.
+// Declared in the store lane; `types.ts` re-exports them for the contract.
 export type {
   ReviewPosition,
   ReviewRange,
@@ -42,7 +42,7 @@ export type {
   RevisionBatchSkipDetail,
   RevisionBatchSkipReason,
   RevisionSiteRefusal,
-} from './editor.ts';
+} from './types';
 
 // Re-exported because the signatures below hand every one of them to a caller. This entry
 // point is meant to be usable on its own — an automation host or a tool layer names it
