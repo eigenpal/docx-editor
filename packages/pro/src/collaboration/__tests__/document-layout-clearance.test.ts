@@ -13,6 +13,10 @@ import { writeOoxmlPackage } from '@docx-editor.dev/core/store';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument, W, R, REL } from './document-peer-support.ts';
 import { packageFingerprint } from './document-support.ts';
+import {
+  omittedGridCellBytes,
+  restartedSectionBytes,
+} from './document-layout-boundary-fixtures.ts';
 
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 const harness = createPeerHarness('layout-clearance', { offlineEditing: true });
@@ -176,6 +180,8 @@ test.each([
   ['kept rows below header pictures', floatBytes, 2, 1],
   ['captions before oversized rows', captionBytes, 4, 2],
   ['repeated headers around oversized rows', repeatedBytes, 4, 5],
+  ['restarted sections after an even initial number', restartedSectionBytes, 2, 1],
+  ['exposed borders beside omitted grid cells', omittedGridCellBytes, 1, 3],
 ] as const)(
   '%s converge through edits, history, reconnect, and reopen',
   async (_name, bytes, pages, targetIndex) => {
