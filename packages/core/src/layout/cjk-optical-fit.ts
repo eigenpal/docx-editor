@@ -338,7 +338,7 @@ export function createCjkOpticalFitter(
       x += currentWidth;
       if (currentRange.end < piece.end) break;
       const next = pieces[currentIndex + 1];
-      if (!next || breaks.decision(next, 0) === 'opens') break;
+      if (!next || breaks.decision(next, 0, currentText, next.text) === 'opens') break;
       currentIndex++;
       const boundary = breaks.boundaries(next)[0] ?? next.text.length;
       currentText = next.text.slice(0, boundary);

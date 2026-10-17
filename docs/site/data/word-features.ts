@@ -287,6 +287,18 @@ export const wordFeatures: WordFeature[] = [
     docsLink: '/docs/2.x/word-fidelity',
   },
   {
+    id: 'paragraphs.complex-script-line-breaks',
+    name: 'Thai, Lao, Khmer, and Myanmar line breaking',
+    category: 'paragraphs',
+    editing: 'preserved',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Lines in Thai, Lao, Khmer, and Myanmar text without spaces wrap at any character cluster that fits, not at dictionary word boundaries. Table AutoFit keeps an unspaced run whole as one segment. Lines can end after a zero-width space (U+200B) in any script, which marks a word boundary, and the zero-width space stays at the end of the line. A space before a zero-width space counts as text while it fits, and hangs only when it does not fit. Line breaks never split a character cluster, a Khmer or Myanmar stacked consonant, or a Myanmar consonant and its vowel sign or visarga.',
+    docsLink: '/docs/2.x/word-fidelity',
+  },
+  {
     id: 'paragraphs.spacing',
     name: 'Line & paragraph spacing',
     category: 'paragraphs',

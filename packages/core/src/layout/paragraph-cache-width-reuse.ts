@@ -1,4 +1,5 @@
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import { endsWithSpaceSlot } from './trailing-spaces.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
 
@@ -47,7 +48,7 @@ export function tokenLineMovable(line: PendingLine): boolean {
     known =
       !lineTiedToPlacement(line) &&
       line.spans.length > 0 &&
-      !line.spans[line.spans.length - 1]!.text.endsWith(' ') &&
+      !endsWithSpaceSlot(line.spans[line.spans.length - 1]!.text) &&
       line.spans.every(
         (span) =>
           ORDINARY_TEXT.test(span.text) &&

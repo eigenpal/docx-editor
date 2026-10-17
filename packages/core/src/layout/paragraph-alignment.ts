@@ -5,7 +5,12 @@ import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import { justifyCjkSpans } from './cjk-justify.ts';
-import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import {
+  endsWithSpaceSlot,
+  withoutLineEndWhitespace,
+  withoutTrailingSpaces,
+  withoutTrailingZeroWidthSpaces,
+} from './trailing-spaces.ts';
 import { alignBidiTrailingSpaces, bidiTrailingSpaces } from './bidi-trailing-spaces.ts';
 import { alignPassageSpans, partUsedWidth, type LinePassage } from './passage-alignment.ts';
 
@@ -75,7 +80,8 @@ export function jcValueForAlignment(
  * the highlight (DOM) stayed on the glyphs.
  */
 function endsWithExpandableSpace(text: string): boolean {
-  return text.endsWith(' ');
+  // A zero-width space after the space takes no room; the space is still the slot.
+  return withoutTrailingZeroWidthSpaces(text).endsWith(' ');
 }
 
 /**
@@ -212,14 +218,18 @@ function alignLogicalSpans(
     contentLast -= 1;
   }
   const contentEnd = spans[contentLast] ?? last;
-  const contentEndWithoutTrailingWhitespace = (): number =>
-    contentEnd.box.x -
-    indentLeft +
-    contentEnd.box.width -
-    trailingWhitespaceOf(
-      contentEnd,
-      contentEnd === last ? undefined : withoutTrailingSpaces(contentEnd.text)
-    );
+  const contentEndWithoutTrailingWhitespace = (): number => {
+    const end = contentEnd.box.x - indentLeft + contentEnd.box.width;
+    const used =
+      end -
+      trailingWhitespaceOf(
+        contentEnd,
+        contentEnd === last ? undefined : withoutTrailingSpaces(contentEnd.text)
+      );
+    // A space before a zero-width space is content while it fits; it hangs when it overflows.
+    if (used <= available + OVERFLOW_TOLERANCE_PT) return used;
+    return end - trailingWhitespaceOf(contentEnd, withoutLineEndWhitespace(contentEnd.text));
+  };
   // A justified line's hanging spaces may follow a word that keeps its own space (a double
   // space split across runs). That space hangs too: it is neither content nor a slot.
   // Only U+0020 hangs; a tab or a no-break space before the hanging spaces is content.
@@ -243,13 +253,29 @@ function alignLogicalSpans(
   // A space retained at a natural wrap still owns its model/caret advance, but Word
   // centers/right-aligns the visible text. Do not subtract from drawing-owned width,
   // tabs or nonbreaking spaces: only a text span reaching the measured line end qualifies.
+  // A space before a zero-width space is content while it fits, and hangs when it overflows.
+  // The span's box can be priced to the room left, so the text decides the overflow.
+  const overflowingSlot =
+    lastContentSpan !== undefined &&
+    !lastContentSpan.text.endsWith(' ') &&
+    endsWithSpaceSlot(lastContentSpan.text) &&
+    lastContentSpan.box.x -
+      indentLeft +
+      measureDisplayText(
+        lastContentSpan.text,
+        styleForFontSlot(lastContentSpan.style, lastContentSpan.fontSlot),
+        measurer
+      ) >
+      available + OVERFLOW_TOLERANCE_PT;
   if (
     (alignment === 'center' || alignment === 'right') &&
     spansReachLineEnd &&
-    lastContentSpan?.text.endsWith(' ') &&
+    (lastContentSpan?.text.endsWith(' ') || overflowingSlot) &&
     !lastContentSpan.lineEndWhitespace
   ) {
-    const visible = withoutTrailingSpaces(lastContentSpan.text);
+    const visible = overflowingSlot
+      ? withoutLineEndWhitespace(lastContentSpan.text)
+      : withoutTrailingSpaces(lastContentSpan.text);
     const width = measureDisplayText(
       visible,
       styleForFontSlot(lastContentSpan.style, lastContentSpan.fontSlot),
@@ -284,7 +310,15 @@ function alignLogicalSpans(
     // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
     // slots either: a boundary between two of them took a share of the slack from the words.
     const gapBefore: number[] = [];
-    for (let index = 1; index < Math.min(trailingStart, contentLast + 1); index += 1) {
+    // Zero-width spaces closing the line take no room, so the boundary before them is no slot.
+    let slotEnd = Math.min(trailingStart, contentLast + 1);
+    while (
+      slotEnd > 1 &&
+      spans[slotEnd - 1]!.text.length > 0 &&
+      withoutTrailingZeroWidthSpaces(spans[slotEnd - 1]!.text) === ''
+    )
+      slotEnd -= 1;
+    for (let index = 1; index < slotEnd; index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
     }
     if (gapBefore.length === 0) return spans;

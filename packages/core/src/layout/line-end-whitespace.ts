@@ -1,14 +1,18 @@
 import { PAGE_BREAK_CHAR } from '@docx-editor.dev/core/store';
 import type { StyleSpanRecord } from './semantic-records.ts';
-import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
-/** Spaces Word may hang/clip at a line end instead of wrapping onto a new line. */
+/**
+ * Spaces that may hang/clip at a line end instead of wrapping onto a new line. Zero-width
+ * spaces among them hang too, but zero-width spaces alone are not spaces.
+ */
 export function isCollapsibleLineEndWhitespace(text: string): boolean {
-  if (text.length === 0) return false;
+  let space = false;
   for (const char of text) {
-    if (char !== ' ' && char !== '\u3000') return false;
+    if (char === ' ' || char === '\u3000') space = true;
+    else if (char !== '\u200b') return false;
   }
-  return true;
+  return space;
 }
 
 /**
@@ -37,7 +41,7 @@ interface ClippedWordEnd {
 
 /** The advance of a word without its trailing spaces; undefined when it has none, or no ink. */
 export function wordInkWidth(text: string, measure: (text: string) => number): number | undefined {
-  const ink = withoutTrailingSpaces(text);
+  const ink = withoutLineEndWhitespace(text);
   return ink.length === 0 || ink.length === text.length ? undefined : measure(ink);
 }
 
@@ -50,9 +54,9 @@ export function clipWordEnd(
   tolerance: number
 ): ClippedWordEnd | undefined {
   if (width <= remaining + tolerance) return undefined;
-  let length = text.length;
   // U+3000 participates in kinsoku groups; leave those authored groups to the CJK breaker.
-  while (length > 0 && text[length - 1] === ' ') length--;
+  // A zero-width space after a space hangs with it.
+  const length = withoutLineEndWhitespace(text).length;
   if (length === 0 || length === text.length) return undefined;
   const visibleWidth = measure(text.slice(0, length));
   if (visibleWidth > remaining + tolerance) return undefined;

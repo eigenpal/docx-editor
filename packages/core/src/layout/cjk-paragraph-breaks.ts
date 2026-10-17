@@ -2,13 +2,19 @@
 // not a Unicode boundary: segment the visible text once, then map cuts to pieces.
 import type { FieldAwarePiece } from './field-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
+import { isParagraphText, paragraphBreakText, paragraphWordCuts } from './paragraph-word-cuts.ts';
+import { paragraphWordBreaks } from './paragraph-word-breaks.ts';
 import {
   CJK_NO_BREAK_AFTER,
   CJK_NO_BREAK_BEFORE,
   isIdeographicForLineBreak,
   lastCodePointOf,
   NO_BREAK_CHARACTER,
+  isCombiningMark,
+  marksContinue,
+  stacksNext,
   wordBoundaries,
+  ZERO_WIDTH_SPACE,
   type LineOpenDecision,
 } from './cjk-line-break.ts';
 import {
@@ -34,16 +40,22 @@ const isFullwidthAlphanumeric = (cp: number): boolean =>
   (cp >= 0xff10 && cp <= 0xff19) ||
   (cp >= 0xff21 && cp <= 0xff3a) ||
   (cp >= 0xff41 && cp <= 0xff5a);
-const isText = (piece: FieldAwarePiece): boolean =>
-  !piece.projected &&
-  !piece.positionalTab &&
-  !piece.inlineDrawing &&
-  !piece.equation &&
-  piece.end - piece.start === piece.text.length;
+const isText = isParagraphText;
 
+/**
+ * Paragraph-wide break analysis, shared by line placement and the anchor-line probe.
+ * `decision` takes the text placed before the candidate and the candidate itself, which the
+ * per-piece analysis (`paragraph-word-breaks.ts`) passes to `lineOpenDecisionAt`; the East
+ * Asian table ignores them.
+ */
 export interface CjkParagraphBreaks {
   boundaries(piece: FieldAwarePiece): readonly number[];
-  decision(piece: FieldAwarePiece, offset: number): LineOpenDecision;
+  decision(
+    piece: FieldAwarePiece,
+    offset: number,
+    lastEmitted: string,
+    candidate: string
+  ): LineOpenDecision;
   cutAllowed(piece: FieldAwarePiece, candidateStart: number, index: number): boolean;
 }
 
@@ -58,20 +70,15 @@ export function cjkParagraphBreaks(
         /[\u1100-\u11ff\u2e80-\ud7ff\uf900-\uffef\u{20000}-\u{323af}]/u.test(piece.text) ||
         eastAsianLanguage(piece.props)
     )
-  )
-    return null;
-  const starts = new Map<FieldAwarePiece, number>();
-  const strings: string[] = [];
-  let total = 0;
-  for (const piece of pieces) {
-    starts.set(piece, total);
-    // Layout-owned atoms form barriers. Their display characters have no one-to-one
-    // model mapping and must not become inter-character placement candidates.
-    const text = isText(piece) ? piece.text : '\ufffc'.repeat(Math.min(piece.text.length, 1));
-    strings.push(text);
-    total += text.length;
+  ) {
+    // A run that opens with a dash needs the text before it; any other paragraph without
+    // East Asian text has no paragraph-wide analysis.
+    const cuts = paragraphWordCuts(pieces);
+    return cuts ? paragraphWordBreaks(cuts) : null;
   }
-  const text = strings.join('');
+  // Layout-owned atoms form barriers. Their display characters have no one-to-one
+  // model mapping and must not become inter-character placement candidates.
+  const { text, starts } = paragraphBreakText(pieces);
   const clusters = segmentGraphemes(text);
   const decisions = new Map<number, LineOpenDecision>([
     [0, 'opens'],
@@ -129,6 +136,17 @@ export function cjkParagraphBreaks(
     const after = right.text.codePointAt(0)!;
     if (/[\t\n\f\ufffc]/u.test(left.text + right.text)) {
       decisions.set(at, 'opens');
+      continue;
+    }
+    // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
+    // a Khmer coeng or Myanmar virama before a letter, which it stacks under its base, nor
+    // before a combining mark such as a Myanmar spacing vowel.
+    if (
+      right.text === ZERO_WIDTH_SPACE ||
+      stacksNext(before, after) ||
+      (isCombiningMark(after) && marksContinue(before))
+    ) {
+      decisions.set(at, 'forbidden');
       continue;
     }
     // Glue is independent of language and kinsoku. Neither character wrapping
