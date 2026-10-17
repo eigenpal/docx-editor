@@ -139,7 +139,7 @@ export function cjkParagraphBreaks(
       continue;
     }
     // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
-    // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base, nor
+    // a Khmer coeng or Myanmar virama before a letter, which it stacks under its base, nor
     // before a combining mark such as a Myanmar spacing vowel.
     if (
       right.text === ZERO_WIDTH_SPACE ||

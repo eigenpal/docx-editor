@@ -105,7 +105,8 @@ export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
 /**
  * Whether the code point stacks the next consonant under the one before it: the Khmer coeng
  * (U+17D2) and the Myanmar virama (U+1039). Grapheme rules end a cluster after them, but a
- * line break there would tear a stacked consonant from its base, so no break follows them.
+ * line break there would tear a stacked consonant from its base, so no break follows them
+ * before a letter (`stacksNext`).
  */
 export const isStackingSign = (cp: number | undefined): boolean => cp === 0x17d2 || cp === 0x1039;
 
@@ -138,7 +139,7 @@ export function isCombiningMark(cp: number | undefined): boolean {
  * may break before the mark. After a breaking space or a zero-width space the mark starts a
  * new word instead (UAX #14 LB10), as in Zawgyi-encoded Myanmar, which stores the vowel sign
  * U+1031 before its consonant. After a tab or a dash that breaks after itself, the break
- * before the mark is kept as on main. Undefined (a line start) continues nothing.
+ * before the mark is kept. Undefined (a line start) continues nothing.
  */
 export function marksContinue(before: number | undefined): boolean {
   if (before === undefined || before === 0x200b || before === 0x09) return false;
@@ -286,7 +287,7 @@ export function cjkCutAllowedBetween(
 export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
   // No line starts with a zero-width space or a combining mark, even after an emergency cut,
-  // nor right after a stacking sign, nor with a space that ink follows. A cut where only
+  // nor right after a stacking sign before a letter, nor with a space that ink follows. A cut where only
   // line-end whitespace remains hangs that whitespace.
   const next = text.charCodeAt(index);
   if (
