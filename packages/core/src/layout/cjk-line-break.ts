@@ -109,6 +109,17 @@ export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
  */
 export const isStackingSign = (cp: number | undefined): boolean => cp === 0x17d2 || cp === 0x1039;
 
+const LETTER = /^\p{L}$/u;
+
+/**
+ * Whether a stacking sign joins the next code point to its base: only a letter stacks. In
+ * Zawgyi-encoded Myanmar U+1039 is the visible asat that ends a word, so a space after it
+ * still breaks.
+ */
+export function stacksNext(before: number | undefined, after: number | undefined): boolean {
+  return isStackingSign(before) && after !== undefined && LETTER.test(String.fromCodePoint(after));
+}
+
 const COMBINING_MARK = /^\p{M}$/u;
 
 /**
@@ -124,10 +135,10 @@ export function isCombiningMark(cp: number | undefined): boolean {
 
 /**
  * Whether a combining mark after this code unit continues the text before it, so no line
- * may break before the mark. After a breaking space, a zero-width space, a tab, or a dash
- * that breaks after itself, the mark starts a new word instead (UAX #14 LB10), as in
- * Zawgyi-encoded Myanmar, which stores the vowel sign U+1031 before its consonant.
- * Undefined (a line start) continues nothing.
+ * may break before the mark. After a breaking space or a zero-width space the mark starts a
+ * new word instead (UAX #14 LB10), as in Zawgyi-encoded Myanmar, which stores the vowel sign
+ * U+1031 before its consonant. After a tab or a dash that breaks after itself, the break
+ * before the mark is kept as on main. Undefined (a line start) continues nothing.
  */
 export function marksContinue(before: number | undefined): boolean {
   if (before === undefined || before === 0x200b || before === 0x09) return false;
@@ -281,7 +292,7 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (
     next === 0x200b ||
     (isCombiningMark(text.codePointAt(index)) && marksContinue(text.charCodeAt(index - 1))) ||
-    isStackingSign(text.charCodeAt(index - 1))
+    stacksNext(text.charCodeAt(index - 1), text.codePointAt(index))
   )
     return false;
   if (next === 0x20 && withoutLineEndWhitespace(text).length > index) return false;
@@ -365,7 +376,8 @@ export function lineOpenDecisionAt(
   const lastUnit = lastEmitted.length === 0 ? 0 : lastEmitted.charCodeAt(lastEmitted.length - 1);
   const firstUnit = candidate.charCodeAt(0);
   // UAX #14 LB7: never break before a zero-width space, even after a space.
-  if ((firstUnit === 0x200b && lastUnit !== 0) || isStackingSign(lastUnit)) return 'forbidden';
+  if ((firstUnit === 0x200b && lastUnit !== 0) || stacksNext(lastUnit, candidate.codePointAt(0)))
+    return 'forbidden';
   // A combining mark never opens a line, even where grapheme rules end a cluster before it.
   if (marksContinue(lastUnit || undefined) && isCombiningMark(candidate.codePointAt(0)))
     return 'forbidden';

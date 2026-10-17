@@ -12,7 +12,7 @@ import {
   NO_BREAK_CHARACTER,
   isCombiningMark,
   marksContinue,
-  isStackingSign,
+  stacksNext,
   wordBoundaries,
   ZERO_WIDTH_SPACE,
   type LineOpenDecision,
@@ -143,7 +143,7 @@ export function cjkParagraphBreaks(
     // before a combining mark such as a Myanmar spacing vowel.
     if (
       right.text === ZERO_WIDTH_SPACE ||
-      isStackingSign(before) ||
+      stacksNext(before, after) ||
       (isCombiningMark(after) && marksContinue(before))
     ) {
       decisions.set(at, 'forbidden');

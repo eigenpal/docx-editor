@@ -1,6 +1,6 @@
 // Grapheme-safe chopping for an unbroken word that is wider than the line measure.
 
-import { isCombiningMark, isStackingSign } from './cjk-line-break.ts';
+import { isCombiningMark, stacksNext } from './cjk-line-break.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -130,7 +130,10 @@ export function chopOversizedWord(
       fitTo > measuredFit &&
       options.lineHasText() &&
       !(utf16From === 0 && options.keepWithPrevious) &&
-      (isStackingSign(text.charCodeAt(graphemes[measuredFit - 1]!.utf16To - 1)) ||
+      (stacksNext(
+        text.charCodeAt(graphemes[measuredFit - 1]!.utf16To - 1),
+        text.codePointAt(graphemes[measuredFit - 1]!.utf16To)
+      ) ||
         isCombiningMark(text.codePointAt(graphemes[measuredFit - 1]!.utf16To)))
     ) {
       options.closeLine();

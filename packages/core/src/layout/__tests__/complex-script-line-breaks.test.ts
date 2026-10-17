@@ -164,6 +164,24 @@ describe('clusters that never split', () => {
     );
   });
 
+  test('Zawgyi words break at the spaces in East Asian paragraphs too', () => {
+    // Zawgyi ends a word with U+1039 as the visible asat; only a letter after it stacks.
+    const word = '\u1031\u1019\u102c\u1004\u1039';
+    const zawgyi = Array(8).fill(word).join(' ');
+    for (const body of [
+      `<w:p>${run(zawgyi, '<w:lang w:eastAsia="zh-CN"/>')}</w:p>`,
+      `<w:p>${run(`中文 ${zawgyi}`)}</w:p>`,
+    ]) {
+      for (const width of [60, 72, 96]) {
+        const lines = linesOf(body, width);
+        expect(lines.join('')).toContain(zawgyi);
+        for (const line of lines)
+          for (const token of line.trim().split(' '))
+            expect([word, '中文'], `${JSON.stringify(lines)} at ${width}`).toContain(token);
+      }
+    }
+  });
+
   test('a combining mark in the next run stays with its base letter', () => {
     expect(linesOf(`<w:p>${run('abcde')}${run('́fgh')}</w:p>`, 30)).toEqual(['abcdé', 'fgh']);
   });

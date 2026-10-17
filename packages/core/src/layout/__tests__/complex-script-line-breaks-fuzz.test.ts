@@ -5,9 +5,9 @@
 // laid out at random widths. The oracle is written out here, independent of the engine:
 // unspaced text of these scripts wraps at any cluster that fits, never at a dictionary word;
 // a line may end after a space run, a zero-width space, a dash between letters, or a tab. An
-// emergency cut never splits a grapheme cluster, never follows a Khmer coeng or Myanmar
-// virama, and never precedes a combining mark (a Myanmar spacing vowel or visarga) or a
-// zero-width space. Every case checks:
+// emergency cut never splits a grapheme cluster, never falls between a Khmer coeng or Myanmar
+// virama and the letter it stacks, and never precedes a combining mark (a Myanmar spacing
+// vowel or visarga) or a zero-width space. Every case checks:
 //
 // 1. Lines concatenate back to the visible text.
 // 2. No line starts with a space or a zero-width space.
@@ -109,8 +109,9 @@ function oracleCutStops(text: string): Set<number> {
     if (at === 0) continue;
     const next = text[at]!;
     const startsWord = /[ \u200b\t]/u.test(text[at - 1]!);
+    // Only a letter stacks under a coeng or virama; Zawgyi uses U+1039 as a final asat.
     if (
-      STACKING.test(text[at - 1]!) ||
+      (STACKING.test(text[at - 1]!) && /\p{L}/u.test(next)) ||
       (MARK.test(next) && !startsWord) ||
       next === ' ' ||
       next === '\u200b'
@@ -440,6 +441,22 @@ describe('complex-script line breaks hold their invariants on random text', () =
                 Math.abs(end - width),
                 `${where}: right-aligned ${JSON.stringify(line)} ends at ${end}`
               ).toBeLessThan(0.01);
+
+        // East Asian path: a run with an East Asian language takes the paragraph table, which
+        // must keep the same legal breaks and cut stops (Zawgyi asat and vowel included).
+        if (index % 4 === 1) {
+          const eastAsian = lineTexts(runXml(text, '<w:lang w:eastAsia="zh-CN"/>'), width);
+          expect(eastAsian.join(''), `${where} (East Asian)`).toBe(text);
+          // The East Asian table also opens a line before a space, which then starts the line.
+          checkBreaks(
+            `${where} (East Asian)`,
+            text,
+            breakOffsets(eastAsian),
+            legal,
+            width,
+            (offset) => text[offset] === ' '
+          );
+        }
 
         // Property 7.
         const widest = Math.max(...words.map(([from, to]) => inkPt(text.slice(from, to))));
