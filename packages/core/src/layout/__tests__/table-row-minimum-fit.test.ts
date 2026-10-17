@@ -8,6 +8,9 @@
 // 14pt lines (126pt) in four paragraphs, and no cell margins.
 
 import { describe, expect, test } from 'bun:test';
+import { serializeOoxmlPart, TreeDocumentStore } from '@docx-editor.dev/core/store';
+import { createLayoutSession } from '../layout-session.ts';
+import type { SemanticLayout } from '../semantic-records.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { read, W } from './table-row-keep-fixtures.ts';
@@ -64,18 +67,21 @@ const SECT =
   '<w:sectPr><w:pgSz w:w="8000" w:h="8000"/><w:pgMar w:top="1000" w:bottom="1000" ' +
   'w:left="1000" w:right="1000" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>';
 
-function layOut(probe: Probe) {
+function probePart(probe: Probe) {
   const caption = (probe.keep ? '<w:keepNext/>' : '') + '<w:keepLines/><w:widowControl w:val="0"/>';
   const body =
     para('FILL', 1, probe.filler, '<w:widowControl w:val="0"/>') +
     para('CAP', 1, 14, caption) +
     (probe.table ?? tableXml(rowXml(probe.minimum, probe.widow, '', probe.firstLines))) +
     para('TAIL', 1, 14, '<w:widowControl w:val="0"/>');
-  const part = read(
+  return read(
     `<w:document xmlns:w="${W}"><w:body>${body}${SECT}</w:body></w:document>`,
     '/word/document.xml'
   );
-  return layoutSemanticDocument(part, 1, {
+}
+
+function layOut(probe: Probe) {
+  return layoutSemanticDocument(probePart(probe), 1, {
     measurer,
     styleCascade,
     ...('mode' in probe ? { compatibilityMode: probe.mode } : { compatibilityMode: 15 }),
@@ -83,7 +89,7 @@ function layOut(probe: Probe) {
 }
 
 /** The page, from 1, of the first line of every marker. */
-function markerPages(probe: Probe): Record<string, number> {
+function layoutMarkerPages(layout: SemanticLayout): Record<string, number> {
   const found: Record<string, number> = {};
   const visit = (fragment: unknown, page: number): void => {
     const block = fragment as {
@@ -101,11 +107,13 @@ function markerPages(probe: Probe): Record<string, number> {
     for (const placed of block.rows ?? [])
       for (const cell of placed.cells) for (const inner of cell.blocks) visit(inner, page);
   };
-  layOut(probe).pages.forEach((page, index) => {
+  layout.pages.forEach((page, index) => {
     for (const fragment of page.fragments) visit(fragment, index + 1);
   });
   return found;
 }
+
+const markerPages = (probe: Probe) => layoutMarkerPages(layOut(probe));
 
 const MARKERS = ['CAP-1', 'CELL0-1', 'CELL0-3', 'CELL1-1', 'CELL2-1', 'CELL3-1', 'TAIL-1'];
 const expectPagesIn = (probe: Probe, pages: readonly number[]) => {
@@ -213,10 +221,95 @@ describe('bounds of the minimum fit rule', () => {
     expect([found(100)['LEAD3-1'], found(100)['CELL0-1']]).toEqual([1, 2]);
   });
 
-  test('a minimum taller than a page is left to the ordinary row rules', () => {
-    // A 400pt minimum no page can hold: the row starts in the 76pt room and splits.
+  test('a minimum taller than a page opens on a fresh page and fills it', () => {
+    // A 400pt minimum exceeds the page. Its complete content fills the fresh 300pt band.
     const found = markerPages({ filler: 210, minimum: 400, keep: false, widow: false });
-    expect([found['CAP-1'], found['CELL0-1'], found['CELL3-1']]).toEqual([1, 1, 2]);
+    expect([found['CAP-1'], found['CELL0-1'], found['CELL3-1'], found['TAIL-1']]).toEqual([
+      1, 2, 2, 3,
+    ]);
+  });
+
+  for (const mode of [14, 15]) {
+    test(`a kept caption moves before an oversized row opening (mode ${mode})`, () => {
+      for (const minimum of [287, 300, 400]) {
+        const found = markerPages({ filler: 210, minimum, keep: true, widow: false, mode });
+        expect([found['CAP-1'], found['CELL0-1'], found['CELL3-1'], found['TAIL-1']]).toEqual([
+          2, 3, 3, 4,
+        ]);
+      }
+    });
+
+    test(`a kept caption moves before an oversized exact row (mode ${mode})`, () => {
+      const table = tableXml(rowXml(0, false, '<w:trHeight w:val="8000" w:hRule="exact"/>'));
+      const found = markerPages({ filler: 210, minimum: 0, keep: true, widow: false, mode, table });
+      expect([found['CAP-1'], found['CELL0-1'], found['CELL3-1'], found['TAIL-1']]).toEqual([
+        2, 3, 3, 4,
+      ]);
+    });
+
+    test(`a kept caption shares the exact remaining minimum band (mode ${mode})`, () => {
+      const found = markerPages({ filler: 210, minimum: 286, keep: true, widow: false, mode });
+      expect([found['CAP-1'], found['CELL0-1'], found['CELL3-1'], found['TAIL-1']]).toEqual([
+        2, 2, 2, 3,
+      ]);
+    });
+  }
+
+  test('a kept caption already at page start does not create an empty page', () => {
+    const body =
+      para('CAP', 1, 14, '<w:keepNext/><w:keepLines/>') +
+      tableXml(rowXml(400, false)) +
+      para('TAIL');
+    const part = read(
+      `<w:document xmlns:w="${W}"><w:body>${body}${SECT}</w:body></w:document>`,
+      '/word/document.xml'
+    );
+    const layout = layoutSemanticDocument(part, 1, { measurer, styleCascade });
+    const found = layoutMarkerPages(layout);
+    expect([found['CAP-1'], found['CELL0-1'], found['TAIL-1']]).toEqual([1, 2, 3]);
+    expect(layout.pages).toHaveLength(3);
+  });
+
+  test('caption keep edits invalidate retained layout and survive save and reopen', () => {
+    const store = new TreeDocumentStore(
+      probePart({ filler: 210, minimum: 400, keep: false, widow: false })
+    );
+    const session = createLayoutSession();
+    const options = { measurer, styleCascade, compatibilityMode: 15 };
+    const layout = () =>
+      layoutSemanticDocument(store.part, store.revision, { ...options, session });
+    expect(layoutMarkerPages(layout())['CAP-1']).toBe(1);
+    const body = store.part.root.children.find((child) => child.kind === 'body');
+    const caption = body?.children.find(
+      (child) => child.kind === 'paragraph' && JSON.stringify(child).includes('CAP-1')
+    );
+    if (!caption) throw new Error('Missing caption fixture.');
+    for (const keep of [true, false, true]) {
+      const result = store.transact((tx) => {
+        tx.apply({
+          op: 'setParagraphProperties',
+          paragraphId: caption.id,
+          properties: [
+            { localName: 'keepNext', attributes: { val: keep ? '1' : '0' } },
+            { localName: 'keepLines' },
+            { localName: 'widowControl', attributes: { val: '0' } },
+            {
+              localName: 'spacing',
+              attributes: { before: '0', after: '0', line: '280', lineRule: 'exact' },
+            },
+          ],
+        });
+      });
+      expect(result.ok).toBe(true);
+      const retained = layoutMarkerPages(layout());
+      expect(retained['CAP-1']).toBe(keep ? 2 : 1);
+      expect(retained['CELL0-1']).toBe(keep ? 3 : 2);
+      const reopened = read(serializeOoxmlPart(store.part), '/word/document.xml');
+      expect(layoutMarkerPages(layoutSemanticDocument(reopened, 1, options))).toEqual(retained);
+      expect(
+        layoutMarkerPages(layoutSemanticDocument(store.part, store.revision, options))
+      ).toEqual(retained);
+    }
   });
 
   test('header rows move with a body row whose minimum does not fit', () => {
