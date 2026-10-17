@@ -7,7 +7,6 @@
 // per pass. The inputs are identity-stable when unchanged, so a hit is a handful of
 // pointer compares.
 
-import { dictionaryWordSegmenterEpoch } from './dictionary-word-breaks.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { noteMarksCacheToken, type NoteMarkContext } from './note-projection.ts';
 import {
@@ -70,7 +69,6 @@ interface PassProducerEntry {
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly pageNumberFormat: string | undefined;
   readonly compatibilityMode: number | undefined;
-  readonly dictionaryEpoch: number;
   readonly producer: string;
 }
 
@@ -102,14 +100,13 @@ function passProducerEntryMatches(
     entry.displayMode === displayMode &&
     entry.authorFilter === authorFilter &&
     entry.pageNumberFormat === pageNumberFormat &&
-    entry.compatibilityMode === compatibilityMode &&
-    entry.dictionaryEpoch === dictionaryWordSegmenterEpoch()
+    entry.compatibilityMode === compatibilityMode
   );
 }
 
 /**
- * The per-pass producer: base plus cascade, note-mark, default-tab, display-mode,
- * page-number-format, and dictionary-segmenter tokens.
+ * The per-pass producer: base plus cascade, note-mark, default-tab, display-mode and
+ * page-number-format tokens.
  *
  * `pageNumberFormat` is the section's `w:pgNumType/@w:fmt` as the body flow MEASURES against
  * it, the format the body page-field context carries. Body placeholders and their finalize
@@ -146,7 +143,6 @@ export function passProducerOf(
   ) {
     return entry.producer;
   }
-  const dictionaryEpoch = dictionaryWordSegmenterEpoch();
   const producer =
     (base ?? 'unversioned-measurer') +
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
@@ -155,9 +151,7 @@ export function passProducerOf(
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
     (authorFilter ? `|reviewers:${authorFilter.cacheKey}` : '') +
     (pageNumberFormat !== undefined ? `|pnf:${pageNumberFormat}` : '') +
-    (compatibilityMode !== undefined ? `|compat:${compatibilityMode}` : '') +
-    // An installed dictionary segmenter moves Thai, Lao, Khmer, and Myanmar breaks.
-    (dictionaryEpoch === 0 ? '' : `|dwb:${dictionaryEpoch}`);
+    (compatibilityMode !== undefined ? `|compat:${compatibilityMode}` : '');
   const fresh: PassProducerEntry = {
     base,
     noteMarks,
@@ -166,7 +160,6 @@ export function passProducerOf(
     authorFilter,
     pageNumberFormat,
     compatibilityMode,
-    dictionaryEpoch,
     producer,
   };
   if (styleCascade) passProducersByCascade.set(styleCascade, fresh);

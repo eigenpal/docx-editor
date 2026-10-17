@@ -109,14 +109,18 @@ export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
  */
 export const isStackingSign = (cp: number | undefined): boolean => cp === 0x17d2 || cp === 0x1039;
 
+const COMBINING_MARK = /^\p{M}$/u;
+
 /**
- * Marks that repeat or abbreviate the word before them: Thai U+0E46 and U+0E2F, Lao U+0EC6
- * and U+0EAF, and Khmer U+17D7. A segmenter may report a word boundary before them, but no
- * dictionary cut or emergency cut falls there, whatever segmenter is installed; only a space,
- * zero-width space, tab, or dash before one breaks.
+ * Whether the code point is a combining mark (general category M, UAX #14 class CM), which
+ * never starts a line. Grapheme rules end a cluster before some spacing marks, such as the
+ * Myanmar vowel signs U+102B and U+102C and the visarga U+1038, but a line break there would
+ * tear the vowel from its consonant (`လေ` + `း`, `သွ` + `ား`). Below U+0300 nothing is a
+ * mark, so ASCII text skips the test.
  */
-export const isRepetitionMark = (cp: number): boolean =>
-  cp === 0x0e46 || cp === 0x0e2f || cp === 0x0ec6 || cp === 0x0eaf || cp === 0x17d7;
+export function isCombiningMark(cp: number | undefined): boolean {
+  return cp !== undefined && cp >= 0x0300 && COMBINING_MARK.test(String.fromCodePoint(cp));
+}
 
 /** U+200B ZERO WIDTH SPACE: an invisible break opportunity, common in Thai and Khmer text. */
 export const ZERO_WIDTH_SPACE = '\u200b';
@@ -257,10 +261,15 @@ export function cjkCutAllowedBetween(
  */
 export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
-  // No line starts with a zero-width space, even after an emergency cut, nor with a space
-  // that ink follows. A cut where only line-end whitespace remains hangs that whitespace.
+  // No line starts with a zero-width space or a combining mark, even after an emergency cut,
+  // nor right after a stacking sign, nor with a space that ink follows. A cut where only
+  // line-end whitespace remains hangs that whitespace.
   const next = text.charCodeAt(index);
-  if (next === 0x200b || isRepetitionMark(next) || isStackingSign(text.charCodeAt(index - 1)))
+  if (
+    next === 0x200b ||
+    isCombiningMark(text.codePointAt(index)) ||
+    isStackingSign(text.charCodeAt(index - 1))
+  )
     return false;
   if (next === 0x20 && withoutLineEndWhitespace(text).length > index) return false;
   return cjkCutAllowedBetween(lastCodePointOf(text.slice(0, index)), text.codePointAt(index));
@@ -270,12 +279,12 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
  * Whether a cluster boundary exists between two adjacent code points, under the active
  * grapheme boundary, memoized by the pair.
  *
- * Asked at a piece seam whose second code point is at or above U+0300, and at each
- * dictionary word cut. ASCII seams never reach it.
+ * Asked at a piece seam whose second code point is at or above U+0300. ASCII seams never
+ * reach it.
  */
 const clusterBreakCache = new Map<number, boolean>();
 let clusterBreakEpoch = -1;
-export function clusterBreaksBetween(before: number, after: number): boolean {
+function clusterBreaksBetween(before: number, after: number): boolean {
   const epoch = graphemeBoundaryEpoch();
   if (clusterBreakEpoch !== epoch || clusterBreakCache.size >= 2048) {
     clusterBreakCache.clear();
@@ -344,8 +353,8 @@ export function lineOpenDecisionAt(
   const firstUnit = candidate.charCodeAt(0);
   // UAX #14 LB7: never break before a zero-width space, even after a space.
   if ((firstUnit === 0x200b && lastUnit !== 0) || isStackingSign(lastUnit)) return 'forbidden';
-  // A repetition mark opens a line only after a space, zero-width space, tab, or dash.
-  if (!opportunity && isRepetitionMark(firstUnit)) return 'forbidden';
+  // A combining mark never opens a line, even where grapheme rules end a cluster before it.
+  if (lastUnit !== 0 && isCombiningMark(candidate.codePointAt(0))) return 'forbidden';
   if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
     // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below
     // U+0300 no code point extends a cluster, so ASCII seams skip the check.

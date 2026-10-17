@@ -8,7 +8,7 @@ import { segmentGraphemes } from './grapheme.ts';
 import { isCjk, type CjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
 import { canHangCjkPunctuation } from './cjk-spacing.ts';
 import { formatRevisionOf } from './revision-projection.ts';
-import { withoutLineEndWhitespace } from './trailing-spaces.ts';
+import { withoutTrailingSpaces } from './trailing-spaces.ts';
 import { withLayoutDerivedSpacing } from './layout-derived-spacing.ts';
 
 const OPENING = /^[〈《「『【〔〖〘〚（［｛]$/u;
@@ -355,7 +355,7 @@ export function createCjkOpticalFitter(
     let hasVisiblePrefix = false;
     for (let index = candidates.length - 1; index >= 0; index--) {
       const candidate = candidates[index]!;
-      const visible = withoutLineEndWhitespace(candidate.text);
+      const visible = withoutTrailingSpaces(candidate.text);
       trailingWidth += measureDisplayText(
         candidate.text.slice(visible.length),
         styleForFontSlot(candidate.style, candidate.fontSlot),

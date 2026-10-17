@@ -1,6 +1,6 @@
 // Grapheme-safe chopping for an unbroken word that is wider than the line measure.
 
-import { isRepetitionMark, isStackingSign } from './cjk-line-break.ts';
+import { isCombiningMark, isStackingSign } from './cjk-line-break.ts';
 import { segmentGraphemes } from './grapheme.ts';
 import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
@@ -123,7 +123,7 @@ export function chopOversizedWord(
     if (fitTo === graphemeFrom) fitTo += 1;
     const measuredFit = fitTo;
     fitTo = acceptedCut(text, graphemes, graphemeFrom, fitTo, options.cutAllowedAt);
-    // A stacked consonant (after a Khmer coeng or Myanmar virama) or a repetition mark that
+    // A stacked consonant (after a Khmer coeng or Myanmar virama) or a combining mark that
     // would overflow a line with text on it moves to the next line with the letters before
     // it, rather than hanging past the measure as a kinsoku push-out does.
     if (
@@ -131,7 +131,7 @@ export function chopOversizedWord(
       options.lineHasText() &&
       !(utf16From === 0 && options.keepWithPrevious) &&
       (isStackingSign(text.charCodeAt(graphemes[measuredFit - 1]!.utf16To - 1)) ||
-        isRepetitionMark(text.charCodeAt(graphemes[measuredFit - 1]!.utf16To)))
+        isCombiningMark(text.codePointAt(graphemes[measuredFit - 1]!.utf16To)))
     ) {
       options.closeLine();
       brokeLine = true;

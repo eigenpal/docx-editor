@@ -1,8 +1,10 @@
-// A space that a zero-width space follows hangs at the line end in alignment too (#1384).
+// A space that a zero-width space follows, at the end of a line (#1384).
 //
-// Line breaking hangs "space + U+200B" like a plain space. Right, centered, justified, and
-// right-to-left justified lines must place their ink exactly where the same line with a plain
-// space puts it. The measurer gives U+200B no width, as a shaped font does.
+// The zero-width space stays at the end of the line it ends. When the space before it fits,
+// the space is content: a right-aligned line ends one space short of the measure, and a
+// centered one shifts by half a space. It hangs only when it overflows. Inside a justified
+// line, "space + U+200B" is a slot like a plain space. The measurer gives U+200B no width, as
+// a shaped font does.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
@@ -58,37 +60,39 @@ const geometry = (layout: SemanticLayout) =>
 const lay = (jc: string, text: string, rtl = false) =>
   geometry(layoutSemanticDocument(document(jc, text, rtl), 1, { measurer }));
 
-const CASES: [string, string][] = [
-  ['aaaa ​bbbbbbbbb', 'aaaa bbbbbbbbb'],
-  ['aa ​bb ​cc ​dddddddd', 'aa bb cc dddddddd'],
-  ['aaaa ​bbbb ​cccc', 'aaaa bbbb cccc'],
-  ['ฉันอยาก ​กินข้าว', 'ฉันอยาก กินข้าว'],
-];
-
-describe('a space before a zero-width space hangs in alignment', () => {
-  for (const jc of ['right', 'center', 'both']) {
-    test(`${jc}: the same geometry as a plain space`, () => {
-      for (const [spaced, plain] of CASES) expect(lay(jc, spaced)).toEqual(lay(jc, plain));
-    });
-  }
-
-  test('right: the ink of a line ending in a space and a zero-width space ends at the measure', () => {
-    const [first] = geometry(
-      layoutSemanticDocument(document('right', 'aaaa ​bbbbbbbbb'), 1, { measurer })
-    );
-    const [text, x] = first![0]! as [string, number, number];
-    expect(text).toBe('aaaa ');
-    expect(x + 24).toBeCloseTo(MEASURE, 5);
+/** The ink end of each line: the last span with ink, without spaces and zero-width spaces. */
+const inkEnds = (rows: ReturnType<typeof lay>) =>
+  rows.map((line) => {
+    const spans = line as [string, number, number][];
+    const last = [...spans].reverse().find(([text]) => text.trim() !== '')!;
+    return Math.round((last[1] + last[0].trimEnd().length * 6) * 100) / 100;
   });
 
-  test('right-to-left justified text matches a plain space', () => {
-    for (const [spaced, plain] of [
-      ['אאאא ​בבבב ​גגגג', 'אאאא בבבב גגגג'],
-      ['אא ​בב ​גג ​דדדדדדדד', 'אא בב גג דדדדדדדד'],
-    ] as const) {
-      expect(lay('both', spaced, true)).toEqual(lay('both', plain, true));
-      expect(lay('left', spaced, true)).toEqual(lay('left', plain, true));
-    }
+describe('a space before a zero-width space counts at the line end when it fits', () => {
+  test('right: the ink ends one space short of the measure', () => {
+    // "aaaa " + U+200B fits (30pt): the space is content.
+    expect(inkEnds(lay('right', 'aaaa \u200bbbbbbbbbb'))).toEqual([MEASURE - 6, MEASURE]);
+    // A plain space at the line end still hangs.
+    expect(inkEnds(lay('right', 'aaaa bbbbbbbbb'))).toEqual([MEASURE, MEASURE]);
+  });
+
+  test('right: a space that overflows hangs', () => {
+    // "aaaaaaaaa" fills 54pt of 55; the space after it overflows and hangs.
+    expect(inkEnds(lay('right', 'aaaaaaaaa \u200bbb'))).toEqual([MEASURE, MEASURE]);
+  });
+
+  test('center: the line shifts by half a space', () => {
+    const spaced = inkEnds(lay('center', 'aaaa \u200bbbbbbbbbb'))[0]!;
+    const plain = inkEnds(lay('center', 'aaaa bbbbbbbbb'))[0]!;
+    expect(plain - spaced).toBeCloseTo(3, 5);
+  });
+
+  test('justify: a stretched line ends one space short, and inner slots stretch', () => {
+    const rows = lay('both', 'aa \u200bbb \u200bcc \u200bdddddddd');
+    expect(inkEnds(rows)[0]).toBeCloseTo(MEASURE - 6, 5);
+    const xs = (rows[0] as [string, number, number][]).map(([, x]) => x);
+    // 1pt of slack over the two inner slots; the space closing the line takes none.
+    expect(xs).toEqual([0, 18.5, 37]);
   });
 
   test('on a justified line the caret after a stretched space is at its painted end', () => {
@@ -108,6 +112,6 @@ describe('a space before a zero-width space hangs in alignment', () => {
     const apart = carets('aa ~\u200b~bb ~\u200b~cc ~\u200b~dd ~\u200b~eeeeeeee');
     expect(together).toEqual(apart);
     expect(together[3]).toBeCloseTo(together[4]!, 5);
-    expect(together[3]).toBeGreaterThan(18.5);
+    expect(together[3]).toBeGreaterThan(18.25);
   });
 });

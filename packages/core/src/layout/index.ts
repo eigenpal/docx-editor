@@ -142,13 +142,6 @@ export {
   WORD_SEGMENTER_LOCALE,
 } from './word-segment.ts';
 export {
-  type DictionaryScript,
-  type DictionaryWordSegmenter,
-  isDictionaryWordBreakSupported,
-  setDictionaryWordSegmenter,
-  resetDictionaryWordSegmenter,
-} from './dictionary-word-breaks.ts';
-export {
   type OperationSnapshot,
   type OperationSnapshotField,
   type OperationSnapshotGuard,

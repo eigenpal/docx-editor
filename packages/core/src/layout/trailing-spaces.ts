@@ -12,10 +12,12 @@ export function withoutTrailingSpaces(text: string): string {
 }
 
 /**
- * `text` without the whitespace that hangs at a line end: the trailing run of U+0020 spaces
- * and zero-width spaces, from its first U+0020 on. A zero-width space glues to the space
- * before it (no break between them), so `word` + space + U+200B hangs as one space would;
- * zero-width spaces with no space before them stay. One backward scan, linear in the run.
+ * `text` without the whitespace that may hang at a line end when it overflows: the trailing
+ * run of U+0020 spaces and zero-width spaces, from its first U+0020 on. A zero-width space
+ * glues to the space before it (no break between them), so `word` + space + U+200B hangs
+ * as one space would; zero-width spaces with no space before them stay. A space before a
+ * zero-width space that fits the line is content, so alignment reads `withoutTrailingSpaces`.
+ * One backward scan, linear in the run.
  */
 export function withoutLineEndWhitespace(text: string): string {
   let start = text.length;
@@ -28,9 +30,12 @@ export function withoutLineEndWhitespace(text: string): string {
   return firstSpace < 0 ? text : text.slice(0, firstSpace);
 }
 
-/** Whether `text` ends in whitespace that hangs at a line end. */
-export function endsWithLineEndWhitespace(text: string): boolean {
-  return withoutLineEndWhitespace(text).length < text.length;
+/**
+ * Whether `text` ends in a space, ignoring zero-width spaces after it: a justification slot,
+ * and a space whose width depends on whether it hangs.
+ */
+export function endsWithSpaceSlot(text: string): boolean {
+  return withoutTrailingZeroWidthSpaces(text).endsWith(' ');
 }
 
 /**

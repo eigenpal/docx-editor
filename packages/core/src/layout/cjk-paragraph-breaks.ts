@@ -1,24 +1,16 @@
 // Paragraph-wide boundary analysis. A formatting, revision, or font-slot seam is
 // not a Unicode boundary: segment the visible text once, then map cuts to pieces.
-// East Asian text takes the table below. Dictionary-script text (Thai, Lao, Khmer,
-// Myanmar) without East Asian text takes `dictionary-paragraph-breaks.ts`.
 import type { FieldAwarePiece } from './field-projection.ts';
 import { segmentGraphemes } from './grapheme.ts';
-import { dictionaryWordBreaks, hasDictionaryScriptText } from './dictionary-word-breaks.ts';
-import {
-  paragraphWordCuts,
-  isParagraphText,
-  paragraphBreakText,
-  withDictionaryCuts,
-} from './dictionary-piece-cuts.ts';
-import { dictionaryParagraphBreaks } from './dictionary-paragraph-breaks.ts';
+import { isParagraphText, paragraphBreakText, paragraphWordCuts } from './paragraph-word-cuts.ts';
+import { paragraphWordBreaks } from './paragraph-word-breaks.ts';
 import {
   CJK_NO_BREAK_AFTER,
   CJK_NO_BREAK_BEFORE,
   isIdeographicForLineBreak,
   lastCodePointOf,
   NO_BREAK_CHARACTER,
-  isRepetitionMark,
+  isCombiningMark,
   isStackingSign,
   wordBoundaries,
   ZERO_WIDTH_SPACE,
@@ -52,7 +44,8 @@ const isText = isParagraphText;
 /**
  * Paragraph-wide break analysis, shared by line placement and the anchor-line probe.
  * `decision` takes the text placed before the candidate and the candidate itself, which the
- * dictionary-only analysis passes to `lineOpenDecisionAt`; the East Asian table ignores them.
+ * per-piece analysis (`paragraph-word-breaks.ts`) passes to `lineOpenDecisionAt`; the East
+ * Asian table ignores them.
  */
 export interface CjkParagraphBreaks {
   boundaries(piece: FieldAwarePiece): readonly number[];
@@ -65,41 +58,26 @@ export interface CjkParagraphBreaks {
   cutAllowed(piece: FieldAwarePiece, candidateStart: number, index: number): boolean;
 }
 
-/**
- * Whether a seam puts a repetition mark after a letter. The paragraph table holds U+FFFC for
- * a field or picture, so the seam reads the real text placed before the piece instead.
- */
-function repetitionMarkGluedAt(lastEmitted: string, text: string): boolean {
-  return (
-    lastEmitted.length > 0 &&
-    isRepetitionMark(text.codePointAt(0) ?? 0) &&
-    !/[\s\u200b\-\u2010\u2013\u2014]$/u.test(lastEmitted)
-  );
-}
-
 export function cjkParagraphBreaks(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography
 ): CjkParagraphBreaks | null {
-  const eastAsianParagraph =
-    policy.characterWrap ||
-    pieces.some(
+  if (
+    !policy.characterWrap &&
+    !pieces.some(
       (piece) =>
         /[\u1100-\u11ff\u2e80-\ud7ff\uf900-\uffef\u{20000}-\u{323af}]/u.test(piece.text) ||
         eastAsianLanguage(piece.props)
-    );
-  // Thai, Lao, Khmer, and Myanmar text without East Asian text keeps the per-run rules and
-  // adds its dictionary cuts, as does a run that opens with a dash; any other paragraph has
-  // no paragraph-wide analysis.
-  if (!eastAsianParagraph) {
+    )
+  ) {
+    // A run that opens with a dash needs the text before it; any other paragraph without
+    // East Asian text has no paragraph-wide analysis.
     const cuts = paragraphWordCuts(pieces);
-    return cuts ? dictionaryParagraphBreaks(cuts) : null;
+    return cuts ? paragraphWordBreaks(cuts) : null;
   }
   // Layout-owned atoms form barriers. Their display characters have no one-to-one
   // model mapping and must not become inter-character placement candidates.
   const { text, starts } = paragraphBreakText(pieces);
-  // Dictionary words beside East Asian text, found once over the whole paragraph.
-  const dictionary = new Set(dictionaryWordBreaks(text));
   const clusters = segmentGraphemes(text);
   const decisions = new Map<number, LineOpenDecision>([
     [0, 'opens'],
@@ -160,10 +138,9 @@ export function cjkParagraphBreaks(
       continue;
     }
     // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
-    // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base.
-    // A repetition mark opens a line only after a space, zero-width space, tab, or dash.
-    const repeats = isRepetitionMark(after) && !latinCuts.has(at) && !/\s$/u.test(left.text);
-    if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before) || repeats) {
+    // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base, nor
+    // before a combining mark such as a Myanmar spacing vowel.
+    if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before) || isCombiningMark(after)) {
       decisions.set(at, 'forbidden');
       continue;
     }
@@ -227,7 +204,6 @@ export function cjkParagraphBreaks(
     const koreanWord = isHangul(beforeBase) && isHangul(after) && !wrapCharacters;
     const opens =
       latinCuts.has(at) ||
-      dictionary.has(at) ||
       /\s$/u.test(left.text) ||
       /^\s/u.test(right.text) ||
       (eastAsian && !koreanWord) ||
@@ -238,10 +214,7 @@ export function cjkParagraphBreaks(
   for (const piece of pieces) {
     const start = starts.get(piece)!;
     if (!isText(piece)) {
-      // A field result breaks at its own spaces and dictionary words, never per ideograph.
-      const own = wordBoundaries(piece.text, false);
-      const words = hasDictionaryScriptText(piece.text) ? dictionaryWordBreaks(piece.text) : [];
-      boundaries.set(piece, words.length > 0 ? withDictionaryCuts(own, new Set(words)) : own);
+      boundaries.set(piece, wordBoundaries(piece.text, false));
       continue;
     }
     const cuts: number[] = [];
@@ -256,12 +229,8 @@ export function cjkParagraphBreaks(
   }
   return {
     boundaries: (piece) => boundaries.get(piece)!,
-    decision: (piece, offset, lastEmitted) =>
-      offset === 0 && repetitionMarkGluedAt(lastEmitted, piece.text)
-        ? 'forbidden'
-        : !isText(piece)
-          ? 'opens'
-          : (decisions.get(starts.get(piece)! + offset) ?? 'forbidden'),
+    decision: (piece, offset) =>
+      !isText(piece) ? 'opens' : (decisions.get(starts.get(piece)! + offset) ?? 'forbidden'),
     cutAllowed: (piece, candidateStart, index) =>
       decisions.get(starts.get(piece)! + candidateStart + index) !== 'forbidden' &&
       decisions.has(starts.get(piece)! + candidateStart + index),

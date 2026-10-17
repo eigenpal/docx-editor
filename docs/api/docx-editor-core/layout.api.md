@@ -739,12 +739,6 @@ export function deriveNoteDisplayMarks(noteKind: NoteKind, references: readonly 
 export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind, references: readonly NoteReferenceSite[], resolveProps: (sectionIndex: number) => ResolvedNoteProperties): readonly NoteDisplayMark[];
 
 // @public
-export type DictionaryScript = 'thai' | 'lao' | 'khmer' | 'myanmar';
-
-// @public
-export type DictionaryWordSegmenter = (run: string) => readonly number[];
-
-// @public
 export function displayText(text: string, style: ResolvedRunStyle): string;
 
 // @public
@@ -1640,9 +1634,6 @@ export function isContentControlContent(node: OoxmlNode): node is ContentControl
 
 // @public
 export function isCumulativeGeometryTrustedFromLineOrigin(run: ShapedRun, lineStartUtf16Offset: number, utf16Offset: number): boolean;
-
-// @public
-export function isDictionaryWordBreakSupported(script: DictionaryScript): boolean;
 
 // @public
 export function isFurniturePoint(layout: SemanticLayout, point: HitPoint): boolean;
@@ -2963,9 +2954,6 @@ export interface RegisteredFieldLink {
 }
 
 // @public
-export function resetDictionaryWordSegmenter(): void;
-
-// @public
 export function resetGraphemeBoundary(): void;
 
 // @public
@@ -3995,9 +3983,6 @@ export interface SemanticTrackedChangeArtifactRecord {
     // (undocumented)
     readonly text: string;
 }
-
-// @public
-export function setDictionaryWordSegmenter(segmenter: DictionaryWordSegmenter | null): void;
 
 // @public
 export function setGraphemeBoundary(boundary: GraphemeBoundary): void;

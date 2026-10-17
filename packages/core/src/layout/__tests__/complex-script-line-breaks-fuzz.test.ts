@@ -1,24 +1,26 @@
-// Seeded property test for dictionary word breaks (#1384).
+// Seeded property test for Thai, Lao, Khmer, and Myanmar line breaking (#1384).
 //
 // Random Thai and mixed-script paragraphs with spaces, zero-width spaces, no-break spaces,
 // dashes, hidden runs, tracked insertions, and random formatting, split into random runs and
-// laid out at random widths. The oracle is independent of the engine: word boundaries come
-// from `Intl.Segmenter` directly, and the space, zero-width-space, and dash rules are written
-// out here. Every case checks:
+// laid out at random widths. The oracle is written out here, independent of the engine:
+// unspaced text of these scripts wraps at any cluster that fits, never at a dictionary word;
+// a line may end after a space run, a zero-width space, a dash between letters, or a tab. An
+// emergency cut never splits a grapheme cluster, never follows a Khmer coeng or Myanmar
+// virama, and never precedes a combining mark (a Myanmar spacing vowel or visarga) or a
+// zero-width space. Every case checks:
 //
 // 1. Lines concatenate back to the visible text.
-// 2. Every break is at a grapheme cluster boundary.
-// 3. Every break is a legal break (a dictionary word boundary, after a space run, after a
-//    zero-width space, or after a dash between letters). Any other break is a chop, legal
-//    only inside a word wider than the line.
+// 2. No line starts with a space or a zero-width space.
+// 3. Every break is a legal break, or an emergency cut at an allowed stop inside a word wider
+//    than the line.
 // 4. Every line fits the measure, unless it is a piece of a word wider than the measure.
-// 5. No line breaks early: the next word never fits after a line that ends at a legal break.
+// 5. No line breaks early: after a legal break the next word does not fit, and after an
+//    emergency cut the next cluster does not fit.
 // 6. Runs split between clusters, with any formatting or hidden text, break where one plain
 //    run breaks.
-// 7. The AutoFit minimum equals the widest word, and is at most the minimum without
-//    dictionary data.
-// 8. Right alignment puts the ink end of every line that fits at the measure, so hanging
-//    spaces and zero-width spaces never count as content.
+// 7. The AutoFit minimum equals the widest word: an unspaced run is one segment.
+// 8. Right alignment puts the content of every line at the measure. A space before a
+//    zero-width space is content while it fits, and hangs when it overflows.
 //
 // A second generator adds fields, inline pictures, tabs, and positional tabs, and checks
 // properties 1 to 3 through full document layout. A third edits Thai paragraphs at random and
@@ -26,17 +28,13 @@
 //
 // Determinism: fixed seeds and an inline mulberry32 PRNG. A failure names the seed and case.
 
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   readOoxmlPart,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import {
-  resetDictionaryWordSegmenter,
-  setDictionaryWordSegmenter,
-} from '../dictionary-word-breaks.ts';
 import { segmentGraphemes } from '../grapheme.ts';
 import { createLayoutSession, layoutSemanticDocument, type LayoutSession } from '../index.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
@@ -51,7 +49,7 @@ const UNIT = 6;
 const fixed = createFixedMeasurer(UNIT, 14);
 const measurer: TextMeasurer = {
   ...fixed,
-  measure: (text, style) => fixed.measure(text.replace(/\u200b/gu, ''), style),
+  measure: (text, style) => fixed.measure(text.replace(/​/gu, ''), style),
 };
 
 function mulberry32(seed: number): () => number {
@@ -67,58 +65,20 @@ function mulberry32(seed: number): () => number {
 
 // ── Independent oracle ─────────────────────────────────────────────────────────
 
-const SCRIPTS = [/\p{Script=Thai}/u, /\p{Script=Lao}/u, /\p{Script=Khmer}/u, /\p{Script=Myanmar}/u];
-const LETTER_OR_MARK = /[\p{L}\p{M}]/u;
-const scriptIndex = (ch: string): number =>
-  LETTER_OR_MARK.test(ch) ? SCRIPTS.findIndex((script) => script.test(ch)) : -1;
-const segmenter = new Intl.Segmenter('und', { granularity: 'word' });
-
-/** Word boundaries inside each same-script run of letters, straight from `Intl.Segmenter`. */
-function oracleDictionaryCuts(text: string): Set<number> {
-  const cuts = new Set<number>();
-  let index = 0;
-  while (index < text.length) {
-    const script = scriptIndex(text[index]!);
-    if (script < 0) {
-      index += 1;
-      continue;
-    }
-    let end = index + 1;
-    while (end < text.length && scriptIndex(text[end]!) === script) end += 1;
-    for (const part of segmenter.segment(text.slice(index, end)))
-      // A repetition or abbreviation mark never starts a line.
-      if (part.index > 0 && !ORACLE_NO_LINE_START.includes(text[index + part.index]!))
-        cuts.add(index + part.index);
-    index = end;
-  }
-  return cuts;
-}
-
 const DASHES = '-‐–—';
-const ORACLE_SIGNS = '\u0e5a\u0e5b\u17d4\u17d5\u17d8\u17da\u104a\u104b';
-/** Thai vowels that follow a consonant, and the repetition and abbreviation marks. */
-const ORACLE_NO_LINE_START = '\u0e30\u0e32\u0e33\u0e45\u0e46\u0e2f\u0ec6\u0eaf\u17d7';
+const STACKING = /[្္]/u;
+const MARK = /\p{M}/u;
 
-/** Legal breaks, never before a space: after a space run, a zero-width space, or a dash. */
-function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<number> {
-  const legal = new Set(dictionary);
+/** Legal breaks, never before a space: after a space run, a zero-width space, a dash, a tab. */
+function oracleLegalBreaks(text: string): Set<number> {
+  const legal = new Set<number>();
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]!;
     const next = text[i + 1];
     // Never before a space or a zero-width space (UAX #14 LB7).
-    if (ch === ' ' && next !== undefined && next !== ' ' && next !== '\u200b') legal.add(i + 1);
+    if (ch === ' ' && next !== undefined && next !== ' ' && next !== '​') legal.add(i + 1);
     // ZW SP* ÷: after a zero-width space, past the spaces that follow it.
-    if (ch === '\u200b' && next !== undefined && next !== ' ' && next !== '\u200b')
-      legal.add(i + 1);
-    // A phrase or sentence mark (UAX #14 class BA) breaks after itself before a letter or
-    // digit that may start a line: the oracle's own table, not the engine's.
-    if (
-      next !== undefined &&
-      ORACLE_SIGNS.includes(ch) &&
-      /^[\p{L}\p{N}]$/u.test(next) &&
-      !ORACLE_NO_LINE_START.includes(next)
-    )
-      legal.add(i + 1);
+    if (ch === '​' && next !== undefined && next !== ' ' && next !== '​') legal.add(i + 1);
     if (ch === '\t') {
       if (i > 0) legal.add(i);
       if (next !== undefined) legal.add(i + 1);
@@ -129,7 +89,7 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
       text[i - 1] !== ' ' &&
       next !== undefined &&
       next !== ' ' &&
-      next !== '\u200b' &&
+      next !== '​' &&
       !DASHES.includes(next)
     )
       legal.add(i + 1);
@@ -137,10 +97,26 @@ function oracleLegalBreaks(text: string, dictionary: ReadonlySet<number>): Set<n
   return legal;
 }
 
+/**
+ * Where an emergency cut may fall: a grapheme cluster start that does not follow a stacking
+ * sign and does not precede a combining mark, a space, or a zero-width space.
+ */
+function oracleCutStops(text: string): Set<number> {
+  const stops = new Set<number>();
+  for (const cluster of segmentGraphemes(text)) {
+    const at = cluster.utf16From;
+    if (at === 0) continue;
+    const next = text[at]!;
+    if (STACKING.test(text[at - 1]!) || MARK.test(next) || next === ' ' || next === '​') continue;
+    stops.add(at);
+  }
+  return stops;
+}
+
 /** Width of text: a zero-width space takes none. */
-const widthPt = (text: string): number => text.replace(/\u200b/gu, '').length * UNIT;
-/** Ink width of a line or word: trailing spaces hang and take no width. */
-const inkPt = (text: string): number => widthPt(text.replace(/[ \u200b]+$/u, ''));
+const widthPt = (text: string): number => text.replace(/​/gu, '').length * UNIT;
+/** Ink width of a word: trailing spaces (and zero-width spaces) may hang. */
+const inkPt = (text: string): number => widthPt(text.replace(/[ ​]+$/u, ''));
 
 /** The words between legal breaks, as [start, end) ranges. */
 function wordsOf(text: string, legal: ReadonlySet<number>): [number, number][] {
@@ -180,38 +156,35 @@ const THAI_WORDS = [
   'กรุงเทพมหานคร',
 ];
 const OTHER_WORDS = ['ພາສາລາວ', 'ភាសាខ្មែរ', 'မြန်မာ', 'ABC', 'word', '123', '๒๕๖๕', '2026'];
-const SEPARATORS = [' ', ' ', '-', '  ', '\u200b', '\u200b', '\u00a0', ' \u200b', '\u200b '];
+const SEPARATORS = [' ', ' ', '-', '  ', '​', '​', ' ', ' ​', '​ '];
 
 type Rand = () => number;
 const pick = <T>(rand: Rand, items: readonly T[]): T => items[Math.floor(rand() * items.length)]!;
 
-/** Words of whole Lao, Khmer, and Myanmar sentences, with their sentence marks. */
+/** Words of whole Lao, Khmer, Myanmar, and Thai sentences, with their marks and signs. */
 const SCRIPT_WORDS: readonly (readonly string[])[] = [
   ['ພາສາ', 'ລາວ', 'ເປັນ', 'ທີ່', 'ສວຍງາມ', 'ຫຼາຍ', 'ປະເທດ', 'ຂອງ', 'ຊ້າໆ', 'ຫຼວງພະບາງຯ'],
+  ['ភាសា', 'ខ្មែរ', 'ជា', 'ផ្លូវការ', 'នៃ', 'ប្រទេស', 'កម្ពុជា', 'ស្រុក', 'ផ្សេងៗ', '។', '៕”'],
   [
-    'ភាសា',
-    'ខ្មែរ',
-    'ជា',
-    'ផ្លូវការ',
-    'នៃ',
-    'ប្រទេស',
-    'កម្ពុជា',
-    'ស្រុក',
-    'ផ្សេងៗ',
-    'តិចៗ',
-    '។',
-    '៕',
-    '។»',
-    '៕”',
-    '។!',
+    'မြန်မာ',
+    'ဘာသာ',
+    'စကား',
+    'သည်',
+    'ရုံးသုံး',
+    'ကျောင်း',
+    'သွား',
+    'လေး',
+    'တော်',
+    'ကမ္ဘာ',
+    '။',
+    '၊',
   ],
-  ['မြန်မာ', 'ဘာသာ', 'စကား', 'သည်', 'ရုံးသုံး', 'ဖြစ်', 'ကမ္ဘာ', 'နိုင်ငံ', '။', '၊', '။)', '၊!'],
-  ['ภาษา', 'ไทย', 'กิน', 'ข้าว', '๚', '๚”', '๚ะ', '๛', '๚)', 'ต่างๆ', 'กรุงเทพฯ'],
+  ['ภาษา', 'ไทย', 'กิน', 'ข้าว', '๚', '๚”', '๛', 'ต่างๆ', 'กรุงเทพฯ'],
 ];
 
 function randomText(rand: Rand): string {
   const count = 2 + Math.floor(rand() * 14);
-  // A quarter of the paragraphs are whole Lao, Khmer, or Myanmar sentences.
+  // A quarter of the paragraphs are whole sentences of one script.
   const script = rand() < 0.25 ? pick(rand, SCRIPT_WORDS) : null;
   let text = '';
   for (let i = 0; i < count; i++) {
@@ -225,23 +198,20 @@ function randomText(rand: Rand): string {
   return text.trim() || 'ฉัน';
 }
 
-/** Seams anywhere, including inside a grapheme cluster, or only between clusters. */
+/**
+ * Seams anywhere, including inside a grapheme cluster, or only where an emergency cut could
+ * fall (between clusters, not inside a stack, not before a spacing vowel).
+ */
 function randomSplit(text: string, rand: Rand, clusterAligned = false): string[] {
-  // A Khmer coeng or Myanmar virama joins the next cluster to its own, and a repetition mark
-  // joins the cluster before it, as layout keeps them.
-  const starts = segmentGraphemes(text)
-    .map((cluster) => cluster.utf16From)
-    .filter(
-      (at) =>
-        !/[\u17d2\u1039]/u.test(text[at - 1] ?? '') &&
-        !/[\u0e46\u0e2f\u0ec6\u0eaf\u17d7]/u.test(text[at] ?? '')
-    );
+  const starts = Array.from(oracleCutStops(text));
   const seams = new Set<number>();
   const count = Math.floor(rand() * 5);
-  for (let i = 0; i < count; i++)
+  for (let i = 0; i < count; i++) {
+    if (clusterAligned && starts.length === 0) break;
     seams.add(
       clusterAligned ? pick(rand, starts) : 1 + Math.floor(rand() * Math.max(1, text.length - 1))
     );
+  }
   const sorted = Array.from(seams)
     .filter((at) => at > 0 && at < text.length)
     .sort((a, b) => a - b);
@@ -313,55 +283,43 @@ const minimumOf = (xml: string): number =>
     tableCellStyle: undefined,
   });
 
-/** The legal-or-chop check shared by both generators; returns the dictionary breaks taken. */
+/** The legal-or-cut check shared by both generators; returns the emergency cuts taken. */
 function checkBreaks(
   where: string,
   text: string,
   offsets: readonly number[],
   legal: Set<number>,
-  dictionary: ReadonlySet<number>,
   width: number,
-  chopExempt: (offset: number) => boolean = () => false
+  cutExempt: (offset: number) => boolean = () => false
 ): number {
-  const clusterStarts = new Set(segmentGraphemes(text).map((cluster) => cluster.utf16From));
+  const stops = oracleCutStops(text);
   // A line can hold only an atom (a picture or a positional tab), so it paints no text.
-  clusterStarts.add(text.length);
+  stops.add(text.length);
   legal.add(0);
   legal.add(text.length);
   const words = wordsOf(text, legal);
-  let taken = 0;
+  let cuts = 0;
   for (const offset of offsets) {
-    // A Khmer coeng or Myanmar virama stacks the next consonant: never break after one.
-    expect(
-      /[\u17d2\u1039]/u.test(text[offset - 1] ?? ''),
-      `${where}: break ${offset} after a stack`
-    ).toBe(false);
-    expect(clusterStarts.has(offset), `${where}: break ${offset} inside a cluster`).toBe(true);
-    // A repetition or abbreviation mark starts a line only after a space, zero-width space,
-    // tab, or dash: never at a dictionary cut or an emergency cut.
-    expect(
-      offset < text.length &&
-        '\u0e46\u0e2f\u0ec6\u0eaf\u17d7'.includes(text[offset]!) &&
-        !/[ \t\u200b\-‐–—]/u.test(text[offset - 1] ?? ''),
-      `${where}: line ${offset} starts with a repetition mark`
-    ).toBe(false);
-    if (dictionary.has(offset)) taken += 1;
-    if (legal.has(offset) || chopExempt(offset)) continue;
+    if (legal.has(offset) || cutExempt(offset)) continue;
+    cuts += 1;
+    expect(stops.has(offset), `${where}: cut ${offset} splits a cluster, stack, or vowel`).toBe(
+      true
+    );
     const word = words.find(([start, end]) => start < offset && offset < end);
     expect(word, `${where}: break ${offset} outside the text`).toBeDefined();
     const [from, to] = word!;
     expect(
       inkPt(text.slice(from, to)),
-      `${where}: chop at ${offset} in a word that fits`
+      `${where}: cut at ${offset} in a word that fits`
     ).toBeGreaterThan(width);
   }
-  return taken;
+  return cuts;
 }
 
 // ── Text paragraphs ───────────────────────────────────────────────────────────
 
-/** Each right-aligned line as [ink end, ink width], through full document layout. */
-function rightAlignedLines(xml: string, width: number): [number, number][] {
+/** Each right-aligned line as [content end, content width, text], through full layout. */
+function rightAlignedLines(xml: string, width: number): [number, number, string][] {
   const part = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:jc w:val="right"/></w:pPr>${xml}</w:p>` +
       `<w:sectPr><w:pgSz w:w="${Math.round((width + 20) * 20)}" w:h="40000"/>` +
@@ -369,19 +327,19 @@ function rightAlignedLines(xml: string, width: number): [number, number][] {
     { name: '/word/document.xml', contentType: 'app/xml' }
   );
   if (!part.ok) throw new Error(part.reason);
-  const out: [number, number][] = [];
+  const out: [number, number, string][] = [];
   for (const page of layoutSemanticDocument(part.part, 1, { measurer }).pages)
     for (const fragment of page.fragments)
       if (fragment.kind === 'paragraph')
         for (const line of fragment.lines) {
-          const content = line.spans.filter((span) => inkPt(span.text) > 0);
-          const last = content.at(-1);
-          if (!last) continue;
+          if (line.spans.length === 0) continue;
           const text = line.spans.map((span) => span.text).join('');
-          // Two trailing spaces keep one space of room on right-aligned lines, a separate,
-          // older behavior that this property does not cover.
-          if (/ {2}[\u200b]*$/u.test(text.replace(/\u200b/gu, ''))) continue;
-          out.push([last.box.x - fragment.box.x + inkPt(last.text), inkPt(text)]);
+          // Plain trailing spaces hang. A space before a zero-width space is content while
+          // it fits, and hangs with it when it overflows.
+          let content = text.replace(/ +$/u, '');
+          if (widthPt(content) > width + 0.01) content = content.replace(/[ ​]+$/u, '');
+          const x = line.spans[0]!.box.x - fragment.box.x;
+          out.push([x + widthPt(content), widthPt(content), text]);
         }
   return out;
 }
@@ -389,45 +347,36 @@ function rightAlignedLines(xml: string, width: number): [number, number][] {
 const SEEDS = Array.from({ length: 50 }, (_, index) => 0x1384 + index * 7919);
 const CASES = 80;
 
-afterEach(() => resetDictionaryWordSegmenter());
-
-describe('dictionary word breaks hold their invariants on random text', () => {
+describe('complex-script line breaks hold their invariants on random text', () => {
   for (const seed of SEEDS) {
     test(`seed ${seed}: ${CASES} random paragraphs`, () => {
       const rand = mulberry32(seed);
-      let dictionaryBreaksTaken = 0;
+      let cutsTaken = 0;
       for (let index = 0; index < CASES; index++) {
         const text = randomText(rand);
         const width = UNIT * (3 + Math.floor(rand() * 18)) + (rand() < 0.3 ? 2.5 : 0);
         const where = `seed ${seed}, case ${index}, width ${width}, text ${JSON.stringify(text)}`;
-        const dictionary = oracleDictionaryCuts(text);
-        const legal = oracleLegalBreaks(text, dictionary);
+        const legal = oracleLegalBreaks(text);
 
         // Any seams, including inside clusters: properties 1 to 3.
         const anyRuns = runsXml(randomSplit(text, rand), rand);
         const anyLines = lineTexts(anyRuns, width);
         expect(anyLines.join(''), `${where}: ${anyRuns}`).toBe(text);
-        dictionaryBreaksTaken += checkBreaks(
-          `${where} (any seams)`,
-          text,
-          breakOffsets(anyLines),
-          legal,
-          dictionary,
-          width
-        );
+        checkBreaks(`${where} (any seams)`, text, breakOffsets(anyLines), legal, width);
 
         // One plain run: properties 4 and 5.
         const plain = lineTexts(runXml(text), width);
         const offsets = breakOffsets(plain);
         for (const line of [...anyLines, ...plain])
-          expect(line, `${where}: line start`).not.toMatch(/^[\u200b ]/u);
-        checkBreaks(where, text, offsets, legal, dictionary, width);
+          expect(line, `${where}: line start`).not.toMatch(/^[​ ]/u);
+        cutsTaken += checkBreaks(where, text, offsets, legal, width);
         const words = wordsOf(text, legal);
+        const stops = [...oracleCutStops(text), ...legal].sort((a, b) => a - b);
         let at = 0;
         plain.forEach((line, lineIndex) => {
           const lineStart = at;
           at += line.length;
-          // A piece of an oversized word may be wider than the line only by its last cluster.
+          // A piece of an oversized word may be wider than the line by its last cluster.
           const oversized = words.some(
             ([from, to]) => from <= lineStart && at <= to && inkPt(text.slice(from, to)) > width
           );
@@ -435,12 +384,21 @@ describe('dictionary word breaks hold their invariants on random text', () => {
             expect(inkPt(line), `${where}: line ${lineIndex} overflows`).toBeLessThanOrEqual(
               width + 0.01
             );
-          if (lineIndex === plain.length - 1 || !legal.has(at)) return;
-          const next = words.find(([from]) => from === at)!;
-          expect(
-            widthPt(line) + inkPt(text.slice(next[0], next[1])),
-            `${where}: line ${lineIndex} ends early`
-          ).toBeGreaterThan(width + 0.01);
+          if (lineIndex === plain.length - 1) return;
+          if (legal.has(at)) {
+            const next = words.find(([from]) => from === at)!;
+            expect(
+              widthPt(line) + inkPt(text.slice(next[0], next[1])),
+              `${where}: line ${lineIndex} ends early`
+            ).toBeGreaterThan(width + 0.01);
+          } else {
+            // After an emergency cut the next cluster would not fit: lines fill.
+            const nextStop = stops.find((stop) => stop > at) ?? text.length;
+            expect(
+              widthPt(line) + inkPt(text.slice(at, nextStop)),
+              `${where}: line ${lineIndex} is cut early`
+            ).toBeGreaterThan(width + 0.01);
+          }
         });
 
         // Seams between clusters, with formatting and hidden runs: property 6.
@@ -449,27 +407,21 @@ describe('dictionary word breaks hold their invariants on random text', () => {
           offsets
         );
 
-        // Property 8: right alignment puts the ink end of every line that fits at the measure,
-        // whatever hangs after it (spaces, zero-width spaces).
+        // Property 8. Two trailing spaces keep one space of room, a separate, older behavior.
         if (index % 2 === 0)
-          for (const [end, ink] of rightAlignedLines(alignedRuns, width))
-            if (ink <= width + 0.01)
+          for (const [end, content, line] of rightAlignedLines(alignedRuns, width))
+            if (content <= width + 0.01 && !/ {2}$/u.test(line.replace(/​/gu, '')))
               expect(
                 Math.abs(end - width),
-                `${where}: right-aligned ink ends at ${end}`
+                `${where}: right-aligned ${JSON.stringify(line)} ends at ${end}`
               ).toBeLessThan(0.01);
 
         // Property 7.
         const widest = Math.max(...words.map(([from, to]) => inkPt(text.slice(from, to))));
-        const minimum = minimumOf(anyRuns);
-        expect(minimum, `${where}: AutoFit minimum`).toBeCloseTo(widest, 5);
-        setDictionaryWordSegmenter(null);
-        const unbroken = minimumOf(anyRuns);
-        resetDictionaryWordSegmenter();
-        expect(minimum).toBeLessThanOrEqual(unbroken + 1e-6);
+        expect(minimumOf(anyRuns), `${where}: AutoFit minimum`).toBeCloseTo(widest, 5);
       }
-      // Anti-vacuity: the generator must reach dictionary breaks.
-      expect(dictionaryBreaksTaken).toBeGreaterThan(CASES / 2);
+      // Anti-vacuity: the generator must reach emergency cuts inside unspaced text.
+      expect(cutsTaken).toBeGreaterThan(CASES / 4);
     });
   }
 });
@@ -504,7 +456,7 @@ interface AtomParagraph {
   readonly text: string;
   /** Paint offsets where an atom starts or ends; breaks there are legal. */
   readonly atomEdges: ReadonlySet<number>;
-  /** Text offsets segmented on their own, as a field result is. */
+  /** Text offsets of field results. */
   readonly fieldRanges: readonly [number, number][];
 }
 
@@ -568,11 +520,10 @@ function documentLines(xml: string, width: number): string[] {
 const ATOM_SEEDS = Array.from({ length: 12 }, (_, index) => 0xa70 + index * 104729);
 const ATOM_CASES = 40;
 
-describe('dictionary word breaks beside fields, pictures, and tabs', () => {
+describe('complex-script line breaks beside fields, pictures, and tabs', () => {
   for (const seed of ATOM_SEEDS) {
     test(`seed ${seed}: ${ATOM_CASES} random paragraphs`, () => {
       const rand = mulberry32(seed);
-      let fieldBreaksTaken = 0;
       for (let index = 0; index < ATOM_CASES; index++) {
         const atoms = randomAtomParagraph(rand);
         const width = UNIT * (4 + Math.floor(rand() * 16));
@@ -599,34 +550,19 @@ describe('dictionary word breaks beside fields, pictures, and tabs', () => {
           tabBefore.push(sawTab);
         }
         offsets.pop();
-        // A field result is segmented on its own; the text around it as one run of text.
-        const dictionary = new Set<number>();
-        const plainText = Array.from(atoms.text);
-        for (const [from, to] of atoms.fieldRanges) {
-          for (const cut of oracleDictionaryCuts(atoms.text.slice(from, to)))
-            dictionary.add(from + cut);
-          for (let at = from; at < to; at++) plainText[at] = '￼';
-        }
-        for (const cut of oracleDictionaryCuts(plainText.join(''))) dictionary.add(cut);
-        const legal = oracleLegalBreaks(atoms.text, dictionary);
+        const legal = oracleLegalBreaks(atoms.text);
         for (const edge of atoms.atomEdges) legal.add(edge);
-        // A field edge breaks as a run seam does, beside a space or after a dash only.
-        for (const [from, to] of atoms.fieldRanges)
-          for (const offset of offsets)
-            if (offset > from && offset < to && dictionary.has(offset)) fieldBreaksTaken += 1;
         // After a tab, a word wraps within the room the tab leaves, so it may be cut there.
         checkBreaks(
           `${JSON.stringify(lines)} ${JSON.stringify(offsets)} ${where}`,
           atoms.text,
           offsets,
           legal,
-          dictionary,
           width,
           (offset) => tabBefore[offsets.indexOf(offset)] === true
         );
         for (const line of lines) expect(line, where).not.toMatch(/^[\u200b ]/u);
       }
-      expect(fieldBreaksTaken).toBeGreaterThan(0);
     });
   }
 });

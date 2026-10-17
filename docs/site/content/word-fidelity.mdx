@@ -294,29 +294,13 @@ The configured font resolver also receives faces used by SYMBOL fields and numbe
 
 Paragraph `w:bidi` controls alignment and the order of groups with different run directions. Run `w:rtl` controls the directional context within each group. Unmarked numeric text such as `1 980` keeps its left-to-right order in right-to-left paragraphs. Arabic, Hebrew, and Arabic-Indic digits retain their Unicode direction within that context. Authored Unicode direction controls use paragraph-wide Unicode ordering. Selection and caret positions follow the displayed text without changing source offsets.
 
-### Thai, Lao, Khmer, and Myanmar word breaking
+### Thai, Lao, Khmer, and Myanmar line breaking
 
-Thai, Lao, Khmer, and Myanmar text puts no spaces between words. Lines in these scripts wrap at dictionary word boundaries, in body text, table cells, and field results. Table AutoFit uses the widest word as the narrowest column content. Formatting changes and tracked changes inside a word do not add or remove a break position. Fields, pictures, punctuation, and no-break spaces next to these scripts follow the same rules as in Latin text.
+Thai, Lao, Khmer, and Myanmar text puts no spaces between words. Lines in these scripts wrap at any character cluster that fits, not at dictionary word boundaries. Table AutoFit keeps an unspaced run of these scripts whole as one segment.
 
-A line can end after a zero-width space (U+200B) in any script, and never starts with one. A space next to a zero-width space hangs at the line end like a plain space, so it does not change alignment or justification. Line breaks never split a grapheme cluster, so tone marks and vowel signs stay with their base letter. A Khmer coeng or Myanmar virama keeps the consonant stacked under it on the same line. Repetition and abbreviation marks, such as `ๆ`, `ฯ`, `ໆ`, `ຯ`, and `ៗ`, stay with the word before them. A line can start with one only after a space, a zero-width space, a tab, or a dash. A line can end after a sentence mark, such as `។` or `။`, that text follows directly. A word wider than the line breaks between grapheme clusters.
+To mark a word boundary, insert a zero-width space (U+200B). A line can end after a zero-width space in any script, and the zero-width space stays at the end of that line. A space before a zero-width space counts as text while it fits on the line, so a right-aligned line ends one space short of the margin. The space hangs past the margin only when it does not fit. Inside a justified line, a space followed by a zero-width space stretches and compresses like any other space.
 
-Word boundaries come from `Intl.Segmenter` with ICU dictionary data for each script. Major browsers, Bun, and Node.js builds with full ICU data, which is the default, include this data. Node.js built with `small-icu` and React Native on Hermes do not. In those runtimes, text in these scripts wraps only at spaces, zero-width spaces, and dashes. Break positions come from the ICU dictionaries of the runtime, so they can differ between ICU versions.
-
-To check support, or to supply your own dictionary, use the functions in `@docx-editor.dev/core/layout`. Install the segmenter before you create editors. A change takes effect at the next layout pass. An editor that is already open does not lay out again on its own. It shows the new line breaks after its next layout, for example after the next edit.
-
-```ts
-import {
-  isDictionaryWordBreakSupported,
-  setDictionaryWordSegmenter,
-} from '@docx-editor.dev/core/layout';
-
-// Run this at startup, before you create any editor.
-if (!isDictionaryWordBreakSupported('thai')) {
-  // Return the word boundaries inside one run of Thai, Lao, Khmer, or Myanmar
-  // letters, as UTF-16 offsets between 0 and run.length.
-  setDictionaryWordSegmenter((run) => myDictionary.wordBoundaries(run));
-}
-```
+Line breaks never split a character cluster. A Khmer coeng or Myanmar virama keeps the consonant stacked under it on the same line. Myanmar vowel signs and the visarga, such as `ာ` and `း`, stay with their consonant.
 
 ### East Asian typography
 
