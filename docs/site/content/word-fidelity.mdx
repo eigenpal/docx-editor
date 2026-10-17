@@ -300,7 +300,9 @@ Thai, Lao, Khmer, and Myanmar text puts no spaces between words. Lines in these 
 
 To mark a word boundary, insert a zero-width space (U+200B). A line can end after a zero-width space in any script, and the zero-width space stays at the end of that line. A space before a zero-width space counts as text while it fits on the line, so a right-aligned line ends one space short of the margin. The space hangs past the margin only when it does not fit. Inside a justified line, a space followed by a zero-width space stretches and compresses like any other space.
 
-Line breaks never split a character cluster. A Khmer coeng or Myanmar virama keeps the consonant stacked under it on the same line. Myanmar vowel signs and the visarga, such as `ာ` and `း`, stay with their consonant.
+Line breaks never split a character cluster. A Khmer coeng or Myanmar virama keeps the consonant stacked under it on the same line. Myanmar vowel signs and the visarga, such as `ာ` and `း`, stay with their consonant. A word that starts with a vowel sign after a space, as in Zawgyi-encoded Myanmar, still breaks at the space.
+
+In every script, a dash between letters is a break position even when the text after it starts a new run, so `ALPHA` followed by a run `-PRIME` can wrap after the dash.
 
 ### East Asian typography
 

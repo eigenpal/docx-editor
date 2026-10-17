@@ -122,6 +122,19 @@ export function isCombiningMark(cp: number | undefined): boolean {
   return cp !== undefined && cp >= 0x0300 && COMBINING_MARK.test(String.fromCodePoint(cp));
 }
 
+/**
+ * Whether a combining mark after this code unit continues the text before it, so no line
+ * may break before the mark. After a breaking space, a zero-width space, a tab, or a dash
+ * that breaks after itself, the mark starts a new word instead (UAX #14 LB10), as in
+ * Zawgyi-encoded Myanmar, which stores the vowel sign U+1031 before its consonant.
+ * Undefined (a line start) continues nothing.
+ */
+export function marksContinue(before: number | undefined): boolean {
+  if (before === undefined || before === 0x200b || before === 0x09) return false;
+  const char = String.fromCharCode(before);
+  return !ENDS_WITH_BREAKING_SPACE.test(char) && !BREAK_AFTER_DASH.has(char);
+}
+
 /** U+200B ZERO WIDTH SPACE: an invisible break opportunity, common in Thai and Khmer text. */
 export const ZERO_WIDTH_SPACE = '\u200b';
 
@@ -267,7 +280,7 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   const next = text.charCodeAt(index);
   if (
     next === 0x200b ||
-    isCombiningMark(text.codePointAt(index)) ||
+    (isCombiningMark(text.codePointAt(index)) && marksContinue(text.charCodeAt(index - 1))) ||
     isStackingSign(text.charCodeAt(index - 1))
   )
     return false;
@@ -354,12 +367,15 @@ export function lineOpenDecisionAt(
   // UAX #14 LB7: never break before a zero-width space, even after a space.
   if ((firstUnit === 0x200b && lastUnit !== 0) || isStackingSign(lastUnit)) return 'forbidden';
   // A combining mark never opens a line, even where grapheme rules end a cluster before it.
-  if (lastUnit !== 0 && isCombiningMark(candidate.codePointAt(0))) return 'forbidden';
+  if (marksContinue(lastUnit || undefined) && isCombiningMark(candidate.codePointAt(0)))
+    return 'forbidden';
   if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
     // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below
     // U+0300 no code point extends a cluster, so ASCII seams skip the check.
+    // After a breaking space, a zero-width space, or a tab a mark starts a word, though
+    // grapheme rules join it to the space.
     if (
-      lastUnit !== 0 &&
+      marksContinue(lastUnit || undefined) &&
       firstUnit >= FIRST_CLUSTER_EXTENDER_UNIT &&
       !clusterBreaksBetween(lastUnit, firstUnit)
     )

@@ -11,6 +11,7 @@ import {
   lastCodePointOf,
   NO_BREAK_CHARACTER,
   isCombiningMark,
+  marksContinue,
   isStackingSign,
   wordBoundaries,
   ZERO_WIDTH_SPACE,
@@ -140,7 +141,11 @@ export function cjkParagraphBreaks(
     // UAX #14 LB7: no break before a zero-width space; the break comes after it. Nor after
     // a Khmer coeng or Myanmar virama, which stacks the next consonant under its base, nor
     // before a combining mark such as a Myanmar spacing vowel.
-    if (right.text === ZERO_WIDTH_SPACE || isStackingSign(before) || isCombiningMark(after)) {
+    if (
+      right.text === ZERO_WIDTH_SPACE ||
+      isStackingSign(before) ||
+      (isCombiningMark(after) && marksContinue(before))
+    ) {
       decisions.set(at, 'forbidden');
       continue;
     }

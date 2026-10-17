@@ -312,7 +312,11 @@ function alignLogicalSpans(
     const gapBefore: number[] = [];
     // Zero-width spaces closing the line take no room, so the boundary before them is no slot.
     let slotEnd = Math.min(trailingStart, contentLast + 1);
-    while (slotEnd > 1 && withoutTrailingZeroWidthSpaces(spans[slotEnd - 1]!.text) === '')
+    while (
+      slotEnd > 1 &&
+      spans[slotEnd - 1]!.text.length > 0 &&
+      withoutTrailingZeroWidthSpaces(spans[slotEnd - 1]!.text) === ''
+    )
       slotEnd -= 1;
     for (let index = 1; index < slotEnd; index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);

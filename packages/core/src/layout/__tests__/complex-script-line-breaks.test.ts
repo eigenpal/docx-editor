@@ -145,6 +145,25 @@ describe('clusters that never split', () => {
       expect(line).not.toMatch(/^ာ/u);
   });
 
+  test('a word that starts with a mark after a space still breaks at the space', () => {
+    // Zawgyi-encoded Myanmar stores the vowel sign U+1031 before its consonant.
+    const zawgyi = Array(8).fill('\u1031\u1019\u102c\u1004\u1039').join(' ');
+    const lines = linesOf(`<w:p>${run(zawgyi)}</w:p>`, 72);
+    expect(lines).toEqual(
+      Array(4)
+        .fill(null)
+        .map((_, i) => (i < 3 ? 'ေမာင္ ေမာင္ ' : 'ေမာင္ ေမာင္'))
+    );
+    // Split into runs at the spaces, too, and after a zero-width space or a tab.
+    const words = Array(8).fill('ေမာင္');
+    expect(linesOf(`<w:p>${words.map((word) => run(`${word} `)).join('')}</w:p>`, 72)).toEqual(
+      linesOf(`<w:p>${run(`${zawgyi} `)}</w:p>`, 72)
+    );
+    expect(linesOf(`<w:p>${run(words.join('\u200b'))}</w:p>`, 60)[1]!.startsWith('\u1031')).toBe(
+      true
+    );
+  });
+
   test('a combining mark in the next run stays with its base letter', () => {
     expect(linesOf(`<w:p>${run('abcde')}${run('́fgh')}</w:p>`, 30)).toEqual(['abcdé', 'fgh']);
   });
