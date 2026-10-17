@@ -31,6 +31,7 @@ import {
   type InlineAttributes,
 } from './paragraph-text.ts';
 import { followAnchorAt, insertFollowing, insertTyped } from './paragraph-text-apply.ts';
+import { hasRevisions } from './paragraph-text-revisions.ts';
 import type { DocumentRegistry } from './registry.ts';
 import { awaitingUpdates } from './yjs-items.ts';
 
@@ -143,6 +144,9 @@ export function typedInsertOf(
   if (after && after.key === `c${first}`) return null;
   if (before && before.key === `c${last}` && before.element !== (attributes.t ?? '')) return null;
   if (before?.highSurrogate) return null;
+  // At the start of a text element, the general path writes the revisions against the
+  // character on the left (`rebaseRevisions`), which can differ from the element's own.
+  if (before?.revisions && before.element !== (attributes.t ?? '')) return null;
   return {
     paragraphId,
     text,
@@ -211,21 +215,33 @@ function encodesBack(
   return same;
 }
 
-/** The token at one position of a delta: its content key and its text element. */
+/**
+ * The token at one position of a delta: its content key, its text element, and whether it
+ * holds revision attributes.
+ */
 function tokenAt(
   delta: readonly { insert: unknown; attributes?: InlineAttributes }[],
   position: number
-): { readonly key: string; readonly element: string; readonly highSurrogate: boolean } | null {
+): {
+  readonly key: string;
+  readonly element: string;
+  readonly highSurrogate: boolean;
+  readonly revisions: boolean;
+} | null {
   let at = 0;
   for (const op of delta) {
     const length = typeof op.insert === 'string' ? op.insert.length : 1;
     if (position < at + length) {
-      if (typeof op.insert !== 'string') return { key: 'embed', element: '', highSurrogate: false };
+      const revisions = hasRevisions(op.attributes ?? {});
+      if (typeof op.insert !== 'string') {
+        return { key: 'embed', element: '', highSurrogate: false, revisions };
+      }
       const code = op.insert.charCodeAt(position - at);
       return {
         key: `c${op.insert[position - at]}`,
         element: op.attributes?.t ?? '',
         highSurrogate: code >= 0xd800 && code <= 0xdbff,
+        revisions,
       };
     }
     at += length;

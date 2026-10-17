@@ -48,7 +48,32 @@ export type EditKind =
   | 'deleteParagraph'
   | 'insertRow'
   | 'deleteRow'
+  | TrackedEditKind
   | StructureEditKind;
+
+/**
+ * Edits in suggesting mode and decisions on pending changes. They weigh nothing by default, so
+ * the seeds of every other shape draw the same numbers; the `tracked` shapes turn them on.
+ */
+export type TrackedEditKind =
+  | 'trackedType'
+  | 'trackedDelete'
+  | 'acceptRevision'
+  | 'rejectRevision'
+  | 'acceptAll'
+  | 'rejectAll';
+
+/**
+ * A tracked edit's date, from the seed so a seed replays exactly. Edits get different dates, so
+ * a later change never takes the identity of one a peer decided.
+ */
+function revisionDate(random: () => number): string {
+  const seconds = Math.floor(random() * 86_400);
+  const part = (value: number) => String(value).padStart(2, '0');
+  return `2026-01-01T${part(Math.floor(seconds / 3600))}:${part(Math.floor(seconds / 60) % 60)}:${part(seconds % 60)}Z`;
+}
+
+const REVISION_ELEMENTS = ['ins', 'del'] as const;
 
 export const DEFAULT_WEIGHTS: Record<EditKind, number> = {
   type: 40,
@@ -62,8 +87,56 @@ export const DEFAULT_WEIGHTS: Record<EditKind, number> = {
   deleteParagraph: 3,
   insertRow: 2,
   deleteRow: 1,
+  trackedType: 0,
+  trackedDelete: 0,
+  acceptRevision: 0,
+  rejectRevision: 0,
+  acceptAll: 0,
+  rejectAll: 0,
   ...STRUCTURE_WEIGHTS,
 };
+
+/**
+ * The mix of the `tracked` shapes: authors type and strike in suggesting mode inside, beside
+ * and over each other's pending changes, while others accept and reject those changes.
+ */
+export const TRACKED_WEIGHTS: Partial<Record<EditKind, number>> = {
+  type: 10,
+  delete: 4,
+  trackedType: 30,
+  trackedDelete: 14,
+  acceptRevision: 8,
+  rejectRevision: 7,
+  acceptAll: 1,
+  rejectAll: 1,
+  // No splits or joins: a split or join moves text as copies, and a decision a peer makes at
+  // the same time does not reach the copies, as concurrent formatting does not. That is a
+  // known limit of moved text, which the decision oracle would report on every such seed.
+  split: 0,
+  join: 0,
+  format: 4,
+};
+
+/** A pending change, by the triple a decision names it with, and which element it is. */
+function revisionAt(
+  root: Parameters<typeof elements>[0],
+  random: () => number
+): { readonly revision: Record<string, string>; readonly localName: string } | null {
+  const sites = REVISION_ELEMENTS.flatMap((name) => elements(root, name));
+  if (sites.length === 0) return null;
+  const site = sites[Math.floor(random() * sites.length)]!;
+  if (site.kind === 'textValue') return null;
+  const value = (name: string) =>
+    site.attributes.find((attribute) => attribute.localName === name)?.value;
+  const id = value('id');
+  const author = value('author');
+  if (id === undefined || author === undefined) return null;
+  const date = value('date');
+  return {
+    revision: { id, author, ...(date === undefined ? {} : { date }) },
+    localName: site.localName,
+  };
+}
 
 /** Operations in document coordinates: paragraph, table, and row indexes, not node ids. */
 export type Addressed =
@@ -104,7 +177,9 @@ export const RUN_PROPERTIES = ['b', 'i', 'u', 'strike'] as const;
 export function planEdit(
   store: TreePackageStore,
   random: () => number,
-  weights: Record<EditKind, number>
+  weights: Record<EditKind, number>,
+  /** Who the replica's tracked edits record: each replica is its own author. */
+  author = 'Fuzzer'
 ): Addressed | null {
   const root = store.bodyStore().part.root;
   const paragraphs = elements(root, 'p');
@@ -158,6 +233,48 @@ export function planEdit(
             start: boundary(Math.min(offset, length - 1)),
             end: endBoundary(Math.min(length, offset + span)),
           });
+    case 'trackedType': {
+      // Typed in suggesting mode: the same text a plain keystroke types, under this author.
+      const count = 1 + Math.floor(random() * 4);
+      const start = offset % TYPED.length;
+      const text = [...TYPED, ...TYPED].slice(start, start + count).join('');
+      return at({
+        op: 'insertText',
+        offset,
+        text,
+        revision: { author, date: revisionDate(random) },
+      });
+    }
+    case 'trackedDelete':
+      return length === 0
+        ? null
+        : at({
+            op: 'deleteText',
+            start: boundary(Math.min(offset, length - 1)),
+            end: endBoundary(Math.min(length, offset + span)),
+            revision: { author, date: revisionDate(random) },
+          });
+    case 'acceptRevision':
+    case 'rejectRevision': {
+      const site = revisionAt(root, random);
+      if (!site) return null;
+      return {
+        kind: 'paragraph',
+        op: {
+          op: kind,
+          revision: site.revision,
+          localName: site.localName,
+        } as unknown as TreeDocOp,
+        paragraphs: [pick],
+      };
+    }
+    case 'acceptAll':
+    case 'rejectAll':
+      return {
+        kind: 'paragraph',
+        op: { op: kind === 'acceptAll' ? 'acceptAllRevisions' : 'rejectAllRevisions' } as TreeDocOp,
+        paragraphs: [pick],
+      };
     case 'split':
       return at({ op: 'splitParagraph', offset });
     case 'join': {

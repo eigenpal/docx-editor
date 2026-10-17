@@ -35,6 +35,11 @@ const DELETING = new Set<string>([
   'deleteTableRow',
   'deleteTableColumn',
   'deleteDrawing',
+  // A decision removes text: a rejected insertion, an accepted deletion.
+  'acceptRevision',
+  'rejectRevision',
+  'acceptAllRevisions',
+  'rejectAllRevisions',
 ]);
 
 /** Whether any part of `pkg` holds a paragraph with `id`. */

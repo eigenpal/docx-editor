@@ -18,6 +18,7 @@ import {
   type InlineAttributes,
   type InlineEmbed,
 } from './paragraph-text.ts';
+import { revisionTrail, withoutRevisions } from './paragraph-text-revisions.ts';
 
 /** One position of a paragraph's inline sequence, as shared text holds it. */
 export interface Token {
@@ -29,14 +30,27 @@ export interface Token {
   readonly attributes: InlineAttributes;
   /** Where the token stands in its shared text, which can also hold positions it hides. */
   readonly position?: number;
+  /** The revisions it belongs to (`revisionTrail`), or empty when read without a paragraph. */
+  readonly trail?: string;
+}
+
+/** The paragraph and limits a shared text is read under. */
+export interface TokenContext {
+  readonly limits: DocumentLimits;
+  readonly paragraphId: string;
 }
 
 /** The tokens of a shared text, without the positions `hidden` names. */
-export function tokensOfText(text: Y.Text, hidden?: ReadonlySet<number>): Token[] {
+export function tokensOfText(
+  text: Y.Text,
+  hidden?: ReadonlySet<number>,
+  context?: TokenContext
+): Token[] {
   const tokens: Token[] = [];
   let position = 0;
   for (const op of text.toDelta() as { insert: unknown; attributes?: Record<string, string> }[]) {
     const attributes = op.attributes ?? {};
+    const trail = context ? revisionTrail(attributes, context.limits, context.paragraphId) : '';
     if (typeof op.insert === 'string') {
       const holder = textIdOf(attributes);
       for (let at = 0; at < op.insert.length; at += 1, position += 1) {
@@ -48,6 +62,7 @@ export function tokensOfText(text: Y.Text, hidden?: ReadonlySet<number>): Token[
           insert: op.insert[at]!,
           attributes,
           position,
+          trail,
         });
       }
     } else {
@@ -57,13 +72,14 @@ export function tokensOfText(text: Y.Text, hidden?: ReadonlySet<number>): Token[
       const key =
         typeof embed.n === 'string'
           ? `e${embed.r === 1 ? 'r' : ''}${embed.n}`
-          : `a${attributeSignature(attributes)}`;
+          : anchorKey(attributes, trail);
       tokens.push({
         key,
         strong: key,
         insert: embed as InlineEmbed,
         attributes,
         position: position - 1,
+        trail,
       });
     }
   }
@@ -73,26 +89,28 @@ export function tokensOfText(text: Y.Text, hidden?: ReadonlySet<number>): Token[
 export function tokensOfParagraph(after: OoxmlElement, limits: DocumentLimits): Token[] {
   const paragraphId = after.id;
   // Characters of one run share one attributes object, so each is encoded once.
-  const encoded = new Map<object, InlineAttributes>();
+  const encoded = new Map<object, { attributes: InlineAttributes; trail: string }>();
   return linearizeParagraph(after).items.map((item) => {
-    let attributes = encoded.get(item.attributes);
-    if (!attributes) {
-      attributes = encodeAttributes(item.attributes, paragraphId, limits);
-      encoded.set(item.attributes, attributes);
+    let entry = encoded.get(item.attributes);
+    if (!entry) {
+      const attributes = encodeAttributes(item.attributes, paragraphId, limits);
+      entry = { attributes, trail: revisionTrail(attributes, limits, paragraphId) };
+      encoded.set(item.attributes, entry);
     }
+    const { attributes, trail } = entry;
     if (item.kind === 'char') {
       const key = `c${item.value}`;
       const strong = `${key}\u0000${textIdOf(attributes)}`;
-      return { key, strong, insert: item.value, attributes };
+      return { key, strong, insert: item.value, attributes, trail };
     }
     if (item.kind === 'embed') {
       const insert = embedContent(item);
       // Moving into or out of a run changes the content, so the embed is written again.
       const key = `e${'r' in insert ? 'r' : ''}${item.node.id}`;
-      return { key, strong: key, insert, attributes };
+      return { key, strong: key, insert, attributes, trail };
     }
-    const key = `a${attributeSignature(attributes)}`;
-    return { key, strong: key, insert: { a: 1 }, attributes };
+    const key = anchorKey(attributes, trail);
+    return { key, strong: key, insert: { a: 1 }, attributes, trail };
   });
 }
 
@@ -102,6 +120,15 @@ export type Step =
   | { readonly op: 'ins'; readonly after: number };
 
 const MAX_DIFF_CELLS = 1 << 20;
+
+/**
+ * An empty element's content key: its attributes, with its revisions as the revisions it
+ * belongs to. Shared text can hold a revision under another key or order than the editor's
+ * tree encodes, or hold one the anchor does not belong to; the anchor is still the same.
+ */
+function anchorKey(attributes: InlineAttributes, trail: string): string {
+  return `a${attributeSignature(withoutRevisions(attributes))}${trail}`;
+}
 
 /**
  * The text element a character's shared attributes name, as stored. Stored IDs are relative
@@ -318,20 +345,31 @@ function dropScatteredLetters(steps: Step[], before: readonly Token[]): Step[] {
       for (const step of group) if (step.op === 'ins') inserted += 1;
       return Math.max(inserted, group.length - inserted);
     };
-    const deletes = (group: Step[] | undefined): boolean =>
-      group !== undefined && group.some((step) => step.op === 'del');
+    // A replacement removes letters of the text it types over, in the revisions the kept
+    // letters are in. Letters that go from other revisions, or struck letters, go by a decision,
+    // as an accept or reject of a change makes: the letters between them stay where they are.
+    const deletes = (group: Step[] | undefined, kept: ReadonlySet<string>): boolean =>
+      group !== undefined &&
+      group.some((step) => {
+        if (step.op !== 'del') return false;
+        const token = before[step.before]!;
+        return !isStruck(token) && kept.has(token.trail ?? '');
+      });
     let changed = false;
     const out: Step[] = [];
     groups.forEach((group, index) => {
+      const kept = new Set(
+        group.map((step) => (step.op === 'eq' ? (before[step.before]!.trail ?? '') : ''))
+      );
       const scattered =
         group[0]!.op === 'eq' &&
         group.length <= size(groups[index - 1]) &&
         group.length <= size(groups[index + 1]) &&
         // Only a replacement scatters letters: text typed in between deletes nothing.
-        (deletes(groups[index - 1]) || deletes(groups[index + 1])) &&
+        (deletes(groups[index - 1], kept) || deletes(groups[index + 1], kept)) &&
         group.every((step) => step.op === 'eq' && isPlainLetter(before[step.before]!));
       if (!scattered) {
-        out.push(...group);
+        for (const step of group) out.push(step);
         return;
       }
       changed = true;
@@ -405,6 +443,19 @@ function sameLetters(
   }
 }
 
+const STRUCK_TEXT = /"l":"del(Text|InstrText)"/;
+const STRUCK_REVISION = /\\"l\\":\\"(del|moveFrom)\\"/;
+
+/**
+ * Whether a character is struck: it sits in deleted text, a `w:delText` or `w:delInstrText`
+ * element, or belongs to a deletion. A peer's concurrent strike can leave either one alone.
+ */
+function isStruck(token: Token): boolean {
+  const text = token.attributes.t;
+  if (typeof text === 'string' && STRUCK_TEXT.test(text)) return true;
+  return token.trail !== undefined && STRUCK_REVISION.test(token.trail);
+}
+
 function equalCount(steps: readonly Step[]): number {
   let count = 0;
   for (const step of steps) if (step.op === 'eq') count += 1;
@@ -421,25 +472,98 @@ function scriptOf(
   let i = 0;
   let j = 0;
   for (const [nextBefore, nextAfter] of [...strong, [before.length, after.length] as const]) {
-    // The gap before this strong match: weak ends, then the rest deleted and inserted.
-    let bEnd = nextBefore;
-    let aEnd = nextAfter;
-    // An embed only one side has at a gap's end, as a removed field mark or comment marker,
-    // does not end the letters that match there.
+    // The gap before this strong match: weak ends, then the rest deleted and inserted. Where
+    // the gap's head and tail can each keep a letter, as a letter typed beside an equal one,
+    // the order that keeps more letters in their revisions decides: a kept letter that
+    // changes revision writes a decision over it, which another author's concurrent decision
+    // on that revision would not see.
+    let ends = weakEnds(before, after, i, nextBefore, j, nextAfter, false);
+    const kept = inRevision(ends, before, after);
+    // Only an order that moves a letter out of its revision can lose to the other one.
+    if (kept.inRevision < kept.equal) {
+      const tailFirst = weakEnds(before, after, i, nextBefore, j, nextAfter, true);
+      const other = inRevision(tailFirst, before, after);
+      // Never at the cost of a letter: a letter the gap does not keep loses its identity.
+      if (other.equal >= kept.equal && other.inRevision > kept.inRevision) ends = tailFirst;
+    }
+    // One at a time: a gap can hold more steps than a call takes arguments.
+    for (const step of ends.head) steps.push(step);
+    const tail = ends.tail;
+    ({ i, j } = ends);
+    const { bEnd, aEnd } = ends;
+    if (sameLetters(before, i, bEnd, after, j, aEnd)) {
+      // Only embeds differ, as when a comment's range markers go in around its text: every
+      // letter stays, so the text keeps its identity for a peer who moves it meanwhile.
+      while (i < bEnd || j < aEnd) {
+        if (i < bEnd && j < aEnd && isLetter(before[i]!) && isLetter(after[j]!)) {
+          steps.push({ op: 'eq', before: i, after: j });
+          i += 1;
+          j += 1;
+        } else if (i < bEnd && !isLetter(before[i]!)) {
+          steps.push({ op: 'del', before: i });
+          i += 1;
+        } else {
+          steps.push({ op: 'ins', after: j });
+          j += 1;
+        }
+      }
+    }
+    for (; i < bEnd; i += 1) steps.push({ op: 'del', before: i });
+    for (; j < aEnd; j += 1) steps.push({ op: 'ins', after: j });
+    for (const step of tail) steps.push(step);
+    i = nextBefore;
+    j = nextAfter;
+    if (i < before.length && j < after.length) {
+      steps.push({ op: 'eq', before: i, after: j });
+      i += 1;
+      j += 1;
+    }
+  }
+  return steps;
+}
+
+/** The weak matches at the ends of one gap, and the gap they leave. */
+interface WeakEnds {
+  readonly head: Step[];
+  readonly tail: Step[];
+  readonly i: number;
+  readonly j: number;
+  readonly bEnd: number;
+  readonly aEnd: number;
+}
+
+/**
+ * Match letters by value at a gap's start, then at its end, or with `tailFirst` the other way
+ * round. An embed only one side has at a gap's end, as a removed field mark or comment
+ * marker, does not end the letters that match there.
+ */
+function weakEnds(
+  before: readonly Token[],
+  after: readonly Token[],
+  i: number,
+  bEnd: number,
+  j: number,
+  aEnd: number,
+  tailFirst: boolean
+): WeakEnds {
+  const head: Step[] = [];
+  const tail: Step[] = [];
+  const fromHead = (): void => {
     for (;;) {
       if (i < bEnd && j < aEnd && before[i]!.key === after[j]!.key) {
-        steps.push({ op: 'eq', before: i, after: j });
+        head.push({ op: 'eq', before: i, after: j });
         i += 1;
         j += 1;
       } else if (i < bEnd && j < aEnd && !isLetter(before[i]!) && isLetter(after[j]!)) {
-        steps.push({ op: 'del', before: i });
+        head.push({ op: 'del', before: i });
         i += 1;
       } else if (i < bEnd && j < aEnd && isLetter(before[i]!) && !isLetter(after[j]!)) {
-        steps.push({ op: 'ins', after: j });
+        head.push({ op: 'ins', after: j });
         j += 1;
       } else break;
     }
-    const tail: Step[] = [];
+  };
+  const fromTail = (): void => {
     for (;;) {
       if (bEnd > i && aEnd > j && before[bEnd - 1]!.key === after[aEnd - 1]!.key) {
         bEnd -= 1;
@@ -463,35 +587,33 @@ function scriptOf(
         tail.unshift({ op: 'ins', after: aEnd });
       } else break;
     }
-    if (sameLetters(before, i, bEnd, after, j, aEnd)) {
-      // Only embeds differ, as when a comment's range markers go in around its text: every
-      // letter stays, so the text keeps its identity for a peer who moves it meanwhile.
-      while (i < bEnd || j < aEnd) {
-        if (i < bEnd && j < aEnd && isLetter(before[i]!) && isLetter(after[j]!)) {
-          steps.push({ op: 'eq', before: i, after: j });
-          i += 1;
-          j += 1;
-        } else if (i < bEnd && !isLetter(before[i]!)) {
-          steps.push({ op: 'del', before: i });
-          i += 1;
-        } else {
-          steps.push({ op: 'ins', after: j });
-          j += 1;
-        }
-      }
-    }
-    for (; i < bEnd; i += 1) steps.push({ op: 'del', before: i });
-    for (; j < aEnd; j += 1) steps.push({ op: 'ins', after: j });
-    steps.push(...tail);
-    i = nextBefore;
-    j = nextAfter;
-    if (i < before.length && j < after.length) {
-      steps.push({ op: 'eq', before: i, after: j });
-      i += 1;
-      j += 1;
+  };
+  if (tailFirst) {
+    fromTail();
+    fromHead();
+  } else {
+    fromHead();
+    fromTail();
+  }
+  return { head, tail, i, j, bEnd, aEnd };
+}
+
+/** How many letters weak matches keep, and how many of those stay in the revisions they were in. */
+function inRevision(
+  ends: WeakEnds,
+  before: readonly Token[],
+  after: readonly Token[]
+): { readonly equal: number; readonly inRevision: number } {
+  let equal = 0;
+  let kept = 0;
+  for (const steps of [ends.head, ends.tail]) {
+    for (const step of steps) {
+      if (step.op !== 'eq') continue;
+      equal += 1;
+      if ((before[step.before]!.trail ?? '') === (after[step.after]!.trail ?? '')) kept += 1;
     }
   }
-  return steps;
+  return { equal, inRevision: kept };
 }
 
 /**
@@ -551,7 +673,7 @@ function strongMatches(
       }
     }
   }
-  pairs.push(...tail);
+  for (const pair of tail) pairs.push(pair);
   return pairs;
 }
 

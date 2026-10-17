@@ -87,12 +87,40 @@ export function sharedContent(ydoc: Y.Doc): string {
 export function comparableBody(pkg: OoxmlPackage): string {
   const part = pkg.parts.get(pkg.mainDocumentPart);
   if (!part) return '';
-  return (
+  return joinAdjacentRevisions(
     serializeOoxmlPart(part)
       .replace(/\s(w14:paraId|w14:textId|w:rsid[A-Za-z]*)="[^"]*"/g, '')
       .replace(/\sw:id="[^"]*"/g, '')
       // A new content control takes a random `w:id`, different in every store.
       .replace(/<w:id w:val="[^"]*"\/>/g, '<w:id/>')
+  );
+}
+
+/**
+ * Two adjacent revision elements of one author and date as one, and inside one revision, two
+ * adjacent runs without properties as one run.
+ *
+ * An edit splits another author's change into pieces, and a single store joins the pieces back
+ * on its own schedule: when the text between them goes, or at its next edit of the paragraph.
+ * Shared text never renames a piece, because a peer's decision on the change at the same time
+ * would not reach the renamed characters; it shows adjacent pieces as one element at once. So
+ * the two can disagree on where elements and runs split inside one change, with the same text
+ * in the same changes. Outside revision elements, the comparison stays exact.
+ */
+function joinAdjacentRevisions(xml: string): string {
+  let previous: string;
+  let joined = xml;
+  do {
+    previous = joined;
+    joined = joined.replace(
+      /(<w:(ins|del)( [^>]*)?>)((?:(?!<\/?w:\2[ >]).)*)<\/w:\2><w:\2\3>/g,
+      '$1$4'
+    );
+  } while (joined !== previous);
+  return joined.replace(/<w:(ins|del)( [^>]*)?>(?:(?!<\/?w:\1[ >]).)*<\/w:\1>/g, (element) =>
+    element
+      .replace(/ xml:space="preserve"/g, '')
+      .replace(/<\/w:(t|delText)><\/w:r><w:r><w:\1>/g, '')
   );
 }
 

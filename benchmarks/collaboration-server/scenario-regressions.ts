@@ -109,6 +109,24 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'concurrent', delivery: 'server', seed: 8 },
   { config: 'denseImages', delivery: 'server', seed: 8 },
   { config: 'textbox', delivery: 'peer', seed: 1 },
+  // A decision on a pending change once missed text a peer typed or linked inside or after
+  // the change at the same time, and later text could join the change.
+  // An accept or reject of every change rewrote text between two stretches it removed, and the
+  // copy brought back text a peer deleted or rejected at the same time.
+  { config: 'tracked', delivery: 'server', seed: 2 },
+  { config: 'tracked', delivery: 'server', seed: 14 },
+  { config: 'tracked', delivery: 'server', seed: 18 },
+  { config: 'tracked', delivery: 'server', seed: 3 },
+  { config: 'tracked', delivery: 'server', seed: 6 },
+  { config: 'tracked', delivery: 'server', seed: 8 },
+  { config: 'tracked', delivery: 'server', seed: 12 },
+  { config: 'tracked', delivery: 'peer', seed: 1 },
+  { config: 'trackedEverything', delivery: 'server', seed: 1 },
+  // A link added around another author's insertion, and an accept between two pieces of a
+  // deletion, once changed what one author's edits showed.
+  { config: 'trackedSequential', delivery: 'in-order', seed: 1 },
+  { config: 'trackedSequential', delivery: 'in-order', seed: 6 },
+  { config: 'trackedEverything', delivery: 'peer', seed: 1 },
 ];
 
 /**
@@ -116,7 +134,16 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  * into `replays/` and the seed back into `CLEAN`.
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
-  [];
+  [
+    // An undo of a reject restores the insertion as copies, a peer's typing inside it follows
+    // them, and the undo of a later edit takes the adopted copy of that typing away.
+    {
+      config: 'trackedEverything',
+      delivery: 'peer',
+      seed: 7,
+      case: 'undo-after-accept-all-removes-peer-typing',
+    },
+  ];
 
 /** How many test files share the seeds. Each file defines one share with `scenarioShare`. */
 export const SCENARIO_SHARES = 8;

@@ -1,0 +1,335 @@
+{
+  "config": "tracked",
+  "seed": 18,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 21,
+          "text": "it ",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T23:24:05Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 47,
+          "end": 51,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T08:03:40Z"
+          }
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptRevision",
+          "revision": {
+            "id": "31844",
+            "author": "Author 2",
+            "date": "2026-01-01T23:24:05Z"
+          },
+          "localName": "ins"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertInlineContentControl",
+          "offset": 5,
+          "tag": "fuzz",
+          "text": "value"
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 45,
+          "text": " do",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T17:18:30Z"
+          }
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 5,
+          "text": " ",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T08:36:29Z"
+          }
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 18,
+          "text": "r",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T10:43:13Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 17,
+          "text": "or "
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 20,
+          "text": "sit",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T03:00:21Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 15,
+          "end": 17,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T08:42:04Z"
+          }
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 4,
+          "text": "m i",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T22:51:13Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 16,
+          "text": "lo",
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T03:01:21Z"
+          }
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 43,
+          "end": 46,
+          "revision": {
+            "author": "Author 2",
+            "date": "2026-01-01T12:52:57Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 31,
+          "text": " lo",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T07:40:16Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "rejectAllRevisions"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptRevision",
+          "revision": {
+            "id": "425060",
+            "author": "Author 2",
+            "date": "2026-01-01T12:52:57Z"
+          },
+          "localName": "del"
+        },
+        "paragraphs": [3]
+      }
+    }
+  ]
+}
