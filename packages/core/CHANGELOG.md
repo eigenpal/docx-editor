@@ -1,5 +1,20 @@
 # @docx-editor.dev/core
 
+## 2.32.0
+
+### Minor Changes
+
+- b16195d: Packages ship task recipes in `docs/`, `DocxEditorReview.Draft` takes the host's position and can render inside custom cards, and review writes such as accept, reject, and comment no longer scroll the page. Editing API tracked changes save their dates to the second like editor edits, and refusals and toolbar reasons name the API to use instead.
+
+### Patch Changes
+
+- c85001c: Fix table pagination around wrapping pictures, oversized rows, captions, repeated headers, and empty header frames.
+- a91ff98: Copied pictures with an extension-style content type, such as `image/.png`, now carry the standard image type, so earlier editor versions also paste them.
+- 1b19b22: Fix documents that stay gray and reject clicks after an external file refresh.
+- 8f541b3: Pictures whose content type carries the file extension, such as `image/.jpg`, now survive copy and paste, and documents that also declare a conflicting standard type still open.
+- c85001c: Fix blank pages and header selection after section numbering restarts, and missing borders beside omitted table cells.
+- Updated dependencies: @docx-editor.dev/i18n@2.32.0
+
 ## 2.31.0
 
 ### Minor Changes
