@@ -383,3 +383,44 @@ describe('a pass that cannot be put back', () => {
     }
   });
 });
+
+describe('a pass with only its answer left', () => {
+  test('shows every page it has, and a newer edit drops it without putting anything back', () => {
+    const restore = setDeferredLayoutForTest(1, 40);
+    let time = 0;
+    const page = {} as SemanticLayout['pages'][number];
+    const previous = { pages: Array.from({ length: 10 }, () => page) } as SemanticLayout;
+    const interim = { pages: Array.from({ length: 10 }, () => page) } as SemanticLayout;
+    const published: SemanticLayout[] = [];
+    let restored = 0;
+    const deferred = createDeferredLayout({
+      now: () => time,
+      pageAfterView: () => 1,
+      current: () => previous,
+      revision: () => 1,
+      publish: (layout) => void published.push(layout),
+      snapshot: () => () => void (restored += 1),
+    });
+    function* steps(): Generator<
+      { pages: readonly unknown[]; finalize: () => SemanticLayout; settled: true },
+      SemanticLayout,
+      void
+    > {
+      time += 50;
+      yield { pages: interim.pages, finalize: () => interim, settled: true };
+      return { pages: [] } as unknown as SemanticLayout;
+    }
+    try {
+      // As many pages as the previous layout: a settled pass defers all the same.
+      expect(deferred.run(steps() as never, 1)).toBe(interim);
+      expect(deferred.pending()).toBe(true);
+      deferred.abandon();
+      expect(restored).toBe(0);
+      expect(published).toEqual([]);
+      expect(deferred.pending()).toBe(false);
+    } finally {
+      deferred.cancel();
+      restore();
+    }
+  });
+});

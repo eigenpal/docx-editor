@@ -15,6 +15,7 @@ import { finalizePageFieldProjection, withPageFieldSources } from './field-proje
 import { recordMovedSeedReserves } from './note-reserves.ts';
 import { sectionReadCollector } from './note-reserve-resume.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
+import { currentFinal } from './published-story-projections.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { drainLayoutSteps, type LayoutSteps } from './layout-steps.ts';
 import type { ContinuedPageHost } from './continued-page-zones.ts';
@@ -880,12 +881,9 @@ export function* layoutMultiSectionDocumentSteps(
   ) {
     const prevFinal = multi.previousFinalized.pages;
     const prevRemapped = multi.previousRemapped;
-    const merged = freshlyFinalized.pages.map((page, index) => {
-      if (remappedAll[index] === prevRemapped[index] && prevFinal[index]) {
-        return prevFinal[index]!;
-      }
-      return page;
-    });
+    const merged = freshlyFinalized.pages.map((page, index) =>
+      remappedAll[index] === prevRemapped[index] ? (currentFinal(prevFinal, index) ?? page) : page
+    );
     finalized = { ...freshlyFinalized, pages: merged };
   }
 

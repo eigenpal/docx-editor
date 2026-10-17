@@ -69,6 +69,7 @@ import { createReviewOrderIndex } from './surface-review-order.ts';
 import { litReviewKeys, reviewItemsByKey } from './review-replacement-pairs.ts';
 import { bodyBlockCountOf, bodyBlockLimitAfter, bodyBlocksOf } from '../layout/body-block-limit.ts';
 import { snapshotLayoutSession } from '../layout/layout-session-snapshot.ts';
+import { furnitureLaterSteps } from './surface-furniture-later.ts';
 import {
   createContentControlWidgetSessions,
   contentControlValueOps,
@@ -1710,11 +1711,9 @@ export function mountPaginatedSurface(
       finishOpeningPass();
       deferredLayout.abandon();
       // An edit during an opening lays out the prefix so far; the opening slices go on after it.
-      const steps = layoutDocumentSteps(
-        scope.revision,
-        scope,
-        undefined,
-        openingBlockLimit ?? undefined
+      const steps = furnitureLaterSteps(
+        layoutDocumentSteps(scope.revision, scope, undefined, openingBlockLimit ?? undefined),
+        visiblePages()
       );
       const layout = deferredLayout.run(steps, scope.revision, timedLayout(scope));
       openingBlockLimit = bodyBlockLimitAfter(layoutSession, openingBlockLimit);

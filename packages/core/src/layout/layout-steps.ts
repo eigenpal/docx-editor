@@ -30,6 +30,12 @@ export interface LayoutProgress {
    * next pass continues from there.
    */
   readonly wrapUp?: () => void;
+  /**
+   * The pass has written its end state to the session and only finishes its answer (the
+   * headers and footers off the screen, `surface-furniture-later.ts`): a host that pauses it
+   * drops it for a newer edit without putting anything back, and shows `pages` as they are.
+   */
+  readonly settled?: boolean;
 }
 
 /** Steps that end with a `T`, reporting progress at some pause points. */
