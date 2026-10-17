@@ -1,0 +1,10 @@
+{
+  "//": "Environment boundary for the parse entry, which runs in a Web Worker: like the store lane it reads, it must compile without the DOM lib.",
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "noEmit": true
+  },
+  "include": ["."],
+  "exclude": ["__tests__"]
+}

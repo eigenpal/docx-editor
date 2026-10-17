@@ -20,6 +20,7 @@ export type LaneName =
   | 'output'
   | 'export'
   | 'automation'
+  | 'parse'
   | 'editor';
 
 export type LaneEnvironment = 'neutral' | 'browser' | 'node';
@@ -159,6 +160,15 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     mayImport: ['contracts', 'store', 'collaboration', 'layout', 'export'],
     environment: 'neutral',
     subpath: './automation',
+  },
+  parse: {
+    directory: 'src/parse',
+    package: null,
+    nativeToCore: true,
+    // A package read on a worker: the store's bounded reader and nothing that needs a page.
+    mayImport: ['store'],
+    environment: 'neutral',
+    subpath: './parse',
   },
   editor: {
     directory: 'src/editor',

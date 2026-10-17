@@ -23,6 +23,7 @@ import {
 import { fontFamilyName } from '../store/package/font-family-name.ts';
 import { isDocAnchor, isDocAnchorRange } from './anchor-resolution.ts';
 import { blankDocumentBytes } from './blank-document.ts';
+import { isParsedDocument } from '../store/package/parsed-document.ts';
 import { tableCommandCanSupport } from './table-command-plan.ts';
 import { replaceMatchArgumentRefusal } from './docx-editor-replace-match.ts';
 
@@ -235,6 +236,9 @@ export function normalizeSource(source: DocumentSource): Uint8Array | null {
   if (source === 'blank') return blankDocumentBytes();
   if (source instanceof Uint8Array) return source;
   if (source instanceof ArrayBuffer) return new Uint8Array(source);
+  // Bytes already read ahead of the open (`parseDocument`): the file is its bytes, and the
+  // read they carry is kept beside them (`holdParsedRead`).
+  if (isParsedDocument(source)) return source.bytes;
   // Any OTHER string is a mistake worth naming. Falling through to the handle branch below
   // would answer a `document="/report.docx"` or a `'Blank'` typo with "a DocumentHandle
   // cannot be re-loaded", which names a type the caller never mentioned.
@@ -252,6 +256,9 @@ export function normalizeSource(source: DocumentSource): Uint8Array | null {
 export function unloadableSourceReason(source: DocumentSource): string {
   if (typeof source === 'string') {
     return `'${source}' is not a document; pass DOCX bytes, or 'blank' for an empty one`;
+  }
+  if ((source as { kind?: unknown }).kind === 'docx-editor.parsed-document') {
+    return 'a parsed document without its bytes cannot be opened; pass what parseDocument returned';
   }
   return 'a DocumentHandle cannot be re-loaded; pass DOCX bytes';
 }

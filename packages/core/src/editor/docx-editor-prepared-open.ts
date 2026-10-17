@@ -8,7 +8,12 @@ import {
   openTreeSessionFromPackage,
   type OpenTreeSessionOptions,
 } from '../binding/tree-session.ts';
-import { readOoxmlPackageSteps } from '../store/package/ooxml-package.ts';
+import { readOoxmlPackageSteps, type OoxmlPackageResult } from '../store/package/ooxml-package.ts';
+import {
+  isParsedDocument,
+  parsedDocumentRead,
+  type ParsedDocument,
+} from '../store/package/parsed-document.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { nodeIndexSteps } from '../store/package/ooxml-edit.ts';
@@ -34,6 +39,25 @@ export type FontSession = Pick<
 >;
 
 const prepared = new WeakMap<Uint8Array, OpenTreeSessionResult>();
+/** The package read a parsed document carries, by the bytes it opens; taken once, like a session. */
+const parsedReads = new WeakMap<Uint8Array, OoxmlPackageResult>();
+
+/**
+ * Keep the read a {@link ParsedDocument} carries beside the bytes it opens, so their open skips
+ * reading them. Any other source, and a parsed document whose read this engine cannot use
+ * (another wire version, a damaged stream), opens from its bytes as before.
+ */
+export function holdParsedRead(source: unknown, bytes: Uint8Array): void {
+  const read = isParsedDocument(source) ? parsedDocumentRead(source as ParsedDocument) : null;
+  if (read) parsedReads.set(bytes, read);
+}
+
+/** The held read of `bytes`, removed: a session is live editing state and owns its package. */
+function takeParsedRead(bytes: Uint8Array): OoxmlPackageResult | undefined {
+  const read = parsedReads.get(bytes);
+  if (read) parsedReads.delete(bytes);
+  return read;
+}
 
 /** The session options a prepared open must share with the mount it stands in for. */
 export type PreparedOpenOptions = Pick<OpenTreeSessionOptions, 'reviewModel' | 'contentLockPolicy'>;
@@ -70,11 +94,13 @@ export function prepareOpenSteps(
   options: PreparedOpenOptions,
   then: (opened: OpenTreeSessionResult) => ReturnType<Step>
 ): Step {
-  const reader = readOoxmlPackageSteps(bytes);
+  const held = takeParsedRead(bytes);
+  // A parsed document's package is read already: the first step opens its session.
+  const reader = held ? null : readOoxmlPackageSteps(bytes);
   const step: Step = () => {
     const deadline = performance.now() + FONT_WARM_STEP_MS;
     for (;;) {
-      const next = reader.next();
+      const next = reader ? reader.next() : { done: true as const, value: held! };
       if (next.done) {
         const opened = openTreeSessionFromPackage(next.value, options);
         prepared.set(bytes, opened);
@@ -90,12 +116,19 @@ export function prepareOpenSteps(
  * The mount options for a prepared open of `bytes`, or nothing. Removes the entry. A prepared
  * open is a large one, so its first layout also runs in slices after the mount.
  */
-export function takePreparedOpen(bytes: Uint8Array): {
+export function takePreparedOpen(
+  bytes: Uint8Array,
+  options: PreparedOpenOptions = {}
+): {
   readonly openedSession?: OpenTreeSessionResult;
   readonly progressiveOpen?: boolean;
 } {
   const openedSession = prepared.get(bytes);
-  if (openedSession === undefined) return {};
+  if (openedSession === undefined) {
+    // A parsed document opened without a prepare: its session opens from the held read.
+    const read = takeParsedRead(bytes);
+    return read ? { openedSession: openTreeSessionFromPackage(read, options) } : {};
+  }
   prepared.delete(bytes);
   return { openedSession, progressiveOpen: true };
 }

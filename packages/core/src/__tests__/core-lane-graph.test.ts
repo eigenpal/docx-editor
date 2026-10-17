@@ -289,6 +289,7 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
     'export',
     'automation',
     'collaboration',
+    'parse',
   ] as const;
 
   test('every runtime-neutral lane in core has its own DOM-free project', () => {
