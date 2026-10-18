@@ -81,19 +81,18 @@ function touchesBookmarks(part: OoxmlPart, paragraphId: string): boolean {
   return !!paragraph && paragraph.kind === 'paragraph' && holdsBookmarkMarker(paragraph, 0);
 }
 
-/** Move the markers that sat at `offset` back in front of text inserted there. */
+/**
+ * Move the markers that sat at `offset` (`atOffset`, read before the edit) back in front of
+ * text inserted there.
+ */
 function keepMarkersBeforeInsertion(
-  before: OoxmlPart,
+  atOffset: readonly ParagraphMarker[],
   result: TreeOpResult,
   paragraphId: string,
   offset: number,
   options?: EditOptions
 ): TreeOpResult {
-  if (!result.ok) return result;
-  const atOffset = paragraphMarkers(before, paragraphId).filter(
-    (marker) => marker.offset === offset
-  );
-  if (atOffset.length === 0) return result;
+  if (!result.ok || atOffset.length === 0) return result;
   const nowAt = new Map(
     paragraphMarkers(result.part, paragraphId).map((marker) => [marker.node.id, marker.offset])
   );
@@ -112,23 +111,24 @@ function keepMarkersBeforeInsertion(
   if (!paragraph || paragraph.kind !== 'paragraph') return result;
   const site = markerSiteAt(part, paragraph, offset, options);
   if (!site.ok) return result;
-  const nodes = moved.map((marker) => findNode(before, marker.node.id) ?? marker.node);
+  const nodes = moved.map((marker) => marker.node);
   const inserted = insertChildren(site.part, site.containerId, site.index, nodes, options);
   if (!inserted.ok) return result;
   return { ok: true, part: inserted.part, effect: result.effect };
 }
 
-/** Remove the bookmarks an untracked deletion of `start`..`end` encloses. */
+/**
+ * Remove the bookmarks an untracked deletion of `start`..`end` encloses, from the paragraph's
+ * `markers` read before the edit.
+ */
 function dropEnclosedBookmarks(
-  before: OoxmlPart,
+  markers: readonly ParagraphMarker[],
   result: TreeOpResult,
-  paragraphId: string,
   start: number,
   end: number,
   options?: EditOptions
 ): TreeOpResult {
   if (!result.ok || end <= start) return result;
-  const markers = paragraphMarkers(before, paragraphId);
   const starts = new Map<string, ParagraphMarker>();
   const doomed: string[] = [];
   for (const marker of markers) {
@@ -176,11 +176,17 @@ export function withBookmarkEditRules(
     op.op === 'insertFragment'
   ) {
     if (!touchesBookmarks(part, op.paragraphId)) return apply();
-    return keepMarkersBeforeInsertion(part, apply(), op.paragraphId, op.offset, options);
+    // Read BEFORE applying: the op moves the node index to its new tree, and a lookup in the
+    // old one afterwards indexed the whole part again, on every keystroke.
+    const atOffset = paragraphMarkers(part, op.paragraphId).filter(
+      (marker) => marker.offset === op.offset
+    );
+    return keepMarkersBeforeInsertion(atOffset, apply(), op.paragraphId, op.offset, options);
   }
   if (op.op === 'deleteText' && !op.revision) {
     if (!touchesBookmarks(part, op.paragraphId)) return apply();
-    return dropEnclosedBookmarks(part, apply(), op.paragraphId, op.start, op.end, options);
+    const markers = paragraphMarkers(part, op.paragraphId);
+    return dropEnclosedBookmarks(markers, apply(), op.start, op.end, options);
   }
   return apply();
 }
