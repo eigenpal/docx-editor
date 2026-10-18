@@ -1,0 +1,100 @@
+{
+  "config": "tracked",
+  "seed": 2,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 27,
+          "end": 31
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 0,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 37,
+          "text": " ",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T13:42:15Z"
+          }
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "deleteText",
+          "start": 39,
+          "end": 45,
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T12:41:42Z"
+          }
+        },
+        "paragraphs": [1]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "rejectAllRevisions"
+        },
+        "paragraphs": [2]
+      }
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptAllRevisions"
+        },
+        "paragraphs": [3]
+      }
+    }
+  ]
+}

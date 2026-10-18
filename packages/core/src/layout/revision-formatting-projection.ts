@@ -1,3 +1,4 @@
+import { withoutUnlistedChanges } from './revision-hidden-sites.ts';
 import { WML_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { MAX_XML_DEPTH } from '../store/package/xml-reader.ts';
 import { keepsSubtreeMemo } from '../store/package/subtree-memo-policy.ts';
@@ -28,13 +29,23 @@ const originalProjections = new WeakMap<OoxmlElement, OoxmlElement>();
  */
 const resolvedFormatChanges = new WeakMap<OoxmlElement, RevisionAttribution>();
 
-/** The tracked formatting change a resolved view accepted into this `rPr` / `pPr`, if any. */
+/**
+ * The tracked formatting change a resolved view accepted into this `rPr` / `pPr`, if any.
+ *
+ * A record the review queue leaves out is no change site: Simple Markup draws no bar for a
+ * change that has no card. Decided here, at read time, not in the cached projection, because
+ * whether a run's record is listed also depends on its paragraph, a node the projection of the
+ * run does not see.
+ */
 export function resolvedFormatChangeOf(
-  properties: OoxmlNode | undefined
+  properties: OoxmlNode | undefined,
+  filter?: RevisionAuthorFilter
 ): RevisionAttribution | null {
-  return properties && properties.kind !== 'textValue'
-    ? (resolvedFormatChanges.get(properties) ?? null)
-    : null;
+  const change =
+    properties && properties.kind !== 'textValue'
+      ? (resolvedFormatChanges.get(properties) ?? null)
+      : null;
+  return change && filter?.unlisted?.sites.has(change.nodeId) ? null : change;
 }
 
 function named(node: OoxmlNode, name: string): boolean {
@@ -56,19 +67,30 @@ export function resolvedParagraphMarkChangeSites(
   if (mode === 'all-markup' || paragraph.kind === 'textValue') return [];
   const sites = [...resolvedChangeSites(paragraphMarkRevisionsOf(paragraph), mode, filter)];
   const pPr = paragraph.children.find((child) => child.kind === 'paragraphProperties');
-  const paragraphChange = resolvedFormatChangeOf(pPr);
+  const paragraphChange = resolvedFormatChangeOf(pPr, filter);
   if (paragraphChange) sites.push(paragraphChange);
   const rPr =
     pPr && pPr.kind !== 'textValue'
       ? pPr.children.find((child) => child.kind === 'runProperties')
       : undefined;
-  const markChange = resolvedFormatChangeOf(rPr);
+  const markChange = resolvedFormatChangeOf(rPr, filter);
   if (markChange) sites.push(markChange);
   return sites;
 }
 
 /** Restore supported formatting records for display, keeping every canonical node untouched. */
 export function projectRevisionFormatting(
+  node: OoxmlElement,
+  mode: RevisionDisplayMode,
+  filter?: RevisionAuthorFilter,
+  depth = 0
+): OoxmlElement {
+  const projected = projectedFormatting(node, mode, filter, depth);
+  // A block leaves out the records the review queue does not list, after any other projection.
+  return depth === 0 ? withoutUnlistedChanges(projected, filter) : projected;
+}
+
+function projectedFormatting(
   node: OoxmlElement,
   mode: RevisionDisplayMode,
   filter?: RevisionAuthorFilter,
@@ -135,7 +157,7 @@ export function projectRevisionFormatting(
     const result =
       child.kind === 'textValue' || child.localName.endsWith('PrChange')
         ? child
-        : projectRevisionFormatting(child, mode, filter, depth + 1);
+        : projectedFormatting(child, mode, filter, depth + 1);
     if (result !== child) projected ??= children.slice(0, index);
     projected?.push(result);
   }

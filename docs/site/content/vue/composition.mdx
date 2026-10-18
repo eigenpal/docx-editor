@@ -69,7 +69,7 @@ You can place all optional chrome inside `DocxEditorRoot`.
 
 Listen for `@ready`, `@change`, and `@font-error` on the root.
 
-The root rebuilds for `document`, `fonts`, and `imageDecodePort` identity changes. Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the locale catalog apply without a rebuild. Existing revisions keep their authors. The root ignores a later `modules` array change until you remount it with a different `:key`.
+The root rebuilds for `document` and `imageDecodePort` identity changes. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the locale catalog apply without a rebuild. Existing revisions keep their authors. The root ignores a later `modules` array change until you remount it with a different `:key`.
 
 `locale` selects regional date input and generated document labels. It defaults to `en-US`.
 

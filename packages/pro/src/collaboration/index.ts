@@ -53,6 +53,11 @@ export {
 } from './resource-usage.ts';
 export { CollaborationSchemaError } from './errors.ts';
 export {
+  CollaborationUndoGroupError,
+  type CollaborationUndoGroup,
+  type CollaborationUndoGroupErrorCode,
+} from './document-undo-group.ts';
+export {
   DOCUMENT_COLLABORATION_VERSIONS,
   assertDocumentCollaborationCompatibility,
   type DocumentCollaborationVersions,

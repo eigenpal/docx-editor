@@ -8,6 +8,8 @@
 // a live one, is worse than a slower keystroke.
 
 import {
+  registerRevisionSiteNodeIds,
+  revisionSiteNodeIdsOf,
   reviewItemKey,
   reviewItemPositionRank,
   type ReviewCommentItem,
@@ -77,7 +79,8 @@ function itemStartParagraphRank(
 export function canApplyLocalReviewPatch(
   cached: readonly ReviewItem[],
   localRevisions: readonly ReviewRevisionItem[],
-  dirtyParagraphId: string
+  dirtyParagraphId: string,
+  part: OoxmlPart
 ): boolean {
   for (const local of localRevisions) {
     if (local.ranges.length === 0) return false;
@@ -91,22 +94,56 @@ export function canApplyLocalReviewPatch(
   for (const local of localRevisions) {
     if (keptRangelessKeys.has(reviewItemKey(local))) return false;
   }
+  // A change whose record also sits outside this paragraph (one id shared with a text box, say)
+  // is one decision over all its sites, which a walk of the paragraph cannot see. A site the edit
+  // removed is simply gone; one that still exists elsewhere needs the whole derivation.
+  const localSites = new Set(localRevisions.flatMap((item) => revisionSiteNodeIdsOf(item)));
+  for (const item of cached) {
+    if (
+      item.kind === 'revision' &&
+      isRevisionWhollyInParagraph(item, dirtyParagraphId) &&
+      revisionSiteNodeIdsOf(item).some((id) => !localSites.has(id) && findNode(part, id))
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 
+/**
+ * `cached` with the dirty paragraph's revisions replaced by `localRevisions`, or null when the
+ * paragraph has no place in `paragraphOrder` and holds a revision. Pieces of a cached
+ * group are taken into the group first; `filterLocal` then decides over the rest, so a piece
+ * whose group is listed is never decided on its own.
+ */
 export function patchLocalReviewItems(
   cached: readonly ReviewItem[],
   paragraphOrder: ReadonlyMap<string, number>,
   dirtyParagraphId: string,
-  localRevisions: readonly ReviewRevisionItem[]
-): ReviewItem[] {
+  localRevisions: readonly ReviewRevisionItem[],
+  filterLocal: (items: readonly ReviewRevisionItem[]) => readonly ReviewRevisionItem[] = (items) =>
+    items
+): ReviewItem[] | null {
+  // A paragraph outside the story's own order (one in a text box) has no place to splice into.
+  // With no revision of its own the cached queue still holds; with one, the caller derives the
+  // whole queue instead.
   const dirtyRank = paragraphOrder.get(dirtyParagraphId);
-  if (dirtyRank === undefined) return [...cached];
+  if (dirtyRank === undefined) return localRevisions.length === 0 ? [...cached] : null;
 
   const patched: ReviewItem[] = [];
   let insertAt: number | null = null;
+  const { groups, absorbed } = absorbedIntoGroups(
+    cached,
+    paragraphOrder,
+    dirtyParagraphId,
+    localRevisions
+  );
+  const local = filterLocal(
+    absorbed.size > 0 ? localRevisions.filter((item) => !absorbed.has(item)) : localRevisions
+  );
 
-  for (const item of cached) {
+  for (const cachedItem of cached) {
+    const item = (cachedItem.kind === 'revision' && groups.get(cachedItem)) || cachedItem;
     if (item.kind === 'revision' && isRevisionWhollyInParagraph(item, dirtyParagraphId)) {
       if (insertAt === null) insertAt = patched.length;
       continue;
@@ -119,15 +156,32 @@ export function patchLocalReviewItems(
   }
 
   if (insertAt === null) insertAt = patched.length;
-  if (localRevisions.length > 0) {
+  if (local.length > 0) {
     const orderedLocalRevisions =
-      localRevisions.length < 2
-        ? [...localRevisions]
-        : [...localRevisions].sort(
+      local.length < 2
+        ? [...local]
+        : [...local].sort(
             (a, b) =>
               reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
           );
     patched.splice(insertAt, 0, ...orderedLocalRevisions);
+  }
+  // A group that starts in the dirty paragraph sits where the derivation puts it among that
+  // paragraph's own items: by position, as the full derivation orders them.
+  if (groups.size > 0) {
+    const slots: number[] = [];
+    patched.forEach((item, index) => {
+      // Comments too: the derivation orders comments and revisions together by position.
+      const start = item.kind === 'revision' ? item.ranges[0]?.start : undefined;
+      if (start?.paragraphId === dirtyParagraphId) slots.push(index);
+    });
+    const ordered = slots
+      .map((index) => patched[index]!)
+      .sort(
+        (a, b) =>
+          reviewItemPositionRank(a, paragraphOrder) - reviewItemPositionRank(b, paragraphOrder)
+      );
+    slots.forEach((index, at) => (patched[index] = ordered[at]!));
   }
   // RE-LINKED, because the local revisions were derived from one paragraph and carry no
   // replies. Splicing them in as-is dropped the link between a tracked change and the comment
@@ -144,6 +198,63 @@ function isRevisionWhollyInParagraph(item: ReviewRevisionItem, paragraphId: stri
       (range) => range.start.paragraphId === paragraphId && range.end.paragraphId === paragraphId
     )
   );
+}
+
+/**
+ * A paragraph-property change that spans paragraphs, as one review decision. A text-local edit
+ * leaves every paragraph's properties as they were, so the group still holds.
+ */
+function isParagraphPropertyGroup(item: ReviewRevisionItem): boolean {
+  return item.revisionKind === 'format' && item.formattingKind === 'pPrChange';
+}
+
+/**
+ * The cached paragraph-property groups that cross the dirty paragraph, each rebuilt with that
+ * paragraph's fresh ranges, and the local items they take in. A paragraph walk sees only its
+ * own part of such a group, as an item of its own; the cached group already holds it.
+ */
+function absorbedIntoGroups(
+  cached: readonly ReviewItem[],
+  paragraphOrder: ReadonlyMap<string, number>,
+  dirtyParagraphId: string,
+  localRevisions: readonly ReviewRevisionItem[]
+): {
+  readonly groups: ReadonlyMap<ReviewRevisionItem, ReviewRevisionItem>;
+  readonly absorbed: ReadonlySet<ReviewRevisionItem>;
+} {
+  const groups = new Map<ReviewRevisionItem, ReviewRevisionItem>();
+  const absorbed = new Set<ReviewRevisionItem>();
+  const groupOfSite = new Map<string, ReviewRevisionItem>();
+  for (const item of cached) {
+    if (
+      item.kind === 'revision' &&
+      isParagraphPropertyGroup(item) &&
+      revisionCrossesParagraphBoundary(item, dirtyParagraphId)
+    ) {
+      for (const id of revisionSiteNodeIdsOf(item)) groupOfSite.set(id, item);
+    }
+  }
+  if (groupOfSite.size === 0) return { groups, absorbed };
+  for (const local of localRevisions) {
+    const ids = revisionSiteNodeIdsOf(local);
+    const group = ids.length > 0 ? groupOfSite.get(ids[0]!) : undefined;
+    if (!group || !ids.every((id) => groupOfSite.get(id) === group)) continue;
+    absorbed.add(local);
+    const base = groups.get(group) ?? group;
+    const ranges = [
+      ...base.ranges.filter((range) => range.start.paragraphId !== dirtyParagraphId),
+      ...local.ranges,
+    ].sort(
+      (a, b) =>
+        (paragraphOrder.get(a.start.paragraphId) ?? 0) -
+          (paragraphOrder.get(b.start.paragraphId) ?? 0) || a.start.offset - b.start.offset
+    );
+    groups.set(
+      group,
+      registerRevisionSiteNodeIds({ ...base, ranges }, revisionSiteNodeIdsOf(group))
+    );
+  }
+  return { groups, absorbed };
 }
 
 function commentTouchesParagraph(item: ReviewCommentItem, paragraphId: string): boolean {
@@ -323,7 +434,11 @@ export function localReviewPatchParagraphId(
     // Full derivation, not the fast path: the paragraph walk cannot see this item's markup,
     // so patching would delete a decision the document still holds.
     if (revisionAnchoredOutsideParagraph(item, paragraphId)) return null;
-    if (revisionCrossesParagraphBoundary(item, paragraphId)) return null;
+    if (
+      revisionCrossesParagraphBoundary(item, paragraphId) &&
+      !(change.impact === 'text-local' && isParagraphPropertyGroup(item))
+    )
+      return null;
   }
   return paragraphId;
 }

@@ -1,8 +1,8 @@
 // `useFonts` — one stable `fonts` prop out of origins that change identity every render.
 //
-// The trap this exists to close: `DocxEditor.Root` keys its instance on `fonts` identity,
-// so `fonts={googleFonts()}` (a new function per render) would destroy and rebuild the
-// editor forever. These pin the two halves of the fix — the identity never moves, and the
+// The trap this exists to close: `DocxEditor.Root` replaces its fonts on every `fonts`
+// identity change, so `fonts={googleFonts()}` (a new function per render) would resolve
+// and lay out the fonts again on every render. These pin the two halves of the fix — the identity never moves, and the
 // arguments are still re-read when a resolution actually happens.
 
 // MUST be first: happy-dom registration happens on import.

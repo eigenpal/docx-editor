@@ -32,7 +32,7 @@ export interface DocumentCollaborationVersions {
  */
 export const DOCUMENT_COLLABORATION_VERSIONS: DocumentCollaborationVersions = Object.freeze({
   protocolVersion: 1,
-  sharedSchemaVersion: 4,
+  sharedSchemaVersion: 5,
   repairVersion: 2,
   canonicalModelVersion: 1,
 });

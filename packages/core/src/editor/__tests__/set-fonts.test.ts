@@ -460,3 +460,40 @@ test('the latest font replacement survives flushing an earlier deferred refresh'
     state.dispose();
   }
 });
+
+test('a replacement keeps the current faces until the new ones install', async () => {
+  const pending = deferred<FontConfiguration>(),
+    state = mount({ fonts: fonts() });
+  try {
+    await until(() => state.editor.fontMeasurement().measurer === 'shaped');
+    const session = state.editor.surface!.session;
+    const measured: string[] = [];
+    const off = state.editor.on('change', () =>
+      measured.push(state.editor.fontMeasurement().measurer)
+    );
+    const replaced = state.editor.setFonts(() => pending.promise);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // No fallback frame between the two font sets: the old faces still measure the pages.
+    expect(state.editor.fontMeasurement().measurer).toBe('shaped');
+    pending.resolve(fonts());
+    await replaced;
+    off();
+    expect(state.editor.fontMeasurement().measurer).toBe('shaped');
+    expect(measured).not.toContain('fixed');
+    expect(state.editor.surface!.session).toBe(session);
+  } finally {
+    state.dispose();
+  }
+});
+
+test('a replacement that supplies nothing usable still removes the replaced faces', async () => {
+  const state = mount({ fonts: fonts() });
+  try {
+    await until(() => state.editor.fontMeasurement().measurer === 'shaped');
+    await state.editor.setFonts(() => Promise.resolve(undefined));
+    expect(state.editor.fontMeasurement().measurer).toBe('fixed');
+    expect(state.editor.fontMeasurement().resolving).toBe(false);
+  } finally {
+    state.dispose();
+  }
+});

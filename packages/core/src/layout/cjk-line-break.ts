@@ -16,6 +16,7 @@
 // line slack as published geometry. Layout-owned field results remain atomic.
 
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
+import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
 /**
  * Whether the code point takes ideographic line breaking — a break opportunity on both
@@ -101,6 +102,54 @@ export const BREAK_AFTER_DASH: ReadonlySet<string> = new Set(['-', '‐', '–',
  */
 export const NO_BREAK_CHARACTER = /[\u00a0\u2007\u202f\u2060\ufeff]/u;
 
+/**
+ * Whether the code point stacks the next consonant under the one before it: the Khmer coeng
+ * (U+17D2) and the Myanmar virama (U+1039). Grapheme rules end a cluster after them, but a
+ * line break there would tear a stacked consonant from its base, so no break follows them
+ * before a letter (`stacksNext`).
+ */
+export const isStackingSign = (cp: number | undefined): boolean => cp === 0x17d2 || cp === 0x1039;
+
+const LETTER = /^\p{L}$/u;
+
+/**
+ * Whether a stacking sign joins the next code point to its base: only a letter stacks. In
+ * Zawgyi-encoded Myanmar U+1039 is the visible asat that ends a word, so a space after it
+ * still breaks.
+ */
+export function stacksNext(before: number | undefined, after: number | undefined): boolean {
+  return isStackingSign(before) && after !== undefined && LETTER.test(String.fromCodePoint(after));
+}
+
+const COMBINING_MARK = /^\p{M}$/u;
+
+/**
+ * Whether the code point is a combining mark (general category M, UAX #14 class CM), which
+ * never starts a line. Grapheme rules end a cluster before some spacing marks, such as the
+ * Myanmar vowel signs U+102B and U+102C and the visarga U+1038, but a line break there would
+ * tear the vowel from its consonant (`လေ` + `း`, `သွ` + `ား`). Below U+0300 nothing is a
+ * mark, so ASCII text skips the test.
+ */
+export function isCombiningMark(cp: number | undefined): boolean {
+  return cp !== undefined && cp >= 0x0300 && COMBINING_MARK.test(String.fromCodePoint(cp));
+}
+
+/**
+ * Whether a combining mark after this code unit continues the text before it, so no line
+ * may break before the mark. After a breaking space or a zero-width space the mark starts a
+ * new word instead (UAX #14 LB10), as in Zawgyi-encoded Myanmar, which stores the vowel sign
+ * U+1031 before its consonant. After a tab or a dash that breaks after itself, the break
+ * before the mark is kept. Undefined (a line start) continues nothing.
+ */
+export function marksContinue(before: number | undefined): boolean {
+  if (before === undefined || before === 0x200b || before === 0x09) return false;
+  const char = String.fromCharCode(before);
+  return !ENDS_WITH_BREAKING_SPACE.test(char) && !BREAK_AFTER_DASH.has(char);
+}
+
+/** U+200B ZERO WIDTH SPACE: an invisible break opportunity, common in Thai and Khmer text. */
+export const ZERO_WIDTH_SPACE = '\u200b';
+
 // Whitespace that ends a word at a seam: every JavaScript `\s` except the no-break
 // characters above, which `\s` also matches (U+2060 is not `\s`).
 /** A breaking space at a run's end or start: the break opportunities a run seam offers. */
@@ -109,6 +158,8 @@ export const STARTS_WITH_BREAKING_SPACE = /^[^\S\u00a0\u2007\u202f\ufeff]/;
 
 /** Every kinsoku member and every ideographic range sits at or above this code unit. */
 const FIRST_IDEOGRAPHIC_UNIT = 0x2e80;
+/** The first combining mark. No code point below it joins the cluster before it. */
+const FIRST_CLUSTER_EXTENDER_UNIT = 0x0300;
 
 /**
  * UTF-16 positions where a grapheme cluster starts, for vetoing a cut inside one.
@@ -150,7 +201,8 @@ function mergeBoundaries(latin: readonly number[], cjk: readonly number[]): numb
 }
 
 /**
- * Break points inside a piece: after each run of spaces (words stay whole), after a dash
+ * Break points inside a piece: after each run of spaces (words stay whole) and each zero-width
+ * space (never before one), after a dash
  * that sits between non-space text, with each tab as its own atom so tab-stop geometry can
  * size `\t` independently of neighbouring text — and, when `ideographic` allows it,
  * between ideographic characters, where UAX #14 allows a line to end (kinsoku vetoes
@@ -169,14 +221,20 @@ export function wordBoundaries(text: string, ideographic: boolean): number[] {
     if (ch === '\t') {
       if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
       boundaries.push(index + 1);
-    } else if (ch === ' ') {
-      boundaries.push(index + 1);
+    } else if (ch === ' ' || ch === ZERO_WIDTH_SPACE) {
+      // UAX #14 ZW SP* ÷: the break after a zero-width space comes after the spaces that
+      // follow it, and there is no break before a zero-width space, even after a space. So a
+      // run of spaces and zero-width spaces breaks once, at its end, and hangs as one.
+      const next = text[index + 1];
+      if (next !== ZERO_WIDTH_SPACE && !(ch === ZERO_WIDTH_SPACE && next === ' '))
+        boundaries.push(index + 1);
     } else if (
       BREAK_AFTER_DASH.has(ch) &&
       index > 0 &&
       text[index - 1] !== ' ' &&
       index + 1 < text.length &&
       text[index + 1] !== ' ' &&
+      text[index + 1] !== ZERO_WIDTH_SPACE &&
       !BREAK_AFTER_DASH.has(text[index + 1]!)
     ) {
       boundaries.push(index + 1);
@@ -228,14 +286,26 @@ export function cjkCutAllowedBetween(
  */
 export function cjkChopCutAllowedAt(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
+  // No line starts with a zero-width space or a combining mark, even after an emergency cut,
+  // nor right after a stacking sign before a letter, nor with a space that ink follows. A cut where only
+  // line-end whitespace remains hangs that whitespace.
+  const next = text.charCodeAt(index);
+  if (
+    next === 0x200b ||
+    (isCombiningMark(text.codePointAt(index)) && marksContinue(text.charCodeAt(index - 1))) ||
+    stacksNext(text.charCodeAt(index - 1), text.codePointAt(index))
+  )
+    return false;
+  if (next === 0x20 && withoutLineEndWhitespace(text).length > index) return false;
   return cjkCutAllowedBetween(lastCodePointOf(text.slice(0, index)), text.codePointAt(index));
 }
 
 /**
- * Whether a cluster boundary exists between two adjacent code points, memoized by the pair.
+ * Whether a cluster boundary exists between two adjacent code points, under the active
+ * grapheme boundary, memoized by the pair.
  *
- * Only reached at a piece seam whose neighbours are at or above the ideographic range, so
- * Latin placement never pays for it.
+ * Asked at a piece seam whose second code point is at or above U+0300. ASCII seams never
+ * reach it.
  */
 const clusterBreakCache = new Map<number, boolean>();
 let clusterBreakEpoch = -1;
@@ -297,6 +367,7 @@ export function lineOpenDecisionAt(
     afterIntraPieceCut ||
     lastEmitted === '' ||
     ENDS_WITH_BREAKING_SPACE.test(lastEmitted) ||
+    lastEmitted.endsWith(ZERO_WIDTH_SPACE) ||
     STARTS_WITH_BREAKING_SPACE.test(candidate) ||
     (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
       !BREAK_AFTER_DASH.has(candidate[0]!));
@@ -304,7 +375,24 @@ export function lineOpenDecisionAt(
   // so the pre-ideographic decision above is final. This is the hot path for pure-Latin
   // text — no decode, no set lookups. (A surrogate unit is above the threshold.)
   const lastUnit = lastEmitted.length === 0 ? 0 : lastEmitted.charCodeAt(lastEmitted.length - 1);
-  if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && candidate.charCodeAt(0) < FIRST_IDEOGRAPHIC_UNIT) {
+  const firstUnit = candidate.charCodeAt(0);
+  // UAX #14 LB7: never break before a zero-width space, even after a space.
+  if ((firstUnit === 0x200b && lastUnit !== 0) || stacksNext(lastUnit, candidate.codePointAt(0)))
+    return 'forbidden';
+  // A combining mark never opens a line, even where grapheme rules end a cluster before it.
+  if (marksContinue(lastUnit || undefined) && isCombiningMark(candidate.codePointAt(0)))
+    return 'forbidden';
+  if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && firstUnit < FIRST_IDEOGRAPHIC_UNIT) {
+    // A run seam can split a combining mark, tone mark, or vowel sign from its base. Below
+    // U+0300 no code point extends a cluster, so ASCII seams skip the check.
+    // After a breaking space, a zero-width space, or a tab a mark starts a word, though
+    // grapheme rules join it to the space.
+    if (
+      marksContinue(lastUnit || undefined) &&
+      firstUnit >= FIRST_CLUSTER_EXTENDER_UNIT &&
+      !clusterBreaksBetween(lastUnit, firstUnit)
+    )
+      return 'forbidden';
     return opportunity ? 'opens' : 'continues';
   }
   if (lastUnit === 0x09) return 'opens';

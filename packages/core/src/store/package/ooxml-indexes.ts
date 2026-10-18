@@ -210,6 +210,28 @@ export function stylesPartOf(pkg: OoxmlPackage): OoxmlPart | undefined {
   return [...pkg.parts.values()].find((part) => STYLES_PART_RE.test(part.name));
 }
 
+const NUMBERING_REL =
+  'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
+
+/**
+ * The numbering part's root, chosen as the editor session chooses the one it paints with: the
+ * main document's FIRST numbering relationship, else the default path.
+ */
+export function numberingRootOf(pkg: OoxmlPackage): OoxmlElement | null {
+  const record = (pkg.relationships.get(pkg.mainDocumentPart) ?? []).find(
+    (relationship) => relationship.type === NUMBERING_REL
+  );
+  let part: OoxmlPart | undefined;
+  if (record) {
+    const resolved = resolveRelationship(record);
+    if (resolved.mode === 'Internal' && resolved.target.ok) {
+      part = pkg.parts.get(resolved.target.partName);
+    }
+  }
+  part ??= pkg.parts.get('/word/numbering.xml');
+  return part?.root ?? null;
+}
+
 /**
  * Derive every index from one canonical package revision.
  *

@@ -294,6 +294,16 @@ The configured font resolver also receives faces used by SYMBOL fields and numbe
 
 Paragraph `w:bidi` controls alignment and the order of groups with different run directions. Run `w:rtl` controls the directional context within each group. Unmarked numeric text such as `1 980` keeps its left-to-right order in right-to-left paragraphs. Arabic, Hebrew, and Arabic-Indic digits retain their Unicode direction within that context. Authored Unicode direction controls use paragraph-wide Unicode ordering. Selection and caret positions follow the displayed text without changing source offsets.
 
+### Thai, Lao, Khmer, and Myanmar line breaking
+
+Thai, Lao, Khmer, and Myanmar text puts no spaces between words. Lines in these scripts wrap at any character cluster that fits, not at dictionary word boundaries. Table AutoFit keeps an unspaced run of these scripts whole as one segment.
+
+To mark a word boundary, insert a zero-width space (U+200B). A line can end after a zero-width space in any script, and the zero-width space stays at the end of that line. A space before a zero-width space counts as text while it fits on the line, so a right-aligned line ends one space short of the margin. The space hangs past the margin only when it does not fit. Inside a justified line, a space followed by a zero-width space stretches and compresses like any other space.
+
+Line breaks never split a character cluster. A Khmer coeng or Myanmar virama keeps the consonant stacked under it on the same line. Myanmar vowel signs and the visarga, such as `ာ` and `း`, stay with their consonant. A word that starts with a vowel sign after a space, as in Zawgyi-encoded Myanmar, still breaks at the space.
+
+In every script, a dash between letters is a break position even when the text after it starts a new run, so `ALPHA` followed by a run `-PRIME` can wrap after the dash.
+
 ### East Asian typography
 
 East Asian layout keeps punctuation, graphemes, and full-width number groups together across formatting changes. Justified lines distribute inter-character spacing through the same geometry used for paint and caret placement.

@@ -13,6 +13,7 @@ function inputs(overrides: Partial<ReviewItemsInputs> = {}): ReviewItemsInputs {
     commentsPart: part('comments'),
     commentsExtendedPart: undefined,
     stylesPart: part('styles'),
+    numberingRoot: null,
     furnitureParts: [part('header1')],
     customNodePayloads: new Map(),
     ...overrides,

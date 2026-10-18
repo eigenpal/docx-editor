@@ -22,6 +22,8 @@ export interface RevisionAuthorVisibility {
   readonly hiddenAuthorList: readonly string[];
   readonly stateKey: string;
   readonly hasFilter: boolean;
+  /** Whether a tracked change predicate is set, whatever the author filter does. */
+  readonly hasPredicate: boolean;
   filterFor(items: readonly ReviewItem[]): RevisionAuthorFilter | undefined;
   filterForSession(session: RevisionFilterSession): RevisionAuthorFilter | undefined;
   filterItems(items: readonly ReviewItem[]): readonly ReviewItem[];
@@ -260,6 +262,9 @@ export function createRevisionAuthorVisibility(
     },
     get hasFilter() {
       return hidden.size > 0 || predicate !== null;
+    },
+    get hasPredicate() {
+      return predicate !== null;
     },
     filterFor(items) {
       if (!predicate) return authorOnlyFilter;

@@ -44,6 +44,7 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 /** Props for the Vue `DocxEditor` sugar host. @public */
 export interface DocxEditorProps {
   popups?: import('./editor/popup-config').DocxEditorPopups;
+  /** Font sources. A new value replaces them in place, keeping edits, selection and history. */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
   fontShaping?: FontShapingOptions;

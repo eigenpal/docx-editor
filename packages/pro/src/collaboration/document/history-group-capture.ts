@@ -12,12 +12,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // of each frame; and a change of group — into one, out of one, or between two — is a
 // boundary, so the capture is stopped. Journals with no group keep the clock rule, which
 // is what lets a run of keystrokes stay one item.
+//
+// A host undo group pins one group over every local journal, whatever group the journal
+// names, until it is unpinned. A refused or thrown frame does not end a pinned group: the
+// item that holds the group's earlier writes stays the one later writes join.
 import type { HistoryGroup } from '@docx-editor.dev/core/store';
 import type * as Y from 'yjs';
 import {
   registerUndoHistoryPosition,
   reportHistoryGroup,
 } from '@docx-editor.dev/core/collaboration/replication';
+import { markGroupStep } from './history-undone.ts';
 
 type StackItem = Y.UndoManager['undoStack'][number];
 
@@ -35,6 +40,8 @@ export class HistoryGroupCapture {
   /** Set while a grouped journal's own transaction runs: only ITS item is the gesture's. */
   private capturing = false;
   private captured = false;
+  /** The host undo group every local journal joins while it is open. */
+  private pinned: HistoryGroup | undefined;
 
   constructor(
     private readonly undoManager: Y.UndoManager,
@@ -44,6 +51,7 @@ export class HistoryGroupCapture {
       if (this.capturing && event.type === 'undo') {
         this.gestureItem = event.stackItem;
         this.captured = true;
+        if (this.pinned !== undefined) markGroupStep(event.stackItem);
       }
     };
     undoManager.on('stack-item-added', noteItem);
@@ -58,7 +66,8 @@ export class HistoryGroupCapture {
    * the gesture's — so the next frame merges only into THAT item, never into whatever an
    * unrelated local write may have pushed in between.
    */
-  capture<T>(group: HistoryGroup | undefined, run: () => T): T {
+  capture<T>(journalGroup: HistoryGroup | undefined, run: () => T): T {
+    const group = this.pinned ?? journalGroup;
     const previous = this.previous;
     this.previous = group;
     const stack = this.undoManager.undoStack;
@@ -79,12 +88,12 @@ export class HistoryGroupCapture {
     try {
       const result = run();
       if (this.captured)
-        reportHistoryGroup(group, this.gestureItem === priorItem ? 'extended' : 'started');
+        reportHistoryGroup(journalGroup, this.gestureItem === priorItem ? 'extended' : 'started');
       return result;
     } catch (error) {
       // The frame never landed: forget it, as a refusal does, or the next frame would merge
       // into an item that does not hold it.
-      this.reset();
+      this.refused();
       throw error;
     } finally {
       this.capturing = false;
@@ -96,6 +105,29 @@ export class HistoryGroupCapture {
   reset(): void {
     this.previous = undefined;
     this.gestureItem = undefined;
+  }
+
+  /**
+   * A local journal was refused or threw. That ends an editor gesture. A pinned group stays:
+   * its earlier writes are still in the item it collects, and the merge check above admits a
+   * later write only while that item is on top of the stack.
+   */
+  refused(): void {
+    if (this.pinned === undefined) this.reset();
+  }
+
+  /** Open a host undo group. Its first write starts a new item, however recent the last one. */
+  pin(group: HistoryGroup): void {
+    this.undoManager.stopCapturing();
+    this.reset();
+    this.pinned = group;
+  }
+
+  /** Close the host undo group. The next local write starts a new item. */
+  unpin(): void {
+    this.pinned = undefined;
+    this.reset();
+    this.undoManager.stopCapturing();
   }
 }
 

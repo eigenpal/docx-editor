@@ -1,3 +1,7 @@
+import {
+  filterReviewItemsByAuthor,
+  type RevisionAuthorVisibility,
+} from './revision-author-visibility.ts';
 import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
 import type {
   EditorModuleRegistry,
@@ -38,6 +42,13 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { EditorDiagnostics } from './editor-diagnostics.ts';
 import { PRO_REVIEW_REASON, READ_ONLY_REVISION_REASON } from './opening-editing-mode.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { withReviewItemFilter } from '../binding/review-item-filter.ts';
+import {
+  inertPropertyChangeInputsOf,
+  inertPropertyChanges,
+  withoutInertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
+import { revisionItemsOf } from '../store/store/review-reads.ts';
 import {
   findReviewPlacement,
   isReplacementPairKey,
@@ -61,7 +72,8 @@ interface ReviewCommandDependencies {
   destroyed(): boolean;
   viewing(): boolean;
   placements(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
-  visible(): readonly ReviewItem[];
+  /** The reviewer filter: which authors it shows, and whether a predicate narrows the rest. */
+  authorVisibility: RevisionAuthorVisibility;
   scope(item: ReviewItem): StoryScope;
   /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
@@ -88,21 +100,25 @@ export function reviewModelOption(
   const review = modules.review;
   if (!review) return {};
   return {
-    reviewModel: {
-      ...review,
-      collectReviewItems: (input: ReviewModelInput) =>
-        review.collectReviewItems(
-          modules.customNodes.length > 0
-            ? {
-                ...input,
-                customNodes: modules.customNodes,
-                ...(modules.customNodeDiagnostics.length > 0
-                  ? { reportCustomNodeDiagnostic: reportDiagnostic }
-                  : {}),
-              }
-            : input
-        ),
-    },
+    // Property changes that resolve to no change are left out of every queue reader.
+    reviewModel: withReviewItemFilter(
+      {
+        ...review,
+        collectReviewItems: (input: ReviewModelInput) =>
+          review.collectReviewItems(
+            modules.customNodes.length > 0
+              ? {
+                  ...input,
+                  customNodes: modules.customNodes,
+                  ...(modules.customNodeDiagnostics.length > 0
+                    ? { reportCustomNodeDiagnostic: reportDiagnostic }
+                    : {}),
+                }
+              : input
+          ),
+      },
+      withoutInertPropertyChanges
+    ),
   };
 }
 
@@ -131,8 +147,33 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       .surface()
       ?.session.reviewItems()
       .filter((item): item is ReviewRevisionItem => item.kind === 'revision') ?? [];
+  /** Property changes the queue leaves out because they change nothing, in every story. */
+  const unlistedRecordsNow = (): readonly ReviewRevisionItem[] => {
+    const session = deps.surface()?.session;
+    if (!session) return [];
+    const inputs = inertPropertyChangeInputsOf(session.currentPackage());
+    return session
+      .storyParts()
+      .flatMap((part) => inertPropertyChanges(revisionItemsOf(part), inputs));
+  };
+  /**
+   * The unlisted records a decision with no keys clears beside the listed changes. With
+   * `scope: 'visible'`, only those by an author the filter shows, and none while a tracked
+   * change predicate narrows the decision: it decides over listed changes only. A document-wide
+   * decision with no keys resolves every site already. Read only when the decision runs.
+   */
+  const keylessUnlisted = (
+    command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
+    unlisted: () => readonly ReviewRevisionItem[]
+  ): readonly ReviewRevisionItem[] =>
+    command.keys !== undefined || command.scope === 'document' || deps.authorVisibility.hasPredicate
+      ? []
+      : unlisted().filter((item) => deps.authorVisibility.isVisible(item.author));
   /** The parts a bulk review command reaches, with the keys it selects in each. */
-  const selection = (command: { scope?: 'visible' | 'document'; keys?: readonly string[] }) => {
+  const selection = (
+    command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
+    withUnlisted = false
+  ) => {
     const items = all();
     // A paired replacement's key selects both of its halves. The paired queue is read once,
     // however many pair keys the command names.
@@ -152,7 +193,13 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         const pair = pairOf(key);
         return pair ? resolutionKeysOf(pair.item) : [key];
       }) ??
-        (command.scope === 'document' ? items : deps.visible())
+        (command.scope === 'document'
+          ? items
+          : filterReviewItemsByAuthor(
+              deps.surface()?.session.reviewItems() ?? [],
+              deps.authorVisibility
+            )
+        )
           .filter((item) => item.kind === 'revision')
           .map(reviewItemKey)
     );
@@ -167,10 +214,14 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           keys: [],
         });
     }
-    for (const item of items) {
+    let unlistedMemo: readonly ReviewRevisionItem[] | null = null;
+    const unlisted = () => (unlistedMemo ??= unlistedRecordsNow());
+    const swept = withUnlisted ? keylessUnlisted(command, unlisted) : [];
+    for (const item of swept) selected.add(reviewItemKey(item));
+    const place = (item: ReviewRevisionItem) => {
       const scope = deps.scope(item);
       const part = partOfNodeId(deps.surface()!.session, revisionSiteNodeIdsOf(item)[0]);
-      if (!part) continue;
+      if (!part) return;
       let group = scopes.get(part.name);
       if (!group) {
         group = { scope, part, keys: [] };
@@ -178,8 +229,23 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       }
       const key = reviewItemKey(item);
       if (selected.delete(key)) group.keys.push(key);
+    };
+    for (const item of items) place(item);
+    for (const item of swept) place(item);
+    // A key a caller saved can name a record that has since lost its card; it still resolves.
+    const named = new Set(command.keys ?? []);
+    if (named.size > 0 && selected.size > 0) {
+      for (const item of unlisted()) if (selected.has(reviewItemKey(item))) place(item);
     }
-    return { scopes: [...scopes.values()], missing: [...selected], unfilteredDocument };
+    // Records the caller did not name resolve silently: results report only listed changes.
+    const silent = withUnlisted
+      ? new Set(
+          unlisted().flatMap((item) =>
+            named.has(reviewItemKey(item)) ? [] : [reviewItemKey(item)]
+          )
+        )
+      : new Set<string>();
+    return { scopes: [...scopes.values()], missing: [...selected], unfilteredDocument, silent };
   };
   /** Story ops commit as groups; the styles part commits as a part op. */
   const routed = (
@@ -195,19 +261,21 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     }
     return { groups, partOps };
   };
-  const bulkPlan = (command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>) => {
-    const { scopes, missing, unfilteredDocument } = selection(command);
+  const bulkPlan = (
+    command: Extract<EditorCommand, { type: 'resolveAllReviewChanges' }>,
+    withUnlisted = false
+  ) => {
+    const { scopes, missing, unfilteredDocument, silent } = selection(command, withUnlisted);
     const resolved: RevisionBatchResult['resolved'][number][] = [];
-    const skipped: RevisionBatchResult['skipped'][number][] = missing.map((key) => ({
-      key,
-      reason: 'unknown-revision',
-    }));
+    const skipped: RevisionBatchResult['skipped'][number][] = missing
+      .filter((key) => !silent.has(key))
+      .map((key) => ({ key, reason: 'unknown-revision' }));
     const plans: { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[] = [];
     let remaining = 0;
     for (const { scope, part, keys } of scopes) {
       const plan = planRevisionBatch(part, command.action, unfilteredDocument ? undefined : keys);
-      resolved.push(...plan.result.resolved);
-      skipped.push(...plan.result.skipped);
+      for (const entry of plan.result.resolved) if (!silent.has(entry.key)) resolved.push(entry);
+      for (const entry of plan.result.skipped) if (!silent.has(entry.key)) skipped.push(entry);
       remaining += plan.result.remaining;
       plans.push({ scope, part, ops: plan.ops });
     }
@@ -501,7 +569,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           revisions: {
             ...result,
             resolved: [],
-            remaining: result.remaining + result.resolved.length,
+            // The listed queue, as a decision that runs reports it: records with no card are
+            // not pending decisions to a caller.
+            remaining: all().length,
           },
         };
       }
@@ -535,7 +605,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return result;
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
-    const { groups, partOps, result } = bulkPlan(command);
+    const { groups, partOps, result } = bulkPlan(command, true);
     let applied: { committed: boolean; reason?: unknown } | undefined;
     const refused = surface.commitReviewOps((historyToken) => {
       applied = surface.session.applyTreeOpsAtomic(groups, { partOps, historyToken });

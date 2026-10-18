@@ -17,7 +17,7 @@ For user preferences and programmatic styling, see [Customize revision markup](/
 
 Use **Review > Next Change** or **Previous Change** to move between visible changes. Navigation skips comments and hidden authors, and wraps at the end. A replacement is one stop, and its deleted and inserted text highlight together. A replacement is a deletion and the insertion from the same author that took its place. When a reviewer or tracked-changes filter hides one half, the other half is a stop of its own. A continuous insertion stays in one card when it crosses field markers or tracked paragraph breaks. Accepting or rejecting that card resolves its field instructions, results, and surrounding text together. Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
 
-In the review pane, tracked text replacements appear as separate deletion and addition cards. You can accept or reject either half independently, even when their author, ID, and editing time match. Tracked change balloons and `getReviewItems()` show a replacement as one item. Unchanged text separates inline cards even when their source revision attributes match. The editor preserves all source revision dates when you save. Adjacent additions, deletions, and equal formatting changes can each form one card across different editing times.
+In the review pane, tracked text replacements appear as separate deletion and addition cards. You can accept or reject either half independently, even when their author, ID, and editing time match. Tracked change balloons and `getReviewItems()` show a replacement as one item. Unchanged text separates inline cards even when their source revision attributes match. The editor preserves all source revision dates when you save. Adjacent additions, deletions, and equal formatting changes can each form one card across different editing times. An addition or deletion that continues across a tracked paragraph mark is one card, whatever its editing times. When one author changes consecutive paragraphs to the same paragraph formatting, the change is one card. A formatting change that leaves the resolved formatting unchanged, after styles and list levels apply, has no card and no change bar. **Accept All** and **Reject All** remove it together with the listed changes. If a tracked change filter narrows the decision, or the record's author is hidden, the record stays.
 
 Use **Review > Accept all changes shown** or **Reject all changes shown** to resolve changes selected by your active filters. These controls include offscreen changes in supported stories and leave hidden or unsupported changes pending. A successful operation preserves comments and creates one undo step. To resolve all authors or require every selected change to resolve, configure the [bulk review command](/docs/2.x/editor-api/revisions#resolve-changes-shown-in-the-editor).
 
@@ -1053,6 +1053,16 @@ export function BulkReviewer({ bytes }: { bytes: Uint8Array }) {
 Each call resolves every location with the revision's `(id, author, date)` tuple. The call uses one transaction and one undo step. A tracked row insertion cannot become partly resolved.
 
 The automation object model also provides revision collection bulk actions. See the [editor API](/docs/2.x/editor-api).
+
+### Formatting changes with no card
+
+A tracked formatting change can leave the formatting unchanged. For example, it can set an indent that the paragraph style already sets. After styles and list levels apply, such a change has no effect, so the editor shows no card, no change bar, and no format mark for it. The change stays in the file until a bulk decision removes it.
+
+- The `resolveAllReviewChanges` command with no `keys` removes these changes together with the listed changes.
+- With `scope: 'visible'`, the command keeps the changes of hidden authors. It also keeps every such change while a tracked change predicate is set, because the predicate decides over listed changes only.
+- If the command names a change by its key, it resolves that change, listed or not.
+- A loop over `useReview().items`, like the `AcceptAll` sample, never reaches these changes. Run the command when the file must end up without them.
+- A tracked edit that touches another author's change of this kind refuses with `edit.tracked-foreign-revision-unsupported`, and the diagnostic message names this case.
 
 ## Detect review content without Pro
 

@@ -116,6 +116,29 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'tableCells', delivery: 'server', seed: 30 },
   { config: 'tableCells', delivery: 'peer', seed: 4 },
   { config: 'tableCells', delivery: 'peer', seed: 13 },
+  // A decision on a pending change once missed text a peer typed or linked inside or after
+  // the change at the same time, and later text could join the change.
+  // An accept or reject of every change rewrote text between two stretches it removed, and the
+  // copy brought back text a peer deleted or rejected at the same time.
+  { config: 'tracked', delivery: 'server', seed: 2 },
+  { config: 'tracked', delivery: 'server', seed: 14 },
+  { config: 'tracked', delivery: 'server', seed: 18 },
+  { config: 'tracked', delivery: 'server', seed: 3 },
+  { config: 'tracked', delivery: 'server', seed: 6 },
+  { config: 'tracked', delivery: 'server', seed: 8 },
+  { config: 'tracked', delivery: 'server', seed: 12 },
+  { config: 'tracked', delivery: 'peer', seed: 1 },
+  { config: 'trackedEverything', delivery: 'server', seed: 1 },
+  // A link added around another author's insertion, and an accept between two pieces of a
+  // deletion, once changed what one author's edits showed.
+  { config: 'trackedSequential', delivery: 'in-order', seed: 1 },
+  { config: 'trackedSequential', delivery: 'in-order', seed: 6 },
+  { config: 'trackedEverything', delivery: 'peer', seed: 1 },
+  // An undo of a copy that showed a peer's deleted typing, while the record of the deletion
+  // was held back, once counted as the undo removing that typing.
+  { config: 'trackedEverything', delivery: 'peer', seed: 7 },
+  { config: 'undoGroups', delivery: 'server', seed: 1 },
+  { config: 'undoGroups', delivery: 'peer', seed: 2 },
 ];
 
 /**

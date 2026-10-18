@@ -23,6 +23,7 @@
 
 import { advanceClock, resetClock } from './scenario-clock.ts';
 import { TypedTokens } from './scenario-tokens.ts';
+import { DecisionOracle } from './scenario-decisions.ts';
 import { CaretWatch } from './scenario-presence.ts';
 import * as Y from 'yjs';
 import {
@@ -108,6 +109,11 @@ export interface ScenarioOptions {
   readonly faultChance?: number;
   /** Chance per step that one replica syncs by state vector with another, as on reconnect. */
   readonly resyncChance?: number;
+  /**
+   * Chance per step that the editing replica opens an explicit undo group, or closes the one
+   * it has open, and that the step waits longer than the undo capture window.
+   */
+  readonly groupChance?: number;
 }
 
 export interface ScenarioReport {
@@ -137,7 +143,11 @@ export type Action =
   | { readonly kind: 'resync'; readonly to: number; readonly from: number }
   | { readonly kind: 'undo' | 'redo'; readonly replica: number }
   | { readonly kind: 'toggle'; readonly replica: number }
-  | { readonly kind: 'join'; readonly from: number };
+  | { readonly kind: 'join'; readonly from: number }
+  /** Open an undo group on the replica, or close the one it has open. */
+  | { readonly kind: 'group'; readonly replica: number }
+  /** Let time pass, so undo capture sees a pause. */
+  | { readonly kind: 'wait'; readonly ms: number };
 
 function describe(action: Action, replicas: readonly Replica[]): string {
   if (action.kind !== 'edit') return JSON.stringify(action);
@@ -153,8 +163,13 @@ class Simulation {
   readonly network: Network;
   readonly refused: Record<string, number> = {};
   readonly sequence: Addressed[] = [];
+  /** The replica that made each edit of `sequence`: the actor a solo replay applies it as. */
+  readonly sequenceReplicas: number[] = [];
   readonly trail: string[] = [];
   private readonly tokens = new TypedTokens();
+  private readonly decisions = new DecisionOracle();
+  /** Each replica's open undo group, and its undo stack's height when it opened. */
+  private readonly groups = new Map<number, { readonly end: () => void; readonly steps: number }>();
   private readonly carets: CaretWatch;
   applied = 0;
   undos = 0;
@@ -281,7 +296,7 @@ class Simulation {
     const touched =
       action.kind === 'deliver' || action.kind === 'resync'
         ? this.replicas[action.to]
-        : action.kind === 'join'
+        : action.kind === 'join' || action.kind === 'wait'
           ? undefined
           : this.replicas[action.replica];
     // A replica that holds back an update has applied its deletions but not its inserts, so
@@ -325,6 +340,12 @@ class Simulation {
         if (replica) this.network.setOnline(replica, !replica.online);
         break;
       }
+      case 'group':
+        this.toggleGroup(action.replica);
+        break;
+      case 'wait':
+        advanceClock(action.ms);
+        break;
       case 'undo':
       case 'redo': {
         const replica = this.replicas[action.replica];
@@ -336,6 +357,7 @@ class Simulation {
         const pendingBefore = shownOrPending(replica);
         if (action.kind === 'redo' ? session.redo() : session.undo()) {
           this.undos += 1;
+          this.decisions.undone(action.replica);
           this.tokens.undoOn(action.replica, sharedBefore, sharedTextOf(replica.ydoc), {
             before: pendingBefore,
             after: shownOrPending(replica),
@@ -365,6 +387,7 @@ class Simulation {
             break;
           }
           const removing = this.tokens.beforeEdit(editor.store, op);
+          const decision = this.decisions.before(editor.store, op, editor.index);
           const result = applyOp(editor.store, op, `replica-${editor.index}`);
           if (!result.ok) {
             const reason = result.reason ?? 'refused';
@@ -372,6 +395,7 @@ class Simulation {
             break;
           }
           this.tokens.afterEdit(editor.store, removing, editor.index);
+          this.decisions.applied(decision);
           editor.handle.session.flushPendingJournals();
           this.applied += 1;
           // A transient refusal takes the edit back in the same tick; its token never existed.
@@ -386,6 +410,7 @@ class Simulation {
             this.carets.moved(editor);
           }
           this.sequence.push(tagged.addressed);
+          this.sequenceReplicas.push(editor.index);
           this.followLockstep(editor, tagged.addressed);
         } catch (error) {
           this.problems.push(`replica ${editor.index} threw ${(error as Error).stack ?? error}`);
@@ -394,6 +419,34 @@ class Simulation {
       }
     }
     if (this.firstFailure < 0 && this.failed()) this.firstFailure = index;
+  }
+
+  /**
+   * Open an undo group on a replica, or close its open one. A closed group is at most one
+   * undo step, however long it stayed open and whatever the replica's peers did meanwhile.
+   */
+  private toggleGroup(index: number): void {
+    const replica = this.replicas[index];
+    if (!replica) return;
+    const session = replica.handle.session;
+    const steps = (): number =>
+      (session as unknown as { undoManager: { undoStack: unknown[] } }).undoManager.undoStack
+        .length;
+    const open = this.groups.get(index);
+    if (!open) {
+      const group = session.beginUndoGroup();
+      this.groups.set(index, { end: () => group.end(), steps: steps() });
+      return;
+    }
+    this.groups.delete(index);
+    open.end();
+    const added = steps() - open.steps;
+    if (added > 1) this.problems.push(`replica ${index} undo group made ${added} undo steps`);
+  }
+
+  /** Close every open undo group, as a host does when its operations finish. */
+  closeGroups(): void {
+    for (const index of [...this.groups.keys()]) this.toggleGroup(index);
   }
 
   /** Apply an edit a replica made to the lockstep store, and compare the two. */
@@ -426,6 +479,7 @@ class Simulation {
   finish(document: Uint8Array, checkSequential: boolean): void {
     const replicas = this.replicas;
     const problems = this.problems;
+    this.closeGroups();
     if (this.strict) {
       // One delivery at a time, so a failure names the delivery that caused it.
       for (const replica of replicas) this.network.setOnline(replica, true);
@@ -470,6 +524,8 @@ class Simulation {
 
     // Typing that no one removed shows exactly once.
     problems.push(...this.tokens.check(packages));
+    // A decision on a pending change reached all of the change its author saw.
+    if (packages[0]) problems.push(...this.decisions.check(packages[0]));
 
     // Save and reopen, and the server's view of the shared state.
     try {
@@ -497,7 +553,8 @@ class Simulation {
       const solo = storeFrom(document);
       for (const [index, addressed] of this.sequence.entries()) {
         const op = bindIds(solo, addressed);
-        const result = op ? applyOp(solo, op, 'solo') : { ok: false as const, reason: 'unbound' };
+        const actor = `replica-${this.sequenceReplicas[index]}`;
+        const result = op ? applyOp(solo, op, actor) : { ok: false as const, reason: 'unbound' };
         if (!result.ok) {
           problems.push(`solo replay refused operation ${index} (${result.reason})`);
           break;
@@ -582,10 +639,11 @@ function shownOrPending(replica: Replica): OoxmlPackage {
  * run in lockstep: in-order delivery, and no undo or offline step.
  *
  * A fresh run decides from its shape, before it draws any action: no offline or undo chance.
- * A replay has no shape, so it decides from its actions: edits and deliveries only. The two
- * rules differ at the edges, and each run keeps its own. A shape with an undo chance that
- * drew no undo is not sequential, while its replay is; a join or a resync makes a replay not
- * sequential, while a fresh run's shape does not look at them.
+ * A replay has no shape, so it decides from its actions: edits, deliveries, undo groups, and
+ * waits only, because a group or a wait changes no content. The two rules differ at the
+ * edges, and each run keeps its own. A shape with an undo chance that drew no undo is not
+ * sequential, while its replay is; a join or a resync makes a replay not sequential, while a
+ * fresh run's shape does not look at them.
  */
 function isSequential(
   delivery: Delivery,
@@ -595,7 +653,13 @@ function isSequential(
 ): boolean {
   if (delivery !== 'in-order') return false;
   if ('shape' in run) return !run.shape.offlineChance && !run.shape.undoChance;
-  return run.actions.every((action) => action.kind === 'edit' || action.kind === 'deliver');
+  return run.actions.every(
+    (action) =>
+      action.kind === 'edit' ||
+      action.kind === 'deliver' ||
+      action.kind === 'group' ||
+      action.kind === 'wait'
+  );
 }
 
 export async function runScenario(options: ScenarioOptions): Promise<ScenarioReport> {
@@ -631,10 +695,18 @@ export async function runScenario(options: ScenarioOptions): Promise<ScenarioRep
         await perform({ kind: 'toggle', replica: Math.floor(random() * replicas.length) });
       }
       const editor = replicas[Math.floor(random() * replicas.length)]!;
+      // Groups draw from the random stream only when a shape asks for them, so every other
+      // shape replays the seeds it always did.
+      if (options.groupChance && random() < options.groupChance) {
+        await perform({ kind: 'group', replica: editor.index });
+      }
+      if (options.groupChance && random() < options.groupChance) {
+        await perform({ kind: 'wait', ms: random() < 0.5 ? 300 : 1_500 });
+      }
       if (options.undoChance && random() < options.undoChance) {
         await perform({ kind: random() < 0.4 ? 'redo' : 'undo', replica: editor.index });
       } else {
-        const addressed = planEdit(editor.store, random, weights);
+        const addressed = planEdit(editor.store, random, weights, `Author ${editor.index}`);
         if (addressed) await perform({ kind: 'edit', replica: editor.index, addressed });
       }
       if (options.delivery !== 'in-order') {

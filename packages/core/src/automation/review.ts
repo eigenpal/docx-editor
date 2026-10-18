@@ -35,6 +35,10 @@ import type {
 } from '../store/store/review-items.ts';
 import { commentPartNameOf, commentsExtendedPartNameOf } from '../store/store/comment-writes.ts';
 import type { AutomationStoryReads } from './reads.ts';
+import {
+  inertPropertyChangeInputsOf,
+  withoutInertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
 
 /**
  * Word's own name for a kind of change.
@@ -111,15 +115,32 @@ export function revisionItemsInStory(reads: AutomationStoryReads): readonly Revi
 }
 
 /**
+ * The story's items a caller can list: {@link revisionItemsInStory} without the property changes
+ * that leave the formatting unchanged, as the editor's review queue lists them. With no package,
+ * every item. Collection decisions still resolve the others, because they name every item.
+ */
+export function listedRevisionItemsInStory(
+  reads: AutomationStoryReads,
+  pkg: OoxmlPackage | null
+): readonly ReviewRevisionItem[] {
+  const items = revisionItemsInStory(reads);
+  return pkg ? withoutInertPropertyChanges(items, inertPropertyChangeInputsOf(pkg)) : items;
+}
+
+/**
  * The decisions of one story, in document order.
  *
  * Omits `readOnly` items and structural cards whose Word subtype this protocol cannot name.
  * That listing is not the collection decision set: store-resolvable structural revisions are
  * still resolved by collection accept/reject.
  */
-export function revisionReads(reads: AutomationStoryReads): readonly AutomationRevisionRead[] {
+export function revisionReads(
+  reads: AutomationStoryReads,
+  pkg: OoxmlPackage | null
+): readonly AutomationRevisionRead[] {
   const found: AutomationRevisionRead[] = [];
-  for (const item of revisionItemsInStory(reads)) {
+  const listed = listedRevisionItemsInStory(reads, pkg);
+  for (const item of listed) {
     if (item.readOnly) continue;
     const rowChange = item.structuralChanges?.length === 1 ? item.structuralChanges[0] : undefined;
     const type =

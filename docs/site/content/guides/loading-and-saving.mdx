@@ -256,58 +256,6 @@ async function pick(event: Event) {
 </Framework>
 </FrameworkTabs>
 
-### Parsing in a worker
-
-Reading the package (the unzip, and the XML of the body, notes and styles) is most of what opening a long document costs before layout. `parseDocument` from `@docx-editor.dev/core/parse` does that read on any thread, so a Web Worker can do it while the page stays responsive, for example as soon as a file is picked. What it returns crosses `postMessage`. Pass it to `document` or `load()` and the editor opens on the same model as the bytes, without reading them again:
-
-```ts
-// parse.worker.ts
-import { parseDocument, parsedDocumentTransferables } from '@docx-editor.dev/core/parse';
-
-self.onmessage = (event: MessageEvent<Uint8Array>) => {
-  const parsed = parseDocument(event.data);
-  self.postMessage(parsed, parsedDocumentTransferables(parsed));
-};
-```
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-import { receiveParsedDocumentInSlices, type ParsedDocument } from '@docx-editor.dev/core/parse';
-
-export function WorkerEditor({ worker }: { worker: Worker }) {
-  const [doc, setDoc] = useState<ParsedDocument>();
-  useEffect(() => {
-    worker.onmessage = async (event) => {
-      const parsed = await receiveParsedDocumentInSlices(event.data);
-      if (parsed) setDoc(parsed);
-    };
-  }, [worker]);
-  return doc ? <DocxEditor document={doc} /> : null;
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```ts
-import { receiveParsedDocumentInSlices, type ParsedDocument } from '@docx-editor.dev/core/parse';
-
-const doc = shallowRef<ParsedDocument>();
-worker.onmessage = async (event) => {
-  const parsed = await receiveParsedDocumentInSlices(event.data);
-  if (parsed) doc.value = parsed;
-};
-```
-
-</Framework>
-</FrameworkTabs>
-
-`receiveParsedDocumentInSlices` rebuilds the read on the page in short tasks; `receiveParsedDocument` does it in one, and the editor does it on open if neither has run. The worker applies the same size, zip and XML limits as an open from bytes, and a file it refuses is reported the same way. The parsed document keeps the file's bytes, so `save()`, embedded fonts and images work as they do for bytes.
-
 ### Replace a document at runtime
 
 To replace the document without remounting the component, use the ref:

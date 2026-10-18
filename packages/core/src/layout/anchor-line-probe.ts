@@ -110,7 +110,7 @@ export function anchorLineStartsByModelOffset(input: {
       }
       const modelStart = piece.start + consumed;
       const probeDecision =
-        input.cjkBreaks?.decision(piece, consumed) ??
+        input.cjkBreaks?.decision(piece, consumed, probeLastEmitted, candidate) ??
         lineOpenDecisionAt(probeLastEmitted, candidate, consumed > 0);
       const opens = probeDecision === 'opens';
       if (opens) {

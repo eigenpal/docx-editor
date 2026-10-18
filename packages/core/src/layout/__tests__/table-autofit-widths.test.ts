@@ -520,11 +520,13 @@ describe('autofit layout', () => {
   });
 
   test('a dash run seam breaks where line breaking does', () => {
-    // A dash before another dash does not break; a lone dash after a space is its own word.
+    // A dash before another dash does not break, the last dash of the run does, as in one
+    // run; a lone dash after a space is its own word.
     expect(
       columns(table('', `${run('ABCDE-')}<w:r><w:rPr><w:b/></w:rPr><w:t>-FGHIJ</w:t></w:r>`))
         .widths[1]
-    ).toBe(72);
+    ).toBe(42);
+    expect(columns(table('', run('ABCDE--FGHIJ'))).widths[1]).toBe(42);
     expect(
       columns(table('', `${run('ABCDEFGH -')}<w:r><w:rPr><w:b/></w:rPr><w:t>IJKLMNOP</w:t></w:r>`))
         .widths[1]

@@ -255,8 +255,8 @@ describe('restarted numbering after an even initial number', () => {
   });
 
   test.each([
-    [0, 'oddPage', 2, true, false],
-    [0, 'evenPage', 1, true, true],
+    [0, 'oddPage', 2, true, true],
+    [0, 'evenPage', 1, true, false],
     [1, 'evenPage', 1, true, false],
     [1, 'oddPage', 2, true, true],
     [0, 'evenPage', 1, false, false],
@@ -414,6 +414,30 @@ describe('parity after the notes pass inserts sheets', () => {
     // A note sheet on the shared sheet's far side takes 5, and the section moves to 7.
     const before = [sheet(0, 1), sheet(0, 2, { noteStream: 'endnote-overflow' }), sheet(1, 5)];
     expect(shape(resettleParitySheets(before, layout))).toEqual([1, 5, 'B', 7]);
+  });
+
+  test('notes preserve physical progression after a shared continuous restart', () => {
+    const layout = { revision: 1, pages: [] } as unknown as SemanticLayout;
+    registerParityPlan(
+      layout,
+      true,
+      [
+        { pageIndex: 0, breakType: 'nextPage', restart: 1, runningBefore: 1, geometry },
+        { pageIndex: 2, breakType: 'nextPage', restart: 1, runningBefore: 2, geometry },
+      ],
+      new Map([[1, 2]])
+    );
+    expect(shape(resettleParitySheets([sheet(0, 1), sheet(1, 2), sheet(2, 1)], layout))).toEqual([
+      1, 2, 1,
+    ]);
+    expect(
+      shape(
+        resettleParitySheets(
+          [sheet(0, 1), sheet(1, 2), sheet(1, 2, { noteStream: 'endnote-overflow' }), sheet(2, 1)],
+          layout
+        )
+      )
+    ).toEqual([1, 2, 2, 'B', 1]);
   });
 
   test('an inserted note sheet changes parity after an even initial number', () => {
@@ -585,5 +609,65 @@ describe('editing around a blank parity sheet', () => {
     // A no-change pass keeps the blank sheet by identity.
     const again = lay(one, { session });
     expect(again.pages[1]).toBe(back.pages[1]!);
+  });
+});
+
+describe('continuous restarts preserve sheet parity', () => {
+  test.each([false, true])('shared restart with overflow %s', (overflow) => {
+    const body =
+      p('One') +
+      pageBreak +
+      ending('Two', undefined, 1) +
+      (overflow ? p('Shared') + pageBreak : '') +
+      ending('Continued', 'continuous', 1) +
+      p('Final') +
+      sectPr(undefined, 1);
+    const session = createLayoutSession();
+    for (let pass = 0; pass < 2; pass++) {
+      const layout = lay(body, { evenAndOdd: true, session });
+      expect(sheets(layout)).toEqual(
+        overflow
+          ? ['One', 'TwoShared', 'Continued', '|', 'Final']
+          : ['One', 'TwoContinued', 'Final']
+      );
+      expect(layout.pages.at(-1)?.pageFieldSource?.pageNumber).toBe(1);
+    }
+    const reopened = serializeOoxmlPart(load(body));
+    const parsed = readOoxmlPart(reopened, { name: '/word/document.xml', contentType: 'app/xml' });
+    if (!parsed.ok) throw new Error(parsed.reason);
+    expect(
+      layoutSemanticDocument(parsed.part, 2, { measurer, evenAndOddHeaders: true }).pages.length
+    ).toBe(overflow ? 5 : 3);
+  });
+
+  test('ordinary restarts retain the numbering after an explicit restarted break', () => {
+    const body =
+      ending('One', undefined, 1) +
+      ending('Two', 'evenPage', 1) +
+      p('Final') +
+      sectPr(undefined, 1);
+    const layout = lay(body, { evenAndOdd: true });
+    expect(sheets(layout)).toEqual(['One', 'Two', '|', 'Final']);
+    expect(layout.pages.map((page) => page.pageFieldSource?.pageNumber)).toEqual([
+      1,
+      1,
+      undefined,
+      1,
+    ]);
+  });
+
+  test('an explicit even restart uses physical sheet parity after an even initial number', () => {
+    const layout = lay(
+      p('One') +
+        pageBreak +
+        p('Two') +
+        pageBreak +
+        ending('Three', undefined, 916) +
+        p('Final') +
+        sectPr('evenPage', 916),
+      { evenAndOdd: true }
+    );
+    expect(sheets(layout)).toEqual(['One', 'Two', 'Three', 'Final']);
+    expect(layout.pages.at(-1)?.pageFieldSource?.pageNumber).toBe(916);
   });
 });

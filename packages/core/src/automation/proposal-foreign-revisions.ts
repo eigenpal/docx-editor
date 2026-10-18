@@ -65,7 +65,7 @@ function coversLiveText(
 }
 
 /** Why a tracked edit cannot touch another author's pending text revision. */
-export type ForeignTextRefusal = 'deleted-text-only' | 'collaborative-insertion';
+export type ForeignTextRefusal = 'deleted-text-only';
 
 /**
  * Why a tracked edit of `[start, end)` cannot touch or overlap `item`, which belongs to
@@ -73,15 +73,9 @@ export type ForeignTextRefusal = 'deleted-text-only' | 'collaborative-insertion'
  *
  * Their inserted text, including the inserted half of a replacement, admits any edit. Their
  * struck text admits an insertion inside or at its edge, which the store places after or
- * beside the deletion, and a strike that also covers live text or the paragraph mark.
- *
- * In a collaboration session, a strike over any of their text revisions refuses, and so does
- * any edit that starts inside or right after one. Shared text keeps a
- * revision as an attribute of its characters. A peer that accepts or rejects the revision at
- * the same time rewrites that attribute, so a concurrent strike or new words inside it can
- * lose the decision or reorder the words. A marker that starts right after it can take its
- * attribute when a concurrent decision removes the marker that ended it. Edits that end
- * before their revision stay admitted.
+ * beside the deletion, and a strike that also covers live text or the paragraph mark. The
+ * same rules hold in a collaboration session: shared text keeps each revision apart, so a
+ * peer's concurrent decision on their revision reaches all of it and only it.
  */
 export function foreignTextRefusal(
   story: AutomationStoryReads,
@@ -90,25 +84,9 @@ export function foreignTextRefusal(
   paragraphId: string,
   start: number,
   end: number,
-  options: {
-    readonly strikesMark?: boolean;
-    readonly collaborative?: boolean;
-    /** Where the same edit writes new words, when it writes any. */
-    readonly insertsAt?: number;
-  } = {}
+  options: { readonly strikesMark?: boolean } = {}
 ): ForeignTextRefusal | null {
   const ranges = rangesIn(story, item, paragraphId);
-  const at = options.insertsAt;
-  // A point whose left neighbour is a character of this revision.
-  const follows = (point: number) =>
-    ranges.some((range) => range.start < point && point <= range.end);
-  if (
-    options.collaborative &&
-    (ranges.some((range) => start < range.end && end > range.start) ||
-      (end > start && follows(start)) ||
-      (at !== undefined && follows(at)))
-  )
-    return 'collaborative-insertion';
   if (item.revisionKind === 'insert') return null;
   const struckContact = ranges.some(
     (range) => range.struck && start <= range.end && end >= range.start

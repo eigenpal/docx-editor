@@ -5,10 +5,11 @@
 // - `w:type` `oddPage` / `evenPage` (ECMA-376 §17.18.77) starts the section on the next page
 //   whose DISPLAYED number is odd / even. The skipped sheet takes the number in between.
 // - Under `w:evenAndOddHeaders` (§17.10.1) a section that restarts its numbering starts on a
-//   sheet whose continued number has the parity of the restarted number.
+//   sheet whose continued number has the parity of the restarted number. A restart on a
+//   shared continuous sheet does not reset that sequence.
 //
 // A restarted number does not move when a sheet is added. With alternating headers enabled,
-// an explicit odd/even break selects the required parity before the restart is applied.
+// an explicit odd/even break selects physical sheet parity before the restart is applied.
 // Otherwise the restart selects that parity. Without alternating headers, a restart adds no
 // sheet. Continuous sections share the previous sheet and never get one.
 //
@@ -25,6 +26,8 @@ export interface ParitySheetInputs {
   readonly restart: number | undefined;
   /** The continued number before applying this section's restart or adding a blank. */
   readonly nextDisplayed: number;
+  /** Continued sheet number, excluding restarts on a shared sheet. */
+  readonly nextParity?: number;
   /** The document index of the section's first sheet when nothing is inserted. */
   readonly sheetIndex: number;
   readonly evenAndOddHeaders: boolean;
@@ -34,11 +37,15 @@ export interface ParitySheetInputs {
 export function sectionNeedsParitySheet(inputs: ParitySheetInputs): boolean {
   if (inputs.breakType === 'continuous' || inputs.sheetIndex === 0) return false;
   if (inputs.restart !== undefined) {
-    // Continue the preceding numbering before applying the restart. The first section
-    // can start at an even number, so physical sheet indices do not establish parity.
+    // Ordinary restarts continue the preceding sheet sequence. Explicit odd/even breaks
+    // select a physical sheet, independently of the displayed number restarted there.
     const parity =
       inputs.breakType === 'oddPage' ? 1 : inputs.breakType === 'evenPage' ? 0 : inputs.restart;
-    return inputs.evenAndOddHeaders && (parity - inputs.nextDisplayed) % 2 !== 0;
+    const explicit = inputs.breakType === 'oddPage' || inputs.breakType === 'evenPage';
+    const continued = explicit
+      ? inputs.sheetIndex + 1
+      : (inputs.nextParity ?? inputs.nextDisplayed);
+    return inputs.evenAndOddHeaders && (parity - continued) % 2 !== 0;
   }
   if (inputs.breakType === 'oddPage') return inputs.nextDisplayed % 2 === 0;
   if (inputs.breakType === 'evenPage') return inputs.nextDisplayed % 2 !== 0;
@@ -95,6 +102,8 @@ export interface SectionSheetStart {
   readonly restart: number | undefined;
   /** The body pass's running displayed number before any blank sheet in front. */
   readonly runningBefore: number;
+  /** Overflow sheets of a section that began on the preceding section's sheet. */
+  readonly continuesPreviousSheet?: boolean;
   readonly geometry: PageGeometry;
 }
 
@@ -147,6 +156,7 @@ export function resettleParitySheets(
   let shift = 0;
   /** The running displayed number the next sheet gets, in final terms. */
   let running = 1;
+  let parityRunning = 1;
   const numbered = (page: PageRecord, pageNumber: number): PageRecord => {
     const source = page.pageFieldSource;
     return source && source.pageNumber !== pageNumber
@@ -160,12 +170,14 @@ export function resettleParitySheets(
       // A sheet the notes pass inserted takes the running number and moves what follows.
       next.push(numbered(page, running));
       running += 1;
+      parityRunning += 1;
       shift += 1;
       continue;
     }
     if (stored === undefined) {
       next.push(page);
       running += 1;
+      parityRunning += 1;
       continue;
     }
     const start = plan.starts.get(page.index);
@@ -176,17 +188,27 @@ export function resettleParitySheets(
           breakType: start.breakType,
           restart: start.restart,
           nextDisplayed: start.restart === undefined ? displayed : running,
+          nextParity: parityRunning,
           sheetIndex: next.length,
           evenAndOddHeaders: plan.evenAndOddHeaders,
         })
       ) {
         next.push(paritySheetAt(start.pageIndex, 0, start.geometry, undefined));
         if (start.restart === undefined) displayed += 1;
+        parityRunning += 1;
       }
       // A restarted section's stamps are already final; an unrestarted one moves with the
       // sheets in front of it. Its stamp is the body pass's running number, blank included.
       shift = start.restart === undefined ? displayed - stored : 0;
     }
+    if (
+      start &&
+      start.restart !== undefined &&
+      !(start.continuesPreviousSheet ?? start.breakType === 'continuous')
+    ) {
+      parityRunning = stored + shift;
+    }
+    parityRunning += 1;
     next.push(numbered(page, stored + shift));
     const restartedAfter = plan.runningAfter.get(page.index);
     if (restartedAfter !== undefined) {

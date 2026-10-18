@@ -382,7 +382,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     if (!reads) {
       return { ok: false, planned: refuse('invalid-handle', 'that story is not in this document') };
     }
-    const item = revisionReads(reads).find((each) => each.id === target.revisionId) ?? null;
+    // No package: a handle to a record still in the document resolves, listed or not.
+    const item = revisionReads(reads, null).find((each) => each.id === target.revisionId) ?? null;
     // RESOLVED MEANS GONE. A decision already made is not re-applied to whatever now occupies
     // its offsets — that would edit text the caller never named.
     if (!item) {
@@ -1773,8 +1774,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             const storyPlan = planFor(story);
             return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
           },
-          host.trackedRangeReplacement !== false,
-          host.collaborative === true
+          host.trackedRangeReplacement !== false
         );
 
       case 'insertText': {

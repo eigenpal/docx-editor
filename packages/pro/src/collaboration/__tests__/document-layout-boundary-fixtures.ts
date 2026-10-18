@@ -3,6 +3,7 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import { strToU8, unzipSync, zipSync } from 'fflate';
 import { zipDocument, W, R, REL } from './document-peer-support.ts';
 
 const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
@@ -49,3 +50,17 @@ export const omittedGridCellBytes = zipDocument(
     paragraph('Closing') +
     section(1)
 );
+
+const continuousParts = unzipSync(restartedSectionBytes);
+continuousParts['word/document.xml'] = strToU8(
+  new TextDecoder()
+    .decode(continuousParts['word/document.xml'])
+    .replace(
+      `<w:p><w:pPr>${section(0, true)}</w:pPr><w:r><w:t>Opening section</w:t></w:r></w:p>`,
+      paragraph('Opening') +
+        '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
+        `<w:p><w:pPr>${section(1, true)}</w:pPr><w:r><w:t>Second</w:t></w:r></w:p>` +
+        `<w:p><w:pPr>${section(1, true).replace('<w:sectPr>', '<w:sectPr><w:type w:val="continuous"/>')}</w:pPr></w:p>`
+    )
+);
+export const continuousRestartBytes = zipSync(continuousParts);

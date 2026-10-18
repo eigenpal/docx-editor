@@ -1,4 +1,5 @@
 import { beyondLine, gapOffset } from './line-edge-hit.ts';
+import { endsWithSpaceSlot, withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 import { drawingAtOffset, pictureEdgeX, pictureIsRtl } from './inline-picture-caret.ts';
 import { bidiPrefixWidth } from './shaped-caret-advances.ts';
 import { nearestBidiSpan, paragraphIsRtl } from './rtl-paragraph.ts';
@@ -1000,7 +1001,7 @@ export function caretBoxOnLine(
       if (next && next.range.start === offset) {
         const cjk = isCjk(lastCodePointOf(span.text) ?? 0) || isCjk(next.text.codePointAt(0) ?? 0);
         const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
-        if ((span.text.endsWith(' ') && gap > 0.25) || (cjk && gap > 0.001)) {
+        if ((endsWithSpaceSlot(span.text) && gap > 0.25) || (cjk && gap > 0.001)) {
           chosen = next;
           break;
         }
@@ -1023,7 +1024,7 @@ export function caretBoxOnLine(
       break;
     }
   }
-  const x = spanOffsetX(chosen, offset, measurer);
+  const x = justifiedSpaceEndX(spans, chosen, offset) ?? spanOffsetX(chosen, offset, measurer);
   // Span boxes are NOT baseline-aligned — every one of them starts at the line's top, and the
   // painter baseline-aligns the glyphs in CSS. Taking the box directly drew a small run's
   // caret at the top of a tall line, floating above the text it belonged to. Aligning it the
@@ -1039,6 +1040,28 @@ export function caretBoxOnLine(
     y: line.box.y + line.baseline - metrics.baseline - baselineShiftPtOf(chosen.style),
     height: metrics.height,
   };
+}
+
+/**
+ * The caret between a stretched space and the zero-width spaces after it, on a justified
+ * line: at the far end of the painted space (the next span's start), as at the span's end.
+ * Only zero-width spaces follow the offset, so both offsets are one visible position.
+ */
+function justifiedSpaceEndX(
+  spans: readonly StyleSpanRecord[],
+  span: StyleSpanRecord,
+  offset: number
+): number | undefined {
+  if (offset <= span.range.start || offset >= span.range.end) return undefined;
+  if (span.range.end - span.range.start !== span.text.length || span.style.shaping)
+    return undefined;
+  const tail = span.text.slice(offset - span.range.start);
+  if (withoutTrailingZeroWidthSpaces(tail) !== '') return undefined;
+  if (!withoutTrailingZeroWidthSpaces(span.text).endsWith(' ')) return undefined;
+  const next = spans[spans.indexOf(span) + 1];
+  if (!next || next.range.start !== span.range.end) return undefined;
+  const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
+  return gap > 0.25 ? next.box.x : undefined;
 }
 
 function offsetWithinSpan(span: StyleSpanRecord, x: number, context: HitContext): LineOffset {

@@ -11,6 +11,7 @@ export { commentBodyText, commentInitials } from './review-text.ts';
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
 import { mergeParagraphBreakEdits } from './review-paragraph-breaks.ts';
+import { mergeConsecutiveParagraphPropertyChanges } from './review-paragraph-property-groups.ts';
 import {
   changedLanguages,
   changedFormatting,
@@ -377,12 +378,13 @@ function computeRevisionItemsOf(
   // an atomic field, leaving those wrappers as separate review decisions.
   const tableItems = groupTableRevisions(part, items, sites, located, order);
   // Same-kind fragments remain one decision even when their source dates differ.
-  return mergeParagraphBreakEdits(
+  const textItems = mergeParagraphBreakEdits(
     mergeAdjacentSameKindEdits(tableItems, order),
     part,
     order,
     previewByNode
   );
+  return mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order);
 }
 
 /**

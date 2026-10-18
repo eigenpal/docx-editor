@@ -56,7 +56,8 @@ import {
   type PreservedImageConverter,
 } from './node-image-decode-port.ts';
 import { attachReviewArtifactGeometry } from './review-artifact-geometry.ts';
-import { projectReviewArtifacts } from './review-artifact-projection.ts';
+import { projectReviewArtifacts, unlistedReviewSites } from './review-artifact-projection.ts';
+import { withHiddenRevisionSites } from '../layout/revision-hidden-sites.ts';
 import { publishImmutableSemanticLayout } from './semantic-layout-publication.ts';
 
 const EMPTY_REVIEW_ARTIFACTS = Object.freeze([]);
@@ -529,6 +530,16 @@ export function openDocumentForExport(
       return runLayout(mode, revisionRestarts + 1, deadline);
     };
 
+    // Records the review artifacts leave out paint no markup, as in the editor. Only the views
+    // that paint markup need to know which they are.
+    const baseFilter =
+      mode === 'simple-markup'
+        ? withPlainResolvedMarkup(revisionAuthorFilter)
+        : revisionAuthorFilter;
+    const viewFilter =
+      mode === 'all-markup' || mode === 'simple-markup'
+        ? withHiddenRevisionSites(baseFilter, unlistedReviewSites(pkg), mode === 'simple-markup')
+        : baseFilter;
     let fieldLinkState = state.fieldLinks.get(mode);
     if (!fieldLinkState || fieldLinkState.revision !== revision || fieldLinkState.pkg !== pkg) {
       // Cached paragraph lines can survive a live-view revision. Keep the registry's monotonic
@@ -557,10 +568,7 @@ export function openDocumentForExport(
         defaultTabStopPt: state.styles.defaultTabStopPt,
         compatibilityMode: state.styles.compatibilityMode,
         displayMode: layoutProjectionOf(mode),
-        revisionAuthorFilter:
-          mode === 'simple-markup'
-            ? withPlainResolvedMarkup(revisionAuthorFilter)
-            : revisionAuthorFilter,
+        revisionAuthorFilter: viewFilter,
         showFieldCodes: false,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
         drawingLayoutTokenForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
@@ -601,10 +609,7 @@ export function openDocumentForExport(
         drawingLayoutEpoch: state.drawingBundle.cacheTokenForPart(state.view.part().name),
         drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         displayMode: layoutProjectionOf(mode),
-        revisionAuthorFilter:
-          mode === 'simple-markup'
-            ? withPlainResolvedMarkup(revisionAuthorFilter)
-            : revisionAuthorFilter,
+        revisionAuthorFilter: viewFilter,
         showFieldCodes: false,
         bodyBlockLimit: undefined,
         // Export paints every field as one unit; the painted text is the same in both modes.

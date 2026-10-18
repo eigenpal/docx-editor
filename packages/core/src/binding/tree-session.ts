@@ -9,7 +9,7 @@ import { createSessionPackageWriter } from './session-package-writer.ts';
 // Paragraphs are edited through the canonical tree; unknown content remains preserved there.
 
 import { projectedText, storyCarriesCommentAnchor } from './story-text-reads.ts';
-import { stylesPartOf } from '../store/package/ooxml-indexes.ts';
+import { numberingRootOf, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import { materializeGlossaryPlaceholders } from '../store/store/placeholder-materialize.ts';
 import { paragraphOrderOfPart, type ReviewItem } from '@docx-editor.dev/core/store';
 import {
@@ -19,6 +19,7 @@ import {
   patchLocalReviewItems,
 } from './review-patch.ts';
 import { createReviewItemsMemo } from './review-items-memo.ts';
+import { reviewItemFiltering } from './review-item-filter.ts';
 import {
   addPackageComment,
   deletePackageComments,
@@ -206,6 +207,9 @@ export function openTreeSessionFromPackage(
     commentsPart: OoxmlPart | undefined;
     commentsExtendedPart: OoxmlPart | undefined;
     pkg: OoxmlPackage;
+    /** The styles and numbering `items` were filtered against. */
+    stylesPart: OoxmlPart | undefined;
+    numberingRoot: OoxmlElement | null;
   } | null = null;
   /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
@@ -306,8 +310,6 @@ export function openTreeSessionFromPackage(
   // Their memoized roots are cleared after the narrow package edits this session supports.
   const STYLES_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
-  const NUMBERING_REL_TYPE =
-    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering';
   let stylesRoot: OoxmlElement | null = null;
   const resolveStylesRoot = (): OoxmlElement | null => {
     const live = currentPackage();
@@ -337,18 +339,7 @@ export function openTreeSessionFromPackage(
     const live = currentPackage();
     if (numberingRootPackage === live) return numberingRoot;
     numberingRootPackage = live;
-    const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
-      (rel) => rel.type === NUMBERING_REL_TYPE
-    );
-    let part: OoxmlPart | undefined;
-    if (record) {
-      const resolved = resolveRelationship(record);
-      if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = live.parts.get(resolved.target.partName);
-      }
-    }
-    part ??= live.parts.get('/word/numbering.xml');
-    numberingRoot = part?.root ?? null;
+    numberingRoot = numberingRootOf(live);
     return numberingRoot;
   };
 
@@ -695,7 +686,7 @@ export function openTreeSessionFromPackage(
       currentPackage,
 
       collaborationPort: (documentId) =>
-        createCollaborationDocumentPort(packageStore, { documentId }),
+        createCollaborationDocumentPort(packageStore, { documentId, interactive: true }),
 
       applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE, options = {}) {
         return commitSessionTreeOps(
@@ -1022,22 +1013,27 @@ export function openTreeSessionFromPackage(
           commentsPart,
           commentsExtendedPart,
           stylesPart: stylesPartOf(pkg),
+          numberingRoot: resolveNumberingRoot(),
           furnitureParts: furnitureAndNoteParts(),
           // Resolved HERE because a payload lives in a customXml data part: the derivation
           // receives story parts, and reaching a package part from one is not something a
           // capability module can do.
           customNodePayloads: customNodePayloadsAcrossStories(),
         };
+        const { stylesPart, numberingRoot } = memoInputs;
+        const filtering = reviewItemFiltering(derive, pkg, memoInputs, reviewCache);
         const derived = (): readonly ReviewItem[] =>
           reviewItemsMemo.get(memoInputs) ??
-          derive.collectReviewItems({
-            storyPart: store.part,
-            furnitureParts: memoInputs.furnitureParts,
-            stylesPart: memoInputs.stylesPart,
-            commentsPart,
-            commentsExtendedPart,
-            customNodePayloads: memoInputs.customNodePayloads,
-          });
+          filtering.filtered(
+            derive.collectReviewItems({
+              storyPart: store.part,
+              furnitureParts: memoInputs.furnitureParts,
+              stylesPart: memoInputs.stylesPart,
+              commentsPart,
+              commentsExtendedPart,
+              customNodePayloads: memoInputs.customNodePayloads,
+            })
+          );
         const inputs = {
           part: store.part,
           commentsPart,
@@ -1053,6 +1049,7 @@ export function openTreeSessionFromPackage(
         if (
           reviewCache &&
           lastChange &&
+          filtering.sameFilter &&
           reviewQueueKeptByStructure(lastChange, reviewCache, reviewCache.items, inputs)
         ) {
           items = reviewCache.items;
@@ -1062,29 +1059,37 @@ export function openTreeSessionFromPackage(
               ? localReviewPatchParagraphId(lastChange, reviewCache, reviewCache.items, inputs)
               : null;
           const localRevisions =
-            patchParagraphId && reviewCache
+            patchParagraphId && reviewCache && filtering.patchable(patchParagraphId)
               ? derive.revisionItemsOfParagraph(store.part, patchParagraphId)
               : null;
           if (
             patchParagraphId &&
             reviewCache &&
             localRevisions &&
-            canApplyLocalReviewPatch(reviewCache.items, localRevisions, patchParagraphId)
+            canApplyLocalReviewPatch(
+              reviewCache.items,
+              localRevisions,
+              patchParagraphId,
+              store.part
+            )
           ) {
             paragraphOrder = reviewCache.paragraphOrder ?? paragraphOrderOfPart(store.part);
-            items = patchLocalReviewItems(
+            const patched = patchLocalReviewItems(
               reviewCache.items,
               paragraphOrder,
               patchParagraphId,
-              localRevisions
+              localRevisions,
+              filtering.filtered
             );
+            if (!patched) paragraphOrder = paragraphOrderOfPart(store.part);
+            items = patched ?? derived();
           } else {
             paragraphOrder = paragraphOrderOfPart(store.part);
             items = derived();
           }
         }
 
-        reviewItemsMemo.set(memoInputs, items);
+        reviewItemsMemo.set(memoInputs, (items = filtering.publish(items)));
         reviewCache = {
           revisionKey,
           bodyRevision: store.revision,
@@ -1094,6 +1099,8 @@ export function openTreeSessionFromPackage(
           commentsPart,
           commentsExtendedPart,
           pkg,
+          stylesPart,
+          numberingRoot,
         };
         return reviewCache.items;
       },

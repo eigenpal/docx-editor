@@ -14,7 +14,14 @@ import type { AutomationOperation } from './operations.ts';
 import type { AutomationErrorCode } from './protocol.ts';
 import type { AutomationPackageReads, AutomationStoryReads } from './reads.ts';
 import { storyOfHandle } from './spans.ts';
-import { revisionItemsInStory } from './review.ts';
+import { listedRevisionItemsInStory, revisionItemsInStory } from './review.ts';
+import {
+  inertPropertyChangeInputsOf,
+  inertPropertyChanges,
+} from '../layout/review-inert-property-changes.ts';
+import { revisionItemsOf } from '../store/store/review-reads.ts';
+import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { planNarrowRevisionDecision, type RevisionDecisionLedger } from './review-scope.ts';
 import { textboxSiteIndex } from './textbox-revision-scope.ts';
 
@@ -220,14 +227,42 @@ export function revisionAuthorPlan(
     };
   const selection = batchSelection(operation, handles, packageReads);
   if (!selection.ok) return selection;
+  const keys =
+    operation.revisions === undefined
+      ? storyKeysWithoutUnlisted(selection, packageReads.package)
+      : selection.keys;
   const plan = planRevisionAuthorChange(
     selection.reads.part,
     attribution,
-    selection.keys,
+    keys,
     selection.scopeRoot,
     operation.authors
   );
   return { ok: true as const, reads: selection.reads, ...plan };
+}
+
+/**
+ * A whole-story author change names every change of the story except records with no card,
+ * which keep their author. The story's own keys when it chose them (a body with text boxes),
+ * else every key of the scoped derivation; `selection.keys` unchanged when there are none.
+ */
+function storyKeysWithoutUnlisted(
+  selection: {
+    readonly reads: AutomationStoryReads;
+    readonly keys: readonly string[] | undefined;
+    readonly scopeRoot?: OoxmlNode | undefined;
+  },
+  pkg: OoxmlPackage | null
+): readonly string[] | undefined {
+  if (!pkg) return selection.keys;
+  const { part } = selection.reads;
+  const root = selection.scopeRoot;
+  const items = revisionItemsOf(root && root.kind !== 'textValue' ? { ...part, root } : part);
+  const unlisted = new Set(
+    inertPropertyChanges(items, inertPropertyChangeInputsOf(pkg)).map(reviewItemKey)
+  );
+  if (unlisted.size === 0) return selection.keys;
+  return (selection.keys ?? items.map(reviewItemKey)).filter((key) => !unlisted.has(key));
 }
 
 /** Count pending decisions after mutation, when adjacent surviving changes may regroup. */
@@ -239,7 +274,7 @@ export function revisionBatchAnswer(
 ): import('./protocol.ts').AutomationValue {
   const target = revisionDecisionTarget({ op: 'acceptAllRevisions', body }, handles, post);
   if (!target.ok) throw new Error('resolved story disappeared');
-  const remaining = revisionItemsInStory(target.reads).length;
+  const remaining = listedRevisionItemsInStory(target.reads, post.package).length;
   return { kind: 'revisionBatch', result: { ...result, remaining } };
 }
 

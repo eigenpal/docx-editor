@@ -38,6 +38,26 @@ The system SHALL store each run property as its own attribute on each character.
 - **WHEN** two peers set the same property of the same character to different values at the same time
 - **THEN** every replica shows the same one of the two values
 
+### Requirement: A decision on a revision reaches all of it and only it
+
+The system SHALL store each tracked revision around a character as its own attribute, so that an accept or reject of one author's revision changes every character of that revision and no other character, also when another peer edits inside or right after the revision at the same time.
+
+#### Scenario: Typing inside an insertion while it is accepted
+
+- **WHEN** one peer types, in suggesting mode, inside another author's pending insertion, and another peer accepts that insertion at the same time
+- **THEN** every replica shows every character of the insertion accepted
+- **AND** the typed text stays the typing peer's own pending insertion
+
+#### Scenario: Typing right after an insertion while it is accepted
+
+- **WHEN** one peer types, in suggesting mode, right after another author's pending insertion, and another peer accepts that insertion at the same time
+- **THEN** the untracked text after the typed text stays untracked on every replica
+
+#### Scenario: Striking inside an insertion while it is accepted
+
+- **WHEN** one peer strikes part of another author's pending insertion, and another peer accepts that insertion at the same time
+- **THEN** the struck characters are the striking peer's pending deletion only, and the rest of the insertion is accepted
+
 ### Requirement: A character shows once
 
 The system SHALL show each character of shared paragraph text at most once in the materialized document.

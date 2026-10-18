@@ -7,7 +7,6 @@ import {
   type ReviewRevisionItem,
   type ReviewRange,
 } from './review-items.ts';
-import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 import { isInertMarker } from './revision-marker-content.ts';
 import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 
@@ -25,16 +24,15 @@ function holdsParagraphBelow(node: OoxmlNode): boolean {
   return result;
 }
 
-export function mergeParagraphBreakEdits(
-  items: readonly ReviewRevisionItem[],
-  part: OoxmlPart,
-  order: ReadonlyMap<string, number>,
-  previewByNode: ReadonlyMap<string, { readonly range: ReviewRange; readonly text: string }>
-): readonly ReviewRevisionItem[] {
-  if (!items.some((item) => item.revisionKind === 'paragraphMark')) return items;
-  // Only sibling paragraphs share a break. Deep document order alone would join edits
-  // across table cells, text boxes, or intervening tables. Position markers between two
-  // paragraphs, such as a bookmark end, do not separate them.
+/**
+ * Each paragraph's next SIBLING paragraph. Deep document order alone would pair paragraphs
+ * across table cells, text boxes, or intervening tables. Position markers between two
+ * paragraphs, such as a bookmark end, do not separate them.
+ */
+export function followingSiblingParagraphs(part: OoxmlPart): ReadonlyMap<string, string> {
+  // One walk per root: both the break merge and the property merge of a derivation ask.
+  const known = followingByRoot.get(part.root);
+  if (known) return known;
   const following = new Map<string, string>();
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
@@ -49,6 +47,21 @@ export function mergeParagraphBreakEdits(
     }
   };
   visit(part.root, 0);
+  followingByRoot.set(part.root, following);
+  return following;
+}
+
+const followingByRoot = new WeakMap<OoxmlNode, ReadonlyMap<string, string>>();
+
+export function mergeParagraphBreakEdits(
+  items: readonly ReviewRevisionItem[],
+  part: OoxmlPart,
+  order: ReadonlyMap<string, number>,
+  previewByNode: ReadonlyMap<string, { readonly range: ReviewRange; readonly text: string }>
+): readonly ReviewRevisionItem[] {
+  if (!items.some((item) => item.revisionKind === 'paragraphMark')) return items;
+  // Only sibling paragraphs share a break.
+  const following = followingSiblingParagraphs(part);
   const parent = items.map((_, index) => index);
   const find = (index: number): number => {
     while (parent[index] !== index) {
@@ -74,13 +87,11 @@ export function mergeParagraphBreakEdits(
       add(ends, key(item, range.end.paragraphId, range.end.offset), index);
     }
   });
+  // Dates do not separate the edits: text, the mark, and the next paragraph's leading edit by
+  // one author are one decision even when the file stamps them months apart, as inline
+  // adjacency already treats them.
   const join = (index: number, others: readonly number[]): void => {
-    for (const other of others) {
-      const left = items[index]!.date;
-      const right = items[other]!.date;
-      if (left !== undefined && right !== undefined && !sameEditingMoment(left, right)) continue;
-      parent[find(other)] = find(index);
-    }
+    for (const other of others) parent[find(other)] = find(index);
   };
   items.forEach((item, index) => {
     if (
