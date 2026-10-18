@@ -1,3 +1,7 @@
+import {
+  filterReviewItemsByAuthor,
+  type RevisionAuthorVisibility,
+} from './revision-author-visibility.ts';
 import { ordinaryMoveRanges } from '../store/store/revision-move-ranges.ts';
 import type {
   EditorModuleRegistry,
@@ -68,11 +72,8 @@ interface ReviewCommandDependencies {
   destroyed(): boolean;
   viewing(): boolean;
   placements(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
-  visible(): readonly ReviewItem[];
-  /** Whether the author filter shows `author`'s changes. */
-  authorVisible(author: string): boolean;
-  /** Whether a tracked change predicate narrows the changes shown. */
-  predicateActive(): boolean;
+  /** The reviewer filter: which authors it shows, and whether a predicate narrows the rest. */
+  authorVisibility: RevisionAuthorVisibility;
   scope(item: ReviewItem): StoryScope;
   /** Activates without announcing: only the caller knows whether the activation reveals. */
   activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
@@ -165,9 +166,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
     unlisted: () => readonly ReviewRevisionItem[]
   ): readonly ReviewRevisionItem[] =>
-    command.keys !== undefined || command.scope === 'document' || deps.predicateActive()
+    command.keys !== undefined || command.scope === 'document' || deps.authorVisibility.hasPredicate
       ? []
-      : unlisted().filter((item) => deps.authorVisible(item.author));
+      : unlisted().filter((item) => deps.authorVisibility.isVisible(item.author));
   /** The parts a bulk review command reaches, with the keys it selects in each. */
   const selection = (
     command: { scope?: 'visible' | 'document'; keys?: readonly string[] },
@@ -192,7 +193,13 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
         const pair = pairOf(key);
         return pair ? resolutionKeysOf(pair.item) : [key];
       }) ??
-        (command.scope === 'document' ? items : deps.visible())
+        (command.scope === 'document'
+          ? items
+          : filterReviewItemsByAuthor(
+              deps.surface()?.session.reviewItems() ?? [],
+              deps.authorVisibility
+            )
+        )
           .filter((item) => item.kind === 'revision')
           .map(reviewItemKey)
     );

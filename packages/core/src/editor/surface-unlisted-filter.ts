@@ -23,3 +23,25 @@ export function withUnlistedRecords(
       )
     : base;
 }
+
+/**
+ * The surface's revision filter: the reviewer filter for `session`, without the records its
+ * queue leaves out, under the review view's own settings. Those records paint no markup, so
+ * nothing on the page marks a change that has no card.
+ */
+export function surfaceRevisionFilter(
+  reviewView: {
+    filter(filter: RevisionAuthorFilter | undefined): RevisionAuthorFilter | undefined;
+    view(): ReviewDisplayMode;
+  },
+  visibility: {
+    filterForSession(session: {
+      reviewItems(): readonly ReviewItem[];
+    }): RevisionAuthorFilter | undefined;
+  },
+  session: { reviewItems(): readonly ReviewItem[] }
+): RevisionAuthorFilter | undefined {
+  return reviewView.filter(
+    withUnlistedRecords(visibility.filterForSession(session), reviewView.view(), session)
+  );
+}

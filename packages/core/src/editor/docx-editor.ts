@@ -58,7 +58,6 @@ import {
   createReviewAuthorCommands,
   createReviewRevisionTicker,
   createRevisionAuthorVisibility,
-  filterReviewItemsByAuthor,
 } from './revision-author-visibility.ts';
 import type {
   DocumentEditingMode,
@@ -209,12 +208,11 @@ import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
   type CommandRefusal,
   createSuggestingConfigurationReporter,
-  documentEditingModeRestriction,
   documentTrackingAdoption,
   PRO_REVIEW_REASON,
+  refusalOfEditingMode,
   resolveHostEditingMode,
   SUGGESTING_AUTHOR_REASON,
-  suggestingModeRefusal,
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import { normalizeEditorAuthor } from './docx-editor-author.ts';
@@ -1752,12 +1750,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   /** Why `setEditingMode(mode)` is refused right now, or null: ONE ladder for `can` and `exec`. */
   function editingModeRefusal(mode: DocumentEditingMode): CommandRefusal | null {
-    // A document opened with `mode: 'view'` is read-only for the session; the pill stays.
-    if (hostConfig.mode() === 'view' && mode !== 'viewing') {
-      return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
-    }
-    const suggesting = mode === 'suggesting' ? suggestingModeRefusal(suggestingGuards()) : null;
-    return suggesting ?? documentEditingModeRestriction(documentTracking(), mode);
+    const viewOnly = hostConfig.mode() === 'view';
+    return refusalOfEditingMode(viewOnly, suggestingGuards, documentTracking, mode);
   }
 
   const reviewCommands = createReviewCommands({
@@ -1766,10 +1760,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     destroyed: () => destroyed,
     viewing: () => editingMode === 'viewing',
     placements: reviewPlacements,
-    visible: () =>
-      filterReviewItemsByAuthor(surface?.session.reviewItems() ?? [], reviewAuthorVisibility),
-    authorVisible: (author) => reviewAuthorVisibility.isVisible(author),
-    predicateActive: () => reviewAuthorVisibility.hasPredicate,
+    authorVisibility: reviewAuthorVisibility,
     scope: storyScopeOfReviewItem,
     reveal: (event) => events.emitReviewItemReveal(withRevealPairKey(reviewPlacements, event)),
     activate: (key, allowExcludedFormat) => {

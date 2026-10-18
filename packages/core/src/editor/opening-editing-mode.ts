@@ -317,6 +317,24 @@ export function documentEditingModeRestriction(
   };
 }
 
+/**
+ * Why switching to `mode` is refused right now, or null: ONE ladder for `can` and `exec`. The
+ * guards and the tracking settings are read only when a rung needs them.
+ */
+export function refusalOfEditingMode(
+  hostViewOnly: boolean,
+  guards: () => OpeningModeGuards,
+  tracking: () => DocumentTrackingSettings,
+  mode: DocumentEditingMode
+): CommandRefusal | null {
+  // A document opened with `mode: 'view'` is read-only for the session; the pill stays.
+  if (hostViewOnly && mode !== 'viewing') {
+    return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
+  }
+  const suggesting = mode === 'suggesting' ? suggestingModeRefusal(guards()) : null;
+  return suggesting ?? documentEditingModeRestriction(tracking(), mode);
+}
+
 /** Resolve live host intent against the document whose surface is being edited. */
 export function resolveHostEditingMode(
   requested: 'edit' | 'view' | 'suggesting' | undefined,

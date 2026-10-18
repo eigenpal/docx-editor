@@ -158,7 +158,7 @@ import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
 import { rangesOnPages } from '../layout/selection-rects.ts';
 import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import { type RevisionAuthorFilter } from '../layout/revision-projection.ts';
-import { withUnlistedRecords } from './surface-unlisted-filter.ts';
+import { surfaceRevisionFilter } from './surface-unlisted-filter.ts';
 import { createFurnitureFilterMemo } from './surface-furniture-filter.ts';
 import { createRevisionAuthorVisibility } from './revision-author-visibility.ts';
 import type { PaginatedSurfaceRuntimeOptions } from './surface-runtime-options.ts';
@@ -958,15 +958,7 @@ export function mountPaginatedSurface(
   });
   const markupSettings = createSurfaceRevisionMarkup(
     options.revisionMarkup,
-    // Records the review queue leaves out paint no markup, so nothing marks a missing card.
-    () =>
-      reviewView.filter(
-        withUnlistedRecords(
-          revisionAuthorVisibility.filterForSession(session),
-          reviewDisplayMode(),
-          session
-        )
-      ),
+    () => surfaceRevisionFilter(reviewView, revisionAuthorVisibility, session),
     () => flushPendingInputAndLayout(),
     () => {
       furnitureSource = createCurrentFurnitureSource(revisionFilter());

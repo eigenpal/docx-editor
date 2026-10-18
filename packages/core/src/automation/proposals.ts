@@ -146,7 +146,12 @@ export function proposalRevisionError(
       'span'
     );
   const rule: ProposalRevisionRule =
-    foreignRule ?? (blocking.author === tracked.author ? 'own-pending' : 'foreign-revision');
+    foreignRule ??
+    (blocking.author === tracked.author
+      ? 'own-pending'
+      : blocking.revisionKind === 'format'
+        ? 'foreign-formatting'
+        : 'foreign-revision');
   return invalid('unsupported-revision', RULE_MESSAGES[rule], RULE_CODES[rule]);
 }
 
@@ -155,6 +160,7 @@ type ProposalRevisionRule =
   | 'deleted-text-only'
   | 'collaborative-insertion'
   | 'foreign-revision'
+  | 'foreign-formatting'
   | 'own-pending';
 
 const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
@@ -163,6 +169,9 @@ const RULE_MESSAGES: Readonly<Record<ProposalRevisionRule, string>> = {
     "in a collaboration session, the API refuses strikes over another author's pending insertion or deletion, and edits that start inside or right after one",
   'foreign-revision':
     "the edit touches another author's pending paragraph mark, formatting, move, or structure",
+  // Named apart because the change may have no card: one that leaves the formatting unchanged.
+  'foreign-formatting':
+    "the edit touches another author's pending formatting change; if it leaves the formatting unchanged it has no card, and Accept All or Reject All over the story clears it",
   'own-pending': "the edit would merge with or cover the author's own pending change",
 };
 
@@ -171,5 +180,6 @@ const RULE_CODES: Readonly<Record<ProposalRevisionRule, EditDiagnosticCode>> = {
   'deleted-text-only': 'edit.tracked-deleted-text-only',
   'collaborative-insertion': 'edit.tracked-foreign-revision-unsupported',
   'foreign-revision': 'edit.tracked-foreign-revision-unsupported',
+  'foreign-formatting': 'edit.tracked-foreign-revision-unsupported',
   'own-pending': 'edit.tracked-own-pending-change',
 };

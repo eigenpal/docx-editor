@@ -89,12 +89,18 @@ test('a tracked edit over another author’s unlisted property change refuses', 
           code: string;
           debugInfo?: { innerError?: { code?: string } };
         };
-        return { listed, error: { code, inner: debugInfo?.innerError?.code } };
+        const named = JSON.stringify(debugInfo).includes('no review card');
+        return { listed, error: { code, inner: debugInfo?.innerError?.code, named } };
       }
     });
     expect(outcome).toEqual({
       listed: 0,
-      error: { code: 'NotImplemented', inner: 'edit.tracked-foreign-revision-unsupported' },
+      error: {
+        code: 'NotImplemented',
+        inner: 'edit.tracked-foreign-revision-unsupported',
+        // The refusal names the possibility, so a caller with nothing listed knows what to look for.
+        named: true,
+      },
     });
   } finally {
     server.dispose();

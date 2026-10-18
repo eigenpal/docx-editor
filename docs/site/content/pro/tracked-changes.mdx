@@ -1054,6 +1054,16 @@ Each call resolves every location with the revision's `(id, author, date)` tuple
 
 The automation object model also provides revision collection bulk actions. See the [editor API](/docs/2.x/editor-api).
 
+### Formatting changes with no card
+
+A tracked formatting change can leave the formatting unchanged. For example, it can set an indent that the paragraph style already sets. After styles and list levels apply, such a change has no effect, so the editor shows no card, no change bar, and no format mark for it. The change stays in the file until a bulk decision removes it.
+
+- The `resolveAllReviewChanges` command with no `keys` removes these changes together with the listed changes.
+- With `scope: 'visible'`, the command keeps the changes of hidden authors. It also keeps every such change while a tracked change predicate is set, because the predicate decides over listed changes only.
+- If the command names a change by its key, it resolves that change, listed or not.
+- A loop over `useReview().items`, like the `AcceptAll` sample, never reaches these changes. Run the command when the file must end up without them.
+- A tracked edit that touches another author's change of this kind refuses with `edit.tracked-foreign-revision-unsupported`, and the diagnostic message names this case.
+
 ## Detect review content without Pro
 
 The snapshot field `hasReviewContent` detects revisions or comment anchors without a registered review module.
