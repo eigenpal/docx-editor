@@ -4023,13 +4023,13 @@ export interface DocxEditorProps {
     // (undocumented)
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
-    // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
     // (undocumented)
     hyperlinkPopup?: boolean;
     // (undocumented)
     i18n?: Translations;
+    imageDecodePort?: ImageDecodePort;
     locale?: string;
     lockedControlNavigation?: LockedControlNavigation;
     // (undocumented)
@@ -4374,7 +4374,6 @@ export interface DocxEditorRootProps {
     // (undocumented)
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
-    // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
     // (undocumented)

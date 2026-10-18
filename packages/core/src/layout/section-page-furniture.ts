@@ -30,6 +30,8 @@ export interface SectionPageFurnitureInputs {
   readonly footerDistance: number;
   /** Where this section's first sheet lands in the DOCUMENT. */
   readonly pageIndexStart: number;
+  /** Displayed number of local page zero. */
+  readonly pageNumberStart?: number;
   /** Content width the stories were laid out at. */
   readonly contentWidth: number;
   /** This section's per-page content insets, by section-local index. */
@@ -140,7 +142,7 @@ export function createSectionPageFurniture(
   });
 
   const variantFor = (index: number): HeaderFooterVariantName =>
-    headerFooterVariantFor(furniture, pageIndexStart, index);
+    headerFooterVariantFor(furniture, inputs.pageNumberStart ?? pageIndexStart + 1, index);
 
   const furnitureFor = (
     kind: 'header' | 'footer',
@@ -155,12 +157,12 @@ export function createSectionPageFurniture(
         : furniture.footers.get(variant);
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
-    const pageNumber = pageIndexStart + index + 1;
+    const pageNumber = (inputs.pageNumberStart ?? pageIndexStart + 1) + index;
     const pageContext: FieldPageContext = {
       pageNumber,
       pageCount: Math.max(pageNumber, inputs.pageCount() + 1),
       sectionPageCount: index + 1,
-      sheetNumber: pageNumber,
+      sheetNumber: pageIndexStart + index + 1,
     };
     const placement: StoryPlacement = {
       kind,

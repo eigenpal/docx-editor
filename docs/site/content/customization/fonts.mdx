@@ -24,6 +24,20 @@ The DOCX editor needs font bytes for text shaping and page layout. Choose the su
 | `FontConfiguration` | Supplies a complete configuration with defaults and limits. |
 | `FontResolver` | Loads application-approved faces after document font requests become known. |
 
+### Replace fonts in an existing editor
+
+To replace fonts in React or Vue, pass a new value to the `fonts` prop. The editor replaces the fonts in place: the document, selection, undo history, protection, and collaboration session stay intact. Keep the value stable across renders, because each new value resolves the fonts again.
+
+On a `createDocxEditor` instance, call `editor.setFonts(fonts)`. This changes local layout and paint without changing document content.
+
+```ts
+await editor.setFonts(nextFonts);
+// Remove host-supplied faces when their permission expires.
+await editor.setFonts(undefined);
+```
+
+Replacement cancels the previous resolver. The current faces keep measuring and painting the document until the new faces are ready, so the pages lay out once. If the new fonts supply nothing usable, or the resolver fails, the editor still removes the previous host faces. Removal with `undefined` takes effect at once. Pass the resolver request's `signal` to your fetch operation to cancel network work. Old results cannot restore removed fonts. Without host faces, the editor uses bounded fallback measurement unless the document supplies embedded faces. Current failures report through `onFontError` and retain their original cause.
+
 ### Configuration fields
 
 | Field | What you can customize |
@@ -377,7 +391,7 @@ onUnmounted(() => {
 </Framework>
 </FrameworkTabs>
 
-Use `useFonts()` with `packagedFonts()` to load the packaged families. `fonts` identity changes remount a Root. Load a stable configuration before editing starts.
+Use `useFonts()` with `packagedFonts()` to load the packaged families. A new `fonts` value replaces the fonts in place, so keep the configuration stable across renders.
 
 ## Build an application picker
 
