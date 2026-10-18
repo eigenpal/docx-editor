@@ -14,6 +14,7 @@ import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument, W, R, REL } from './document-peer-support.ts';
 import { packageFingerprint } from './document-support.ts';
 import {
+  continuousRestartBytes,
   omittedGridCellBytes,
   restartedSectionBytes,
 } from './document-layout-boundary-fixtures.ts';
@@ -181,6 +182,7 @@ test.each([
   ['captions before oversized rows', captionBytes, 4, 2],
   ['repeated headers around oversized rows', repeatedBytes, 4, 5],
   ['restarted sections after an even initial number', restartedSectionBytes, 2, 1],
+  ['continuous section restarts', continuousRestartBytes, 3, 4],
   ['exposed borders beside omitted grid cells', omittedGridCellBytes, 1, 3],
 ] as const)(
   '%s converge through edits, history, reconnect, and reopen',
