@@ -164,25 +164,6 @@ function waitForSynced(
   });
 }
 
-/** The longest a teardown waits for a connecting socket to open or fail. */
-const SETTLE_TIMEOUT_MS = 10_000;
-
-/** Run `teardown` once the provider's socket opens or closes, or after a bound. */
-function closeWhenSettled(provider: OwnedHocuspocusProvider, teardown: () => void): void {
-  let done = false;
-  const finish = (): void => {
-    if (done) return;
-    done = true;
-    clearTimeout(timer);
-    provider.off('open', finish);
-    provider.off('close', finish);
-    teardown();
-  };
-  const timer = setTimeout(finish, SETTLE_TIMEOUT_MS);
-  provider.on('open', finish);
-  provider.on('close', finish);
-}
-
 /** Create one owned Hocuspocus room and provider-neutral collaboration session. @public */
 export async function createHocuspocusCollaboration(
   options: CreateHocuspocusCollaborationOptions
@@ -197,8 +178,6 @@ export async function createHocuspocusCollaboration(
   // Every connection first names the room generation this replica holds, so a server that
   // compacted the room refuses it before any of its state merges (`room-generation.ts`).
   // The provider emits `open` before it sends its token and starts the sync.
-  /** The socket opened or closed at least once: closing it now cannot interrupt a connect. */
-  let socketSettled = false;
   const connectProvider = (): OwnedHocuspocusProvider => {
     const created = providerFactory({
       url: options.url,
@@ -207,13 +186,7 @@ export async function createHocuspocusCollaboration(
       awareness,
       ...(options.token !== undefined ? { token: options.token } : {}),
     });
-    created.on('open', () => {
-      socketSettled = true;
-      created.sendStateless?.(roomGenerationMessage(ydoc));
-    });
-    created.on('close', () => {
-      socketSettled = true;
-    });
+    created.on('open', () => created.sendStateless?.(roomGenerationMessage(ydoc)));
     return created;
   };
   let provider: OwnedHocuspocusProvider | null = null;
@@ -224,6 +197,10 @@ export async function createHocuspocusCollaboration(
     // a document, and merging a second seed into it doubled every paragraph. Synced first,
     // 'create' refuses such a room with `already-initialized`. The seed is one transaction,
     // so peers never receive half of it.
+    // A join aborted before it starts opens no connection at all.
+    if (options.bootstrap.kind !== 'create' && options.bootstrap.signal?.aborted) {
+      throw new CollaborationSchemaError('initialization-aborted');
+    }
     provider = connectProvider();
     await waitForSynced(
       provider,
@@ -247,22 +224,9 @@ export async function createHocuspocusCollaboration(
     });
   } catch (error) {
     handle?.destroy();
-    const teardown = (): void => {
-      provider?.destroy();
-      awareness.destroy();
-      ydoc.destroy();
-    };
-    // An abort can land while the socket still connects. Closing a connecting socket is
-    // legal, but some WebSocket implementations then raise an error event that nothing can
-    // listen to any more, such as the one test DOMs install in place of the platform's. So a
-    // socket that is still connecting is closed once it opens or fails, and the join rejects
-    // at once either way.
-    const aborted = options.bootstrap.kind !== 'create' && options.bootstrap.signal?.aborted;
-    if (provider && aborted && !socketSettled && !provider.isSynced) {
-      closeWhenSettled(provider, teardown);
-    } else {
-      teardown();
-    }
+    provider?.destroy();
+    awareness.destroy();
+    ydoc.destroy();
     throw error;
   }
   const connectedProvider = provider;

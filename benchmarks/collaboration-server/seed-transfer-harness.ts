@@ -9,7 +9,9 @@
 // Hocuspocus's own Server runs on the Node.js WebSocket adapter, which refuses Bun. This is the
 // same wiring over Bun's server: one Hocuspocus connection per socket.
 
+import { HocuspocusProvider } from '@hocuspocus/provider';
 import { Hocuspocus } from '@hocuspocus/server';
+import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 import {
   checkCollaborationRoomGeneration,
@@ -31,9 +33,38 @@ import {
   type TreePackageStore,
 } from '@docx-editor.dev/core/store';
 import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
+import { HOCUSPOCUS_PROVIDER_FOR_TESTS } from '../../packages/pro/src/collaboration/hocuspocus-test-provider.ts';
 import { storeFrom } from './document-text.ts';
 
 const BODY: StoryScope = { kind: 'body' };
+
+/**
+ * The runtime's own WebSocket. The test preload installs a test DOM whose `WebSocket` raises
+ * an error event nothing can listen to when a connecting socket closes, which fails the run.
+ * Browsers and Node do not, so every provider here uses Bun's WebSocket, as production would.
+ * Bun serves it from its built-in `undici` module.
+ */
+export const NativeWebSocket = (
+  (await import('undici' as string)) as { readonly WebSocket: typeof WebSocket }
+).WebSocket;
+
+/** The provider `createHocuspocusCollaboration` builds, on the runtime's own WebSocket. */
+function nativeProvider(init: {
+  readonly url: string;
+  readonly name: string;
+  readonly document: Y.Doc;
+  readonly awareness: Awareness;
+  readonly token?: string | (() => string | Promise<string>);
+}): HocuspocusProvider {
+  return new HocuspocusProvider({
+    url: init.url,
+    name: init.name,
+    document: init.document,
+    awareness: init.awareness,
+    ...(init.token !== undefined ? { token: init.token as string } : {}),
+    WebSocketPolyfill: NativeWebSocket,
+  } as ConstructorParameters<typeof HocuspocusProvider>[0]);
+}
 
 /** Hocuspocus message type of document sync messages. */
 const SYNC = 0;
@@ -54,6 +85,10 @@ export interface ConnectionTraffic {
   readonly syncReceivedSizes: number[];
   /** The size of each sync message the participant sent to the server. */
   readonly syncSentSizes: number[];
+  /** The socket closed. */
+  closed: boolean;
+  /** The Hocuspocus message type of each message the participant sent, in order. */
+  readonly sentTypes: number[];
 }
 
 /** Traffic summed over every connection of one participant. */
@@ -90,6 +125,8 @@ export interface SeedServer {
   readonly created: Set<string>;
   /** How many times the server compacted a room. */
   readonly compactions: () => number;
+  /** The peers the server authenticated, in order. */
+  readonly authenticated: readonly string[];
   /** Every connection's traffic, in the order the connections opened. */
   readonly connections: readonly ConnectionTraffic[];
   /** How many times the server seeded a room. */
@@ -135,10 +172,14 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
   const connections: ConnectionTraffic[] = [];
   let seeds = 0;
   let compactions = 0;
+  const authenticated: string[] = [];
   const hocuspocus = new Hocuspocus({
     quiet: true,
     debounce: 50,
     maxDebounce: 200,
+    async onAuthenticate({ requestParameters }) {
+      authenticated.push(requestParameters.get('peer') ?? '');
+    },
     async onLoadDocument({ documentName, document }) {
       prepareCollaborationServerDocument(document);
       const delay = options.loadDelayMs?.() ?? 0;
@@ -200,6 +241,8 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
         sent: 0,
         syncReceivedSizes: [],
         syncSentSizes: [],
+        closed: false,
+        sentTypes: [],
       };
       return bun.upgrade(request, { data: { request, traffic } }) ? undefined : new Response('ok');
     },
@@ -234,6 +277,7 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
           typeof message === 'string' ? new TextEncoder().encode(message) : new Uint8Array(message);
         const traffic = socket.data.traffic;
         traffic.sent += bytes.byteLength;
+        traffic.sentTypes.push(messageType(bytes));
         if (messageType(bytes) === SYNC) {
           traffic.syncSent += bytes.byteLength;
           traffic.syncSentSizes.push(bytes.byteLength);
@@ -241,6 +285,7 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
         socket.data.connection?.handleMessage(bytes);
       },
       close(socket, code, reason) {
+        socket.data.traffic.closed = true;
         socket.data.connection?.handleClose({ code, reason });
       },
     },
@@ -252,6 +297,7 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
     connections,
     seeds: () => seeds,
     compactions: () => compactions,
+    authenticated,
     document: (room) => hocuspocus.documents.get(room),
     traffic(peer) {
       const total: ConnectionTraffic = {
@@ -262,6 +308,8 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
         sent: 0,
         syncReceivedSizes: [],
         syncSentSizes: [],
+        closed: true,
+        sentTypes: [],
       };
       for (const entry of connections) {
         if (entry.peer !== peer) continue;
@@ -271,6 +319,8 @@ export async function startSeedServer(options: SeedServerOptions): Promise<SeedS
         total.sent += entry.sent;
         total.syncReceivedSizes.push(...entry.syncReceivedSizes);
         total.syncSentSizes.push(...entry.syncSentSizes);
+        total.closed &&= entry.closed;
+        total.sentTypes.push(...entry.sentTypes);
       }
       return {
         ...total,
@@ -349,7 +399,8 @@ export async function joinRoom(
     identity: { actorId: `actor-${options.peer}`, name: `Participant ${options.peer}` },
     bootstrap: options.bootstrap,
     syncedTimeoutMs: 15_000,
-  });
+    [HOCUSPOCUS_PROVIDER_FOR_TESTS]: nativeProvider,
+  } as Parameters<typeof createHocuspocusCollaboration>[0]);
   const store = storeFrom(room.document);
   const detach = room.session.attach(
     createCollaborationDocumentPort(store, { documentId: options.roomId })

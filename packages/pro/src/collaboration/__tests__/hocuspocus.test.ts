@@ -444,10 +444,8 @@ describe('createHocuspocusCollaboration abort', () => {
           )
         )
       ).rejects.toMatchObject({ code: 'initialization-aborted' });
-      // The socket never opened, so it is closed once it fails, not while it connects.
-      expect(providers.every((provider) => provider.destroyCount === 0)).toBe(true);
-      for (const provider of providers) provider.emit('close', {});
-      expect(providers.every((provider) => provider.destroyCount === 1)).toBe(true);
+      // No provider, so no connection: nothing reaches the server.
+      expect(providers).toHaveLength(0);
     });
 
     test(`an abort while the server loads the room rejects ${kind} at once`, async () => {
@@ -470,14 +468,7 @@ describe('createHocuspocusCollaboration abort', () => {
       ).rejects.toMatchObject({ code: 'initialization-aborted' });
       expect(performance.now() - started).toBeLessThan(1_000);
       const [provider] = providers;
-      // The join rejected at once; the connecting socket is closed when it opens.
-      expect(provider!.destroyCount).toBe(0);
-      provider!.emit('open', {});
       expect(provider!.destroyCount).toBe(1);
-      provider!.emit('close', {});
-      expect(provider!.destroyCount).toBe(1);
-      expect(provider!.listeners.get('open')?.size ?? 0).toBe(1);
-      expect(provider!.listeners.get('close')?.size ?? 0).toBe(1);
       expect(provider!.listeners.get('synced')?.size ?? 0).toBe(0);
       expect(provider!.listeners.get('authenticationFailed')?.size ?? 0).toBe(0);
     });

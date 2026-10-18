@@ -32,6 +32,7 @@ import * as Y from 'yjs';
 import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
 import { createCollaborationRoomId } from '@docx-editor.dev/pro/collaboration/hocuspocus';
 import {
+  NativeWebSocket,
   docxParagraphTexts,
   joinRoom,
   paragraphTexts,
@@ -187,7 +188,8 @@ export async function runSeedScenario(
       url: `${server.url}/?peer=leaver`,
       name: roomId,
       document: new Y.Doc(),
-    });
+      WebSocketPolyfill: NativeWebSocket,
+    } as ConstructorParameters<typeof HocuspocusProvider>[0]);
     // Settled once the socket opens or fails; it is never closed while it connects.
     const opened = new Promise<void>((resolve) => {
       provider.on('open', () => {

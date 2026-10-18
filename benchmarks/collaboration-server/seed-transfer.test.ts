@@ -155,9 +155,7 @@ describe('a new room on a Hocuspocus server', () => {
     expect(paragraphTexts(again.store)).toEqual(['Small room', 'Two paragraphs']);
   });
 
-  test('joins aborted while their socket connects reject and leave no unhandled error', async () => {
-    // Under the test DOM, closing a connecting WebSocket raises an error event that nothing can
-    // listen to, which fails the whole run. An aborted join closes its socket once it settles.
+  test('joins aborted while their socket connects reject at once and close their sockets', async () => {
     const room = await server('server', paragraphsDocx(['Abort while connecting']));
     const outcomes: string[] = [];
     for (let index = 0; index < 30; index += 1) {
@@ -174,14 +172,65 @@ describe('a new room on a Hocuspocus server', () => {
         )
       );
     }
-    // Let every deferred close run before the server stops.
-    await new Promise((resolve) => setTimeout(resolve, 300));
     expect(
       outcomes.filter((outcome) => outcome !== 'joined' && outcome !== 'initialization-aborted')
     ).toEqual([]);
     expect(
       outcomes.filter((outcome) => outcome === 'initialization-aborted').length
     ).toBeGreaterThanOrEqual(10);
+    // Every aborted join closed whatever connection it had opened.
+    await until(
+      () =>
+        outcomes.every(
+          (outcome, index) => outcome === 'joined' || room.traffic(`abort-${index}`).closed
+        ),
+      'the aborted joins to close their sockets'
+    );
+  });
+
+  test('a join aborted before it starts opens no connection', async () => {
+    const room = await server('server', paragraphsDocx(['Never opened']));
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      join(room, 'pre-aborted', createCollaborationRoomId(), {
+        kind: 'create-or-join',
+        document: SAMPLE,
+        signal: abort.signal,
+      })
+    ).rejects.toMatchObject({ code: 'initialization-aborted' });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(room.connections.filter((entry) => entry.peer === 'pre-aborted')).toEqual([]);
+    expect(room.authenticated).not.toContain('pre-aborted');
+    expect(room.seeds()).toBe(0);
+  });
+
+  test('a join aborted while the server loads the room sends no sync or token after the abort', async () => {
+    const room = await startSeedServer({
+      seed: 'server',
+      document: paragraphsDocx(['Slow room']),
+      loadDelayMs: () => 500,
+    });
+    servers.push(room);
+    const abort = new AbortController();
+    const pending = join(room, 'slow', createCollaborationRoomId(), {
+      kind: 'join',
+      signal: abort.signal,
+    });
+    // The token reaches the server, which starts to load the room; then the participant leaves.
+    await until(() => room.authenticated.includes('slow'), 'the server to authenticate the join');
+    abort.abort();
+    const started = performance.now();
+    await expect(pending).rejects.toMatchObject({ code: 'initialization-aborted' });
+    expect(performance.now() - started).toBeLessThan(100);
+    const sentAtAbort = room.traffic('slow').sentTypes.length;
+    await until(() => room.traffic('slow').closed, 'the aborted join to close its socket');
+    // Wait past the load: the server finished it for nobody.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    // After the abort the provider only says goodbye: it clears its presence (awareness, 1)
+    // and closes (7). No token (2), sync (0), or stateless message (5) follows.
+    expect(room.traffic('slow').sentTypes.slice(sentAtAbort)).toEqual([1, 7]);
+    expect(room.connections.filter((entry) => entry.peer === 'slow')).toHaveLength(1);
   });
 
   test('participants that race to open a new room all join the one server seed', async () => {
