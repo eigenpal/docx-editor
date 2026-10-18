@@ -7,7 +7,12 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, layoutHeaderFooterStory, layoutSemanticDocument } from '../index.ts';
+import {
+  createFixedMeasurer,
+  createLayoutSession,
+  layoutHeaderFooterStory,
+  layoutSemanticDocument,
+} from '../index.ts';
 import type { PageFurniture } from '../semantic-layout.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -81,4 +86,21 @@ describe('evenAndOddHeaders alternates by document page, not section page', () =
     );
     expect(variants(part, [alternating()])).toEqual(['default', 'even']);
   });
+});
+
+test('single-section numbering controls header variants and retained layout', () => {
+  const session = createLayoutSession();
+  for (const start of [0, 1, 2, 0]) {
+    const part = load(
+      paragraph('one') +
+        '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
+        paragraph('two') +
+        sectPr().replace('</w:sectPr>', `<w:pgNumType w:start="${start}"/></w:sectPr>`)
+    );
+    const furniture = alternating();
+    const layout = layoutSemanticDocument(part, 1, { measurer, furniture, session });
+    expect(layout.pages.map((page) => page.header?.variant)).toEqual(
+      start % 2 === 0 ? ['even', 'default'] : ['default', 'even']
+    );
+  }
 });

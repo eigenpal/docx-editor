@@ -111,6 +111,10 @@ export const MODE_RULES = {
     'Note reference bands in table rows honor cell widow control and keep-lines cuts',
     'ECMA-376 Part 1 §17.11 Footnotes and Endnotes'
   ),
+  oversizedRowKeepGroupReleases: legacy(
+    'A kept row group that exceeds a fresh page starts beside preceding content, except directly below authored headers',
+    'ECMA-376 Part 1 §17.3.1.15 keepNext'
+  ),
   positionedTableBreaksAtMargin: modern(
     'A page- or margin-positioned table that breaks ends its first fragment at the bottom margin, not the page edge',
     'ECMA-376 Part 1 §17.4.57 tblpPr'

@@ -35,6 +35,7 @@ const MODE_MATRIX = {
   modernBidiTableRuleShift: 'modern',
   modernGridLineSideRules: 'modern',
   noteTableCellKeeps: 'modern',
+  oversizedRowKeepGroupReleases: 'legacy',
   positionedTableBreaksAtMargin: 'modern',
   pageBreakBeforeKeepsSpace: 'legacy',
   pageBreakLinesStretch: 'legacy',

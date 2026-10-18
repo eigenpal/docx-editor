@@ -18,6 +18,7 @@ import {
 import { MAX_BORDER_WIDTH_PT } from './paragraph-style.ts';
 import { resolveStrictHexFill } from './ooxml-shading.ts';
 import { effectiveBorderSide } from './table-border-cascade.ts';
+import { tableRowBorderExtents } from './table-row-border-extents.ts';
 import {
   buildColumnOwnershipIndexes,
   ownerAt,
@@ -832,6 +833,7 @@ export function resolveTableCellBorderGrid(
     work.columnLookups = 0;
   }
   const ownership = buildColumnOwnershipIndexes(rows, columnCount, work, ownershipBudget);
+  const rowExtents = tableRowBorderExtents(rows, columnCount);
 
   const effective = (
     cell: BorderGridCell,
@@ -859,9 +861,7 @@ export function resolveTableCellBorderGrid(
       const lastMergeRow = rowIndex + mergeSpan - 1;
       const isTop = rowIndex === 0;
       const isBottom = lastMergeRow === rowCount - 1;
-      const isLeft = cell.gridColumn === 0;
       const lastCol = cell.gridColumn + cell.gridSpan - 1;
-      const isRight = lastCol >= columnCount - 1;
 
       // --- top (outer only; interior owned by row above) — per grid column ---
       const topRaw: RawInterval[] = [];
@@ -875,16 +875,15 @@ export function resolveTableCellBorderGrid(
         }
       }
 
-      // --- left (outer only; interior owned by cell to the left) — per merge row ---
+      // Row perimeters can move inward after skipped grid columns.
       const leftRaw: RawInterval[] = [];
-      if (isLeft) {
-        for (let r = rowIndex; r <= lastMergeRow; r += 1) {
-          leftRaw.push({
-            gridStart: r,
-            gridEnd: r + 1,
-            edge: asResolved(effective(cell, 'left', false)),
-          });
-        }
+      for (let r = rowIndex; r <= lastMergeRow; r += 1) {
+        if (cell.gridColumn !== rowExtents[r]?.start) continue;
+        leftRaw.push({
+          gridStart: r,
+          gridEnd: r + 1,
+          edge: asResolved(effective(cell, 'left', false)),
+        });
       }
 
       // --- bottom (owned here; conflict with below.top per grid column) ---
@@ -912,7 +911,7 @@ export function resolveTableCellBorderGrid(
       const rightRaw: RawInterval[] = [];
       for (let r = rowIndex; r <= lastMergeRow; r += 1) {
         let edge: TableBorderSide;
-        if (isRight) {
+        if (lastCol >= (rowExtents[r]?.end ?? columnCount) - 1) {
           edge = effective(cell, 'right', false);
         } else {
           const neighbor = ownerAt(ownership, r, lastCol + 1, work);

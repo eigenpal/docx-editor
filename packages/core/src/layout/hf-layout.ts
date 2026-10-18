@@ -610,10 +610,10 @@ export function layoutHeaderFooterStory(
       flowStory([frameBlock], 0);
       const framed = flow;
       flowStory(flowBlocks.slice(1), lineCounter);
-      // An anchored drawing wraps the story around its own exclusion, which the frame laid out
-      // alone never saw. Keep the ordinary flow rather than guess at that interaction.
+      // An anchored drawing wraps the story around an exclusion the isolated frame never saw.
+      // Only an empty frame can share that band without another collision check.
       placed =
-        pendingAnchoredDrawings.length === 0
+        pageFrame.empty || pendingAnchoredDrawings.length === 0
           ? placeHeaderPageFrame(
               pageFrame,
               framed,

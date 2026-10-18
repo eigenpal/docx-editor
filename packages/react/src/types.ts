@@ -5,6 +5,7 @@ import type {
   FieldResultsMode,
   ContentLockPolicy,
   FontShapingOptions,
+  ImageDecodePort,
   LockedControlNavigation,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorPopups } from './editor/popup-config';
@@ -63,8 +64,8 @@ export interface DocxEditorProps {
   /** Customize automatically mounted popups. Set an entry to false for manual ownership. */
   popups?: DocxEditorPopups;
   /**
-   * Immutable byte-backed font sources sampled at mount. Remount to replace this
-   * configuration atomically.
+   * Font sources for layout and paint. A new value replaces the fonts in place, keeping the
+   * document, selection and undo history; keep the reference stable across renders.
    *
    * Optional, but it decides layout FIDELITY. With it, the engine shapes text through
    * HarfBuzz and measures line and page breaks from real font metrics. Without it, layout
@@ -75,6 +76,8 @@ export interface DocxEditorProps {
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
   fontShaping?: FontShapingOptions;
+  /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
+  imageDecodePort?: ImageDecodePort;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them
