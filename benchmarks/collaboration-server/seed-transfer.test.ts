@@ -155,6 +155,35 @@ describe('a new room on a Hocuspocus server', () => {
     expect(paragraphTexts(again.store)).toEqual(['Small room', 'Two paragraphs']);
   });
 
+  test('joins aborted while their socket connects reject and leave no unhandled error', async () => {
+    // Under the test DOM, closing a connecting WebSocket raises an error event that nothing can
+    // listen to, which fails the whole run. An aborted join closes its socket once it settles.
+    const room = await server('server', paragraphsDocx(['Abort while connecting']));
+    const outcomes: string[] = [];
+    for (let index = 0; index < 30; index += 1) {
+      const abort = new AbortController();
+      if (index % 3 === 0) abort.abort();
+      else setTimeout(() => abort.abort(), index % 4);
+      outcomes.push(
+        await join(room, `abort-${index}`, createCollaborationRoomId(), {
+          kind: 'join',
+          signal: abort.signal,
+        }).then(
+          () => 'joined',
+          (error: { code?: string }) => error.code ?? 'threw'
+        )
+      );
+    }
+    // Let every deferred close run before the server stops.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(
+      outcomes.filter((outcome) => outcome !== 'joined' && outcome !== 'initialization-aborted')
+    ).toEqual([]);
+    expect(
+      outcomes.filter((outcome) => outcome === 'initialization-aborted').length
+    ).toBeGreaterThanOrEqual(10);
+  });
+
   test('participants that race to open a new room all join the one server seed', async () => {
     const room = await server('server', paragraphsDocx(['First paragraph', 'Second paragraph']));
     const roomId = createCollaborationRoomId();
@@ -181,7 +210,7 @@ describe('a new room on a Hocuspocus server', () => {
     editor.insert(0, 0.999, ' EDITED');
     await settled(editor);
     await until(() => storedTexts(room, roomId)[0] === 'Original EDITED', 'the edit to be stored');
-    editor.disconnect();
+    await editor.disconnect();
     await until(() => room.document(roomId) === undefined, 'the server to unload the room');
     room.storage.delete(roomId);
     await editor.reconnect();
@@ -209,7 +238,7 @@ describe('a new room on a Hocuspocus server', () => {
     const room = await server('server', paragraphsDocx(['Only paragraph']));
     const roomId = createCollaborationRoomId();
     const first = await join(room, 'first', roomId, { kind: 'join' });
-    first.disconnect();
+    await first.disconnect();
     await until(() => room.document(roomId) === undefined, 'the server to unload the room');
     room.storage.delete(roomId);
     room.created.delete(roomId);

@@ -188,17 +188,19 @@ export async function runSeedScenario(
       name: roomId,
       document: new Y.Doc(),
     });
-    const opened = new Promise<void>((resolve) =>
+    // Settled once the socket opens or fails; it is never closed while it connects.
+    const opened = new Promise<void>((resolve) => {
       provider.on('open', () => {
         provider.sendStateless(JSON.stringify({ type: 'docx-room-generation', generation: null }));
         resolve();
-      })
-    );
+      });
+      provider.on('close', () => resolve());
+    });
     const delay = int(0, 50);
     // Leave after the socket opens: the server loads the room once the token arrives, and the
     // load delay keeps it loading while this participant leaves. Closing a socket that is still
     // connecting makes the provider raise an error event nothing listens to.
-    await Promise.race([opened, sleep(5_000)]);
+    await opened;
     await sleep(delay);
     provider.destroy();
   };
@@ -249,7 +251,7 @@ export async function runSeedScenario(
         log.push(`${entry.participant.peer} ${undo ? 'undo' : 'redo'}${done ? '' : ' (nothing)'}`);
       } else if (roll < 0.77 && online.length > 0) {
         const entry = online[int(0, online.length - 1)]!;
-        entry.participant.disconnect();
+        await entry.participant.disconnect();
         entry.online = false;
         log.push(`${entry.participant.peer} disconnect`);
       } else if (roll < 0.84 && offline.length > 0) {
@@ -409,7 +411,7 @@ async function loseStorage(
   const before = JSON.stringify(paragraphTexts(holder.store));
   for (const entry of live) {
     await synced(entry.participant);
-    entry.participant.disconnect();
+    await entry.participant.disconnect();
     entry.online = false;
   }
   await until(() => server.document(roomId) === undefined, 'the server to unload the room');

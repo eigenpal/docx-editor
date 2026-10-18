@@ -328,8 +328,8 @@ export interface SeedParticipant {
   undo(): boolean;
   /** Redo this participant's last undone step. */
   redo(): boolean;
-  /** Close the connection. Edits stay local until `reconnect`. */
-  disconnect(): void;
+  /** Close the connection, once it is open. Edits stay local until `reconnect`. */
+  disconnect(): Promise<void>;
   /** Open the connection again, once the previous socket has closed. */
   reconnect(): Promise<void>;
   destroy(): void;
@@ -371,15 +371,24 @@ export async function joinRoom(
   // The provider ignores `connect()` while its socket still reads as connected, so a reconnect
   // right after a disconnect would leave it offline for good.
   let socketStatus = 'connected';
+  const settled: (() => void)[] = [];
   room.provider.on('status', (event: { readonly status: string }) => {
     socketStatus = event.status;
+    if (socketStatus !== 'connecting') for (const run of settled.splice(0)) run();
   });
+  // Close a socket only once it opened or failed. A test DOM's WebSocket raises an error
+  // event nothing can listen to when a connecting socket closes, and that fails the run.
+  const whenSettled = (run: () => void): void => {
+    if (socketStatus === 'connecting') settled.push(run);
+    else run();
+  };
   return {
     peer: options.peer,
     room,
     store,
     statuses,
-    disconnect() {
+    async disconnect() {
+      await new Promise<void>((resolve) => whenSettled(resolve));
       room.provider.disconnect();
     },
     async reconnect() {
@@ -417,7 +426,7 @@ export async function joinRoom(
       destroyed = true;
       stopStatus();
       detach();
-      room.destroy();
+      whenSettled(() => room.destroy());
     },
   };
 }
