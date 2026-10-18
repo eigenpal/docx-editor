@@ -8,6 +8,8 @@
 // it on the receiving thread, and the session opens from that with nothing left to read.
 //
 // Neither half touches a DOM, a window or a canvas: this lane compiles without the DOM lib.
+// Internal: the editor's own parse worker (`src/parse/worker.ts`) is the only writer and the
+// editor (`parse-off-thread.ts`) the only reader, so a read never arrives from a host.
 
 import { readOoxmlPackage, type OoxmlPackageResult } from './ooxml-package.ts';
 import {
@@ -24,12 +26,9 @@ import {
  *
  * Reading a package — unzipping it and turning its XML parts into trees — is most of what an
  * open costs before layout, and none of it needs the page. {@link parseDocument} does that read
- * anywhere, a worker included, and answers this: plain data that crosses `postMessage`. Handed
- * to `createDocxEditor({ document })`, `load()` or an adapter's `document` prop, the open skips
- * the read and goes straight to fonts and the first layout, on exactly the model a read of
- * `bytes` in place would have produced.
- *
- * @public
+ * anywhere, a worker included, and answers this: plain data that crosses `postMessage`. The
+ * editor opens from it without reading the bytes again, on exactly the model a read of `bytes`
+ * in place would have produced.
  */
 export interface ParsedDocument {
   /** Tells a parsed document from the other kinds of document source. */
@@ -54,7 +53,6 @@ const VERSION = 1;
  * bytes. Post the answer with {@link parsedDocumentTransferables} to move its buffers rather
  * than copy them.
  *
- * @public
  */
 export function parseDocument(bytes: Uint8Array): ParsedDocument {
   const read = readOoxmlPackage(bytes);
@@ -74,7 +72,6 @@ export function parseDocument(bytes: Uint8Array): ParsedDocument {
  * bytes and the read's. Transferring them detaches them on the sending side, so pass this
  * only where the sender is done with them — a worker that just parsed.
  *
- * @public
  */
 export function parsedDocumentTransferables(parsed: ParsedDocument): ArrayBuffer[] {
   const buffers = new Set<ArrayBuffer>();
@@ -88,6 +85,43 @@ export function parsedDocumentTransferables(parsed: ParsedDocument): ArrayBuffer
     for (const array of parsed.read.bytes) add(array);
   }
   return [...buffers];
+}
+
+/** What the editor posts to its parse worker: the bytes to read, and a number to answer with. */
+export interface ParseRequest {
+  readonly id: number;
+  readonly bytes: Uint8Array;
+}
+
+/** What the parse worker answers: the request's number and its read, or null when it failed. */
+export interface ParseReply {
+  readonly id: number;
+  readonly parsed: ParsedDocument | null;
+}
+
+/**
+ * The parse worker's whole job: read a {@link ParseRequest}'s bytes and answer with the reply
+ * and the buffers to transfer. A message that is not a request gets no answer; a read that
+ * throws answers null, and the editor then reads the bytes on the page.
+ */
+export function answerParseRequest(
+  data: unknown
+): { readonly reply: ParseReply; readonly transfer: ArrayBuffer[] } | null {
+  const request = data as Partial<ParseRequest> | null;
+  if (
+    typeof request !== 'object' ||
+    request === null ||
+    typeof request.id !== 'number' ||
+    !(request.bytes instanceof Uint8Array)
+  ) {
+    return null;
+  }
+  try {
+    const parsed = parseDocument(request.bytes);
+    return { reply: { id: request.id, parsed }, transfer: parsedDocumentTransferables(parsed) };
+  } catch {
+    return { reply: { id: request.id, parsed: null }, transfer: [] };
+  }
 }
 
 /** Whether a value is a {@link ParsedDocument}, by its tag and its bytes. */
@@ -141,8 +175,8 @@ function advance(parsed: ParsedDocument, rebuild: Rebuild, pause?: () => boolean
  *
  * Rebuilding is one pass of object creation, a fraction of the read it replaces, and happens
  * once per parsed document; a rebuild a host started in slices is finished here in one go.
- * After it the wire form is released, so a host holding the parsed document (as an adapter
- * prop does) does not also hold a second copy of the read.
+ * After it the wire form is released, so whatever still holds the parsed document does not
+ * also hold a second copy of the read.
  */
 export function parsedDocumentRead(parsed: ParsedDocument): OoxmlPackageResult | null {
   const rebuild = rebuildOf(parsed);
@@ -157,7 +191,6 @@ export function parsedDocumentRead(parsed: ParsedDocument): OoxmlPackageResult |
  *
  * Optional: an editor handed a parsed document rebuilds it on open if this has not.
  *
- * @public
  */
 export function receiveParsedDocument(value: unknown): ParsedDocument | null {
   if (!isParsedDocument(value)) return null;
@@ -179,7 +212,6 @@ export interface ReceiveInSlicesOptions {
  * page never stalls on it, and the promise settles when it is done. Opening the document
  * before then is fine — the open finishes what is left of the rebuild at once.
  *
- * @public
  */
 export async function receiveParsedDocumentInSlices(
   value: unknown,

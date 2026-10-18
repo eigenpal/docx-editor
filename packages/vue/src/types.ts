@@ -4,6 +4,7 @@ import type {
   FontShapingOptions,
   ImageDecodePort,
   LockedControlNavigation,
+  ParseInWorkerOption,
   RevisionMarkupOptions,
   ReviewDisplayMode,
 } from '@docx-editor.dev/core/editor';
@@ -44,11 +45,18 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 /** Props for the Vue `DocxEditor` sugar host. @public */
 export interface DocxEditorProps {
   popups?: import('./editor/popup-config').DocxEditorPopups;
+  /** Font sources. A new value replaces them in place, keeping edits, selection and history. */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
   fontShaping?: FontShapingOptions;
   /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
   imageDecodePort?: ImageDecodePort;
+  /**
+   * Read large documents on a Web Worker so the page stays responsive while they open. `true`
+   * starts the worker this package ships; a function creates it instead. Small documents, and
+   * any open the worker cannot serve, read on the page. Sampled at mount.
+   */
+  parseInWorker?: ParseInWorkerOption;
   colorMode?: 'light' | 'dark' | 'system';
   /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;

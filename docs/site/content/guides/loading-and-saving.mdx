@@ -256,57 +256,40 @@ async function pick(event: Event) {
 </Framework>
 </FrameworkTabs>
 
-### Parsing in a worker
+### Read large documents in a worker
 
-Reading the package (the unzip, and the XML of the body, notes and styles) is most of what opening a long document costs before layout. `parseDocument` from `@docx-editor.dev/core/parse` does that read on any thread, so a Web Worker can do it while the page stays responsive, for example as soon as a file is picked. What it returns crosses `postMessage`. Pass it to `document` or `load()` and the editor opens on the same model as the bytes, without reading them again:
-
-```ts
-// parse.worker.ts
-import { parseDocument, parsedDocumentTransferables } from '@docx-editor.dev/core/parse';
-
-self.onmessage = (event: MessageEvent<Uint8Array>) => {
-  const parsed = parseDocument(event.data);
-  self.postMessage(parsed, parsedDocumentTransferables(parsed));
-};
-```
+Opening a long document spends much of its time reading the file: unzipping it and parsing its XML. Set `parseInWorker` to do that work on a Web Worker, so the page keeps responding while the document opens.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { useEffect, useState } from 'react';
-import { DocxEditor } from '@docx-editor.dev/react';
-import { receiveParsedDocumentInSlices, type ParsedDocument } from '@docx-editor.dev/core/parse';
-
-export function WorkerEditor({ worker }: { worker: Worker }) {
-  const [doc, setDoc] = useState<ParsedDocument>();
-  useEffect(() => {
-    worker.onmessage = async (event) => {
-      const parsed = await receiveParsedDocumentInSlices(event.data);
-      if (parsed) setDoc(parsed);
-    };
-  }, [worker]);
-  return doc ? <DocxEditor document={doc} /> : null;
-}
+<DocxEditor document={bytes} parseInWorker />
 ```
 
 </Framework>
 <Framework value="vue">
 
-```ts
-import { receiveParsedDocumentInSlices, type ParsedDocument } from '@docx-editor.dev/core/parse';
-
-const doc = shallowRef<ParsedDocument>();
-worker.onmessage = async (event) => {
-  const parsed = await receiveParsedDocumentInSlices(event.data);
-  if (parsed) doc.value = parsed;
-};
+```vue
+<DocxEditor :document="bytes" parse-in-worker />
 ```
 
 </Framework>
 </FrameworkTabs>
 
-`receiveParsedDocumentInSlices` rebuilds the read on the page in short tasks; `receiveParsedDocument` does it in one, and the editor does it on open if neither has run. The worker applies the same size, zip and XML limits as an open from bytes, and a file it refuses is reported the same way. The parsed document keeps the file's bytes, so `save()`, embedded fonts and images work as they do for bytes.
+`DocxEditor.Root` takes the same prop, and `createDocxEditor` takes `parseInWorker: true` in its options. The editor uses the worker only for large documents. Small documents open on the page, where starting a worker costs more time than it saves.
+
+The worker applies the same size, zip, and XML limits as an open on the page, and the editor opens the same document with the same pages. If the worker can't start, fails, or doesn't answer, the editor reads the document on the page, so the option never stops a document from opening.
+
+#### Start the worker yourself
+
+The editor locates its worker with `new URL('./parse.js', import.meta.url)`, a pattern that Vite, webpack, and Next.js handle. If your bundler doesn't handle it, or your content security policy allows workers only from known locations, pass a function that starts the worker script published at `@docx-editor.dev/core/parse`. The following example uses the Vite worker import:
+
+```tsx
+import ParseWorker from '@docx-editor.dev/core/parse?worker';
+
+<DocxEditor document={bytes} parseInWorker={() => new ParseWorker()} />;
+```
 
 ### Replace a document at runtime
 

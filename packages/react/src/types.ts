@@ -7,6 +7,7 @@ import type {
   FontShapingOptions,
   ImageDecodePort,
   LockedControlNavigation,
+  ParseInWorkerOption,
 } from '@docx-editor.dev/core/editor';
 import type { DocxEditorPopups } from './editor/popup-config';
 import type { DocxEditorChildren } from './docx-editor-children';
@@ -64,8 +65,8 @@ export interface DocxEditorProps {
   /** Customize automatically mounted popups. Set an entry to false for manual ownership. */
   popups?: DocxEditorPopups;
   /**
-   * Immutable byte-backed font sources sampled at mount. Remount to replace this
-   * configuration atomically.
+   * Font sources for layout and paint. A new value replaces the fonts in place, keeping the
+   * document, selection and undo history; keep the reference stable across renders.
    *
    * Optional, but it decides layout FIDELITY. With it, the engine shapes text through
    * HarfBuzz and measures line and page breaks from real font metrics. Without it, layout
@@ -78,6 +79,12 @@ export interface DocxEditorProps {
   fontShaping?: FontShapingOptions;
   /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
   imageDecodePort?: ImageDecodePort;
+  /**
+   * Read large documents on a Web Worker so the page stays responsive while they open. `true`
+   * starts the worker this package ships; a factory creates it instead. Small documents, and
+   * any open the worker cannot serve, read on the page. Sampled at mount.
+   */
+  parseInWorker?: ParseInWorkerOption;
   /**
    * Title-bar slots. The host owns what goes here — brand lockup, switchers, theme
    * toggle, Open/New/Save controls — and passes them in; the editor renders them

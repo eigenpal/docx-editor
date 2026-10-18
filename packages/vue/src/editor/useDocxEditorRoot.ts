@@ -44,6 +44,7 @@ import {
   type FontConfigurationFragment,
   type FontResolver,
   type ImageDecodePort,
+  type ParseInWorkerOption,
 } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
@@ -66,6 +67,7 @@ import {
 export interface DocxEditorRootProps {
   popups?: import('./popup-config').DocxEditorPopups;
   document?: DocumentSource;
+  /** Font sources. A new value replaces them in place (`setFonts`), keeping edits and history. */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Explicit shaping byte ceiling; a changed maxFontBytes value remounts. */
   fontShaping?: FontShapingOptions;
@@ -119,6 +121,8 @@ export interface DocxEditorRootProps {
 
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
+  /** Read large documents on a Web Worker; see `DocxEditorConfig.parseInWorker`. Sampled at mount. */
+  parseInWorker?: ParseInWorkerOption;
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;
@@ -168,6 +172,8 @@ export function useDocxEditorRootOwner(
   let createdContentLockPolicy: DocxEditorRootProps['contentLockPolicy'];
   /** The `lockedControlNavigation` the current instance was created with. */
   let createdLockedControlNavigation: DocxEditorRootProps['lockedControlNavigation'];
+  /** The `fonts` the current instance holds: created with, or last handed to `setFonts`. */
+  let createdFonts: DocxEditorRootProps['fonts'];
   const markupRevision = shallowRef(0);
   let applyingMarkup = false;
   const tick = shallowRef(0);
@@ -288,6 +294,7 @@ export function useDocxEditorRootOwner(
     createdFieldResults = p.fieldResults;
     createdContentLockPolicy = p.contentLockPolicy;
     createdLockedControlNavigation = p.lockedControlNavigation;
+    createdFonts = p.fonts;
     const instance = createDocxEditor({
       ...(p.document !== undefined ? { document: p.document } : {}),
       ...(p.fonts ? { fonts: p.fonts } : {}),
@@ -311,6 +318,7 @@ export function useDocxEditorRootOwner(
       ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
+      ...(p.parseInWorker ? { parseInWorker: p.parseInWorker } : {}),
       onFontError: fireFontError,
     });
     const notify = deferredTick(() => {
@@ -360,7 +368,6 @@ export function useDocxEditorRootOwner(
     watch(
       [
         () => toValue(props).document,
-        () => toValue(props).fonts,
         () => toValue(props).fontShaping?.maxFontBytes,
         () => toValue(props).imageDecodePort,
       ],
@@ -368,6 +375,19 @@ export function useDocxEditorRootOwner(
       { immediate: true, flush: 'post' }
     );
   }
+
+  // A new `fonts` value replaces the instance's fonts in place. The instance a remount just
+  // created already has them, so only a change after creation reaches `setFonts`.
+  watch(
+    () => [editorRef.value, toValue(props).fonts] as const,
+    ([editor, fonts]) => {
+      if (!editor || createdFonts === fonts) return;
+      createdFonts = fonts;
+      // Rejects only after destroy; font failures report through `fontError`.
+      editor.setFonts(fonts).catch(() => {});
+    },
+    { flush: 'post' }
+  );
 
   onUnmounted(destroyEditor);
 

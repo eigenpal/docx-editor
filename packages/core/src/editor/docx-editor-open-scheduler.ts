@@ -76,9 +76,19 @@ function zipContentExceeds(bytes: Uint8Array, limit: number): boolean {
  */
 export const PREPARED_WORK_WAIT_MS = 2000;
 
+/**
+ * A step that waits for work off this thread, then continues with the step it answers. Unlike
+ * a plain promise, the wait is not capped by {@link PREPARED_WORK_WAIT_MS}: the work it stands
+ * for is the open's own, so the mount gains nothing by starting first. The work must settle,
+ * and should answer a step that still opens the document when it failed.
+ */
+export interface AwaitedStep {
+  readonly awaitStep: Promise<PrepareStep | void>;
+}
+
 /** What one prepare step leaves: nothing, work to wait for, or the next step. */
-type PrepareResult = void | Promise<unknown> | PrepareStep;
-type PrepareStep = () => void | Promise<unknown> | PrepareStep;
+type PrepareResult = void | Promise<unknown> | PrepareStep | AwaitedStep;
+type PrepareStep = () => PrepareResult;
 
 /** What the facade hands the scheduler; both close over facade-owned state. */
 export interface OpenSchedulerHooks {
@@ -212,6 +222,15 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
           if (!work) {
             // The mount gets its own task, so input and paint can run in between.
             timer = timers.setTimeout(run, 0);
+            return;
+          }
+          if (typeof work === 'object' && 'awaitStep' in work) {
+            const resume = (next: PrepareStep | void) => {
+              if (cancelled) return;
+              step = typeof next === 'function' ? next : null;
+              queueTask(run, viewOf());
+            };
+            work.awaitStep.then(resume, () => resume());
             return;
           }
           let waiting = true;

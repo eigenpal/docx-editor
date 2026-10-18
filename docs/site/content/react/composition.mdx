@@ -67,12 +67,12 @@ You can place optional chrome anywhere inside `Root`. Optional chrome includes t
 
 ### Root props
 
-The editor reads construction props when it creates the instance. Changes to `document`, `fonts`, or `imageDecodePort` remount the editor. Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, or the locale catalog apply without a remount. These changes preserve edits, caret position, and undo history.
+The editor reads construction props when it creates the instance. Changes to `document` or `imageDecodePort` remount the editor. Changes to `fonts`, `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, or the locale catalog apply without a remount. These changes preserve edits, caret position, and undo history.
 
 | Prop | Type | Description |
 | --- | --- | --- |
 | `document` | `DocumentSource` | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. An identity change remounts the editor. |
-| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Supplies font bytes or a resolver. An identity change remounts the editor. |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Supplies font bytes or a resolver. An identity change replaces the fonts without a remount. |
 | `author` | `string` | Sets the author for later comments, replies, and tracked changes. Changes apply without a remount. |
 | `locale` | `string` | Regional date input and generated document labels. Defaults to `en-US`; updates without a remount. |
 | `mode` | `'edit' \| 'view' \| 'suggesting'` | Sets the editing mode. When omitted, `w:trackRevisions` can select suggesting mode. |
@@ -84,6 +84,7 @@ The editor reads construction props when it creates the instance. Changes to `do
 | `translate` | `(key, params?) => string` | Resolves live document-surface labels. It defaults to the active catalog. |
 | `tableInteractionLabel` | `(key) => string` | Resolves labels for table insertion controls. |
 | `imageDecodePort` | `ImageDecodePort` | Overrides raster decoding for tests or custom hosts. |
+| `parseInWorker` | `boolean \| (() => Worker)` | Reads large documents on a Web Worker so the page keeps responding while they open. The editor reads this prop once, at creation. For details, see [Read large documents in a worker](/docs/2.x/guides/loading-and-saving#read-large-documents-in-a-worker). |
 
 For exact signatures, see the [React API reference](/docs/2.x/api/react).
 

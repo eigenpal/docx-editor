@@ -74,6 +74,51 @@ const harfBuzzWasmUrlEscapeHatch: NonNullable<Options['esbuildPlugins']>[number]
   },
 };
 
+/** How the editor locates its parse worker in source, verbatim from `parse-off-thread.ts`. */
+export const PARSE_WORKER_SOURCE_URL = "new URL('../parse/worker.ts', import.meta.url)";
+
+/**
+ * Point the parse worker's URL at the built worker.
+ *
+ * In source, `parse-off-thread.ts` names `../parse/worker.ts`, which every bundler that compiles
+ * core's sources resolves and bundles. The build emits that worker as `dist/parse.js`, beside
+ * the chunk that loads it, so both builds rewrite the expression to `./parse.js` and keep
+ * it a literal `new URL(..., import.meta.url)` that consumer bundlers still recognise. Both
+ * guards from the HarfBuzz plugin apply: exactly one occurrence, and exactly one file patched.
+ */
+const parseWorkerUrl: NonNullable<Options['esbuildPlugins']>[number] = {
+  name: 'parse-worker-url',
+  setup(build) {
+    let applied = 0;
+    build.onLoad({ filter: /[/\\]src[/\\]editor[/\\]parse-off-thread\.ts$/ }, async (args) => {
+      const source = await readFile(args.path, 'utf8');
+      const occurrences = source.split(PARSE_WORKER_SOURCE_URL).length - 1;
+      if (occurrences !== 1) {
+        throw new Error(
+          `expected exactly one \`${PARSE_WORKER_SOURCE_URL}\` in ${args.path}, found ${occurrences}. ` +
+            'Keep the worker URL literal, or parseInWorker ships pointing at a missing file.'
+        );
+      }
+      applied += 1;
+      return {
+        contents: source.replace(
+          PARSE_WORKER_SOURCE_URL,
+          () => "new URL('./parse.js', import.meta.url)"
+        ),
+        loader: 'ts',
+      };
+    });
+    build.onEnd(() => {
+      if (applied !== 1) {
+        throw new Error(
+          `parse-worker-url patched ${applied} files, expected exactly 1. ` +
+            'parse-off-thread.ts moved; re-point the onLoad filter.'
+        );
+      }
+    });
+  },
+};
+
 /**
  * Put HarfBuzz's `.wasm` beside the bundle that now contains its loader.
  *
@@ -124,7 +169,6 @@ const shared = {
     store: 'src/store/index.ts',
     editor: 'src/editor/index.ts',
     export: 'src/export/index.ts',
-    parse: 'src/parse/index.ts',
   },
   // Same reason the adapter sets it: tsup defaults to `node`, which resolves
   // bundled deps through their `node` export condition, and fflate's node build
@@ -171,7 +215,6 @@ const shared = {
       '@docx-editor.dev/core/store': resolve(here, 'src/store/index.ts'),
       '@docx-editor.dev/core/editor': resolve(here, 'src/editor/index.ts'),
       '@docx-editor.dev/core/export': resolve(here, 'src/export/index.ts'),
-      '@docx-editor.dev/core/parse': resolve(here, 'src/parse/index.ts'),
     };
   },
 } satisfies Options;
@@ -184,6 +227,9 @@ export default defineConfig([
   {
     ...shared,
     format: ['esm'],
+    // The parse worker, ESM only: `parse-off-thread.ts` starts it as a module worker from
+    // `new URL('./parse.js', import.meta.url)`, and `require()` has no workers to start.
+    entry: { ...shared.entry, parse: 'src/parse/worker.ts' },
     // Declarations are not built by tsup. `scripts/build-core-declarations.mjs` emits
     // them after this build, in a quarter of the memory tsup's declaration bundler
     // needs. Every `types` condition in package.json points at that one graph,
@@ -203,7 +249,7 @@ export default defineConfig([
     noExternal: ['harfbuzzjs'],
     // Only meaningful here: the CJS build leaves harfbuzzjs external, so its glue never
     // passes through esbuild there.
-    esbuildPlugins: [harfBuzzWasmUrlEscapeHatch],
+    esbuildPlugins: [harfBuzzWasmUrlEscapeHatch, parseWorkerUrl],
     // Scoped to THIS build, not `shared`. Only the ESM bundle inlines the runtime that asks
     // for `module`, and aliasing a bare Node specifier package-wide would hand any future
     // bundled dependency a stub that silently lacks `builtinModules` instead of failing the
@@ -227,6 +273,8 @@ export default defineConfig([
     dts: false,
     clean: false,
     define: { __DOCX_HARFBUZZ_WASM_URL_SUPPORTED__: 'false' },
+    // No glue patch here, but the parse worker's URL still has to name a file `dist/` holds.
+    esbuildPlugins: [parseWorkerUrl],
     // harfbuzzjs stays EXTERNAL here, because it cannot be inlined: its entry is a
     // top-level `await` over the WASM instantiation, and CJS has no top-level await. That
     // costs nothing. This output exists for `require()`, which is Node, where `module`

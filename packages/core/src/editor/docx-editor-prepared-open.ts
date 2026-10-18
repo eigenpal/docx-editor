@@ -9,11 +9,8 @@ import {
   type OpenTreeSessionOptions,
 } from '../binding/tree-session.ts';
 import { readOoxmlPackageSteps, type OoxmlPackageResult } from '../store/package/ooxml-package.ts';
-import {
-  isParsedDocument,
-  parsedDocumentRead,
-  type ParsedDocument,
-} from '../store/package/parsed-document.ts';
+import type { AwaitedStep } from './docx-editor-open-scheduler.ts';
+import type { OffThreadParser } from './parse-off-thread.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { nodeIndexSteps } from '../store/package/ooxml-edit.ts';
@@ -39,17 +36,12 @@ export type FontSession = Pick<
 >;
 
 const prepared = new WeakMap<Uint8Array, OpenTreeSessionResult>();
-/** The package read a parsed document carries, by the bytes it opens; taken once, like a session. */
+/** A package read on a worker, by the bytes it opens; taken once, like a session. */
 const parsedReads = new WeakMap<Uint8Array, OoxmlPackageResult>();
 
-/**
- * Keep the read a {@link ParsedDocument} carries beside the bytes it opens, so their open skips
- * reading them. Any other source, and a parsed document whose read this engine cannot use
- * (another wire version, a damaged stream), opens from its bytes as before.
- */
-export function holdParsedRead(source: unknown, bytes: Uint8Array): void {
-  const read = isParsedDocument(source) ? parsedDocumentRead(source as ParsedDocument) : null;
-  if (read) parsedReads.set(bytes, read);
+/** Keep a read made off this thread beside the bytes it opens, so their open skips reading them. */
+export function holdParsedRead(bytes: Uint8Array, read: OoxmlPackageResult): void {
+  parsedReads.set(bytes, read);
 }
 
 /** The held read of `bytes`, removed: a session is live editing state and owns its package. */
@@ -95,7 +87,7 @@ export function prepareOpenSteps(
   then: (opened: OpenTreeSessionResult) => ReturnType<Step>
 ): Step {
   const held = takeParsedRead(bytes);
-  // A parsed document's package is read already: the first step opens its session.
+  // A package read on a worker is read already: the first step opens its session.
   const reader = held ? null : readOoxmlPackageSteps(bytes);
   const step: Step = () => {
     const deadline = performance.now() + FONT_WARM_STEP_MS;
@@ -125,7 +117,7 @@ export function takePreparedOpen(
 } {
   const openedSession = prepared.get(bytes);
   if (openedSession === undefined) {
-    // A parsed document opened without a prepare: its session opens from the held read.
+    // A read held without a prepare: its session opens from the held read.
     const read = takeParsedRead(bytes);
     return read ? { openedSession: openTreeSessionFromPackage(read, options) } : {};
   }
@@ -140,13 +132,24 @@ export function takePreparedOpen(
 export function preparedOpenHook(
   sessionOptions: () => PreparedOpenOptions,
   adopt: (bytes: Uint8Array, session: TreeDocxSessionView) => (() => boolean) | null,
-  startFonts: () => void | Promise<unknown>
-): (bytes: Uint8Array) => Step {
-  return (bytes) =>
+  startFonts: () => void | Promise<unknown>,
+  offThread: OffThreadParser | null = null
+): (bytes: Uint8Array) => Step | AwaitedStep {
+  const steps = (bytes: Uint8Array): Step =>
     prepareOpenSteps(bytes, sessionOptions(), (opened) => {
       const current = opened.ok ? adopt(bytes, opened.session) : null;
       return opened.ok && current ? openSteps(opened.session, current, startFonts) : undefined;
     });
+  // With a worker, the package is read there first; without its read, the steps read it here.
+  return (bytes) =>
+    offThread
+      ? {
+          awaitStep: offThread.read(bytes).then((read) => {
+            if (read) holdParsedRead(bytes, read);
+            return steps(bytes);
+          }),
+        }
+      : steps(bytes);
 }
 
 export {

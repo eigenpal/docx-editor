@@ -1581,7 +1581,7 @@ export interface DocumentShape {
 }
 
 // @public
-export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | ParsedDocument | 'blank';
+export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
 // @public
 export interface DocxDocument {
@@ -1620,6 +1620,7 @@ export interface DocxEditorConfig {
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;
+    parseInWorker?: ParseInWorkerOption;
     reviewDisplayMode?: ReviewDisplayMode;
     revisionMarkup?: RevisionMarkupOptions;
     revisionStyles?: RevisionStyles;
@@ -3234,12 +3235,7 @@ export interface ParagraphTabStop {
 }
 
 // @public
-export interface ParsedDocument {
-    readonly bytes: Uint8Array;
-    readonly kind: 'docx-editor.parsed-document';
-    readonly read: unknown;
-    readonly version: number;
-}
+export type ParseInWorkerOption = boolean | (() => Worker);
 
 // @public
 export interface PerformanceDiagnostic extends DiagnosticBase {

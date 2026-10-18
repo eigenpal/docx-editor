@@ -1,0 +1,16 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Changing the fonts prop on the React and Vue editors replaced the editor instance and its session.",
+  "after": "Changing the fonts prop replaces local font resources through setFonts in the same session, and a replacement keeps the current faces until the new ones install. Worker parsing (parseInWorker) reads a large document's package on a Web Worker and opens the same session.",
+  "reason": "Only local font resources, measurement, and where the package read runs change. Nothing enters shared state, operations, node identities, snapshots, or awareness payloads.",
+  "tests": [
+    "packages/react/test/fonts-and-parse-props.test.tsx",
+    "packages/vue/test/fonts-and-parse-props.test.ts",
+    "packages/core/src/editor/__tests__/set-fonts.test.ts",
+    "packages/pro/src/collaboration/__tests__/set-fonts-editors.test.ts",
+    "packages/pro/src/collaboration/__tests__/parse-in-worker-editors.test.ts"
+  ],
+  "changeset": "fonts-prop-in-place",
+  "migration": null
+}

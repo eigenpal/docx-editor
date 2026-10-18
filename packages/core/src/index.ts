@@ -54,6 +54,7 @@ export type {
   FieldResultsMode,
   FontShapingOptions,
   FontLoadFailureReason,
+  ParseInWorkerOption,
   FontResolutionRequest,
   FontMeasurementState,
   FontResolver,
