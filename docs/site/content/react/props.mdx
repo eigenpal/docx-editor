@@ -15,7 +15,7 @@ Use `document` for the document source. Use `fonts` to supply font metrics for m
 | --- | --- | --- |
 | `fieldResults` | `'atomic' \| 'editable'` | Saved field result editing. Defaults to `'atomic'`; fixed when the editor starts. |
 | `document` | `DocumentSource` | DOCX bytes, `'blank'`, or an existing `DocumentHandle`. |
-| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination. |
+| `fonts` | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination. Changes apply without a remount. |
 | `author` | `string` | Author for later comments, replies, and tracked changes. Changes apply without a remount. |
 | `locale` | `string` | BCP-47 locale for regional date input and generated labels. Defaults to `en-US`; updates without a remount. |
 | `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. Changes apply without a remount. |
@@ -155,7 +155,7 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 const fonts = useFonts(packagedFonts(), googleFonts());
 ```
 
-The editor samples `fonts` at mount. Changing its identity remounts the editor, which is why an inline resolver needs `useFonts`.
+Each new `fonts` value replaces the fonts and resolves them again, without a remount. An inline resolver is a new value on every render, which is why it needs `useFonts`.
 
 `packagedFonts()` resolves after the document is parsed, so the first layout can use fallback measurement. The editor updates pagination when the fonts arrive. Font arrivals preserve edits, selection, and undo history. For a document that must paginate correctly on the first pass, use `defaultFonts()` instead. For more information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
 

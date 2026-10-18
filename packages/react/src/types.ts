@@ -64,8 +64,8 @@ export interface DocxEditorProps {
   /** Customize automatically mounted popups. Set an entry to false for manual ownership. */
   popups?: DocxEditorPopups;
   /**
-   * Immutable byte-backed font sources sampled at mount. Remount to replace this
-   * configuration atomically.
+   * Font sources for layout and paint. A new value replaces the fonts in place, keeping the
+   * document, selection and undo history; keep the reference stable across renders.
    *
    * Optional, but it decides layout FIDELITY. With it, the engine shapes text through
    * HarfBuzz and measures line and page breaks from real font metrics. Without it, layout

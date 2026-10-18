@@ -18,7 +18,11 @@
 // gets the embedded glyphs; the declared name keeps whatever it means to the host page.
 
 import type { FontSource, FontSourceSubstitution } from '../contracts/editor.ts';
-import { boundedStructuralFontValidator } from '../layout/font-resource.ts';
+import {
+  boundedStructuralFontValidator,
+  FontResolutionError,
+  type FontResourceSnapshot,
+} from '../layout/font-resource.ts';
 import { materializeCollectionFace } from './font-collection-face.ts';
 
 /** The slice of `FontFace` this module needs; injectable for tests. */
@@ -242,4 +246,22 @@ export async function registerEmbeddedFontFaces(
       }
     },
   };
+}
+
+/**
+ * The sources a shaping snapshot admitted, as the validated, owned copies it holds — never the
+ * raw file view. A refused source, or one the snapshot answered with another face, is left out.
+ */
+export function admittedFontSources(
+  sources: readonly FontSource[],
+  snapshot: FontResourceSnapshot
+): FontSource[] {
+  const admitted: FontSource[] = [];
+  for (const source of sources) {
+    const resolved = snapshot.resolve(source.request);
+    if (resolved instanceof FontResolutionError || resolved.id !== source.id) continue;
+    const { id, bytes, hash, faceIndex } = resolved;
+    admitted.push({ request: source.request, id, bytes, hash, faceIndex });
+  }
+  return admitted;
 }

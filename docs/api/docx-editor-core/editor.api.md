@@ -1493,6 +1493,7 @@ export interface DocxEditorInstance extends Editor {
     setCommentDraftChrome(handlers: CommentDraftChromeHandlers): Unsubscribe;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+    setFonts(fonts: DocxEditorConfig['fonts']): Promise<void>;
     setGoToChrome(handlers: GoToChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
