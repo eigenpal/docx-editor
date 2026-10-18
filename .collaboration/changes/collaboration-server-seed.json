@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A participant seeds a new room, uploads the whole room state, and receives it back from a Hocuspocus server. The first participant can receive a loaded room twice.",
+  "after": "A server can seed a new room with createCollaborationState before any participant syncs. Participants join the seeded room, upload nothing, and receive the room once. The example servers flush the loaded room in afterLoadDocument, refuse a known room whose stored state is missing with saved-room-unavailable instead of seeding it again, and refuse invites to unknown rooms. A seed document whose expanded package is over the size limit reports baseline-too-large instead of invalid-baseline. An aborted join rejects with initialization-aborted, also when the room is already present or the server still loads it; a signal aborted before the join starts rejects every join and create-or-join, including one whose Y.Doc already holds the room. A server refusal after the join keeps the server's reason in the failure detail, as on the join path.",
+  "reason": "The server builds the room with the same seed path as compaction: the current format, one seed record, and a new room generation. Released clients join it as any seeded or compacted room. A known room that lost its state is refused, so no second seed replaces its edits. A client that holds an earlier copy of a room seeded again after its record was also lost is refused by the generation gate before its state merges. The refusal codes already exist.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/server-document.test.ts",
+    "packages/pro/src/collaboration/__tests__/hocuspocus.test.ts"
+  ],
+  "changeset": "collaboration-server-seed",
+  "migration": null
+}

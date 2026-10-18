@@ -40,6 +40,9 @@ import { useColorMode, type ColorMode } from './useColorMode';
 import { actorIdFor, PEOPLE, type Person } from './people';
 import { encodeDemoToken } from '../shared/admission';
 import { failureMessage } from '../shared/failure-message';
+import { exampleText as t } from '../../shared/example-text';
+import { roomAddress } from './room-address';
+import { roomToken } from './room-token';
 
 /**
  * Anonymous diagnostics. In development, the console prints each one with its hint, such as why
@@ -62,8 +65,13 @@ const SERVER_URL = import.meta.env.VITE_COLLAB_URL ?? 'ws://127.0.0.1:1234';
  * `onAuthenticate`. A real app sends a signed token for the signed-in user; pass a callback
  * instead of a string and the provider re-evaluates it on every reconnect, which is how an
  * expiring token renews.
+ *
+ * The tab that starts a room asks the server to create it. An invite link only joins: the
+ * server refuses a room it does not know.
  */
-const TOKEN = encodeDemoToken(import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token');
+const SECRET = import.meta.env.VITE_COLLAB_TOKEN ?? 'demo-token';
+const CREATE_TOKEN = encodeDemoToken(SECRET, { createRoom: true });
+const JOIN_TOKEN = encodeDemoToken(SECRET);
 
 /**
  * Give up on the first sync after eight seconds rather than the default thirty.
@@ -110,6 +118,8 @@ interface Joined {
   readonly roomId: string;
   /** Unique per attachment, so two tabs of one person are two carets. */
   readonly actorId: string;
+  /** This tab started the room, so the server may create it. */
+  readonly creating: boolean;
 }
 
 /**
@@ -395,44 +405,68 @@ export function App() {
   // reconnecting to the room it was just asked to leave.
   const [left, setLeft] = useState(false);
 
-  // Fetch the document and Word's substitute faces in one call. The hook holds `document`
-  // back until fonts settle, because layout measures with them.
+  // A tab opened from an invite link joins a room that exists, so it needs no document of its
+  // own: the room is the document. Read once; the address bar changes only on join.
+  const [invited] = useState(() => roomFromUrl() !== null);
+
+  // Fetch the document and the substitute faces in one call. The hook holds `document` back
+  // until fonts settle, because layout measures with them. An invited tab loads fonts only.
   const {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(DOCUMENT_URL, { fonts: packagedFonts() });
+  } = useDocxSource(invited ? null : DOCUMENT_URL, { fonts: packagedFonts() });
+
+  // One token callback per joined room. A starting tab asks to create the room only until
+  // its first sync; every reconnect after it only joins (`room-token.ts`).
+  const tokens = useMemo(
+    () =>
+      roomToken({ create: CREATE_TOKEN, join: JOIN_TOKEN, creating: joined?.creating ?? false }),
+    [joined]
+  );
 
   // Only the room's identity keys the connection, so this object does not need to be stable —
   // but building it in a memo keeps the branch that decides "no room yet" in one place.
   const room = useMemo(() => {
-    if (!joined || !bytes || left) return null;
+    if (!joined || left) return null;
+    if (joined.creating && !bytes) return null;
     return {
       url: SERVER_URL,
       roomId: joined.roomId,
-      token: TOKEN,
+      token: tokens.token,
       syncedTimeoutMs: SYNC_TIMEOUT_MS,
       identity: {
         actorId: joined.actorId,
         name: joined.person.name,
         color: joined.person.color,
       },
-      // The first tab seeds the room from these bytes; every later tab ignores them and
-      // takes the document the server already holds.
-      bootstrap: { kind: 'create-or-join', document: bytes } as const,
+      // `server/server.ts` seeds every new room itself, so every tab joins the document the
+      // server holds and uploads nothing. The starting tab's bytes seed the room only on a
+      // server that leaves new rooms empty; an invited tab only joins.
+      bootstrap:
+        joined.creating && bytes
+          ? ({ kind: 'create-or-join', document: bytes } as const)
+          : ({ kind: 'join' } as const),
     };
-  }, [bytes, joined, left]);
+  }, [bytes, joined, left, tokens]);
 
   const collaboration = useHocuspocusCollaboration({ modules: MODULES, room });
 
   const join = useCallback((person: Person) => {
-    const roomId = roomFromUrl() ?? createCollaborationRoomId();
-    const url = new URL(location.href);
-    url.search = '';
-    url.searchParams.set('room', roomId);
-    history.replaceState(null, '', url);
-    setJoined({ person, roomId, actorId: actorIdFor(person) });
+    const invited = roomFromUrl();
+    const roomId = invited ?? createCollaborationRoomId();
+    setJoined({ person, roomId, actorId: actorIdFor(person), creating: invited === null });
   }, []);
+
+  // Name the room in the address bar. A starting tab waits for its first successful connect:
+  // until then a reload starts a new room instead of asking for one the server never made.
+  const connected = collaboration.document !== null;
+  useEffect(() => {
+    if (!joined) return;
+    if (connected) tokens.markJoined();
+    const next = roomAddress({ href: location.href, ...joined, connected });
+    if (next) history.replaceState(null, '', next);
+  }, [joined, connected, tokens]);
 
   const leave = useCallback(
     (nextDocument: Uint8Array) => {
@@ -453,7 +487,7 @@ export function App() {
     );
   }
 
-  if (!joined) return <SignIn ready={bytes !== undefined} onJoin={join} />;
+  if (!joined) return <SignIn ready={invited || bytes !== undefined} onJoin={join} />;
 
   if (collaboration.error) {
     const message = failureMessage(collaboration.error, {
@@ -471,6 +505,11 @@ export function App() {
             </a>
           ) : null}
           {message.command ? <code>{message.command}</code> : null}
+          {message.retry && room ? (
+            <button type="button" onClick={() => void collaboration.connect(room)}>
+              {t('collaborationDemo.serverRecovery.retry')}
+            </button>
+          ) : null}
         </div>
       </div>
     );

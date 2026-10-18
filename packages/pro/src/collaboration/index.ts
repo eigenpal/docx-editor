@@ -28,7 +28,11 @@ export {
   type DocumentCollaborationHandle,
   type DocumentCollaborationSession,
 } from './document-session.ts';
-export { prepareCollaborationServerDocument } from './server-document.ts';
+export {
+  createCollaborationState,
+  prepareCollaborationServerDocument,
+  type CreateCollaborationStateOptions,
+} from './server-document.ts';
 export {
   checkCollaborationRoomGeneration,
   compactCollaborationState,

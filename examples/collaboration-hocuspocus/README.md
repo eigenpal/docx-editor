@@ -49,18 +49,24 @@ The default shared token is `demo-token`. Set matching server and client values 
 The app wraps the token in this demo's JSON authentication envelope:
 
 ```ts
-{ token, collaborationVersion: COLLABORATION_FORMAT_VERSION }
+{ token, collaborationVersion: COLLABORATION_FORMAT_VERSION, createRoom?: true }
 ```
 
-`shared/admission.ts` creates and validates that envelope. In `onAuthenticate`, the server checks the secret and calls `assertCollaborationFormatCompatibility(collaborationVersion)` before Hocuspocus allows synchronization. Import the version from the installed package; transmit it unchanged. Missing, malformed, and incompatible versions are refused. The example also accepts compatible clients using its previous `versions` envelope. Pass the encoded string as `token`, or return it from a callback to refresh credentials on reconnection.
+Only the tab that starts a room sends `createRoom`. A production server derives that permission from the signed token instead.
+
+`shared/admission.ts` creates and validates that envelope. In `onAuthenticate`, the server checks the secret and calls `assertCollaborationFormatCompatibility(collaborationVersion)` before Hocuspocus allows synchronization. Import the version from the installed package; transmit it unchanged. Missing, malformed, and incompatible versions are refused. The example also accepts compatible clients that send its previous `versions` envelope. Those clients can join existing rooms, but they cannot start one, because that envelope has no `createRoom` field. Pass the encoded string as `token`, or return it from a callback to refresh credentials on reconnection.
 
 These self-reported versions prevent accidental connections between incompatible builds. They do not prove which code a client runs. A production server should verify a signed token, derive identity and room permissions from it, and enforce its deployment policy separately.
 
 ## Store and export rooms
 
-The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a room opens. It also exports a `.docx` file beside each Yjs document. Before admitting a saved snapshot, `server/stored-room.ts` checks its version with `readCollaborationFormatVersion` and `assertCollaborationFormatCompatibility` in a temporary document. It then validates the compatible document with `readCollaborationDocument`. The server rejects incompatible or invalid snapshots before loading them into the live room. Compatible clients cannot upgrade saved room data.
+The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a room opens, and keeps a `.room` record for each room it created. It also exports a `.docx` file beside each Yjs document. Before admitting a saved snapshot, `server/stored-room.ts` checks its version with `readCollaborationFormatVersion` and `assertCollaborationFormatCompatibility` in a temporary document. It then validates the compatible document with `readCollaborationDocument`. The server rejects incompatible or invalid snapshots before loading them into the live room. Compatible clients cannot upgrade saved room data.
 
-Replace `onLoadDocument` and `onStoreDocument` when you need database or object storage. Keep the `prepareCollaborationServerDocument` call at the start of `onLoadDocument`, before the room's state loads.
+The server creates a room only for the tab that starts it. That tab asks for a new room in its authentication envelope; an invite link only joins, and the server refuses a room it does not know. To create the room, the server seeds it from `examples/vite/public/sample.docx` with `createCollaborationState`. It stores the room state with a create-only write before anyone syncs, and then writes a `.room` record. When it loads a stored room that has no record, it writes one, so a crash between the two writes leaves no room unprotected. Participants join the seeded room, so no participant uploads the document or receives it back. For more information, see [Seed new rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#seed-new-rooms-on-a-server).
+
+If a room has a record but no state, the server refuses it with `saved-room-unavailable` and does not seed it again. A second seed would replace every edit with the original document. Participants keep their copies while you restore the `.ydoc` file. A document that cannot seed a room, such as one over the seed size limit, is refused with its failure code, such as `baseline-too-large`.
+
+Replace `onLoadDocument` and `onStoreDocument` when you need database or object storage. Keep the `prepareCollaborationServerDocument` call at the start of `onLoadDocument`, before the room's state loads. Keep the `document.flush()` call in `afterLoadDocument`, so the first participant receives the loaded room once.
 
 When a saved room is at least twice the size of a fresh build of its content, `onLoadDocument` compacts it with `compactCollaborationState` and stores the new generation in place of the old state. The server replaces each file atomically, so an interrupted write leaves either its previous state or its complete replacement. If compaction throws `CollaborationSchemaError`, the server keeps the stored state unchanged. `beforeHandleMessage` calls `checkCollaborationRoomGeneration`, which refuses a client that still holds the room from before a compaction. That client reports `room-generation-changed` and can rejoin. Keep both calls when you replace the storage hooks. For more information, see [Compact rooms on a server](https://www.docx-editor.dev/docs/2.x/pro/collaboration#compact-rooms-on-a-server).
 
@@ -86,7 +92,7 @@ To migrate the rooms, follow these steps:
    npm install @docx-editor.dev/pro@2.27.0 @docx-editor.dev/core@2.27.0 yjs@^13.6.32
    ```
 
-1. In that directory, run `node export-rooms.ts --data-dir "/absolute/path/to/server/.data"`. Replace the quoted path with your stopped server's data directory. It writes `<room>.migration.docx` beside each room, with `<room>.migration.sha256`, the SHA-256 of the state it exported. If a room fails with `not-initialized`, it holds no document: move `<room>.ydoc` out of the data directory, keep it with your backups, and run the export again.
+1. In that directory, run `node export-rooms.ts --data-dir "/absolute/path/to/server/.data"`. Replace the quoted path with your stopped server's data directory. It writes `<room>.migration.docx` beside each room, with `<room>.migration.sha256`, the SHA-256 of the state it exported. If a room fails with `not-initialized`, it holds no document: move both `<room>.ydoc` and its `<room>.room` record out of the data directory together, keep them with your backups, and run the export again. The room ID is then retired: an invite to it reports that the room does not exist. Moving only the `.ydoc` file makes the server refuse the room as a saved room it cannot open.
 1. Return to `examples/collaboration-hocuspocus` in the checkout with the target build. Install dependencies and build packages with the repository-root commands in [Run the example](#run-the-example). Run `node server/migrate-rooms.ts --dry-run --report report.json` from the example directory. For each room, it seeds a new room from the export and checks the new room against the export: every XML part, every media file, and every link target. It prints one line for each room and a summary, writes the results to `report.json`, and leaves room files unchanged. The report file is still written.
 1. If any room is not `would-migrate` or `current`, stop and resolve it as the following table describes. Otherwise, run `node server/migrate-rooms.ts`. It keeps each earlier state as `<room>.ydoc.previous` and writes the new state in its place. Rooms already in the current format stay as they are, so a second run after an interruption migrates only the rest.
 1. Check that the write run exits with status 0. Start the server with the new build. Open migrated rooms with two clients, edit, and verify DOCX export.
@@ -103,7 +109,7 @@ Each room ends in one of these outcomes:
 | `no-export` | The room has no export. Run `export-rooms.ts` with the earlier build. |
 | `stale-export` | The room changed after its export. Export it again, so no edit is lost. |
 | `later-format` | A later build wrote the room. This build does not open or replace it. |
-| `error` | The room or its export could not be read. For `not-initialized`, the state holds no document that a build can open: move `<room>.ydoc` out of the data directory, and keep it with your backups. |
+| `error` | The room or its export could not be read. For `not-initialized`, the state holds no document that a build can open: move `<room>.ydoc` and `<room>.room` out of the data directory together, and keep them with your backups. The room ID stays retired. |
 
 A write run can migrate some rooms before another room fails. Keep all servers stopped if it exits with status 1. Resolve the failure and run it again. To cancel instead, restore all migrated rooms before starting the earlier build. Never serve mixed formats with one deployment.
 
