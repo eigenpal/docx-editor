@@ -66,8 +66,10 @@ export interface PageContentInsetInputs {
   readonly headerDistance: number;
   /** `w:pgMar/@w:footer` in points. */
   readonly footerDistance: number;
-  /** Where this section's first sheet lands in the DOCUMENT, for even/odd selection. */
+  /** Where this section's first sheet lands in the document. */
   readonly pageIndexStart: number;
+  /** Displayed number of local page zero, before adding later pages. */
+  readonly pageNumberStart?: number;
   /**
    * The content box local page 0 must flow against when this section CONTINUES the previous
    * one's sheet, instead of opening one of its own.
@@ -89,20 +91,19 @@ export interface PageContentInsetInputs {
  * The variant the page at section-local `index` shows.
  *
  * `w:titlePg` is a property of the SECTION, so its first page is the section's own first — the
- * local index. `w:evenAndOddHeaders` lives in settings.xml and alternates by the page's number
- * in the DOCUMENT, so it reads through `pageIndexStart`: a section that begins on an even page
- * must open with the even header, and `remapPage` renumbers a page without re-picking anything.
+ * local index. Alternating variants use displayed page numbering, including section restarts.
+ * The physical document index remains separate for source-addressed header drawings.
  */
 export function headerFooterVariantFor(
   furniture: PageFurniture | undefined,
-  pageIndexStart: number,
+  pageNumberStart: number,
   index: number
 ): HeaderFooterVariantName {
   if (furniture && headerFooterVariantCanPaint(furniture, 'first') && index === 0) return 'first';
   if (
     furniture &&
     headerFooterVariantCanPaint(furniture, 'even') &&
-    (pageIndexStart + index + 1) % 2 === 0
+    (pageNumberStart + index) % 2 === 0
   ) {
     return 'even';
   }
@@ -139,7 +140,11 @@ export function createPageContentInsets(
   return (index: number): PageContentInsets => {
     // Local page 0 of a continued section is the host's sheet, not this section's first page.
     if (index === 0 && inputs.continuedPageInsets) return inputs.continuedPageInsets;
-    const variant = headerFooterVariantFor(furniture, inputs.pageIndexStart, index);
+    const variant = headerFooterVariantFor(
+      furniture,
+      inputs.pageNumberStart ?? inputs.pageIndexStart + 1,
+      index
+    );
     const key = furniture && characterHeaderPageToken(furniture) ? `${variant}:${index}` : variant;
     const cached = memo.get(key);
     if (cached) return cached;

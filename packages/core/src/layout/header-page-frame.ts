@@ -8,7 +8,7 @@
 // margin, also after a numbering restart.
 //
 // The lane is bounded. It accepts one frame, first in the part, followed by an ordinary
-// paragraph. The frame holds one PAGE field or plain text. Anything else keeps the ordinary
+// paragraph. The frame is empty or holds one PAGE field or plain text. Anything else keeps the ordinary
 // flow, and so does a band where the frame meets the anchor's text, a table, a drawing or a
 // paragraph border or shading.
 
@@ -47,6 +47,8 @@ export interface HeaderPageFrame {
   readonly y: number;
   /** True for `inside` and `outside`: the placement changes with the sheet's parity. */
   readonly parity: boolean;
+  /** No field, drawing, or text occupies this frame. */
+  readonly empty: boolean;
 }
 
 const isElement = (node: OoxmlNode): node is OoxmlElement => node.kind !== 'textValue';
@@ -79,20 +81,26 @@ function framePropertyCount(part: OoxmlPart): number | null {
   return frames;
 }
 
-/** One complete PAGE field, or runs of plain text with at least one visible character. */
-function supportedFrameContent(paragraph: OoxmlElement): boolean {
-  if (readLegacyPageField(paragraph) === '') return true;
+/** One complete PAGE field, or runs of plain text including an empty frame. */
+function supportedFrameContent(paragraph: OoxmlElement): 'empty' | 'text' | null {
+  if (readLegacyPageField(paragraph) === '') return 'text';
   let visible = false;
+  let hasText = false;
   for (const run of elements(paragraph)) {
     if (isW(run, 'pPr')) continue;
-    if (!isW(run, 'r')) return false;
+    if (!isW(run, 'r')) return null;
     for (const node of elements(run)) {
       if (isW(node, 'rPr')) continue;
-      if (!isW(node, 't') || node.children.some(isElement)) return false;
+      if (!isW(node, 't') || node.children.some(isElement)) return null;
+      hasText ||= node.children.some(
+        (child) => child.kind === 'textValue' && child.value.length > 0
+      );
       visible ||= node.children.some((child) => child.kind === 'textValue' && child.value.trim());
     }
   }
-  return visible;
+  // Spaces can carry inherited underline, shading, or highlight. Their advance also
+  // remains selectable, so only a paragraph without text is an empty frame.
+  return visible ? 'text' : hasText ? null : 'empty';
 }
 
 function readFrameProperties(frame: OoxmlElement): Pick<HeaderPageFrame, 'align' | 'y'> | null {
@@ -137,9 +145,11 @@ export function readHeaderPageFrame(part: OoxmlPart): HeaderPageFrame | null {
     return null;
   const frame = children.find((node) => isW(node, 'framePr'));
   const placement = frame ? readFrameProperties(frame) : null;
-  if (!placement || !supportedFrameContent(framed)) return null;
+  const content = supportedFrameContent(framed);
+  if (!placement || !content) return null;
   return {
     frameId: framed.id,
+    empty: content === 'empty',
     anchorId: anchor.id,
     ...placement,
     parity: placement.align === 'inside' || placement.align === 'outside',
@@ -281,7 +291,7 @@ export function placeHeaderPageFrame<T extends { blocks: BlockFragmentRecord[]; 
   // The frame starts in the anchor's first line: the only band this lane has evidence for.
   const firstLine = anchor.lines[0];
   if (!firstLine || box.y >= firstLine.box.y + firstLine.box.height) return null;
-  if (checkBand) {
+  if (checkBand && !frame.empty) {
     const sides: readonly Side[] = frame.parity
       ? ['left', 'right']
       : [sideOf(frame.align, sheetNumber)];

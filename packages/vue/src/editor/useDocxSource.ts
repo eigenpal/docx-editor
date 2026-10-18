@@ -5,7 +5,8 @@
 // One deliberate difference: this watcher keys on the `fonts` VALUE, so swapping one eager
 // loader for another re-runs it. React keys on the option's SHAPE, because it rebuilds the
 // options object every render and keying on the value would re-run the eager load on every
-// one. Neither is a contract; remount, or load a document, to change fonts deliberately.
+// one. Neither is a contract; pass a new `fonts` value, or load a document, to change fonts
+// deliberately.
 
 import { computed, ref, toValue, watch, type ComputedRef } from 'vue';
 import { scopeDispose } from './scope-dispose';
@@ -96,8 +97,8 @@ export function useDocxSource(
   let fetchGeneration = 0;
 
   // ONE resolver for the composable's life, delegating to whatever the options hold now.
-  // `:fonts` rebuilds the editor when its identity changes, and `packagedFonts()` written
-  // inline is a fresh function on every render; this is what keeps that from remounting.
+  // `:fonts` replaces the editor's fonts when its identity changes, and `packagedFonts()`
+  // written inline is a fresh function on every render; this keeps that from re-resolving.
   const resolver: FontResolver = defineFontResolver((request: FontResolutionRequest) =>
     composeFontOrigins(fontOrigins(toValue(reactiveOptions).fonts ?? []).map(asFontOrigin), request)
   );

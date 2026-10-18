@@ -37,6 +37,7 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
   readonly flowStartY?: number;
   readonly spaceBeforeCarry?: number;
   readonly pageIndexStart?: number;
+  readonly furniturePageNumberStart?: number;
   /** The host sheet's content box when this section continues the previous one. */
   readonly continuedPageInsets?: PageContentInsets;
   /** The host sheet, whose furniture drawings and earlier floats the continued text wraps around. */

@@ -1,0 +1,27 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Changing the fonts prop on the React and Vue editors replaced the editor instance and its session.",
+  "after": "Changing the fonts prop replaces local font resources through setFonts in the same session, and a replacement keeps the current faces until the new ones install.",
+  "reason": "Only local font resources, measurement caches, and painted geometry change. Nothing enters shared state, operations, node identities, snapshots, or awareness payloads.",
+  "tests": [
+    "packages/react/test/fonts-prop.test.tsx",
+    "packages/vue/test/fonts-prop.test.ts",
+    "packages/core/src/editor/__tests__/set-fonts.test.ts",
+    "packages/pro/src/collaboration/__tests__/set-fonts-editors.test.ts"
+  ],
+  "supersedesTests": [
+    {
+      "path": "packages/core/src/store/__tests__/parsed-document.test.ts",
+      "reasonCategory": "feature-removed",
+      "reason": "Reading documents ahead of their open was removed before release: measured opens of large documents were no faster and used more memory."
+    },
+    {
+      "path": "packages/core/src/editor/__tests__/parsed-document-open.test.ts",
+      "reasonCategory": "feature-removed",
+      "reason": "Reading documents ahead of their open was removed before release: measured opens of large documents were no faster and used more memory."
+    }
+  ],
+  "changeset": "fonts-prop-in-place",
+  "migration": null
+}

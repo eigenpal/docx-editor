@@ -246,6 +246,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       document: doc,
       fonts,
       fontShaping,
+      imageDecodePort,
       className,
       t,
       chrome = true,
@@ -439,14 +440,15 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       [translate]
     );
 
-    // Root owns the facade: created once per document/fonts identity, zoom follows
-    // through `setZoom`, callbacks are read at their latest identity.
+    // Root owns the facade: created once per document identity, fonts follow
+    // through `setFonts` and zoom through `setZoom`; callbacks are read at their latest identity.
     return (
       <DocxEditorRoot
         popups={createPackagedPopups(props.popups, hyperlinkPopup, contextMenu, translate)}
         {...(doc !== undefined ? { document: doc } : {})}
         {...(fonts ? { fonts } : {})}
         {...(fontShaping ? { fontShaping } : {})}
+        {...(imageDecodePort ? { imageDecodePort } : {})}
         {...(author !== undefined ? { author } : {})}
         {...(locale !== undefined ? { locale } : {})}
         translate={translate}

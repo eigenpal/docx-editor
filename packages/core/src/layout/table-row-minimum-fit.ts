@@ -13,9 +13,7 @@
 // that repeats there, so a row with content above it moves even when the next page leaves it
 // the same room below that band.
 //
-// Limits, each placed by the ordinary row rules instead:
-// - A minimum taller than a fresh column below the repeated header rows. The row splits where
-//   it stands.
+// Positioned-table limit:
 // - Positioned (`w:tblpPr`) tables, except one breaking across pages from a page or margin
 //   anchor (`table-pinned-break.ts`).
 
@@ -27,8 +25,7 @@ import { cellSpacingGapPt } from './table-cell-spacing.ts';
 
 /**
  * Height the first fragment of `row` needs where it starts: the padded `atLeast` minimum, or
- * undefined when the row has none. `freshRoomPt` is the room a fresh column offers the row;
- * a larger minimum also gives undefined.
+ * undefined when the row has none. A larger minimum consumes the fresh column band.
  */
 export function rowMinimumOpeningPt(
   row: SemanticTableRow,
@@ -50,7 +47,19 @@ export function rowMinimumOpeningPt(
     deps.cellMinimumContentInsets,
     gapPt
   );
-  return minimum <= freshRoomPt + 0.001 ? minimum : undefined;
+  return Math.min(minimum, freshRoomPt);
+}
+
+/** Whether a row's first fragment can retain its minimum in the offered opening. */
+export function rowMinimumFits(
+  row: SemanticTableRow,
+  deps: TableFlowDeps,
+  cellSpacingPt: number,
+  freshRoomPt: number,
+  availablePt: number
+): boolean {
+  const minimum = rowMinimumOpeningPt(row, deps, cellSpacingPt, freshRoomPt);
+  return minimum === undefined || minimum <= availablePt + 0.001;
 }
 
 /** Where a row would start in the column being filled, in page content coordinates. */
@@ -79,6 +88,5 @@ export function rowMinimumMoves(
 ): boolean {
   if (at.belowBandOnly || at.top <= at.columnTop + 0.001) return false;
   const fresh = at.band - at.columnTop - at.repeat;
-  const minimum = rowMinimumOpeningPt(row, deps, cellSpacingPt, fresh);
-  return minimum !== undefined && minimum > at.bottom - at.top + 0.001;
+  return !rowMinimumFits(row, deps, cellSpacingPt, fresh, at.bottom - at.top);
 }
