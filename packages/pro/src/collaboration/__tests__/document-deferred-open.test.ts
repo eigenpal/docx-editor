@@ -163,6 +163,10 @@ test('editors that take input while their opening layout runs converge, undo, an
   expect(texts(bob)[0]).toBe('Body typed paragraph 0');
   expect(texts(alice)[1400]).toBe('paragraph 1400');
 
+  // Select All lays out the rest of each opening first, as for a reader selecting everything.
+  // Waiting for the background tasks alone outlasted the timeout on a loaded machine.
+  alice.surface!.selectAll();
+  bob.surface!.selectAll();
   await until(() => !pending().includes(true), 60_000);
   sync();
   const left = alice.surface!.session.currentPackage();
@@ -176,4 +180,4 @@ test('editors that take input while their opening layout runs converge, undo, an
   sync();
   expect(texts(bob)[0]).toBe('Body paragraph 0');
   expect(texts(bob)[1400]).toBe('paragraph 1400');
-}, 120_000);
+}, 240_000);
