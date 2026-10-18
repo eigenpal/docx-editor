@@ -109,6 +109,8 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'concurrent', delivery: 'server', seed: 8 },
   { config: 'denseImages', delivery: 'server', seed: 8 },
   { config: 'textbox', delivery: 'peer', seed: 1 },
+  { config: 'undoGroups', delivery: 'server', seed: 1 },
+  { config: 'undoGroups', delivery: 'peer', seed: 2 },
 ];
 
 /**

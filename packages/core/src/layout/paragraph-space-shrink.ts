@@ -9,15 +9,24 @@ import type { ResolvedRunStyle } from './run-style.ts';
 import type { StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import type { FieldAwarePiece } from './field-pieces.ts';
 import { isSpaceShrinkWordPiece } from './space-shrink-piece.ts';
+import { withoutTrailingZeroWidthSpaces } from './trailing-spaces.ts';
 
 // No-break spaces join their neighbours into one word. They have width, never break the
 // line, and never hang, so the word-shape tests read them as word characters.
 const WORD_CHARACTER = String.raw`[\S\u00a0\u2007\u202f]`;
 // A span holding U+00A0 lends none of its space: screen paint applies `word-spacing` to
 // U+00A0 as well, so its shrink would be painted twice. The narrow forms are unaffected.
-const SPACED_SPAN = /^[\S\u2007\u202f]* $/u;
-const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ $`, 'u');
+const SPACED_SPAN = /^[\S\u2007\u202f]* \u200b*$/u;
+const SPACED_WORD = new RegExp(`^${WORD_CHARACTER}+ \u200b*$`, 'u');
 const BARE_WORD = new RegExp(`^${WORD_CHARACTER}+$`, 'u');
+
+/**
+ * The text before its space slot: the final U+0020 and any zero-width spaces after it. A
+ * zero-width space after the space takes no room, so the space still lends, and the word
+ * before it is still a spaced word.
+ */
+const withoutSpaceSlot = (text: string): string =>
+  withoutTrailingZeroWidthSpaces(text).slice(0, -1);
 
 /**
  * Whether a candidate ends at the break after a hyphen inside a word ("well-" of
@@ -40,7 +49,7 @@ function firstShrinkSlot(spans: readonly StyleSpanRecord[]): number {
 function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   if (
     (!span.style.shaping &&
-      !/^[\p{Script=Latin}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f]*$/u.test(span.text)) ||
+      !/^[\p{Script=Latin}\p{N}\p{P}\p{Sc}\p{Sm} \u2007\u202f\u200b]*$/u.test(span.text)) ||
     span.lineEndWhitespace ||
     !SPACED_SPAN.test(span.text) ||
     span.equation
@@ -49,7 +58,7 @@ function capacity(span: StyleSpanRecord, measurer: TextMeasurer): number {
   const style = styleForFontSlot(span.style, span.fontSlot);
   const space = Math.max(
     0,
-    span.box.width - measureDisplayText(span.text.slice(0, -1), style, measurer)
+    span.box.width - measureDisplayText(withoutSpaceSlot(span.text), style, measurer)
   );
   const minimum = space * 0.75;
   return space - minimum;
@@ -94,7 +103,7 @@ export function fitsWithSpaceShrink(
     return false;
   const first = firstShrinkSlot(spans);
   const visible = measureDisplayText(
-    ownSpace ? candidate.slice(0, -1) : candidate,
+    ownSpace ? withoutSpaceSlot(candidate) : candidate,
     style,
     measurer
   );

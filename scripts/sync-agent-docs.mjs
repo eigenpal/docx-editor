@@ -7,8 +7,8 @@
 //     coding agent reading `node_modules` finds the recipes beside the code. A recipe's
 //     `<FrameworkTabs>` become the React code in `react`, the Vue code in `vue`, and both,
 //     under React and Vue labels, in the other packages;
-//   - the `## Which API for which job` section of the root README, each package README listed
-//     below, and the docs index page.
+//   - the `## Which API for which job` section of each package README listed below and the
+//     docs index page.
 //
 // Usage:
 //   node scripts/sync-agent-docs.mjs          # write every copy and delete stale ones
@@ -40,7 +40,6 @@ const SITE_RECIPES = 'For worked examples, see [Task recipes](/docs/2.x/recipes)
 const PACKAGE_RECIPES =
   'This package ships the task recipes in [`docs/index.md`](./docs/index.md). They are also on the site: [Task recipes](/docs/2.x/recipes).';
 const SECTION_TARGETS = [
-  { file: 'README.md', links: 'absolute', suffix: SITE_RECIPES },
   { file: 'packages/core/README.md', links: 'absolute', suffix: PACKAGE_RECIPES },
   { file: 'packages/react/README.md', links: 'absolute', suffix: PACKAGE_RECIPES },
   { file: 'packages/pro/README.md', links: 'absolute', suffix: PACKAGE_RECIPES },

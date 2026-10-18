@@ -15,7 +15,11 @@ export function underlineGap(visit: Pick<SemanticSpanVisit, 'line' | 'span'>): n
   if (index < 0 || (line.drawings?.length ?? 0) > 0) return 0;
   const next = line.spans[index + 1];
   if (!next || next.style.hidden || next.equation || next.text.includes('\t')) return 0;
-  if (!span.text.endsWith(' ') || /\s/u.test(span.text.slice(0, -1))) return 0;
+  // A zero-width space after the space takes no room, so the space still ends the span.
+  let end = span.text.length;
+  while (end > 0 && span.text.charCodeAt(end - 1) === 0x200b) end -= 1;
+  const text = span.text.slice(0, end);
+  if (!text.endsWith(' ') || /\s/u.test(text.slice(0, -1))) return 0;
   if ((next.wrapAdvanceBefore ?? 0) > 0.001 || span.link !== next.link) return 0;
   if (span.range.paragraphId !== next.range.paragraphId) return 0;
   if (span.revisions?.length || next.revisions?.length) return 0;

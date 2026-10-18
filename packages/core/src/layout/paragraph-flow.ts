@@ -1352,7 +1352,7 @@ export function breakParagraph(
       const openDecision =
         piece.noteSeparator || line.spans.at(-1)?.noteSeparator
           ? 'opens'
-          : (cjkBreaks?.decision(piece, consumed) ??
+          : (cjkBreaks?.decision(piece, consumed, lastEmitted, candidate) ??
             lineOpenDecisionAt(lastEmitted, candidate, consumed > 0));
       const opensWord = openDecision === 'opens';
       if (opensWord) {
@@ -1369,7 +1369,8 @@ export function breakParagraph(
         sameParagraphAnchorStarts.length === 0 &&
         boundary === piece.text.length &&
         pieces[pieceIndex + 1] !== undefined &&
-        cjkBreaks?.decision(pieces[pieceIndex + 1]!, 0) === 'forbidden';
+        cjkBreaks?.decision(pieces[pieceIndex + 1]!, 0, candidate, pieces[pieceIndex + 1]!.text) ===
+          'forbidden';
       const clipsWordEnd = !layoutOwned && piece.measureText === undefined && !protectedEnd;
       const naturalWidth = width;
       const measureFace = (text: string) =>

@@ -38,7 +38,6 @@ import type {
   CollaborationStatus,
   CollaborationSelectionMove,
   CollaborationStatusSnapshot,
-  EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import {
   historyGroupOfJournal,
@@ -76,6 +75,8 @@ import {
 } from './document-awareness.ts';
 import { CollaborationSchemaError } from './errors.ts';
 import type { CollaborationHandle, CollaborationIdentityUpdate } from './types.ts';
+import type { DocumentCollaborationSession } from './document-session-contract.ts';
+import { UndoGroups, type CollaborationUndoGroup } from './document-undo-group.ts';
 import type { CreateDocumentCollaborationOptions } from './document-session-options.ts';
 
 /**
@@ -133,6 +134,7 @@ class DocumentSession implements DocumentCollaborationSession {
   private destroyed = false;
   private readonly refusals = new RefusalStreak();
   private readonly historyGroups: HistoryGroupCapture;
+  private readonly undoGroups: UndoGroups;
   private readonly stopBlobWatch: () => void;
   private readonly stopSeedWatch: () => void;
 
@@ -158,6 +160,7 @@ class DocumentSession implements DocumentCollaborationSession {
       deleteFilter: registry.undoDeleteFilter(),
     });
     this.historyGroups = new HistoryGroupCapture(this.undoManager, this);
+    this.undoGroups = new UndoGroups(this.historyGroups, () => this.flushPendingJournals());
     this.historySelections = new HistorySelection(
       this.undoManager,
       (id) => this.port?.paragraphByStableId(id)?.text ?? null,
@@ -263,6 +266,8 @@ class DocumentSession implements DocumentCollaborationSession {
     const refused = this.refuseAttach(port);
     if (refused) return refused;
     this.clearAttachWatchdog();
+    // An editor shows undo state to its user, which an open group would leave wrong.
+    if (port.interactive === true) this.undoGroups.close();
     this.port = port;
     this.publishSharedToPort();
     const stopJournal = port.observePrimitiveJournal((journal) => {
@@ -369,15 +374,19 @@ class DocumentSession implements DocumentCollaborationSession {
   // room's history and every peer applies the result — so they obey the same readiness rule
   // the operation gate applies. Without it a replica in terminal `error`, which the gate has
   // declared diverged and read-only, kept mutating the room through Ctrl+Z.
+  // An open undo group refuses both: stepping history would take apart the step it collects.
   canUndo(): boolean {
     return (
+      !this.undoGroups.isOpen &&
       this.canWriteSharedState() &&
       ((this.port?.hasPendingJournals() ?? false) || this.undoManager.undoStack.length > 0)
     );
   }
 
   canRedo(): boolean {
-    return this.canWriteSharedState() && this.undoManager.redoStack.length > 0;
+    return (
+      !this.undoGroups.isOpen && this.canWriteSharedState() && this.undoManager.redoStack.length > 0
+    );
   }
 
   undo(): boolean {
@@ -393,8 +402,16 @@ class DocumentSession implements DocumentCollaborationSession {
     return this.popHistory('redo');
   }
 
+  beginUndoGroup(): CollaborationUndoGroup {
+    return this.undoGroups.begin(() => this.destroyed, this.port?.interactive === true);
+  }
+
+  get undoGroupOpen(): boolean {
+    return this.undoGroups.isOpen;
+  }
+
   private popHistory(direction: 'undo' | 'redo'): boolean {
-    if (!this.canWriteSharedState()) return false;
+    if (this.undoGroups.isOpen || !this.canWriteSharedState()) return false;
     this.flushPendingJournals();
     // The flush can refuse the queued journal and take this session to terminal `error`,
     // so the gate re-checks: undo must not write a room the session just diverged from.
@@ -511,6 +528,7 @@ class DocumentSession implements DocumentCollaborationSession {
     if (this.destroyed) return;
     this.clearAttachWatchdog();
     this.flushPendingJournals();
+    this.undoGroups.close();
     this.detachPort?.();
     this.destroyed = true;
     this.stopBlobWatch();
@@ -598,7 +616,7 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 
   private refuseLocalJournal(refusal: CollaborationFailure, transient = false): void {
-    this.historyGroups.reset();
+    this.historyGroups.refused();
     this.undoManager.stopCapturing();
     // The status this replica held before the refusal. Recovery restores it, because a
     // realign repairs the DOCUMENT, not the transport: with offline editing on, the refused
@@ -825,46 +843,7 @@ class DocumentSession implements DocumentCollaborationSession {
   }
 }
 
-/**
- * Full-document collaboration session: the engine-facing seam, the transport status a
- * provider sets, and a live display-identity update.
- * @public
- */
-export interface DocumentCollaborationSession extends EditorCollaborationSession {
-  /**
-   * Provider convenience seam. Low-level consumers normally leave the session ready.
-   *
-   * `reason` is a typed code so a host can branch on it: pass `'transport-disconnected'` for
-   * a socket that will retry itself and `'authentication-failed'` for a credential the server
-   * rejected, because those need opposite responses. The provider's own phrasing goes in
-   * `detail`.
-   */
-  setTransportStatus(
-    status: 'ready' | 'disconnected' | 'error',
-    reason?: CollaborationFailureCode,
-    detail?: string
-  ): void;
-  /**
-   * Update the display identity for the rest of this session and republish presence.
-   *
-   * `name` revalidates with the construction rules (trimmed, 1 to 256 characters) and an
-   * invalid value throws. `color` longer than 64 characters throws; a color
-   * `safeParticipantColor` refuses is dropped, so peers fall back to the accent color.
-   * `actorId` and `role` are immutable — the update type cannot name them, and any extra
-   * runtime property is ignored.
-   */
-  setIdentity(update: CollaborationIdentityUpdate): void;
-
-  /**
-   * One reading of the room's replicated size against this replica's hard limits.
-   *
-   * A room only grows — deletion is a tombstone — and the limits that bound hostile
-   * amplification turn terminal when crossed. Watch this to archive and re-room before that
-   * happens. The tombstone count walks the node map once per call, so read it on your own
-   * schedule rather than per keystroke.
-   */
-  resourceUsage(): CollaborationResourceUsage;
-}
+export type { DocumentCollaborationSession } from './document-session-contract.ts';
 
 /** Owned full-document collaboration replica. @public */
 export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborationSession>;

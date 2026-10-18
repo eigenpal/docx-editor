@@ -195,6 +195,7 @@ import {
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   fontFaceEnvironmentOf,
+  admittedFontSources,
   registerEmbeddedFontFaces,
   type EmbeddedFontFaceRegistration,
 } from './embedded-font-faces.ts';
@@ -709,10 +710,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // default (`all-markup`), which is what the review rail annotates.
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       ...diagnostics.surfaceHooks(suggesting, () => surface),
-      ...preparedOpen.takePreparedOpen(
-        bytes,
-        preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config)
-      ),
+      ...preparedOpen.takePreparedOpen(bytes),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       onHostMoved: followHost,
       onTrackedChange: () => {
@@ -852,20 +850,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     try {
       reviewAuthorSlots = createStableReviewAuthorSlots();
       reviewAuthorVisibility.showAll();
-      shapedMeasurer = undefined;
-      shapedProducer = undefined;
-      // An on-demand answer describes the document that asked for it. Carrying it into the
-      // next one would offer the previous file's families in this file's font picker.
-      resolvedFontConfiguration = undefined;
-      coveredFontFamilies = new Set();
-      documentSubstitutedFamilies = new Set();
-      disposeEmbeddedFaces();
-      disposeShapedFonts();
-      disposeShapedFonts = () => {};
-      // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
-      // guard will refuse to touch state, so the flag must reset here or a load that
-      // starts no font work of its own reports `resolving: true` forever.
-      fontsResolving = false;
+      forgetFonts();
       // BEFORE the mount, so the initial paint materializes the pages actually in view.
       // Only here, never in `mountBytes`: the font remount and `attach` re-enter that
       // function for the SAME document and must keep the reader's place.
@@ -878,6 +863,40 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     } finally {
       lifetime.cancelPrevious();
     }
+  }
+
+  /**
+   * Drop every installed face and the answer that chose them. An on-demand answer describes the
+   * document (or font origin) that asked for it: carried on, it would offer stale families in
+   * the font picker. A superseded resolution's stale guard refuses to touch state, so the flag
+   * resets here, or a load that starts no font work reports `resolving: true` forever.
+   */
+  function forgetFonts(): void {
+    shapedMeasurer = undefined;
+    shapedProducer = undefined;
+    resolvedFontConfiguration = undefined;
+    coveredFontFamilies = new Set();
+    documentSubstitutedFamilies = new Set();
+    disposeEmbeddedFaces();
+    disposeShapedFonts();
+    disposeShapedFonts = () => {};
+    fontsResolving = false;
+  }
+
+  /** {@link forgetFonts}, then measure the mounted document with the fallback measurer. */
+  function fallBackToDefaultFonts(): void {
+    forgetFonts();
+    if (surface) {
+      const fallback = resolveDefaultSurfaceMeasurer(scaleOf(), {
+        context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
+      });
+      const producer = `${fallback.producer}+fonts:${++fontMeasurementEpoch}`;
+      const defaultFontFamily = configuredDefaultFontFamily(fontConfiguration());
+      const measurement = { measurer: fallback.measurer, producer, defaultFontFamily };
+      updateSurfaceMeasurement(surface, { ...measurement, fontAlias: undefined }, false);
+    }
+    bump();
+    emitSelectionChange();
   }
 
   function reportFontError(
@@ -1111,20 +1130,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // name, so a document laid out on Carlito metrics would be drawn in something else
       // — correct pagination, wrong glyphs. Aliasing (rather than registering the family
       // name itself) is what keeps that safe; see `embedded-font-faces.ts`.
-      const admitted = fonts.sources
-        .map((source) => {
-          const resolved = shaping.fonts.resolve(source.request);
-          return resolved instanceof FontResolutionError || resolved.id !== source.id
-            ? null
-            : {
-                request: source.request,
-                id: resolved.id,
-                bytes: resolved.bytes,
-                hash: resolved.hash,
-                faceIndex: resolved.faceIndex,
-              };
-        })
-        .filter((source): source is NonNullable<typeof source> => source !== null);
+      const admitted = admittedFontSources(fonts.sources, shaping.fonts);
       const registration = await registerEmbeddedFontFaces(
         admitted,
         fontFaceEnvironmentOf(container?.ownerDocument),
@@ -1370,10 +1376,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
   if (config.document) {
     const bytes = normalizeSource(config.document);
-    if (bytes) {
-      preparedOpen.holdParsedRead(config.document, bytes);
-      loadBytes(bytes);
-    } else {
+    if (bytes) loadBytes(bytes);
+    else {
       emitError(editorError('unsupported', openFailure.refuseSource(config.document)));
       diagnostics.openRejected('unsupported');
     }
@@ -1836,39 +1840,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       surface?.flushPendingInput();
       if (destroyed || request !== fontRequestSeq) return;
       const lifetime = fontLifetime.advance();
+      const live = () => !destroyed && lifetime.current();
       try {
         configuredFonts = fonts;
         resolvedFontConfiguration = undefined;
-        shapedMeasurer = undefined;
-        shapedProducer = undefined;
-        coveredFontFamilies = new Set();
-        documentSubstitutedFamilies = new Set();
-        disposeEmbeddedFaces();
-        disposeShapedFonts();
-        disposeShapedFonts = () => {};
         fontsResolving = false;
-        if (surface) {
-          const fallback = resolveDefaultSurfaceMeasurer(scaleOf(), {
-            context: container ? tryCreateBrowserCanvasContext(container.ownerDocument) : null,
-          });
-          updateSurfaceMeasurement(
-            surface,
-            {
-              measurer: fallback.measurer,
-              producer: `${fallback.producer}+fonts:${++fontMeasurementEpoch}`,
-              fontAlias: undefined,
-              defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
-            },
-            false
-          );
-        }
-        if (destroyed || !lifetime.current()) return;
-        bump();
-        emitSelectionChange();
+        // Removal drops the host faces now. A replacement keeps the current faces painted
+        // until the new ones install, so the pages lay out once, not twice.
+        if (!fonts) fallBackToDefaultFonts();
       } finally {
         lifetime.cancelPrevious();
       }
-      if (!destroyed && lifetime.current()) await liveFonts.schedule(true);
+      const replaced = disposeShapedFonts;
+      if (live()) await liveFonts.schedule(true);
+      // Nothing new installed (no usable sources, or a failure): the replaced faces go anyway.
+      if (fonts && live() && disposeShapedFonts === replaced) fallBackToDefaultFonts();
     },
 
     attach(el, options) {
@@ -1945,7 +1931,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       refreshHost?.invalidate();
       highlights.reset();
-      preparedOpen.holdParsedRead(document, bytes);
       loadBytes(bytes);
     },
 

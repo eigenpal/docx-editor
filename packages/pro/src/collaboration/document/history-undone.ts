@@ -20,6 +20,7 @@ import { RESTORE_ORIGIN } from './paragraph-text-restore.ts';
 import { isElementRecord, isNodeMap, NODE_UNDONE_FIELD } from './schema.ts';
 import { textDeletionsOf, type DeletedRun } from './paragraph-text-deletions.ts';
 import { deleteSetRuns, structAt } from './yjs-items.ts';
+import { textMarksOf } from './paragraph-text-marks.ts';
 
 /**
  * The part members a part always lists. Numbering definitions are not among them: concurrent
@@ -74,6 +75,13 @@ const COPY_RUNS = 'docx-copy-runs';
 const HIDDEN_KEYS = 'docx-hidden-copies';
 /** A step with nothing for Yjs to reverse: only copies to hide or show again. */
 const COPIES_ONLY = 'docx-copies-only';
+/** A step that a host undo group collected: one undo reverts it and nothing older. */
+const GROUP_STEP = 'docx-undo-group';
+
+/** Mark `item` as the step of a host undo group. */
+export function markGroupStep(item: { readonly meta: Map<unknown, unknown> }): void {
+  item.meta.set(GROUP_STEP, true);
+}
 
 interface HistoryStack {
   readonly undoStack: StackItemShape[];
@@ -111,12 +119,26 @@ export function stepHistory(
   const before = opposite.length;
   // A step for copies alone that Yjs later merged an edit into has that edit to reverse too.
   const copiesOnly = popped?.meta.get(COPIES_ONLY) === true && changesOf(popped) === 0;
+  // Yjs pops steps until one changes something. When other participants already removed
+  // everything a step wrote, that would revert older steps too. A group's step must never
+  // be reverted that way: a group step is stepped alone, and with nothing left to reverse
+  // it is popped and changes nothing. An ungrouped step may still pass over ungrouped
+  // steps below it that changed nothing, as without groups, but stops above a group step.
+  const grouped = popped?.meta.get(GROUP_STEP) === true;
   if (copiesOnly || (runs.length > 0 && nothingElse(registry, popped))) {
     stack.pop();
-  } else if (direction === 'undo') {
-    history.undo();
   } else {
-    history.redo();
+    const below = stack.splice(0, grouped ? stack.length - 1 : aboveLastGroupStep(stack));
+    try {
+      if (direction === 'undo') history.undo();
+      else history.redo();
+    } finally {
+      if (below.length > 0) {
+        const restored = below.concat(stack);
+        stack.length = 0;
+        for (const step of restored) stack.push(step);
+      }
+    }
   }
   afterStep();
   let pushed = opposite.length > before ? opposite[opposite.length - 1] : undefined;
@@ -138,6 +160,11 @@ export function stepHistory(
       pushed.meta.set(HIDDEN_KEYS, keys);
     }
   }
+  if (grouped) {
+    // The step that undoes this undo is the group's step too, even when it changes nothing.
+    pushed ??= pushCopiesOnly(opposite);
+    markGroupStep(pushed);
+  }
   markUndoneRecords(
     registry,
     direction,
@@ -147,6 +174,58 @@ export function stepHistory(
   // The next edit is a step of its own. Yjs merges an edit made within its capture window into
   // the step on top, and a step this module pushed would take an edit it then never reverses.
   history.stopCapturing();
+}
+
+/**
+ * The identities of one author's characters `[from, to)` of `client`, as spans.
+ *
+ * A redo writes this author's characters again under new IDs, with a restore mark naming the
+ * identity they had, and a copy of them carries that identity. Only that mark is followed: a
+ * step's other inserts, such as copies its own split wrote of another author's text, keep
+ * their own IDs, so a record never hides that text.
+ */
+function identitySpans(
+  marks: ReturnType<typeof textMarksOf>,
+  client: number,
+  from: number,
+  to: number
+): { client: number; from: number; to: number }[] {
+  const spans: { client: number; from: number; to: number }[] = [];
+  for (let at = from; at < to; ) {
+    const restored = marks.origin('restore', client, at);
+    if (restored === null || restored.client !== client) {
+      // Without a mark here, the rest of the insert has none either: a mark covers whole
+      // inserts.
+      const end = restored === null ? to : Math.min(to, restored.firstClock + restored.length);
+      spans.push({ client, from: at, to: end });
+      at = end;
+      continue;
+    }
+    const end = Math.min(to, restored.firstClock + restored.length);
+    const start = restored.clock + (at - restored.firstClock);
+    spans.push({ client: restored.client, from: start, to: start + (end - at) });
+    at = end;
+  }
+  return spans;
+}
+
+/** Whether a paragraph shows a copy of any character of `client` in `[from, to)`. */
+function hasShownCopy(
+  follow: { shownCopy(identity: string): unknown },
+  client: number,
+  from: number,
+  to: number
+): boolean {
+  for (let at = from; at < to; at += 1) if (follow.shownCopy(`${client}:${at}`)) return true;
+  return false;
+}
+
+/** How many steps lie at or below the topmost group step under the top one, or 0. */
+function aboveLastGroupStep(stack: readonly StackItemShape[]): number {
+  for (let index = stack.length - 2; index >= 0; index -= 1) {
+    if (stack[index]!.meta.get(GROUP_STEP) === true) return index + 1;
+  }
+  return 0;
 }
 
 /** How many runs of items a step reverses: what it inserted and what it deleted. */
@@ -165,26 +244,34 @@ function changesOf(step: StackItemShape): number {
  */
 function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined): DeletedRun[] {
   const follow = registry.inline.follow;
-  const copied: DeletedRun[] = [...((runsOf(step, COPY_RUNS) as DeletedRun[] | undefined) ?? [])];
+  const marks = textMarksOf(registry.doc);
+  const copied: { client: number; from: number; to: number }[] = (
+    (runsOf(step, COPY_RUNS) as DeletedRun[] | undefined) ?? []
+  ).map((run) => ({ ...run }));
   const add = (client: number, from: number, to: number): void => {
     const last = copied[copied.length - 1];
-    if (last && last.client === client && last.to === from) {
-      copied[copied.length - 1] = { ...last, to };
-    } else {
-      copied.push({ client, from, to });
-    }
+    if (last && last.client === client && last.to === from) last.to = to;
+    else copied.push({ client, from, to });
   };
   for (const run of deleteSetRuns((step as { insertions?: unknown } | undefined)?.insertions)) {
     const runEnd = run.clock + run.length;
     for (let clock = run.clock; clock < runEnd; ) {
       const item = structAt(registry.doc, { client: run.client, clock });
       const end = item ? Math.min(item.id.clock + item.length, runEnd) : clock + 1;
-      if (item?.deleted) {
-        for (let at = clock; at < end; at += 1) {
-          if (follow.shownCopy(`${run.client}:${at}`) === null) continue;
-          add(run.client, clock, end);
-          break;
-        }
+      // A peer that edits the paragraph a move took typed text to writes a copy of it there,
+      // and the original, still live, no longer shows. Removing the original alone would
+      // leave that copy in view, so typed text counts live too. Text a redo wrote again
+      // counts only once deleted.
+      if (item?.deleted || (item && !marks.origin('restore', run.client, clock))) {
+        const spans = identitySpans(marks, run.client, clock, end);
+        // Spans first, characters only where an index run holds a copy: an undo of a long
+        // paste reads its marks once per insert, not once per character.
+        const shown = spans.some(
+          (span) =>
+            follow.holdsCopyIn(span.client, span.from, span.to) &&
+            hasShownCopy(follow, span.client, span.from, span.to)
+        );
+        if (shown) for (const span of spans) add(span.client, span.from, span.to);
       }
       clock = end;
     }
@@ -192,18 +279,42 @@ function copiesOf(registry: DocumentRegistry, step: StackItemShape | undefined):
   return copied;
 }
 
-/** Whether Yjs has nothing to reverse for a step: it deleted nothing, and what it wrote is gone. */
+/**
+ * Whether Yjs has nothing to reverse for a step: it deleted nothing, and what it wrote is gone.
+ *
+ * Only the undo manager's own types count. A step also records the items its transaction
+ * wrote elsewhere, such as the mark that says where typed text follows a moved character.
+ * Yjs never reverses those, so a live one does not mean there is something to undo.
+ */
 function nothingElse(registry: DocumentRegistry, step: StackItemShape | undefined): boolean {
   if (!step) return false;
-  if (deleteSetRuns((step as { deletions?: unknown }).deletions).length > 0) return false;
-  for (const run of deleteSetRuns((step as { insertions?: unknown }).insertions)) {
-    for (let clock = run.clock; clock < run.clock + run.length; ) {
-      const item = structAt(registry.doc, { client: run.client, clock });
-      if (!item || !item.deleted) return false;
-      clock = item.id.clock + item.length;
+  const scope = new Set<unknown>(registry.trackedTypes());
+  const shape = step as { deletions?: unknown; insertions?: unknown };
+  for (const [runs, deletion] of [
+    [deleteSetRuns(shape.deletions), true],
+    [deleteSetRuns(shape.insertions), false],
+  ] as const) {
+    for (const run of runs) {
+      for (let clock = run.clock; clock < run.clock + run.length; ) {
+        const item = structAt(registry.doc, { client: run.client, clock });
+        if (!item) return false;
+        if (inScope(item, scope) && (deletion || !item.deleted)) return false;
+        clock = item.id.clock + item.length;
+      }
     }
   }
   return true;
+}
+
+/** Whether `item` lives under one of the undo manager's root types. */
+function inScope(item: Y.Item, scope: ReadonlySet<unknown>): boolean {
+  let type: Y.AbstractType<unknown> | null = item.parent as Y.AbstractType<unknown> | null;
+  while (type !== null) {
+    if (scope.has(type)) return true;
+    const parent: unknown = type._item?.parent;
+    type = parent instanceof Y.AbstractType ? parent : null;
+  }
+  return false;
 }
 
 function runsOf<Value>(step: StackItemShape | undefined, key: string): Value[] | undefined {

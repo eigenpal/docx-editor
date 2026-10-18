@@ -27,7 +27,9 @@ import {
   ENDS_WITH_BREAKING_SPACE,
   STARTS_WITH_BREAKING_SPACE,
   wordBoundaries,
+  ZERO_WIDTH_SPACE,
 } from './cjk-line-break.ts';
+import { paragraphWordCuts } from './paragraph-word-cuts.ts';
 import { measureInlineDrawing, type InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import type { DocumentProperties } from '@docx-editor.dev/core/store';
@@ -53,7 +55,7 @@ import {
 import { cellContentInsets } from './table-cell-geometry.ts';
 import { preferredSpreadWidths } from './table-autofit-spread.ts';
 import type { PreferredWidth } from './table-widths.ts';
-import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
 /**
  * What autofit needs from layout to measure each cell the way layout paints it.
@@ -197,8 +199,9 @@ function sameKey(a: MinimumKey, b: MinimumKey): boolean {
 /**
  * The widest segment of a paragraph that no line break may split, plus its indents.
  *
- * Break opportunities are spaces, tabs, line breaks, and the dash rule of
- * {@link wordBoundaries}. An ideographic run counts as one segment here: an autofit column
+ * Break opportunities are spaces, zero-width spaces, tabs, line breaks, and the dash rule of
+ * {@link wordBoundaries}. An ideographic run counts as one segment here, and so does an
+ * unspaced Thai, Lao, Khmer, or Myanmar run: an autofit column
  * widens to keep it whole, although line breaking may still wrap it inside the column. A
  * segment runs across source runs, field results, and hidden text, measured in the face each
  * piece paints. A positive first-line indent counts against the first segment.
@@ -325,6 +328,8 @@ export function paragraphContentWidthsPt(
   let layoutEquation: ReturnType<typeof createEquationLayouter> | undefined;
   // A dash that ends a run breaks only if the next run does not open with another dash.
   let dashPending = false;
+  // A dash that opens a run breaks after itself when text precedes it, as line breaking reads it.
+  const wordCuts = paragraphWordCuts(pieces, (piece) => piece.style.hidden === true);
   for (const piece of pieces) {
     if (piece.style.hidden) continue;
     // A drawing that is not an inline atom (anchored, hidden, unresolved) takes no width in
@@ -372,7 +377,7 @@ export function paragraphContentWidthsPt(
       continue;
     }
     let from = 0;
-    for (const to of wordBoundaries(piece.text, false)) {
+    for (const to of wordCuts?.boundaries(piece) ?? wordBoundaries(piece.text, false)) {
       const candidate = piece.text.slice(from, to);
       from = to;
       if (candidate.length === 0) continue;
@@ -388,7 +393,7 @@ export function paragraphContentWidthsPt(
       }
       // Measured as line breaking measures it, so the advance comes from the same cache;
       // the trailing spaces it hangs are priced on their own.
-      const ink = withoutTrailingSpaces(candidate);
+      const ink = withoutLineEndWhitespace(candidate);
       const full = measure(candidate);
       advance(full, ink.length === candidate.length ? 0 : full - (ink ? measure(ink) : 0));
       if (lineStart && ink.length === 0) {
@@ -407,7 +412,8 @@ export function paragraphContentWidthsPt(
       if (
         ink.length < candidate.length ||
         to < piece.text.length ||
-        ENDS_WITH_BREAKING_SPACE.test(candidate)
+        ENDS_WITH_BREAKING_SPACE.test(candidate) ||
+        candidate.endsWith(ZERO_WIDTH_SPACE)
       )
         close();
       else dashPending = BREAK_AFTER_DASH.has(candidate.at(-1)!);
