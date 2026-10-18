@@ -997,9 +997,7 @@ function* layoutBlocksPass(
     // Keep those passes on the full preparation path.
     const unframed = columns.count === 1 && !options.disabledParagraphFrameIds;
     const reusable = prepassInputsValid && unframed ? prepassMemo : null;
-    // Only the list map moved (a paragraph split or joined renumbers some items, and the map is
-    // new): an unchanged paragraph whose own list item is the same object keeps its entry; any
-    // other block is prepared again, which its own memo answers.
+    // Only the list map moved: a paragraph keeps its entry while its own list item is the same.
     const listMoved = !reusable && prepassNonListInputsValid && unframed ? prepassMemo : null;
     const orderSource = reusable ?? (autofitInputsEqual ? prepassMemo : null);
     const prepared = resolveListAutoSpacing(
@@ -1918,10 +1916,8 @@ function* layoutBlocksPass(
       if (mark) reserveResume.followShift(pages.length - mark.pageCount);
       const tailHolds = mark && reserveResume.tailHolds(mark, pages.length);
       if (mark && tailHolds) {
-        // At delta 0 the previous pages are appended by identity; at a nonzero delta the tail
-        // is identical content `delta` sheets away and is reused through `remapPage`, gated by
-        // `convergenceTailShiftAllowed`. Asked first: it reads no flow state, and the compare
-        // of the open page's fragments is wasted on a tail it refuses.
+        // At delta 0 the previous pages append by identity; otherwise `remapPage` reuses them,
+        // gated by `convergenceTailShiftAllowed`, asked before the costlier fragment compare.
         const delta = pages.length - mark.pageCount;
         const shiftedTail = delta !== 0 ? reserveResume.shiftedTail(mark, pages.length) : undefined;
         const shiftable = convergenceTailShiftAllowed({

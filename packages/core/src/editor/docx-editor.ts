@@ -23,7 +23,7 @@ import { bindCommentDraftRequests } from './comment-draft-chrome.ts';
 import { completePendingSuggesting } from './opening-editing-mode.ts';
 import { subscribeDocumentChanges } from './docx-editor-document-changes.ts';
 import { attachTargetRefusal, hostWindowOf, registerEditorHost } from './host-realm.ts';
-import { continueOpeningLayout } from './docx-editor-opening-layout.ts';
+import { continueOpeningLayout, withOpeningRefresh } from './docx-editor-opening-layout.ts';
 import { formattingCommandActive } from './docx-editor-active.ts';
 import { createEditorScrolling } from './docx-editor-scroll.ts';
 import { createAnchorNavigation } from './docx-editor-anchor-navigation.ts';
@@ -766,35 +766,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     sweepCustomNodePayloadsOnOpen(surface, modules);
     // A large open ends at the mount; its remaining pages lay out behind the live pages.
     const opened = surface;
-    /** Set when a refresh's opening failed and was reported to the refresh host. */
-    let refreshFailed = false;
     if (!preparedOpen.stillOpening(opened)) diagnostics.openSettled(opened);
     else
-      continueOpeningLayout(opened, {
-        current: () => surface,
-        view: () => hostWindowOf(container),
-        slice: (run) => {
-          try {
-            return diagnostics.continueOpen(run);
-          } catch (error) {
-            // A refresh reports its failure to the refresh host; any other open throws.
-            const bytes = openingRefreshBytes;
-            openingRefreshBytes = null;
-            if (!bytes) throw error;
-            diagnostics.openCrashed(error);
-            refreshHost?.mounted(bytes, error);
-            refreshFailed = true;
-            return true;
+      continueOpeningLayout(
+        opened,
+        withOpeningRefresh(
+          {
+            current: () => surface,
+            view: () => hostWindowOf(container),
+            slice: (run) => diagnostics.continueOpen(run),
+            settled: () => diagnostics.openSettled(opened),
+          },
+          {
+            take: () => [openingRefreshBytes, (openingRefreshBytes = null)][0],
+            crashed: (error) => diagnostics.openCrashed(error),
+            mounted: (bytes, error) => refreshHost?.mounted(bytes, error),
           }
-        },
-        settled: () => {
-          if (refreshFailed) return;
-          const bytes = openingRefreshBytes;
-          openingRefreshBytes = null;
-          diagnostics.openSettled(opened);
-          if (bytes) refreshHost?.mounted(bytes);
-        },
-      });
+        )
+      );
     mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
     // engine's own guards refuse the WRITE, but the pages layer stays `contenteditable`

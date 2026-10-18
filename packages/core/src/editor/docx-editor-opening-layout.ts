@@ -46,3 +46,46 @@ export function continueOpeningLayout(surface: object, hooks: OpeningLayoutHooks
   };
   queueTask(slice, hooks.view());
 }
+
+/** An external refresh still opening when the mount ended: the host hears how the open ended. */
+export interface OpeningRefresh {
+  /** The refreshed bytes, once; null when this open is not a refresh. */
+  take(): Uint8Array | null;
+  /** Report a failed open. */
+  crashed(error: unknown): void;
+  /** Tell the refresh host the open ended, with its error when it failed. */
+  mounted(bytes: Uint8Array, error?: unknown): void;
+}
+
+/**
+ * `hooks`, with a refresh's ending reported to its host: on the last page once the open
+ * settles, or with the error a slice threw. A failed refresh is not reported as settled, and
+ * an open that is not a refresh throws as before.
+ */
+export function withOpeningRefresh(
+  hooks: OpeningLayoutHooks,
+  refresh: OpeningRefresh
+): OpeningLayoutHooks {
+  let failed = false;
+  return {
+    ...hooks,
+    slice: (run) => {
+      try {
+        return hooks.slice(run);
+      } catch (error) {
+        const bytes = refresh.take();
+        if (!bytes) throw error;
+        refresh.crashed(error);
+        refresh.mounted(bytes, error);
+        failed = true;
+        return true;
+      }
+    },
+    settled: () => {
+      if (failed) return;
+      const bytes = refresh.take();
+      hooks.settled();
+      if (bytes) refresh.mounted(bytes);
+    },
+  };
+}
