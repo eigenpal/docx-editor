@@ -65,8 +65,9 @@ function rememberNotWorthIt(key: string): void {
 }
 
 /**
- * The generation ID of the room a document holds: empty for a room never compacted, and
- * empty for a document that holds no room yet.
+ * The generation ID of the room a document holds. It is empty for a room that a participant
+ * seeded and nobody compacted since, and for a document that holds no room yet. A room that
+ * `createCollaborationState` or `compactCollaborationState` built has one.
  *
  * @public
  */
@@ -128,13 +129,17 @@ export async function compactCollaborationState(
 }
 
 /** A fresh room state that holds `bytes`, with a new generation ID. */
-export async function seedGeneration(bytes: Uint8Array, documentId: string): Promise<Uint8Array> {
+export async function seedGeneration(
+  bytes: Uint8Array,
+  documentId: string,
+  maxBytes?: number
+): Promise<Uint8Array> {
   const fresh = new Y.Doc();
   const stopKeepingMarkers = keepFormattingMarkers(fresh);
   const registry = new DocumentRegistry(fresh);
   try {
     const blobs = new SharedBlobStore(fresh.getMap<Uint8Array>(SHARED_BLOBS_KEY));
-    const seeded = await seedPackage(registry, openBaselinePackage(bytes), blobs);
+    const seeded = await seedPackage(registry, openBaselinePackage(bytes, maxBytes), blobs);
     if (!seeded.ok) throw new CollaborationSchemaError(seeded.code);
     fresh.transact(() => {
       registry.schema.meta.set('documentId', documentId);

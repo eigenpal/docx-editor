@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "bun check",
-    "test": "bun test ./shared/admission.test.ts ./server/stored-room.test.ts ./server/room-migration.test.ts"
+    "test": "bun test ./shared/admission.test.ts ./server/stored-room.test.ts ./server/room-migration.test.ts ./server/room-files.test.ts ./src/room-address.test.ts ./src/room-token.test.ts"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",

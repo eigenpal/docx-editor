@@ -62,11 +62,15 @@ const messages = {
     'Save a copy of any local changes first. Update the app and room server to compatible builds, then reload every open tab. For an older saved room, export its DOCX using the matching older build and open that file in a new room. Keep the saved room until its content has been recovered.',
   'collaborationDemo.serverRecovery.timeoutTitle': 'Room synchronization did not finish.',
   'collaborationDemo.serverRecovery.timeoutBody':
-    'Check the server at {serverUrl}, your network connection, and the configured URL, then reload this page. If the demo server is not running, start it in a second terminal.',
+    'Check the server at {serverUrl}, your network connection, and the configured URL, then select Try again. If the demo server is not running, start it in a second terminal.',
   'collaborationDemo.serverRecovery.tokenBody':
     'Check COLLAB_TOKEN on the server against VITE_COLLAB_TOKEN here, then reconnect.',
   'collaborationDemo.serverRecovery.generalBody':
     'Save a copy of any local changes. Ask the room owner to resolve the connection problem before rejoining.',
+  'collaborationDemo.serverRecovery.retry': 'Try again',
+  'collaborationDemo.serverRecovery.unknownRoomTitle': 'This room does not exist.',
+  'collaborationDemo.serverRecovery.unknownRoomBody':
+    'Check the invite link. The room may have been removed from the server. To start a new room, open this page without a room in its address.',
   'collaborationDemo.serverRecovery.savedRoomTitle': 'The saved room could not be opened.',
   'collaborationDemo.serverRecovery.savedRoomBody':
     'Ask the room owner to check the saved files and server storage access. Keep the existing files; restore a working backup or recover a DOCX into a new room before trying again.',

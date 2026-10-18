@@ -26,7 +26,16 @@ import type {
  */
 export type CollaborationBootstrap =
   | { readonly kind: 'create'; readonly document: Uint8Array }
-  | { readonly kind: 'join'; readonly timeoutMs?: number; readonly signal?: AbortSignal }
+  | {
+      readonly kind: 'join';
+      /** Wait for the room's shared state. Default 30000 ms. */
+      readonly timeoutMs?: number;
+      /**
+       * Abort the join. The factory rejects with `initialization-aborted`, also when the room
+       * is already present or the server still loads it.
+       */
+      readonly signal?: AbortSignal;
+    }
   | {
       readonly kind: 'create-or-join';
       readonly document: Uint8Array;
@@ -39,7 +48,10 @@ export type CollaborationBootstrap =
       readonly electionWindowMs?: number;
       /** Join wait after this replica loses the seed election. Default 30000 ms. */
       readonly timeoutMs?: number;
-      /** Abort the join. The factory rejects with `initialization-aborted`. */
+      /**
+       * Abort the join. The factory rejects with `initialization-aborted`, also when the room
+       * is already present or the server still loads it.
+       */
       readonly signal?: AbortSignal;
     };
 

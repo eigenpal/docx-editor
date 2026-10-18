@@ -116,8 +116,17 @@ const defaultProviderFactory: HocuspocusProviderFactory = (init) =>
  * so a version refusal cannot be mistaken for an expired credential. Other reasons keep
  * `initialization-aborted` and diagnostic detail instead of burning the whole timeout.
  */
-function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Promise<void> {
+function waitForSynced(
+  provider: OwnedHocuspocusProvider,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    // The bootstrap `signal` covers the whole join, the server's load of the room included.
+    if (signal?.aborted) {
+      reject(new CollaborationSchemaError('initialization-aborted'));
+      return;
+    }
     if (provider.isSynced) {
       resolve();
       return;
@@ -126,6 +135,11 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
       clearTimeout(timer);
       provider.off('synced', onSynced);
       provider.off('authenticationFailed', onAuthenticationFailed);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = (): void => {
+      cleanup();
+      reject(new CollaborationSchemaError('initialization-aborted'));
     };
     const onSynced = (): void => {
       cleanup();
@@ -146,6 +160,7 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
     }, timeoutMs);
     provider.on('synced', onSynced);
     provider.on('authenticationFailed', onAuthenticationFailed);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
@@ -182,8 +197,16 @@ export async function createHocuspocusCollaboration(
     // a document, and merging a second seed into it doubled every paragraph. Synced first,
     // 'create' refuses such a room with `already-initialized`. The seed is one transaction,
     // so peers never receive half of it.
+    // A join aborted before it starts opens no connection at all.
+    if (options.bootstrap.kind !== 'create' && options.bootstrap.signal?.aborted) {
+      throw new CollaborationSchemaError('initialization-aborted');
+    }
     provider = connectProvider();
-    await waitForSynced(provider, options.syncedTimeoutMs ?? DEFAULT_SYNCED_TIMEOUT_MS);
+    await waitForSynced(
+      provider,
+      options.syncedTimeoutMs ?? DEFAULT_SYNCED_TIMEOUT_MS,
+      options.bootstrap.kind === 'create' ? undefined : options.bootstrap.signal
+    );
     // The server's synced state is the whole room, so there is nothing left to probe for: an
     // uninitialized room after the sync is empty. The election still runs, for two clients
     // that race to seed it.
@@ -221,9 +244,12 @@ export async function createHocuspocusCollaboration(
   // A token the server later rejects (an expired JWT on reconnect) stops replication for
   // good: surface it as a terminal session error rather than a silent stall.
   const onAuthenticationFailed = (event: { readonly reason: string }): void => {
+    // The server's reason travels as the detail, as it does on the join path, so a host can
+    // tell a retired room from an expired credential.
     session.setTransportStatus(
       'error',
-      isCollaborationFailureCode(event.reason) ? event.reason : 'authentication-failed'
+      isCollaborationFailureCode(event.reason) ? event.reason : 'authentication-failed',
+      `authentication failed: ${event.reason}`
     );
   };
   connectedProvider.on('authenticationFailed', onAuthenticationFailed);
