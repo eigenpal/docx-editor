@@ -16,6 +16,7 @@ import {
   type ReviewItem,
   type ReviewRevisionItem,
 } from '../store/store/review-items.ts';
+import { commentMarkersOfParagraph } from '../store/store/comment-reads.ts';
 import {
   findNode,
   parentNodeOf,
@@ -122,8 +123,12 @@ export function patchLocalReviewItems(
   dirtyParagraphId: string,
   localRevisions: readonly ReviewRevisionItem[],
   filterLocal: (items: readonly ReviewRevisionItem[]) => readonly ReviewRevisionItem[] = (items) =>
-    items
+    items,
+  part?: OoxmlPart
 ): ReviewItem[] | null {
+  // Comments anchored in the paragraph keep their cards, at the offsets its markers now hold.
+  const comments = part ? remappedComments(cached, part, dirtyParagraphId) : new Map();
+  if (!comments) return null;
   // A paragraph outside the story's own order (one in a text box) has no place to splice into.
   // With no revision of its own the cached queue still holds; with one, the caller derives the
   // whole queue instead.
@@ -143,7 +148,10 @@ export function patchLocalReviewItems(
   );
 
   for (const cachedItem of cached) {
-    const item = (cachedItem.kind === 'revision' && groups.get(cachedItem)) || cachedItem;
+    const item =
+      (cachedItem.kind === 'revision' && groups.get(cachedItem)) ||
+      (cachedItem.kind === 'comment' && comments.get(cachedItem)) ||
+      cachedItem;
     if (item.kind === 'revision' && isRevisionWhollyInParagraph(item, dirtyParagraphId)) {
       if (insertAt === null) insertAt = patched.length;
       continue;
@@ -168,11 +176,11 @@ export function patchLocalReviewItems(
   }
   // A group that starts in the dirty paragraph sits where the derivation puts it among that
   // paragraph's own items: by position, as the full derivation orders them.
-  if (groups.size > 0) {
+  if (groups.size > 0 || comments.size > 0) {
     const slots: number[] = [];
     patched.forEach((item, index) => {
       // Comments too: the derivation orders comments and revisions together by position.
-      const start = item.kind === 'revision' ? item.ranges[0]?.start : undefined;
+      const start = item.kind === 'revision' ? item.ranges[0]?.start : item.range?.start;
       if (start?.paragraphId === dirtyParagraphId) slots.push(index);
     });
     const ordered = slots
@@ -189,6 +197,47 @@ export function patchLocalReviewItems(
   // and the next full re-derive put it back. The pass is over the patched list and costs
   // nothing when no comment answers a change.
   return linkRevisionReplies(patched);
+}
+
+/**
+ * The cached comments anchored in `paragraphId`, each with the ends that sit there read again
+ * from the paragraph's markers; null when one cannot be: it has no proper range, or a marker it
+ * needs is no longer in the paragraph, and the caller derives the whole queue.
+ */
+function remappedComments(
+  cached: readonly ReviewItem[],
+  part: OoxmlPart,
+  paragraphId: string
+): Map<ReviewCommentItem, ReviewCommentItem> | null {
+  const remapped = new Map<ReviewCommentItem, ReviewCommentItem>();
+  let markers: ReturnType<typeof commentMarkersOfParagraph> | undefined;
+  for (const item of cached) {
+    if (item.kind !== 'comment' || !commentTouchesParagraph(item, paragraphId)) continue;
+    const range = item.range;
+    if (!range || item.orphaned) return null;
+    if (!markers) {
+      const paragraph = findNode(part, paragraphId);
+      if (!paragraph || paragraph.kind !== 'paragraph') return null;
+      markers = commentMarkersOfParagraph(paragraph);
+    }
+    const offsetOf = (kind: 'start' | 'end'): number | undefined => {
+      const found = markers!.filter((point) => point.commentId === item.id && point.kind === kind);
+      return found.length === 1 ? found[0]!.offset : undefined;
+    };
+    const start = range.start.paragraphId === paragraphId ? offsetOf('start') : range.start.offset;
+    const end = range.end.paragraphId === paragraphId ? offsetOf('end') : range.end.offset;
+    if (start === undefined || end === undefined) return null;
+    if (start === range.start.offset && end === range.end.offset) continue;
+    remapped.set(item, {
+      ...item,
+      range: {
+        ...range,
+        start: { ...range.start, offset: start },
+        end: { ...range.end, offset: end },
+      },
+    });
+  }
+  return remapped;
 }
 
 function isRevisionWhollyInParagraph(item: ReviewRevisionItem, paragraphId: string): boolean {
@@ -422,7 +471,9 @@ export function localReviewPatchParagraphId(
 
   for (const item of items) {
     if (item.kind === 'comment') {
-      if (commentTouchesParagraph(item, paragraphId)) return null;
+      // Typing moves a comment's ends within the paragraph; the patch reads them again from
+      // its markers (`remappedComments`). Any other edit can move markers between paragraphs.
+      if (commentTouchesParagraph(item, paragraphId) && change.impact !== 'text-local') return null;
       continue;
     }
     // A custom node's item is refreshed by the FULL derivation only; a local revision

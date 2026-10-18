@@ -149,6 +149,14 @@ function markersInParagraphWithPolicy(
   return points;
 }
 
+/**
+ * @internal The comment range markers inside one paragraph, with the offset each sits at; the
+ * same reading a full anchor pass takes of that paragraph.
+ */
+export function commentMarkersOfParagraph(paragraph: OoxmlParagraphNode): readonly MarkerPoint[] {
+  return markersInParagraphWithPolicy(paragraph, true);
+}
+
 /** Marker points per immutable paragraph node. */
 const markerPointsCache = new FieldResultsModeMemo<OoxmlParagraphNode, readonly MarkerPoint[]>();
 
