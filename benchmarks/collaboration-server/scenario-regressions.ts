@@ -127,6 +127,9 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   { config: 'trackedSequential', delivery: 'in-order', seed: 1 },
   { config: 'trackedSequential', delivery: 'in-order', seed: 6 },
   { config: 'trackedEverything', delivery: 'peer', seed: 1 },
+  // An undo of a copy that showed a peer's deleted typing, while the record of the deletion
+  // was held back, once counted as the undo removing that typing.
+  { config: 'trackedEverything', delivery: 'peer', seed: 7 },
 ];
 
 /**
@@ -134,16 +137,7 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
  * into `replays/` and the seed back into `CLEAN`.
  */
 const OPEN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number; case: string }[] =
-  [
-    // An undo of a reject restores the insertion as copies, a peer's typing inside it follows
-    // them, and the undo of a later edit takes the adopted copy of that typing away.
-    {
-      config: 'trackedEverything',
-      delivery: 'peer',
-      seed: 7,
-      case: 'undo-after-accept-all-removes-peer-typing',
-    },
-  ];
+  [];
 
 /** How many test files share the seeds. Each file defines one share with `scenarioShare`. */
 export const SCENARIO_SHARES = 8;

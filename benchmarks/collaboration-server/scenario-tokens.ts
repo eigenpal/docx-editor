@@ -182,6 +182,12 @@ export class TypedTokens {
     for (const token of before) {
       const typed = this.typed.get(token);
       if (!typed || still.has(token) || !hasParagraph(after, typed.paragraph)) continue;
+      // Another replica deleted the token, so it must not show once updates settle. It can
+      // show for a while: Yjs deletes the characters at once but can hold back the record of
+      // the deletion, and a copy this replica wrote at the same time shows until the record
+      // arrives. An undo of that copy only shows the deletion sooner.
+      const deleter = this.deletedBy.get(token);
+      if (deleter !== undefined && deleter !== replica) continue;
       // A redo of this replica's own deletion takes the token out again.
       if (this.deleters.get(token)?.has(replica)) {
         this.deletedBy.set(token, replica);
