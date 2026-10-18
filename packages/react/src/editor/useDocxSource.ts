@@ -247,7 +247,7 @@ export function useDocxSource(
   // in Vue, whose watcher keys on the option value. Keying on the value is not open to
   // this hook: React rebuilds the options object every render, so `{ fonts: [a, b] }`
   // written inline would re-run the whole eager load on every render. Neither behaviour is
-  // a contract — remount, or load a document, to change fonts deliberately.
+  // a contract — pass a new `fonts` value, or load a document, to change fonts deliberately.
   useEffect(() => {
     const fontsSource = latest.current.fonts;
     if (fontsSource === undefined) {

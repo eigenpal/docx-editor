@@ -1,0 +1,71 @@
+{
+  "config": "tracked",
+  "seed": 12,
+  "replicas": 3,
+  "delivery": "server",
+  "actions": [
+    {
+      "kind": "edit",
+      "replica": 0,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 13,
+          "text": " d",
+          "revision": {
+            "author": "Author 0",
+            "date": "2026-01-01T04:04:52Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 1,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 1,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "paragraphId": "",
+          "op": "insertText",
+          "offset": 15,
+          "text": "ol",
+          "revision": {
+            "author": "Author 1",
+            "date": "2026-01-01T07:04:29Z"
+          }
+        },
+        "paragraphs": [0]
+      }
+    },
+    {
+      "kind": "deliver",
+      "to": 2,
+      "from": -1
+    },
+    {
+      "kind": "edit",
+      "replica": 2,
+      "addressed": {
+        "kind": "paragraph",
+        "op": {
+          "op": "acceptRevision",
+          "revision": {
+            "id": "32650",
+            "author": "Author 0",
+            "date": "2026-01-01T04:04:52Z"
+          },
+          "localName": "ins"
+        },
+        "paragraphs": [0]
+      }
+    }
+  ]
+}

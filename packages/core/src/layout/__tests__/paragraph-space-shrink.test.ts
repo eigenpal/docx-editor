@@ -40,6 +40,25 @@ test('modern justified flow compresses spaces, preserving letters and measurable
   expect(linesOf(result)[1]!.spans.every((s) => !s.style.shaping?.wordSpacingPt)).toBe(true);
 });
 
+test('a space before a zero-width space lends its shrink like a plain space', () => {
+  // U+200B takes no width, as in a shaped font.
+  const zeroWidth: TextMeasurer = {
+    ...measurer,
+    measure: (text, style) => measurer.measure(text.replace(/\u200b/gu, ''), style),
+  };
+  const spaced = layoutSemanticDocument(source('both', 'aa \u200bbb \u200bcc \u200bdd'), 1, {
+    measurer: zeroWidth,
+    compatibilityMode: 15,
+  });
+  expect(content(spaced).map((line) => line.replace(/\u200b/gu, '').trimEnd())).toEqual([
+    'aa bb cc',
+    'dd',
+  ]);
+  expect(
+    linesOf(spaced)[0]!.spans.some((span) => (span.style.shaping?.wordSpacingPt ?? 0) < 0)
+  ).toBe(true);
+});
+
 test('legacy, unspecified compatibility, and left alignment preserve existing wrapping', () => {
   for (const compatibilityMode of [undefined, 14])
     expect(content(layoutSemanticDocument(source(), 1, { measurer, compatibilityMode }))).toEqual([

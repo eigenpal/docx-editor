@@ -160,8 +160,9 @@
     "validation:pdf": "bun packages/docx-to-pdf/scripts/validator/launch.mjs",
     "check:docs-style": "node scripts/check-docs-style.mjs",
     "check:agent-docs": "node scripts/sync-agent-docs.mjs --check",
+    "check:recipe-code": "node scripts/check-recipe-code.mjs",
     "docs:agent": "node scripts/sync-agent-docs.mjs",
-    "check:docs": "bun run check:agent-docs && bun run check:docs-style && bun run check:example-readmes && bun run check:docs-mdx && bun run check:docs-chrome-slots && bun run check:docs-vue-refs && bun run check:public-docs-surface",
+    "check:docs": "bun run check:agent-docs && bun run check:recipe-code && bun run check:docs-style && bun run check:example-readmes && bun run check:docs-mdx && bun run check:docs-chrome-slots && bun run check:docs-vue-refs && bun run check:public-docs-surface",
     "dev:refresh": "bun run --filter './examples/document-refresh' dev",
     "dev:anchors": "bun run --filter './examples/anchor-navigation' dev",
     "dev:popout": "bun run --filter './examples/popout-window' dev"

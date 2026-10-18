@@ -15,7 +15,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * - `rp`: the run's `w:rPr` without children, and the order of its properties.
  * - `p:<namespace>|<local name>`: one property element of that `w:rPr`, with its subtree.
  * - `t`: the text element without children, and the ID of its text value.
- * - `w`: the wrappers around the item, outer to inner, each with its fixed children.
+ * - `w`: the wrappers around the item other than revisions, outer to inner, each with its
+ *   fixed children and the revisions nested inside it.
+ * - `v:<wrapper ID>`: one tracked insertion, deletion or move around the item, and `b`, the
+ *   revisions the item holds but does not belong to (`paragraph-text-revisions.ts`).
  *
  * Two peers formatting the same characters then merge property by property, and a deletion
  * removes only the characters its author saw. Every value comes from a peer, so decoding
@@ -50,6 +53,15 @@ import {
   type Slot,
 } from './paragraph-text-codec.ts';
 import type { ElementShell, LinearAttributes, LinearItem } from './paragraph-linear.ts';
+import {
+  encodeRevisions,
+  parseJson,
+  placeRevisions,
+  insideOf,
+  readRevisions,
+  shellData,
+  wrapperData,
+} from './paragraph-text-revisions.ts';
 
 /** The record field that holds a paragraph's shared inline text. */
 export const INLINE_FIELD = 'inline';
@@ -81,16 +93,6 @@ export interface InlineDeltaOp {
 
 // ---------------------------------------------------------------------------------------------
 // Encoding
-
-/** An element shell's compact data with its ID relative to `base`, and extra fields. */
-function shellData(
-  shell: ElementShell,
-  base: string,
-  slot: Slot | null,
-  extra: { [key: string]: JsonValue } = {}
-): { [key: string]: JsonValue } {
-  return { i: encodeId(shell.id, base), ...(elementData(shell, slot, false) as object), ...extra };
-}
 
 /**
  * The attribute key of one run property: `p:` and the local name for WordprocessingML,
@@ -150,13 +152,15 @@ export function encodeAttributes(
   if (attributes.wrap.length > MAX_JSON_DEPTH) {
     throw new SharedTextValueRefused('tree-too-deep', `${attributes.wrap.length} nested wrappers`);
   }
-  if (attributes.wrap.length > 0) {
+  // Each revision is an attribute of its own (`paragraph-text-revisions.ts`); `w` keeps the rest.
+  const plain = encodeRevisions(attributes.wrap, paragraphId, out);
+  if (plain.length > 0) {
     out[KEY_WRAP] = JSON.stringify(
-      attributes.wrap.map((wrapper) =>
-        shellData(wrapper, paragraphId, null, {
-          c: wrapper.children.map((child) => elementData(child, null, true)),
-        })
-      )
+      plain.map(({ wrapper, inside, outside }) => ({
+        ...wrapperData(wrapper, paragraphId),
+        ...(inside.length > 0 ? { r: inside } : {}),
+        ...(outside.length > 0 ? { x: outside } : {}),
+      }))
     );
   }
   if (Object.values(out).some((value) => mayBeUnreadable(value, limits))) {
@@ -286,15 +290,6 @@ export function attributeSignature(attributes: InlineAttributes | undefined): st
 
 // ---------------------------------------------------------------------------------------------
 // Decoding
-
-function parseJson(value: unknown): unknown {
-  if (typeof value !== 'string') return undefined;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return undefined;
-  }
-}
 
 /** A shell with its ID resolved against `base`, or null for data it cannot trust. */
 function readShell(
@@ -466,16 +461,29 @@ function decodeUncached(
         : null) ?? `${text.shell.id}~v`)
     : null;
   const wrapData = parseJson(attributes[KEY_WRAP]);
-  const wrap: ElementShell[] = [];
-  const wrapSignatures: string[] = [];
+  const plain: {
+    shell: ElementShell;
+    signature: string;
+    inside: ReadonlySet<string>;
+    outside: ReadonlySet<string>;
+  }[] = [];
   if (Array.isArray(wrapData) && wrapData.length <= MAX_JSON_DEPTH) {
     for (const entry of wrapData) {
       const shell = readShell(entry, paragraphId, null, limits, true);
       if (!shell) break;
-      wrap.push(shell.shell);
-      wrapSignatures.push(JSON.stringify(entry));
+      // The revisions a wrapper holds are not the wrapper: they never split one element.
+      const { r: _inside, x: _outside, ...wrapper } = entry as Record<string, unknown>;
+      plain.push({
+        shell: shell.shell,
+        signature: JSON.stringify(wrapper),
+        inside: insideOf(entry, limits, paragraphId),
+        outside: insideOf(entry, limits, paragraphId, 'x'),
+      });
     }
   }
+  const chain = placeRevisions(plain, readRevisions(attributes, limits, paragraphId));
+  const wrap = chain.map((entry) => entry.shell);
+  const wrapSignatures = chain.map((entry) => entry.signature);
   const runSignature = run
     ? JSON.stringify([
         attributes[KEY_RUN],

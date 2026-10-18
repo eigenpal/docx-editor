@@ -24,6 +24,7 @@ import {
   type ScenarioOptions,
 } from './scenario-harness.ts';
 import { readCase, replayOf, writeCase, type SavedCase } from './scenario-case.ts';
+import { TRACKED_WEIGHTS } from './scenario-plan.ts';
 import { zipDocument } from '../../packages/pro/src/collaboration/__tests__/document-peer-support.ts';
 
 const TEXTBOX_DOCUMENT = path.resolve(
@@ -46,12 +47,26 @@ const PARAGRAPHS_BODY = [
   .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
   .join('');
 
+/**
+ * Paragraphs that hold another author's pending insertion, deletion, and replacement, beside
+ * plain text, so suggesting-mode edits and decisions keep meeting the same changes.
+ */
+const REVISION = 'w:author="Counterparty" w:date="2025-12-01T00:00:00Z"';
+const TRACKED_BODY = [
+  `<w:p><w:r><w:t xml:space="preserve">Payment is due within </w:t></w:r><w:ins w:id="1" ${REVISION}><w:r><w:t>thirty (30) days of receipt</w:t></w:r></w:ins><w:r><w:t>.</w:t></w:r></w:p>`,
+  `<w:p><w:r><w:t xml:space="preserve">Notice goes to </w:t></w:r><w:del w:id="2" ${REVISION}><w:r><w:delText>the registered office of </w:delText></w:r></w:del><w:r><w:t>each party.</w:t></w:r></w:p>`,
+  `<w:p><w:r><w:t xml:space="preserve">The term is </w:t></w:r><w:del w:id="3" ${REVISION}><w:r><w:delText xml:space="preserve">two years </w:delText></w:r></w:del><w:ins w:id="4" ${REVISION}><w:r><w:t>one year</w:t></w:r></w:ins><w:r><w:t xml:space="preserve"> from signing.</w:t></w:r></w:p>`,
+  '<w:p><w:r><w:t>Plain text without changes, for edits beside them.</w:t></w:r></w:p>',
+].join('');
+
 /** Named scenario shapes. Each varies one source of concurrency over the same edit mix. */
 export const SCENARIO_CONFIGS = {
   sequential: { replicas: 3, steps: 150, delivery: 'in-order' },
   concurrent: { replicas: 4, steps: 200 },
   offline: { replicas: 4, steps: 200, offlineChance: 0.05 },
   undo: { replicas: 3, steps: 200, undoChance: 0.12 },
+  // Explicit undo groups opened and closed at random, with pauses past the capture window.
+  undoGroups: { replicas: 3, steps: 200, undoChance: 0.12, groupChance: 0.1 },
   join: { replicas: 2, steps: 200, lateJoiners: 3 },
   everything: { replicas: 4, steps: 300, offlineChance: 0.04, undoChance: 0.08, lateJoiners: 2 },
   // Updates that arrive twice, never, or cut short, repaired by state-vector syncs.
@@ -71,6 +86,24 @@ export const SCENARIO_CONFIGS = {
   denseControls: { ...DENSE, documentPath: fixture('block-sdt-showcase.docx') },
   denseLinks: { ...DENSE, documentPath: fixture('hyperlink-demo.docx') },
   denseParagraphs: { ...DENSE, replicas: 4, documentBody: PARAGRAPHS_BODY },
+  // Suggesting-mode typing and strikes inside, beside and over pending changes, while others
+  // accept and reject them.
+  tracked: { replicas: 3, steps: 200, documentBody: TRACKED_BODY, weights: TRACKED_WEIGHTS },
+  // The same edits one at a time: after every edit, each replica equals one plain store.
+  trackedSequential: {
+    replicas: 3,
+    steps: 150,
+    delivery: 'in-order',
+    documentBody: TRACKED_BODY,
+    weights: TRACKED_WEIGHTS,
+  },
+  trackedEverything: {
+    ...DENSE,
+    replicas: 4,
+    steps: 200,
+    documentBody: TRACKED_BODY,
+    weights: TRACKED_WEIGHTS,
+  },
 } as const satisfies Record<
   string,
   Partial<ScenarioOptions> & { documentPath?: string; documentBody?: string }

@@ -1774,8 +1774,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
             const storyPlan = planFor(story);
             return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
           },
-          host.trackedRangeReplacement !== false,
-          host.collaborative === true
+          host.trackedRangeReplacement !== false
         );
 
       case 'insertText': {

@@ -1,0 +1,14 @@
+{
+  "impact": "migration-required",
+  "fields": ["sharedSchemaVersion"],
+  "before": "Shared text stored tracked revisions in the wrapper list of each character. Text typed inside or right after another author's pending insertion restored the insertion after itself, so a concurrent accept or reject left part of the insertion pending and could add the next untracked text to it. The editing API refused those edits in a collaboration session.",
+  "after": "Each tracked revision around a character is its own shared-text attribute (v:<wrapper ID>), and a character typed inside a revision it does not belong to names that revision as superseded (b). An accept or reject applies to every character of the revision and to no other character, also while another participant types or strikes inside or right after it. An accept or reject that removes text on both sides of other text keeps that text in place, so it never brings back text another participant deleted or rejected at the same time. The editing API admits those edits in a collaboration session.",
+  "reason": "Released readers read revisions only from the wrapper list w, so they would show text that the new writer marks as tracked as plain text, and the reverse. sharedSchemaVersion increases, and saved rooms are exported and reseeded.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/paragraph-text-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-foreign-revisions.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-tracked-foreign-revisions-page.test.ts"
+  ],
+  "changeset": "concurrent-revision-decisions",
+  "migration": "upgrade-rooms-to-format-1521"
+}

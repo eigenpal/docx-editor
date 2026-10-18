@@ -1,7 +1,8 @@
 // Grapheme-safe chopping for an unbroken word that is wider than the line measure.
 
+import { isCombiningMark, stacksNext } from './cjk-line-break.ts';
 import { segmentGraphemes } from './grapheme.ts';
-import { withoutTrailingSpaces } from './trailing-spaces.ts';
+import { withoutLineEndWhitespace } from './trailing-spaces.ts';
 
 export interface OversizedWordPrefix {
   readonly text: string;
@@ -120,7 +121,25 @@ export function chopOversizedWord(
     // Overflow by one whole grapheme when none fits an empty line or a protected seam
     // prevents moving it. The accepted cut also preserves clusters split across pieces.
     if (fitTo === graphemeFrom) fitTo += 1;
+    const measuredFit = fitTo;
     fitTo = acceptedCut(text, graphemes, graphemeFrom, fitTo, options.cutAllowedAt);
+    // A stacked consonant (after a Khmer coeng or Myanmar virama) or a combining mark that
+    // would overflow a line with text on it moves to the next line with the letters before
+    // it, rather than hanging past the measure as a kinsoku push-out does.
+    if (
+      fitTo > measuredFit &&
+      options.lineHasText() &&
+      !(utf16From === 0 && options.keepWithPrevious) &&
+      (stacksNext(
+        text.charCodeAt(graphemes[measuredFit - 1]!.utf16To - 1),
+        text.codePointAt(graphemes[measuredFit - 1]!.utf16To)
+      ) ||
+        isCombiningMark(text.codePointAt(graphemes[measuredFit - 1]!.utf16To)))
+    ) {
+      options.closeLine();
+      brokeLine = true;
+      continue;
+    }
     // The final group may continue in the next run. Keep it on the pending line;
     // only the caller can decide whether the next piece permits a line break.
     if (fitTo === graphemes.length) break;
@@ -129,7 +148,7 @@ export function chopOversizedWord(
     const prefixText = text.slice(utf16From, utf16To);
     // Spaces after the cut hang at this line's end; they never open the next line. Priced
     // like any line-end space: the ink plus whatever room the line has left.
-    if (utf16To < text.length && withoutTrailingSpaces(text).length <= utf16To) {
+    if (utf16To < text.length && withoutLineEndWhitespace(text).length <= utf16To) {
       const width = Math.max(options.measureText(prefixText), available);
       return { text: text.slice(utf16From), modelStart: modelStart + utf16From, width, brokeLine };
     }

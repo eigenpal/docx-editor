@@ -11,7 +11,7 @@ import {
 import { CollaborationSchemaError } from '../errors.ts';
 
 test('public full-document contract matches JSON handshake', () => {
-  expect(versions.sharedSchemaVersion).toBe(4);
+  expect(versions.sharedSchemaVersion).toBe(5);
   expect(Object.isFrozen(versions)).toBe(true);
   expect(() => assertCompatible(JSON.parse(JSON.stringify(versions)))).not.toThrow();
   expect(() => assertCompatible({ ...versions, futureCapability: true })).not.toThrow();
@@ -45,5 +45,5 @@ test('refuses missing descriptors and inherited claims without coercion or leaki
   }
   expect(() =>
     assertCompatible({ ...versions, sharedSchemaVersion: '<script>private data</script>' })
-  ).toThrow('sharedSchemaVersion: expected 4, received invalid');
+  ).toThrow('sharedSchemaVersion: expected 5, received invalid');
 });

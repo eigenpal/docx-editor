@@ -1,3 +1,4 @@
+import { sectionProgress } from './section-progress.ts';
 import { characterHeaderPageToken } from './character-header-pages.ts';
 // Per-section incremental layout for multi-section documents.
 //
@@ -445,65 +446,6 @@ export function layoutMultiSectionDocument(
   );
 }
 
-/**
- * Re-report a section pass's completed pages as the document's: the sheets before the section,
- * then the section's pages so far, numbered and stacked as the final publish places them. Not
- * restorable: section sessions advance in place, so a paused pass is finished, never undone.
- */
-function* sectionProgress(
-  steps: LayoutSteps<SectionLayoutResult>,
-  before: readonly PageRecord[] | null,
-  sheetY: number,
-  displayedStart: number,
-  format: string | undefined,
-  revision: number
-): LayoutSteps<SectionLayoutResult> {
-  // Each completed page publishes once, here, without the shared publish memo: the final
-  // publish knows the section's page count and must find the memo as the last pass left it.
-  const published: PageRecord[] = [];
-  const sources: PageRecord[] = [];
-  let y = sheetY;
-  for (;;) {
-    const next = steps.next();
-    if (next.done) return next.value;
-    const partial = next.value?.pages;
-    if (!before || !partial) {
-      yield undefined;
-      continue;
-    }
-    let from = 0;
-    while (from < sources.length && from < partial.length && sources[from] === partial[from]) {
-      from += 1;
-    }
-    if (from === partial.length && from === sources.length) {
-      yield undefined;
-      continue;
-    }
-    published.length = from;
-    sources.length = from;
-    const last = published[from - 1];
-    y = last ? last.box.y + last.box.height + SHEET_GUTTER_PT : sheetY;
-    for (let offset = from; offset < partial.length; offset += 1) {
-      const page = partial[offset]!;
-      const remapped = remapPage(page, before.length + offset, y);
-      const sheet = withPageFieldSources(
-        [remapped],
-        displayedStart + offset,
-        partial.length,
-        format
-      )[0]!;
-      published.push(sheet);
-      sources.push(page);
-      y = sheet.box.y + sheet.box.height + SHEET_GUTTER_PT;
-    }
-    yield {
-      pages: [...before, ...published],
-      finalize: (pages) => finalizePageFieldProjection({ revision, pages }),
-      restorable: false,
-    };
-  }
-}
-
 /** {@link layoutMultiSectionDocument} as steps that report the pages completed so far. */
 export function* layoutMultiSectionDocumentSteps(
   blocks: readonly OoxmlElement[],
@@ -565,9 +507,11 @@ export function* layoutMultiSectionDocumentSteps(
    * The running displayed number: the PAGE value the next new sheet gets when its section
    * does not author `w:start`. A continuous section shares its host sheet, so this can move
    * past the host's own stamped number (a restart that ends on the shared sheet). The parity
-   * rule and the notes-pass resettle read this value, never a stamp.
+   * rules for unrestarted breaks and the notes pass read this value, never a stamp.
    */
   let nextDisplayed = 1;
+  // Shared-sheet restarts change displayed numbers, but not the sheet sequence.
+  let nextParity = 1;
   /** Each section's first own sheet, for the notes pass to decide parity again. */
   const sheetStarts: SectionSheetStart[] = [];
   /** The running number after a sheet, where it is not that sheet's stamped number + 1. */
@@ -601,6 +545,7 @@ export function* layoutMultiSectionDocumentSteps(
       breakType: section.properties.breakType,
       restart,
       nextDisplayed,
+      nextParity,
       sheetIndex: pages.length,
       evenAndOddHeaders,
     })
@@ -849,6 +794,11 @@ export function* layoutMultiSectionDocumentSteps(
       nextDisplayed = displayedStart + remapped.length;
     }
 
+    nextParity =
+      !continues && restart !== undefined
+        ? nextDisplayed
+        : nextParity + remapped.length + (paritySheet ? 1 : 0);
+
     newSpans.push({
       startIndex,
       pageCount: remapped.length,
@@ -863,6 +813,7 @@ export function* layoutMultiSectionDocumentSteps(
         breakType: section.properties.breakType,
         restart,
         runningBefore,
+        continuesPreviousSheet: continues,
         geometry,
       });
     }

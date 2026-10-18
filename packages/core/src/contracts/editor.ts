@@ -134,8 +134,6 @@ import type { ImageWrapTarget } from '../store/package/drawing-projection.ts';
 import type { DocumentProtectionState } from '../store/package/document-protection.ts';
 import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
-import type { ParsedDocument } from '../store/package/parsed-document.ts';
-export type { ParsedDocument } from '../store/package/parsed-document.ts';
 import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
 import type { BookmarkSummary, EditorBookmarkCommands } from './editor-bookmarks.ts';
 export type * from './types';
@@ -216,7 +214,7 @@ export interface DocumentHandle {
  * File › New. Call the function into `load()` or host state, never inline in a prop,
  * where a new array per render rebuilds the editor per render.
  */
-export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | ParsedDocument | 'blank';
+export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
 
 /** Typed adapter error reported both through `onFontError` and accessible alert UI. */
 export class EditorFontError extends Error {

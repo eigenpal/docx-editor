@@ -4023,7 +4023,6 @@ export interface DocxEditorProps {
     // (undocumented)
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
-    // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
     // (undocumented)
@@ -4375,7 +4374,6 @@ export interface DocxEditorRootProps {
     // (undocumented)
     document?: DocumentSource;
     fieldResults?: FieldResultsMode;
-    // (undocumented)
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     fontShaping?: FontShapingOptions;
     // (undocumented)
