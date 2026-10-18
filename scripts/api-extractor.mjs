@@ -7,13 +7,21 @@
 //   node scripts/api-extractor.mjs --local                  # all packages, write snapshots
 //   node scripts/api-extractor.mjs --package <name>         # one package, CI mode
 //   node scripts/api-extractor.mjs --package <name> --local # one package, write
+//   node scripts/api-extractor.mjs --local --record-forgotten-exports
+//       # rewrite the forgotten-export baseline for every package (review the diff first)
+//
+// Forgotten exports: every package reports them. A warning not in the package's reviewed
+// allowlist (`scripts/lib/packages.mjs`) or in `scripts/api-forgotten-exports.baseline.json`
+// fails the run, and so does a baseline entry that no longer warns in CI mode. Only
+// `--record-forgotten-exports` writes the baseline: it drops stale entries, adds new ones, and
+// writes the file once after every package has run.
 //
 // Per-package `package.json` scripts delegate here with `--package <name>`
 // so `bun run --filter '<pkg>' api:extract` still works the way every
 // other workspace script does.
 
 import path from 'node:path';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runApiExtractor } from './lib/api-extractor-runner.mjs';
 import { PACKAGES, packageByName, buildHintFor, reportDirFor } from './lib/packages.mjs';
@@ -23,6 +31,21 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const args = process.argv.slice(2);
 const isLocal = args.includes('--local');
+const recordForgottenExports = args.includes('--record-forgotten-exports');
+if (recordForgottenExports && !isLocal) {
+  console.error('--record-forgotten-exports writes the baseline, so it requires --local');
+  process.exit(1);
+}
+if (recordForgottenExports && args.includes('--package')) {
+  // One run writes the one file. Per-package runs in parallel would overwrite each other.
+  console.error('--record-forgotten-exports records every package at once; drop --package');
+  process.exit(1);
+}
+const forgottenExportBaselinePath = path.join(
+  repoRoot,
+  'scripts',
+  'api-forgotten-exports.baseline.json'
+);
 const pkgArgIdx = args.indexOf('--package');
 // `--package` requires a following value. Without this guard,
 // `... --package` (no value) and `... --package --local` would silently
@@ -49,6 +72,7 @@ if (pkgArg && !targets[0]) {
   process.exit(1);
 }
 
+const recordedBaselines = new Map();
 for (const pkg of targets) {
   if (pkg.disconnected) {
     // A disconnected package is skipped LOUDLY, never silently. And if it turns out to
@@ -65,12 +89,31 @@ for (const pkg of targets) {
     console.warn(`SKIPPED ${pkg.name}: ${pkg.disconnected}`);
     continue;
   }
-  runApiExtractor({
+  const result = runApiExtractor({
     packageRoot: path.join(repoRoot, pkg.root),
     reportDir: reportDirFor(pkg, repoRoot),
     isLocal,
     buildHint: buildHintFor(pkg),
     tsconfigPath: pkg.tsconfigPath ? path.join(repoRoot, pkg.tsconfigPath) : undefined,
-    forgottenExports: pkg.forgottenExports,
+    forgottenExports: pkg.forgottenExports ?? 'warning',
+    forgottenExportBaselinePath,
+    recordForgottenExports,
   });
+  if (result?.nextForgottenExportBaseline) {
+    recordedBaselines.set(pkg.name, result.nextForgottenExportBaseline);
+  }
+}
+
+if (recordForgottenExports) {
+  const sorted = {};
+  for (const name of [...recordedBaselines.keys()].sort()) {
+    const entries = recordedBaselines.get(name);
+    if (Object.keys(entries).length > 0) sorted[name] = entries;
+  }
+  const text = `${JSON.stringify(sorted, null, 2)}\n`;
+  const previous = existsSync(forgottenExportBaselinePath)
+    ? readFileSync(forgottenExportBaselinePath, 'utf8')
+    : null;
+  if (previous !== text) writeFileSync(forgottenExportBaselinePath, text);
+  console.log(`Forgotten-export baseline recorded for ${recordedBaselines.size} packages.`);
 }

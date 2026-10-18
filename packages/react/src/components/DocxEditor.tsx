@@ -246,6 +246,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
       document: doc,
       fonts,
       fontShaping,
+      imageDecodePort,
       className,
       t,
       chrome = true,
@@ -447,6 +448,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {...(doc !== undefined ? { document: doc } : {})}
         {...(fonts ? { fonts } : {})}
         {...(fontShaping ? { fontShaping } : {})}
+        {...(imageDecodePort ? { imageDecodePort } : {})}
         {...(author !== undefined ? { author } : {})}
         {...(locale !== undefined ? { locale } : {})}
         translate={translate}

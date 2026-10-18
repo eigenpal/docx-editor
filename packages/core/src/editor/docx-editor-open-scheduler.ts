@@ -229,7 +229,10 @@ export function createOpenScheduler(hooks: OpenSchedulerHooks): OpenScheduler {
         endOnThrow(() => hooks.mount(bytes));
         const slice = () => {
           if (cancelled || scheduled !== entry) return;
-          if (hooks.continueOpen && !endOnThrow(() => hooks.continueOpen!(OPEN_SLICE_MS))) {
+          const done = !hooks.continueOpen || endOnThrow(() => hooks.continueOpen!(OPEN_SLICE_MS));
+          // Completion observers can load another document. This slice owns only its entry.
+          if (cancelled || scheduled !== entry) return;
+          if (!done) {
             queueTask(slice, viewOf());
             return;
           }

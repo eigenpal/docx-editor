@@ -44,176 +44,203 @@ interface ComposePartDeps {
 
 /** Build the draft and reply compose boxes against the rail's private contexts. */
 export function createReviewComposeParts(deps: ComposePartDeps) {
+  const ReviewDraftBox = defineComponent({
+    name: 'ReviewDraftBox',
+    props: {
+      top: { type: Number, required: true },
+      left: { type: Number as PropType<number | null>, default: null },
+      className: String,
+      hidden: Boolean,
+    },
+    setup(props) {
+      const rail = deps.useRail();
+      const t = deps.useLabel();
+      const text = ref('');
+      const refused = ref(false);
+      // Taken when the comment is refused, so the sentence holds still while it shows.
+      const refusedCode = ref<EditDiagnosticCode | undefined>(undefined);
+      const editorRef = useDocxEditor();
+      const fieldId = useReviewStableId('draft');
+      let measuredBy: ReviewRailValue['measure'] | null = null;
+
+      onMounted(() => {
+        const root = getCurrentInstance()?.proxy?.$el;
+        if (isHTMLElementNode(root)) {
+          measuredBy = rail.value.measure;
+          measuredBy(root, COMPOSE_KEY);
+        }
+        if (rail.value.readOnly) return;
+        const input = isHTMLElementNode(root)
+          ? root.querySelector('[data-testid="review-draft-input"]')
+          : null;
+        (input as HTMLInputElement | null)?.focus({ preventScroll: true });
+      });
+      onBeforeUnmount(() => {
+        measuredBy?.(null, COMPOSE_KEY);
+      });
+
+      const submit = () => {
+        const { review, endDraft, readOnly } = rail.value;
+        if (readOnly || text.value.trim().length === 0) return;
+        const landed = review.comment(text.value.trim());
+        refused.value = !landed;
+        const editor = editorRef.value;
+        refusedCode.value = landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code;
+        if (landed) {
+          text.value = '';
+          endDraft();
+        }
+      };
+      // The editor's store drops a refusal once its cause is gone; the notice goes with it.
+      watch(
+        () => rail.value.review.lastRefusal,
+        (refusal) => {
+          if (refusal || refusedCode.value === undefined) return;
+          refused.value = false;
+          refusedCode.value = undefined;
+        }
+      );
+
+      return () => {
+        if (props.hidden) return null;
+        const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = rail.value;
+        return h(
+          'div',
+          {
+            class: `docx-review__slot${props.left === null ? '' : ' docx-review__slot--compact'}${props.className ? ` ${props.className}` : ''}`,
+            style: {
+              position: 'absolute',
+              top: `${props.top}px`,
+              ...(props.left === null
+                ? {}
+                : { left: `${props.left}px`, width: `${COMPACT_CARD_WIDTH}px` }),
+            },
+          },
+          [
+            h(
+              'div',
+              {
+                class: 'docx-review__card',
+                'data-testid': 'review-draft',
+                'data-draft': '',
+                ...(draftAuthor
+                  ? {
+                      'data-review-author': draftAuthor,
+                      'data-review-author-slot': draftAuthorSlot,
+                    }
+                  : {}),
+                style: authorCardStyle(draftAuthor ?? undefined, draftAuthorInfo, draftAuthorSlot),
+              },
+              [
+                h(
+                  'form',
+                  {
+                    class: 'docx-review__reply-box',
+                    onSubmit: (event: Event) => {
+                      event.preventDefault();
+                      submit();
+                    },
+                  },
+                  [
+                    h(
+                      'label',
+                      { class: 'docx-editor-sr-only', for: fieldId },
+                      t('comments.addComment')
+                    ),
+                    h('input', {
+                      id: fieldId,
+                      'data-testid': 'review-draft-input',
+                      class: 'docx-review__input',
+                      value: text.value,
+                      placeholder: t('comments.addComment'),
+                      readonly: readOnly,
+                      ...(refused.value ? { 'aria-invalid': true } : {}),
+                      onInput: (event: Event) => {
+                        if (readOnly) return;
+                        refused.value = false;
+                        text.value = (event.target as HTMLInputElement).value;
+                      },
+                      onKeydown: (event: KeyboardEvent) => {
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          rail.value.endDraft();
+                          return;
+                        }
+                        if (readOnly || event.key !== 'Enter') return;
+                        event.preventDefault();
+                        submit();
+                      },
+                    }),
+                    h('div', { class: 'docx-review__reply-actions' }, [
+                      h(
+                        'button',
+                        {
+                          type: 'button',
+                          'data-testid': 'review-draft-cancel',
+                          class: 'docx-review__text-button',
+                          onMousedown: guardMousedown,
+                          onClick: () => rail.value.endDraft(),
+                        },
+                        t('common.cancel')
+                      ),
+                      h(
+                        'button',
+                        {
+                          type: 'submit',
+                          'data-testid': 'review-draft-submit',
+                          class: 'docx-review__submit',
+                          disabled: readOnly || text.value.trim().length === 0,
+                          title: readOnly ? t('editingMode.viewingHint') : undefined,
+                        },
+                        t('common.comment')
+                      ),
+                    ]),
+                    refused.value
+                      ? h(
+                          'span',
+                          { class: 'docx-review__refused' },
+                          t(reviewRefusalLabelKey(refusedCode.value, 'review.commentRefused'))
+                        )
+                      : null,
+                  ]
+                ),
+              ]
+            ),
+          ]
+        );
+      };
+    },
+  });
+
+  /**
+   * The compose box for a new comment. It renders only while a comment draft is open.
+   *
+   * Use it as a direct child of `DocxEditorReview`, or inside your own content in
+   * `<DocxEditorReview :preset="false">`. Without `top`, it sits where the packaged card
+   * stack puts it. A rail that renders its own cards passes `top` from its own stack.
+   *
+   * @public
+   */
   const ReviewDraft = markPart(
     defineComponent({
       name: 'ReviewDraft',
       props: {
-        top: { type: Number, default: 0 },
-        left: { type: Number as PropType<number | null>, default: null },
+        /** Rail-local `top` in CSS pixels. Omit it to use the packaged card stack's position. */
+        top: { type: Number as PropType<number | undefined>, default: undefined },
+        /** Rail-local `left`. Omit it to follow the compact rail; null keeps the column. */
+        left: { type: Number as PropType<number | null | undefined>, default: undefined },
         className: String,
         hidden: Boolean,
       },
       setup(props) {
         const rail = deps.useRail();
-        const t = deps.useLabel();
-        const text = ref('');
-        const refused = ref(false);
-        // Taken when the comment is refused, so the sentence holds still while it shows.
-        const refusedCode = ref<EditDiagnosticCode | undefined>(undefined);
-        const editorRef = useDocxEditor();
-        const fieldId = useReviewStableId('draft');
-        let measuredBy: ReviewRailValue['measure'] | null = null;
-
-        onMounted(() => {
-          const root = getCurrentInstance()?.proxy?.$el;
-          if (isHTMLElementNode(root)) {
-            measuredBy = rail.value.measure;
-            measuredBy(root, COMPOSE_KEY);
-          }
-          if (rail.value.readOnly) return;
-          const input = isHTMLElementNode(root)
-            ? root.querySelector('[data-testid="review-draft-input"]')
-            : null;
-          (input as HTMLInputElement | null)?.focus({ preventScroll: true });
-        });
-        onBeforeUnmount(() => {
-          measuredBy?.(null, COMPOSE_KEY);
-        });
-
-        const submit = () => {
-          const { review, endDraft, readOnly } = rail.value;
-          if (readOnly || text.value.trim().length === 0) return;
-          const landed = review.comment(text.value.trim());
-          refused.value = !landed;
-          const editor = editorRef.value;
-          refusedCode.value =
-            landed || !editor ? undefined : reviewRefusalStore(editor).get()?.code;
-          if (landed) {
-            text.value = '';
-            endDraft();
-          }
-        };
-        // The editor's store drops a refusal once its cause is gone; the notice goes with it.
-        watch(
-          () => rail.value.review.lastRefusal,
-          (refusal) => {
-            if (refusal || refusedCode.value === undefined) return;
-            refused.value = false;
-            refusedCode.value = undefined;
-          }
-        );
-
         return () => {
-          if (props.hidden) return null;
-          const { readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } = rail.value;
-          return h(
-            'div',
-            {
-              class: `docx-review__slot${props.left === null ? '' : ' docx-review__slot--compact'}${props.className ? ` ${props.className}` : ''}`,
-              style: {
-                position: 'absolute',
-                top: `${props.top}px`,
-                ...(props.left === null
-                  ? {}
-                  : { left: `${props.left}px`, width: `${COMPACT_CARD_WIDTH}px` }),
-              },
-            },
-            [
-              h(
-                'div',
-                {
-                  class: 'docx-review__card',
-                  'data-testid': 'review-draft',
-                  'data-draft': '',
-                  ...(draftAuthor
-                    ? {
-                        'data-review-author': draftAuthor,
-                        'data-review-author-slot': draftAuthorSlot,
-                      }
-                    : {}),
-                  style: authorCardStyle(
-                    draftAuthor ?? undefined,
-                    draftAuthorInfo,
-                    draftAuthorSlot
-                  ),
-                },
-                [
-                  h(
-                    'form',
-                    {
-                      class: 'docx-review__reply-box',
-                      onSubmit: (event: Event) => {
-                        event.preventDefault();
-                        submit();
-                      },
-                    },
-                    [
-                      h(
-                        'label',
-                        { class: 'docx-editor-sr-only', for: fieldId },
-                        t('comments.addComment')
-                      ),
-                      h('input', {
-                        id: fieldId,
-                        'data-testid': 'review-draft-input',
-                        class: 'docx-review__input',
-                        value: text.value,
-                        placeholder: t('comments.addComment'),
-                        readonly: readOnly,
-                        ...(refused.value ? { 'aria-invalid': true } : {}),
-                        onInput: (event: Event) => {
-                          if (readOnly) return;
-                          refused.value = false;
-                          text.value = (event.target as HTMLInputElement).value;
-                        },
-                        onKeydown: (event: KeyboardEvent) => {
-                          if (event.key === 'Escape') {
-                            event.preventDefault();
-                            rail.value.endDraft();
-                            return;
-                          }
-                          if (readOnly || event.key !== 'Enter') return;
-                          event.preventDefault();
-                          submit();
-                        },
-                      }),
-                      h('div', { class: 'docx-review__reply-actions' }, [
-                        h(
-                          'button',
-                          {
-                            type: 'button',
-                            'data-testid': 'review-draft-cancel',
-                            class: 'docx-review__text-button',
-                            onMousedown: guardMousedown,
-                            onClick: () => rail.value.endDraft(),
-                          },
-                          t('common.cancel')
-                        ),
-                        h(
-                          'button',
-                          {
-                            type: 'submit',
-                            'data-testid': 'review-draft-submit',
-                            class: 'docx-review__submit',
-                            disabled: readOnly || text.value.trim().length === 0,
-                            title: readOnly ? t('editingMode.viewingHint') : undefined,
-                          },
-                          t('common.comment')
-                        ),
-                      ]),
-                      refused.value
-                        ? h(
-                            'span',
-                            { class: 'docx-review__refused' },
-                            t(reviewRefusalLabelKey(refusedCode.value, 'review.commentRefused'))
-                          )
-                        : null,
-                    ]
-                  ),
-                ]
-              ),
-            ]
-          );
+          if (props.hidden || !rail.value.drafting) return null;
+          return h(ReviewDraftBox, {
+            top: props.top ?? rail.value.composeTop ?? 0,
+            left: props.left === undefined ? rail.value.composeLeft : props.left,
+            className: props.className,
+          });
         };
       },
     }),

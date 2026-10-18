@@ -5,6 +5,56 @@
 ```ts
 
 // @public
+export interface DefaultFontFaceRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
+export interface DefaultFontSource {
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly faceIndex: number;
+    // (undocumented)
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly request: DefaultFontFaceRequest;
+}
+
+// @public
+export interface DefaultFontSubstitution {
+    // (undocumented)
+    readonly from: DefaultFontFaceRequest;
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly to: DefaultFontFaceRequest;
+}
+
+// @public
+export interface FontOriginRequest {
+    readonly defaultFamily: string;
+    readonly families: readonly string[];
+    readonly resolvedFaces?: readonly ResolvedFontFace[];
+    readonly signal?: AbortSignal;
+}
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
+
+// @public
 export const GOOGLE_FONT_CATALOG: readonly GoogleFontFace[];
 
 // @public
@@ -59,5 +109,12 @@ export interface GoogleFontsOptions {
 
 // @public
 export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<GoogleFontsFragment>) & FontResolverMark;
+
+// @public
+export interface ResolvedFontFace {
+    readonly family: string;
+    readonly style: 'normal' | 'italic';
+    readonly weight: number;
+}
 
 ```

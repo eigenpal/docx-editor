@@ -604,6 +604,8 @@ const ReviewRoot = defineComponent({
         cardClassName: props.card?.className,
         readOnly: readOnly.value,
         composeTop: composeTop.value,
+        composeLeft: compact.value ? metrics.value.compactCardLeft : null,
+        drafting: draftAnchorY.value !== null,
         review: reviewActions.value,
         allItems: allReview.items.value,
         authorSlots: authorSlots.value,
@@ -843,11 +845,41 @@ export { useReviewItem };
 export type {
   ReviewActionProps,
   ReviewBalloonProps,
+  ReviewDraftProps,
   ReviewMarkersProps,
   ReviewPartProps,
   ReviewProps,
 } from './review-types.ts';
 
+/**
+ * The review rail: comments and tracked changes as a compound component. Requires
+ * `reviewModule()` in the editor's modules.
+ *
+ * PARTS AND SCOPES. The rail reads its parts from its own children, by element type. There are
+ * two scopes:
+ *
+ * - Root parts: `List`, `Markers`, `AddComment`, `Draft`, and `Balloon`. Put them as DIRECT
+ *   children of `DocxEditorReview` (fragments are transparent). The rail gives them the geometry
+ *   only it can compute: the comment button's and the compose box's `top`, and the markers'
+ *   scale and window. A root part inside a wrapper component is not seen as a part. It renders
+ *   as ordinary content, without that wiring.
+ * - Card parts: `Card`, `Empty`, and the parts inside a card (`Author`, `Summary`, `Accept`,
+ *   `Reject`, `Reply`, and the others). Put them inside `DocxEditorReview.List`, or as other
+ *   direct children, which become the card template.
+ *
+ * `:preset="false"` drops the packaged defaults. Root parts you pass still get their wiring, and
+ * every other child renders as is inside the rail, where `useReviewRailMetrics()` reads the
+ * rail's own measurement. To render your own cards, use `useReview().items`,
+ * `useStackedReviewPositions`, and `useReviewRailMetrics`. `Draft` without `top` sits where the
+ * packaged card stack puts it, so pass `top` from your own stack.
+ *
+ * In a browser host, this rail and `useReview()` are the way to build a review UI. For headless,
+ * server, or agent pipelines, use `@docx-editor.dev/editor-api`.
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
+ *
+ * @public
+ */
 export const DocxEditorReview = Object.assign(ReviewRoot, {
   List: ReviewList,
   Empty: ReviewEmpty,

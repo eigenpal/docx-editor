@@ -44,10 +44,11 @@ test('adopt records the editor author, or the author and date passed', async () 
     // Keys include the author, so read the refreshed items before the next call.
     await new Promise((resolve) => setTimeout(resolve, 10));
     await nextTick();
-    const date = new Date('2026-10-08T09:30:00Z');
+    const date = new Date('2026-10-08T09:30:00.123Z');
     expect(review.adopt(review.items.value[0]!, { date })).toBe(true);
     const first = editor.getReviewItems()[0]!;
-    expect(first.kind === 'revision' && first.date).toBe(date.toISOString());
+    // Milliseconds in, seconds out: every revision date is written to the second.
+    expect(first.kind === 'revision' && first.date).toBe('2026-10-08T09:30:00Z');
     expect(review.adopt(review.items.value[0]!, { date: new Date('soon') })).toBe(false);
     expect(review.adopt([])).toBe(false);
   } finally {

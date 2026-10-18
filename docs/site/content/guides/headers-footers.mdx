@@ -53,6 +53,16 @@ A right-aligned `PAGE` frame with `w:wrap="around"` can sit over an empty paragr
 
 This support covers a simple, single-line `PAGE` frame and a single-line empty, `PAGE`, or text anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, direct paragraph spacing outside the empty right-aligned frame case, and additional content keep the ordinary flow behavior.
 
+### Empty header frames
+
+A supported empty frame at the start of a header does not add a separate line. It uses a margin-aligned horizontal anchor and a text-relative vertical anchor. Its paragraph stays available for editing and save. Frames with explicit widths, unsupported positions, or additional content keep ordinary flow.
+
+Whitespace-only header frames keep ordinary flow because spaces can have visible run decoration.
+
+### Table flow below header pictures
+
+A wrapping header picture reduces the space for table header rows. Table pagination uses this space when it keeps the header with the first body row.
+
 ## Per-section headers and footers
 
 Each section can use its own headers and footers:
@@ -69,7 +79,7 @@ Editing a header or footer changes the part that the page displays. Other pages 
 
 A continuous section can start on the same page even when its header height, footer height, or first-page setting differs. The shared page keeps the preceding section's header, footer, and body area. Text from the continued section wraps around pictures in that page's header or footer. Later pages use the continued section's headers and footers. A page-size change still starts a separate page.
 
-Odd-page and even-page section breaks can add a blank page to reach the required page position. Page-number restarts can also require a blank page when odd and even headers are enabled. These blank pages have no header or footer.
+Odd-page and even-page section breaks can add a blank page to reach the required page position. Page-number restarts can also require a blank page when odd and even headers are enabled. The editor compares the restarted number with the continued page number, including when the first section starts at zero. An explicit odd-page or even-page break determines the required parity before the restart applies. These blank pages have no header or footer.
 
 ## Watermarks
 
@@ -163,3 +173,5 @@ The shape is centered on the text area. A diagonal text shape turns 45 degrees c
 - [Architecture](/docs/2.x/core/architecture) for how header/footer editing shares the body's editing model
 - [Loading and saving](/docs/2.x/guides/loading-and-saving) for the save pipeline that round-trips these parts
 - [Editing API](/docs/2.x/editor-api) for editing a document from a server
+
+Alternating headers and footers follow displayed page numbers, including section numbering restarts.

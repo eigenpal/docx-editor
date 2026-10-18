@@ -18,6 +18,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument, type PageFurniture } from '../semantic-layout.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { hitTestFragments } from '../semantic-hit-test.ts';
+import { layoutContext, squareAnchorAtLeft } from './anchored-drawing-test-fixtures.ts';
 import type {
   BlockFragmentRecord,
   ParagraphFragmentRecord,
@@ -161,6 +162,103 @@ describe('a PAGE frame that opens a header', () => {
       expect(right - left).toBeCloseTo(digits, 9);
       expect(projected.flowHeight).toBe(story.flowHeight);
     }
+  });
+
+  test('an empty frame does not add a line before the anchor', () => {
+    const part = headerPart(framed(frameProperties('right'), '') + anchor + heading);
+    const xml = serializeOoxmlPart(part);
+    const story = layoutHeaderFooterStory(part, WIDTH, measurer, 'empty-header-frame');
+    const expected = paragraphs(lay(anchor + heading).fragments);
+    const [empty, running, next] = paragraphs(story.fragments);
+    expect(empty!.box.width).toBe(0);
+    expect(geometry(running!)).toEqual(geometry(expected[0]!));
+    expect(geometry(next!)).toEqual(geometry(expected[1]!));
+    expect(story.flowHeight).toBe(2 * LINE);
+    const reopened = readOoxmlPart(xml, { name: part.name, contentType: part.contentType });
+    if (!reopened.ok) throw new Error(reopened.reason);
+    expect(readHeaderPageFrame(reopened.part)).not.toBeNull();
+    expect(serializeOoxmlPart(part)).toBe(xml);
+  });
+
+  for (const decoration of [
+    '',
+    '<w:u w:val="single"/><w:highlight w:val="yellow"/>',
+    '<w:rStyle w:val="MarkedSpaces"/>',
+  ]) {
+    test(`whitespace frames retain flow and selectable width, decoration=${decoration}`, () => {
+      const content =
+        framed(
+          frameProperties('right'),
+          `<w:r><w:rPr>${decoration}</w:rPr><w:t xml:space="preserve">   </w:t></w:r>`
+        ) + anchor;
+      const part = headerPart(content);
+      const styles = readOoxmlPart(
+        `<w:styles xmlns:w="${W}">` +
+          '<w:style w:type="character" w:styleId="MarkedSpaces"><w:rPr>' +
+          '<w:highlight w:val="yellow"/><w:u w:val="single"/></w:rPr></w:style></w:styles>',
+        { name: '/word/styles.xml', contentType: 'app/xml' }
+      );
+      if (!styles.ok) throw new Error(styles.reason);
+      const cascade = buildStyleCascadeTable(styles.part.root);
+      expect(readHeaderPageFrame(part)).toBeNull();
+      const story = layoutHeaderFooterStory(
+        part,
+        WIDTH,
+        measurer,
+        'spaces-frame',
+        undefined,
+        cascade
+      );
+      const [frame, running] = paragraphs(story.fragments);
+      expect(frame!.box.width).toBe(WIDTH);
+      expect(running!.box.y).toBeGreaterThan(frame!.box.y);
+      const spans = frame!.lines.flatMap((line) => line.spans);
+      expect(spans.map((span) => span.text).join('')).toBe('   ');
+      expect(spans.every((span) => span.box.x + span.box.width <= WIDTH)).toBe(true);
+      if (decoration) expect(spans[0]!.style.highlight).toBe('yellow');
+    });
+  }
+
+  test('an empty frame does not displace an anchored picture or its text', () => {
+    const picture = squareAnchorAtLeft({ text: 'Running title' })
+      .replace('<w:document ', '<w:hdr ')
+      .replace('<w:body>', '')
+      .replace('</w:body></w:document>', '</w:hdr>');
+    const story = (frame: string) => {
+      const xml = picture.replace('<w:p>', frame + '<w:p>');
+      const parsed = readOoxmlPart(xml, {
+        name: '/word/header1.xml',
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml',
+      });
+      if (!parsed.ok) throw new Error(parsed.reason);
+      return layoutHeaderFooterStory(
+        parsed.part,
+        WIDTH,
+        measurer,
+        'frame-with-picture',
+        undefined,
+        undefined,
+        undefined,
+        128,
+        undefined,
+        undefined,
+        layoutContext(parsed.part, parsed.part.name)
+      );
+    };
+    const plain = story('');
+    const empty = story(framed(frameProperties('right'), ''));
+    expect(empty.flowHeight).toBeCloseTo(plain.flowHeight + 0.05, 6);
+    expect(geometry(paragraphs(empty.fragments)[1]!)).toEqual(
+      geometry(paragraphs(plain.fragments)[0]!)
+    );
+    expect(empty.anchoredDrawings).toHaveLength(1);
+    const pictureGeometry = (value: typeof plain) => {
+      const { x, y, width, height } = value.anchoredDrawings![0]!;
+      return { x, y, width, height };
+    };
+    expect(pictureGeometry(empty)).toEqual(pictureGeometry(plain));
+    // Visible frames still refuse this interaction rather than guessing at wrapping.
+    expect(story(framed(frameProperties('right'))).flowHeight).toBeGreaterThan(plain.flowHeight);
   });
 
   test('an empty cached result still opens the header with the anchor', () => {

@@ -215,6 +215,78 @@ describe('review compound composition', () => {
     expect(view.getByTestId('review-draft')).toBeDefined();
   });
 
+  test('a Draft root part takes the host position from top', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview preset={false}>
+            <DocxEditorReview.AddComment />
+            <DocxEditorReview.Draft top={123} />
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await act(async () => {
+      view.getByTestId('review-add-comment').click();
+    });
+    const slot = view.getByTestId('review-draft').parentElement!;
+    expect(slot.style.top).toBe('123px');
+  });
+
+  test('a Draft inside host content renders only while a draft is open', async () => {
+    let instance: DocxEditorInstance | null = null;
+    function HostCards() {
+      return (
+        <div data-testid="host-cards">
+          <DocxEditorReview.Draft top={40} />
+        </div>
+      );
+    }
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview preset={false}>
+            <DocxEditorReview.AddComment />
+            <HostCards />
+          </DocxEditorReview>
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    expect(view.getByTestId('host-cards')).toBeDefined();
+    expect(view.queryByTestId('review-draft')).toBeNull();
+    await act(async () => {
+      instance!.surface!.selectAll();
+    });
+    await act(async () => {
+      view.getByTestId('review-add-comment').click();
+    });
+    const draft = view.getByTestId('review-draft');
+    expect(view.getByTestId('host-cards').contains(draft)).toBe(true);
+    expect(draft.parentElement!.style.top).toBe('40px');
+    await act(async () => {
+      view.getByTestId('review-draft-cancel').click();
+    });
+    expect(view.queryByTestId('review-draft')).toBeNull();
+  });
+
   test('uses a List Empty override and preserves legacy root render children', () => {
     let emptyEditor: DocxEditorInstance | null = null;
     const empty = render(

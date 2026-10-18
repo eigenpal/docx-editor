@@ -86,6 +86,8 @@ The example can highlight returned tracked revisions when a review module suppli
 
 Keep the returned `submission` object in the browser. Pass that same object to `applyUpdate()`. A copied token, another editor's token, or a superseded token cannot authorize replacement. Send its bytes and ID to your backend when needed.
 
+`applyUpdate()` reports success after the replacement completes its opening layout and accepts document clicks. You can then capture the document or apply the next cumulative update. The opening threshold uses uncompressed ZIP content size. A small compressed file can also take this path.
+
 ## Receive cumulative updates
 
 Assign each result a nonnegative integer `sequence` at the processor. Each file must contain the complete cumulative output for that submission. Use processor order, never network arrival order. The controller serializes replacement and rejects duplicate or older accepted sequences. It advances its baseline only after successful loading.

@@ -7,5 +7,5 @@
   "file_types": [".ts", ".tsx"],
   "insert_license": false,
   "trailing_whitespace": "TRIM",
-  "ignore": ["*.md", "*.txt", "tsup.config.ts", "dist-types/**", "scripts/**", "temp/**"]
+  "ignore": ["*.md", "docs/**", "*.txt", "tsup.config.ts", "dist-types/**", "scripts/**", "temp/**"]
 }

@@ -20,6 +20,7 @@ export type LaneName =
   | 'output'
   | 'export'
   | 'automation'
+  | 'parse'
   | 'editor';
 
 export type LaneEnvironment = 'neutral' | 'browser' | 'node';
@@ -45,6 +46,14 @@ export interface Lane {
   readonly nativeToCore?: boolean;
   /** Lanes this one may import. Anything else is a violation. */
   readonly mayImport: readonly LaneName[];
+  /**
+   * Lanes this one may import TYPES from, in addition to {@link Lane.mayImport}.
+   *
+   * Type-only imports (`import type`, `export type ... from`) are erased at build, so they can
+   * never carry code or an environment across lanes. This is never a value edge: a value import
+   * from one of these lanes still fails, and the cycle and reachability walks ignore it.
+   */
+  readonly mayImportTypes?: readonly LaneName[];
   /**
    * What the lane may assume it is running in.
    *
@@ -81,6 +90,10 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     directory: 'src/contracts',
     package: '@docx-editor.dev/core',
     mayImport: [],
+    // The public contract describes the shapes the store, layout and collaboration lanes
+    // produce (review items, revision results, projection modes, session status). No lane both
+    // sides may import exists to hold them, so the contract names them as types only.
+    mayImportTypes: ['store', 'layout', 'collaboration'],
     environment: 'neutral',
     // No bare `./contracts` entry point exists; the lane ships one subpath per contract.
     subpath: null,
@@ -148,6 +161,15 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     environment: 'neutral',
     subpath: './automation',
   },
+  parse: {
+    directory: 'src/parse',
+    package: null,
+    nativeToCore: true,
+    // A package read on a worker: the store's bounded reader and nothing that needs a page.
+    mayImport: ['store'],
+    environment: 'neutral',
+    subpath: './parse',
+  },
   editor: {
     directory: 'src/editor',
     package: null,
@@ -214,7 +236,13 @@ export function sourceRootOf(lane: Lane): string {
   return `${directory === 'core' ? 'core' : directory}/src`;
 }
 
-/** Every lane, in an order where a lane's dependencies come first. */
+/**
+ * Every lane, in an order where a lane's dependencies come first.
+ *
+ * Follows VALUE edges ({@link Lane.mayImport}) only. Type-only edges ({@link Lane.mayImportTypes})
+ * are erased at build, so they cannot form a runtime cycle; `contracts` naming store types while
+ * the store names contract types is a type-level loop the build never sees.
+ */
 export function laneTopologicalOrder(): LaneName[] {
   const order: LaneName[] = [];
   const visiting = new Set<LaneName>();
@@ -232,7 +260,7 @@ export function laneTopologicalOrder(): LaneName[] {
   return order;
 }
 
-/** Lanes reachable from a starting lane, following the DAG. */
+/** Lanes reachable at runtime from a starting lane: value edges only, like the cycle walk. */
 export function reachableLanes(from: LaneName): Set<LaneName> {
   const seen = new Set<LaneName>();
   const walk = (name: LaneName): void => {

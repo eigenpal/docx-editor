@@ -17,9 +17,7 @@
 // their own rules (`table-out-of-cell-floats.ts`, cell flow), and floats anchored after the
 // table cannot reach back to it. Floating tables and frames are not obstacles here.
 //
-// Known difference: a `w:cantSplit` row that fits a page, but not the room below the band on
-// the page or column it opens, keeps its place under the band instead of starting below it and
-// splitting.
+// A kept row that exceeds the fresh band below a float can split inside that band.
 
 import type { ExclusionZone } from './drawing-exclusion.ts';
 import { squareExclusionBounds } from './drawing-wrap.ts';

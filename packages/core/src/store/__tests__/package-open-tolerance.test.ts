@@ -234,12 +234,15 @@ describe('malformed content-type records', () => {
     `<Relationship Id="rId2" Type="${IMAGE_REL}" Target="media/image1.PNG"/>` +
     '</Relationships>';
 
-  test('ignores an invalid Default for an image extension, and the image still renders', async () => {
+  test.each([
+    ['image/.png', 'image/.png'],
+    ['image/', null],
+  ])('a Default of %s on an image extension keeps the image rendering', async (type, kept) => {
     const bytes = build({
       '[Content_Types].xml': contentTypes(
         RELS_DEFAULT,
         XML_DEFAULT,
-        '<Default Extension="PNG" ContentType="image/.png"/>',
+        `<Default Extension="PNG" ContentType="${type}"/>`,
         MAIN_OVERRIDE
       ),
       'word/document.xml': pictureDocument,
@@ -247,7 +250,8 @@ describe('malformed content-type records', () => {
       'word/media/image1.PNG': ONE_PIXEL_PNG,
     });
     const pkg = opened(bytes);
-    expect(resolveContentTypeOf(pkg, '/word/media/image1.PNG')).toBeNull();
+    // A valid token is kept; a malformed one is ignored. The bytes decide the image either way.
+    expect(resolveContentTypeOf(pkg, '/word/media/image1.PNG')).toBe(kept);
 
     const cache = createImageResourceCache(pkg, {
       decodePort: { decode: async () => ({ pixelWidth: 1, pixelHeight: 1, dpiX: 96, dpiY: 96 }) },
@@ -258,7 +262,7 @@ describe('malformed content-type records', () => {
   });
 
   test('ignores an invalid Override on an inert image part and keeps the record on save', () => {
-    const invalid = '<Override PartName="/extra/images/icon.png" ContentType="image/.png"/>';
+    const invalid = '<Override PartName="/extra/images/icon.png" ContentType="image/"/>';
     const bytes = build({
       '[Content_Types].xml': contentTypes(
         RELS_DEFAULT,
@@ -277,26 +281,112 @@ describe('malformed content-type records', () => {
     expect(strFromU8(opened(saved).partBytes.get('/[Content_Types].xml')!)).toContain(invalid);
   });
 
-  test('a valid Default beside an invalid duplicate decides the extension', () => {
+  test.each(['image/.jpg', 'image/'])(
+    'a conventional Default beside a duplicate of %s decides the extension',
+    (type) => {
+      const pkg = opened(
+        build({
+          '[Content_Types].xml': contentTypes(
+            RELS_DEFAULT,
+            XML_DEFAULT,
+            `<Default Extension="JPG" ContentType="${type}"/>`,
+            '<Default Extension="jpg" ContentType="image/jpeg"/>',
+            MAIN_OVERRIDE
+          ),
+        })
+      );
+      expect(resolveContentTypeOf(pkg, '/word/media/a.jpg')).toBe('image/jpeg');
+    }
+  );
+
+  test('a conventional Override beside an extension-style duplicate decides the part', () => {
     const pkg = opened(
       build({
         '[Content_Types].xml': contentTypes(
           RELS_DEFAULT,
           XML_DEFAULT,
-          '<Default Extension="JPG" ContentType="image/.jpg"/>',
-          '<Default Extension="jpg" ContentType="image/jpeg"/>',
-          MAIN_OVERRIDE
+          MAIN_OVERRIDE,
+          '<Override PartName="/customUI/images/icon.png" ContentType="image/.png"/>',
+          '<Override PartName="/customUI/images/icon.png" ContentType="image/png"/>'
         ),
+        'customUI/images/icon.png': ONE_PIXEL_PNG,
       })
     );
-    expect(resolveContentTypeOf(pkg, '/word/media/a.jpg')).toBe('image/jpeg');
+    expect(resolveContentTypeOf(pkg, '/customUI/images/icon.png')).toBe('image/png');
+  });
+
+  test.each([
+    [
+      '<Default Extension="svg" ContentType="image/.svg+xml"/>',
+      'word/media/a.svg',
+      '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "x"><svg xmlns="http://www.w3.org/2000/svg"/>',
+    ],
+    [
+      '<Default Extension="bin" ContentType="application/.x+xml"/>',
+      'word/embeddings/a.bin',
+      '\u0001\u0002',
+    ],
+    [
+      '<Override PartName="/word/media/b.dat" ContentType="*/*+xml"/>',
+      'word/media/b.dat',
+      'not xml',
+    ],
+  ])('a part under the extension-style XML type in %s stays bytes', (record, entry, content) => {
+    const pkg = opened(
+      build({
+        '[Content_Types].xml': contentTypes(RELS_DEFAULT, XML_DEFAULT, MAIN_OVERRIDE, record),
+        [entry]: content,
+      })
+    );
+    expect(pkg.parts.has(`/${entry}`)).toBe(false);
+    const saved = opened(writeOoxmlPackage(pkg));
+    expect(strFromU8(saved.partBytes.get(`/${entry}`) ?? saved.partBytes.get(entry)!)).toBe(
+      content
+    );
+  });
+
+  test('conflicting extension-style Defaults are both ignored and kept on save', () => {
+    const records = [
+      '<Default Extension="JPG" ContentType="image/.jpg"/>',
+      '<Default Extension="jpg" ContentType="image/.jpeg"/>',
+    ];
+    const pkg = opened(
+      build({
+        '[Content_Types].xml': contentTypes(RELS_DEFAULT, XML_DEFAULT, ...records, MAIN_OVERRIDE),
+      })
+    );
+    expect(resolveContentTypeOf(pkg, '/word/media/a.jpg')).toBeNull();
+    const saved = strFromU8(opened(writeOoxmlPackage(pkg)).partBytes.get('/[Content_Types].xml')!);
+    for (const record of records) expect(saved).toContain(record);
+  });
+
+  test('still refuses conflicting extension-style types on a needed part', () => {
+    const bytes = build({
+      '[Content_Types].xml': contentTypes(
+        RELS_DEFAULT,
+        XML_DEFAULT,
+        MAIN_OVERRIDE,
+        '<Override PartName="/word/styles.xml" ContentType="application/.xml"/>',
+        '<Override PartName="/word/styles.xml" ContentType="application/.styles"/>'
+      ),
+      'word/_rels/document.xml.rels':
+        `<Relationships xmlns="${REL_NS}">` +
+        `<Relationship Id="rId1" Type="${R}/styles" Target="styles.xml"/>` +
+        '</Relationships>',
+      'word/styles.xml': `<w:styles xmlns:w="${W}"/>`,
+    });
+    expect(readOoxmlPackage(bytes)).toMatchObject({
+      ok: false,
+      reason: 'bad-content-types',
+      detail: '/word/styles.xml',
+    });
   });
 
   test('still refuses an invalid type on the main document or a relationships part', () => {
     for (const records of [
       [RELS_DEFAULT, XML_DEFAULT, `<Override PartName="/word/document.xml" ContentType="bogus"/>`],
-      [RELS_DEFAULT, '<Default Extension="xml" ContentType="application/.xml"/>'],
-      ['<Default Extension="rels" ContentType="application/.rels"/>', XML_DEFAULT, MAIN_OVERRIDE],
+      [RELS_DEFAULT, '<Default Extension="xml" ContentType="application/"/>'],
+      ['<Default Extension="rels" ContentType="application/"/>', XML_DEFAULT, MAIN_OVERRIDE],
     ]) {
       expect(
         readOoxmlPackage(build({ '[Content_Types].xml': contentTypes(...records) }))
@@ -310,7 +400,7 @@ describe('malformed content-type records', () => {
         RELS_DEFAULT,
         XML_DEFAULT,
         MAIN_OVERRIDE,
-        '<Override PartName="/word/styles.xml" ContentType="application/.xml"/>'
+        '<Override PartName="/word/styles.xml" ContentType="application/"/>'
       ),
       'word/_rels/document.xml.rels':
         `<Relationships xmlns="${REL_NS}">` +
@@ -328,7 +418,7 @@ describe('malformed content-type records', () => {
   test('refuses a dropped Default that decides a non-payload part of the main document', () => {
     const records = [
       RELS_DEFAULT,
-      '<Default Extension="xml" ContentType="application/.xml"/>',
+      '<Default Extension="xml" ContentType="application/"/>',
       MAIN_OVERRIDE,
     ];
     const related = (type: string) =>
@@ -349,7 +439,7 @@ describe('malformed content-type records', () => {
     expect(readOoxmlPackage(related('image')).ok).toBe(true);
   });
 
-  test('a valid Override on a needed part outranks an invalid duplicate', () => {
+  test('a conventional Override on a needed part outranks an extension-style duplicate', () => {
     const bytes = build({
       '[Content_Types].xml': contentTypes(
         RELS_DEFAULT,

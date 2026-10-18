@@ -53,7 +53,8 @@ test('an agent suggestion is reattributed to its reviewer and stays pending', as
       const suggested = revisions.items.filter((revision) => revision.author === 'AI');
       expect(suggested).toHaveLength(2);
 
-      const date = new Date('2026-10-08T09:30:00Z');
+      // Milliseconds in, seconds out: every revision date is written to the second.
+      const date = new Date('2026-10-08T09:30:00.123Z');
       const result = revisions.setAuthor('Ada Lovelace', suggested, { date });
       await context.sync();
       expect(result.value.skipped).toEqual([]);
@@ -70,8 +71,8 @@ test('an agent suggestion is reattributed to its reviewer and stays pending', as
         'Ada Lovelace',
       ]);
       expect(suggested.map((revision) => revision.date?.toISOString())).toEqual([
-        date.toISOString(),
-        date.toISOString(),
+        '2026-10-08T09:30:00.000Z',
+        '2026-10-08T09:30:00.000Z',
       ]);
       expect(suggested.map((revision) => revision.type).sort()).toEqual(['Delete', 'Insert']);
     });

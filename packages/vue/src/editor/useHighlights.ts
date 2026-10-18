@@ -36,6 +36,8 @@ const EMPTY_RESULT: HighlightResult = Object.freeze({ applied: 0, unavailable: 0
  *   { className: 'glossary-term' }
  * );
  * ```
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges | Highlight ranges}
  * @public
  */
 export function useHighlights(

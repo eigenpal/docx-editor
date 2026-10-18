@@ -1,5 +1,6 @@
 // Tracked inline planning shares the canonical story transaction and snapshot anchors.
 import { lineBreakRefusal } from './line-break-text.ts';
+import { revisionDateNow } from './revision-date.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan.ts';
@@ -163,7 +164,7 @@ export function planProposal(
       const adjacent = ownMarkDeletionRefusal(reads.part, ids[0]!, operation.author);
       if (adjacent) return adjacent;
     }
-    const revision = { author: operation.author.trim(), date: new Date().toISOString() };
+    const revision = { author: operation.author.trim(), date: revisionDateNow() };
     const ops: TreeDocOp[] = [];
     // Text deletions first, then the marks: a mark op between two text deletions makes the
     // store walk the whole part again for the next revision id.
@@ -257,7 +258,7 @@ export function planProposal(
     const lineBreak = lineBreakRefusal(story.value.part, paragraphId, start, end, operation.text);
     if (lineBreak) return lineBreak;
   }
-  const revision = { author: operation.author.trim(), date: new Date().toISOString() };
+  const revision = { author: operation.author.trim(), date: revisionDateNow() };
   // The store places tracked words outside struck text, so the answer names where they land.
   const aim = insertion ? start : end;
   const writes = tracked && !deletion && operation.text.length > 0;

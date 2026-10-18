@@ -4,7 +4,8 @@ import type { DocxEditorRefCallback } from '../docx-editor-ref-callback';
 import { absolutePointInScroller } from './scroller-geometry.ts';
 import { hostWindowOf } from '@docx-editor.dev/core/editor';
 
-type AnchorPlacement = 'before' | 'after' | 'story-label';
+/** Where a scoped chrome anchor sits relative to its story: before it, after it, or on its label. */
+export type ScopedChromeAnchorPlacement = 'before' | 'after' | 'story-label';
 
 export interface ScopedChromeAnchor {
   readonly ref: DocxEditorRefCallback<HTMLDivElement>;
@@ -20,7 +21,7 @@ export interface ScopedChromeAnchor {
  */
 export function useScopedChromeAnchor(
   findAnchor: (viewport: HTMLElement) => HTMLElement | null,
-  placement: AnchorPlacement
+  placement: ScopedChromeAnchorPlacement
 ): ScopedChromeAnchor {
   const [chrome, setChrome] = useState<HTMLDivElement | null>(null);
   const ref = useCallback<RefCallback<HTMLDivElement>>((node) => setChrome(node), []);

@@ -1,5 +1,6 @@
 // Table protocol dispatch. Handles never expose canonical node identities.
 import { findNode } from '../store/package/ooxml-edit.ts';
+import { revisionDateNow } from './revision-date.ts';
 import { indexStyles, stylesPartOf } from '../store/package/ooxml-indexes.ts';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { AutomationOperation } from './operations.ts';
@@ -118,7 +119,7 @@ export function planTableOperation(
       operation.columnCount,
       operation.values,
       context.trackingAuthor
-        ? { author: context.trackingAuthor, date: new Date().toISOString() }
+        ? { author: context.trackingAuthor, date: revisionDateNow() }
         : undefined
     );
     if (!planned.ok) return refuse('unsupported-content', planned.reason);
@@ -146,7 +147,7 @@ export function planTableOperation(
           },
           ...(context.trackingAuthor
             ? {
-                revision: { author: context.trackingAuthor, date: new Date().toISOString() },
+                revision: { author: context.trackingAuthor, date: revisionDateNow() },
               }
             : {}),
         },
@@ -260,7 +261,7 @@ export function planTableOperation(
         mutation = { ...mutation, styleId: style.styleId };
       }
       const revision = context.trackingAuthor
-        ? { author: context.trackingAuthor, date: new Date().toISOString() }
+        ? { author: context.trackingAuthor, date: revisionDateNow() }
         : undefined;
       if (
         revision &&

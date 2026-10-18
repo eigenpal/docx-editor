@@ -324,6 +324,8 @@ A card's CSS `top` is `metrics.top + position * metrics.scale`. To stack cards w
 
 Inside `<DocxEditorReview preset={false}>`, call `useReviewRailMetrics()` without arguments. Your children render inside the rail element, which already sits at `left`.
 
+Root parts such as `DocxEditorReview.AddComment` keep their wiring only as direct children of `DocxEditorReview`. For a complete example with the compose box, see [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards).
+
 For a column of your own, pass a ref to the column element. The column must meet these conditions:
 
 - The component that calls the hook renders the element.

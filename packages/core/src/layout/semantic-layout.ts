@@ -361,6 +361,7 @@ function* layoutInModeSteps(
         ...opts,
         geometry,
         furniture,
+        furniturePageNumberStart: sectionNumbering?.start ?? 1,
         paragraphLineUnitPt: sectionLineGridPt(section?.properties),
         sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
         ...(section?.properties.pageBorders
@@ -538,11 +539,14 @@ function* layoutBlocksPass(
   const pageBottomReserves = options.pageBottomReserves;
   const session = options.session;
   const lineCounterStart = options.lineCounterStart ?? 0;
-  const furnitureContext = furnitureLayoutContext(furniture, headerDistance, footerDistance);
+  const furniturePageNumberStart =
+    options.furniturePageNumberStart ?? (options.pageIndexStart ?? 0) + 1;
+  const furnitureContext =
+    furnitureLayoutContext(furniture, headerDistance, footerDistance) +
+    (furniture?.evenAndOddHeaders ? `|fp:${furniturePageNumberStart & 1}` : '');
   const flowStartY = options.flowStartY ?? 0;
   const spaceBeforeCarry = options.spaceBeforeCarry ?? 0;
-  // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
-  // alternates by page number, so it is not a section-local question.
+  // Physical sheet position remains separate from displayed header/footer numbering.
   const pageIndexStart = options.pageIndexStart ?? 0;
   const insetsFor = createPageContentInsets({
     ...(furniture ? { furniture } : {}),
@@ -552,6 +556,7 @@ function* layoutBlocksPass(
     headerDistance,
     footerDistance,
     pageIndexStart,
+    pageNumberStart: furniturePageNumberStart,
     ...(options.continuedPageInsets ? { continuedPageInsets: options.continuedPageInsets } : {}),
   });
   /**
@@ -620,6 +625,7 @@ function* layoutBlocksPass(
     headerDistance,
     footerDistance,
     pageIndexStart,
+    pageNumberStart: furniturePageNumberStart,
     contentWidth: contentWidthForReflow,
     insetsFor,
     pageCount: () => pages.length,

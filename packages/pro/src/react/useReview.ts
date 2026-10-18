@@ -166,7 +166,10 @@ export interface UseReviewReturn {
    * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
    * setActive(key); // fires nothing
    * setActive(key, { announce: true }); // fires 'reviewItemReveal'
+   * setActive(key, { reveal: false }); // opens the item without scrolling
    * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
   /**
@@ -175,9 +178,17 @@ export interface UseReviewReturn {
    * False for an item whose `readOnly` is true, and equally for a resolution the engine
    * refuses on other grounds — a document open for viewing refuses every one. A caller
    * that assumed success drew a live button that did nothing.
+   *
+   * For headless or server use, see `Revision.accept()` in `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   readonly accept: (item: ReviewItemView) => boolean;
-  /** Reject a revision. Reports whether it landed, on the same terms as {@link accept}. */
+  /**
+   * Reject a revision. Reports whether it landed, on the same terms as {@link accept}.
+   *
+   * For headless or server use, see `Revision.reject()` in `@docx-editor.dev/editor-api`.
+   */
   readonly reject: (item: ReviewItemView) => boolean;
   /**
    * Adopt tracked changes as the reviewer's own: they record the reviewer as their author
@@ -220,6 +231,8 @@ export interface UseReviewReturn {
    * neither rather than writing an empty attribute — which is why this REPORTS whether the
    * reply landed. A box that cleared itself on a refusal would throw the text away and show
    * nothing, and the writer would not learn their reply never existed.
+   *
+   * For headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
    */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
   /**
@@ -228,7 +241,21 @@ export interface UseReviewReturn {
    * From the engine, not from the DOM — the same rule the card anchors follow.
    */
   readonly selectionAnchorY: number | null;
-  /** Comment on the current selection. Reports whether it landed, like {@link reply}. */
+  /**
+   * Comment on the current selection. Reports whether it landed, like {@link reply}.
+   *
+   * To comment on found text, select it first with `editor.findMatches` and
+   * `editor.selectMatch`. For headless or server use, see `Range.insertComment` in
+   * `@docx-editor.dev/editor-api`.
+   *
+   * @example
+   * ```tsx
+   * const [match] = editor.findMatches('Effective Date', { wholeWord: true });
+   * if (match && editor.selectMatch(match).ok) comment('Define this term.');
+   * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
+   */
   readonly comment: (text: string, author?: string) => boolean;
   /**
    * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
@@ -260,6 +287,11 @@ export interface UseReviewReturn {
  *
  * Subscribes to the editor's own change stream, so the list re-derives when the document does
  * and not on every render.
+ *
+ * This is the browser review API: comment, reply, accept, reject, and open items from your own
+ * UI. For headless, server, or agent pipelines, use `@docx-editor.dev/editor-api` instead.
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes | Which API for which job}
  */
 export function useReview(query?: ReviewItemQuery): UseReviewReturn {
   const editor = useDocxEditor();
@@ -537,9 +569,16 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
  *
  * Returns each card's top in layout points. `useReviewRailMetrics` supplies `scale` and the
  * pixel offset of the first page: a card's CSS `top` is `metrics.top + position * metrics.scale`.
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
  */
 export function useStackedReviewPositions(
-  items: readonly { readonly key: string; readonly anchorY: number | null }[],
+  items: readonly {
+    readonly key: string;
+    readonly anchorY: number | null;
+    /** Keep this entry at its own anchor; the entries before it move up. */
+    readonly isActive?: boolean;
+  }[],
   heights: ReadonlyMap<string, number>,
   options: { readonly gap?: number; readonly scale?: number; readonly defaultHeight?: number } = {}
 ): ReadonlyMap<string, number> {

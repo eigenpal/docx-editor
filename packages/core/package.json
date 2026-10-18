@@ -72,6 +72,11 @@
       "import": "./dist/export.js",
       "require": "./dist/export.cjs"
     },
+    "./parse": {
+      "types": "./dist/parse.d.ts",
+      "import": "./dist/parse.js",
+      "require": "./dist/parse.cjs"
+    },
     "./store": {
       "types": "./dist/store.d.ts",
       "import": "./dist/store.js",
@@ -132,6 +137,7 @@
   },
   "files": [
     "dist",
+    "docs",
     "licenses",
     "!dist/metafile-*.json",
     "README.md",

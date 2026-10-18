@@ -91,7 +91,7 @@ export interface SemanticLayoutOptions {
   readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
   /**
    * `w:evenAndOddHeaders` from settings.xml. A section that restarts its page numbering then
-   * starts on a sheet whose position has the parity of the restarted number. When absent,
+   * aligns its continued numbering with the required break or restart parity. When absent,
    * layout reads the flag from the section furniture.
    */
   readonly evenAndOddHeaders?: boolean;

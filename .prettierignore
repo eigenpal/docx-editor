@@ -14,3 +14,7 @@ packages/editor-api/compat/reference/word.full-inventory.json
 # indentation of their numbered clauses, which edits the licence a consumer
 # receives in the tarball.
 packages/*/LICENSE.md
+
+# Forgotten-export baseline — owned by `bun run api:extract`, which writes it with
+# JSON.stringify and prunes it on every local run. Reformatting would make that run rewrite it.
+scripts/api-forgotten-exports.baseline.json

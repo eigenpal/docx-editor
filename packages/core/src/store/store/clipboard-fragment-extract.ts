@@ -17,7 +17,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from '../package/ooxml-package.ts';
-import type { ContentTypeIndex } from '../package/content-types.ts';
+import { standardImageType, type ContentTypeIndex } from '../package/content-types.ts';
 import { resolveContentTypeOf, relationshipsOf } from '../package/package-edit.ts';
 import { resolveInternalTarget, validateExternalTarget } from '../package/opc-names.ts';
 import type { RelationshipRecord } from '../package/relationships.ts';
@@ -846,7 +846,12 @@ export function extractFragmentPackage(
     entries.set(name.slice(1), bytes);
     const ext = mediaExtensionOf(name);
     if (ext && !mediaExtensions.has(ext)) {
-      mediaExtensions.set(ext, resolveContentTypeOf(pkg, name) ?? 'application/octet-stream');
+      // The fragment names the standard type, so a reader that ignores `image/.png` still
+      // admits the picture.
+      mediaExtensions.set(
+        ext,
+        standardImageType(resolveContentTypeOf(pkg, name) ?? 'application/octet-stream')
+      );
     }
   }
 

@@ -10,7 +10,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, zipSync } from 'fflate';
-import { readOoxmlPackage, writeOoxmlPackage } from '@docx-editor.dev/core/store';
+import {
+  readOoxmlPackage,
+  resolveContentTypeOf,
+  writeOoxmlPackage,
+  type OoxmlPackage,
+} from '@docx-editor.dev/core/store';
 import { CT, OD, REL, W, createPeerHarness, walk, type Peer } from './document-peer-support.ts';
 
 const harness = createPeerHarness('package-tolerance-room');
@@ -20,7 +25,19 @@ afterEach(() => {
 });
 
 const CUSTOM_XML = '<Ügyfél xmlns="urn:example:record"><Größe>12</Größe><名前>x</名前></Ügyfél>';
-const INVALID_DEFAULT = '<Default Extension="JPG" ContentType="image/.jpg"/>';
+const INVALID_DEFAULT = '<Default Extension="bad" ContentType="image/"/>';
+// A valid extension-style type is kept where it is uncontested and yields where it conflicts.
+const EXTENSION_STYLE_DEFAULTS =
+  '<Default Extension="PNG" ContentType="image/.png"/>' +
+  '<Default Extension="JPG" ContentType="image/.jpg"/>' +
+  '<Default Extension="jpg" ContentType="image/jpeg"/>';
+const OPAQUE_BYTES = new Uint8Array([7, 11, 13]);
+
+function expectContentTypes(pkg: OoxmlPackage): void {
+  expect(resolveContentTypeOf(pkg, '/word/media/opaque.PNG')).toBe('image/.png');
+  expect(resolveContentTypeOf(pkg, '/word/media/opaque.JPG')).toBe('image/jpeg');
+  expect(resolveContentTypeOf(pkg, '/word/media/a.bad')).toBeNull();
+}
 
 function tolerantDocument(): Uint8Array {
   return zipSync(
@@ -30,6 +47,7 @@ function tolerantDocument(): Uint8Array {
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
           '<Default Extension="xml" ContentType="application/xml"/>' +
           INVALID_DEFAULT +
+          EXTENSION_STYLE_DEFAULTS +
           '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
           '</Types>'
       ),
@@ -43,6 +61,8 @@ function tolerantDocument(): Uint8Array {
       ),
       'customXml/item1.xml': strToU8(CUSTOM_XML),
       'word/embeddings/blank.bin': new Uint8Array(4_700),
+      'word/media/opaque.PNG': OPAQUE_BYTES,
+      'word/media/opaque.JPG': OPAQUE_BYTES,
     },
     { level: 9 }
   );
@@ -59,6 +79,7 @@ function bodyText(peer: Peer): string {
 describe('collaboration over a tolerated package', () => {
   test('opens, converges under concurrent edits and a cold join, and saves the parts', async () => {
     const { alice, bob, pause, resume } = await harness.pair(tolerantDocument());
+    for (const peer of [alice, bob]) expectContentTypes(harness.packageOf(peer));
     pause();
     harness.apply(alice, [
       { op: 'insertText', paragraphId: harness.paragraphIdAt(alice, 0), offset: 0, text: 'A ' },
@@ -99,13 +120,16 @@ describe('collaboration over a tolerated package', () => {
     harness.expectConverged(alice, reconnected);
     const carol = await harness.join(alice, 'carol');
     harness.expectConverged(alice, carol);
+    expectContentTypes(harness.packageOf(carol));
 
     const saved = readOoxmlPackage(writeOoxmlPackage(harness.packageOf(carol)));
     if (!saved.ok) throw new Error(saved.reason);
     expect(saved.package.parts.get('/customXml/item1.xml')?.root.localName).toBe('Ügyfél');
     expect(strFromU8(saved.package.partBytes.get('/[Content_Types].xml')!)).toContain(
-      INVALID_DEFAULT
+      INVALID_DEFAULT + EXTENSION_STYLE_DEFAULTS
     );
+    expectContentTypes(saved.package);
+    expect(saved.package.partBytes.get('/word/media/opaque.PNG')).toEqual(OPAQUE_BYTES);
     expect(saved.package.partBytes.get('/word/embeddings/blank.bin')?.length).toBe(4_700);
   });
 });

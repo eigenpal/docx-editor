@@ -29,6 +29,7 @@ import {
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
 import { withBinaryParts, validateEmbeddedImageBytes } from '../package/drawing-package-edit.ts';
+import { standardImageType } from '../package/content-types.ts';
 import { sniffImageMime, type SupportedImageMime } from '../package/image-resources.ts';
 import { ensureHyperlinkRelationship } from '../package/hyperlink-part.ts';
 import { ensureNotesPart } from '../package/note-lifecycle.ts';
@@ -217,9 +218,10 @@ const DECLARED_MIME_ALIASES: Readonly<Record<string, string>> = {
 function admittedMediaMime(bytes: Uint8Array, declaredType: string): string | null {
   const sniffed = sniffImageMime(bytes);
   if (sniffed === 'unknown') return null;
-  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declaredType)
-    ? DECLARED_MIME_ALIASES[declaredType]!
-    : declaredType;
+  const declared = standardImageType(declaredType);
+  const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declared)
+    ? DECLARED_MIME_ALIASES[declared]!
+    : declared;
   if (normalizedDeclared !== sniffed) return null;
   if (SUPPORTED_RASTER_MIMES.has(sniffed)) {
     if (!validateEmbeddedImageBytes(bytes, sniffed as SupportedImageMime)) return null;

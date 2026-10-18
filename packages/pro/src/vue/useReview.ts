@@ -81,10 +81,23 @@ export interface UseReviewReturn {
    * useEditorEvent('reviewItemReveal', ({ key, source }) => openMyCard(key, source));
    * setActive(key); // fires nothing
    * setActive(key, { announce: true }); // fires 'reviewItemReveal'
+   * setActive(key, { reveal: false }); // opens the item without scrolling
    * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
+  /**
+   * Accept a revision. Reports whether it landed. For headless or server use, see
+   * `Revision.accept()` in `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
+   */
   readonly accept: (item: ReviewItemView) => boolean;
+  /**
+   * Reject a revision. Reports whether it landed. For headless or server use, see
+   * `Revision.reject()` in `@docx-editor.dev/editor-api`.
+   */
   readonly reject: (item: ReviewItemView) => boolean;
   /**
    * Adopt tracked changes as the reviewer's own; they stay pending. Takes one item or a list,
@@ -100,8 +113,21 @@ export interface UseReviewReturn {
   readonly reopen: (item: ReviewItemView) => boolean;
   readonly commentResolutionDisabledReason: ComputedRef<string | null>;
   readonly remove: (item: ReviewItemView) => boolean;
+  /**
+   * Reply to a comment or a revision. The author is `DocxEditorConfig.author` unless you pass
+   * one. Reports whether the reply landed. For headless or server use, see `Comment.reply` in
+   * `@docx-editor.dev/editor-api`.
+   */
   readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
+  /** Where a comment on the current selection would sit, in layout points, or null. */
   readonly selectionAnchorY: ComputedRef<number | null>;
+  /**
+   * Comment on the current selection. Reports whether it landed, like `reply`. To comment
+   * on found text, select it first with `editor.findMatches` and `editor.selectMatch`. For
+   * headless or server use, see `Range.insertComment` in `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
+   */
   readonly comment: (text: string, author?: string) => boolean;
   /**
    * Why the last accept, reject, resolve, reopen, remove, reply or comment did not land, or null.
@@ -375,10 +401,18 @@ function useReviewOfInternal(
  * Returns each card's top in layout points. `useReviewRailMetrics` supplies `scale` and the
  * pixel offset of the first page: a card's CSS `top` is `metrics.top + position * metrics.scale`.
  *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
  * @public
  */
 export function useStackedReviewPositions(
-  items: MaybeRefOrGetter<readonly { readonly key: string; readonly anchorY: number | null }[]>,
+  items: MaybeRefOrGetter<
+    readonly {
+      readonly key: string;
+      readonly anchorY: number | null;
+      /** Keep this entry at its own anchor; the entries before it move up. */
+      readonly isActive?: boolean;
+    }[]
+  >,
   heights: MaybeRefOrGetter<ReadonlyMap<string, number>>,
   options: MaybeRefOrGetter<{
     readonly gap?: number;

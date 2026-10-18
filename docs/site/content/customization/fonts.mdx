@@ -24,6 +24,20 @@ The DOCX editor needs font bytes for text shaping and page layout. Choose the su
 | `FontConfiguration` | Supplies a complete configuration with defaults and limits. |
 | `FontResolver` | Loads application-approved faces after document font requests become known. |
 
+### Replace fonts in an existing editor
+
+Use `editor.setFonts(fonts)` on a `createDocxEditor` instance to replace its host font resources. The document, selection, undo history, protection, and collaboration session stay intact. This changes local layout and paint without changing document content.
+
+```ts
+await editor.setFonts(nextFonts);
+// Remove host-supplied faces when their permission expires.
+await editor.setFonts(undefined);
+```
+
+Replacement cancels the previous resolver and removes its faces before it resolves the new fonts. Pass the resolver request's `signal` to your fetch operation to cancel network work. Old results cannot restore removed fonts. An empty result keeps bounded fallback measurement unless the document supplies embedded faces. Current failures report through `onFontError` and retain their original cause.
+
+Changing an adapter's `fonts` prop still recreates that adapter's editor instance. Use this instance method when you need to preserve unsaved edits and undo history.
+
 ### Configuration fields
 
 | Field | What you can customize |

@@ -1,6 +1,7 @@
 // Host-local tracking state is staged with each batch and published only after success.
 import { isAutomationCommand, type AutomationOperation } from './operations.ts';
 import type { PlannedOperation } from './plan.ts';
+import { revisionDateNow } from './revision-date.ts';
 import { isValidXmlText } from '../store/package/sinks.ts';
 
 /** Which change-tracking rule refused an operation, carried as the error `detail`. */
@@ -137,7 +138,7 @@ export function trackPlannedChanges(
     plan.kind !== 'command'
   )
     return plan;
-  const revision = { author, date: new Date().toISOString() };
+  const revision = { author, date: revisionDateNow() };
   return {
     ...plan,
     ops: plan.ops.map((op) => {

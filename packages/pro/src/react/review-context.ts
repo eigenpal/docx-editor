@@ -100,6 +100,15 @@ export interface ReviewRailValue {
   readonly beginDraft: () => void;
   /** Close it, committed or not, and unpin the range. */
   readonly endDraft: () => void;
+  /** Whether a comment draft is open. A `Draft` part renders only while it is. */
+  readonly drafting: boolean;
+  /**
+   * The packaged position of the compose box, in rail CSS pixels, or null when it has no
+   * anchor. A `Draft` part without its own `top` uses it.
+   */
+  readonly composeTop: number | null;
+  /** The compose box's rail-local `left` in the compact rail, or null in the full column. */
+  readonly composeLeft: number | null;
   /** The `commentMarkers` review pane setting: how a comment thread's margin marker looks. */
   readonly commentMarkers: CommentMarkerStyle;
   /** The `revisionsIn` review pane setting: tracked changes as rail cards or page balloons. */
@@ -177,6 +186,9 @@ export const INERT_RAIL: ReviewRailValue = {
   measure: () => {},
   beginDraft: () => {},
   endDraft: () => {},
+  drafting: false,
+  composeTop: null,
+  composeLeft: null,
   commentMarkers: 'icon',
   revisionsIn: 'pane',
 };

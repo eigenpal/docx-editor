@@ -335,6 +335,18 @@ export interface AttachOptions {
  * need. Production adapters program against `Editor` for everything else.
  */
 export interface DocxEditorInstance extends Editor {
+  /**
+   * Replace host font resources without replacing the document or its edit history.
+   * Old resolution is cancelled. Existing host faces are removed before the new
+   * resolver runs; no answer keeps the bounded fallback. Document-embedded faces
+   * remain independent of host fonts. Failures report through `onFontError`.
+   *
+   * The session, selection, undo, protection, and collaboration state stay intact.
+   * Throws after `destroy()`. This does not grant permission to load native fonts.
+   * @public
+   */
+  setFonts(fonts: DocxEditorConfig['fonts']): Promise<void>;
+
   /** Bumps on mount, detach, destroy, and document reload — guards async image intents. */
   readonly mountGeneration: number;
   /**

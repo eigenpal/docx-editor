@@ -2,6 +2,7 @@ import type {
   ContentLockPolicy,
   FieldResultsMode,
   FontShapingOptions,
+  ImageDecodePort,
   LockedControlNavigation,
   RevisionMarkupOptions,
   ReviewDisplayMode,
@@ -46,6 +47,8 @@ export interface DocxEditorProps {
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Explicit shaping byte ceiling. A changed maxFontBytes value remounts; equal values keep the instance. */
   fontShaping?: FontShapingOptions;
+  /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
+  imageDecodePort?: ImageDecodePort;
   colorMode?: 'light' | 'dark' | 'system';
   /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;

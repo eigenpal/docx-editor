@@ -25,6 +25,7 @@ import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { findReviewPlacement, replacementPairHalves } from './review-replacement-pairs.ts';
 import { reviewReplyRefusal } from './review-reply.ts';
 import { reviewWriteRefusal } from './review-write-refusal.ts';
+import { revisionDateNow } from '../automation/revision-date.ts';
 
 export interface ReviewWriteDeps {
   readonly reviewEnabled: boolean;
@@ -67,9 +68,6 @@ function authorAndOptions(
   return [undefined, author as HistoryGroupOptions];
 }
 
-/** `@w:date` is written to the second; milliseconds group with nothing. */
-const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
-
 export function createReviewWrites(deps: ReviewWriteDeps) {
   /** Validate the handle, then run the write with its group bound to the surface. */
   const grouped = (options: HistoryGroupOptions | undefined, write: () => ExecResult) => {
@@ -109,7 +107,7 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
         },
         text,
         writer,
-        secondsPrecisionNow(),
+        revisionDateNow(),
         // The story the SELECTED PARAGRAPH is in, not the one the reader happens to have
         // open. Commenting on header or note text wrote against the body store, which has
         // never heard of that paragraph, so the write was refused — after the affordance
@@ -192,7 +190,7 @@ export function createReviewWrites(deps: ReviewWriteDeps) {
         // around it. The clock is the HOST's, which is why the store takes the value rather
         // than reading one: a store that called `Date.now()` could not be tested for a
         // deterministic round trip.
-        secondsPrecisionNow(),
+        revisionDateNow(),
         // The story the card's range lives in. Written against the body, a header
         // anchor names a paragraph the body store does not have, and every reply to a
         // header or footer card was refused.

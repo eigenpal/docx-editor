@@ -5,12 +5,12 @@
 // - `w:type` `oddPage` / `evenPage` (ECMA-376 §17.18.77) starts the section on the next page
 //   whose DISPLAYED number is odd / even. The skipped sheet takes the number in between.
 // - Under `w:evenAndOddHeaders` (§17.10.1) a section that restarts its numbering starts on a
-//   sheet whose physical position has the parity of the restarted number, so an odd page is
-//   always a right-hand sheet in the printed output.
+//   sheet whose continued number has the parity of the restarted number.
 //
-// A restarted number does not move when a sheet is added in front of it, so only the second
-// rule can apply to a restart; an unrestarted number moves with the sheet, so only the first
-// rule can apply without one. Continuous sections share the previous sheet and never get one.
+// A restarted number does not move when a sheet is added. With alternating headers enabled,
+// an explicit odd/even break selects the required parity before the restart is applied.
+// Otherwise the restart selects that parity. Without alternating headers, a restart adds no
+// sheet. Continuous sections share the previous sheet and never get one.
 //
 // The sheet is empty: no body, header, footer, drawing, or page border. It is not a page of
 // either section, so SECTIONPAGES does not count it. NUMPAGES counts it like every sheet.
@@ -23,7 +23,7 @@ export interface ParitySheetInputs {
   readonly breakType: DocumentSection['properties']['breakType'];
   /** `w:pgNumType/@w:start` when the section restarts its numbering. */
   readonly restart: number | undefined;
-  /** The displayed number the section's first sheet gets when nothing is inserted. */
+  /** The continued number before applying this section's restart or adding a blank. */
   readonly nextDisplayed: number;
   /** The document index of the section's first sheet when nothing is inserted. */
   readonly sheetIndex: number;
@@ -34,8 +34,11 @@ export interface ParitySheetInputs {
 export function sectionNeedsParitySheet(inputs: ParitySheetInputs): boolean {
   if (inputs.breakType === 'continuous' || inputs.sheetIndex === 0) return false;
   if (inputs.restart !== undefined) {
-    // Physical sheets count from 1, so index 0 is an odd sheet.
-    return inputs.evenAndOddHeaders && (inputs.restart - (inputs.sheetIndex + 1)) % 2 !== 0;
+    // Continue the preceding numbering before applying the restart. The first section
+    // can start at an even number, so physical sheet indices do not establish parity.
+    const parity =
+      inputs.breakType === 'oddPage' ? 1 : inputs.breakType === 'evenPage' ? 0 : inputs.restart;
+    return inputs.evenAndOddHeaders && (parity - inputs.nextDisplayed) % 2 !== 0;
   }
   if (inputs.breakType === 'oddPage') return inputs.nextDisplayed % 2 === 0;
   if (inputs.breakType === 'evenPage') return inputs.nextDisplayed % 2 !== 0;
@@ -172,7 +175,7 @@ export function resettleParitySheets(
         sectionNeedsParitySheet({
           breakType: start.breakType,
           restart: start.restart,
-          nextDisplayed: displayed,
+          nextDisplayed: start.restart === undefined ? displayed : running,
           sheetIndex: next.length,
           evenAndOddHeaders: plan.evenAndOddHeaders,
         })
