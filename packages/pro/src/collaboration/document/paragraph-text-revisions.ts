@@ -62,6 +62,16 @@ export function isRevisionWrapper(shell: OoxmlElement): boolean {
   return shell.namespaceUri === WML_NAMESPACE_URI && REVISION_NAMES.has(shell.localName);
 }
 
+/**
+ * Paragraph-level wrappers a revision cannot hold: `w:ins` and `w:del` admit run content only
+ * (CT_RunTrackChange), so a revision always goes inside a link or a simple field.
+ */
+const OUTSIDE_REVISIONS = new Set(['hyperlink', 'fldSimple']);
+
+function holdsNoRevision(shell: ElementShell): boolean {
+  return shell.namespaceUri === WML_NAMESPACE_URI && OUTSIDE_REVISIONS.has(shell.localName);
+}
+
 /** An element shell's compact data with its ID relative to `base`, and extra fields. */
 export function shellData(
   shell: ElementShell,
@@ -87,6 +97,12 @@ export interface PlainWrapper {
   readonly wrapper: ElementShell;
   /** The revisions nested inside it, by stored wrapper ID: its `r`. */
   readonly inside: readonly string[];
+  /**
+   * For a link or simple field, the revisions around it, by stored wrapper ID: its `x`. A file
+   * can nest a link inside a revision, and only this list tells that apart from a revision a
+   * peer added without seeing the link, which belongs inside it.
+   */
+  readonly outside: readonly string[];
 }
 
 /**
@@ -115,7 +131,10 @@ export function encodeRevisions(
   wrap.forEach((wrapper, index) => {
     if (!isRevisionWrapper(wrapper)) {
       const inside = stored.filter((_, inner) => inner > index && isRevisionWrapper(wrap[inner]!));
-      plain.push({ wrapper, inside });
+      const outside = holdsNoRevision(wrapper)
+        ? stored.filter((_, outer) => outer < index && isRevisionWrapper(wrap[outer]!))
+        : [];
+      plain.push({ wrapper, inside, outside });
       return;
     }
     order += 1;
@@ -127,10 +146,15 @@ export function encodeRevisions(
   return plain;
 }
 
-/** A plain wrapper's `r`: the stored IDs of the revisions it holds, decoded. */
-export function insideOf(entry: unknown, limits: DocumentLimits, paragraphId: string): Set<string> {
+/** A plain wrapper's `r` (or `x`): the stored IDs of the revisions it holds (or sits in). */
+export function insideOf(
+  entry: unknown,
+  limits: DocumentLimits,
+  paragraphId: string,
+  key: 'r' | 'x' = 'r'
+): Set<string> {
   const ids = new Set<string>();
-  const data = isRecord(entry) ? entry.r : undefined;
+  const data = isRecord(entry) ? entry[key] : undefined;
   if (!Array.isArray(data)) return ids;
   for (const value of data.slice(0, MAX_JSON_DEPTH)) {
     const id = decodeId(value, paragraphId, limits);
@@ -191,8 +215,10 @@ function supersededKeys(value: unknown): Set<string> {
 }
 
 /**
- * The revision keys a reader looks at: those `b` does not name, in key order. It stops after
- * `MAX_SUPERSEDED` of them, so a peer's junk keys cost bounded work.
+ * The revision keys a reader looks at: those `b` does not name, in key order. Every one is a
+ * candidate: the reader stops after the revisions a wrapper chain holds that read, so keys a
+ * peer stored that do not read never hide one that does, and the work stays linear in what
+ * the character stores.
  */
 function liveKeys(attributes: Readonly<Record<string, unknown>>): string[] {
   const superseded = supersededKeys(attributes[SUPERSEDED_KEY]);
@@ -200,8 +226,7 @@ function liveKeys(attributes: Readonly<Record<string, unknown>>): string[] {
     .filter(
       (key) => key.startsWith(REVISION_PREFIX) && !rejectDangerousKey(key) && !superseded.has(key)
     )
-    .sort()
-    .slice(0, MAX_SUPERSEDED);
+    .sort();
 }
 
 const WRAPPER_SLOT: Slot | null = null;
@@ -277,6 +302,7 @@ export function placeRevisions(
     readonly shell: ElementShell;
     readonly signature: string;
     readonly inside: ReadonlySet<string>;
+    readonly outside?: ReadonlySet<string>;
   }[],
   revisions: readonly RevisionEntry[]
 ): { readonly shell: ElementShell; readonly signature: string }[] {
@@ -285,6 +311,7 @@ export function placeRevisions(
     readonly shell: ElementShell;
     readonly signature: string;
     readonly inside?: ReadonlySet<string>;
+    readonly outside?: ReadonlySet<string>;
     anchor?: string | null;
   }[] = [...plain];
   // The whole chain stays as deep as a writer encodes, outer wrappers first.
@@ -293,6 +320,17 @@ export function placeRevisions(
     let anchor: string | null = null;
     for (let index = chain.length - 1; index >= 0; index -= 1) {
       if (chain[index]!.inside?.has(revision.shell.id)) {
+        at = index + 1;
+        anchor = chain[index]!.shell.id;
+        break;
+      }
+    }
+    // A revision no wrapper names, as one a peer made while another wrapped the text in a
+    // link, still goes inside every link and simple field above it, unless the writer of
+    // that link put it around the link, as a file can.
+    const around = chain.some((entry) => entry.outside?.has(revision.shell.id));
+    for (let index = chain.length - 1; index >= at && !around; index -= 1) {
+      if (chain[index]!.anchor === undefined && holdsNoRevision(chain[index]!.shell)) {
         at = index + 1;
         anchor = chain[index]!.shell.id;
         break;

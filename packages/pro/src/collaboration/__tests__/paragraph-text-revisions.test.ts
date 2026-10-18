@@ -77,6 +77,36 @@ describe('the shared encoding of revisions', () => {
     });
   });
 
+  test("a peer's strike lands inside a link another peer added at the same time", () => {
+    // One peer wraps the text in a link; the other, who never saw the link, strikes it. The
+    // merged character holds the link's `w` and the strike's attribute, and the strike goes
+    // inside the link: a revision holds run content only, never a link.
+    const LINK = '<w:hyperlink w:anchor="a">';
+    for (const [linked, struck, chain] of [
+      [
+        `<w:p>${LINK}${INS(1, 'A')}<w:r><w:t>x</w:t></w:r></w:ins></w:hyperlink></w:p>`,
+        // A leading wrapper keeps the strike's IDs apart from the link's, as two peers' are.
+        `<w:p><w:smartTag w:element="z">${INS(1, 'A')}${DEL(2, 'B')}<w:r><w:delText>x</w:delText></w:r></w:del></w:ins></w:smartTag></w:p>`,
+        ['hyperlink', 'ins:A', 'del:B'],
+      ],
+      [
+        `<w:p>${LINK}<w:r><w:t>x</w:t></w:r></w:hyperlink></w:p>`,
+        `<w:p><w:smartTag w:element="z">${DEL(2, 'B')}<w:r><w:delText>x</w:delText></w:r></w:del></w:smartTag></w:p>`,
+        ['hyperlink', 'del:B'],
+      ],
+    ] as const) {
+      const link = itemsOf(linked);
+      const strike = itemsOf(struck);
+      const fromLink = encodeAttributes(link.items[0]!, link.id, LIMITS);
+      const fromStrike = encodeAttributes(strike.items[0]!, link.id, LIMITS);
+      const merged = { ...fromStrike, ...fromLink };
+      for (const key of Object.keys(fromStrike).filter((k) => k.startsWith(REVISION_PREFIX))) {
+        merged[key] = fromStrike[key]!;
+      }
+      expect(chainOf(decodeAttributes(merged, LIMITS, link.id))).toEqual([...chain]);
+    }
+  });
+
   test('two strikes written at once read in key order, and a write over them keeps both', () => {
     const { id, items } = itemsOf(
       `<w:p>${DEL(1, 'A')}${DEL(2, 'B')}<w:r><w:delText>x</w:delText></w:r></w:del></w:del></w:p>`
@@ -107,9 +137,10 @@ describe('the shared encoding of revisions', () => {
     const [link] = JSON.parse(encoded.w!) as Record<string, unknown>[];
     for (const inside of ['x', [1, {}], ['__proto__']]) {
       const w = JSON.stringify([{ ...link, r: inside }]);
+      // Named by no list it can read, the revision goes inside the link, where it is valid.
       expect(chainOf(decodeAttributes({ ...encoded, w }, LIMITS, id))).toEqual([
-        'ins:A',
         'hyperlink',
+        'ins:A',
       ]);
     }
   });
@@ -358,7 +389,8 @@ describe('revision values a peer wrote', () => {
 
   test('keys that do not read never push out a revision that does', () => {
     const junk: Record<string, string> = {};
-    for (let at = 0; at < 40; at += 1) junk[`${REVISION_PREFIX}!!!${at}`] = '{';
+    // More junk keys than a character holds superseded revisions, all sorting first.
+    for (let at = 0; at < 600; at += 1) junk[`${REVISION_PREFIX}!!!${at}`] = '{';
     expect(chainOf(decodeAttributes({ ...encoded, ...junk }, LIMITS, id))).toEqual(['ins:A']);
   });
 

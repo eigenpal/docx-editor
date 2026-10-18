@@ -156,9 +156,10 @@ export function encodeAttributes(
   const plain = encodeRevisions(attributes.wrap, paragraphId, out);
   if (plain.length > 0) {
     out[KEY_WRAP] = JSON.stringify(
-      plain.map(({ wrapper, inside }) => ({
+      plain.map(({ wrapper, inside, outside }) => ({
         ...wrapperData(wrapper, paragraphId),
         ...(inside.length > 0 ? { r: inside } : {}),
+        ...(outside.length > 0 ? { x: outside } : {}),
       }))
     );
   }
@@ -460,17 +461,23 @@ function decodeUncached(
         : null) ?? `${text.shell.id}~v`)
     : null;
   const wrapData = parseJson(attributes[KEY_WRAP]);
-  const plain: { shell: ElementShell; signature: string; inside: ReadonlySet<string> }[] = [];
+  const plain: {
+    shell: ElementShell;
+    signature: string;
+    inside: ReadonlySet<string>;
+    outside: ReadonlySet<string>;
+  }[] = [];
   if (Array.isArray(wrapData) && wrapData.length <= MAX_JSON_DEPTH) {
     for (const entry of wrapData) {
       const shell = readShell(entry, paragraphId, null, limits, true);
       if (!shell) break;
       // The revisions a wrapper holds are not the wrapper: they never split one element.
-      const { r: _inside, ...wrapper } = entry as Record<string, unknown>;
+      const { r: _inside, x: _outside, ...wrapper } = entry as Record<string, unknown>;
       plain.push({
         shell: shell.shell,
         signature: JSON.stringify(wrapper),
         inside: insideOf(entry, limits, paragraphId),
+        outside: insideOf(entry, limits, paragraphId, 'x'),
       });
     }
   }
