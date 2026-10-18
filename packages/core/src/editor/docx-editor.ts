@@ -124,7 +124,6 @@ import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
-import { createOffThreadParser } from './parse-off-thread.ts';
 import * as preparedOpen from './docx-editor-prepared-open.ts';
 import { configSurfaceOptions } from './docx-editor-surface-config.ts';
 import type { TreeDocxSessionView } from '../binding/tree-session-contract.ts';
@@ -300,7 +299,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let pendingBytes: Uint8Array | null = null;
   /** Pending input belongs to these exact remount bytes, including a deferred mount. */
   let pendingTextFormInputs = new WeakMap<Uint8Array, PendingTextFormInput>();
-  const offThread = createOffThreadParser(config.parseInWorker, () => container);
   /** Defers a big document's open behind a painted frame; see `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
     mount: (bytes) => mountBytes(bytes),
@@ -332,8 +330,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         preparedFontSession = session;
         return () => preparedFontSession === session;
       },
-      () => liveFonts.schedule(true),
-      offThread
+      () => liveFonts.schedule(true)
     ),
     scheduled: () => {
       bump();
@@ -713,10 +710,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // default (`all-markup`), which is what the review rail annotates.
       revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       ...diagnostics.surfaceHooks(suggesting, () => surface),
-      ...preparedOpen.takePreparedOpen(
-        bytes,
-        preparedOpen.sessionOpenOptions(reviewModelOption(modules, reportDiagnostic), config)
-      ),
+      ...preparedOpen.takePreparedOpen(bytes),
       ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       onHostMoved: followHost,
       onTrackedChange: () => {
@@ -835,7 +829,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // so its remaining opening slices clear the preview and restore pointer input.
     if (!immediate) {
       openScheduler.cancel();
-      offThread?.cancel();
       openingRefreshBytes = null;
     }
     // Keep the live font resources intact until a deferred refresh actually mounts.
@@ -2546,7 +2539,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       fontLifetime.dispose();
       suggestingReporter.dispose();
       openScheduler.cancel();
-      offThread?.cancel();
       zoomLane.detach();
       disposeEmbeddedFaces();
       disposeShapedFonts();

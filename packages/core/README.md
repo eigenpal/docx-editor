@@ -83,7 +83,6 @@ The root exports editor creation, contracts, font helpers, control definitions, 
 | `./layout` | The DOM-free layout pass. |
 | `./output` | Paint layouts and selection overlays into the DOM. |
 | `./export` | Document layout sessions for exporters. No DOM required. |
-| `./parse` | The worker script behind the `parseInWorker` option, for hosts that start it themselves. Exports nothing. |
 | `./automation` | The object model behind `@docx-editor.dev/editor-api`. |
 | `./collaboration` | Provider-neutral collaboration session contracts. |
 | `./collaboration/replication` | Replication helpers for collaboration providers. |

@@ -1620,7 +1620,6 @@ export interface DocxEditorConfig {
     modules?: readonly EditorModule[];
     // (undocumented)
     onFontError?: (error: EditorFontError) => void;
-    parseInWorker?: ParseInWorkerOption;
     reviewDisplayMode?: ReviewDisplayMode;
     revisionMarkup?: RevisionMarkupOptions;
     revisionStyles?: RevisionStyles;
@@ -3233,9 +3232,6 @@ export interface ParagraphTabStop {
     // (undocumented)
     readonly positionTwips: number;
 }
-
-// @public
-export type ParseInWorkerOption = boolean | (() => Worker);
 
 // @public
 export interface PerformanceDiagnostic extends DiagnosticBase {

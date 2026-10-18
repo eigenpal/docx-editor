@@ -72,7 +72,6 @@
       "import": "./dist/export.js",
       "require": "./dist/export.cjs"
     },
-    "./parse": "./dist/parse.js",
     "./store": {
       "types": "./dist/store.d.ts",
       "import": "./dist/store.js",

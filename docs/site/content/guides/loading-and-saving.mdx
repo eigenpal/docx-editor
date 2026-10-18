@@ -256,41 +256,6 @@ async function pick(event: Event) {
 </Framework>
 </FrameworkTabs>
 
-### Read large documents in a worker
-
-Opening a long document spends much of its time reading the file: unzipping it and parsing its XML. Set `parseInWorker` to do that work on a Web Worker, so the page keeps responding while the document opens.
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-<DocxEditor document={bytes} parseInWorker />
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<DocxEditor :document="bytes" parse-in-worker />
-```
-
-</Framework>
-</FrameworkTabs>
-
-`DocxEditor.Root` takes the same prop, and `createDocxEditor` takes `parseInWorker: true` in its options. The editor uses the worker only for large documents. Small documents open on the page, where starting a worker costs more time than it saves.
-
-The worker applies the same size, zip, and XML limits as an open on the page, and the editor opens the same document with the same pages. If the worker can't start, fails, or doesn't answer, the editor reads the document on the page, so the option never stops a document from opening.
-
-#### Start the worker yourself
-
-The editor locates its worker with `new URL('./parse.js', import.meta.url)`, a pattern that Vite, webpack, and Next.js handle. If your bundler doesn't handle it, or your content security policy allows workers only from known locations, pass a function that starts the worker script published at `@docx-editor.dev/core/parse`. The following example uses the Vite worker import:
-
-```tsx
-import ParseWorker from '@docx-editor.dev/core/parse?worker';
-
-<DocxEditor document={bytes} parseInWorker={() => new ParseWorker()} />;
-```
-
 ### Replace a document at runtime
 
 To replace the document without remounting the component, use the ref:

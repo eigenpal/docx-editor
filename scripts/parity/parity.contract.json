@@ -12,7 +12,6 @@
       "fonts",
       "fontShaping",
       "imageDecodePort",
-      "parseInWorker",
       "hyperlinkPopup",
       "i18n",
       "locale",

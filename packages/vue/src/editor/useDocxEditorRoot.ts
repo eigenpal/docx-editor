@@ -44,7 +44,6 @@ import {
   type FontConfigurationFragment,
   type FontResolver,
   type ImageDecodePort,
-  type ParseInWorkerOption,
 } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
@@ -121,8 +120,6 @@ export interface DocxEditorRootProps {
 
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   imageDecodePort?: ImageDecodePort;
-  /** Read large documents on a Web Worker; see `DocxEditorConfig.parseInWorker`. Sampled at mount. */
-  parseInWorker?: ParseInWorkerOption;
   onReady?: (editor: Editor) => void;
   onChange?: (change: DocumentChange) => void;
   onFontError?: (error: EditorFontError) => void;
@@ -318,7 +315,6 @@ export function useDocxEditorRootOwner(
       ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
-      ...(p.parseInWorker ? { parseInWorker: p.parseInWorker } : {}),
       onFontError: fireFontError,
     });
     const notify = deferredTick(() => {

@@ -51,7 +51,6 @@ import type {
   FontConfigurationFragment,
   FontResolver,
   ImageDecodePort,
-  ParseInWorkerOption,
 } from '@docx-editor.dev/core/editor';
 import { useTranslation, type TranslationKey } from '../i18n';
 import { DocxEditorContext, ReviewRailContext, type ReviewRailRegistry } from './context';
@@ -73,7 +72,7 @@ import {
  * Props for `DocxEditor.Root`. `document` and `imageDecodePort` identity changes remount the
  * editor. Changing `fontShaping.maxFontBytes` also remounts. Later `fonts`, `author`, `locale`,
  * `mode`, `translate`, `zoom`, and `zoomMode` changes use instance setters, so edits, selection
- * and undo history survive them. `modules` and `parseInWorker` are sampled at mount only.
+ * and undo history survive them. `modules` is sampled at mount only.
  *
  * @public
  */
@@ -182,11 +181,6 @@ export interface DocxEditorRootProps {
   tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
   /** Optional decode port for embedded image insertion and paint in tests or custom hosts. */
   imageDecodePort?: ImageDecodePort;
-  /**
-   * Read large documents on a Web Worker so the page stays responsive while they open. See
-   * `DocxEditorConfig.parseInWorker`. Sampled at mount.
-   */
-  parseInWorker?: ParseInWorkerOption;
   children?: DocxEditorChildren;
 }
 
@@ -352,7 +346,6 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.zoomMode !== undefined ? { zoomMode: p.zoomMode } : {}),
       ...(p.tableInteractionLabel ? { tableInteractionLabel: p.tableInteractionLabel } : {}),
       ...(p.imageDecodePort ? { imageDecodePort: p.imageDecodePort } : {}),
-      ...(p.parseInWorker ? { parseInWorker: p.parseInWorker } : {}),
       onFontError: (error) => propsRef.current.onFontError?.(error),
     });
     createdFonts.current = p.fonts;

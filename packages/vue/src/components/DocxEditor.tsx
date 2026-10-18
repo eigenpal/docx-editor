@@ -260,10 +260,6 @@ const docxEditorFrameProps = {
     type: Object as PropType<DocxEditorProps['imageDecodePort']>,
     default: undefined,
   },
-  parseInWorker: {
-    type: [Boolean, Function] as PropType<DocxEditorProps['parseInWorker']>,
-    default: undefined,
-  },
   class: { type: String, default: undefined },
   t: { type: Function as PropType<DocxEditorProps['t']>, default: undefined },
   colorMode: { type: String as PropType<'light' | 'dark' | 'system'>, default: 'light' },
@@ -524,7 +520,6 @@ const DocxEditorFrame = defineComponent({
           ...(props.fonts ? { fonts: props.fonts } : {}),
           ...(props.fontShaping ? { fontShaping: props.fontShaping } : {}),
           ...(props.imageDecodePort ? { imageDecodePort: props.imageDecodePort } : {}),
-          ...(props.parseInWorker ? { parseInWorker: props.parseInWorker } : {}),
           ...(props.author !== undefined ? { author: props.author } : {}),
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
           popups: createPackagedPopups(props.popups, hyperlinkPopup.value, contextMenu.value, t),

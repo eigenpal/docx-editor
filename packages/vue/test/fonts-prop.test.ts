@@ -1,7 +1,6 @@
-// `fonts` replaces fonts in place, and `parseInWorker` reaches the engine, through both Vue hosts.
+// `fonts` replaces fonts in place through both Vue hosts.
 import './dom-setup.ts';
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
 import { createApp, h, shallowRef } from 'vue';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import type { DocxEditorInstance, FontResolver } from '@docx-editor.dev/core/editor';
@@ -24,9 +23,6 @@ const SOURCE = zipSync({
     `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Fonts stay in place</w:t></w:r></w:p></w:body></w:document>`
   ),
 });
-const LARGE = new Uint8Array(
-  readFileSync(new URL('../../../e2e/fixtures/demo.docx', import.meta.url))
-);
 
 /** A resolver that records each request under `name` and supplies nothing. */
 function resolver(name: string, calls: string[]): FontResolver {
@@ -83,38 +79,5 @@ describe('fonts prop', () => {
         container.remove();
       }
     });
-  }
-});
-
-describe('parseInWorker prop', () => {
-  for (const host of ['root', 'sugar'] as const) {
-    test(`${host}: a large document asks the host's worker factory`, async () => {
-      let created = 0;
-      // A factory that fails: the engine must still open the document on the page.
-      const parseInWorker = (): Worker => {
-        created += 1;
-        throw new Error('no workers here');
-      };
-      const ready: Editor[] = [];
-      const container = document.createElement('div');
-      document.body.append(container);
-      const app = createApp({
-        render: () =>
-          tree(host, { document: LARGE, parseInWorker, onReady: (e: Editor) => ready.push(e) }),
-      });
-      try {
-        app.mount(container);
-        for (let wait = 0; wait < 100 && ready.length === 0; wait += 1) {
-          await flush();
-          await settle(50);
-        }
-        expect(created).toBe(1);
-        expect(ready).toHaveLength(1);
-        expect(ready[0]!.snapshot().parseError).toBeNull();
-      } finally {
-        app.unmount();
-        container.remove();
-      }
-    }, 30_000);
   }
 });

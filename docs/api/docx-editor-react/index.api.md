@@ -116,7 +116,6 @@ import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
-import { ParseInWorkerOption } from '@docx-editor.dev/core/editor';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
 import * as react from 'react';
@@ -1391,7 +1390,6 @@ export interface DocxEditorProps {
     onSave?: () => void;
     onTitleChange?: (title: string) => void;
     openFailure?: boolean | DocxEditorOpenFailureProps;
-    parseInWorker?: ParseInWorkerOption;
     popups?: DocxEditorPopups;
     readonly renderOpenFailureActions?: (context: DocxEditorOpenFailureContext) => DocxEditorChildren;
     readonly renderTitleBarLeft?: () => DocxEditorChildren;
@@ -1503,7 +1501,6 @@ export interface DocxEditorRootProps {
     onFontError?: (error: EditorFontError) => void;
     onReady?: (editor: Editor) => void;
     onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
-    parseInWorker?: ParseInWorkerOption;
     popups?: DocxEditorPopups;
     reviewDisplayMode?: ReviewDisplayMode;
     revisionMarkup?: RevisionMarkupOptions;

@@ -122,7 +122,6 @@ import { ParagraphFlagState } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatRead } from '@docx-editor.dev/core/editor';
 import { ParagraphFormatUpdate } from '@docx-editor.dev/core/editor';
 import { ParagraphTabStop } from '@docx-editor.dev/core/editor';
-import { ParseInWorkerOption } from '@docx-editor.dev/core/editor';
 import { PropType } from 'vue';
 import { PX_PER_CM } from '@docx-editor.dev/core/editor';
 import { PX_PER_INCH } from '@docx-editor.dev/core/editor';
@@ -4039,7 +4038,6 @@ export interface DocxEditorProps {
     modules?: readonly EditorModule[];
     navigation?: boolean | DocxEditorNavigationProps;
     openFailure?: boolean | DocxEditorOpenFailureProps;
-    parseInWorker?: ParseInWorkerOption;
     // (undocumented)
     popups?: DocxEditorPopups;
     reviewDisplayMode?: ReviewDisplayMode;
@@ -4242,10 +4240,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<readonly EditorModule[]>;
     };
-    parseInWorker: {
-        default: undefined;
-        type: PropType<ParseInWorkerOption>;
-    };
     popups: PropType<DocxEditorPopups>;
     reviewDisplayMode: PropType<ReviewDisplayMode>;
     revisionMarkup: PropType<RevisionMarkupOptions>;
@@ -4317,10 +4311,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: PropType<readonly EditorModule[]>;
     };
-    parseInWorker: {
-        default: undefined;
-        type: PropType<ParseInWorkerOption>;
-    };
     popups: PropType<DocxEditorPopups>;
     reviewDisplayMode: PropType<ReviewDisplayMode>;
     revisionMarkup: PropType<RevisionMarkupOptions>;
@@ -4357,7 +4347,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     lockedControlNavigation: LockedControlNavigation;
     mode: "edit" | "suggesting" | "view";
     modules: readonly EditorModule[];
-    parseInWorker: ParseInWorkerOption;
     tableInteractionLabel: ((key: 'table.insertRowBelow' | 'table.insertColumnRight') => string) | undefined;
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined;
     zoom: number;
@@ -4400,7 +4389,6 @@ export interface DocxEditorRootProps {
     // (undocumented)
     onReady?: (editor: Editor) => void;
     onRevisionMarkupChange?: (settings: ResolvedRevisionMarkup) => void;
-    parseInWorker?: ParseInWorkerOption;
     // (undocumented)
     popups?: DocxEditorPopups;
     reviewDisplayMode?: ReviewDisplayMode;

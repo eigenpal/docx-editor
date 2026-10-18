@@ -1,8 +1,7 @@
-// `fonts` replaces fonts in place, and `parseInWorker` reaches the engine, through both React hosts.
+// `fonts` replaces fonts in place through both React hosts.
 import './dom-setup.ts';
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 import { afterEach, describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
 import { act, cleanup, render } from '@testing-library/react';
 import type { DocxEditorInstance, FontResolver } from '@docx-editor.dev/core/editor';
 import { strToU8, zipSync } from 'fflate';
@@ -23,9 +22,6 @@ const SOURCE = zipSync({
     `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>Fonts stay in place</w:t></w:r></w:p></w:body></w:document>`
   ),
 });
-const LARGE = new Uint8Array(
-  readFileSync(new URL('../../../e2e/fixtures/demo.docx', import.meta.url))
-);
 
 afterEach(cleanup);
 const settle = (ms = 150) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -44,7 +40,6 @@ function tree(
   props: {
     readonly document: Uint8Array;
     readonly fonts?: FontResolver;
-    readonly parseInWorker?: () => Worker;
     readonly onReady: (editor: unknown) => void;
   }
 ) {
@@ -91,29 +86,5 @@ describe('fonts prop', () => {
       expect(calls).toEqual(['first', 'second']);
       mounted.unmount();
     });
-  }
-});
-
-describe('parseInWorker prop', () => {
-  for (const host of ['root', 'sugar'] as const) {
-    test(`${host}: a large document asks the host's worker factory`, async () => {
-      let created = 0;
-      // A factory that fails: the engine must still open the document on the page.
-      const parseInWorker = (): Worker => {
-        created += 1;
-        throw new Error('no workers here');
-      };
-      const ready: DocxEditorInstance[] = [];
-      const onReady = (editor: unknown) => ready.push(editor as DocxEditorInstance);
-      let mounted!: ReturnType<typeof render>;
-      await act(async () => {
-        mounted = render(tree(host, { document: LARGE, parseInWorker, onReady }));
-      });
-      for (let wait = 0; wait < 100 && ready.length === 0; wait += 1) await act(() => settle(50));
-      expect(created).toBe(1);
-      expect(ready).toHaveLength(1);
-      expect(ready[0]!.snapshot().parseError).toBeNull();
-      mounted.unmount();
-    }, 30_000);
   }
 });

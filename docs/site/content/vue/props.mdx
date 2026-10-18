@@ -15,7 +15,6 @@ Use `document` for the document source.
 | --- | --- | --- |
 | `fieldResults` | `'atomic' \| 'editable'` | Saved field result editing. Defaults to `'atomic'`; fixed when the editor starts. |
 | `document` | `DocumentSource` | DOCX bytes, `'blank'`, or a `DocumentHandle`. |
-| `parseInWorker` | `boolean \| (() => Worker)` | Reads large documents on a Web Worker so the page keeps responding while they open. The editor reads this prop once, at creation. For details, see [Read large documents in a worker](/docs/2.x/guides/loading-and-saving#read-large-documents-in-a-worker). |
 | `author` | `string` | Author for later comments, replies, and tracked changes. |
 | `locale` | `string` | BCP-47 locale for regional date input and generated labels. Defaults to `en-US`; updates without a remount. |
 | `mode` | `'edit' \| 'view' \| 'suggesting'` | Editing mode. The packaged `<DocxEditor>` defaults to `'edit'`. |

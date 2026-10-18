@@ -4,7 +4,6 @@ import type {
   FontShapingOptions,
   ImageDecodePort,
   LockedControlNavigation,
-  ParseInWorkerOption,
   RevisionMarkupOptions,
   ReviewDisplayMode,
 } from '@docx-editor.dev/core/editor';
@@ -51,12 +50,6 @@ export interface DocxEditorProps {
   fontShaping?: FontShapingOptions;
   /** Inject image decoding and preserved-image conversion. A changed port identity remounts the editor. */
   imageDecodePort?: ImageDecodePort;
-  /**
-   * Read large documents on a Web Worker so the page stays responsive while they open. `true`
-   * starts the worker this package ships; a function creates it instead. Small documents, and
-   * any open the worker cannot serve, read on the page. Sampled at mount.
-   */
-  parseInWorker?: ParseInWorkerOption;
   colorMode?: 'light' | 'dark' | 'system';
   /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;

@@ -19,7 +19,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import tsupConfig, { PARSE_WORKER_SOURCE_URL, WASM_URL_EXPRESSION } from '../../tsup.config.ts';
+import tsupConfig, { WASM_URL_EXPRESSION } from '../../tsup.config.ts';
 
 const CORE = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -81,20 +81,9 @@ const asSpecifier = (subpath: string): string =>
  * and `./package.json` is the conventional self-reference; none is a module and none
  * belongs in the other three tables.
  */
-/**
- * Worker scripts: a subpath published only so a host can start the worker itself. The editor
- * starts `./parse` from `new URL('./parse.js', import.meta.url)` (`editor/parse-off-thread.ts`).
- * A worker script exports nothing, so it has no declarations and nothing imports it by package
- * name; it is ESM only, because `require()` has no module workers to start.
- */
-const WORKER_SUBPATHS = ['./parse'];
-
 const jsSubpaths = Object.keys(manifest.exports).filter(
   (subpath) =>
-    subpath !== './package.json' &&
-    !subpath.endsWith('.css') &&
-    !subpath.endsWith('.wasm') &&
-    !WORKER_SUBPATHS.includes(subpath)
+    subpath !== './package.json' && !subpath.endsWith('.css') && !subpath.endsWith('.wasm')
 );
 
 describe('the published subpath tables agree', () => {
@@ -112,7 +101,7 @@ describe('the published subpath tables agree', () => {
   test('every build entry is an exported subpath', () => {
     // The other direction: an entry nobody can import is dead weight in every bundle that
     // shares its chunks, and reads as a public surface when it is not one.
-    const exported = new Set([...jsSubpaths, ...WORKER_SUBPATHS].map(asEntryKey));
+    const exported = new Set(jsSubpaths.map(asEntryKey));
     const orphans = Object.keys(config.entry).filter((entry) => !exported.has(entry));
     expect({ unexportedBuildEntry: orphans }).toEqual({ unexportedBuildEntry: [] });
   });
@@ -165,14 +154,8 @@ describe('the published subpath tables agree', () => {
       );
 
     expect(configs).toHaveLength(2);
-    const modules = (build: BuildConfig): Record<string, string> =>
-      Object.fromEntries(
-        Object.entries(build.entry).filter(
-          ([entry]) => !WORKER_SUBPATHS.map(asEntryKey).includes(entry)
-        )
-      );
     for (const build of configs.slice(1)) {
-      expect(modules(build)).toEqual(modules(config));
+      expect(build.entry).toEqual(config.entry);
       expect(selfReferenceAliases(build)).toEqual(selfReferenceAliases(config));
     }
   });
@@ -196,34 +179,6 @@ describe('the published subpath tables agree', () => {
     expect(manifest.scripts.build).toContain('node ../../scripts/build-core-declarations.mjs');
   });
 
-  test('a worker script is one ESM file: no declarations, no self-reference, no CJS twin', () => {
-    const [esm, cjs] = configs;
-    for (const subpath of WORKER_SUBPATHS) {
-      const entry = asEntryKey(subpath);
-      const lookup = <T>(table: Record<string, T>, key: string): T | undefined => table[key];
-      expect({
-        exported: manifest.exports[subpath],
-        esm: lookup(esm!.entry, entry),
-        cjs: lookup(cjs!.entry, entry),
-        alias: lookup(esbuildAliasOf(esm!), asSpecifier(subpath)),
-        path: lookup(tsconfig.compilerOptions.paths, asSpecifier(subpath)),
-      }).toEqual({
-        exported: `./dist/${entry}.js`,
-        esm: `src/${entry}/worker.ts`,
-        cjs: undefined,
-        alias: undefined,
-        path: undefined,
-      });
-    }
-  });
-
-  test('the editor names its parse worker exactly as the build rewrites it', () => {
-    // The ESM build rewrites this one expression to the emitted `./parse.js`, and refuses to
-    // build when the count is not exactly one; this puts the same tripwire in the suite.
-    const source = readFileSync(join(CORE, 'src/editor/parse-off-thread.ts'), 'utf8');
-    expect(source.split(PARSE_WORKER_SOURCE_URL).length - 1).toBe(1);
-  });
-
   test('only the build that inlines the runtime aliases Node’s `module`', () => {
     // `module` is a bare Node specifier, not a subpath of this package. Aliasing it is how
     // the inlined HarfBuzz runtime stops reaching for a builtin no browser bundler can
@@ -244,10 +199,6 @@ describe('the published subpath tables agree', () => {
     // of them still builds and still passes every other test — the regression only shows
     // in a consumer's app. And neither build may clean: tsup runs an array config
     // concurrently, so cleaning belongs to the package `build` script alone.
-    const patchesGlue = (plugins: readonly unknown[] | undefined): boolean =>
-      (plugins ?? []).some(
-        (plugin) => (plugin as { name?: string }).name === 'harfbuzz-wasm-url-escape-hatch'
-      );
     const [esm, cjs] = configs as readonly (BuildConfig & {
       format?: readonly string[];
       clean?: boolean;
@@ -260,14 +211,14 @@ describe('the published subpath tables agree', () => {
         format: esm!.format,
         clean: esm!.clean,
         noExternal: esm!.noExternal,
-        patchesGlue: patchesGlue(esm!.esbuildPlugins),
+        patchesGlue: (esm!.esbuildPlugins?.length ?? 0) > 0,
         copiesWasm: typeof esm!.onSuccess === 'function',
       },
       cjs: {
         format: cjs!.format,
         clean: cjs!.clean,
         noExternal: cjs!.noExternal,
-        patchesGlue: patchesGlue(cjs!.esbuildPlugins),
+        patchesGlue: (cjs!.esbuildPlugins?.length ?? 0) > 0,
         copiesWasm: typeof cjs!.onSuccess === 'function',
       },
     }).toEqual({

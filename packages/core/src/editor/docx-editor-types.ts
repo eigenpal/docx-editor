@@ -172,20 +172,6 @@ export interface DocxEditorConfig {
   /** Override raster decode for insert/replace image commands; defaults to browser/headless. */
   imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
   /**
-   * Read large documents on a Web Worker, so the page stays responsive while they open. `true`
-   * starts the worker this package ships. A function creates the worker itself, for a bundler
-   * that does not emit `new URL(..., import.meta.url)` assets, or a content security policy that
-   * allows workers only from known locations. For example, with Vite:
-   * `import ParseWorker from '@docx-editor.dev/core/parse?worker'` and
-   * `parseInWorker: () => new ParseWorker()`.
-   *
-   * Small documents open on the page, where a worker would only add start-up time. An open the
-   * worker cannot serve (it fails to start, errors, or answers nothing) also reads the document
-   * on the page, so the option never stops a document from opening. Fixed for the instance.
-   * Default `false`.
-   */
-  parseInWorker?: import('./parse-off-thread.ts').ParseInWorkerOption;
-  /**
    * The scale to open at, as a fixed number.
    *
    * Supplying one also picks the mode: an editor given a `zoom` and no `zoomMode` opens

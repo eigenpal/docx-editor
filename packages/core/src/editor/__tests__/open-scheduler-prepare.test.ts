@@ -204,69 +204,6 @@ describe('prepare work the mount waits for', () => {
   });
 });
 
-describe('an awaited prepare step', () => {
-  /** A scheduler whose prepare waits on `answer`, then runs the step it answers. */
-  function awaiting() {
-    const events: string[] = [];
-    let answer: (next: (() => void) | void) => void = () => {};
-    const scheduler = createOpenScheduler({
-      mount: () => events.push('mount'),
-      prepare: () => {
-        events.push('prepare');
-        return { awaitStep: new Promise((resolve) => (answer = resolve)) };
-      },
-      scheduled: () => events.push('scheduled'),
-    });
-    return { events, scheduler, answer: (next?: () => void) => answer(next) };
-  }
-
-  test('waits past the work limit, then runs the step it answers before the mount', async () => {
-    const { events, scheduler, answer } = awaiting();
-    scheduler.schedule(new Uint8Array(1));
-    await frame();
-    await nextTask();
-    await new Promise((resolve) => setTimeout(resolve, PREPARED_WORK_WAIT_MS + 100));
-    expect(events).toEqual(['scheduled', 'prepare']);
-    expect(scheduler.isScheduled()).toBe(true);
-    answer(() => void events.push('next step'));
-    for (let task = 0; task < 4; task += 1) await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'next step', 'mount']);
-  }, 10_000);
-
-  test('an answer without a step goes straight to the mount', async () => {
-    const { events, scheduler, answer } = awaiting();
-    scheduler.schedule(new Uint8Array(1));
-    await frame();
-    await nextTask();
-    answer();
-    for (let task = 0; task < 4; task += 1) await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
-  });
-
-  test('cancel while waiting means a late answer runs nothing', async () => {
-    const { events, scheduler, answer } = awaiting();
-    scheduler.schedule(new Uint8Array(1));
-    await frame();
-    await nextTask();
-    scheduler.cancel();
-    answer(() => void events.push('next step'));
-    for (let task = 0; task < 4; task += 1) await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare']);
-  });
-
-  test('flush while waiting mounts at once, and a late answer runs nothing', async () => {
-    const { events, scheduler, answer } = awaiting();
-    scheduler.schedule(new Uint8Array(1));
-    await frame();
-    await nextTask();
-    scheduler.flush();
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
-    answer(() => void events.push('next step'));
-    for (let task = 0; task < 4; task += 1) await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
-  });
-});
-
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';

@@ -84,7 +84,6 @@ The editor reads construction props when it creates the instance. Changes to `do
 | `translate` | `(key, params?) => string` | Resolves live document-surface labels. It defaults to the active catalog. |
 | `tableInteractionLabel` | `(key) => string` | Resolves labels for table insertion controls. |
 | `imageDecodePort` | `ImageDecodePort` | Overrides raster decoding for tests or custom hosts. |
-| `parseInWorker` | `boolean \| (() => Worker)` | Reads large documents on a Web Worker so the page keeps responding while they open. The editor reads this prop once, at creation. For details, see [Read large documents in a worker](/docs/2.x/guides/loading-and-saving#read-large-documents-in-a-worker). |
 
 For exact signatures, see the [React API reference](/docs/2.x/api/react).
 
