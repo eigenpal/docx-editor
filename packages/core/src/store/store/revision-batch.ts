@@ -69,12 +69,21 @@ export interface RevisionBatchResult {
   readonly remaining: number;
 }
 
-/** @internal Pure preflight; callers commit its operations through their normal write guards. */
+/**
+ * @internal Pure preflight; callers commit its operations through their normal write guards.
+ *
+ * `countRemaining: false` skips the exact count of the decisions left after the batch, and
+ * reports `remaining` as the decisions not resolved here. The exact count resolves the whole
+ * batch once more on a copy and lists what is left, which on a long reviewed document cost more
+ * than the plan itself, and a caller that reads only the operations or the skipped changes
+ * (a check, one decision, an editor that recounts its queue) paid it on every call.
+ */
 export function planRevisionBatch(
   part: OoxmlPart,
   action: 'accept' | 'reject',
   keys?: readonly string[],
-  scopeRoot?: OoxmlNode
+  scopeRoot?: OoxmlNode,
+  options?: { readonly countRemaining?: boolean }
 ): { ops: readonly TreeDocOp[]; result: RevisionBatchResult } {
   const root = scopeRoot ?? part.root;
   const scopedPart = root.kind === 'textValue' ? part : { ...part, root };
@@ -354,7 +363,7 @@ export function planRevisionBatch(
   let remaining = items.length - resolved.length;
   // Removing a row can make two formerly separated formatting groups adjacent.
   // Partial outcomes must count the resulting queue, not subtract from the old one.
-  if (remaining > 0 && siteNodeIds.length) {
+  if (remaining > 0 && siteNodeIds.length && options?.countRemaining !== false) {
     // Resolution transfers its mutable node index to the rebuilt root. Keep the
     // original root's index and allocator state untouched during pure preflight.
     const previewPart = { ...part, root: { ...part.root } };

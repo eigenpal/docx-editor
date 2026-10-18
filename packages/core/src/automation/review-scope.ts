@@ -141,7 +141,8 @@ export function planKeyedDecision(
     reads.part,
     action,
     keys,
-    sharesItsPart(reads.story) ? reads.root : undefined
+    sharesItsPart(reads.story) ? reads.root : undefined,
+    { countRemaining: false }
   );
   let ops = decision.ops;
   const skipped = decision.result.skipped;

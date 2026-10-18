@@ -273,7 +273,14 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     const plans: { scope: StoryScope; part: OoxmlPart; ops: readonly TreeDocOp[] }[] = [];
     let remaining = 0;
     for (const { scope, part, keys } of scopes) {
-      const plan = planRevisionBatch(part, command.action, unfilteredDocument ? undefined : keys);
+      // The editor reports its own queue as what remains; see `countRemaining`.
+      const plan = planRevisionBatch(
+        part,
+        command.action,
+        unfilteredDocument ? undefined : keys,
+        undefined,
+        { countRemaining: false }
+      );
       for (const entry of plan.result.resolved) if (!silent.has(entry.key)) resolved.push(entry);
       for (const entry of plan.result.skipped) if (!silent.has(entry.key)) skipped.push(entry);
       remaining += plan.result.remaining;
@@ -628,7 +635,9 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
           const part = session && partOfNodeId(session, revisionSiteNodeIdsOf(item)[0]);
           if (!part) return {};
           try {
-            const plan = planRevisionBatch(part, action, [reviewItemKey(item)]);
+            const plan = planRevisionBatch(part, action, [reviewItemKey(item)], undefined, {
+              countRemaining: false,
+            });
             const detail = plan.result.skipped[0]?.detail;
             return { partName: part.name, ...(detail ? { detail } : {}) };
           } catch {
@@ -689,7 +698,11 @@ function resolutionOps(
     ordinaryMoveRanges(part.root).length > 0 ||
     (item.revisionKind === 'format' && revisionSiteNodeIdsOf(item).length > 1)
   ) {
-    return [...planRevisionBatch(part, action, resolutionKeysOf(item)).ops];
+    return [
+      ...planRevisionBatch(part, action, resolutionKeysOf(item), undefined, {
+        countRemaining: false,
+      }).ops,
+    ];
   }
   const nodeIds = new Set(revisionSiteNodeIdsOf(item));
   const operations = new Map<
