@@ -1,0 +1,10 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "Section numbering restarts can add blank pages, and offset table rows can lose exposed borders.",
+  "after": "Section numbering and exposed table borders retain their intended layout during shared edits.",
+  "reason": "Only derived layout changes; shared operations and document state retain their format.",
+  "tests": ["packages/pro/src/collaboration/__tests__/document-layout-clearance.test.ts"],
+  "changeset": "section-numbering-table-edges",
+  "migration": null
+}

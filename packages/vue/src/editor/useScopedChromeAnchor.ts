@@ -5,7 +5,12 @@ import { formatPx } from '../lib/units';
 import { scopeDispose } from './scope-dispose';
 import { absolutePointInScroller } from './scroller-geometry';
 
-type AnchorPlacement = 'before' | 'after' | 'story-label';
+/**
+ * Where a scoped chrome anchor sits relative to its story: before it, after it, or on its label.
+ *
+ * @public
+ */
+export type ScopedChromeAnchorPlacement = 'before' | 'after' | 'story-label';
 
 /** @public */
 export interface ScopedChromeAnchor {
@@ -20,7 +25,7 @@ export interface ScopedChromeAnchor {
  */
 export function useScopedChromeAnchor(
   findAnchor: (viewport: HTMLElement) => HTMLElement | null,
-  placement: AnchorPlacement
+  placement: ScopedChromeAnchorPlacement
 ): ScopedChromeAnchor {
   const chrome = ref<HTMLDivElement | null>(null);
   const style = ref<CSSProperties>({ visibility: 'hidden' });

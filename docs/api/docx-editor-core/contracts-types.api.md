@@ -8,6 +8,34 @@
 export type Block = Paragraph | Table | ContentControl;
 
 // @public
+export type CollaborationFailureCode =
+/** Edit refused by the session gate. The status does not change. Wait for `ready`. */
+'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'experimental-collaboration-body-text-only'
+/** Factory input rejected before joining. Fix the value the host passed. */
+| 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-session-id'
+/** Join or seed did not complete. Connect the provider, check the room id, and retry. */
+| 'already-initialized' | 'document-id-mismatch' | 'initialization-aborted' | 'initialization-timeout' | 'not-initialized'
+/** The seed document cannot seed a room. Fix the file. */
+| 'baseline-too-large' | 'blob-read' | 'invalid-baseline' | 'missing-local-blob' | 'no-main-document-part'
+/** This client and the room have different formats. Terminal. Save local work. */
+| 'collaboration-format-mismatch' | 'protocol-version-mismatch' | 'schema-version-mismatch'
+/** The room is unusable. Terminal. Create a new room from saved bytes. */
+| 'blob-digest-mismatch' | 'concurrent-seed' | 'port-already-attached'
+/** A remote update is not applied yet. Heals when a later update arrives. Wait. */
+| 'duplicate-paragraph-id' | 'invalid-relationships' | 'materialize-dropped-content' | 'missing-blob' | 'missing-root' | 'remote-apply-failed' | 'unknown-paragraph-id'
+/** Over a resource limit. A local edit realigns; shared state over a limit is terminal. */
+| 'blob-store-full' | 'blob-too-large' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-logical-id' | 'invalid-string' | 'prototype-key' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'tree-too-deep' | 'unknown-logical-id' | 'unsafe-part-name'
+/** Transport state. Only `transport-disconnected` recovers on its own. */
+| 'authentication-failed' | 'room-generation-changed' | 'transport' | 'transport-disconnected'
+/** Reserved for a room server that refuses a saved room. Passed through, never emitted. */
+| 'invalid-saved-room' | 'saved-room-unavailable'
+/** @deprecated Emitted by nothing. Kept for compatibility; do not branch on these. */
+| 'baseline-digest-mismatch' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'invalid-shared-metadata' | 'local-mirror-failed' | 'paragraph-set-mismatch' | 'shared-schema-invalid' | 'unsupported-root-key';
+
+// @public
+export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
+
+// @public
 export type ColorValue = {
     readonly kind: 'hex';
     readonly value: string;
@@ -19,6 +47,9 @@ export type ColorValue = {
 } | {
     readonly kind: 'auto';
 };
+
+// @public
+export type CommentMarkerStyle = 'initials' | 'icon';
 
 // @public
 export type ContainerRef = {
@@ -61,6 +92,12 @@ export interface ContentControlFilter {
 
 // @public
 export type ContentControlType = 'richText' | 'plainText' | 'checkbox' | 'dropdown' | 'comboBox' | 'date' | 'picture' | 'buildingBlockGallery' | 'repeatingSection';
+
+// @public
+export const DEFAULT_REVIEW_PANE: ResolvedReviewPane;
+
+// @public
+export const DEFAULT_REVISION_MARKUP: ResolvedRevisionMarkup;
 
 // @public
 export interface DocAnchor {
@@ -128,6 +165,16 @@ export interface DocumentBody {
 }
 
 // @public
+export type DocumentProtectionEdit = 'none' | 'readOnly' | 'comments' | 'trackedChanges' | 'forms';
+
+// @public
+export interface DocumentProtectionState {
+    readonly edit: DocumentProtectionEdit;
+    readonly enforced: boolean;
+    readonly password: boolean;
+}
+
+// @public
 export interface DocxDocument {
     // (undocumented)
     readonly body: DocumentBody;
@@ -190,6 +237,16 @@ export interface HeaderFooterSet {
     readonly even?: string;
     // (undocumented)
     readonly first?: string;
+}
+
+// @public
+export interface HistoryGroupOutcome {
+    // (undocumented)
+    readonly kind: 'started' | 'extended' | 'split' | 'none';
+    // (undocumented)
+    readonly reason?: 'history-boundary' | 'undo-redo' | 'no-history'
+    /** @deprecated No longer reported: writes that span document parts now extend the group. */
+    | 'package-unit' | 'composition';
 }
 
 // @public
@@ -332,6 +389,133 @@ export interface Rect {
 }
 
 // @public
+export interface ResolvedReviewPane {
+    readonly commentMarkers: CommentMarkerStyle;
+    readonly opening: ReviewPaneOpening;
+    readonly overflow: ReviewPaneOverflow;
+    readonly revisionsIn: RevisionDisplay;
+}
+
+// @public
+export interface ResolvedRevisionMarkup {
+    // (undocumented)
+    readonly cells: {
+        readonly deleted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly inserted: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly merged: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+        readonly split: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+    };
+    // (undocumented)
+    readonly changedLines: RevisionMarkupStyle<RevisionChangedLinesMark>;
+    // (undocumented)
+    readonly deletions: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly formatting: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly insertions: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly movedFrom: RevisionMarkupTextStyle<RevisionDeletionMark>;
+    // (undocumented)
+    readonly movedTo: RevisionMarkupTextStyle;
+    // (undocumented)
+    readonly trackFormatting: boolean;
+    // (undocumented)
+    readonly trackMoves: boolean;
+}
+
+// @public
+export function resolveReviewPane(options: ReviewPaneOptions | undefined, base?: ResolvedReviewPane): ResolvedReviewPane;
+
+// @public
+export function resolveRevisionMarkup(input?: RevisionMarkupOptions, previous?: ResolvedRevisionMarkup): ResolvedRevisionMarkup;
+
+// @public
+export interface ReviewPaneItemFields {
+    readonly kind: 'revision' | 'comment' | 'custom';
+    readonly parentRevisionId?: string;
+}
+
+// @public
+export function reviewPaneListsItem(revisionsIn: RevisionDisplay, item: ReviewPaneItemFields): boolean;
+
+// @public
+export type ReviewPaneOpening = 'auto' | 'manual';
+
+// @public
+export interface ReviewPaneOptions {
+    readonly commentMarkers?: CommentMarkerStyle;
+    readonly opening?: ReviewPaneOpening;
+    readonly overflow?: ReviewPaneOverflow;
+    readonly revisionsIn?: RevisionDisplay;
+}
+
+// @public
+export type ReviewPaneOverflow = 'float' | 'shrinkPage' | 'scroll';
+
+// @public
+export interface ReviewPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ReviewRange {
+    // (undocumented)
+    readonly end: ReviewPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: ReviewPosition;
+}
+
+// @public
+export interface ReviewRevisionItem {
+    readonly address: RevisionAddress;
+    readonly addresses: readonly RevisionAddress[];
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter' | 'direction';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'revision';
+    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
+    readonly nesting: number;
+    readonly pairedWith?: string;
+    readonly ranges: readonly ReviewRange[];
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    readonly replacedText: string;
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionKind;
+    readonly structuralChanges?: readonly ('rowInsert' | 'rowDelete' | 'cellInsert' | 'cellDelete' | 'cellMerge' | 'numberingInsert')[];
+    readonly text: string;
+}
+
+// @public
+export type ReviewRevisionKind = 'insert' | 'delete'
+/**
+* A combined deletion and insertion decision. The built-in reader lists them separately,
+* unless a review query asks to pair replacements or a custom review provider combines them.
+*/
+| 'replace' | 'moveFrom' | 'moveTo'
+/** `w:rPrChange` / `w:pPrChange` — the words are unchanged, their formatting is not. */
+| 'format'
+/** `w:pPr/w:rPr/w:ins|w:del` — a paragraph split or merge. */
+| 'paragraphMark'
+/** A row, cell, section or grid revision. Supported row revisions are resolvable. */
+| 'structural';
+
+// @public
 export interface Revision {
     // (undocumented)
     readonly author: string;
@@ -341,6 +525,137 @@ export interface Revision {
     // (undocumented)
     readonly type: RevisionType;
 }
+
+// @public
+export const REVISION_MARKUP_COLORS: readonly ['black', 'blue', 'turquoise', 'green', 'pink', 'red', 'yellow', 'white', 'darkBlue', 'teal', 'darkGreen', 'violet', 'darkRed', 'darkYellow', 'gray50', 'gray25', 'lightBlue', 'lightYellow', 'lightOrange', 'lightPurple', 'lightGreen', 'gray'];
+
+// @public
+export interface RevisionAddress {
+    // (undocumented)
+    readonly author: string;
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+}
+
+// @public
+export interface RevisionAuthorEntry extends RevisionBatchEntry {
+    readonly previousAuthor: string;
+    readonly previousKey: string;
+}
+
+// @public
+export interface RevisionAuthorResult {
+    readonly skipped: readonly {
+        readonly key: string;
+        readonly reason: RevisionAuthorSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+    readonly updated: readonly RevisionAuthorEntry[];
+}
+
+// @public
+export type RevisionAuthorSkipReason = 'unknown-revision' | 'unsupported-revision';
+
+// @public
+export interface RevisionBatchEntry {
+    // (undocumented)
+    readonly author: string;
+    readonly formattingKind?: string;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly revisionKind: ReviewRevisionItem['revisionKind'];
+}
+
+// @public
+export interface RevisionBatchResult {
+    readonly remaining: number;
+    // (undocumented)
+    readonly resolved: readonly RevisionBatchEntry[];
+    // (undocumented)
+    readonly skipped: readonly {
+        readonly detail?: RevisionBatchSkipDetail;
+        readonly key: string;
+        readonly reason: RevisionBatchSkipReason;
+        readonly revision?: RevisionBatchEntry;
+    }[];
+}
+
+// @public
+export type RevisionBatchSkipDetail = RevisionSiteRefusal | 'unrecorded-properties' | 'read-only' | 'no-sites';
+
+// @public
+export type RevisionBatchSkipReason = 'unsupported-revision' | 'incomplete-group' | 'retained-structure' | 'unknown-revision';
+
+// @public (undocumented)
+export type RevisionChangedLinesMark = 'none' | 'leftBorder' | 'rightBorder' | 'outsideBorder';
+
+// @public (undocumented)
+export type RevisionDeletionMark = RevisionMarkupMark | 'hidden' | 'caret' | 'pound';
+
+// @public
+export type RevisionDisplay = 'pane' | 'balloons';
+
+// @public
+export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export interface RevisionMarkupChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: RevisionMarkupDialogSession) => void;
+}
+
+// @public (undocumented)
+export type RevisionMarkupColor = RevisionMarkupNamedColor | 'byAuthor' | 'auto';
+
+// @public
+export function revisionMarkupColor(color: RevisionMarkupColor, authorColor: string, auto?: string): string;
+
+// @public
+export interface RevisionMarkupDialogSession {
+    apply(): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    cancel(): void;
+    get(): ResolvedRevisionMarkup;
+    reset(): void;
+    set(options: RevisionMarkupOptions): void;
+    readonly signal: AbortSignal;
+    subscribe(listener: () => void): () => void;
+}
+
+// @public (undocumented)
+export type RevisionMarkupMark = 'none' | 'colorOnly' | 'bold' | 'italic' | 'underline' | 'doubleUnderline' | 'strikethrough' | 'doubleStrikethrough';
+
+// @public (undocumented)
+export type RevisionMarkupNamedColor = (typeof REVISION_MARKUP_COLORS)[number];
+
+// @public
+export type RevisionMarkupOptions = {
+    readonly [K in keyof ResolvedRevisionMarkup]?: ResolvedRevisionMarkup[K] extends boolean ? boolean : Partial<ResolvedRevisionMarkup[K]>;
+};
+
+// @public (undocumented)
+export interface RevisionMarkupStyle<Mark extends string = RevisionMarkupMark> {
+    // (undocumented)
+    readonly color: RevisionMarkupColor;
+    // (undocumented)
+    readonly mark: Mark;
+}
+
+// @public
+export function revisionMarkupStyle(settings: ResolvedRevisionMarkup, kind: 'insert' | 'delete' | 'moveFrom' | 'moveTo' | 'format'): RevisionMarkupTextStyle<RevisionDeletionMark>;
+
+// @public
+export interface RevisionMarkupTextStyle<Mark extends string = RevisionMarkupMark> extends RevisionMarkupStyle<Mark> {
+    readonly background: RevisionMarkupNamedColor | 'byAuthor' | 'none';
+}
+
+// @public
+export type RevisionSiteRefusal = 'unaddressed' | 'misplaced-marker' | 'nested-marker' | 'unsupported-structure' | 'unsupported-move';
 
 // @public
 export type RevisionType = 'insert' | 'delete'

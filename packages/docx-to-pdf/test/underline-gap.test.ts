@@ -30,6 +30,18 @@ test('single underlines cover published justification without moving text', () =
   expect(JSON.stringify(record)).toBe(before);
 });
 
+test('a zero-width space after the space still joins the underline', () => {
+  const record = line();
+  const span = record.spans[0]!,
+    next = record.spans[1]!;
+  const gap = next.box.x - span.box.x - span.box.width;
+  const spaced = { ...span, text: `${span.text}\u200b` };
+  expect(underlineGap({ line: { ...record, spans: [spaced, next] }, span: spaced })).toBeCloseTo(
+    gap,
+    6
+  );
+});
+
 test('underline joins stop at color changes, tabs, and float passages', () => {
   const record = line(),
     span = record.spans[0]!,

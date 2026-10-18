@@ -37,6 +37,8 @@ function optionsKey(options: HighlightOptions | undefined): string {
  * );
  * useHighlights('glossary', findTerms, { className: 'glossary-term' });
  * ```
+ *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/highlight-ranges | Highlight ranges}
  * @public
  */
 export function useHighlights(

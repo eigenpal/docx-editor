@@ -63,16 +63,20 @@ for (const mode of [14, 15]) {
       expect(result[0]).toContain('H0-5');
       expect(result[0]).toContain('R3-c2-1');
     });
-    test('an oversized merged group makes progress from a fresh page', () => {
-      const result = pages(
-        lay(load(para('P') + caption + table(rows(34, true)) + para('Tail')), mode)
-      );
-      expect(result.length).toBeLessThanOrEqual(3);
-      expect(result.at(-1)).toContain('R33-c2-1');
-      expect(result.at(-1)).toContain('Tail1');
-      const words = result.join(' ').split(' ');
-      expect(new Set(words).size).toBe(words.length);
-    });
+    for (const merged of [false, true])
+      test(`an oversized group makes progress, merged=${merged}`, () => {
+        const result = pages(
+          lay(load(para('P') + caption + table(rows(34, merged)) + para('Tail')), mode)
+        );
+        expect(result).toHaveLength(mode === 14 ? 3 : 4);
+        expect(result[0]).toBe('P1');
+        expect(result[1]).toContain('Caption1');
+        expect(result[mode === 14 ? 1 : 2]).toContain('H0-1');
+        expect(result.at(-1)).toContain('R33-c2-1');
+        expect(result.at(-1)).toContain('Tail1');
+        const words = result.join(' ').split(' ');
+        expect(new Set(words).size).toBe(words.length);
+      });
   });
 }
 
@@ -105,7 +109,11 @@ test('table measurement stops at its work ceiling, independently of paragraph lo
 for (const merged of [false, true]) {
   test(`a 300-row chain remains bounded and retains all rows, merged=${merged}`, () => {
     const result = pages(lay(load(para('P') + caption + table(rows(300, merged)) + para('Tail'))));
-    expect(result.length).toBeLessThanOrEqual(12);
+    if (merged) expect(result.length).toBeLessThanOrEqual(12);
+    else {
+      expect(result).toHaveLength(13);
+      expect(result.slice(0, 2)).toEqual(['P1', 'Caption1']);
+    }
     expect(result.join(' ')).toContain('R299-c2-1');
     const words = result.join(' ').split(' ');
     expect(new Set(words).size).toBe(words.length);

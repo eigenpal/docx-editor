@@ -151,6 +151,7 @@ export interface CollaborationDocumentPort {
     readonly documentId: string;
     flushPendingJournals(): void;
     hasPendingJournals(): boolean;
+    readonly interactive?: boolean;
     observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
     // (undocumented)
     paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
@@ -198,6 +199,7 @@ export function createCollaborationDocumentPort(store: TreePackageStore, options
 export interface CreateCollaborationDocumentPortOptions {
     // (undocumented)
     readonly documentId: string;
+    readonly interactive?: boolean;
 }
 
 // @public

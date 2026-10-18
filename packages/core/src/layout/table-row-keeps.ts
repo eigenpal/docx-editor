@@ -10,7 +10,8 @@
 // (`w:cantSplit`, an exact height), otherwise the first lines of every cell under the cell
 // paragraphs' own widow and `w:keepLines` rules; after the last row, the opening of the
 // next body paragraph. When the group and that opening do not fit below the content already
-// on the page, the group moves to the next page, even when it cannot fit there either.
+// on the page, the group moves to the next page. Legacy layout releases a group that cannot
+// fit a fresh page; modern layout moves it once before releasing that impossible keep.
 // Before Word 2013 layout, a row that starts a new page (`w:pageBreakBefore`) ends the group
 // and needs no room beside it, as a page break ends a paragraph keep chain. From Word 2013
 // on, a row after a kept row does not start a new page (`rowStartsPage`): it is the group's
@@ -215,6 +216,29 @@ export function keptRowGroup(
     if (successor === undefined) return null;
   }
   return successor === null ? null : { end, kept, successor };
+}
+
+/** Whether a kept group moves out of the current column. */
+export function keptRowGroupMoves(
+  source: KeptRowSource,
+  start: number,
+  room: number,
+  freshRoom: number,
+  compatibilityMode: number | undefined,
+  belowAuthoredHeaders = false
+): boolean {
+  const group = keptRowGroup(source, start, room);
+  if (!group || group.kept + group.successor <= room + 0.001) return false;
+  // Authored headers keep their own page before the body group retries below a repeat.
+  if (
+    belowAuthoredHeaders ||
+    !hasCompatibilityRule(compatibilityMode, 'oversizedRowKeepGroupReleases')
+  )
+    return true;
+  // A successor may open with fewer lines on a fresh page. Price that destination before
+  // releasing the keep; the current-room price can include the successor's whole height.
+  const fresh = keptRowGroup(source, start, freshRoom);
+  return !!fresh && fresh.kept + fresh.successor <= freshRoom + 0.001;
 }
 
 /**

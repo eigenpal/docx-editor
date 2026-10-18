@@ -124,6 +124,35 @@ export {
   type ChromeSlotId,
   type ToolbarCommandState,
 } from './editor/index.ts';
+// Types the editor's public signatures hand out. The editor entry exports them too; listing
+// them here lets a consumer of this entry name what `createDocxEditor` and its methods return.
+export type {
+  AttachOptions,
+  BookmarkChromeHandlers,
+  ChromeExportView,
+  CollaborationModuleContribution,
+  ContentControlWidgetChromeHandlers,
+  ContentControlWidgetSession,
+  EquationActivation,
+  EquationChromeHandlers,
+  SurfaceEquation,
+  ImageDecodePort,
+  ImageResourceLimits,
+  InvalidTextFormFieldChromeHandlers,
+  InvalidTextFormFieldSession,
+  PopupChromeRegistrationOptions,
+  ReviewAuthorInfo,
+  ReviewPaneOptions,
+  RevisionAuthorAssignments,
+  RevisionAuthorStyle,
+  RevisionMarkupChromeHandlers,
+  RevisionMarkupOptions,
+  RevisionStyles,
+  TableChromeSlotId,
+  ToolbarValueMap,
+  ToolbarValueSlot,
+} from './editor/index.ts';
+export type { RevisionMarkupDialog, RevisionMarkupDialogHost } from './contracts/modules.ts';
 
 // ─── Capability modules (what `@docx-editor.dev/pro` implements) ─────────────
 export type {

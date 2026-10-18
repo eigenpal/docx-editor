@@ -38,6 +38,13 @@ const MAX_COLLABORATIVE_PARAGRAPH_TEXT = 1_000_000;
 /** Options for a canonical collaboration document port. @public */
 export interface CreateCollaborationDocumentPortOptions {
   readonly documentId: string;
+  /**
+   * The port belongs to an editor that people edit through, so it shows undo state to them.
+   * Set it for such a host: a full-document session then refuses `beginUndoGroup()` with
+   * `editor-attached`, and attaching the port closes an open undo group. See
+   * {@link CollaborationDocumentPort.interactive}. Default false.
+   */
+  readonly interactive?: boolean;
 }
 
 function splitsSurrogate(text: string, offset: number): boolean {
@@ -283,6 +290,7 @@ export function createCollaborationDocumentPort(
 
   const port = {
     documentId,
+    interactive: options.interactive === true,
     paragraphs,
     paragraphByNodeId(nodeId: string) {
       return paragraphs().find((paragraph) => paragraph.nodeId === nodeId) ?? null;

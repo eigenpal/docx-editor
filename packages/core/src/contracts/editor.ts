@@ -12,6 +12,16 @@ import type { ResolvedReviewPane } from './review-pane.ts';
 
 import type { ZoomMode } from './editor-zoom.ts';
 export type { ZoomFitTarget, ZoomMode } from './editor-zoom.ts';
+import type { TextMatch } from './editor-text-match.ts';
+export type { TextMatch } from './editor-text-match.ts';
+import type { EditorFontErrorCode, FontFaceRequest } from './editor-fonts.ts';
+export type {
+  EditorFontErrorCode,
+  FontConfiguration,
+  FontFaceRequest,
+  FontSource,
+  FontSourceSubstitution,
+} from './editor-fonts.ts';
 import type { EditorEvents } from './editor-events.ts';
 import type { EditorAnchorNavigation, ScrollToAnchorOptions } from './editor-anchor.ts';
 export type {
@@ -205,77 +215,6 @@ export interface DocumentHandle {
  * where a new array per render rebuilds the editor per render.
  */
 export type DocumentSource = ArrayBuffer | Uint8Array | DocumentHandle | 'blank';
-
-/** A concrete font face requested by authored document content. */
-export interface FontFaceRequest {
-  readonly family: string;
-  readonly weight: number;
-  readonly style: 'normal' | 'italic';
-}
-
-/** Immutable, byte-backed font face supplied to layout and browser paint. */
-export interface FontSource {
-  readonly request: FontFaceRequest;
-  readonly id: string;
-  readonly bytes: Uint8Array;
-  readonly hash: string;
-  readonly faceIndex: number;
-  readonly availability?: 'available' | 'forbidden';
-}
-
-/** An explicit authored-font substitution. No implicit platform fallback is performed. */
-export interface FontSourceSubstitution {
-  readonly from: FontFaceRequest;
-  readonly to: FontFaceRequest;
-  /** Word line-box metrics for the requested face, expressed as em ratios. */
-  readonly lineMetrics?: {
-    readonly heightEm: number;
-    readonly baselineEm: number;
-  };
-}
-
-/**
- * Public font source configuration sampled when an adapter mounts. It must be immutable for that
- * editor lifetime; remount the adapter to replace bytes or substitutions atomically.
- */
-export interface FontConfiguration {
-  /** Selectable provider families, independent of loaded bytes. Listing them performs no fetch. */
-  readonly supportedFamilies?: readonly string[];
-  readonly epoch: number;
-  readonly maxFontBytes: number;
-  readonly sources: readonly FontSource[];
-  readonly substitutions?: readonly FontSourceSubstitution[];
-  readonly defaultFont: {
-    readonly family: string;
-    readonly sizeHalfPoints: number;
-  };
-  readonly language?: string;
-}
-
-/**
- * Why a font was not admitted.
- *
- * Distinguished rather than collapsed because the responses differ: `overLimit` and `malformed`
- * are the caller's own bytes, while `forbidden` and `hashMismatch` mean the source was not what
- * it claimed and the load should not be retried. `wasmUnavailable` alone is a HOST fault — the
- * shaper's WASM never loaded, `diagnostic` carries the remedy — surface it as a setup error.
- */
-export type EditorFontErrorCode =
-  | 'initializationFailed'
-  | 'wasmUnavailable'
-  | 'missing'
-  | 'forbidden'
-  | 'overLimit'
-  | 'malformed'
-  | 'hashMismatch'
-  | 'metadataMismatch'
-  | 'fontFaceLoadFailed'
-  | 'unsupportedFaceIndex'
-  | 'missingFont'
-  | 'hashInvalid'
-  | 'fontMismatch'
-  | 'unsupportedFace'
-  | 'loadFailed';
 
 /** Typed adapter error reported both through `onFontError` and accessible alert UI. */
 export class EditorFontError extends Error {
@@ -488,6 +427,13 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * The search narrows to the body and its selectable text boxes when other stories cannot open.
    * This includes viewing mode and surfaces without header, footer, or note entry methods.
    * Text boxes in footnotes and endnotes remain excluded until their drawings are selectable.
+   *
+   * Pass a match to `exec({ type: 'replaceMatch', match, text })` to replace it, which records a
+   * tracked replacement in suggesting mode, or to {@link selectMatch} and then
+   * {@link addComment} to comment on it. For headless or server use, see `body.search` in
+   * `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   findMatches(
     query: string,
@@ -661,6 +607,13 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * editor.addComment('Counter-proposal: 45 days.', { historyGroup: decision });
    * editor.addComment('Approved.', 'Legal team', { historyGroup: decision });
    * ```
+   *
+   * To comment on found text, select it first with {@link findMatches} and
+   * {@link selectMatch}. In a React or Vue host with the review module, `useReview().comment`
+   * calls this. For headless or server use, see `Range.insertComment` in
+   * `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/comment-on-found-text | Comment on found text}
    */
   addComment(text: string, options?: HistoryGroupOptions): ExecResult;
   /** {@link addComment} with an author for this call, overriding the configured author. */
@@ -687,6 +640,11 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * With `options.announce: true`, a call that lands fires `reviewItemReveal` with
    * `source: 'host'`, also when the item was already active, so the packaged review UI opens
    * the item's balloon or card. By default it fires nothing. A `null` key fires nothing.
+   *
+   * Pass `{ reveal: false }` to open the item without scrolling, for a host whose own list
+   * drives the scroll. `useReview().setActive` calls this.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   setActiveReviewItem(key: string | null, options?: ReviewActivationOptions): ExecResult;
 
@@ -739,6 +697,12 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * Refused for a card whose kind the engine cannot resolve structurally, which is why
    * `readOnly` is on the item — a surface should not offer the button in the first place.
    * Other refusals name their cause, as {@link addComment} describes.
+   *
+   * Neither call scrolls. In a React or Vue host with the review module, `useReview().accept`
+   * and `useReview().reject` call these. For headless or server use, see `Revision.accept()`
+   * and `Revision.reject()` in `@docx-editor.dev/editor-api`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
    */
   acceptReviewItem(key: string, options?: HistoryGroupOptions): ExecResult;
   /** The rejecting half of {@link acceptReviewItem}, with the same rules and options. */
@@ -783,6 +747,9 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    * source it — and the argument overrides it for one call. `CT_Comment` makes `@w:author`
    * required, so a reply with neither is refused rather than written as an empty attribute.
    * Other refusals name their cause, as {@link addComment} describes.
+   *
+   * In a React or Vue host with the review module, `useReview().reply` calls this. For
+   * headless or server use, see `Comment.reply` in `@docx-editor.dev/editor-api`.
    */
   replyToReviewItem(key: string, text: string, options?: HistoryGroupOptions): ExecResult;
   /** {@link replyToReviewItem} with an author for this call, overriding the configured author. */
@@ -1179,6 +1146,17 @@ export interface EditorCommands
    * returns. An empty `text` deletes it. The selection and scroll position stay put. In
    * suggesting mode it is a tracked replacement under the editor's author, refused where
    * `proposeReplacement` would be. The match must be in the open story, not a text box.
+   *
+   * For headless or server use, see `range.insertText(text, 'Replace')` with
+   * `document.changeTrackingMode` set to `'TrackMineOnly'` in `@docx-editor.dev/editor-api`.
+   *
+   * @example
+   * ```ts
+   * const [match] = editor.findMatches('30 days', { matchCase: true });
+   * if (match) editor.exec({ type: 'replaceMatch', match, text: '45 days' });
+   * ```
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/tracked-replacement | Replace as a tracked change}
    */
   replaceMatch: { match: TextMatch; text: string };
 
@@ -1432,52 +1410,6 @@ export interface EditorQueryResults extends DocQueryResults {
   isInsideToc: boolean;
   trackedChanges: readonly Revision[];
   bookmarks: readonly BookmarkSummary[];
-}
-
-/**
- * One occurrence of a search query in the document.
- *
- * Carries TWO addresses on purpose. `blockId` + `start` is the engine's own: stable
- * across edits and independent of ordering. `paragraphIndex` + `runIndex` + `runOffset`
- * is the positional one a find/replace UI needs to show and navigate results, and it is
- * derived from the same walk rather than left to the caller to reconstruct — a caller
- * guessing at run boundaries would send the selection to the wrong place.
- *
- * A match can span runs when formatting changes mid-word; the run address is where it
- * STARTS. `scope` identifies a non-body story so navigation opens the correct surface.
- * A frame scope selects its anchoring drawing and never places a caret inside its story.
- * A match inside a field result reports the field atom's model range. Its `length` is one,
- * while `text` carries the visible match and can be longer. Select with `start` and `length`.
- * Never derive the selected length from `text.length`.
- */
-export interface TextMatch {
-  readonly blockId: string;
-  /** Character offset within the paragraph's concatenated run text. */
-  readonly start: number;
-  readonly length: number;
-  /**
-   * Paragraph ordinal within this match's story. Table and nested-table paragraphs count.
-   * Non-paragraph blocks add no ordinal.
-   */
-  readonly paragraphIndex: number;
-  /** Index of the run the match starts in, and the offset within that run. */
-  readonly runIndex: number;
-  readonly runOffset: number;
-  /** Story containing the match. Absence means the body. */
-  readonly scope?: ViewScope;
-  /** The matched text as it appears in the document. */
-  readonly text: string;
-  /**
-   * Paragraph text immediately before and after the match, bounded at the derivation
-   * boundary. A results list shows the match in its sentence — "…as described in this
-   * **Exhi**bit A" — and nothing else in the contract can reach paragraph text, so a
-   * caller would otherwise have to re-read the document to render one row.
-   *
-   * Optional and additive: an implementation that has not derived them omits them, and a
-   * consumer treats absent as empty.
-   */
-  readonly contextBefore?: string;
-  readonly contextAfter?: string;
 }
 
 /**

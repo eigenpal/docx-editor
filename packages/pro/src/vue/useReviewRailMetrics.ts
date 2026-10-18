@@ -177,6 +177,7 @@ const selectPaneOpen = (snapshot: EditorSnapshot) => snapshot.reviewPaneOpen ?? 
  * </template>
  * ```
  *
+ * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
  * @public
  */
 export function useReviewRailMetrics(

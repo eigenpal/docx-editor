@@ -47,6 +47,7 @@ export type {
   AutomationSpan,
   AutomationUnsubscribe,
   AutomationValue,
+  AutomationEndpoint,
 } from './protocol.ts';
 
 // Sections: page geometry in points, and what a write may author on one section.
@@ -57,7 +58,22 @@ export type {
 } from './sections.ts';
 
 // Which story a handle names: the body, a header or footer variant, or one note.
-export { HEADER_FOOTER_VARIANTS, type AutomationStoryId } from './stories.ts';
+export {
+  HEADER_FOOTER_VARIANTS,
+  type AutomationStoryId,
+  type AutomationShapeOwnerStory,
+} from './stories.ts';
+
+// Reads and payloads the operation vocabulary hands back.
+export type { AutomationAuthoringOperation } from './authoring-operations.ts';
+export type { AutomationInlinePictureRead, AutomationInlinePictureWrite } from './pictures.ts';
+export type { AutomationShapeRead, AutomationShapeType } from './shapes.ts';
+export type {
+  AutomationListBullet,
+  AutomationListLevelFormat,
+  AutomationListNumbering,
+} from './list-authoring.ts';
+export type { AutomationTableMutation } from './tables.ts';
 
 // Formatting: what a span agrees about its characters, and what a write may author.
 export type {
@@ -89,6 +105,7 @@ export {
   type AutomationSelectionMode,
   type AutomationSpanRef,
   type AutomationTextProjection,
+  type AutomationCustomNodePayload,
 } from './operations.ts';
 
 // The headless host. The browser host adapter ships from the editor subpath, because it takes

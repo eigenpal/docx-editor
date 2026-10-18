@@ -29,6 +29,7 @@ import {
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
 import { withBinaryParts, validateEmbeddedImageBytes } from '../package/drawing-package-edit.ts';
+import { standardImageType } from '../package/content-types.ts';
 import { sniffImageMime, type SupportedImageMime } from '../package/image-resources.ts';
 import { ensureHyperlinkRelationship } from '../package/hyperlink-part.ts';
 import { ensureNotesPart } from '../package/note-lifecycle.ts';
@@ -205,22 +206,6 @@ const DECLARED_MIME_ALIASES: Readonly<Record<string, string>> = {
   'image/x-bmp': 'image/bmp',
 };
 
-/** The type an extension-style subtype (`image/.jpg`, written by some producers) stands for. */
-const EXTENSION_SUBTYPE_MIMES: ReadonlyMap<string, string> = new Map([
-  ['png', 'image/png'],
-  ['jpg', 'image/jpeg'],
-  ['jpeg', 'image/jpeg'],
-  ['jpe', 'image/jpeg'],
-  ['gif', 'image/gif'],
-  ['bmp', 'image/bmp'],
-  ['webp', 'image/webp'],
-  ['svg', 'image/svg+xml'],
-  ['tif', 'image/tiff'],
-  ['tiff', 'image/tiff'],
-  ['emf', 'image/x-emf'],
-  ['wmf', 'image/x-wmf'],
-]);
-
 /**
  * The content type fragment media is admitted under, or null to drop it.
  *
@@ -233,9 +218,7 @@ const EXTENSION_SUBTYPE_MIMES: ReadonlyMap<string, string> = new Map([
 function admittedMediaMime(bytes: Uint8Array, declaredType: string): string | null {
   const sniffed = sniffImageMime(bytes);
   if (sniffed === 'unknown') return null;
-  const declared = declaredType.startsWith('image/.')
-    ? (EXTENSION_SUBTYPE_MIMES.get(declaredType.slice('image/.'.length)) ?? declaredType)
-    : declaredType;
+  const declared = standardImageType(declaredType);
   const normalizedDeclared = Object.hasOwn(DECLARED_MIME_ALIASES, declared)
     ? DECLARED_MIME_ALIASES[declared]!
     : declared;

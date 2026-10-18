@@ -17,17 +17,17 @@ The DAG was kept identical to the package graph it replaced. A lane quietly gain
 
 ## Lanes
 
-| Lane | Directory | Subpath | May import | Environment |
-| --- | --- | --- | --- | --- |
-| `contracts` | `src/contracts` | `./contracts` | — | neutral |
-| `store` | `src/store` | `./store` | — | neutral |
-| `collaboration` | `src/collaboration` | `./collaboration` | store | neutral |
-| `binding` | `src/binding` | `./binding` | contracts, store, collaboration | browser |
-| `layout` | `src/layout` | `./layout` | contracts, store | neutral |
-| `output` | `src/output` | `./output` | contracts, store, layout | browser |
-| `export` | `src/export` | `./export` | contracts, store, layout | neutral |
-| `automation` | `src/automation` | `./automation` | contracts, store, collaboration, layout, export | neutral |
-| `editor` | `src/editor` | `./editor` | contracts, store, collaboration, binding, layout, output, automation | browser |
+| Lane | Directory | Subpath | May import | May import types | Environment |
+| --- | --- | --- | --- | --- | --- |
+| `contracts` | `src/contracts` | `./contracts` | — | store, layout, collaboration | neutral |
+| `store` | `src/store` | `./store` | — | — | neutral |
+| `collaboration` | `src/collaboration` | `./collaboration` | store | — | neutral |
+| `binding` | `src/binding` | `./binding` | contracts, store, collaboration | — | browser |
+| `layout` | `src/layout` | `./layout` | contracts, store | — | neutral |
+| `output` | `src/output` | `./output` | contracts, store, layout | — | browser |
+| `export` | `src/export` | `./export` | contracts, store, layout | — | neutral |
+| `automation` | `src/automation` | `./automation` | contracts, store, collaboration, layout, export | — | neutral |
+| `editor` | `src/editor` | `./editor` | contracts, store, collaboration, binding, layout, output, automation | — | browser |
 
 Responsibilities:
 
@@ -43,6 +43,8 @@ Responsibilities:
 Layout, output, and export share revision markup settings through the runtime-neutral contracts lane. This keeps settings validation and defaults consistent.
 
 Edges point downward only. A lane that acquires a new dependency declares it in `core-lane-graph.ts`, in a diff a reviewer sees.
+
+**Type-only edges.** The "May import types" column lists lanes whose types a lane may name with `import type` or `export type ... from`, beyond its value imports. These imports are erased at build, so they never carry code or an environment across lanes. Only `contracts` has such edges: the public contract describes the shapes that the store, layout, and collaboration lanes produce, such as review items, revision results, and session status, and no lane that both sides may import exists to hold them. A value import from these lanes still fails `core-lane-imports.test.ts`. The cycle check and the browser reachability walk follow value edges only, because a type-level loop cannot become a runtime cycle. Other cross-lane type edges stay pinned one by one in that test.
 
 ## Guarantees
 

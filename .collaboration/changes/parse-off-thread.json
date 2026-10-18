@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Opening a document reads its package on the page's thread, from its bytes.",
+  "after": "A document parsed ahead of its open (parseDocument, typically on a worker) opens from that read, which is the same read of the same bytes under the same limits, so the session, its package and its save are unchanged.",
+  "reason": "Only where the package read runs changes. The opened session is the session the bytes open, and nothing about it enters shared state, operations, snapshots or protocol messages.",
+  "tests": [
+    "packages/core/src/store/__tests__/parsed-document.test.ts",
+    "packages/core/src/editor/__tests__/parsed-document-open.test.ts"
+  ],
+  "changeset": "parse-off-thread",
+  "migration": null
+}

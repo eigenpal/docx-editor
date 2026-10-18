@@ -1,5 +1,6 @@
 import { PackageEditRefusal } from '../store/store/package-edit-refusal.ts';
 import { isProposedList } from './tracked-list.ts';
+import { revisionDateNow } from './revision-date.ts';
 import { withPart } from '../store/package/ooxml-package.ts';
 import {
   WML_NAMESPACE_URI as W,
@@ -164,7 +165,7 @@ export function planListAuthoring(
             numId: created.numId,
             level: 0,
             ...(trackingAuthor
-              ? { revision: { author: trackingAuthor, date: new Date().toISOString() } }
+              ? { revision: { author: trackingAuthor, date: revisionDateNow() } }
               : {}),
           });
           // The commit numbers with the tracking revision the trial left out, so a refusal

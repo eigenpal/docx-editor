@@ -1,6 +1,7 @@
 import { canTrackContentControl } from '../store/store/tracked-content-control-insert.ts';
 import { CONTENT_CONTROL_SUBTYPES, allControlsUnder } from './content-control-input.ts';
 import { proposalRevisionError } from './proposals.ts';
+import { revisionDateNow } from './revision-date.ts';
 import { resolveSpanRef, storyOfSpanRef } from './spans.ts';
 import type { AutomationHandleTable } from './handles.ts';
 import type { AutomationOperation } from './operations.ts';
@@ -83,9 +84,7 @@ export function planContentControlInsertion(
         start: range.start.offset,
         end: range.end.offset,
         type: operation.subtype,
-        ...(tracked
-          ? { revision: { author: trackingAuthor!, date: new Date().toISOString() } }
-          : {}),
+        ...(tracked ? { revision: { author: trackingAuthor!, date: revisionDateNow() } } : {}),
         ...(operation.tag === undefined ? {} : { tag: operation.tag }),
         ...(operation.title === undefined ? {} : { alias: operation.title }),
       },

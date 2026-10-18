@@ -402,7 +402,12 @@ export class Comment extends CommentBase {
    *
    * The author is the one the request context was opened with: a reply records who wrote it, and
    * `CT_TrackChange` makes that mandatory, so a context with no author refuses here rather than
-   * writing an anonymous remark the file cannot represent.
+   * writing an anonymous remark the file cannot represent. The refusal is `NotSupported` with
+   * `debugInfo.innerError.code` `edit.comment-author-required`.
+   *
+   * In a React or Vue host with the review module, use `useReview().reply` from
+   * `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` instead. It replies as the
+   * editor's author.
    */
   reply(replyText: string): CommentReply {
     const target = `${this.path.label}.reply`;
@@ -411,7 +416,7 @@ export class Comment extends CommentBase {
     }
     const author = this.internals.author;
     if (typeof author !== 'string' || author.trim().length === 0) {
-      fail({ code: 'NotSupported', target });
+      fail({ code: 'NotSupported', target, diagnostic: 'edit.comment-author-required' });
     }
     const created = CommentReply.promised(this.context, target, false);
     this.commandAnswering(
@@ -541,12 +546,23 @@ export class Revision extends ModelObject implements PromisedItem {
     return found;
   }
 
-  /** Keep the change, resolving every site that carries its identity in one transaction. */
+  /**
+   * Keep the change, resolving every site that carries its identity in one transaction.
+   *
+   * In a React or Vue host with the review module, use `useReview().accept` from
+   * `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue` for a review UI.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/accept-reject-without-scrolling | Accept or reject without scrolling}
+   */
   accept(): void {
     this.command('accept', () => ({ op: 'acceptRevision', revision: this.#handle() }));
   }
 
-  /** Undo the change, likewise in one transaction. */
+  /**
+   * Undo the change, likewise in one transaction.
+   *
+   * In a React or Vue host with the review module, use `useReview().reject` for a review UI.
+   */
   reject(): void {
     this.command('reject', () => ({ op: 'rejectRevision', revision: this.#handle() }));
   }
@@ -813,7 +829,8 @@ export class RevisionCollection extends HandleCollection<Revision> {
         op: 'setRevisionAuthorBatch',
         body,
         author,
-        ...(date === undefined ? {} : { date: date.toISOString() }),
+        // Written to the second, as every other revision date is.
+        ...(date === undefined ? {} : { date: `${date.toISOString().slice(0, 19)}Z` }),
         ...(authors === undefined ? {} : { authors: [...authors] }),
         ...(targets === undefined
           ? {}

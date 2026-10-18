@@ -492,6 +492,15 @@ export class TextFollow {
     return parsed ? this.index.holders(parsed.client, parsed.clock) : [];
   }
 
+  /** Whether any paragraph holds a copy of a character of `client` in `[start, end)`. */
+  holdsCopyIn(client: number, start: number, end: number): boolean {
+    if (!this.index.hasCopies(client)) return false;
+    return (
+      this.index.overlapping('move', client, start, end).length > 0 ||
+      this.index.overlapping('restore', client, start, end).length > 0
+    );
+  }
+
   /** The paragraph that shows a copy of one character, or null when none holds a copy. */
   shownCopy(identity: Identity): LogicalId | null {
     const parsed = parseClientClock(identity);

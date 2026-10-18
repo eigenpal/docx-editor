@@ -39,6 +39,7 @@ export function adoptReviewItems(
     type: 'setReviewChangesAuthor',
     keys,
     ...(author === undefined ? {} : { author }),
-    ...(date === undefined ? {} : { date: date.toISOString() }),
+    // Written to the second, as every other revision date is.
+    ...(date === undefined ? {} : { date: `${date.toISOString().slice(0, 19)}Z` }),
   }).ok;
 }

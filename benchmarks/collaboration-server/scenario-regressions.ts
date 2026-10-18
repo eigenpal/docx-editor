@@ -130,6 +130,8 @@ const CLEAN: readonly { config: ScenarioConfig; delivery: Delivery; seed: number
   // An undo of a copy that showed a peer's deleted typing, while the record of the deletion
   // was held back, once counted as the undo removing that typing.
   { config: 'trackedEverything', delivery: 'peer', seed: 7 },
+  { config: 'undoGroups', delivery: 'server', seed: 1 },
+  { config: 'undoGroups', delivery: 'peer', seed: 2 },
 ];
 
 /**

@@ -289,7 +289,16 @@ describe('DocxEditor.createBrowser', () => {
     await expect(replyToFirstComment(runtime)).rejects.toMatchObject({
       code: 'NotSupported',
       target: 'document.comments.items[0].reply',
+      // The refusal names the browser path that needs no author option.
+      debugInfo: { innerError: { code: 'edit.comment-author-required' } },
     });
+    const refusal = await replyToFirstComment(runtime).catch(
+      (error: { debugInfo?: { innerError?: { message?: string } } }) => error
+    );
+    expect(
+      (refusal as { debugInfo?: { innerError?: { message?: string } } }).debugInfo?.innerError
+        ?.message
+    ).toContain('useReview().reply');
 
     runtime.dispose();
     editor.destroy();

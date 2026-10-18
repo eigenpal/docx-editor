@@ -357,6 +357,12 @@ export interface ReviewBalloonProps {
 }
 
 // @public
+export interface ReviewDraftProps extends ReviewPartProps {
+    left?: number | null;
+    top?: number;
+}
+
+// @public
 export interface ReviewItemRevealEvent {
     readonly key: string;
     readonly pairKey?: string;
@@ -555,6 +561,7 @@ export interface UseReviewReturn {
 // @public
 export function useStackedReviewPositions(items: readonly {
     readonly anchorY: number | null;
+    readonly isActive?: boolean;
     readonly key: string;
 }[], heights: ReadonlyMap<string, number>, options?: {
     readonly defaultHeight?: number;

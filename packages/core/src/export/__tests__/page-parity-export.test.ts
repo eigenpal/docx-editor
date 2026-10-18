@@ -108,6 +108,18 @@ const ending = (body: string, sect: string) =>
   `<w:p><w:pPr>${sect}</w:pPr><w:r><w:t>${body}</w:t></w:r></w:p>`;
 
 describe('export places blank parity sheets from the document settings', () => {
+  test.each([0, 2])(
+    'an even initial number %i continues to restart 1 without a blank',
+    async (start) => {
+      const layout = await layoutOf(
+        docx(ending('First', sectPr({ start })) + p('Second') + sectPr({ start: 1 }))
+      );
+      expect(layout.pages.map((page) => page.parityBlank === true)).toEqual([false, false]);
+      expect(text(layout.pages[1]!.fragments)).toBe('Second');
+      expect(layout.pages.map((page) => page.pageFieldSource?.pageNumber)).toEqual([start, 1]);
+    }
+  );
+
   test('a restart at 1 on the second sheet gets an empty sheet in front of it', async () => {
     const layout = await layoutOf(
       docx(ending('First', sectPr({ start: 1 })) + p('Second') + sectPr({ start: 1 }))
@@ -171,6 +183,23 @@ describe('export places blank parity sheets from the document settings', () => {
     });
     expect(layout.pages.filter((page) => page.parityBlank).length).toBeLessThanOrEqual(1);
   }
+
+  test.each([0, 2])('furniture follows numbering after notes from initial %i', async (start) => {
+    const layout = await layoutOf(
+      docx(
+        firstSection(1, sectPr({ start, notes: sectEnd })) +
+          p('Second') +
+          sectPr({ start: 1, notes: sectEnd }),
+        { endnote: endnoteLines(30) }
+      )
+    );
+    expectNotesInFront(layout);
+    for (const page of layout.pages) {
+      if (page.parityBlank) continue;
+      const number = page.pageFieldSource!.pageNumber;
+      expect(text(page.header?.fragments ?? [])).toBe(number % 2 === 0 ? 'EVEN' : 'ODD');
+    }
+  });
 
   test.each([
     [1, 20],

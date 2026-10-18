@@ -31,6 +31,9 @@ interface ComposePartDeps {
       readonly lastRefusal: ReviewWriteRefusal | null;
     };
     readonly endDraft: () => void;
+    readonly drafting: boolean;
+    readonly composeTop: number | null;
+    readonly composeLeft: number | null;
     readonly measure: (node: HTMLElement | null, key: string) => void;
     readonly readOnly: boolean;
     readonly draftAuthor: string | null;
@@ -43,23 +46,60 @@ interface ComposePartDeps {
   readonly composeKey: string;
 }
 
+/**
+ * Props of `DocxEditorReview.Draft`.
+ *
+ * @public
+ */
+export interface ReviewDraftProps extends ReviewPartProps {
+  /**
+   * Rail-local `top` in CSS pixels. Omit it to use the packaged card stack's position. Pass
+   * your own when you render your own cards, so the box stacks with them.
+   */
+  top?: number;
+  /**
+   * Rail-local `left` for the COMPACT rail, where the strip is 32px wide and a box laid
+   * out at column width would be cut by the viewport's edge. Omit it to use the compact
+   * card's position in the compact rail and the rail's own column otherwise. Null keeps the
+   * box in the rail's own column.
+   */
+  left?: number | null;
+}
+
 /** Build the draft and reply compose boxes against the rail's private contexts. */
 export function createReviewComposeParts(deps: ComposePartDeps) {
-  /** The compose box for a new comment. @public */
-  function ReviewDraft({
-    top = 0,
-    left = null,
-    className,
-    hidden,
-  }: ReviewPartProps & {
-    top?: number;
-    /**
-     * Rail-local `left` for the COMPACT rail, where the strip is 32px wide and a box laid
-     * out at column width would be cut by the viewport's edge. Null keeps the box in the
-     * rail's own column, which is right whenever the column exists.
-     */
-    left?: number | null;
-  }) {
+  /**
+   * The compose box for a new comment.
+   *
+   * It renders only while a comment draft is open: after `DocxEditorReview.AddComment` or the
+   * `review.addComment` toolbar control starts one. Use it in one of two places:
+   *
+   * - As a direct child of `DocxEditorReview`. The rail mounts it while the draft is open.
+   * - Inside your own content in `<DocxEditorReview preset={false}>`, such as the component
+   *   that renders your cards. It still renders only while the draft is open.
+   *
+   * Without `top`, it sits where the packaged card stack puts it. That position comes from
+   * the packaged cards, so a rail that renders its own cards passes `top` from its own
+   * stack: for example, stack an entry with the anchor `useReview().selectionAnchorY` with
+   * your cards, and convert it with `useReviewRailMetrics()`.
+   *
+   * @see {@link https://www.docx-editor.dev/docs/2.x/recipes/custom-review-cards | Custom cards in the review rail}
+   * @public
+   */
+  function ReviewDraft(props: ReviewDraftProps) {
+    const { drafting, composeTop, composeLeft } = deps.useRail();
+    if (props.hidden || !drafting) return null;
+    return (
+      <ReviewDraftBox
+        {...props}
+        top={props.top ?? composeTop ?? 0}
+        left={props.left === undefined ? composeLeft : props.left}
+      />
+    );
+  }
+  ReviewDraft.docxReviewPart = 'Draft' as const;
+
+  function ReviewDraftBox({ top, left = null, className }: ReviewDraftProps & { top: number }) {
     const { review, endDraft, measure, readOnly, draftAuthor, draftAuthorInfo, draftAuthorSlot } =
       deps.useRail();
     const t = deps.useLabel();
@@ -97,7 +137,6 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       setRefusedCode(undefined);
     }, [review.lastRefusal, refusedCode]);
 
-    if (hidden) return null;
     return (
       <div
         className={`docx-review__slot${className ? ` ${className}` : ''}${left === null ? '' : ' docx-review__slot--compact'}`}
@@ -187,7 +226,6 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
       </div>
     );
   }
-  ReviewDraft.docxReviewPart = 'Draft' as const;
 
   /** Draft state and submission for one reply line, held by whichever part owns it. */
   function useReplyDraft(entry: ReviewItemView | null) {

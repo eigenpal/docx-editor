@@ -196,6 +196,26 @@ describe('toolbar command wiring (task M4.0)', () => {
     );
   });
 
+  test('a dialog slot names the dialog component instead of reading as unwired', () => {
+    const { editor, calls } = fakeEditor(ALLOW);
+    expect(toolbarCommandState(editor, 'file.pageSetup').disabledReason).toBe(
+      'page setup is not a command; render DocxEditor.PageSetupDialog with open and onClose'
+    );
+    expect(runToolbarCommand(editor, 'file.pageSetup')).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason:
+        'page setup is not a command; render DocxEditor.PageSetupDialog with open and onClose',
+    });
+    expect(runToolbarCommand(editor, 'paragraph.dialog')).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason:
+        'the paragraph dialog is not a command; render DocxEditor.ParagraphDialog with open and onClose',
+    });
+    expect(calls.exec).toEqual([]);
+  });
+
   test("a slot with NO command shape still says so in chrome's words, honestly", () => {
     const { editor, calls } = fakeEditor(ALLOW);
     expect(chromeProbeForSlot('zoom.level')).toBeNull();

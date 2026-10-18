@@ -115,7 +115,7 @@ One undo reverts the rejection, the replacement, and the comment together. One r
 
 `run` options are DocxEditor infrastructure. The Office.js `run` function has no options and no undo grouping. The following rules apply:
 
-- Only the browser runtime supports `historyGroup`. Server and collaborative runtimes reject the run with `NotSupported` before the callback starts.
+- Only the browser runtime supports `historyGroup`. Server and collaborative runtimes reject the run with `NotSupported` before the callback starts. To make one operation of a collaborative server runtime one undo step, use the collaboration session's undo group. For more information, see [Undo an agent operation](/docs/2.x/pro/collaboration#undo-an-agent-operation).
 - A closed handle, or a handle from another editor, rejects the run with `InvalidArgument` and `target: 'historyGroup'`. The callback does not run.
 - A handle that closes during the run rejects the next `context.sync()` with the same error. That sync writes nothing.
 - A run without the option never joins a group, even while one is open.

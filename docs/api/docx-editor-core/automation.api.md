@@ -17,6 +17,129 @@ export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformatio
 export type AutomationAlignment = 'Mixed' | 'Unknown' | 'Left' | 'Centered' | 'Right' | 'Justified';
 
 // @public
+export type AutomationAuthoringOperation = {
+    readonly op: 'getFields';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly field: AutomationHandle;
+    readonly op: 'getField' | 'deleteField' | 'updateFieldResult';
+} | {
+    readonly code: string;
+    readonly field: AutomationHandle;
+    readonly op: 'setFieldCode';
+} | {
+    readonly fieldType?: string;
+    readonly location: 'Before' | 'After' | 'Start' | 'End' | 'Replace';
+    readonly op: 'insertField';
+    readonly removeFormatting?: boolean;
+    readonly span: AutomationSpanRef;
+    readonly text?: string;
+} | {
+    readonly op: 'getTables';
+    readonly scope: AutomationSpanRef;
+} | {
+    readonly op: 'getTable' | 'getTableRows';
+    readonly table: AutomationHandle;
+} | {
+    readonly op: 'getTableCells';
+    readonly row: AutomationHandle;
+} | {
+    readonly count: number;
+    readonly location: 'before' | 'after';
+    readonly op: 'insertTableRows';
+    readonly row: AutomationHandle;
+    readonly values?: readonly (readonly string[])[];
+} | {
+    readonly cellIndex: number;
+    readonly op: 'getTableCell';
+    readonly rowIndex: number;
+    readonly table: AutomationHandle;
+} | {
+    readonly cell: AutomationHandle;
+    readonly op: 'getTableCellProperties' | 'getTableCellBody';
+} | {
+    readonly mutation: Exclude<AutomationTableMutation, {
+        kind: 'cell';
+    } | {
+        kind: 'insertRows';
+    }>;
+    readonly op: 'updateTable';
+    readonly table: AutomationHandle;
+} | {
+    readonly cell: AutomationHandle;
+    readonly op: 'updateTableCell';
+    readonly properties: Omit<Extract<AutomationTableMutation, {
+        kind: 'cell';
+    } | {
+        kind: 'insertRows';
+    }>, 'kind' | 'cellId'>;
+} | {
+    readonly columnCount: number;
+    readonly location: 'Before' | 'After';
+    readonly op: 'insertTable';
+    readonly rowCount: number;
+    readonly span: AutomationSpanRef;
+    readonly values?: readonly (readonly string[])[];
+}
+/** The floating shapes anchored in a span's paragraphs, in reading order. */
+| {
+    readonly op: 'getShapes';
+    readonly span: AutomationSpanRef;
+    readonly types?: readonly AutomationShapeType[];
+} | {
+    readonly op: 'getShape';
+    readonly shape: AutomationHandle;
+}
+/** A text box's own story. Any other shape has no body and refuses. */
+| {
+    readonly op: 'getShapeBody';
+    readonly shape: AutomationHandle;
+} | {
+    readonly op: 'getInlinePictures';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly op: 'getInlinePicture';
+    readonly picture: AutomationHandle;
+} | {
+    readonly op: 'setInlinePicture';
+    readonly picture: AutomationHandle;
+    readonly properties: AutomationInlinePictureWrite;
+} | {
+    readonly op: 'deleteInlinePicture';
+    readonly picture: AutomationHandle;
+} | {
+    readonly base64: string;
+    readonly location: 'Before' | 'After' | 'Start' | 'End' | 'Replace';
+    readonly op: 'insertInlinePicture';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly breakType: string;
+    readonly location: string;
+    readonly op: 'insertBreak';
+    readonly span: AutomationSpanRef;
+} | {
+    readonly op: 'startNewList';
+    readonly paragraph: AutomationHandle;
+} | {
+    readonly level: number;
+    readonly listId: number;
+    readonly op: 'attachToList';
+    readonly paragraph: AutomationHandle;
+} | {
+    readonly op: 'detachFromList';
+    readonly paragraph: AutomationHandle;
+} | {
+    readonly format: AutomationListLevelFormat;
+    readonly level: number;
+    readonly list: AutomationHandle;
+    readonly op: 'setListLevelFormat';
+} | {
+    readonly location: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After';
+    readonly op: 'getRange';
+    readonly span: AutomationSpanRef;
+};
+
+// @public
 export interface AutomationBatchRequest {
     readonly expectedRevision?: number;
     readonly operations: readonly AutomationOperation[];
@@ -76,6 +199,23 @@ export type AutomationContentControlValue = {
     readonly iso: string;
     readonly kind: 'date';
 };
+
+// @public
+export interface AutomationCustomNodePayload {
+    readonly data: string;
+    readonly label: string;
+    readonly namespaceUri: string;
+    readonly nodeId: string;
+    readonly rootLocalName: string;
+}
+
+// @public
+export interface AutomationEndpoint {
+    // (undocumented)
+    readonly offset: number;
+    readonly paragraph: AutomationHandle;
+    readonly readAt?: number;
+}
 
 // @public
 export interface AutomationError {
@@ -205,6 +345,56 @@ export interface AutomationHost {
     save(): AutomationSaveResult;
     subscribe(listener: (event: AutomationChangeEvent) => void): AutomationUnsubscribe;
 }
+
+// @public (undocumented)
+export interface AutomationInlinePictureRead {
+    // (undocumented)
+    readonly altTextDescription: string;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly lockAspectRatio: boolean;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public (undocumented)
+export interface AutomationInlinePictureWrite {
+    // (undocumented)
+    readonly altTextDescription?: string;
+    // (undocumented)
+    readonly height?: number;
+    // (undocumented)
+    readonly lockAspectRatio?: boolean;
+    // (undocumented)
+    readonly width?: number;
+}
+
+// @public (undocumented)
+export type AutomationListBullet = 'Custom' | 'Solid' | 'Hollow' | 'Square' | 'Diamonds' | 'Arrow' | 'Checkmark';
+
+// @public (undocumented)
+export interface AutomationListLevelFormat {
+    // (undocumented)
+    readonly bullet?: AutomationListBullet;
+    // (undocumented)
+    readonly bulletNumberPictureIndent?: number;
+    // (undocumented)
+    readonly charCode?: number;
+    // (undocumented)
+    readonly fontName?: string;
+    // (undocumented)
+    readonly formatString?: readonly (string | number)[];
+    // (undocumented)
+    readonly numbering?: AutomationListNumbering;
+    // (undocumented)
+    readonly startingNumber?: number;
+    // (undocumented)
+    readonly textIndent?: number;
+}
+
+// @public (undocumented)
+export type AutomationListNumbering = 'None' | 'Arabic' | 'UpperRoman' | 'LowerRoman' | 'UpperLetter' | 'LowerLetter';
 
 // @public
 export type AutomationObjectKind = 'document' | 'body' | 'paragraph' | 'section' | 'note' | 'comment' | 'revision' | 'bookmark' | 'list' | 'contentControl' | 'table' | 'tableRow' | 'tableCell' | 'field' | 'inlinePicture' | 'shape';
@@ -1302,6 +1492,28 @@ export interface AutomationSearchOptions {
 export type AutomationSelectionMode = 'select' | 'start' | 'end';
 
 // @public
+export type AutomationShapeOwnerStory = {
+    readonly kind: 'body';
+} | {
+    readonly kind: 'header' | 'footer';
+    readonly sectionIndex: number;
+    readonly variant: HeaderFooterVariant;
+};
+
+// @public
+export interface AutomationShapeRead {
+    // (undocumented)
+    readonly id: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly type: AutomationShapeType;
+}
+
+// @public
+export type AutomationShapeType = 'TextBox' | 'GeometricShape' | 'Picture' | 'Group' | 'Canvas' | 'Unsupported';
+
+// @public
 export interface AutomationSpan {
     // (undocumented)
     readonly end: AutomationEndpoint;
@@ -1333,6 +1545,40 @@ export type AutomationStoryId = AutomationShapeOwnerStory | {
     readonly kind: 'textbox';
     readonly owner: AutomationShapeOwnerStory;
     readonly shapeId: number;
+};
+
+// @public (undocumented)
+export type AutomationTableMutation = {
+    readonly count: number;
+    readonly kind: 'insertRows';
+    readonly location: 'before' | 'after';
+    readonly rowId: string;
+    readonly values?: readonly (readonly string[])[];
+} | {
+    readonly kind: 'values';
+    readonly values: readonly (readonly string[])[];
+} | {
+    readonly count: number;
+    readonly kind: 'addRows' | 'addColumns';
+    readonly location: 'start' | 'end';
+    readonly values?: readonly (readonly string[])[];
+} | {
+    readonly count: number;
+    readonly index: number;
+    readonly kind: 'deleteRows' | 'deleteColumns';
+} | {
+    readonly kind: 'delete';
+} | {
+    readonly headerRowCount?: number;
+    readonly kind: 'properties';
+    readonly styleId?: string;
+} | {
+    readonly cellId: string;
+    readonly columnWidth?: number;
+    readonly kind: 'cell';
+    readonly shadingColor?: string;
+    readonly value?: string;
+    readonly verticalAlignment?: 'Top' | 'Center' | 'Bottom';
 };
 
 // @public
@@ -1522,7 +1768,7 @@ export function documentPartKind(detail: string | undefined): DocumentPartKind |
 export type DocumentSaveDiagnosticCode = 'save.no-document' | 'save.document-changed' | 'save.failed';
 
 // @public
-export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
+export type EditDiagnosticCode = 'edit.read-only' | 'edit.protected-content' | 'edit.suggesting-needs-author' | 'edit.review-module-required' | 'edit.tracked-drawing-delete-unsupported' | 'edit.tracked-structure-unsupported' | 'edit.tracked-operation-unsupported' | 'edit.tracking-mode-unsupported' | 'edit.tracking-author-required' | 'edit.comment-author-required' | 'edit.tracking-unsupported-host' | 'edit.revision-unsupported' | 'edit.tracking-required' | 'edit.tracked-image-replace-unsupported' | 'edit.tracked-deleted-text-only' | 'edit.tracked-foreign-revision-unsupported' | 'edit.tracked-own-pending-change' | 'edit.picture-selected' | 'edit.cross-structure-join' | 'edit.indivisible-content' | 'edit.field-structure' | 'edit.section-mark' | 'edit.table-structure-unsupported' | 'edit.table-insert-refused' | 'edit.table-of-contents-refused' | 'edit.unsupported-content' | 'edit.operation-unsupported' | 'edit.unsupported-story' | 'edit.unmapped-change' | 'edit.stale-target' | 'edit.invalid-argument' | 'edit.resource-limit' | 'edit.refresh-in-progress' | 'edit.preview-active' | 'edit.preview-unsupported' | 'edit.preview-composing' | 'edit.preview-diverged' | 'edit.collaboration-not-ready' | 'edit.collaboration-text-limit' | 'edit.internal-invariant' | 'edit.refused';
 
 // @public
 export function exceptionCause(): string;

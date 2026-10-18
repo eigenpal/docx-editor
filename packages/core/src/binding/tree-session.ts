@@ -695,7 +695,7 @@ export function openTreeSessionFromPackage(
       currentPackage,
 
       collaborationPort: (documentId) =>
-        createCollaborationDocumentPort(packageStore, { documentId }),
+        createCollaborationDocumentPort(packageStore, { documentId, interactive: true }),
 
       applyTreeOps(ops, selectionBefore, selectionAfter, scope = BODY_SCOPE, options = {}) {
         return commitSessionTreeOps(

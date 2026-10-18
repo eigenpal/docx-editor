@@ -72,7 +72,7 @@ export function toEditorFontError(error: unknown): EditorFontError {
   return new EditorFontError(
     'initializationFailed',
     error instanceof Error ? error.message : 'Font initialization failed',
-    { diagnostic: error instanceof Error ? error.message : String(error) }
+    { diagnostic: error instanceof Error ? error.message : String(error), cause: error }
   );
 }
 

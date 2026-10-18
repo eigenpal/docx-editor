@@ -145,6 +145,17 @@ const IMAGE_INSERT_PROBE_BYTES = Uint8Array.from(
   (c) => c.charCodeAt(0)
 );
 
+/**
+ * Why a dialog slot cannot run as a command, naming the public way to open the dialog. The
+ * engine can judge the slot, but the values come from a dialog the host renders.
+ */
+const DIALOG_SLOT_REASONS: Partial<Record<ChromeSlotId, string>> = {
+  'file.pageSetup':
+    'page setup is not a command; render DocxEditor.PageSetupDialog with open and onClose',
+  'paragraph.dialog':
+    'the paragraph dialog is not a command; render DocxEditor.ParagraphDialog with open and onClose',
+};
+
 const CHROME_PROBES: Partial<Record<ChromeSlotId, EditorCommand>> = {
   'text.link': { type: 'insertHyperlink', href: 'https://example.com' },
   // Both carry a real command whose ARGUMENTS come from chrome the registry does not own —
@@ -570,6 +581,8 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       if (!judged.ok) {
         return { id, enabled: false, disabledReason: judged.reason, active: false };
       }
+      const dialogReason = DIALOG_SLOT_REASONS[id];
+      if (dialogReason) return { id, enabled: false, disabledReason: dialogReason, active: false };
     }
     // Save is wired — just not as a command. Reporting it "not wired to an editor
     // command" told a host the capability is missing when what is actually missing is a
@@ -894,6 +907,8 @@ export function runToolbarCommand(
         reason: 'open is not a command; run it with editor.load(bytes)',
       };
     }
+    const dialogReason = DIALOG_SLOT_REASONS[id];
+    if (dialogReason) return { ok: false, code: 'unsupported', reason: dialogReason };
     return { ok: false, code: 'unsupported', reason: 'not wired to an editor command' };
   }
   const allowed = editor.can(command, options);

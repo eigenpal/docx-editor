@@ -1,5 +1,34 @@
 import type { HistoryGroupOutcome } from './editor-scope.ts';
 import type { RevisionAuthorResult, RevisionBatchResult } from './editor.ts';
+// Types this vocabulary's results hand out, re-exported from where they are declared so every
+// entry built on this module can name them. The contracts lane may import store, layout and
+// collaboration types (`mayImportTypes` in `core-lane-graph.ts`).
+export type { HistoryGroupOutcome, RevisionAuthorResult, RevisionBatchResult };
+export type * from './revision-markup.ts';
+export type * from './review-pane.ts';
+export type { CollaborationFailureCode, CollaborationStatus } from '../collaboration/index.ts';
+export type {
+  DocumentProtectionEdit,
+  DocumentProtectionState,
+} from '../store/package/document-protection.ts';
+export type {
+  ReviewPosition,
+  ReviewRange,
+  ReviewRevisionItem,
+  ReviewRevisionKind,
+} from '../store/store/review-items.ts';
+export type { RevisionAddress } from '../store/store/tree-op-revision-attribution.ts';
+export type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+export type {
+  RevisionBatchEntry,
+  RevisionBatchSkipDetail,
+  RevisionBatchSkipReason,
+} from '../store/store/revision-batch.ts';
+export type { RevisionSiteRefusal } from '../store/store/revision-site-refusal.ts';
+export type {
+  RevisionAuthorEntry,
+  RevisionAuthorSkipReason,
+} from '../store/store/revision-author-change.ts';
 /**
  * Shared types for the `@docx-editor.dev/core` contract. Type-only, zero runtime.
  *

@@ -420,17 +420,15 @@ describe('bounded clearance', () => {
     expect(tablesOn(layout, 0)[0]!.box.y).toBeCloseTo(0, 3);
   });
 
-  // Known difference, pinned so a change is deliberate: the row keeps its place under the
-  // picture. The intended behavior starts it below the picture and splits it there.
-  test('known difference: a kept row too tall for the room below the picture stays under it', () => {
+  test('splits a kept row below the picture when the reduced page cannot hold it', () => {
     // 45 lines of 12.727pt exceed the 550pt below the picture but fit the 648pt page.
     const layout = lay(
       table({ rows: 3, cantSplit: true, linesPerRow: 45 }),
       pictureHeader(RIGHT_LOGO)
     );
-    expect(layout.pages).toHaveLength(3);
-    for (let page = 0; page < 3; page += 1)
-      expect(tablesOn(layout, page)[0]!.rows[0]!.box.y).toBeCloseTo(0, 3);
+    expect(layout.pages).toHaveLength(6);
+    for (let page = 0; page < 6; page += 1)
+      expect(tablesOn(layout, page)[0]!.rows[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
   });
 });
 
@@ -447,14 +445,13 @@ describe('a table carried into the second column below a header picture', () => 
     return fragments[0]!;
   };
 
-  test('a kept row that fits the column but not the room below the picture keeps the column top', () => {
+  test('splits a kept row below the picture in a later column', () => {
     // 45 lines of 12.727pt: taller than the 550pt below the picture, shorter than the column.
     const layout = carried(table({ rows: 1, width: 4000, cantSplit: true, linesPerRow: 45 }));
-    expect(layout.pages).toHaveLength(1);
+    expect(layout.pages).toHaveLength(2);
     const row = secondColumn(layout).rows[0]!;
-    expect(row.box.y).toBeCloseTo(0, 3);
-    expect(row.box.height).toBeCloseTo(572.7, 1);
-    expect(row.hasContinuation ?? false).toBe(false);
+    expect(row.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    expect(row.hasContinuation).toBe(true);
   });
 
   test('an exact-height row taller than the room below the picture keeps the column top', () => {
@@ -510,5 +507,87 @@ describe('controls that keep their layout', () => {
     const layout = lay(table({ rows: 90 }));
     for (let page = 0; page < layout.pages.length; page += 1)
       expect(tablesOn(layout, page)[0]!.box.y).toBeCloseTo(0, 3);
+  });
+});
+
+describe('header admission after wrapping picture clearance', () => {
+  const exactParagraph = (text: string) =>
+    paragraph(text).replace(
+      '<w:spacing w:after="0"/>',
+      '<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/>'
+    );
+  const rows = (minimum: number) => {
+    const row = (label: string, properties = '') =>
+      `<w:tr><w:trPr>${properties}</w:trPr><w:tc>` +
+      `<w:tcPr><w:tcW w:w="9360" w:type="dxa"/></w:tcPr>` +
+      [1, 2, 3].map((n) => exactParagraph(`${label}${n}`)).join('') +
+      '</w:tc></w:tr>';
+    return (
+      '<w:tbl><w:tblPr><w:tblW w:w="9360" w:type="dxa"/>' +
+      '<w:tblLayout w:type="fixed"/><w:tblCellMar>' +
+      '<w:top w:w="0"/><w:bottom w:w="0"/>' +
+      '</w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="9360"/></w:tblGrid>' +
+      row('Header', '<w:tblHeader/>') +
+      row('Minimum', `<w:trHeight w:val="${minimum * 20}" w:hRule="atLeast"/>`) +
+      row('Following') +
+      '</w:tbl>'
+    );
+  };
+
+  test('moves the authored group and omits a repeat that displaces its row minimum', () => {
+    const result = lay(exactParagraph('Before') + rows(540), pictureHeader(RIGHT_LOGO), 15);
+    expect(result.pages).toHaveLength(4);
+    expect(tablesOn(result, 0)).toHaveLength(0);
+    expect(tablesOn(result, 1)[0]!.rows).toHaveLength(1);
+    expect(tablesOn(result, 1)[0]!.rows[0]!.isHeaderRow).toBe(true);
+    expect(tablesOn(result, 2)[0]!.rows).toHaveLength(1);
+    expect(tablesOn(result, 2)[0]!.rows[0]!.isHeaderRepeat).toBeFalsy();
+    expect(tablesOn(result, 2)[0]!.box.y).toBeCloseTo(LOGO_BOTTOM, 3);
+    expect(tablesOn(result, 2)[0]!.rows[0]!.box.height).toBeCloseTo(540, 3);
+    expect(tablesOn(result, 3)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
+  });
+
+  for (const picture of [undefined, RIGHT_LOGO]) {
+    test(`omits the repeat for a minimum taller than the page, picture=${!!picture}`, () => {
+      const result = lay(
+        exactParagraph('Before') + rows(700),
+        picture ? pictureHeader(picture) : undefined,
+        15
+      );
+      expect(result.pages).toHaveLength(4);
+      expect(tablesOn(result, 0)).toHaveLength(0);
+      expect(tablesOn(result, 1)[0]!.rows).toHaveLength(1);
+      expect(tablesOn(result, 2)[0]!.rows).toHaveLength(1);
+      expect(tablesOn(result, 2)[0]!.rows[0]!.isHeaderRepeat).toBeFalsy();
+      expect(tablesOn(result, 2)[0]!.box.y).toBeCloseTo(picture ? LOGO_BOTTOM : 0, 3);
+      expect(tablesOn(result, 3)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
+    });
+  }
+
+  test('retains the earlier header admission rule in compatibility mode 14', () => {
+    const result = lay(exactParagraph('Before') + rows(540), pictureHeader(RIGHT_LOGO), 14);
+    expect(result.pages).toHaveLength(3);
+    expect(tablesOn(result, 0)[0]!.rows).toHaveLength(1);
+    expect(tablesOn(result, 1)[0]!.rows).toHaveLength(2);
+    expect(tablesOn(result, 1)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
+    expect(tablesOn(result, 2)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
+  });
+
+  test('keeps the authored group on its page when no picture reduces the band', () => {
+    const result = lay(exactParagraph('Before') + rows(540), undefined, 15);
+    expect(result.pages).toHaveLength(1);
+    expect(tablesOn(result, 0)[0]!.rows).toHaveLength(3);
+  });
+
+  test('does not create a blank page when the table opens below the picture', () => {
+    const result = lay(rows(540), pictureHeader(RIGHT_LOGO), 15);
+    expect(result.pages).toHaveLength(3);
+    expect(tablesOn(result, 0)[0]!.rows[0]!.isHeaderRow).toBe(true);
+  });
+
+  test('retains a row minimum that fits below the picture and authored header', () => {
+    const result = lay(exactParagraph('Before') + rows(500), pictureHeader(RIGHT_LOGO), 15);
+    expect(tablesOn(result, 0)[0]!.rows).toHaveLength(2);
+    expect(tablesOn(result, 1)[0]!.rows[0]!.isHeaderRepeat).toBe(true);
   });
 });

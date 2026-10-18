@@ -52,6 +52,7 @@ The `docx/no-raw-compatibility-mode` lint rule rejects a comparison of `compatib
 | `modernBidiTableRuleShift` | `modern` | A right-to-left table sits half its mean outer side rule toward its visual left |
 | `modernGridLineSideRules` | `modern` | Side rules center on grid lines for covered shapes; edge-aligned grids move by half a rule |
 | `noteTableCellKeeps` | `modern` | Note bands in table rows honor cell widow control and `w:keepLines` |
+| `oversizedRowKeepGroupReleases` | `legacy` | Oversized kept row groups release before placement, except below authored headers |
 | `positionedTableBreaksAtMargin` | `modern` | A breaking page- or margin-positioned table ends its first fragment at the bottom margin; legacy modes run it to the page edge |
 | `pageBreakBeforeKeepsSpace` | `legacy` | A paragraph with `w:pageBreakBefore` keeps its space before at the top of the new page. In `modern` modes only the first block of a section keeps it |
 | `pageBreakLinesStretch` | `legacy` | A justified line before a page or column break stretches, unless it ends its paragraph |

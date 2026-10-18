@@ -386,7 +386,7 @@ export interface DocxEditorCollaborationRootProps {
     readonly fallback?: VNode | VNode[];
 }
 
-// @public (undocumented)
+// @public
 export const DocxEditorReview: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
@@ -712,12 +712,12 @@ export const DocxEditorReview: {
         className: StringConstructor;
         hidden: BooleanConstructor;
         left: {
-            default: null;
-            type: PropType<number | null>;
+            default: undefined;
+            type: PropType<number | null | undefined>;
         };
         top: {
-            default: number;
-            type: NumberConstructor;
+            default: undefined;
+            type: PropType<number | undefined>;
         };
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
@@ -725,17 +725,17 @@ export const DocxEditorReview: {
         className: StringConstructor;
         hidden: BooleanConstructor;
         left: {
-            default: null;
-            type: PropType<number | null>;
+            default: undefined;
+            type: PropType<number | null | undefined>;
         };
         top: {
-            default: number;
-            type: NumberConstructor;
+            default: undefined;
+            type: PropType<number | undefined>;
         };
     }>> & Readonly<{}>, {
         hidden: boolean;
-        left: number | null;
-        top: number;
+        left: number | null | undefined;
+        top: number | undefined;
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     Empty: vue.DefineComponent<vue.ExtractPropTypes<{
         asChild: BooleanConstructor;
@@ -1062,6 +1062,12 @@ export interface ReviewBalloonProps {
 }
 
 // @public
+export interface ReviewDraftProps extends ReviewPartProps {
+    left?: number | null;
+    top?: number;
+}
+
+// @public
 export interface ReviewItemRevealEvent {
     readonly key: string;
     readonly pairKey?: string;
@@ -1263,12 +1269,10 @@ export interface UseReviewRailMetricsReturn {
 
 // @public (undocumented)
 export interface UseReviewReturn {
-    // (undocumented)
     readonly accept: (item: ReviewItemView) => boolean;
     readonly activatedKey: ComputedRef<string | null>;
     readonly activeKey: ComputedRef<string | null>;
     readonly adopt: (items: ReviewItemView | readonly ReviewItemView[], options?: ReviewAdoptOptions) => boolean;
-    // (undocumented)
     readonly comment: (text: string, author?: string) => boolean;
     // (undocumented)
     readonly commentResolutionDisabledReason: ComputedRef<string | null>;
@@ -1279,17 +1283,14 @@ export interface UseReviewReturn {
     readonly paneOpen: ComputedRef<boolean>;
     // (undocumented)
     readonly ready: ComputedRef<boolean>;
-    // (undocumented)
     readonly reject: (item: ReviewItemView) => boolean;
     // (undocumented)
     readonly remove: (item: ReviewItemView) => boolean;
     // (undocumented)
     readonly reopen: (item: ReviewItemView) => boolean;
-    // (undocumented)
     readonly reply: (item: ReviewItemView, text: string, author?: string) => boolean;
     // (undocumented)
     readonly resolve: (item: ReviewItemView) => boolean;
-    // (undocumented)
     readonly selectionAnchorY: ComputedRef<number | null>;
     readonly setActive: (key: string | null, options?: ReviewActivationOptions) => boolean;
     // (undocumented)
@@ -1299,6 +1300,7 @@ export interface UseReviewReturn {
 // @public
 export function useStackedReviewPositions(items: MaybeRefOrGetter_2<readonly {
     readonly anchorY: number | null;
+    readonly isActive?: boolean;
     readonly key: string;
 }[]>, heights: MaybeRefOrGetter_2<ReadonlyMap<string, number>>, options?: MaybeRefOrGetter_2<{
     readonly defaultHeight?: number;
