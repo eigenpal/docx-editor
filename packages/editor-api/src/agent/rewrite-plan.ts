@@ -110,8 +110,10 @@ const patternOf = ({ open, close }: PlaceholderSyntax, flags: string, anchor = '
   new RegExp(`${anchor}${escape(open)}(\\d+)${escape(close)}`, flags);
 const PARAGRAPH_BREAK = /[\r\n]/;
 const SEPARATORS = /[\u2028\u2029]/g;
-/** The largest word diff table, in cells: 16 MB. A paragraph comes from the file. */
-const MAX_DIFF_CELLS = 4_000_000;
+/** The most units a paragraph or an answer may have. A paragraph comes from the file. */
+const MAX_UNITS = 20_000;
+/** The most edits one answer may make: the diff keeps about this many squared numbers. */
+const MAX_EDITS = 2_000;
 
 export const coreOf = (text: string): string => text.replace(TRAILING_SPACING, '');
 export const spacingOf = (text: string): string => TRAILING_SPACING.exec(text)?.[0] ?? '';
@@ -273,52 +275,92 @@ export function tokensOf(text: string, syntax: PlaceholderSyntax): ModelToken[] 
   return tokens;
 }
 
-/** The steps from the original units to the model tokens, by longest common subsequence. */
+/**
+ * The steps from the original units to the model tokens: a shortest edit script (Myers). Time
+ * and memory grow with the number of edits, not with the square of the paragraph, so a long
+ * paragraph with a few changes stays fast.
+ */
 function diff(units: readonly PlanUnit[], tokens: readonly ModelToken[]): Step[] {
+  const n = units.length;
+  const m = tokens.length;
   const same = (u: number, t: number): boolean => {
     const unit = units[u]!;
     const token = tokens[t]!;
     if (unit.atom !== null || token.atom !== null) return unit.atom === token.atom;
     if (unit.text === token.text) return true;
     // At either end, a word matches without its trailing spacing.
-    const atEnd = u === units.length - 1 || t === tokens.length - 1;
+    const atEnd = u === n - 1 || t === m - 1;
     return atEnd && coreOf(unit.text) === coreOf(token.text);
   };
-  const cols = tokens.length + 1;
-  if ((units.length + 1) * cols > MAX_DIFF_CELLS) {
-    throw new RewriteError(
-      'too-long',
-      'The paragraph and the model output are too long to compare. Rewrite a shorter paragraph.'
-    );
-  }
-  const length = new Uint32Array((units.length + 1) * cols);
-  for (let u = units.length - 1; u >= 0; u -= 1) {
-    for (let t = tokens.length - 1; t >= 0; t -= 1) {
-      length[u * cols + t] = same(u, t)
-        ? length[(u + 1) * cols + t + 1]! + 1
-        : Math.max(length[(u + 1) * cols + t]!, length[u * cols + t + 1]!);
+  if (n > MAX_UNITS || m > MAX_UNITS) throw tooLong();
+  const limit = Math.min(n + m, MAX_EDITS);
+  const offset = limit + 1;
+  const v = new Int32Array(2 * limit + 3);
+  const trace: Int32Array[] = [];
+  let found = -1;
+  for (let d = 0; d <= limit && found < 0; d += 1) {
+    trace.push(v.slice(offset - d - 1, offset + d + 2));
+    for (let k = -d; k <= d; k += 2) {
+      let x =
+        k === -d || (k !== d && v[offset + k - 1]! < v[offset + k + 1]!)
+          ? v[offset + k + 1]!
+          : v[offset + k - 1]! + 1;
+      let y = x - k;
+      while (x < n && y < m && same(x, y)) {
+        x += 1;
+        y += 1;
+      }
+      v[offset + k] = x;
+      if (x >= n && y >= m) {
+        found = d;
+        break;
+      }
     }
   }
+  if (found < 0) throw tooLong();
+
+  // Walk the trace back from the end. Each step is a keep run, then one edit.
   const steps: Step[] = [];
-  let u = 0;
-  let t = 0;
-  while (u < units.length || t < tokens.length) {
-    if (u < units.length && t < tokens.length && same(u, t)) {
-      steps.push({ kind: 'keep', unit: u, token: tokens[t]! });
-      u += 1;
-      t += 1;
-    } else if (
-      u < units.length &&
-      (t === tokens.length || length[(u + 1) * cols + t]! >= length[u * cols + t + 1]!)
-    ) {
-      steps.push({ kind: 'delete', unit: u });
-      u += 1;
+  let x = n;
+  let y = m;
+  for (let d = found; d > 0; d -= 1) {
+    const saved = trace[d]!;
+    const at = (k: number) => saved[k + d + 1]!;
+    const k = x - y;
+    const down = k === -d || (k !== d && at(k - 1) < at(k + 1));
+    const previousK = down ? k + 1 : k - 1;
+    const previousX = at(previousK);
+    const previousY = previousX - previousK;
+    while (x > previousX && y > previousY) {
+      x -= 1;
+      y -= 1;
+      steps.push({ kind: 'keep', unit: x, token: tokens[y]! });
+    }
+    if (down) {
+      y -= 1;
+      steps.push({ kind: 'insert', token: tokens[y]! });
     } else {
-      steps.push({ kind: 'insert', token: tokens[t]! });
-      t += 1;
+      x -= 1;
+      steps.push({ kind: 'delete', unit: x });
     }
   }
-  return steps;
+  while (x > 0 && y > 0) {
+    x -= 1;
+    y -= 1;
+    steps.push({ kind: 'keep', unit: x, token: tokens[y]! });
+  }
+  return steps.reverse();
+}
+
+const tooLong = () =>
+  new RewriteError(
+    'too-long',
+    'The paragraph and the model output are too long to compare. Rewrite a shorter paragraph.'
+  );
+
+/** Refuse a paragraph too long to compare with any answer, before the model is asked. */
+export function checkLength(units: readonly unknown[]): void {
+  if (units.length > MAX_UNITS) throw tooLong();
 }
 
 /**

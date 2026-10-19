@@ -314,6 +314,8 @@ async function rewriteAll(
   const results: RewriteSettledResult[] = [];
   try {
     for (const [index, item] of items.entries()) {
+      // A macrotask between paragraphs, so that an abort scheduled meanwhile can stop the rest.
+      if (index > 0) await new Promise((resolve) => setTimeout(resolve, 0));
       const draft = drafts[index]!;
       const settled = answerOf.get(index);
       if (draft instanceof RewriteError || !settled) {

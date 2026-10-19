@@ -21,6 +21,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type { Paragraph, RequestContext } from '@docx-editor.dev/editor-api';
 import { messageOf, RewriteError } from './rewrite-error.ts';
 import {
+  checkLength,
   checkOutput,
   draftText,
   expandedOutput,
@@ -32,7 +33,7 @@ import {
   type RewritePlaceholder,
 } from './rewrite-plan.ts';
 import type { RewriteDraft, RewriteOptions, RewriteResult } from './rewrite-types.ts';
-import { assertNothingQueued, exclusive } from './rewrite-guard.ts';
+import { assertNothingQueued, exclusive, helperSync } from './rewrite-guard.ts';
 import { readUnits } from './rewrite-units.ts';
 import {
   rollback,
@@ -127,6 +128,8 @@ export async function prepareHeld(
       cause: error,
     });
   });
+  // Refused now, before any model call, when no answer could be compared with the paragraph.
+  checkLength(units);
   const original = units.map((unit) => unit.text).join('');
   const syntax = syntaxFor(original);
   const placeholders: RewritePlaceholder[] = units.flatMap((unit) =>
@@ -144,15 +147,37 @@ export async function prepareHeld(
   const text = draftText(units, syntax);
   const keepPlaceholders = options.keepPlaceholders === true;
   let used = false;
+  // Placeholders that share one range: kept or deleted only together.
+  const grouped = new Map<number, string[]>();
+  for (const unit of units) {
+    if (unit.group === null || unit.atom === null) continue;
+    grouped.set(unit.group, [...(grouped.get(unit.group) ?? []), placeholderOf(unit.atom, syntax)]);
+  }
+  const checkGroups = (output: string) => {
+    for (const members of grouped.values()) {
+      const kept = members.filter((placeholder) => output.includes(placeholder));
+      if (kept.length === 0 || kept.length === members.length) continue;
+      throw new RewriteError(
+        'placeholder-grouped',
+        `The model output keeps ${kept.join(', ')} but leaves out ` +
+          `${members.filter((member) => !kept.includes(member)).join(', ')}. These placeholders ` +
+          `stand for fields at one place in the text: keep all of ${members.join(', ')}, or ` +
+          'leave all of them out.'
+      );
+    }
+  };
+  /** Both sides of a comparison, read the same way: without the paragraph's outer spacing. */
+  const normal = (value: string) => value.trim();
 
   /** The answer's hunks and the text it should read as, or the model error it breaks. */
   const plan = (modelText: string): { output: string; hunks: Hunk[]; expected: string } => {
     const output = String(modelText).trim();
     checkOutput(output, placeholders, keepPlaceholders, syntax, original);
+    checkGroups(output);
     const hunks = hunksOf(units, output, syntax);
-    const expected = expandedOutput(output, placeholders, syntax);
+    const expected = normal(expandedOutput(output, placeholders, syntax));
     // Only spacing an atom keeps can differ without a hunk, and the helper cannot write it.
-    if (hunks.length === 0 && expected !== original.trim()) throw notProposed();
+    if (hunks.length === 0 && expected !== normal(original)) throw notProposed();
     return { output, hunks, expected };
   };
 
@@ -164,11 +189,11 @@ export async function prepareHeld(
       await writeHunks(context, paragraph, units, hunks, author, own, progress);
       const proposed = paragraph.getReviewedText('Current');
       const before = paragraph.getReviewedText('Original');
-      await context.sync();
+      await helperSync(context);
       // Another participant's edit can land between the writes without making one of them
       // stale, when it is after every range the writes use. The original text then moved.
       if (before.value !== original) throw concurrentEdit();
-      if (proposed.value.trim() !== expected) throw notProposed();
+      if (normal(proposed.value) !== expected) throw notProposed();
       return { paragraphId, original, proposed: proposed.value, changes: hunks.length };
     } catch (error) {
       const failure = writeFailure(error);

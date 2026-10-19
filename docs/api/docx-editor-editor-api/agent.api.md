@@ -53,7 +53,7 @@ export class RewriteError extends Error {
 }
 
 // @public
-export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'model-failed' | 'context-used' | 'aborted' | 'busy' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
+export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'placeholder-grouped' | 'model-failed' | 'context-used' | 'aborted' | 'busy' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
 
 // @public
 export interface RewriteFeedback {

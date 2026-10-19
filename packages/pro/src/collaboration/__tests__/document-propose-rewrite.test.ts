@@ -12,7 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // prepares the paragraph again and asks the model again on its own.
 import { afterAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import type { DocxEditorRuntime, RequestContext } from '@docx-editor.dev/editor-api/browser';
+import { RequestContext, type DocxEditorRuntime } from '@docx-editor.dev/editor-api/browser';
 import { prepareRewrite, proposeRewrite, RewriteError } from '@docx-editor.dev/editor-api/agent';
 import { converged, COUNTERPARTY, REVIEWER, room } from './tracked-foreign-revisions-support';
 
@@ -37,7 +37,7 @@ function interrupted(context: RequestContext, at: number, between: () => Promise
         return async () => {
           count += 1;
           if (count === at) await between();
-          return target.sync();
+          return RequestContext.prototype.sync.call(target);
         };
       }
       const value = Reflect.get(target, key) as unknown;
@@ -86,10 +86,10 @@ for (const [where, edit] of [
       };
       const failure = await alice!.runtime
         .run(async (context) => {
-          // Syncs 1 to 5 prepare, 6 and 7 turn tracking on, and 8 lists the revisions. The last
-          // hunk writes at 9 and reads back at 10 and 11; the participant edits before sync 12,
+          // Syncs 1 to 6 prepare, 7 and 8 turn tracking on, and 9 lists the revisions. The last
+          // hunk writes at 10 and reads back at 11 and 12; the participant edits before sync 13,
           // which writes the first hunk.
-          const paused = interrupted(context, 12, peerEdit);
+          const paused = interrupted(context, 13, peerEdit);
           const draft = await prepareRewrite(paused, paused.document.body.paragraphs.getFirst());
           await draft.apply(MODEL);
         })
@@ -139,7 +139,7 @@ test('a participant with the same author keeps their change when the rewrite rol
     try {
       const failure = await alice!.runtime
         .run(async (context) => {
-          const paused = interrupted(context, 12, async () => {
+          const paused = interrupted(context, 13, async () => {
             await twin.runtime.run(async (other) => {
               other.document.changeTrackingMode = 'TrackMineOnly';
               other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');

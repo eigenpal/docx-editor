@@ -11,7 +11,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  *
  * - The model output broke a rule, and nothing was written. Send `error.message` back to the
  *   model and ask again: `invalid-output`, `placeholder-missing`, `placeholder-unknown`,
- *   `placeholder-moved`, `placeholder-repeated`.
+ *   `placeholder-moved`, `placeholder-repeated`, `placeholder-grouped`.
  * - Your `rewrite` function failed, and nothing was written: `model-failed` when it threw or
  *   timed out on every attempt, `context-used` when it used the request context, and `aborted`
  *   when `options.signal` aborted.
@@ -31,6 +31,7 @@ export type RewriteErrorCode =
   | 'placeholder-unknown'
   | 'placeholder-moved'
   | 'placeholder-repeated'
+  | 'placeholder-grouped'
   | 'model-failed'
   | 'context-used'
   | 'aborted'
@@ -53,6 +54,7 @@ const MODEL_OUTPUT_CODES: ReadonlySet<RewriteErrorCode> = new Set([
   'placeholder-unknown',
   'placeholder-moved',
   'placeholder-repeated',
+  'placeholder-grouped',
 ]);
 
 /**

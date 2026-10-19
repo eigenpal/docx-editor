@@ -95,7 +95,7 @@ export function layoutWords(words: readonly LayoutWord[]): Cluster[] {
     }
     if (word.controls.length === 0 && word.fields > 0) {
       clusters.push(
-        word.fields === 1 && !hasObject(word.text)
+        !hasObject(word.text)
           ? { kind: 'field', word: first }
           : { kind: 'whole', first, last: first }
       );

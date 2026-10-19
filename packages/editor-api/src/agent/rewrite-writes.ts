@@ -14,6 +14,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // changes they make before the rewrite, during the model call, or after a failed write.
 
 import type { Paragraph, Revision, RequestContext } from '@docx-editor.dev/editor-api';
+import { helperSync } from './rewrite-guard.ts';
 import { messageOf, RewriteError } from './rewrite-error.ts';
 import type { Hunk } from './rewrite-plan.ts';
 import type { Unit } from './rewrite-units.ts';
@@ -71,10 +72,10 @@ export function writeFailure(error: unknown): RewriteError {
 async function writeFresh(context: RequestContext, queue: () => boolean): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
     context.document.load('changeTrackingMode');
-    await context.sync();
+    await helperSync(context);
     if (!queue()) return;
     try {
-      await context.sync();
+      await helperSync(context);
       return;
     } catch (error) {
       if (attempt === MAX_STALE_ATTEMPTS || !isStale(error)) throw error;
@@ -151,13 +152,13 @@ async function revisionsOf(
 ): Promise<{ revision: Revision; signature: string; author: string }[]> {
   const revisions = paragraph.getRange('Whole').revisions;
   revisions.load('items/author,items/type,items/date');
-  await context.sync();
+  await helperSync(context);
   const ranges = revisions.items.map((revision) => {
     const range = revision.range;
     range.load('text');
     return range;
   });
-  if (ranges.length > 0) await context.sync();
+  if (ranges.length > 0) await helperSync(context);
   return revisions.items.map((revision, index) => ({
     revision,
     signature: signatureOf(revision, ranges[index]!.text),
@@ -202,7 +203,7 @@ export async function writeHunks(
     queueHunk(paragraph, units, hunk);
     progress.wrote = true;
     try {
-      await context.sync();
+      await helperSync(context);
     } catch (error) {
       // A refused sync wrote nothing. Any other failure may have written, so read what is new.
       if (refusalOf(error) === null) await collect().catch(() => undefined);
@@ -220,14 +221,14 @@ async function reacquire(
 ): Promise<Paragraph | null> {
   try {
     paragraph.load('uniqueLocalId');
-    await context.sync();
+    await helperSync(context);
     if (paragraph.uniqueLocalId === paragraphId) return paragraph;
   } catch {
     // The proxy no longer addresses the paragraph. Look for it by its identity.
   }
   const paragraphs = context.document.body.paragraphs;
   paragraphs.load('items/uniqueLocalId');
-  await context.sync();
+  await helperSync(context);
   return paragraphs.items.find((item) => item.uniqueLocalId === paragraphId) ?? null;
 }
 
@@ -263,7 +264,7 @@ export async function rollback(
     found = mine.length;
     for (const { revision } of mine) revision.reject();
     try {
-      await context.sync();
+      await helperSync(context);
       break;
     } catch (error) {
       // Another participant edited again between the read and the reject. Read again.
@@ -273,7 +274,7 @@ export async function rollback(
   if (!wrote || !target) return;
   const current = target.getReviewedText('Current');
   const before = target.getReviewedText('Original');
-  await context.sync();
+  await helperSync(context);
   if (found < expected) {
     throw new Error(
       `The rollback found ${found} of the ${expected} changes the rewrite made. The paragraph ` +

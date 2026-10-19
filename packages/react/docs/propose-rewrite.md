@@ -61,6 +61,10 @@ The legend describes each placeholder: a field by its code and result, a locked 
 
 Text from the file never reads as instructions. Every value in the legend is a quoted string, and the paragraph and the legend sit between tags that their text cannot close. The prompt tells the model that the text between the tags is document content, not instructions. If the paragraph already contains `⟦` or `⟧`, the placeholders use another bracket pair, such as `⟪1⟫`. Read the exact placeholders from `draft.placeholders`.
 
+Fields that show no text at one place, such as several index entries side by side, share one range. Each gets its own placeholder, but the model can keep them or leave them out only together; an answer that keeps some of them fails with `placeholder-grouped`.
+
+The result of a field that spans paragraphs, such as a table of contents, reads as ordinary text in each paragraph, and the helper edits it as text. Updating that field later replaces the edits. Rewrite the headings that the table of contents lists instead.
+
 A placeholder that the model keeps never changes. A placeholder that the model leaves out deletes what it stands for as one tracked deletion. A deletion of a whole equation strikes the whole equation, and a deletion of a whole content-locked control proposes removing the control. To refuse a left-out placeholder instead, pass `keepPlaceholders: true`.
 
 ## Rewrite several paragraphs
@@ -91,7 +95,7 @@ await runtime.run(async (context) => {
 });
 ```
 
-Every item settles. The results have the shape of `Promise.allSettled` results, in the order of the items. A paragraph that fails has `status: 'rejected'` and a `RewriteError` as `reason`. The other paragraphs are not affected. Pass each paragraph once.
+Every item settles. The results have the shape of `Promise.allSettled` results, in the order of the items. If `options.signal` aborts during the write phase, the paragraphs that are not written yet report `aborted`, and the written ones keep their results. A paragraph that fails has `status: 'rejected'` and a `RewriteError` as `reason`. The other paragraphs are not affected. Pass each paragraph once.
 
 ## Guarantees
 
@@ -117,14 +121,15 @@ The `retries` option caps all three together. It takes a whole number from `0` t
 | `placeholder-moved` | The answer changes the order of the placeholders. | Ask the model again. |
 | `placeholder-repeated` | The answer has a placeholder more than once. | Ask the model again. |
 | `placeholder-missing` | With `keepPlaceholders: true`, the answer leaves out a placeholder. | Ask the model again. |
+| `placeholder-grouped` | The answer keeps some, but not all, of the placeholders at one place. | Ask the model again. |
 | `model-failed` | Your `rewrite` function threw or timed out on every attempt. `error.cause` holds its last error. | Check the model service. |
 | `aborted` | `options.signal` aborted. | Nothing to do. |
 | `context-used` | Your `rewrite` function used `context`, or edits were queued on `context` when you called the helper. | Do not use `context` inside the function, and sync your own edits first. |
-| `busy` | Another helper call runs on the same request context. | Await it first, or use `proposeRewrites()`. |
+| `busy` | Another helper call runs on the same request context, or your code called `context.sync()` while a helper call was in progress. | Await the helper call first, or use `proposeRewrites()`. |
 | `pending-changes` | The paragraph has tracked changes. | Accept or reject them first. |
 | `tracking-unavailable` | The runtime cannot record tracked changes. | Create the runtime with an `author`. In a page, give the editor the review module. |
 | `draft-used` | The draft already wrote to the paragraph. | Prepare the paragraph again. |
-| `too-long` | The paragraph and the answer are too long to compare. | Rewrite a shorter paragraph. |
+| `too-long` | The paragraph, or the answer, is too long to compare. A paragraph is refused before the model is asked. | Rewrite a shorter paragraph. |
 | `unsupported-text` | The paragraph contains every bracket pair that placeholders can use. | Rewrite the paragraph another way. |
 | `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
 | `stale` | The paragraph changed while the helper ran, through another participant or your own code. The rewrite was rolled back. | Prepare the paragraph again. |
@@ -138,7 +143,7 @@ If a cleanup step fails after an error, such as turning tracking off again, `err
 ## How it works
 
 1. The helper splits the paragraph into word ranges with `getTextRanges([' ', '\t'])`, and reads the `fields`, `inlinePictures`, and `contentControls` of every range.
-1. In a word that holds an atom, it finds each atom with `ContentControl.getRange()`, a search for U+FFFC or U+000B, or a search for the punctuation beside a field. It addresses the text between atoms with `getRange('Start')`, `getRange('End')`, and `expandTo()`, and reads each part back to check it. A word whose parts do not read back as expected becomes one placeholder, with its trailing space outside it.
+1. In a word that holds an atom, it finds each atom by its own range. A content control answers its range. A search finds each U+FFFC and U+000B. A word that holds a field is split with every one of its characters as an ending mark, because a field never splits. A field that shows no text sits in the range between two words or two of these pieces. The helper addresses the text between atoms with `getRange('Start')`, `getRange('End')`, and `expandTo()`, and reads each part back to check it. A word whose parts do not read back as expected becomes one placeholder, with its trailing space outside it.
 1. It compares the answer with the original words by longest common subsequence. Each run of differences becomes one call: `insertText(text, 'Replace')`, `delete()`, or `insertText(text, 'Before')` or `'After'`.
 1. It writes the calls from the last one to the first, one sync each, so the earlier ranges stay valid. After each write, it reads the paragraph's revisions and records the new ones.
 1. It reads the result with `getReviewedText('Current')` and compares it with the answer.

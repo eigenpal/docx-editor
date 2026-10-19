@@ -27,12 +27,31 @@ export interface AutomationFieldRead {
   readonly rewritable: boolean;
   readonly locked: boolean;
 }
+/**
+ * The fields of each paragraph node, by node identity. A tree edit replaces the nodes it
+ * touches, so a cached answer never outlives the paragraph it describes; a batch that reads the
+ * fields of many ranges in one paragraph walks the paragraph once.
+ */
+const fieldReadsByParagraph = new WeakMap<object, readonly AutomationFieldRead[]>();
+
 export function fieldsInParagraph(
   part: OoxmlPart,
   paragraphId: string
 ): readonly AutomationFieldRead[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  const cached = fieldReadsByParagraph.get(paragraph);
+  if (cached) return cached;
+  const reads = computeFieldsInParagraph(part, paragraph, paragraphId);
+  fieldReadsByParagraph.set(paragraph, reads);
+  return reads;
+}
+
+function computeFieldsInParagraph(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  paragraphId: string
+): readonly AutomationFieldRead[] {
   const segments = segmentsOf(paragraph);
   return locateFieldResults(paragraph).flatMap((field) => {
     const segment = segments.find((segment) => segment.node.id === field.fieldNodeId);

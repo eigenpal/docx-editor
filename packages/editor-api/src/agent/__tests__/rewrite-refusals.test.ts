@@ -14,7 +14,7 @@ import {
   type RewriteDraft,
   type RewriteErrorCode,
 } from '../../agent.ts';
-import { DocxEditor, type RequestContext } from '../../index.ts';
+import { DocxEditor, RequestContext } from '../../index.ts';
 import { docx, p } from '../../runtime/__tests__/support/docx.ts';
 import {
   AUTHOR,
@@ -142,10 +142,10 @@ describe('a failed write rolls back the writes before it', () => {
     const original = 'Alpha beta gamma delta.';
     const { value } = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      // Syncs 1 to 5 prepare, 6 and 7 turn tracking on, and 8 lists the revisions before the
-      // first write. The last hunk writes at 9 and reads its revisions back at 10 and 11. Sync 12
+      // Syncs 1 to 6 prepare, 7 and 8 turn tracking on, and 9 lists the revisions before the
+      // first write. The last hunk writes at 10 and reads its revisions back at 11 and 12. Sync 13
       // writes the first hunk and then fails, so the helper must find that change too.
-      const draft = await prepareRewrite(failingSync(context, 12), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 13), paragraph);
       const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
       return { error, after: await readBack(context, paragraph) };
     });
@@ -159,7 +159,7 @@ describe('a failed write rolls back the writes before it', () => {
       docx(p(original)),
       async (context) => {
         const paragraph = await firstParagraph(context);
-        const draft = await prepareRewrite(failingSync(context, 12), paragraph);
+        const draft = await prepareRewrite(failingSync(context, 13), paragraph);
         const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
         return { error, after: await readBack(context, paragraph) };
       },
@@ -175,8 +175,8 @@ describe('a failed write rolls back the writes before it', () => {
       const value = await runtime.run(async (context) => {
         const paragraph = await firstParagraph(context);
         // The same author, in another run, proposes text after this rewrite read its own
-        // change back (syncs 10 and 11) and before the final check (sync 12).
-        const paused = pausingSync(context, 12, () =>
+        // change back (syncs 11 and 12) and before the final check (sync 13).
+        const paused = pausingSync(context, 13, () =>
           runtime.run(async (other) => {
             other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
             await other.sync();
@@ -198,9 +198,9 @@ describe('a failed write rolls back the writes before it', () => {
     const original = 'Alpha beta gamma delta.';
     const { value } = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      // The write lands at sync 9; the read of its revisions at sync 10 then fails, so the helper
+      // The write lands at sync 10; the read of its revisions at sync 11 then fails, so the helper
       // never learns which changes it made. The rollback must not report success.
-      const draft = await prepareRewrite(failingSync(context, 10), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 11), paragraph);
       const error = await rejection(draft.apply('Alpha beta gamma DELTA.'));
       return { error, after: await readBack(context, paragraph) };
     });
@@ -211,11 +211,11 @@ describe('a failed write rolls back the writes before it', () => {
 
   test('a failure to turn tracking off again never replaces the result or the error', async () => {
     const original = 'Alpha beta gamma delta.';
-    // Every sync from the thirteenth fails: the write and the check succeed (8 to 12), and turning
+    // Every sync from the fourteenth fails: the write and the check succeed (9 to 13), and turning
     // tracking off again fails. The proposal stands.
     const success = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      const draft = await prepareRewrite(failingSync(context, 13, true), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 14, true), paragraph);
       const result = await draft.apply('Alpha beta gamma DELTA.');
       context.document.load('changeTrackingMode');
       await context.sync();
@@ -224,10 +224,10 @@ describe('a failed write rolls back the writes before it', () => {
     expect(success.value.result.proposed).toBe('Alpha beta gamma DELTA.');
     expect(success.value.mode).toBe('TrackMineOnly');
 
-    // A refused second hunk (sync 12), a rollback (13 to 17), then turning tracking off fails.
+    // A refused second hunk (sync 13), a rollback (14 to 18), then turning tracking off fails.
     const failure = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      const draft = await prepareRewrite(failingSync(context, 18, true), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 19, true), paragraph);
       return rejection(draft.apply('Alpha be\u000Eta gamma DELTA.'));
     });
     expect(failure.value).toMatchObject({ code: 'write-failed' });
@@ -340,7 +340,7 @@ describe('retries', () => {
     try {
       let calls = 0;
       const error = await runtime.run(async (context) => {
-        const paused = pausingSync(context, 12, () =>
+        const paused = pausingSync(context, 13, () =>
           runtime.run(async (other) => {
             other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
             await other.sync();
@@ -385,7 +385,7 @@ function failingSync(context: RequestContext, at: number, from = false): Request
       if (key === 'sync') {
         return async () => {
           count += 1;
-          await target.sync();
+          await RequestContext.prototype.sync.call(target);
           if (count === at || (from && count > at)) throw new Error('The connection dropped.');
         };
       }
@@ -408,7 +408,7 @@ function pausingSync(
         return async () => {
           count += 1;
           if (count === at) await between();
-          await target.sync();
+          await RequestContext.prototype.sync.call(target);
         };
       }
       const value = Reflect.get(target, key) as unknown;
