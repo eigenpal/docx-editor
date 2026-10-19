@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Bold, italic, font, size, and other text formatting commands now return `ok: false` when the document refuses them, for example with code `locked` over a content-locked control, instead of reporting success with no change. Fixes #1426
+Text formatting over a selection that includes a content-locked control is now reported as unavailable by `can()` and the toolbar, and `exec` returns `ok: false` instead of reporting success with no change. Fixes #1426

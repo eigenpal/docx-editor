@@ -71,6 +71,11 @@ describe('contentLockPolicy in the editor', () => {
   test('default: bold over a content-locked control is refused and changes nothing', async () => {
     const editor = mount();
     editor.surface!.selectAll();
+    // The toolbar asks first, and gets the same answer the write would.
+    expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
+      ok: false,
+      code: 'locked',
+    });
     expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
       ok: false,
       code: 'locked',

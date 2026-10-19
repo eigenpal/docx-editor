@@ -2,7 +2,12 @@ import { textboxInsertionRefusal } from './textbox-commands.ts';
 import { tocAtPosition } from './surface-toc-ranges.ts';
 import { formsProtectionRefusal } from '../store/store/tree-op-content-controls.ts';
 import { settingsPartOf } from '../store/package/note-properties.ts';
-import { commandProtectionRefusal, FORMS_WRITE_REASON } from './command-protection.ts';
+import {
+  commandProtectionRefusal,
+  contentLockPolicyFor,
+  FORMS_WRITE_REASON,
+} from './command-protection.ts';
+import { contentLockFormatRefusal } from './content-lock-format-refusal.ts';
 // Snapshot derivations for `createDocxEditor` (editor seam).
 //
 // The reads that turn a mounted surface into contract values: run formatting, page setup,
@@ -345,6 +350,8 @@ export function gateCommand(
   }
   const protection = support.mutating ? commandProtectionRefusal(command, surface) : null;
   if (protection) return { ok: false, refusal: protection };
+  const locked = contentLockFormatRefusal(command, surface, contentLockPolicyFor(surface));
+  if (locked) return { ok: false, refusal: locked };
   if (command.type === 'insertTextBox') {
     const refusal = textboxInsertionRefusal(surface);
     return refusal ? { ok: false, refusal } : { ok: true };

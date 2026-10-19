@@ -34,6 +34,11 @@ export function registerContentLockPolicy(
   if (kept) contentLockPolicies.set(surface, kept);
 }
 
+/** The host's lock policy for this surface, as admission sees it. */
+export function contentLockPolicyFor(surface: PaginatedSurface): ContentLockPolicy | undefined {
+  return contentLockPolicies.get(surface);
+}
+
 export const TRACKED_CHANGES_AUTHOR_REASON =
   'this document is protected for tracked changes; their authors cannot change';
 

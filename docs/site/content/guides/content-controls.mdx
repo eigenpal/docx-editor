@@ -268,7 +268,7 @@ A new dropdown or combo box has no items. Add its items in Word, or fill a contr
 
 ## Formatting content-locked controls
 
-A content lock (`contentLocked` or `sdtContentLocked`) refuses every edit inside a control, including formatting, as Word does. A formatting command over a selection that includes such a control fails with code `locked`, and the selection keeps its formatting. If your template uses controls for placeholders that authors style but must not retype, set `contentLockPolicy` when you create the editor or the server host:
+A content lock (`contentLocked` or `sdtContentLocked`) refuses every edit inside a control, including formatting, as Word does. A formatting command over a selection that includes such a control fails with code `locked`, and the selection keeps its formatting. `editor.can()` gives the same answer first, so the toolbar shows the button as unavailable. If your template uses controls for placeholders that authors style but must not retype, set `contentLockPolicy` when you create the editor or the server host:
 
 ```ts
 const editor = createDocxEditor({
