@@ -327,9 +327,7 @@ function* layoutInModeSteps(
   // NOTEREF fields number against THIS walk's section bounds paired with the notes input's
   // per-section properties — the pairing `attachNotesToLayout` numbers the note areas with,
   // so field and area agree by construction.
-  // An opening prefix resolves over the whole body, like the list items above: a field before
-  // the cut whose target lies after it keeps its final value, its calibration verdict (sticky
-  // for the session) is the one the full pass takes, and every prefix shares one context.
+  // Over the whole body, so a field before an opening's cut keeps its later target's value.
   const refFields = resolveBodyRefFields(
     part,
     allBlocks,
@@ -1912,12 +1910,10 @@ function* layoutBlocksPass(
     // into line once the page it disturbed has been completed.
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
-      // A seeded notes pass reads reserves, and reuses a moved tail, by how far the flow moved.
-      if (mark) reserveResume.followShift(pages.length - mark.pageCount);
+      if (mark) reserveResume.followShift(pages.length - mark.pageCount); // A seeded notes pass.
       const tailHolds = mark && reserveResume.tailHolds(mark, pages.length);
       if (mark && tailHolds) {
-        // At delta 0 the previous pages append by identity; otherwise `remapPage` reuses them,
-        // gated by `convergenceTailShiftAllowed`, asked before the costlier fragment compare.
+        // The shift rule first (delta 0 appends, else `remapPage`): it costs less than the compare.
         const delta = pages.length - mark.pageCount;
         const shiftedTail = delta !== 0 ? reserveResume.shiftedTail(mark, pages.length) : undefined;
         const shiftable = convergenceTailShiftAllowed({
