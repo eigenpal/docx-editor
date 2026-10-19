@@ -394,7 +394,7 @@ Map each difference between the old and the new words to one call. The last rang
 | Insert after a word | `word.insertText(text, 'After')` |
 | Insert after the last word | `last.insertText(' ' + text, 'After')`, because the last word has no space after it |
 
-The [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) recipe implements this mapping with a word diff. It keeps fields, equations, and locked controls whole, shows the model a legend of what each placeholder contains, and rejects its own changes if any write or the final check fails.
+The [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) recipe implements this mapping with a word diff. It keeps fields, equations, and locked controls whole, shows the model a legend of what each placeholder contains, and rejects only its own changes if any write or the final check fails. In a collaboration session, another participant's edit between two syncs makes the next write fail with `StaleDocument`; the recipe rolls back, and you retry by calling `prepare()` again.
 
 Ranges follow the runtime's `revisionTextView`. Text that the view hides, such as a pending insertion in the `original` view, holds no ending mark, and a range starts and ends at characters that the view shows. Hidden text between two shown characters of one range stays inside the range, so an edit through that range also changes the hidden text.
 

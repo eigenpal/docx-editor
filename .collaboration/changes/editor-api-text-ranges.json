@@ -9,7 +9,8 @@
     "packages/editor-api/src/runtime/__tests__/runtime-text-ranges.test.ts",
     "packages/editor-api/src/runtime/__tests__/runtime-range-content-controls.test.ts",
     "packages/editor-api/src/runtime/__tests__/runtime-propose-rewrite.test.ts",
-    "packages/pro/src/collaboration/__tests__/document-text-ranges.test.ts"
+    "packages/pro/src/collaboration/__tests__/document-text-ranges.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-propose-rewrite.test.ts"
   ],
   "changeset": "editor-api-text-ranges",
   "migration": null

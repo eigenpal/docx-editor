@@ -154,7 +154,7 @@ Each range keeps the space or tab after it, except the last range of the paragra
 | Insert after a word | `word.insertText(text, 'After')` |
 | Insert after the last word | `last.insertText(' ' + text, 'After')`, because the last word has no space after it |
 
-For a complete, tested implementation that keeps fields, equations, and locked controls whole, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
+For a complete, tested implementation that keeps fields, equations, and locked controls whole, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite). It rolls back its own changes when a write fails, and in a collaboration session you retry it after a `StaleDocument` error by calling `prepare()` again.
 
 The following example deletes a word, writes after a word, and replaces two words as tracked changes. Each range keeps its trailing space, so the replacement ends with a space too. Then it reads the proposed paragraph:
 

@@ -55,7 +55,7 @@ async function rewrite(
     const result = await runtime.run(async (context) => {
       context.document.changeTrackingMode = 'TrackMineOnly';
       const paragraph = await pick(context);
-      const prepared = await prepare(context, paragraph);
+      const prepared = await prepare(context, paragraph, 'Agent');
       const proposed = await apply(context, prepared, model(prepared.promptText));
       const current = paragraph.getReviewedText('Current');
       const original = paragraph.getReviewedText('Original');
@@ -174,7 +174,7 @@ describe('propose an AI rewrite as tracked changes', () => {
     try {
       await runtime.run(async (context) => {
         context.document.changeTrackingMode = 'TrackMineOnly';
-        const prepared = await prepare(context, await firstParagraph(context));
+        const prepared = await prepare(context, await firstParagraph(context), 'Agent');
         await expect(apply(context, prepared, '⟦3⟧ Under ⟦1⟧ the fee ⟦2⟧ applies')).rejects.toThrow(
           'moved or repeated'
         );
@@ -189,7 +189,7 @@ describe('propose an AI rewrite as tracked changes', () => {
     try {
       await runtime.run(async (context) => {
         context.document.changeTrackingMode = 'TrackMineOnly';
-        const prepared = await prepare(context, await firstParagraph(context));
+        const prepared = await prepare(context, await firstParagraph(context), 'Agent');
         await expect(apply(context, prepared, 'Under ⟦1⟧ the fee ⟦9⟧ applies')).rejects.toThrow(
           'The model output contains ⟦9⟧, which prepare() did not create.'
         );
@@ -206,17 +206,86 @@ describe('propose an AI rewrite as tracked changes', () => {
       await runtime.run(async (context) => {
         context.document.changeTrackingMode = 'TrackMineOnly';
         const paragraph = await firstParagraph(context);
-        const prepared = await prepare(context, paragraph);
+        const prepared = await prepare(context, paragraph, 'Agent');
         expect(prepared.promptText).toBe('Under ⟦1⟧ the fee applies.');
-        expect(prepared.legend).toEqual([{ placeholder: '⟦1⟧', text: 'Section 4.2,' }]);
-        expect(promptFor(prepared, 'Shorten it.')).toContain('Placeholders:\n⟦1⟧ = "Section 4.2,"');
-        await expect(apply(context, prepared, 'Under ⟦1⟧, the charge applies.')).rejects.toThrow(
-          'The model output repeats "," after ⟦1⟧, which ends with it.'
+        expect(prepared.legend).toEqual([
+          { placeholder: '⟦1⟧', kind: 'field', text: 'Section 4.2,' },
+        ]);
+        expect(promptFor(prepared, 'Shorten it.')).toContain(
+          'Placeholders:\n⟦1⟧ (field) = "Section 4.2,"'
         );
+        for (const output of [
+          'Under ⟦1⟧, the charge applies.',
+          'Under ⟦1⟧ , the charge applies.',
+        ]) {
+          await expect(apply(context, prepared, output)).rejects.toThrow(
+            'The model output repeats "," after ⟦1⟧, which ends with it.'
+          );
+        }
         const revisions = paragraph.getRange('Whole').revisions;
         revisions.load('items');
         await context.sync();
         expect(revisions.items).toHaveLength(0);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('the legend labels each kind of atom', async () => {
+    const runtime = await DocxEditor.createServer(RICH, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const prepared = await prepare(context, await firstParagraph(context), 'Agent');
+        expect(prepared.legend).toEqual([
+          { placeholder: '⟦1⟧', kind: 'field', text: 'Section 4.2' },
+          { placeholder: '⟦2⟧', kind: 'equation or note reference', text: '\uFFFC' },
+          { placeholder: '⟦3⟧', kind: 'content control', text: 'Acme Corp' },
+        ]);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('text attached to a placeholder refuses before anything is written', async () => {
+    const runtime = await DocxEditor.createServer(RICH, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const paragraph = await firstParagraph(context);
+        const prepared = await prepare(context, paragraph, 'Agent');
+        for (const output of [
+          'Under ⟦1⟧ the fee ⟦2⟧ applies\tto ⟦3⟧; promptly.',
+          'Under ⟦1⟧ the fee ⟦2⟧ applies\tto "⟦3⟧" promptly.',
+        ]) {
+          await expect(apply(context, prepared, output)).rejects.toThrow(
+            'The model output attaches text to ⟦3⟧. Separate each placeholder with a space.'
+          );
+        }
+        const revisions = paragraph.getRange('Whole').revisions;
+        revisions.load('items');
+        await context.sync();
+        expect(revisions.items).toHaveLength(0);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('the final check compares with the text the model wrote', async () => {
+    const bytes = docx(`<w:p>${t('Pay ')}${PILL}<w:r><w:tab/></w:r>${t('promptly.')}</w:p>`);
+    const runtime = await DocxEditor.createServer(bytes, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const prepared = await prepare(context, await firstParagraph(context), 'Agent');
+        expect(prepared.promptText).toBe('Pay ⟦1⟧\tpromptly.');
+        // The atom keeps its own tab, so the space the model wrote after it cannot land.
+        await expect(apply(context, prepared, 'Pay ⟦1⟧ promptly.')).rejects.toThrow(
+          'The proposed paragraph differs from the model output.'
+        );
       });
     } finally {
       runtime.dispose();
@@ -231,7 +300,12 @@ describe('propose an AI rewrite as tracked changes', () => {
     const runtime = await DocxEditor.createServer(bytes, { author: 'Agent' });
     try {
       await runtime.run(async (context) => {
-        await expect(prepare(context, await firstParagraph(context))).rejects.toThrow(
+        // Without tracking, nothing apply() writes could be rolled back.
+        await expect(prepare(context, await firstParagraph(context), 'Agent')).rejects.toThrow(
+          "Set changeTrackingMode to 'TrackMineOnly'"
+        );
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        await expect(prepare(context, await firstParagraph(context), 'Agent')).rejects.toThrow(
           'Decide the tracked changes in this paragraph'
         );
       });
@@ -247,7 +321,7 @@ describe('propose an AI rewrite as tracked changes', () => {
       await runtime.run(async (context) => {
         context.document.changeTrackingMode = 'TrackMineOnly';
         const paragraph = await firstParagraph(context);
-        const prepared = await prepare(context, paragraph);
+        const prepared = await prepare(context, paragraph, 'Agent');
         // The last hunk applies first and succeeds; the first one carries a paragraph
         // separator, which a text write refuses.
         await expect(apply(context, prepared, 'Alpha be\nta gamma DELTA.')).rejects.toMatchObject({
@@ -261,6 +335,28 @@ describe('propose an AI rewrite as tracked changes', () => {
         expect(revisions.items).toHaveLength(0);
         expect(paragraph.text).toBe(original);
         expect(current.value).toBe(original);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a rollback with the wrong author names the problem', async () => {
+    const runtime = await DocxEditor.createServer(docx(p('Alpha beta gamma delta.')), {
+      author: 'Agent',
+    });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const prepared = await prepare(context, await firstParagraph(context), 'Someone else');
+        const failure = await apply(context, prepared, 'Alpha be\nta gamma DELTA.').then(
+          () => null,
+          (error: unknown) => error
+        );
+        expect(failure).toBeInstanceOf(AggregateError);
+        expect((failure as AggregateError).errors[1]).toMatchObject({
+          message: "The paragraph has no changes by Someone else. Pass the runtime's author.",
+        });
       });
     } finally {
       runtime.dispose();

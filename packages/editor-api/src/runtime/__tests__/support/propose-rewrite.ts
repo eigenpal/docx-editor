@@ -7,7 +7,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // page shows this file exactly, below this header, with the package name in place of the
 // relative import: the package resolves its own name to its build, not to these sources.
 
-import { DocxEditor, type Paragraph, type Range, type RequestContext } from '../../../index.ts';
+import {
+  DocxEditor,
+  isDocxEditorError,
+  type Paragraph,
+  type Range,
+  type RequestContext,
+} from '../../../index.ts';
 
 /** One word, or one atom that the model must keep whole. */
 export interface RewriteUnit {
@@ -19,14 +25,22 @@ export interface RewriteUnit {
   readonly atom: number | null;
 }
 
+/** What an atom is. An equation and a note reference both read as U+FFFC. */
+export type AtomKind = 'field' | 'content control' | 'picture' | 'equation or note reference';
+
 /** What one placeholder stands for: the exact text, with any punctuation attached to it. */
 export interface LegendEntry {
   readonly placeholder: string;
+  readonly kind: AtomKind;
   readonly text: string;
 }
 
 export interface PreparedRewrite {
   readonly paragraph: Paragraph;
+  /** The paragraph's own identity, to find it again after another participant's edit. */
+  readonly paragraphId: string;
+  /** The runtime's author: the author of every change that apply() writes. */
+  readonly author: string;
   readonly units: readonly RewriteUnit[];
   /** The paragraph text for the model, with each atom shown as ⟦n⟧. */
   readonly promptText: string;
@@ -56,36 +70,48 @@ const TRAILING_SPACING = /[ \t]+$/;
 const coreOf = (text: string) => text.replace(TRAILING_SPACING, '');
 const spacingOf = (text: string) => TRAILING_SPACING.exec(text)?.[0] ?? '';
 const PUNCTUATION = /^\p{P}$/u;
+const SPACING = new Set(['', ' ', '\t']);
 
-/** Split a paragraph into words and atoms, and build the text for the model. */
+/**
+ * Split a paragraph into words and atoms, and build the text for the model. Pass the `author`
+ * that the runtime was created with: a rollback rejects only that author's changes.
+ */
 export async function prepare(
   context: RequestContext,
-  paragraph: Paragraph
+  paragraph: Paragraph,
+  author: string
 ): Promise<PreparedRewrite> {
   const words = paragraph.getTextRanges([' ', '\t']);
   const revisions = paragraph.getRange('Whole').revisions;
   words.load('items/text');
   revisions.load('items/type,items/author');
+  paragraph.load('uniqueLocalId');
+  context.document.load('changeTrackingMode');
   await context.sync();
-  // apply() rolls back by rejecting every change in the paragraph, so it must start with none.
+  if (context.document.changeTrackingMode !== 'TrackMineOnly') {
+    throw new Error("Set changeTrackingMode to 'TrackMineOnly' before you rewrite a paragraph.");
+  }
+  // apply() rolls back by rejecting its own changes, so the paragraph must start with none.
   if (revisions.items.length > 0) {
     throw new Error('Decide the tracked changes in this paragraph before you rewrite it.');
   }
 
-  // One sync reads the fields and content controls of every word.
+  // One sync reads the fields, pictures, and content controls of every word.
   const reads = words.items.map((word) => {
     const fields = word.fields;
+    const pictures = word.inlinePictures;
     const controls = word.contentControls;
     fields.load('items');
+    pictures.load('items');
     controls.load('items/tag,items/cannotEdit,items/text');
-    return { word, fields, controls };
+    return { word, fields, pictures, controls };
   });
   await context.sync();
 
   const units: RewriteUnit[] = [];
-  let atoms = 0;
+  const kinds = new Map<number, AtomKind>();
   let lockedKey: string | null = null;
-  for (const { word, fields, controls } of reads) {
+  for (const { word, fields, pictures, controls } of reads) {
     const locked = controls.items.find((control) => control.cannotEdit);
     const key = locked ? `${locked.tag}\u0000${locked.text}` : null;
     const previous = units[units.length - 1];
@@ -95,28 +121,43 @@ export async function prepare(
       continue;
     }
     lockedKey = key;
-    const atom = key !== null || fields.items.length > 0 || word.text.includes('￼');
-    units.push({ first: word, last: word, text: word.text, atom: atom ? ++atoms : null });
+    const kind: AtomKind | null =
+      key !== null
+        ? 'content control'
+        : fields.items.length > 0
+          ? 'field'
+          : pictures.items.length > 0
+            ? 'picture'
+            : word.text.includes('￼')
+              ? 'equation or note reference'
+              : null;
+    const atom = kind === null ? null : kinds.size + 1;
+    if (atom !== null && kind !== null) kinds.set(atom, kind);
+    units.push({ first: word, last: word, text: word.text, atom });
   }
   const promptText = units
     .map((unit) => (unit.atom === null ? unit.text : `⟦${unit.atom}⟧${spacingOf(unit.text)}`))
     .join('');
   const legend = units.flatMap((unit) =>
-    unit.atom === null ? [] : [{ placeholder: `⟦${unit.atom}⟧`, text: coreOf(unit.text) }]
+    unit.atom === null
+      ? []
+      : [{ placeholder: `⟦${unit.atom}⟧`, kind: kinds.get(unit.atom)!, text: coreOf(unit.text) }]
   );
-  return { paragraph, units, promptText, legend };
+  const paragraphId = paragraph.uniqueLocalId;
+  return { paragraph, paragraphId, author, units, promptText, legend };
 }
 
 /** A prompt that shows the model what each placeholder already contains. */
 export function promptFor(prepared: PreparedRewrite, instruction: string): string {
   const legend = prepared.legend
-    .map((entry) => `${entry.placeholder} = ${JSON.stringify(entry.text)}`)
+    .map((entry) => `${entry.placeholder} (${entry.kind}) = ${JSON.stringify(entry.text)}`)
     .join('\n');
   return [
     instruction,
     'Return only the rewritten paragraph. Keep each placeholder, such as ⟦1⟧, exactly as ' +
-      'written, or leave it out to delete what it stands for. Each placeholder already ' +
-      'contains the text listed for it, including its punctuation. Do not repeat that text.',
+      'written, with a space or the paragraph edge on each side, or leave it out to delete ' +
+      'what it stands for. Each placeholder already contains the text listed for it, ' +
+      'including its punctuation. Do not repeat that text or attach other text to it.',
     legend === '' ? '' : `Placeholders:\n${legend}`,
     `Paragraph:\n${prepared.promptText}`,
   ]
@@ -124,7 +165,7 @@ export function promptFor(prepared: PreparedRewrite, instruction: string): strin
     .join('\n\n');
 }
 
-/** Refuse placeholders that prepare() did not create, and punctuation the atom already has. */
+/** Refuse unknown placeholders, repeated punctuation, and text attached to a placeholder. */
 function checkPlaceholders(output: string, legend: readonly LegendEntry[]): void {
   const known = new Map(legend.map((entry) => [entry.placeholder, entry.text]));
   for (const match of output.matchAll(/⟦\d+⟧/g)) {
@@ -133,38 +174,45 @@ function checkPlaceholders(output: string, legend: readonly LegendEntry[]): void
     if (text === undefined) {
       throw new Error(`The model output contains ${placeholder}, which prepare() did not create.`);
     }
-    const before = output[match.index - 1] ?? '';
-    const after = output[match.index + placeholder.length] ?? '';
+    const start = match.index;
+    const end = start + placeholder.length;
+    const before = output[start - 1] ?? '';
+    const after = output[end] ?? '';
+    // The punctuation check looks past spaces, so `⟦1⟧ ,` repeats a comma too.
+    const nextMark = output.slice(end).trimStart()[0] ?? '';
+    const previousMark = output.slice(0, start).trimEnd().slice(-1);
     const first = text[0] ?? '';
     const last = text[text.length - 1] ?? '';
-    if (PUNCTUATION.test(last) && after === last) {
+    if (PUNCTUATION.test(last) && nextMark === last) {
       throw new Error(
         `The model output repeats "${last}" after ${placeholder}, which ends with it.`
       );
     }
-    if (PUNCTUATION.test(first) && before === first) {
+    if (PUNCTUATION.test(first) && previousMark === first) {
       throw new Error(
         `The model output repeats "${first}" before ${placeholder}, which starts with it.`
       );
     }
+    if (!SPACING.has(before) || !SPACING.has(after)) {
+      throw new Error(
+        `The model output attaches text to ${placeholder}. Separate each placeholder with a space.`
+      );
+    }
   }
+}
+
+/** The text the model wrote, with each placeholder read as the text it stands for. */
+function expandedOutput(output: string, legend: readonly LegendEntry[]): string {
+  const known = new Map(legend.map((entry) => [entry.placeholder, entry.text]));
+  return output.replace(/⟦\d+⟧/g, (placeholder) => known.get(placeholder) ?? placeholder);
 }
 
 /** Split the model output the way `getTextRanges([' ', '\t'])` splits text. */
 function tokensOf(output: string): ModelToken[] {
   const tokens: ModelToken[] = [];
   for (const piece of output.match(/[^ \t]*[ \t]|[^ \t]+$/g) ?? []) {
-    for (const part of piece.split(/(⟦\d+⟧)/)) {
-      if (part === '') continue;
-      const placeholder = /^⟦(\d+)⟧$/.exec(part);
-      const previous = tokens[tokens.length - 1];
-      if (!placeholder && previous?.atom != null && coreOf(part) === '') {
-        // Spacing after a placeholder belongs to the atom, which keeps its own.
-        tokens[tokens.length - 1] = { ...previous, text: previous.text + part };
-        continue;
-      }
-      tokens.push({ text: part, atom: placeholder ? Number(placeholder[1]) : null });
-    }
+    const placeholder = /^⟦(\d+)⟧[ \t]?$/.exec(piece);
+    tokens.push({ text: piece, atom: placeholder ? Number(placeholder[1]) : null });
   }
   return tokens;
 }
@@ -212,26 +260,16 @@ function diff(units: readonly RewriteUnit[], tokens: readonly ModelToken[]): Ste
   return steps;
 }
 
-/** Propose the model's rewrite as tracked changes, and return the proposed paragraph text. */
-export async function apply(
-  context: RequestContext,
-  prepared: PreparedRewrite,
-  modelOutput: string
-): Promise<string> {
-  const { paragraph, units } = prepared;
-  const output = modelOutput.replace(/\s+$/, '');
-  checkPlaceholders(output, prepared.legend);
-  const tokens = tokensOf(output);
+/** The hunks that turn the original units into the model tokens. */
+function hunksOf(units: readonly RewriteUnit[], tokens: readonly ModelToken[]): Hunk[] {
   const hunks: Hunk[] = [];
   let open: Hunk | null = null;
-  let expected = '';
   let carry = '';
   let next = 0;
   for (const step of diff(units, tokens)) {
     if (step.kind === 'keep') {
       open = null;
       const unit = units[step.unit]!;
-      expected += unit.text;
       // Text after the last word needs the space the model wrote after it.
       if (spacingOf(unit.text) === '' && unit.atom === null) carry = spacingOf(step.token.text);
       next = step.unit + 1;
@@ -242,7 +280,6 @@ export async function apply(
     }
     if (!open) {
       open = { from: next, to: next, text: carry };
-      expected += carry;
       carry = '';
       hunks.push(open);
     }
@@ -251,10 +288,22 @@ export async function apply(
       next = step.unit + 1;
     } else {
       open.text += step.token.text;
-      expected += step.token.text;
     }
   }
+  return hunks;
+}
 
+/** Propose the model's rewrite as tracked changes, and return the proposed paragraph text. */
+export async function apply(
+  context: RequestContext,
+  prepared: PreparedRewrite,
+  modelOutput: string
+): Promise<string> {
+  const { paragraph, units } = prepared;
+  const output = modelOutput.trim();
+  checkPlaceholders(output, prepared.legend);
+  const hunks = hunksOf(units, tokensOf(output));
+  let wrote = false;
   try {
     // Apply from the last hunk to the first, so the ranges before each edit stay valid.
     for (const hunk of [...hunks].reverse()) {
@@ -272,24 +321,63 @@ export async function apply(
         units[hunk.from - 1]!.last.insertText(hunk.text, 'After');
       }
       await context.sync();
+      wrote = true;
     }
 
     const proposed = paragraph.getReviewedText('Current');
     await context.sync();
-    if (proposed.value !== expected) {
+    const wanted = expandedOutput(output, prepared.legend);
+    if (proposed.value.trim() !== wanted) {
       throw new Error('The proposed paragraph differs from the model output.');
     }
     return proposed.value;
   } catch (error) {
-    // prepare() accepted the paragraph only without tracked changes, so every change in it now
-    // came from this call. Rejecting them leaves the paragraph as it was.
-    paragraph.getRange('Whole').revisions.rejectAll();
-    try {
-      await context.sync();
-    } catch (rollback) {
-      throw new AggregateError([error, rollback], 'The rewrite failed, and so did its rollback.');
+    if (wrote) {
+      try {
+        await rollback(context, prepared);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [error, rollbackError],
+          'The rewrite failed, and so did its rollback.'
+        );
+      }
     }
     throw error;
+  }
+}
+
+/**
+ * Reject the tracked changes this author made in the paragraph. The paragraph had none when
+ * prepare() read it, so they are the ones apply() wrote; other participants' changes stay.
+ */
+async function rollback(context: RequestContext, prepared: PreparedRewrite): Promise<void> {
+  const { paragraphId, author } = prepared;
+  for (let attempt = 1; ; attempt += 1) {
+    // A read-only sync never fails on another participant's edit, and it brings this context
+    // up to date, so the writes that follow it start from the current document.
+    const paragraphs = context.document.body.paragraphs;
+    paragraphs.load('items/uniqueLocalId');
+    await context.sync();
+    const paragraph = paragraphs.items.find((item) => item.uniqueLocalId === paragraphId);
+    if (!paragraph) return;
+    const revisions = paragraph.getRange('Whole').revisions;
+    revisions.load('items/author');
+    await context.sync();
+    const own = revisions.items.filter((revision) => revision.author === author);
+    if (own.length === 0) {
+      if (revisions.items.length === 0) return;
+      throw new Error(`The paragraph has no changes by ${author}. Pass the runtime's author.`);
+    }
+    for (const revision of own) revision.reject();
+    try {
+      await context.sync();
+      return;
+    } catch (error) {
+      // Another participant edited again between the read and the reject. Read again.
+      if (attempt === 3 || !isDocxEditorError(error) || error.code !== 'StaleDocument') {
+        throw error;
+      }
+    }
   }
 }
 
@@ -299,12 +387,13 @@ export async function proposeRewrite(
   instruction: string,
   rewriteText: (prompt: string) => Promise<string>
 ): Promise<{ readonly proposed: string; readonly saved: Uint8Array }> {
-  const runtime = await DocxEditor.createServer(bytes, { author: 'Rewrite agent' });
+  const author = 'Rewrite agent';
+  const runtime = await DocxEditor.createServer(bytes, { author });
   try {
     const proposed = await runtime.run(async (context) => {
       context.document.changeTrackingMode = 'TrackMineOnly';
       const paragraph = context.document.body.paragraphs.getFirst();
-      const prepared = await prepare(context, paragraph);
+      const prepared = await prepare(context, paragraph, author);
       // Send only plain text to the model. The ranges stay in this run.
       return apply(context, prepared, await rewriteText(promptFor(prepared, instruction)));
     });
