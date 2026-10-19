@@ -28,6 +28,8 @@ export interface InlineControlBesideCaret {
   readonly end: number;
   /** The control's content is locked: the first press selects it instead of removing it. */
   readonly contentLocked: boolean;
+  /** The control is already proposed for deletion: the key steps over it. */
+  readonly struck?: boolean;
 }
 
 /** What a Backspace or Delete does with an atomic inline control, when one is involved. */
@@ -133,6 +135,10 @@ export function atomicControlDeletion(
   if (!control) return null;
   const start = { paragraphId: position.paragraphId, offset: control.start };
   const end = { paragraphId: position.paragraphId, offset: control.end };
+  if (control.struck) {
+    const past = backward ? start : end;
+    return { kind: 'select', selection: { anchor: past, head: past } };
+  }
   if (control.contentLocked) {
     return {
       kind: 'select',

@@ -189,7 +189,15 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     if (!summary) return null;
     const contentLocked = summary.lock === 'contentLocked' || summary.lock === 'sdtContentLocked';
     const atom = contentLocked || summary.type === 'checkbox' || summary.type === 'picture';
-    return atom ? { ...span, contentLocked } : null;
+    if (!atom || !control) return null;
+    // A control already proposed for deletion is struck text the key steps over, not a unit
+    // to select again: selecting it would leave the caret where it was, press after press.
+    let struck = false;
+    for (let node = parentNodeOf(part, control.id); node; node = parentNodeOf(part, node.id)) {
+      if (node.kind === 'revisionDelete') struck = true;
+      if (struck || node.kind === 'paragraph') break;
+    }
+    return { ...span, contentLocked, ...(struck ? { struck } : {}) };
   }
 
   function atomicControlDeletion(

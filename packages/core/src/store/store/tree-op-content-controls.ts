@@ -807,10 +807,21 @@ export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach
     let filling = false;
     for (const entry of inside) {
       const span = spanOf(entry.node);
+      const locks = [...inherited, ...locksOf([...entry.ancestors, entry.node])];
+      // A tracked deletion that strikes the control WHOLE proposes removing the field, which is
+      // not filling it in, so forms protection must not let it through as an edit inside one.
+      const struckWhole =
+        target.strikesCovered === true &&
+        target.range !== undefined &&
+        strikesWholeControl(span, target.range, resolveContentControlLock(locks));
       // WHAT FORMS PROTECTION LETS THROUGH is an edit that stays within one field. Asking whether
       // the NAMED NODE is inside a control answers "no" for every inline field — the paragraph
       // around it is not the field — so it is asked of the addressed range instead.
-      if (target.range !== undefined && encloses(span, target.range, target.writes === true)) {
+      if (
+        !struckWhole &&
+        target.range !== undefined &&
+        encloses(span, target.range, target.writes === true)
+      ) {
         filling = true;
       }
       const affected =
@@ -818,12 +829,7 @@ export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach
         target.structural === true ||
         (target.range !== undefined && intersects(span, target.range, target.writes === true));
       if (!affected) continue;
-      const locks = [...inherited, ...locksOf([...entry.ancestors, entry.node])];
-      const removed =
-        target.removes === true ||
-        (target.strikesCovered === true &&
-          target.range !== undefined &&
-          strikesWholeControl(span, target.range, resolveContentControlLock(locks)));
+      const removed = target.removes === true || struckWhole;
       touches.push({
         control: entry.node,
         locks,

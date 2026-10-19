@@ -245,6 +245,18 @@ describe('suggesting', () => {
     expect(struckWhole(m)).toBe(true);
   });
 
+  test('forward Delete steps past a control it already proposed for deletion', () => {
+    const m = mount(line('contentLocked'), null, suggesting);
+    caretAt(m, 2);
+    m.surface.deleteForward();
+    m.surface.deleteForward();
+    expect(struckWhole(m)).toBe(true);
+    // The next presses move on to the text after it instead of selecting it again.
+    m.surface.deleteForward();
+    m.surface.deleteForward();
+    expect(serializeOoxmlPart(m.surface.session.part())).toContain('<w:delText>z</w:delText>');
+  });
+
   test('an sdtContentLocked control is still refused', () => {
     const m = mount(line('sdtContentLocked'), null, suggesting);
     caretAt(m, 1, 8);

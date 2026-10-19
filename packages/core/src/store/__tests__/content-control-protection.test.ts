@@ -110,6 +110,24 @@ describe('forms protection inverts what is editable', () => {
     ).toBe('locked');
   });
 
+  test('a tracked deletion of exactly a contentLocked inline field is refused', () => {
+    const inline =
+      `<w:p><w:r><w:t>ab</w:t></w:r><w:sdt><w:sdtPr><w:tag w:val="f"/>` +
+      `<w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent><w:r><w:t>REF</w:t></w:r>` +
+      `</w:sdtContent></w:sdt><w:r><w:t>cd</w:t></w:r></w:p><w:sectPr/>`;
+    const pkg = build(inline, FORMS);
+    const paragraphId = paragraphIds(pkg)[0]!;
+    expect(
+      refusal(pkg, {
+        op: 'deleteText',
+        paragraphId,
+        start: 2,
+        end: 5,
+        revision: { author: 'A', date: '2026-01-01T00:00:00Z' },
+      })
+    ).toBe('locked');
+  });
+
   test('enforcement="0" is a stored preference, not a protection', () => {
     const pkg = build(BODY, '<w:documentProtection w:edit="forms" w:enforcement="0"/>');
     const outside = paragraphIds(pkg)[1]!;
