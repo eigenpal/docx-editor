@@ -19,6 +19,7 @@ import {
   insertCustomNode,
   recognizeCustomNodes,
 } from '../index.ts';
+import { reviewModule } from '../review/review-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -318,5 +319,30 @@ describe('insertCustomNode', () => {
     });
     const [node] = recognizeCustomNodes(reopened.surface!.session.part(), [citation]);
     expect(node?.attrs['q']).toBe(hostile);
+  });
+
+  test('a node inserted into a paragraph without one appears in the review list at once', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx('<w:p><w:r><w:t>before after</w:t></w:r></w:p>'),
+      author: 'Demo Reviewer',
+      modules: [customNodesModule({ nodes: [citation] }), reviewModule()],
+    });
+    const customItems = () => editor.getReviewItems().filter((item) => item.kind === 'custom');
+    // Read first, so the next read starts from a cached list.
+    expect(customItems()).toHaveLength(0);
+    insertCustomNode(editor, citation, {
+      attrs: { sourceId: 's1' },
+      text: 'label',
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    expect(customItems()).toHaveLength(1);
+    // Typing beside it keeps the item.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: firstParagraphId(editor), offset: 0 },
+      head: { paragraphId: firstParagraphId(editor), offset: 0 },
+    });
+    editor.surface!.type('x');
+    expect(customItems()).toHaveLength(1);
   });
 });

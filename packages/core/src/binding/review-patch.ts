@@ -21,6 +21,7 @@ import {
   findNode,
   parentNodeOf,
   collectRevisionSites,
+  contentControlsIn,
   linkRevisionReplies,
   type OoxmlPackage,
   type OoxmlPart,
@@ -455,6 +456,10 @@ export function localReviewPatchParagraphId(
     // A property or list edit can add a formatting change that folds into a neighbor's card.
     // Only a paragraph left with no revision markup at all is sure to need no card of its own.
     if (collectRevisionSites({ ...part, root: paragraph }).length > 0) return null;
+    // A structural edit can ADD a control a custom-node definition recognizes, and the patch
+    // re-derives revisions only, so the new node would have no item until something else
+    // forced the full derivation. Typing stays on the fast path: it creates no control.
+    if (contentControlsIn(paragraph).length > 0) return null;
     // A list edit moves the flow, and a paragraph in a table has row and cell markup outside
     // it. Only a paragraph directly in the body has nothing above it to hold a card.
     if (
