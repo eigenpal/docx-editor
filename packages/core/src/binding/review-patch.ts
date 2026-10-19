@@ -448,10 +448,16 @@ function controlsChangedIn(before: OoxmlPackage, part: OoxmlPart, paragraph: Oox
   return now.some((entry) => !kept.has(entry.node));
 }
 
-/** Whether a control encloses the paragraph. */
-function insideControl(part: OoxmlPart, paragraphId: string): boolean {
+/** Whether a control the queue lists as a custom node encloses the paragraph. */
+function insideCustomNode(
+  part: OoxmlPart,
+  paragraphId: string,
+  items: readonly ReviewItem[]
+): boolean {
+  const custom = new Set(items.flatMap((item) => (item.kind === 'custom' ? [item.id] : [])));
+  if (custom.size === 0) return false;
   for (let node = parentNodeOf(part, paragraphId); node; node = parentNodeOf(part, node.id)) {
-    if (node.kind === 'contentControl') return true;
+    if (node.kind === 'contentControl' && custom.has(node.id)) return true;
   }
   return false;
 }
@@ -490,9 +496,9 @@ export function localReviewPatchParagraphId(
   // custom-node item it had before, or stay without one. Typing beside a control leaves it the
   // same object, and keeps the fast path.
   if (controlsChangedIn(cache.pkg, part, paragraph)) return null;
-  // A BLOCK control around the paragraph changes with every edit inside it and its item has no
-  // range to match below. Only a queue that already lists custom nodes pays for asking.
-  if (items.some((item) => item.kind === 'custom') && insideControl(part, paragraphId)) return null;
+  // A BLOCK custom node around the paragraph changes with every edit inside it, and its item has
+  // no range to match below. Only a control the queue lists as a custom node is asked about.
+  if (insideCustomNode(part, paragraphId, items)) return null;
 
   // A local edit can CREATE a cross-paragraph group. The cached queue cannot prove
   // that boundary safe: before typing after Enter, only the preceding mark exists.
