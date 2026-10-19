@@ -20,7 +20,17 @@ const BODY =
   '<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>locked text</w:t></w:r></w:p>' +
   '</w:sdtContent></w:sdt>';
 
-function mount(contentLockPolicy?: ContentLockPolicy): DocxEditorInstance {
+/** "ab" [2,5) "PIL" "cd": an inline `contentLocked` pill. */
+const PILL =
+  '<w:p><w:r><w:t>ab</w:t></w:r><w:sdt><w:sdtPr><w:tag w:val="pill"/>' +
+  '<w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent><w:r><w:t>PIL</w:t></w:r>' +
+  '</w:sdtContent></w:sdt><w:r><w:t>cd</w:t></w:r></w:p>';
+
+function mount(
+  contentLockPolicy?: ContentLockPolicy,
+  body = BODY,
+  extra: { readonly mode?: 'suggesting'; readonly author?: string } = {}
+): DocxEditorInstance {
   const bytes = zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -30,13 +40,14 @@ function mount(contentLockPolicy?: ContentLockPolicy): DocxEditorInstance {
       `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
     ),
     'word/document.xml': strToU8(
-      `<w:document xmlns:w="${W}"><w:body>${BODY}</w:body></w:document>`
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
   });
   const editor = createDocxEditor({
     container: document.createElement('div'),
     document: bytes,
     ...(contentLockPolicy ? { contentLockPolicy } : {}),
+    ...extra,
   });
   if (!editor.surface) throw new Error('surface failed to mount');
   return editor;
@@ -70,8 +81,8 @@ test('the eraser at a caret in a locked paragraph is refused before the write', 
   const caret = at(editor, 1, 2);
   editor.surface!.setSelection({ anchor: caret, head: caret });
   expect(editor.can({ type: 'clearFormatting' })).toMatchObject({ ok: false, code: 'locked' });
-  // A run format at the same caret only arms the next characters typed.
-  expect(editor.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+  // Typing is refused here too, so arming a run format for it is refused as well.
+  expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: false });
   editor.destroy();
 });
 
@@ -80,5 +91,28 @@ test('the formatting policy lets run formats through, but not the paragraph eras
   editor.surface!.setSelection({ anchor: at(editor, 1, 0), head: at(editor, 1, 6) });
   expect(editor.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
   expect(editor.can({ type: 'clearFormatting' })).toMatchObject({ ok: false, code: 'locked' });
+  editor.destroy();
+});
+
+test('a caret inside a locked pill refuses run formats; a caret at its edge does not', () => {
+  const editor = mount(undefined, PILL);
+  const inside = at(editor, 0, 3);
+  editor.surface!.setSelection({ anchor: inside, head: inside });
+  expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: false });
+  const edge = at(editor, 0, 5);
+  editor.surface!.setSelection({ anchor: edge, head: edge });
+  expect(editor.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+  editor.destroy();
+});
+
+test('in suggesting mode the formatting policy does not pass a tracked restyle', () => {
+  const editor = mount({ allowFormattingInLockedContent: true }, PILL, { author: 'Reviewer' });
+  editor.surface!.setEditingMode('suggest');
+  expect(editor.surface!.editingMode()).toBe('suggest');
+  editor.surface!.setSelection({ anchor: at(editor, 0, 0), head: at(editor, 0, 7) });
+  expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
+    ok: false,
+    code: 'locked',
+  });
   editor.destroy();
 });

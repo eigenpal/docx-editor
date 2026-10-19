@@ -37,7 +37,7 @@ interface SelectedSpan {
 const WHOLE = Number.MAX_SAFE_INTEGER;
 
 /** The paragraphs a format write reaches, with the same coverage rule the writer uses. */
-function selectedSpans(surface: PaginatedSurface, caretCounts: boolean): SelectedSpan[] {
+function selectedSpans(surface: PaginatedSurface): SelectedSpan[] {
   const state = surface.state();
   const cells = state.cellSelection;
   if (cells) {
@@ -49,10 +49,10 @@ function selectedSpans(surface: PaginatedSurface, caretCounts: boolean): Selecte
   }
   const { anchor, head } = state.selection;
   if (anchor.paragraphId === head.paragraphId) {
-    // A collapsed caret ARMS a run format for the next characters typed; only the eraser
-    // writes paragraph properties at a caret.
+    // A collapsed caret arms a run format for the next characters typed, and the eraser
+    // clears the paragraph's own properties: both are refused where typing would be.
     if (anchor.offset === head.offset) {
-      return caretCounts ? [{ paragraphId: head.paragraphId, start: 0, end: 0 }] : [];
+      return [{ paragraphId: head.paragraphId, start: head.offset, end: head.offset }];
     }
     return [
       {
@@ -105,23 +105,37 @@ export function contentLockFormatRefusal(
 ): Exclude<ExecResult, { ok: true }> | null {
   if (!RUN_FORMAT_COMMANDS.has(command.type)) return null;
   const clearing = command.type === 'clearFormatting';
-  const runsPass = policy?.allowFormattingInLockedContent === true;
+  // The policy lets an UNTRACKED restyle through; a proposed one is still an edit to locked
+  // content, so suggesting mode keeps the lock unless the document asks for formatting
+  // changes to go untracked.
+  const tracked =
+    surface.editingMode() === 'suggest' &&
+    Boolean(surface.author()?.trim()) &&
+    !surface.session.trackingSettings().doNotTrackFormatting;
+  const runsPass = policy?.allowFormattingInLockedContent === true && !tracked;
   if (runsPass && !clearing) return null;
   const refusal = { ok: false as const, code: 'locked' as const, reason: LOCKED_FORMAT_REASON };
-  for (const span of selectedSpans(surface, clearing)) {
+  for (const span of selectedSpans(surface)) {
     // A pure ancestry read of the story that holds the paragraph.
     const part = partOfNodeId(surface.session, span.paragraphId) ?? surface.session.part();
     if (!storyHasContentLock(part)) continue;
     const paragraph = findNode(part, span.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') continue;
     if (effectiveContentLockAt(part, span.paragraphId).content) return refusal;
-    if (runsPass || span.start === span.end) continue;
+    if (runsPass) continue;
     const inside = contentControlsIn(paragraph);
     if (inside.length === 0) continue;
     const offsets = paragraphOffsetIndex(paragraph);
+    const caret = span.start === span.end;
     for (const entry of inside) {
       const at = offsets.spanOf(entry.node);
-      if (!at || at.end <= span.start || at.start >= span.end) continue;
+      if (!at) continue;
+      // A caret strictly INSIDE a locked control arms a format for text that cannot be typed
+      // there; at its edge the text lands outside, so the caret is free.
+      const reached = caret
+        ? at.start < span.start && span.start < at.end
+        : at.end > span.start && at.start < span.end;
+      if (!reached) continue;
       const locks = enclosingContentControls(part, entry.node.id).map(
         (control) => contentControlPropertiesOf(control).lock
       );
