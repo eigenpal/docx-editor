@@ -23,6 +23,7 @@ import {
   collectRevisionSites,
   contentControlsIn,
   linkRevisionReplies,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
   type TreeModelChange,
@@ -436,6 +437,17 @@ export function reviewQueueKeptByStructure(
   return true;
 }
 
+/** Whether the paragraph holds a control that is not the same object it was in `before`. */
+function controlsChangedIn(before: OoxmlPackage, part: OoxmlPart, paragraph: OoxmlNode): boolean {
+  const now = contentControlsIn(paragraph);
+  if (now.length === 0) return false;
+  const previousPart = before.parts.get(part.name);
+  const previous = previousPart ? findNode(previousPart, paragraph.id) : null;
+  if (!previous) return true;
+  const kept = new Set(contentControlsIn(previous).map((entry) => entry.node));
+  return now.some((entry) => !kept.has(entry.node));
+}
+
 /** The one paragraph a patch may rebuild, or null to fall back to the full derivation. */
 export function localReviewPatchParagraphId(
   change: TreeModelChange,
@@ -456,10 +468,6 @@ export function localReviewPatchParagraphId(
     // A property or list edit can add a formatting change that folds into a neighbor's card.
     // Only a paragraph left with no revision markup at all is sure to need no card of its own.
     if (collectRevisionSites({ ...part, root: paragraph }).length > 0) return null;
-    // A structural edit can ADD a control a custom-node definition recognizes, and the patch
-    // re-derives revisions only, so the new node would have no item until something else
-    // forced the full derivation. Typing stays on the fast path: it creates no control.
-    if (contentControlsIn(paragraph).length > 0) return null;
     // A list edit moves the flow, and a paragraph in a table has row and cell markup outside
     // it. Only a paragraph directly in the body has nothing above it to hold a card.
     if (
@@ -469,6 +477,11 @@ export function localReviewPatchParagraphId(
       return null;
     }
   }
+
+  // The patch re-derives revisions only, so a control the edit added or changed would keep the
+  // custom-node item it had before, or stay without one. Typing beside a control leaves it the
+  // same object, and keeps the fast path.
+  if (controlsChangedIn(cache.pkg, part, paragraph)) return null;
 
   // A local edit can CREATE a cross-paragraph group. The cached queue cannot prove
   // that boundary safe: before typing after Enter, only the preceding mark exists.

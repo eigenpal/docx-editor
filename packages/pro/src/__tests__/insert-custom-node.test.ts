@@ -345,4 +345,30 @@ describe('insertCustomNode', () => {
     editor.surface!.type('x');
     expect(customItems()).toHaveLength(1);
   });
+
+  test('typing that changes a node so its card appears updates the review list', () => {
+    const flagged = defineCustomNode({
+      name: 'flagged',
+      tagPrefix: 'acme',
+      reviewCard: ({ text }) => (text.includes('Z') ? { title: text } : null),
+    });
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx('<w:p><w:r><w:t>before after</w:t></w:r></w:p>'),
+      author: 'Demo Reviewer',
+      modules: [customNodesModule({ nodes: [flagged] }), reviewModule()],
+    });
+    const customItems = () => editor.getReviewItems().filter((item) => item.kind === 'custom');
+    insertCustomNode(editor, flagged, {
+      attrs: {},
+      text: 'abc',
+      lock: false,
+      at: { paragraphId: firstParagraphId(editor), offset: 7 },
+    });
+    expect(customItems()).toHaveLength(0);
+    const inside = { paragraphId: firstParagraphId(editor), offset: 9 };
+    editor.surface!.setSelection({ anchor: inside, head: inside });
+    editor.surface!.type('Z');
+    expect(customItems()).toHaveLength(1);
+  });
 });
