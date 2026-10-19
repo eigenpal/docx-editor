@@ -150,6 +150,14 @@ export enum ChangeTrackingMode {
 }
 
 // @public
+export enum ChangeTrackingVersion {
+    // (undocumented)
+    current = "Current",
+    // (undocumented)
+    original = "Original"
+}
+
+// @public
 export abstract class ClientObject implements RuntimeManagedObject {
     // @internal
     [REBIND](context: RequestContext): void;
@@ -1125,6 +1133,9 @@ export class Paragraph extends ModelObject implements PromisedItem {
     set firstLineIndent(value: number);
     get font(): Font;
     getRange(rangeLocation?: 'Whole' | 'Content' | 'Start' | 'End' | 'Before' | 'After'): Range_2;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -1200,9 +1211,14 @@ class Range_2 extends ModelObject implements PromisedItem {
     get bookmarks(): BookmarkCollection;
     clear(): void;
     delete(): void;
+    expandTo(range: Range_2): Range_2;
     get fields(): FieldCollection;
     get font(): Font;
     getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;
+    getRange(rangeLocation?: RangeLocation.whole | RangeLocation.start | RangeLocation.end | RangeLocation.after | RangeLocation.content | 'Whole' | 'Start' | 'End' | 'After' | 'Content'): Range_2;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     // @internal
     hydrateAddress(address: ObjectAddress): void;
     // @internal
@@ -1258,6 +1274,22 @@ export class RangeCollection extends ItemCollection<Range_2> {
 
 // @public
 export type RangeInsertTextLocation = 'Replace' | 'Start' | 'End' | 'Before' | 'After';
+
+// @public
+export enum RangeLocation {
+    // (undocumented)
+    after = "After",
+    // (undocumented)
+    before = "Before",
+    // (undocumented)
+    content = "Content",
+    // (undocumented)
+    end = "End",
+    // (undocumented)
+    start = "Start",
+    // (undocumented)
+    whole = "Whole"
+}
 
 // @public
 export enum RemoveDocInfoType {

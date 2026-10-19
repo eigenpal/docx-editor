@@ -30,8 +30,16 @@ import {
 } from './field-marker-scope.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from './ooxml-tree.ts';
 
-/** Review view applied to cached field-result content. */
-export type FieldResultTextView = 'allMarkup' | 'original';
+/**
+ * Review view applied to cached field-result content. `original` drops pending insertions and
+ * `current` drops pending deletions, as if every revision were rejected or accepted.
+ */
+export type FieldResultTextView = 'allMarkup' | 'original' | 'current';
+
+/** Whether a review view hides one field-machine entry. */
+function hiddenIn(view: FieldResultTextView, entry: FieldRunChildRef): boolean {
+  return view === 'original' ? entry.hiddenInOriginal : view === 'current' && entry.hiddenInCurrent;
+}
 
 /** One visible interval contributed by a result run. @internal */
 export interface FieldResultRunBoundary {
@@ -163,7 +171,7 @@ function plainFieldResultText(
   const result = emptyFieldResult();
   while (pending.length > 0) {
     const entry = pending.pop()!;
-    if (view === 'original' && entry.hiddenInOriginal) continue;
+    if (hiddenIn(view, entry)) continue;
     if (isFldSimple(entry.node)) {
       const nested: FieldRunChildRef[] = [];
       if (!collectFieldRunChildren(entry.node, nested, budget)) return null;
@@ -191,7 +199,7 @@ function scanSimpleEntries(
     if (consumeFieldMarker(states, markers, node)) continue;
     if (isInstrText(node)) continue;
     if (!fieldMarkerStatesVisible(states)) continue;
-    if (view === 'original' && entry.hiddenInOriginal) continue;
+    if (hiddenIn(view, entry)) continue;
     if (isFldSimple(node)) {
       const nested =
         depth >= MAX_FIELD_NESTING
@@ -239,7 +247,7 @@ function consumeComplexEntry(
     isFldSimple(node) ||
     !active.owned.has(node.id) ||
     !fieldMarkerStatesVisible(active.states) ||
-    (view === 'original' && entry.hiddenInOriginal)
+    hiddenIn(view, entry)
   ) {
     return false;
   }

@@ -81,6 +81,8 @@ export {
   Alignment,
   PageOrientation,
   ChangeTrackingMode,
+  ChangeTrackingVersion,
+  RangeLocation,
   VerticalAlignment,
   BreakType,
   ContentControlType,

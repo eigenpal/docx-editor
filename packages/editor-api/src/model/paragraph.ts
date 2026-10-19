@@ -22,7 +22,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // stopped describing it. Two syncs get both edits, each exactly as asked.
 
 import { ShapeCollection } from './shapes.ts';
-import { InsertLocation, Alignment } from './editing-enums.ts';
+import { InsertLocation, Alignment, ChangeTrackingVersion } from './editing-enums.ts';
 import {
   ObjectPath,
   fail,
@@ -30,6 +30,7 @@ import {
   hydratedHandle,
   hydratedParagraphFormat,
   hydratedSpan,
+  hydratedText,
   type AutomationHandle,
   type ObjectAddress,
   type RequestContext,
@@ -43,6 +44,8 @@ import { besideLocation, insertableText, paragraphTextLocation } from './locatio
 import { ModelObject } from './model-object.ts';
 import { Range } from './range.ts';
 import { searchOptions as readSearchOptions, type SearchOptions } from './search-options.ts';
+import { optionalFlag, reviewedTextVersion, textRangeMarks } from './text-ranges.ts';
+import { clientResult, type ClientResult } from '../runtime/client-result.ts';
 
 /** Most delimiters one `split` may name. The host applies its own cap as well. */
 const MAX_DELIMITERS = 16;
@@ -307,6 +310,59 @@ export class Paragraph extends ModelObject implements PromisedItem {
         projection: this.revisionTextView(),
       },
     }));
+  }
+
+  /**
+   * Split this paragraph into ranges that each end after one of `endingMarks`, such as `[' ']`
+   * for words. Takes the same arguments and follows the same rules as `Range.getTextRanges`.
+   *
+   * @example
+   * ```ts
+   * const words = paragraph.getTextRanges([' '], true);
+   * words.load('items/text');
+   * await context.sync();
+   * ```
+   */
+  getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection {
+    const target = `${this.path.label}.getTextRanges`;
+    const marks = textRangeMarks(endingMarks, target);
+    const trim = optionalFlag(trimSpacing, target);
+    this.requireUsablePath();
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'getTextRanges',
+      scope: { paragraph: this.#handle() },
+      endingMarks: marks,
+      ...(trim ? { trimSpacing: true } : {}),
+      projection: this.revisionTextView(),
+    }));
+  }
+
+  /**
+   * This paragraph's text as if every pending tracked change were accepted (`Current`, the
+   * default) or rejected (`Original`). The document does not change.
+   *
+   * After tracked edits, `text` reads both the deleted and the inserted words. Read
+   * `getReviewedText('Current')` to check the proposed result before the next edit.
+   */
+  getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+  /**
+   * This paragraph's text as if every pending tracked change were accepted (`Current`, the
+   * default) or rejected (`Original`). The document does not change.
+   */
+  getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+  getReviewedText(
+    changeTrackingVersion?: ChangeTrackingVersion | 'Original' | 'Current'
+  ): ClientResult<string> {
+    const target = `${this.path.label}.getReviewedText`;
+    const version = reviewedTextVersion(changeTrackingVersion, target);
+    this.requireUsablePath();
+    const { result, fill } = clientResult<string>(target);
+    this.read(
+      target,
+      () => ({ op: 'getReviewedText', span: { paragraph: this.#handle() }, version }),
+      (value) => fill(hydratedText(value, target))
+    );
+    return result;
   }
 
   /** Start a new independent bullet list with this paragraph. Sync before using the returned list. */

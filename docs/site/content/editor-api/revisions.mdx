@@ -166,6 +166,8 @@ In collaboration, text typed into the proposed deletion joins that deletion. Rej
 
 The runtime option `revisionTextView` affects ordinary text loads and search. `allMarkup` is the default. `original` retains pending deletions and hides pending insertions. This is a DocxEditor host option, not a Word document-model property. It does not accept or reject revisions.
 
+To read one paragraph or range in a single review version, call `getReviewedText('Current')` or `getReviewedText('Original')`. `Current` reads the text as if every pending change were accepted, and `Original` as if every change were rejected. The default is `Current`. For an example, see [Rewrite a paragraph and read the result](/docs/2.x/editor-api/text-and-ranges#rewrite-a-paragraph-and-read-the-result).
+
 Use plain text and explicit revision information when preparing a model prompt. Do not pass live proxies into a model or job queue. See [Runtime and setup](/docs/2.x/editor-api/runtime).
 
 ## Inspect revisions by story

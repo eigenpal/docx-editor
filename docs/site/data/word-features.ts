@@ -922,7 +922,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'premium',
     notes:
-      'The automation object model requires the EigenPal Pro License. Manual line breaks use U+000B in text reads and writes, including tracked insertion. Column breaks read as U+000E and refuse text writes. Paragraph separators remain carriage returns. It writes native tracked changes. It works over DOCX bytes on a server, or over an editor open in a page.',
+      'The automation object model requires the EigenPal Pro License. Manual line breaks use U+000B in text reads and writes, including tracked insertion. Column breaks read as U+000E and refuse text writes. Paragraph separators remain carriage returns. It writes native tracked changes. getTextRanges splits a paragraph or range into word ranges that later edits can target, expandTo joins a run of them, and getReviewedText reads the text as if every pending change were accepted or rejected. It works over DOCX bytes on a server, or over an editor open in a page.',
     docsLink: '/docs/2.x/editor-api',
   },
   {

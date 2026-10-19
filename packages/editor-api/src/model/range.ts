@@ -22,7 +22,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // with the reasons recorded as omissions there — rather than left declared for a shipped object that
 // could never satisfy them. A caller who wants the ends of a range asks it for its paragraphs.
 
-import { InsertLocation, BreakType, ContentControlType } from './editing-enums.ts';
+import {
+  InsertLocation,
+  BreakType,
+  ChangeTrackingVersion,
+  ContentControlType,
+  RangeLocation,
+} from './editing-enums.ts';
 import { Field, FieldCollection } from './fields.ts';
 import type { FieldType, FieldTypeLiteral } from './field-types.ts';
 import { InlinePicture, InlinePictureCollection } from './pictures.ts';
@@ -56,6 +62,12 @@ import { Paragraph } from './paragraph.ts';
 import { Comment, RevisionCollection } from './review.ts';
 import { searchOptions, type SearchOptions } from './search-options.ts';
 import { clientResult, type ClientResult } from '../runtime/client-result.ts';
+import {
+  optionalFlag,
+  rangeGetRangeLocation,
+  reviewedTextVersion,
+  textRangeMarks,
+} from './text-ranges.ts';
 
 /**
  * A stretch of a story: two endpoints, each a paragraph and a UTF-16 offset.
@@ -314,6 +326,136 @@ export class Range extends ModelObject implements PromisedItem {
         projection: this.revisionTextView(),
       },
     }));
+  }
+
+  /**
+   * Split this range into ranges that each end after one of `endingMarks`, such as `[' ']` for
+   * words or `['.', '!', '?']` for sentences. A paragraph end always ends a range.
+   *
+   * Each range is an exact span of the document, so you can use it as an edit target in a later
+   * sync: `insertText(text, 'Replace')`, `insertText(text, 'After')`, or `delete()`, also with
+   * change tracking on. Pass `trimSpacing` as `true` to remove spaces, tabs, and column breaks
+   * from the start and end of each range; a range that holds only spacing is then left out.
+   *
+   * A field, an equation, a picture, or a note reference is one character of the range and is
+   * never split, so it joins the word it touches. Its text reads as its displayed result. A tab
+   * ends a range only when you list `'\t'` as a mark. An inline content control adds no
+   * boundary, so its words join the ranges around it. Ranges follow the runtime's
+   * `revisionTextView`: a range that view shows no character of is left out. Pass at most 32
+   * marks of at most 32 UTF-16 code units each; other values refuse with `InvalidArgument`.
+   *
+   * @example
+   * ```ts
+   * const words = paragraph.getTextRanges([' '], true);
+   * words.load('items/text');
+   * await context.sync();
+   * ```
+   */
+  getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection {
+    const target = `${this.path.label}.getTextRanges`;
+    const marks = textRangeMarks(endingMarks, target);
+    const trim = optionalFlag(trimSpacing, target);
+    this.requireUsablePath();
+    return RangeCollection.of(this.context, target, this.path, () => ({
+      op: 'getTextRanges',
+      scope: this.#span(),
+      endingMarks: marks,
+      ...(trim ? { trimSpacing: true } : {}),
+      projection: this.revisionTextView(),
+    }));
+  }
+
+  /**
+   * A new range from the start of whichever range starts first to the end of whichever ends
+   * last. This range does not change.
+   *
+   * Use it to address a run of words from {@link Range.getTextRanges}: expand the first word to
+   * the last, then replace the result. Both ranges must be in the same story, such as the body
+   * or one header; ranges in different stories refuse the sync with `InvalidArgument`. A range
+   * that spans paragraphs follows the same `StaleDocument` rule as `Body.getRange`.
+   */
+  expandTo(range: Range): Range {
+    const target = `${this.path.label}.expandTo`;
+    if (!(range instanceof Range) || range.context !== this.context)
+      fail({ code: 'InvalidArgument', target });
+    this.requireUsablePath();
+    range.requireUsablePath();
+    const expanded = Range.promised(this.context, target, false);
+    this.enqueue({
+      sort: 'read',
+      label: target,
+      dependencies: [range.path],
+      plan: () => ({ op: 'expandSpan', span: this.#span(), to: range.#span() }),
+      settle: (value) => {
+        expanded.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      },
+    });
+    return expanded;
+  }
+
+  /**
+   * The whole range, its content, or one of its endpoints, as a range. The default is `Whole`.
+   *
+   * `Whole` and `Content` answer the same span. `Start` and `End` answer a collapsed range at
+   * that endpoint, for an insertion point. `After` refuses with `NotSupported`, because a range
+   * here never owns the position after its end. A text write can use the returned range in the
+   * same sync; sync before you load it.
+   */
+  getRange(
+    rangeLocation?:
+      | RangeLocation.whole
+      | RangeLocation.start
+      | RangeLocation.end
+      | RangeLocation.after
+      | RangeLocation.content
+      | 'Whole'
+      | 'Start'
+      | 'End'
+      | 'After'
+      | 'Content'
+  ): Range {
+    const target = `${this.path.label}.getRange`;
+    const location = rangeGetRangeLocation(rangeLocation, target);
+    this.requireUsablePath();
+    const found = Range.promised(this.context, target, false);
+    this.read(
+      target,
+      () => ({ op: 'getRange', span: this.#span(), location }),
+      (value) => {
+        found.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) });
+      }
+    );
+    return found;
+  }
+
+  /**
+   * This range's text as if every pending tracked change were accepted (`Current`, the default)
+   * or rejected (`Original`). The document does not change.
+   *
+   * Use it to read back a proposed rewrite between syncs: after tracked edits, `text` reads both
+   * the deleted and the inserted words, while `getReviewedText('Current')` reads only the
+   * result. A paragraph mark reads as `\r` when that version keeps it. Fields read as their
+   * displayed results, like `text`. Formatting changes do not change the text.
+   */
+  getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+  /**
+   * This range's text as if every pending tracked change were accepted (`Current`, the default)
+   * or rejected (`Original`). The document does not change.
+   */
+  getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+  getReviewedText(
+    changeTrackingVersion?: ChangeTrackingVersion | 'Original' | 'Current'
+  ): ClientResult<string> {
+    const target = `${this.path.label}.getReviewedText`;
+    const version = reviewedTextVersion(changeTrackingVersion, target);
+    this.requireUsablePath();
+    const { result, fill } = clientResult<string>(target);
+    this.read(
+      target,
+      () => ({ op: 'getReviewedText', span: this.#span(), version }),
+      (value) => fill(hydratedText(value, target))
+    );
+    return result;
   }
 
   /**

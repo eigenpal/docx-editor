@@ -120,19 +120,47 @@ export function projectParagraphText(
   const base = visibleParagraphPieces(paragraph, rawText, projection);
   if (projection === 'allMarkup') return projectionFromPieces(withLineBreakText(readText, base));
 
-  const hidden = hiddenInsertionSpans(paragraph);
+  const hidden = hiddenRevisionSpans(paragraph, INSERTED_KINDS);
   if (hidden.length === 0) return projectionFromPieces(withLineBreakText(readText, base));
   const pieces = hideInsertionSpansFromPieces(base, hidden);
   return projectionFromPieces(withLineBreakText(readText, pieces));
 }
 
-/** Pending insertions and move destinations are absent from Word's Original review view. */
-function hiddenInsertionSpans(paragraph: OoxmlParagraphNode): readonly RawSpan[] {
+/**
+ * A paragraph as if every pending revision were accepted (`current`) or rejected (`original`).
+ *
+ * `current` drops pending deletions and move sources, including deleted text inside a field's
+ * saved result; `original` is the `original` projection. A field, equation, or other atom that
+ * a revision covers whole is hidden whole. Offsets still map back to the model.
+ */
+export function projectReviewedParagraphText(
+  paragraph: OoxmlParagraphNode,
+  rawText: string,
+  version: 'original' | 'current'
+): ProjectedParagraphText {
+  if (version === 'original') return projectParagraphText(paragraph, rawText, 'original');
+  const readText = withBreakReadText(paragraph, rawText);
+  const base = visibleParagraphPieces(paragraph, rawText, 'current');
+  const hidden = hiddenRevisionSpans(paragraph, REMOVED_KINDS);
+  const pieces = hidden.length === 0 ? base : hideInsertionSpansFromPieces(base, hidden);
+  return projectionFromPieces(withLineBreakText(readText, pieces));
+}
+
+/** Pending insertions and move destinations are absent from the original review view. */
+const INSERTED_KINDS: ReadonlySet<string> = new Set(['revisionInsert', 'revisionMoveTo']);
+/** Pending deletions and move sources are absent once every revision is accepted. */
+const REMOVED_KINDS: ReadonlySet<string> = new Set(['revisionDelete', 'revisionMoveFrom']);
+
+/** Sorted, merged model spans of the revision wrappers of the given kinds. */
+function hiddenRevisionSpans(
+  paragraph: OoxmlParagraphNode,
+  kinds: ReadonlySet<string>
+): readonly RawSpan[] {
   const index = paragraphOffsetIndex(paragraph);
   const found: RawSpan[] = [];
   const visit = (node: OoxmlNode, depth: number): void => {
     if (depth > 64 || node.kind === 'textValue') return;
-    if (node.kind === 'revisionInsert' || node.kind === 'revisionMoveTo') {
+    if (kinds.has(node.kind)) {
       const span = index.spanOf(node);
       if (span && span.end > span.start) found.push({ start: span.start, end: span.end });
       return;

@@ -13,6 +13,32 @@ export enum InsertLocation {
   after = 'After',
 }
 
+/**
+ * Which part of an object a `getRange` call answers. Each call validates its allowed subset;
+ * `Range.getRange` supports `Whole`, `Content`, `Start`, and `End`.
+ *
+ * @public
+ */
+export enum RangeLocation {
+  whole = 'Whole',
+  start = 'Start',
+  end = 'End',
+  before = 'Before',
+  after = 'After',
+  content = 'Content',
+}
+
+/**
+ * Which version of tracked text `getReviewedText` reads: as if every pending revision were
+ * rejected (`Original`) or accepted (`Current`).
+ *
+ * @public
+ */
+export enum ChangeTrackingVersion {
+  original = 'Original',
+  current = 'Current',
+}
+
 /** Paragraph alignment vocabulary. Mixed and unknown are read states, not authoring modes. @public */
 export enum Alignment {
   mixed = 'Mixed',

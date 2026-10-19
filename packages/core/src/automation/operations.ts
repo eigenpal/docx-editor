@@ -194,6 +194,31 @@ export type AutomationOperation =
       readonly projection?: AutomationTextProjection;
     }
   /**
+   * A span split into ranges that each end after one of `endingMarks`, or at a paragraph end.
+   *
+   * Boundaries come from the model text, so a field, an equation, or another atom is never
+   * split. `trimSpacing` removes spaces, tabs, and column breaks from each range's edges and
+   * drops a range left empty. A range the projection shows no character of is not answered.
+   */
+  | {
+      readonly op: 'getTextRanges';
+      readonly scope: AutomationSpanRef;
+      readonly endingMarks: readonly string[];
+      readonly trimSpacing?: boolean;
+      readonly projection?: AutomationTextProjection;
+    }
+  /** The smallest span covering both spans. Both must be in one story. */
+  | { readonly op: 'expandSpan'; readonly span: AutomationSpanRef; readonly to: AutomationSpanRef }
+  /**
+   * A span's text as if every pending revision were accepted (`current`) or rejected
+   * (`original`), with a carriage return at each paragraph mark that view keeps.
+   */
+  | {
+      readonly op: 'getReviewedText';
+      readonly span: AutomationSpanRef;
+      readonly version: 'original' | 'current';
+    }
+  /**
    * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).
    *
    * Not an index and not a handle ref: it survives paragraphs being inserted or deleted around

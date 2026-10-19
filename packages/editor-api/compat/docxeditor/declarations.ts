@@ -64,6 +64,8 @@
  *     `compat/manifest.json`'s `omissions`: this member is intentionally
  *     *not* selected for exact conformance against the reference, precisely
  *     because it is a deliberate simplification, not a faithful mirror.
+ *   - `ChangeTrackingVersion`: the same two-overload shape as `SelectionMode`,
+ *     for `Range#getReviewedText` and `Paragraph#getReviewedText`.
  *   - `ClientResult`: the box a queued method such as `Range#getBookmarks`
  *     returns, declared with its `value` only so the selected members that
  *     return one can be compared against the reference.
@@ -79,6 +81,13 @@ export declare namespace DocxEditor {
    * same-named type has to exist for the enum-typed overload to type-check at all.
    */
   export type HeaderFooterType = 'Primary' | 'FirstPage' | 'EvenPages';
+
+  /**
+   * Which version of tracked text `getReviewedText` reads. A named type for the same reason
+   * `SelectionMode` is one: upstream offers the position as an enum overload and a
+   * string-literal overload.
+   */
+  export type ChangeTrackingVersion = 'Original' | 'Current';
 
   /** Base request-context handle; see the file header for why only `sync` is declared here. */
   export class ClientRequestContext {
@@ -208,7 +217,12 @@ export declare namespace DocxEditor {
     readonly revisions: RevisionCollection;
     style: string;
     readonly text: string;
+    expandTo(range: Range): Range;
     getBookmarks(includeHidden?: boolean, includeAdjacent?: boolean): ClientResult<string[]>;
+    getRange(rangeLocation?: 'Whole' | 'Start' | 'End' | 'After' | 'Content'): Range;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     insertBookmark(name: string): void;
     insertComment(commentText: string): Comment;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
@@ -237,6 +251,9 @@ export declare namespace DocxEditor {
     readonly text: string;
     clear(): void;
     delete(): void;
+    getReviewedText(changeTrackingVersion?: ChangeTrackingVersion): ClientResult<string>;
+    getReviewedText(changeTrackingVersion?: 'Original' | 'Current'): ClientResult<string>;
+    getTextRanges(endingMarks: string[], trimSpacing?: boolean): RangeCollection;
     insertParagraph(paragraphText: string, insertLocation: 'Before' | 'After'): Paragraph;
     insertText(text: string, insertLocation: 'Replace' | 'Start' | 'End'): Range;
     search(searchText: string, searchOptions?: SearchOptions): RangeCollection;

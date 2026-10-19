@@ -62,6 +62,8 @@ export {
   Section,
   SectionCollection,
   ChangeTrackingMode,
+  ChangeTrackingVersion,
+  RangeLocation,
   type BesideLocation,
   type BodyInsertParagraphLocation,
   type BodyInsertTextLocation,

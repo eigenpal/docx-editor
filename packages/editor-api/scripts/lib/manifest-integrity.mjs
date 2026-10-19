@@ -31,6 +31,7 @@ const ALLOWLISTED_SUPPORT_TYPES = new Set([
   'ClientResult',
   'SelectionMode',
   'HeaderFooterType',
+  'ChangeTrackingVersion',
 ]);
 
 function symbolLabel(symbolName) {

@@ -1377,6 +1377,54 @@
             }
           ]
         },
+        "getReviewedText": {
+          "uid": "Word.Paragraph#getReviewedText",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "ChangeTrackingVersion",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            },
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "\"Original\" | \"Current\"",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            }
+          ]
+        },
+        "getTextRanges": {
+          "uid": "Word.Paragraph#getTextRanges",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "endingMarks",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "Word.Paragraph#insertParagraph",
           "kind": "method",
@@ -1660,6 +1708,22 @@
             }
           ]
         },
+        "expandTo": {
+          "uid": "Word.Range#expandTo",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "range",
+                  "type": "Range"
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
         "font": {
           "uid": "Word.Range#font",
           "kind": "property",
@@ -1691,6 +1755,71 @@
                 }
               ],
               "returns": "ClientResult<string[]>"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "Word.Range#getRange",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "rangeLocation",
+                  "type": "\"Whole\" | \"Start\" | \"End\" | \"After\" | \"Content\"",
+                  "optional": true
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "getReviewedText": {
+          "uid": "Word.Range#getReviewedText",
+          "kind": "method",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "ChangeTrackingVersion",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            },
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "\"Original\" | \"Current\"",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            }
+          ]
+        },
+        "getTextRanges": {
+          "uid": "Word.Range#getTextRanges",
+          "kind": "method",
+          "requirementSet": "WordApi 1.3",
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "endingMarks",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
             }
           ]
         },

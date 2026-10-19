@@ -95,7 +95,11 @@
         "search",
         "select",
         "insertBookmark",
-        "getBookmarks"
+        "getBookmarks",
+        "getTextRanges",
+        "expandTo",
+        "getRange",
+        "getReviewedText"
       ]
     },
     "Paragraph": {
@@ -118,7 +122,9 @@
         "insertParagraph",
         "insertText",
         "search",
-        "split"
+        "split",
+        "getTextRanges",
+        "getReviewedText"
       ]
     },
     "ParagraphCollection": {
@@ -434,6 +440,18 @@
     }
   ],
   "divergences": [
+    {
+      "uid": "Word.Range#getTextRanges / Word.Paragraph#getTextRanges",
+      "note": "Boundaries come from the model text: a field, equation, picture, or note reference is one character that never splits and joins the word it touches, and an inline content control adds no boundary. A paragraph end always ends a range, and no range holds a paragraph mark. trimSpacing trims spaces, tabs, and column breaks. Ranges follow revisionTextView and omit ranges that view shows nothing of. At most 32 ending marks of at most 32 UTF-16 code units each."
+    },
+    {
+      "uid": "Word.Range#getRange",
+      "note": "Whole, Content, Start, and End are supported. After refuses with NotSupported: a range is a snapshot of paragraph identity and offsets that never owns the position after its end, and answering End would place an insertion inside the paragraph instead of after the range."
+    },
+    {
+      "uid": "Word.Range#expandTo",
+      "note": "Both ranges must be in one story; ranges in different stories refuse the sync with InvalidArgument. expandToOrNullObject is not implemented."
+    },
     {
       "uid": "Word.Paragraph#delete",
       "note": "With TrackMineOnly, records the paragraph's text as deleted runs and its paragraph mark as a deleted paragraph mark. Accept removes the paragraph; reject restores it. Position markers between paragraphs stay in place until accept, which moves them to the join point. After a reopen, or when another participant rejects, an empty w:pPr or w:rPr that the proposal added can remain. NotSupported: the last paragraph of a story, table cell, or content control; a paragraph directly before a table or block content control; a mark that ends a section; an inline content control in the paragraph; a paragraph containing a complex field boundary whose matching boundary is in another paragraph; inline content nested more than 64 levels deep. NotImplemented: the author's own pending change in the paragraph; another author's pending paragraph mark, formatting, move, or structural change in it; a pending change at the start of the next paragraph, including the author's own; or a previous paragraph whose mark the author already proposed deleting; any tracked deletion or replacement that starts a paragraph after such a mark refuses the same way. Delete adjacent paragraphs in one sync; a later sync beside the author's own pending deletion refuses, because it would review as one decision. One refusal refuses the whole sync."

@@ -38,13 +38,14 @@ Every model object inherits the common `ClientObject` members. Each collection a
 | `RemoveDocInfoType` | All standard enum values; only `documentProperties` removal is supported | [Remove document properties](#remove-document-properties) |
 | `DocumentProperties` | `author`, `title`, `subject`, `keywords`, `comments`, `category`, read-only `lastAuthor` | [Document properties](#document-properties) |
 | `Body` | `text`, `footnotes`, `endnotes`, `paragraphs`, `getRange`, `search`, `clear`, `insertText`, `insertParagraph`; `font`, `style`, `lists`, `bookmarks`, `contentControls`, `getComments`, `revisions`, `tables`, `inlinePictures`, `shapes`, `fields` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories) |
-| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `search`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
-| `Range` | `text`, `paragraphs`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `getBookmarks`, `revisions`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertBreak`, `insertContentControl`, `insertComment`, `insertBookmark` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
+| `Paragraph` | `text`, `uniqueLocalId`, `getRange`, `getTextRanges`, `getReviewedText`, `search`, `insertText`, `insertParagraph`, `split`, `clear`, `delete`; `font`, `style`, paragraph formatting; `list`, `listItem`, `startNewList`, `attachToList`, `detachFromList`; `shapes` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges), [Formatting and styles](/docs/2.x/editor-api/formatting), [Lists and numbering](/docs/2.x/editor-api/lists) |
+| `Range` | `text`, `paragraphs`, `getRange`, `getTextRanges`, `expandTo`, `getReviewedText`, `search`, `insertText`, `insertParagraph`, `clear`, `delete`, `select`; `font`, `style`, `hyperlink`, `bookmarks`, `getBookmarks`, `revisions`, `tables`, `inlinePictures`, `fields`; `insertTable`, `insertInlinePictureFromBase64`, `insertField`, `insertBreak`, `insertContentControl`, `insertComment`, `insertBookmark` | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) and the dedicated insertion guides |
 | `ParagraphCollection` | `getFirst`, `getLast`, `getFirstOrNullObject`, `getLastOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `RangeCollection` | `getFirst`, `getLast`, `getFirstOrNullObject` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `Bookmark`, `BookmarkCollection` | Bookmark `name`, `range`, `select`, `delete`; collection `items` | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `SearchOptions`, `SelectionMode` | Plain-text search flags and browser selection locations | [Search and navigation](/docs/2.x/editor-api/search-and-navigation) |
 | `InsertLocation`, `BesideLocation`, `BodyInsertParagraphLocation`, `BodyInsertTextLocation`, `ParagraphInsertTextLocation`, `RangeInsertTextLocation` | Insertion location enums and aliases | [Text and ranges](/docs/2.x/editor-api/text-and-ranges) |
+| `RangeLocation` | `getRange` location values | [Text and ranges](/docs/2.x/editor-api/text-and-ranges#address-existing-content) |
 
 ## Formatting, lists, tables, and pictures
 
@@ -96,7 +97,7 @@ Font writes honor inherited complex-script properties. Font reads return authore
 | `Revision` | `author`, `date`, `type`, `range`, `accept`, `reject` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `RevisionCollection` | `resolve`, `setAuthor`, `acceptAll`, `rejectAll` | [Tracked changes](/docs/2.x/editor-api/revisions) |
 | `getReviewItemRevisions`, `getReviewItemRange`, `getReviewItemRangeOrNullObject` | DocxEditor functions that return the changes a review item `key` names, or the range it covers | [Work with review items](/docs/2.x/editor-api/revisions#work-with-review-items) |
-| `ChangeTrackingMode`, `RevisionTextView`, `RevisionType` | Runtime tracking modes, read views, and published revision types | [Tracked changes](/docs/2.x/editor-api/revisions) |
+| `ChangeTrackingMode`, `ChangeTrackingVersion`, `RevisionTextView`, `RevisionType` | Runtime tracking modes, `getReviewedText` versions, read views, and published revision types | [Tracked changes](/docs/2.x/editor-api/revisions) |
 
 ## Distinguish host extensions from Office.js compatibility
 

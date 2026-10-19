@@ -8,7 +8,7 @@
 export const AUTOMATION_COMMAND_OPERATIONS: readonly ["removeDocumentInformation", "setDocumentProperties", "insertTableRows", "insertTable", "updateTable", "updateTableCell", "splitTableCell", "setInlinePicture", "deleteInlinePicture", "insertField", "setFieldCode", "deleteField", "updateFieldResult", "insertInlinePicture", "insertBreak", "setChangeTrackingMode", "proposeInsertion", "proposeDeletion", "proposeReplacement", "insertText", "replaceSpan", "replaceStoryBlocks", "insertParagraph", "splitParagraph", "deleteParagraph", "selectSpan", "selectBookmark", "insertBookmark", "deleteBookmark", "setFont", "setParagraphFormat", "setStyle", "setPageSetup", "deleteNote", "setListLevel", "startNewList", "attachToList", "detachFromList", "setListLevelFormat", "insertListParagraph", "setHyperlink", "insertComment", "setCommentResolved", "replyToComment", "deleteComment", "acceptRevision", "rejectRevision", "resolveRevisionBatch", "setRevisionAuthorBatch", "acceptAllRevisions", "rejectAllRevisions", "setContentControlValue", "setContentControlProperties", "deleteContentControl", "insertContentControlText", "insertContentControl", "insertCustomNode"];
 
 // @public
-export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
+export const AUTOMATION_QUERY_OPERATIONS: readonly ["getTables", "getTable", "getTableRows", "getTableCells", "getTableCell", "getMergedTableCell", "getTableCellProperties", "getTableCellBody", "getFields", "getField", "getInlinePictures", "getInlinePicture", "getShapes", "getShape", "getShapeBody", "getChangeTrackingMode", "getDocument", "getDocumentProperty", "getBody", "getParagraphs", "getRange", "getSpanParagraphs", "getText", "getSpanText", "getTextRanges", "expandSpan", "getReviewedText", "getParagraphId", "search", "getFont", "getParagraphFormat", "getStyle", "getSections", "getPageSetup", "getFurniture", "getNotes", "getNoteBody", "getNoteText", "getNoteKind", "getLists", "getListId", "getListById", "getListParagraphs", "getParagraphList", "getListLevel", "getHyperlink", "getBookmarks", "getBookmarkName", "getBookmarkRange", "getBookmarkNames", "getBookmarkRangeByName", "getComments", "getCommentReplies", "getCommentId", "getCommentAuthor", "getCommentDate", "getCommentText", "getCommentRange", "getCommentResolved", "getRevisions", "getRevisionType", "getRevisionAuthor", "getRevisionDate", "getRevisionRange", "getReviewItemRange", "getContentControls", "getContentControlById", "getContentControlsByTag", "getContentControlsByTitle", "getContentControlTag", "getContentControlTitle", "getContentControlFileId", "getContentControlSubtype", "getContentControlLock", "getContentControlIsBound", "getContentControlPlaceholderShown", "getContentControlTemporary", "getContentControlText", "getContentControlParagraphs", "getContentControlRange"];
 
 // @public
 export const AUTOMATION_SOLITARY_OPERATIONS: readonly ["removeDocumentInformation", "insertTableRows", "resolveRevisionBatch", "setRevisionAuthorBatch", "insertTable", "insertInlinePicture", "insertBreak", "startNewList", "deleteNote", "insertComment", "setCommentResolved", "replyToComment", "insertCustomNode"];
@@ -479,6 +479,35 @@ export type AutomationOperation = AutomationAuthoringOperation | {
     readonly op: 'getSpanText';
     readonly projection?: AutomationTextProjection;
     readonly span: AutomationSpanRef;
+}
+/**
+* A span split into ranges that each end after one of `endingMarks`, or at a paragraph end.
+*
+* Boundaries come from the model text, so a field, an equation, or another atom is never
+* split. `trimSpacing` removes spaces, tabs, and column breaks from each range's edges and
+* drops a range left empty. A range the projection shows no character of is not answered.
+*/
+| {
+    readonly endingMarks: readonly string[];
+    readonly op: 'getTextRanges';
+    readonly projection?: AutomationTextProjection;
+    readonly scope: AutomationSpanRef;
+    readonly trimSpacing?: boolean;
+}
+/** The smallest span covering both spans. Both must be in one story. */
+| {
+    readonly op: 'expandSpan';
+    readonly span: AutomationSpanRef;
+    readonly to: AutomationSpanRef;
+}
+/**
+* A span's text as if every pending revision were accepted (`current`) or rejected
+* (`original`), with a carriage return at each paragraph mark that view keeps.
+*/
+| {
+    readonly op: 'getReviewedText';
+    readonly span: AutomationSpanRef;
+    readonly version: 'original' | 'current';
 }
 /**
 * A paragraph's own identity as the DOCUMENT writes it (`w14:paraId`).

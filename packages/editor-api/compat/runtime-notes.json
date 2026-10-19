@@ -712,12 +712,28 @@
     "notes": "Reads and writes formatting through the range's paragraph identity and offsets. A range whose text moved since it was read refuses with StaleDocument."
   },
   "Word.Range#getTextRanges": {
-    "status": "unsupported",
-    "notes": "Not implemented. Search within the range instead; a search result follows the same StaleDocument rule as every range."
+    "status": "partial",
+    "notes": "Splits at the listed ending marks and at every paragraph end; a range never holds a paragraph mark. Boundaries use the model text, so a field, equation, picture, or note reference is one character that joins the word it touches, and a content control adds no boundary. trimSpacing removes spaces, tabs, and column breaks from range edges and drops ranges left empty. A tab ends a range only when listed. Ranges follow revisionTextView; a range that view shows nothing of is omitted. At most 32 marks of at most 32 UTF-16 units. Each range is an exact span usable for insertText and delete in later syncs, also with TrackMineOnly, under the StaleDocument rule: edit from the end of a paragraph toward its start."
+  },
+  "Word.Paragraph#getTextRanges": {
+    "status": "partial",
+    "notes": "Same rules as Word.Range#getTextRanges, over the whole paragraph."
   },
   "Word.Range#expandTo": {
-    "status": "unsupported",
-    "notes": "Not implemented. Word.Body#getRange describes the StaleDocument rule for a range that spans paragraphs."
+    "status": "partial",
+    "notes": "Answers the span from the earlier start to the later end, within one paragraph or across paragraphs of one story. Ranges in different stories refuse the sync with InvalidArgument. A range from another run refuses at the call with InvalidArgument. The answer follows the StaleDocument rule of Word.Body#getRange. expandToOrNullObject is not implemented."
+  },
+  "Word.Range#getRange": {
+    "status": "partial",
+    "notes": "Whole and Content answer the same span; Start and End answer a collapsed range at that endpoint. After refuses with NotSupported, because a snapshot range never owns the position after its end. The answer is usable by a text write in the same sync."
+  },
+  "Word.Range#getReviewedText": {
+    "status": "partial",
+    "notes": "Current drops pending deletions, move sources, and deleted paragraph marks; Original drops pending insertions, move destinations, and inserted paragraph marks. Kept paragraph marks read as a carriage return. Fields read as their displayed results. The default is Current. Formatting revisions do not change the text. Read-only; the document does not change."
+  },
+  "Word.Paragraph#getReviewedText": {
+    "status": "partial",
+    "notes": "Same rules as Word.Range#getReviewedText, over the paragraph's own text."
   },
   "Word.Range#search": {
     "status": "partial",

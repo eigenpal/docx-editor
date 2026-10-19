@@ -173,6 +173,26 @@ const rangeInsertsAParagraph: TakesTheSameArguments<
 > = true;
 const rangeSearches: TakesTheSameArguments<Range['search'], Declared.Range['search']> = true;
 const rangeHasParagraphs: Satisfies<Range['paragraphs'], ParagraphCollection> = true;
+const rangeSplitsIntoWords: TakesTheSameArguments<
+  Range['getTextRanges'],
+  Declared.Range['getTextRanges']
+> = true;
+const rangeAnswersAnEndpoint: TakesTheSameArguments<Range['getRange'], Declared.Range['getRange']> =
+  true;
+const rangeReadsReviewedText: TakesTheSameArguments<
+  Range['getReviewedText'],
+  Declared.Range['getReviewedText']
+> = true;
+// `expandTo` takes a range of this package; the declared one names the declared `Range`.
+const rangeExpandsToARange: Satisfies<Parameters<Range['expandTo']>, [Range]> = true;
+const rangeAnswersItsOwnRanges: Satisfies<
+  [
+    ReturnType<Range['getTextRanges']>,
+    ReturnType<Range['getRange']>,
+    ReturnType<Range['expandTo']>,
+  ],
+  [RangeCollection, Range, Range]
+> = true;
 
 const paragraphTextIsAString: Satisfies<
   Pick<Paragraph, 'text'>,
@@ -192,6 +212,14 @@ const paragraphInsertsAParagraph: TakesTheSameArguments<
 > = true;
 const paragraphSplits: TakesTheSameArguments<Paragraph['split'], Declared.Paragraph['split']> =
   true;
+const paragraphSplitsIntoWords: TakesTheSameArguments<
+  Paragraph['getTextRanges'],
+  Declared.Paragraph['getTextRanges']
+> = true;
+const paragraphReadsReviewedText: TakesTheSameArguments<
+  Paragraph['getReviewedText'],
+  Declared.Paragraph['getReviewedText']
+> = true;
 const paragraphAnswersItsOwnObjects: Satisfies<
   [
     ReturnType<Paragraph['insertText']>,
@@ -454,6 +482,13 @@ void rangeSelects;
 void rangeInsertsText;
 void rangeInsertsAParagraph;
 void rangeSearches;
+void rangeSplitsIntoWords;
+void rangeAnswersAnEndpoint;
+void rangeReadsReviewedText;
+void rangeExpandsToARange;
+void rangeAnswersItsOwnRanges;
+void paragraphSplitsIntoWords;
+void paragraphReadsReviewedText;
 void rangeHasParagraphs;
 void paragraphTextIsAString;
 void paragraphClearsAndDeletes;

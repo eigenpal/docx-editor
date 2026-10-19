@@ -1377,6 +1377,54 @@
             }
           ]
         },
+        "getReviewedText": {
+          "uid": "DocxEditor.Paragraph#getReviewedText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "ChangeTrackingVersion",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            },
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "\"Original\" | \"Current\"",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            }
+          ]
+        },
+        "getTextRanges": {
+          "uid": "DocxEditor.Paragraph#getTextRanges",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "endingMarks",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
+            }
+          ]
+        },
         "insertParagraph": {
           "uid": "DocxEditor.Paragraph#insertParagraph",
           "kind": "method",
@@ -1660,6 +1708,22 @@
             }
           ]
         },
+        "expandTo": {
+          "uid": "DocxEditor.Range#expandTo",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "range",
+                  "type": "Range"
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
         "font": {
           "uid": "DocxEditor.Range#font",
           "kind": "property",
@@ -1691,6 +1755,71 @@
                 }
               ],
               "returns": "ClientResult<string[]>"
+            }
+          ]
+        },
+        "getRange": {
+          "uid": "DocxEditor.Range#getRange",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "rangeLocation",
+                  "type": "\"Whole\" | \"Start\" | \"End\" | \"After\" | \"Content\"",
+                  "optional": true
+                }
+              ],
+              "returns": "Range"
+            }
+          ]
+        },
+        "getReviewedText": {
+          "uid": "DocxEditor.Range#getReviewedText",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "ChangeTrackingVersion",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            },
+            {
+              "params": [
+                {
+                  "name": "changeTrackingVersion",
+                  "type": "\"Original\" | \"Current\"",
+                  "optional": true
+                }
+              ],
+              "returns": "ClientResult<string>"
+            }
+          ]
+        },
+        "getTextRanges": {
+          "uid": "DocxEditor.Range#getTextRanges",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [
+                {
+                  "name": "endingMarks",
+                  "type": "string[]"
+                },
+                {
+                  "name": "trimSpacing",
+                  "type": "boolean",
+                  "optional": true
+                }
+              ],
+              "returns": "RangeCollection"
             }
           ]
         },

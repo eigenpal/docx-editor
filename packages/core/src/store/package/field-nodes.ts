@@ -426,6 +426,8 @@ export interface FieldRunChildRef {
   readonly runId: string;
   readonly node: OoxmlNode;
   readonly hiddenInOriginal: boolean;
+  /** Inside a pending deletion or move source: absent once every revision is accepted. */
+  readonly hiddenInCurrent: boolean;
 }
 
 /** Text contributed by one supported field-result inline node. @internal */
@@ -451,7 +453,12 @@ export function collectFieldRunChildren(
   budget?: { left: number }
 ): boolean {
   let complete = true;
-  const visit = (child: OoxmlNode, sdtDepth: number, hiddenInOriginal: boolean): void => {
+  const visit = (
+    child: OoxmlNode,
+    sdtDepth: number,
+    hiddenInOriginal: boolean,
+    hiddenInCurrent: boolean
+  ): void => {
     if (!complete) return;
     if (sdtDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (budget && budget.left-- <= 0) {
@@ -460,8 +467,15 @@ export function collectFieldRunChildren(
     }
     const hidden =
       hiddenInOriginal || child.kind === 'revisionInsert' || child.kind === 'revisionMoveTo';
+    const removed =
+      hiddenInCurrent || child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom';
     if (isFldSimple(child)) {
-      entries.push({ runId: '', node: child, hiddenInOriginal: hidden });
+      entries.push({
+        runId: '',
+        node: child,
+        hiddenInOriginal: hidden,
+        hiddenInCurrent: removed,
+      });
       return;
     }
     if (child.kind === 'run') {
@@ -471,13 +485,19 @@ export function collectFieldRunChildren(
           complete = false;
           return;
         }
-        entries.push({ runId: child.id, node, hiddenInOriginal: hidden });
+        entries.push({
+          runId: child.id,
+          node,
+          hiddenInOriginal: hidden,
+          hiddenInCurrent: removed,
+        });
       }
       return;
     }
     if (isContentControl(child)) {
       if (sdtDepth >= MAX_CONTENT_CONTROL_NESTING) return;
-      for (const inner of contentControlContentChildren(child)) visit(inner, sdtDepth + 1, hidden);
+      for (const inner of contentControlContentChildren(child))
+        visit(inner, sdtDepth + 1, hidden, removed);
       return;
     }
     if (child.kind === 'textValue') return;
@@ -487,11 +507,11 @@ export function collectFieldRunChildren(
     // walk and `segmentsOf` agree about what is addressable.
     if (isInlineRunContainer(child)) {
       const depth = nextInlineContainerDepth(child, sdtDepth);
-      for (const inner of child.children) visit(inner, depth, hidden);
+      for (const inner of child.children) visit(inner, depth, hidden, removed);
     }
   };
   if (container.kind !== 'textValue') {
-    for (const child of container.children) visit(child, 0, false);
+    for (const child of container.children) visit(child, 0, false, false);
   }
   return complete;
 }

@@ -95,6 +95,7 @@ function collectKnownTypeNames(manifest) {
     'ClientResult',
     'SelectionMode',
     'HeaderFooterType',
+    'ChangeTrackingVersion',
     'RemoveDocInfoType',
   ]);
 }

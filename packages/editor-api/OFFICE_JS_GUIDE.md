@@ -346,6 +346,39 @@ These tracked edits fail with `NotImplemented`. Read `error.debugInfo.innerError
 
 The range that a tracked `insertText()` returns names your own pending insertion. With tracking on, replacing or deleting that range fails with `edit.tracked-own-pending-change`, because the edit would cover your own pending text. Write the final text in one call, or reject your revision and write again.
 
+### Rewrite a paragraph word by word
+
+Split a paragraph into word ranges with `paragraph.getTextRanges([' '], true)`. Address a run of words with `first.expandTo(last)`. Read the proposed result with `paragraph.getReviewedText('Current')`. After tracked edits, `paragraph.text` reads the deleted and the inserted words together. `getReviewedText('Current')` reads the text as if you accepted every change, and `'Original'` reads it as if you rejected every change.
+
+Each word range is a snapshot. An edit before a range in its paragraph makes the range fail with `StaleDocument`, and an edit after it keeps it valid. Edit from the end of the paragraph toward its start, one sync per edit, so the ranges that you read first stay usable:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const paragraph = context.document.body.paragraphs.getFirst();
+  const words = paragraph.getTextRanges([' ', '\t'], true);
+  words.load('items/text');
+  await context.sync();
+
+  // Pass plain text to the model; keep the ranges in this run.
+  const tokens = words.items.map((range) => range.text);
+  const at = (text: string) => words.items[tokens.indexOf(text)]!;
+
+  at('promptly.').delete();
+  await context.sync();
+  at('unit').insertText(' (net)', 'After');
+  await context.sync();
+  at('The').expandTo(at('fee')).insertText('Each charge', 'Replace');
+  await context.sync();
+
+  const proposed = paragraph.getReviewedText('Current');
+  await context.sync();
+  console.log(proposed.value);
+});
+```
+
+A field, an equation, a picture, or a note reference is one character of a word range and never splits; its text reads as its displayed result. An inline content control adds no boundary, so its words join the ranges around it. A tab ends a range only when you list `'\t'` as a mark. `trimSpacing` removes spaces, tabs, and column breaks from the edges of each range. `Range.getRange('Start')` and `'End'` answer an insertion point; `'After'` fails with `NotSupported`. Ranges in different stories make `expandTo()` fail with `InvalidArgument`.
+
 ## Review changes in a range
 
 Use `range.revisions` to reach the tracked changes inside a search result, a comment range, or any other range. The collection lists the changes the range overlaps in its own story, including a nested change or another author's change beside it. A partly covered change is listed whole, and a replacement lists its deletion and insertion separately. Load the members and decide on each one:
