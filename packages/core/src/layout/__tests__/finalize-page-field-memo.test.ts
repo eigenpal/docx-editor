@@ -30,6 +30,11 @@ import {
   carryStrippedPageFieldProjection,
   finalizePageFieldProjection,
 } from '../field-projection.ts';
+import {
+  completeFurniture,
+  pageFurnitureStale,
+  withFurnitureLater,
+} from '../published-story-projections.ts';
 import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../hf-layout.ts';
 import type { HeaderFooterStoryRecord } from '../semantic-records.ts';
 
@@ -350,5 +355,92 @@ describe('single-section incremental reuse re-projects furniture page fields (#4
     const grown = finalizePageFieldProjection({ revision: 3, pages: [...held.pages, extra] });
     expect(footerText(grown, 1)).toBe(`Page 2 of ${total + 1}`);
     expect(grown.pages[1]!.footer!.box.y).toBe(published.box.y + dy);
+  });
+});
+
+describe('headers and footers an edit leaves for later', () => {
+  test('keep their numbers until completed, and the next pass takes the completed ones', () => {
+    const furniture: PageFurniture = {
+      titlePage: false,
+      evenAndOddHeaders: false,
+      headers: new Map(),
+      footers: new Map([
+        ['default', layoutHeaderFooterStory(footerPart(), CONTENT_WIDTH, measurer, 'test')],
+      ]),
+    };
+    const session = createLayoutSession();
+    const build = (count: number) => partOf(filler(count) + tightSectPr);
+    const options = { measurer, producer: 'test', session, furniture };
+    const first = layoutSemanticDocument(build(30), 1, options);
+    const firstTotal = first.pages.length;
+    expect(firstTotal).toBeGreaterThan(3);
+
+    // Only page 0 is near the screen.
+    const second = withFurnitureLater(
+      (index) => index > 0,
+      () => layoutSemanticDocument(build(60), 2, options)
+    );
+    const total = second.pages.length;
+    expect(total).toBeGreaterThan(firstTotal);
+    expect(footerText(second, 0)).toBe(`Page 1 of ${total}`);
+    // A reused sheet away from the screen still shows the total it was projected under.
+    expect(footerText(second, 1)).toBe(`Page 2 of ${firstTotal}`);
+    expect(pageFurnitureStale(second.pages[1]!, total)).toBe(true);
+
+    const completed = completeFurniture(second);
+    completed.pages.forEach((page, index) => {
+      expect(footerText(completed, index)).toBe(`Page ${index + 1} of ${total}`);
+      expect(pageFurnitureStale(page, total)).toBe(false);
+    });
+    expect(completeFurniture(completed)).toBe(completed);
+
+    // The session still holds the stale records; the next pass takes the completed stories.
+    const third = layoutSemanticDocument(build(60), 3, options);
+    third.pages.forEach((_, index) =>
+      expect(footerText(third, index)).toBe(`Page ${index + 1} of ${total}`)
+    );
+    expect(third.pages[1]!.footer).toBe(completed.pages[1]!.footer);
+  });
+
+  test('over several sections too, where every sheet arrives with its projector', () => {
+    const furniture: PageFurniture = {
+      titlePage: false,
+      evenAndOddHeaders: false,
+      headers: new Map(),
+      footers: new Map([
+        ['default', layoutHeaderFooterStory(footerPart(), CONTENT_WIDTH, measurer, 'test')],
+      ]),
+    };
+    const session = createLayoutSession();
+    const build = (tail: number) =>
+      partOf(
+        filler(12, 's0') +
+          `<w:p><w:pPr>${tightSectPr}</w:pPr><w:r><w:t>s0 end</w:t></w:r></w:p>` +
+          filler(tail, 's1') +
+          tightSectPr
+      );
+    const options = { measurer, session, sectionFurniture: [furniture, furniture] };
+    const firstTotal = layoutSemanticDocument(build(6), 1, options).pages.length;
+
+    const second = withFurnitureLater(
+      (index) => index > 0,
+      () => layoutSemanticDocument(build(26), 2, options)
+    );
+    const total = second.pages.length;
+    expect(total).toBeGreaterThan(firstTotal);
+    expect(footerText(second, 0)).toBe(`Page 1 of ${total}`);
+    expect(second.pages.slice(1).some((page) => pageFurnitureStale(page, total))).toBe(true);
+    expect(second.pages.every((page) => !page.footer?.pageFieldProjector)).toBe(true);
+
+    const completed = completeFurniture(second);
+    completed.pages.forEach((_, index) =>
+      expect(footerText(completed, index)).toBe(`Page ${index + 1} of ${total}`)
+    );
+    // The next pass at the same count serves every completed story without projecting again.
+    const third = layoutSemanticDocument(build(26), 3, options);
+    third.pages.forEach((page, index) => {
+      expect(footerText(third, index)).toBe(`Page ${index + 1} of ${total}`);
+      expect(page.footer).toBe(completed.pages[index]!.footer);
+    });
   });
 });

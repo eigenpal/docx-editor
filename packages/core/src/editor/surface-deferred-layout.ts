@@ -45,6 +45,11 @@ export interface DeferredLayoutHost {
   pageAfterView(): number | undefined;
   /** The layout on screen now. */
   current(): SemanticLayout | null;
+  /**
+   * Whether the layout on screen stops before the end of the document, as during an opening.
+   * Its later pages do not exist yet, so a pass defers however few of them there are.
+   */
+  partial?(): boolean;
   /** The model revision now; a finished pass for an older one is not published. */
   revision(): number;
   /** Publish a finished layout of the current revision. */
@@ -119,6 +124,8 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     readonly restorable: boolean;
     /** Asks a pass that is not restorable to end early; see {@link LayoutProgress.wrapUp}. */
     wrapUp: (() => void) | undefined;
+    /** Only the pass's answer is left to finish; see {@link LayoutProgress.settled}. */
+    readonly settled: boolean;
   };
   let paused: Paused | null = null;
   /** Time of dropped passes, owed to the next pass. */
@@ -176,6 +183,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
       const deadline = began + foregroundMs;
       const after = pageAfterViewForTest ?? host.pageAfterView();
       const previous = host.current();
+      const partial = host.partial?.() === true;
       let progress: LayoutProgress | null = null;
       for (;;) {
         const next = steps.next();
@@ -190,12 +198,16 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
           progress.pages.length <= after ||
           host.now() < deadline ||
           !previous ||
-          previous.pages.length - progress.pages.length < MIN_DEFERRED_PAGES
+          (!partial &&
+            !progress.settled &&
+            previous.pages.length - progress.pages.length < MIN_DEFERRED_PAGES)
         )
           continue;
         // The completed pages, then the previous layout's pages after them, until the pass
-        // ends. Each keeps the index it is painted at.
-        const pages = [...progress.pages, ...previous.pages.slice(progress.pages.length)];
+        // ends. Each keeps the index it is painted at. A settled pass has every page.
+        const pages = progress.settled
+          ? progress.pages
+          : [...progress.pages, ...previous.pages.slice(progress.pages.length)];
         setPaused({
           steps,
           revision,
@@ -204,6 +216,7 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
           timed,
           restorable: progress.restorable !== false,
           wrapUp: progress.wrapUp,
+          settled: progress.settled === true,
         });
         afterPaint(drive, host.view?.());
         return progress.finalize(pages);
@@ -213,6 +226,12 @@ export function createDeferredLayout(host: DeferredLayoutHost): DeferredLayout {
     abandon() {
       const pass = paused;
       if (!pass) return;
+      // The session already holds the end of a settled pass: there is nothing to put back.
+      if (pass.settled) {
+        setPaused(null);
+        if (pass.timed) carried += pass.spent;
+        return;
+      }
       // Several sections or footnotes advance their session state in place, so the snapshot
       // taken before the pass cannot put it back: such a pass ends here instead, and its
       // layout reaches the screen only if no newer edit arrived meanwhile.

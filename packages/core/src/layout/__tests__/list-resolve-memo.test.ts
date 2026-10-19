@@ -208,6 +208,44 @@ describe('withResolvedListItems memo', () => {
     expect(second.listItems).toBe(first.listItems!);
   });
 
+  test('a paragraph split near the top re-reads only the blocks it changed', () => {
+    const numberingIndex = loadNumbering(DECIMAL);
+    const item = (text: string) =>
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>' +
+      `<w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const items: string[] = [];
+    for (let index = 0; index < 300; index += 1) items.push(item(`Item ${index}`));
+    const read = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>${items.join('')}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!read.ok) throw new Error(read.reason);
+    const session = createLayoutSession();
+    const blocksA = storyBlocks(read.part);
+    withResolvedListItemsForSession({ numberingIndex }, blocksA, session);
+    const edited = applyTreeOp(read.part, {
+      op: 'splitParagraph',
+      paragraphId: blocksA[2]!.id,
+      offset: 2,
+    });
+    if (!edited.ok) throw new Error(String(edited.issues));
+    const blocksB = storyBlocks(edited.part);
+    const recorder = listResolveBlockVisitTestRecorder();
+    recorder.reset();
+    const warm = withResolvedListItemsForSession({ numberingIndex }, blocksB, session);
+    // The two halves of the split paragraph, not the 297 blocks after it.
+    expect(recorder.blockScans).toBeLessThan(5);
+    const cold = withResolvedListItemsForSession(
+      { numberingIndex },
+      blocksB,
+      createLayoutSession()
+    );
+    const markers = (map: typeof warm.listItems) =>
+      blocksB.map((block) => map?.get(block.id)?.markerText ?? '');
+    expect(markers(warm.listItems)).toEqual(markers(cold.listItems));
+    expect(markers(warm.listItems)[300]).toBe('301.');
+  });
+
   test('independent layout sessions do not share list item maps', () => {
     const numberingIndex = loadNumbering(DECIMAL);
     const blocks = storyBlocks(loadBodyPart());

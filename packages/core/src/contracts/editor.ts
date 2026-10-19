@@ -785,7 +785,8 @@ export interface Editor extends EditorAnchorNavigation, EditorHighlights, Editor
    */
   /**
    * Scroll a page or a block into view. Returns false when the target does not exist or
-   * the host has no scroll container — a caller can tell "not found" from "scrolled".
+   * the host has no scroll container. During a large open, a target not laid out yet answers
+   * true and scrolls once it is; input cancels that, and a page past the end never scrolls.
    */
   scrollToPage(pageNumber: number): boolean;
   /**
@@ -1462,12 +1463,12 @@ export interface EditorSnapshot {
    *  point on — it never depends on one existing. */
   readonly isLoading: boolean;
   /**
-   * Whether a supplied document is still on its way to painted pages. Opening a large
-   * document mounts behind one painted frame so a loading screen can show instead of a
-   * frozen page; this is true for exactly that window, and across it the previous
-   * document (if any) stays on screen. Show a loading overlay while it holds — but gate
-   * only chrome on it, never the mount point, which must stay mounted for the open to
-   * complete ({@link EditorSnapshot.isLoading} is the gate-safe flag). Optional and
+   * Whether a supplied document is still on its way to painted pages. A large document
+   * mounts behind one painted frame so a loading screen can show instead of a frozen page,
+   * with the previous document (if any) still on screen. Show an overlay while it holds,
+   * but gate only chrome on it, never the mount point, which must stay mounted for the open
+   * to complete ({@link EditorSnapshot.isLoading} is the gate-safe flag). It turns false
+   * when the first pages paint; they take input while the rest lay out. Optional and
    * additive: absent means the implementation has not derived it, read as `false`.
    */
   readonly isOpening?: boolean;

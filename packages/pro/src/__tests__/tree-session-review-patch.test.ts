@@ -478,7 +478,7 @@ describe('local review patch after one-paragraph text-local edits', () => {
     expect(after.find((item) => item.kind === 'comment')).toBe(commentItem);
   });
 
-  test('a comment on the dirty paragraph falls back to full collectReviewItems', () => {
+  test('a comment on the dirty paragraph is kept, at the offsets its markers hold', () => {
     const body =
       `<w:p>${cStart('c1')}${run('first ')}${ins('1', run('tracked'))}${cEnd('c1')}</w:p>` +
       `<w:p>${run('second')}</w:p>`;
@@ -486,11 +486,14 @@ describe('local review patch after one-paragraph text-local edits', () => {
     const session = open(docx(body, comments));
     session.reviewItems();
     const commentBefore = session.reviewItems().find((item) => item.kind === 'comment')!;
+    const derivedBefore = derivations;
 
+    // The same length: the comment's ends do not move, so its card is the same object.
     retype(session, 0, 'FIRST ');
     const after = session.reviewItems();
     expect(after).toEqual(oracle(session));
-    expect(after.find((item) => item.kind === 'comment')).not.toBe(commentBefore);
+    expect(after.find((item) => item.kind === 'comment')).toBe(commentBefore);
+    expect(derivations).toBe(derivedBefore);
   });
 
   test('a cross-paragraph revision falls back instead of patching', () => {

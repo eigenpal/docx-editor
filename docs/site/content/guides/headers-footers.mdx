@@ -47,11 +47,13 @@ Legacy footers can store a centered `PAGE` field in an auto-sized `w:framePr`. S
 
 A supported fixed-width frame uses a page-relative X position and text-relative vertical centering over an empty anchor or a second `PAGE` paragraph. A leading tab can place its value outside the frame. The editor clips that value but retains all fields, paragraphs, and source ranges. Selections and pointer hits use the same clip rectangle.
 
+A fixed-width `PAGE` frame over an empty anchor also supports an authored numeric page-relative X position. This subset requires a text-relative vertical anchor and supported frame attributes. An exact-height frame honors its numeric Y offset, including negative offsets, and clips content to its authored rectangle. The empty anchor keeps its flow height. Nonexact frames keep their natural vertical metrics. Unsupported content, leading-tab forms outside the existing centered subset, and unsupported attributes keep ordinary flow.
+
 A right-aligned `PAGE` frame can also sit over the footer text line. The frame uses `w:wrap="none"`, `w:hAnchor="margin"`, and `w:xAlign="right"`, and the next paragraph holds plain text in the same style. The page value ends at the right margin, one line band with the text. The frame adds no footer height unless its own line is taller. The text paragraph keeps its indents and its style's spacing. If the text reaches under the page value, the footer keeps the ordinary flow behavior.
 
 A right-aligned `PAGE` frame with `w:wrap="around"` can sit over an empty paragraph of the same style. The frame can contain plain text around a simple or complex `PAGE` field. The empty paragraph sets the footer flow height. The frame keeps its own spacing, including direct spacing. With `w:doNotUseHTMLParagraphAutoSpacing`, the frame text aligns with the anchor text without adding its before spacing again. Both paragraphs keep their source positions for editing and save.
 
-This support covers a simple, single-line `PAGE` frame and a single-line empty, `PAGE`, or text anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping, other positions, direct paragraph spacing outside the empty right-aligned frame case, and additional content keep the ordinary flow behavior.
+This support covers a simple, single-line `PAGE` frame and a single-line empty, `PAGE`, or text anchor. Values must fit completely inside the frame or lie completely beyond it. Partial wrapping and additional content keep ordinary flow. Positions outside the described subsets also keep ordinary flow. Direct paragraph spacing remains limited to the supported empty-anchor cases.
 
 ### Empty header frames
 
@@ -78,6 +80,8 @@ Editing a header or footer changes the part that the page displays. Other pages 
 ### Section breaks and blank pages
 
 A continuous section can start on the same page even when its header height, footer height, or first-page setting differs. The shared page keeps the preceding section's header, footer, and body area. Text from the continued section wraps around pictures in that page's header or footer. Later pages use the continued section's headers and footers. A page-size change still starts a separate page.
+
+A continuous section starts below the lowest in-flow content across all columns on the preceding section’s final page. Sections that span multiple pages keep their existing column distribution. Columns that continue below earlier content retain authored paragraph space before, including later columns. Fresh-page starts keep their existing spacing rules.
 
 Odd-page and even-page section breaks can add a blank page to reach the required page position. Page-number restarts can also require a blank page when odd and even headers are enabled. The editor compares the restarted number with the continued page number, including when the first section starts at zero. A restart on a shared continuous page does not reset the sheet sequence used for this comparison. An explicit odd-page or even-page break with a restart selects physical page parity before applying the displayed number. These blank pages have no header or footer.
 

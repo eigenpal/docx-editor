@@ -11,7 +11,6 @@ import {
 } from './drawing-exclusion.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { ParagraphFrame } from './paragraph-frame.ts';
-import type { ParagraphBorders } from './paragraph-style.ts';
 
 interface WrapParagraph {
   readonly paragraph: OoxmlElement;
@@ -19,9 +18,6 @@ interface WrapParagraph {
   readonly contextualSpacing: boolean;
   readonly spacing: { readonly after: number };
   readonly frame?: ParagraphFrame;
-  readonly listItem?: unknown;
-  readonly shading?: string;
-  readonly borders?: ParagraphBorders;
 }
 
 /** Select paragraph wrap bands and track displacement caused by the following anchor. */
@@ -114,20 +110,9 @@ export function createParagraphDrawingWrap(options: {
       } = {}
     ): readonly ExclusionZone[] {
       const { placement = false, omittedAnchor } = selection;
-      // A mark-only paragraph keeps its authored line beside floating tables, even when
-      // their distances cover the whole column and synthesize a top-and-bottom band.
-      // Keep all content-bearing or decorated paragraphs on the ordinary wrap path.
-      const markOnly =
-        !entry.frame &&
-        entry.listItem === undefined &&
-        entry.shading === undefined &&
-        !Object.values(entry.borders ?? {}).some(Boolean) &&
-        entry.paragraph.children.every((child) => child.kind === 'paragraphProperties');
       return zones
         .filter((zone) => {
           if (zone.anchorParagraphId === omittedAnchor) return false;
-          if (markOnly && (zone.sourceKind === 'table' || zone.furnitureSource?.kind === 'table'))
-            return false;
           if (zone.sourceKind === 'furniture' || zone.earlierSection) return true;
           const entryOrder = options.paragraphOrder.get(entry.paragraph.id);
           const anchorOrder = options.paragraphOrder.get(zone.anchorParagraphId);

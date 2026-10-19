@@ -76,7 +76,11 @@ export function nestedTextDecisionOps(
   if (group.length < 2 || group.some((member) => !TEXT_KINDS.includes(member.revisionKind)))
     return [];
   const keys = group.map(reviewItemKey);
-  if (planRevisionBatch(reads.part, action, keys, scope).result.skipped.length) return [];
+  if (
+    planRevisionBatch(reads.part, action, keys, scope, { countRemaining: false }).result.skipped
+      .length
+  )
+    return [];
   const own = new Set(revisionSiteNodeIdsOf(item));
   const op = action === 'accept' ? ('acceptRevision' as const) : ('rejectRevision' as const);
   const groups = new Map<

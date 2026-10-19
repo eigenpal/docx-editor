@@ -33,6 +33,15 @@ import type {
   StyleSpanRecord,
 } from './semantic-records.ts';
 import { isOutOfFlowFragment } from './fragment-flow.ts';
+import {
+  completedStories,
+  deferLiveStory,
+  furnitureWaits,
+  pageFieldContextOf,
+  sameFieldPageContext,
+  storyStale,
+  strippedStoryProjections,
+} from './published-story-projections.ts';
 
 /**
  * Placeholder a body PAGE/NUMPAGES/SECTIONPAGES atom paints during measurement.
@@ -610,63 +619,12 @@ export function substituteBodyPageFields(
   return next ?? blocks;
 }
 
-/** Story projector retained past finalize, with the context its published text was projected under. */
-interface RetainedStoryProjection {
-  readonly context: FieldPageContext;
-  readonly projector: (context: FieldPageContext) => HeaderFooterStoryRecord;
-  /**
-   * Cumulative sheet-stack Y offset between where the projector places the story and where
-   * the published record sits. A NUMBER, not a composed closure: a sheet that survives many
-   * tail shifts folds each shift into this one value, so re-projection stays one projector
-   * call plus one translation however long the reuse lineage gets.
-   */
-  readonly dy: number;
-}
-
-/**
- * Projectors of PUBLISHED story records, keyed on the stripped record finalize minted.
- *
- * Finalize strips `pageFieldProjector` from what it publishes, but incremental layout reuses
- * published sheets whole: a later pass that changes the page count hands those stripped
- * records straight back to finalize, which then has nothing to re-project NUMPAGES through —
- * the reused footer kept the old `of Y` text. Retaining the projector on the side (with the
- * context it last ran under) lets finalize keep an unchanged-context story by identity and
- * re-project it when the pagination moved underneath it. Weak on the story record, so a story
- * that falls out of the layout takes its projector with it. The projector holds only its
- * story's placement (`section-page-furniture.ts`), not the pass that placed the sheet.
- *
- * INVARIANT: anything that CLONES a published field-bearing story record must carry this
- * entry onto the clone ({@link carryStrippedPageFieldProjection}) — a published story leaves
- * no data trace of its field needs, so an orphaned clone silently keeps stale text.
- * `remapPage` is the one cloner today.
- */
-const strippedStoryProjections = new WeakMap<HeaderFooterStoryRecord, RetainedStoryProjection>();
-
 /** Release incremental page-field projectors attached to an exported layout. */
 export function releasePageFieldProjectionState(layout: SemanticLayout): void {
   for (const page of Array.isArray(layout.pages) ? layout.pages : []) {
     if (page.header) strippedStoryProjections.delete(page.header);
     if (page.footer) strippedStoryProjections.delete(page.footer);
   }
-}
-
-/**
- * True when two projection contexts substitute identical values for every page field.
- *
- * Compares EVERY dimension of {@link FieldPageContext}, so it must grow in lockstep with
- * that interface: a context field this misses compares as "same context" and finalize keeps
- * a reused story's stale text. Needs-blind on purpose — finalize does not know which fields
- * a published story reads, so it re-projects on any moved dimension; the story layout's own
- * per-token cache absorbs the re-layout when the story's text did not actually change.
- */
-function sameFieldPageContext(a: FieldPageContext, b: FieldPageContext): boolean {
-  return (
-    a.pageNumber === b.pageNumber &&
-    a.pageCount === b.pageCount &&
-    (a.sectionPageCount ?? a.pageCount) === (b.sectionPageCount ?? b.pageCount) &&
-    a.format === b.format &&
-    (a.sheetNumber ?? a.pageNumber) === (b.sheetNumber ?? b.pageNumber)
-  );
 }
 
 /**
@@ -782,14 +740,9 @@ export function finalizePageFieldProjection(
       if (memo.result !== page) changed = true;
       return memo.result;
     }
-    const source = page.pageFieldSource;
-    const context: FieldPageContext = {
-      pageNumber: source?.pageNumber ?? page.index + 1,
-      pageCount,
-      sectionPageCount: source?.sectionPageCount ?? pageCount,
-      ...(source?.format ? { format: source.format } : {}),
-      sheetNumber: page.index + 1,
-    };
+    const context = pageFieldContextOf(page, pageCount);
+    /** Set when a story keeps its earlier text for now: the page is not final, so not memoized. */
+    let later = false;
     const project = (
       story: HeaderFooterStoryRecord | undefined
     ): HeaderFooterStoryRecord | undefined => {
@@ -807,8 +760,28 @@ export function finalizePageFieldProjection(
         // moved under the reused sheet. No retained entry means the story never carried a
         // page field.
         if (!retained || sameFieldPageContext(retained.context, context)) return story;
+        const done = completedStories.get(story);
+        if (done && !storyStale(done, context)) {
+          changed = true;
+          return done;
+        }
+        if (furnitureWaits(page.index)) {
+          later = true;
+          return story;
+        }
         projector = retained.projector;
         dy = retained.dy;
+      } else {
+        const done = completedStories.get(story);
+        if (done && !storyStale(done, context)) {
+          changed = true;
+          return done;
+        }
+        if (furnitureWaits(page.index)) {
+          later = true;
+          changed = true;
+          return deferLiveStory(story, projector);
+        }
       }
       changed = true;
       const projected = projector(context);
@@ -843,7 +816,7 @@ export function finalizePageFieldProjection(
     // carries a `pageFieldProjector`. A story kept by identity because its RETAINED
     // projection context still holds is already published text under this exact context.
     if (header === page.header && footer === page.footer && fragments === page.fragments) {
-      rememberFinalized(page, { pageCount: memoCount, pageRefToken, result: page });
+      if (!later) rememberFinalized(page, { pageCount: memoCount, pageRefToken, result: page });
       return page;
     }
     if (fragments !== page.fragments) changed = true;
@@ -853,7 +826,7 @@ export function finalizePageFieldProjection(
       ...(footer !== undefined ? { footer } : {}),
       ...(fragments !== page.fragments ? { fragments } : {}),
     };
-    rememberFinalized(page, { pageCount: memoCount, pageRefToken, result });
+    if (!later) rememberFinalized(page, { pageCount: memoCount, pageRefToken, result });
     return result;
   });
 

@@ -40,6 +40,49 @@ function docx(): Uint8Array {
   });
 }
 
+const FN_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
+
+/** Several sections, with a footnote every 40 paragraphs. */
+function sectionsAndNotesDocx(sections = true): Uint8Array {
+  const paragraphs: string[] = [];
+  const notes: string[] = [
+    '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>',
+    '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>',
+  ];
+  for (let index = 0; index < 900; index += 1) {
+    const note = index % 40 === 5 ? notes.length - 1 : 0;
+    if (note > 0) {
+      notes.push(
+        `<w:footnote w:id="${note}"><w:p><w:r><w:t>Note ${note} for paragraph ${index}</w:t></w:r></w:p></w:footnote>`
+      );
+    }
+    const reference =
+      note > 0
+        ? `<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="${note}"/></w:r>`
+        : '';
+    const sectionEnd =
+      sections && index % 300 === 299 && index < 899 ? '<w:pPr><w:sectPr/></w:pPr>' : '';
+    paragraphs.push(`<w:p>${sectionEnd}<w:r><w:t>Paragraph ${index}</w:t></w:r>${reference}</w:p>`);
+  }
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId2" Type="${FN_REL}" Target="footnotes.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${paragraphs.join('')}<w:sectPr/></w:body></w:document>`
+    ),
+    'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${notes.join('')}</w:footnotes>`),
+  });
+}
+
 /** Each page's lines as `page|text|y`, in reading order. */
 function linesOf(surface: PaginatedSurface): string[] {
   const out: string[] = [];
@@ -51,7 +94,11 @@ function linesOf(surface: PaginatedSurface): string[] {
       }
     }
   };
-  surface.layout().pages.forEach((page, index) => visit(page.fragments, index));
+  surface.layout().pages.forEach((page, index) => {
+    visit(page.fragments, index);
+    const notes = page.footnotes?.notes ?? [];
+    if (notes.length > 0) out.push(`${index}|notes|${notes.length}`);
+  });
   return out;
 }
 
@@ -155,6 +202,29 @@ describe('pages after the screen finish in the background', () => {
       dispose();
     }
   });
+
+  for (const sections of [true, false])
+    test(`with ${sections ? 'sections and ' : ''}footnotes, a second edit drops the pass and still ends cold`, async () => {
+      const { surface, container, dispose } = mount(sectionsAndNotesDocx(sections));
+      try {
+        const opened = linesOf(surface);
+        expect(opened.some((line) => line.includes('|notes|'))).toBe(true);
+        splitFirst(surface);
+        // Deferred: the second edit below drops this pass instead of finishing it.
+        expect(container.hasAttribute('data-docx-layout-pending')).toBe(true);
+        splitFirst(surface, 2);
+        const cold = coldLines(surface);
+        expect(await settled(surface, cold)).toEqual(cold);
+
+        splitFirst(surface, 3);
+        surface.undo();
+        surface.undo();
+        surface.undo();
+        expect(await settled(surface, opened)).toEqual(opened);
+      } finally {
+        dispose();
+      }
+    });
 
   test('a pass reports its layout time once, background slices included, when it ends', async () => {
     const container = document.createElement('div');
@@ -306,6 +376,47 @@ describe('a pass that cannot be put back', () => {
       expect(stepsAfterWrapUp).toBe(1);
       expect(restored).toBe(0);
       expect(published).toEqual([finished]);
+      expect(deferred.pending()).toBe(false);
+    } finally {
+      deferred.cancel();
+      restore();
+    }
+  });
+});
+
+describe('a pass with only its answer left', () => {
+  test('shows every page it has, and a newer edit drops it without putting anything back', () => {
+    const restore = setDeferredLayoutForTest(1, 40);
+    let time = 0;
+    const page = {} as SemanticLayout['pages'][number];
+    const previous = { pages: Array.from({ length: 10 }, () => page) } as SemanticLayout;
+    const interim = { pages: Array.from({ length: 10 }, () => page) } as SemanticLayout;
+    const published: SemanticLayout[] = [];
+    let restored = 0;
+    const deferred = createDeferredLayout({
+      now: () => time,
+      pageAfterView: () => 1,
+      current: () => previous,
+      revision: () => 1,
+      publish: (layout) => void published.push(layout),
+      snapshot: () => () => void (restored += 1),
+    });
+    function* steps(): Generator<
+      { pages: readonly unknown[]; finalize: () => SemanticLayout; settled: true },
+      SemanticLayout,
+      void
+    > {
+      time += 50;
+      yield { pages: interim.pages, finalize: () => interim, settled: true };
+      return { pages: [] } as unknown as SemanticLayout;
+    }
+    try {
+      // As many pages as the previous layout: a settled pass defers all the same.
+      expect(deferred.run(steps() as never, 1)).toBe(interim);
+      expect(deferred.pending()).toBe(true);
+      deferred.abandon();
+      expect(restored).toBe(0);
+      expect(published).toEqual([]);
       expect(deferred.pending()).toBe(false);
     } finally {
       deferred.cancel();

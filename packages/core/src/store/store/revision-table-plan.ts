@@ -1,6 +1,7 @@
 import { retainsNestedTable } from './revision-table-preserve-nested.ts';
 import { tableChildren, isTableWrapper } from './revision-table-children.ts';
 import { parentNodeOf } from '../package/ooxml-edit.ts';
+import { ancestorIdsOf } from './node-ancestors.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -91,8 +92,10 @@ export function tableRevisionRemovals(
       removed.set(target.id, [...(removed.get(target.id) ?? []), site.node.id]);
   }
   if (!removed.size) return removed;
+  // Only an ancestor of a removed cell or row can lose all its rows or cells.
+  const ancestors = ancestorIdsOf(part, removed.keys());
   const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue' || removed.has(node.id)) return;
+    if (node.kind === 'textValue' || removed.has(node.id) || !ancestors.has(node.id)) return;
     for (const child of node.children) visit(child);
     if (node.kind !== 'table' && node.kind !== 'tableRow' && !isTableWrapper(node)) return;
     const children =
@@ -138,8 +141,10 @@ export function tableRevisionNeighbours(
   const removed = tableRevisionRemovals(part, sites, action);
   const neighbours = new Map<string, readonly string[]>();
   if (!removed.size) return neighbours;
+  // A table or row with no removed row or cell gives no neighbour.
+  const ancestors = ancestorIdsOf(part, removed.keys());
   const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue' || removed.has(node.id)) return;
+    if (node.kind === 'textValue' || removed.has(node.id) || !ancestors.has(node.id)) return;
     if (node.kind === 'table') {
       let precedingRemovals: readonly string[] = [];
       for (const row of tableChildren(node, 'tableRow')) {

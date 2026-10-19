@@ -19,6 +19,7 @@ import {
 } from './resolver-glyph-font-families.ts';
 import { warmLayoutNodeDigests } from '../layout/layout-cache.ts';
 import { setOpeningIndicatorHost, type OpeningIndicatorHost } from './surface-opening-indicator.ts';
+import { PROGRESSIVE_OPEN_FIRST_BLOCKS } from './surface-progressive-open.ts';
 
 /** About how long one font warm-up step runs, in milliseconds. */
 const FONT_WARM_STEP_MS = 40;
@@ -116,10 +117,7 @@ export function preparedOpenHook(
     });
 }
 
-export {
-  continueProgressiveOpen as continueOpen,
-  progressiveOpenPending as stillOpening,
-} from './surface-progressive-open.ts';
+export { progressiveOpenPending as stillOpening } from './surface-progressive-open.ts';
 
 /** The host's opening indicator, kept across the surfaces the facade mounts. */
 export function openingIndicatorChrome(current: () => object | null) {
@@ -152,9 +150,11 @@ export function openSteps(
 ): Step {
   const body = session.part().root.children.find((child) => child.kind === 'body');
   const blocks = body?.kind === 'body' ? (body.children as readonly OoxmlElement[]) : [];
-  // A table's rows come before the table, so its own digest only joins theirs.
+  // A table's rows come before the table, so its own digest only joins theirs. Only the blocks
+  // the mount lays out: the later ones are hashed by the background passes that lay them out,
+  // which pause between table rows, so the first page does not wait for the whole document.
   const digests: OoxmlNode[] = [];
-  for (const block of blocks) {
+  for (const block of blocks.slice(0, PROGRESSIVE_OPEN_FIRST_BLOCKS)) {
     if (block.kind === 'table') for (const row of block.children) digests.push(row);
     digests.push(block);
   }

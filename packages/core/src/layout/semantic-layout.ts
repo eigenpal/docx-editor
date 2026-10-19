@@ -327,7 +327,13 @@ function* layoutInModeSteps(
   // NOTEREF fields number against THIS walk's section bounds paired with the notes input's
   // per-section properties — the pairing `attachNotesToLayout` numbers the note areas with,
   // so field and area agree by construction.
-  const refFields = resolveBodyRefFields(part, blocks, sections, optionsWithLists);
+  // Over the whole body, so a field before an opening's cut keeps its later target's value.
+  const refFields = resolveBodyRefFields(
+    part,
+    allBlocks,
+    blocks === allBlocks ? sections : enumerateDocumentSectionsFromBlocks(part, allBlocks).sections,
+    optionsWithLists
+  );
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
   function* runBodySteps(opts: SemanticLayoutOptions): LayoutSteps<SemanticLayout> {
@@ -604,7 +610,8 @@ function* layoutBlocksPass(
     session,
     contextFor,
     pageBottomReserves,
-    pageIndexStart
+    pageIndexStart,
+    options.pageBottomReservesFollowFlow === true
   );
   const context = reserveResume.context;
   const startPageParity = pageIndexStart & 1;
@@ -691,8 +698,8 @@ function* layoutBlocksPass(
     // the document page at `pageIndexStart + index`. A continuous section's local page 0
     // IS the previous section's last sheet: both passes read the same document slot, so
     // every flow sharing the sheet stops above the same note area.
-    contentHeightOf(pageBottomReserves?.get(pageIndexStart + index) ?? 0, index);
-  const noteReserveHere = () => pageBottomReserves?.get(pageIndexStart + pages.length);
+    contentHeightOf(reserveResume.reserveAt(index) ?? 0, index);
+  const noteReserveHere = () => reserveResume.reserveAt(pages.length);
   /** The same band with the footnote reserve ignored — the table paginator's recovery. */
   const unreservedContentHeight = (): number => contentHeightOf(0);
 
@@ -986,14 +993,21 @@ function* layoutBlocksPass(
   function buildSectionPrepass(): SectionPrepass {
     // Frame admission can vary during wrap probes without moving resource epochs.
     // Keep those passes on the full preparation path.
-    const reusable =
-      prepassInputsValid && columns.count === 1 && !options.disabledParagraphFrameIds
-        ? prepassMemo
-        : null;
+    const unframed = columns.count === 1 && !options.disabledParagraphFrameIds;
+    const reusable = prepassInputsValid && unframed ? prepassMemo : null;
+    // Only the list map moved: a paragraph keeps its entry while its own list item is the same.
+    const listMoved = !reusable && prepassNonListInputsValid && unframed ? prepassMemo : null;
     const orderSource = reusable ?? (autofitInputsEqual ? prepassMemo : null);
     const prepared = resolveListAutoSpacing(
-      sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
-        prepareBlock(block, contentWidth)
+      sectionPrep.prepareSectionBlocks(
+        bodies,
+        reusable ?? listMoved,
+        (block) => prepareBlock(block, contentWidth),
+        listMoved
+          ? (block) =>
+              block.kind === 'paragraph' &&
+              listMoved.listItems?.get(block.id) === listItems?.get(block.id)
+          : undefined
       ),
       options.paragraphLineUnitPt,
       styleCascade
@@ -1019,6 +1033,7 @@ function* layoutBlocksPass(
       flowKeys: flow,
       keepsNext,
       markerTexts,
+      flowKeyIntern,
     } = sectionFlowKeys({
       prepared,
       keys,
@@ -1030,6 +1045,7 @@ function* layoutBlocksPass(
       tocIds,
       leadingBreakFlowKeys: leadingBreakGroups.flowKeys,
       keptTables,
+      flowKeyIntern: prepassMemo?.flowKeyIntern,
     });
 
     return {
@@ -1067,6 +1083,7 @@ function* layoutBlocksPass(
       tocToken,
       refToken: refFields?.valuesToken ?? '',
       flowKeys: flow,
+      flowKeyIntern,
       terminalTextTables,
     };
   }
@@ -1171,10 +1188,6 @@ function* layoutBlocksPass(
   let cursorY = flowStartY;
   // A continuous section can open its column region below content already on the sheet.
   let columnRegionTop = flowStartY;
-  // Later columns can start below a full-width prefix on the same sheet.
-  // Keep the first column's authored spacing when it resumes prior content.
-  const atParagraphRegionStart = (): boolean =>
-    (cursorY === 0 || (columnIndex > 0 && cursorY === columnRegionTop)) && !regionHasFragments();
   let flowColumnIndex = 0;
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
@@ -1542,7 +1555,7 @@ function* layoutBlocksPass(
       paragraphSpaceBefore = appliedSpaceBefore(
         before,
         previousSpaceAfter,
-        atParagraphRegionStart(),
+        cursorY === 0 && !regionHasFragments(),
         keepsBeforeAtPageStart(entryIndex, entry)
       );
       paragraphStartY +=
@@ -1896,12 +1909,12 @@ function* layoutBlocksPass(
     // into line once the page it disturbed has been completed.
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
+      if (mark) reserveResume.followShift(pages.length - mark.pageCount); // A seeded notes pass.
       const tailHolds = mark && reserveResume.tailHolds(mark, pages.length);
-      if (mark && tailHolds && flowCheckpointsMatch(mark, checkpoints[index]!)) {
-        // The in-page flow matches. At delta 0 the previous pages are appended by identity;
-        // at a nonzero delta the tail is identical content `delta` sheets away and is reused
-        // through `remapPage`, gated by `convergenceTailShiftAllowed`.
+      if (mark && tailHolds) {
+        // The shift rule first (delta 0 appends, else `remapPage`): it costs less than the compare.
         const delta = pages.length - mark.pageCount;
+        const shiftedTail = delta !== 0 ? reserveResume.shiftedTail(mark, pages.length) : undefined;
         const shiftable = convergenceTailShiftAllowed({
           delta,
           titlePage: furniture?.titlePage === true,
@@ -1913,10 +1926,11 @@ function* layoutBlocksPass(
           firstPageBorders:
             options.sectionPageBorders !== undefined &&
             options.sectionPageBorders.display !== 'allPages',
-          hasNoteReserves: pageBottomReserves !== undefined,
+          hasNoteReserves: pageBottomReserves !== undefined && !shiftedTail,
           hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
         });
-        if (shiftable) {
+        if (shiftable && flowCheckpointsMatch(mark, checkpoints[index]!)) {
+          if (shiftedTail) reserveResume.adoptShiftedTail(shiftedTail);
           const tail =
             delta === 0
               ? previous!.pages.slice(mark.pageCount)
@@ -2197,7 +2211,7 @@ function* layoutBlocksPass(
       }
     }
 
-    const atTopOfPage = atParagraphRegionStart();
+    const atTopOfPage = cursorY === 0 && !regionHasFragments();
     // Lines holding only a leading page break take no space before and draw no rule. Both
     // open the text after the breaks, on its own sheet.
     let breakLinesOnly = !frame && leadingBreak();

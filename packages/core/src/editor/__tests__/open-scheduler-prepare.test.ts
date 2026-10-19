@@ -48,8 +48,31 @@ describe('open scheduler prepare task', () => {
     expect(events).toEqual(['scheduled', 'prepare']);
     expect(scheduler.isScheduled()).toBe(true);
     await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
+    expect(events).toEqual(['scheduled', 'prepare', 'mount', 'scheduled']);
     expect(scheduler.isScheduled()).toBe(false);
+  });
+
+  test('a load the mount starts stays scheduled after that mount ends', async () => {
+    const events: string[] = [];
+    let mounts = 0;
+    const scheduler = createOpenScheduler({
+      mount: () => {
+        events.push('mount');
+        mounts += 1;
+        if (mounts === 1) scheduler.schedule(new Uint8Array(2));
+      },
+      scheduled: () => events.push('scheduled'),
+    });
+    scheduler.schedule(new Uint8Array(1));
+    await frame();
+    await nextTask();
+    expect(mounts).toBe(1);
+    // The first open ended at its mount; the second one is still the scheduler's to cancel.
+    expect(scheduler.isScheduled()).toBe(true);
+    expect(scheduler.cancel()).toEqual(new Uint8Array(2));
+    await frame();
+    await nextTask();
+    expect(mounts).toBe(1);
   });
 
   test('flush before the prepare task mounts at once and never prepares', async () => {
@@ -79,7 +102,7 @@ describe('open scheduler prepare task', () => {
     await frame();
     await nextTask();
     await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
+    expect(events).toEqual(['scheduled', 'prepare', 'mount', 'scheduled']);
     expect(scheduler.isScheduled()).toBe(false);
   });
 
@@ -146,7 +169,7 @@ describe('prepare work the mount waits for', () => {
     settle();
     await nextTask();
     await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
+    expect(events).toEqual(['scheduled', 'prepare', 'mount', 'scheduled']);
   });
 
   test('work that never settles delays the mount by the wait limit only', async () => {
@@ -156,7 +179,7 @@ describe('prepare work the mount waits for', () => {
     await nextTask();
     expect(events).toEqual(['scheduled', 'prepare']);
     await new Promise((resolve) => setTimeout(resolve, PREPARED_WORK_WAIT_MS + 50));
-    expect(events).toEqual(['scheduled', 'prepare', 'mount']);
+    expect(events).toEqual(['scheduled', 'prepare', 'mount', 'scheduled']);
   });
 
   test('a follow-up step runs in its own task, and the wait starts after it', async () => {
@@ -185,7 +208,7 @@ describe('prepare work the mount waits for', () => {
     settle();
     await nextTask();
     await nextTask();
-    expect(events).toEqual(['scheduled', 'prepare', 'scan', 'mount']);
+    expect(events).toEqual(['scheduled', 'prepare', 'scan', 'mount', 'scheduled']);
   }, 10_000);
 
   test('cancel while waiting means the settled work mounts nothing', async () => {

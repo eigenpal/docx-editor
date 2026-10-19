@@ -264,8 +264,14 @@ test('a completion observer can switch to another deferred document without losi
     await refresh.applyUpdate({ submission, sequence: 1, bytes: refreshFixture(1, true) })
   ).toMatchObject({ code: 'document-changed' });
   expect(switched).toBe(true);
+  // The document takes input once it mounts; its preview clears when its pages are laid out.
   const deadline = Date.now() + 3000;
-  while ((!editor.surface || editor.snapshot().isOpening) && Date.now() < deadline)
+  while (
+    (!editor.surface ||
+      editor.snapshot().isOpening ||
+      container.hasAttribute('data-docx-opening-preview')) &&
+    Date.now() < deadline
+  )
     await new Promise((resolve) => setTimeout(resolve, 10));
   expect(editor.surface).not.toBeNull();
   expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);

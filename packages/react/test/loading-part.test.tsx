@@ -120,14 +120,14 @@ function slicedSource(): Uint8Array {
   });
 }
 
-/** Records where each mount of the indicator landed: the first screen or the first page. */
+/** Records where each mount of the indicator landed: the first screen or below the laid-out pages. */
 function trackedIndicator(places: string[]) {
   return (
     <span
       className="mine"
       ref={(element) => {
         if (!element) return;
-        places.push(element.closest('.docx-opening-indicator') ? 'first page' : 'screen');
+        places.push(element.closest('.docx-opening-indicator') ? 'below the pages' : 'screen');
       }}
     >
       Opening document
@@ -509,7 +509,7 @@ describe('DocxEditor.Loading', () => {
     expect(view.container.querySelector('.docx-editor__loading-page')).not.toBeNull();
   });
 
-  test('with overlay, the indicator moves onto the first page while the pages are laid out', async () => {
+  test('with overlay, the indicator moves below the laid-out pages while the rest are laid out', async () => {
     const places: string[] = [];
     const view = render(
       <DocxEditorRoot document={slicedSource()}>
@@ -522,9 +522,9 @@ describe('DocxEditor.Loading', () => {
       </DocxEditorRoot>
     );
 
-    await waitFor(() => expect(places).toContain('first page'), { timeout: 20_000 });
+    await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
     expect(places[0]).toBe('screen');
-    // The screen yields at the first painted page, but the first-page indicator stays until the
+    // The screen yields at the first painted page, but the indicator below the pages stays until the
     // last slice lands. Wait for that end state, not for the screen alone.
     await waitFor(
       () => {
@@ -584,7 +584,7 @@ describe('packaged DocxEditor loading screen', () => {
     ).toBe(true);
   });
 
-  test('loadingIndicator shows on the loading page, then on the first page', async () => {
+  test('loadingIndicator shows on the loading page, then below the laid-out pages', async () => {
     const places: string[] = [];
     const view = render(
       <DocxEditor document={slicedSource()} loadingIndicator={trackedIndicator(places)} />
@@ -593,7 +593,7 @@ describe('packaged DocxEditor loading screen', () => {
     await act(async () => {});
     expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
     expect(view.container.querySelector(SPINNER)).toBeNull();
-    await waitFor(() => expect(places).toContain('first page'), { timeout: 20_000 });
+    await waitFor(() => expect(places).toContain('below the pages'), { timeout: 20_000 });
     await waitFor(() => expect(view.container.querySelector('.mine')).toBeNull(), {
       timeout: 20_000,
     });

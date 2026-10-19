@@ -22,7 +22,7 @@ async function until(check: () => boolean, timeoutMs = 20_000): Promise<void> {
   }
 }
 
-/** Records where each mount of the indicator landed: the first screen or the first page. */
+/** Records where each mount of the indicator landed: the first screen or below the laid-out pages. */
 function trackedIndicator(places: string[]) {
   return () =>
     h(
@@ -31,7 +31,7 @@ function trackedIndicator(places: string[]) {
         class: 'mine',
         ref: (element: unknown) => {
           if (!(element instanceof HTMLElement)) return;
-          places.push(element.closest('.docx-opening-indicator') ? 'first page' : 'screen');
+          places.push(element.closest('.docx-opening-indicator') ? 'below the pages' : 'screen');
         },
       },
       'Opening document'
@@ -53,7 +53,7 @@ describe('the loading indicator slot', () => {
     app.unmount();
   });
 
-  test('loadingIndicator shows on the loading page, then on the first page', async () => {
+  test('loadingIndicator shows on the loading page, then below the laid-out pages', async () => {
     const places: string[] = [];
     const view = await mountSugarAsync(
       { document: slicedSource() },
@@ -62,7 +62,7 @@ describe('the loading indicator slot', () => {
     await nextTick();
     expect(view.container.querySelector('.docx-editor__loading-page .mine')).not.toBeNull();
     expect(view.container.querySelector('.docx-editor__loading-spinner')).toBeNull();
-    await until(() => places.includes('first page'));
+    await until(() => places.includes('below the pages'));
     expect(places[0]).toBe('screen');
     await until(() => view.container.querySelector('.mine') === null);
     expect(view.container.querySelector('.docx-opening-indicator')).toBeNull();

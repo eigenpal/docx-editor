@@ -1079,7 +1079,8 @@ export function openTreeSessionFromPackage(
               paragraphOrder,
               patchParagraphId,
               localRevisions,
-              filtering.filtered
+              filtering.filtered,
+              store.part
             );
             if (!patched) paragraphOrder = paragraphOrderOfPart(store.part);
             items = patched ?? derived();

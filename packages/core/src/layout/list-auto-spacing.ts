@@ -3,6 +3,7 @@ import { flowNeighbourStyle } from './contextual-paragraph-spacing.ts';
 import { paragraphSpacing, type ParagraphSpacing } from './paragraph-style.ts';
 import { resolveParagraphLayoutInputs, type StyleCascadeTable } from './style-cascade.ts';
 import { styleSeparatorMembersOf } from './style-separator-group.ts';
+import { extendedFlowKey } from './flow-key-intern.ts';
 
 type SpacingBlock =
   | {
@@ -100,7 +101,11 @@ export function listAutoSpacingFlowKeys(keys: string[], blocks: readonly Spacing
   blocks.forEach((block, index) => {
     if (block.kind !== 'paragraph' || block.listItem === undefined) return;
     if (flow === keys) flow = [...keys];
-    flow[index] = `${flow[index]}~ls~${block.spacing.before},${block.spacing.after}`;
+    flow[index] = extendedFlowKey(
+      flow[index]!,
+      '~ls~',
+      `${block.spacing.before},${block.spacing.after}`
+    );
   });
   return flow;
 }

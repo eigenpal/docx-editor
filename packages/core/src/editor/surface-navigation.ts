@@ -45,6 +45,16 @@ export interface NavigationDeps {
   /** Sanitized `a:hlinkClick` on a painted drawing, keyed by drawing node id. */
   readonly drawingLinkById?: (drawingNodeId: string) => SurfaceHyperlink | null;
   readonly setSelection: (position: { paragraphId: string; offset: number }) => void;
+  /** Start of every jump: a newer jump replaces one still waiting for its page. */
+  readonly beginJump?: () => void;
+  /**
+   * During a large open, wait for a target the layout has not reached and `retry` the jump
+   * once it has. False when there is nothing to wait for.
+   */
+  readonly whenLaidOut?: (
+    position: { paragraphId: string; offset: number },
+    retry: () => void
+  ) => boolean;
   /**
    * Put the surface in the story a jump target is in, before the caret moves there.
    *
@@ -156,6 +166,7 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
     // doing it afterwards would measure the target against the story the reader was leaving.
     // A story that cannot be opened (a header in a read-only document) is shown without
     // moving the caret into it, when the caller asks for that.
+    deps.beginJump?.();
     const entered = !deps.enterStoryFor || deps.enterStoryFor(position.paragraphId);
     if (!entered && !options?.orShow) return false;
     const layout = deps.layout();
@@ -167,7 +178,13 @@ export function createSurfaceNavigation(deps: NavigationDeps): SurfaceNavigation
       position,
       entered ? undefined : { preferredPageIndex: pageInView(layout, element, deps.scale()) }
     );
-    if (!caret) return false;
+    if (!caret) {
+      // A body target past the pages laid out so far: the caret moves now, the view follows.
+      if (!entered || !deps.whenLaidOut?.(position, () => goToPosition(position, options)))
+        return false;
+      deps.setSelection(position);
+      return true;
+    }
     const page = layout.pages[caret.pageIndex];
     if (!page) return false;
 

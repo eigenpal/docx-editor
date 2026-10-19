@@ -6,6 +6,7 @@ import type { RefreshHost } from './document-refresh-host.ts';
 import type { DocxEditorInstance } from './docx-editor-types.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { revealScrollOptions } from './reveal-scroll-options.ts';
+import { progressiveOpenPending as stillOpening } from './surface-progressive-open.ts';
 
 /** Resolve against committed text: session reads sit below the input buffer. */
 function resolveAnchor(surface: PaginatedSurface, anchor: DocAnchor) {
@@ -80,7 +81,12 @@ export function createAnchorNavigation(
         .pages.some((page) =>
           paragraphFragmentsOf(page).some((fragment) => fragment.paragraphId === paragraphId)
         );
-      if (!placed) return false;
+      // A body paragraph that a large open has not laid out yet shows its highlight when it is.
+      if (
+        !placed &&
+        !(stillOpening(surface) && surface.session.paragraphIds().includes(paragraphId))
+      )
+        return false;
       presentation.show([{ paragraphId }], options);
       return true;
     },

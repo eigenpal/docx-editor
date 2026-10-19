@@ -107,3 +107,77 @@ test('editors opened in two tasks converge through edits, concurrent deletion, u
   converged();
   expect(texts(bob)[0]).toBe('Alpha one');
 });
+
+test('editors that take input while their opening layout runs converge, undo, and reopen', async () => {
+  const body: string[] = [];
+  // Long enough that the opening layout runs for many tasks after the mount.
+  const words = ' with enough ordinary words to wrap over several lines of the page'.repeat(3);
+  for (let index = 0; index < 3000; index += 1)
+    body.push(paragraph(`Body paragraph ${index}${index === 0 || index === 1400 ? '' : words}`));
+  const peers = await harness.pair(
+    zipDocument(body.join('') + '<w:sectPr/>', {
+      overrides: '<Override PartName="/customXml/item1.xml" ContentType="application/xml"/>',
+      extraXml: { 'customXml/item1.xml': filler(700 * 1024) },
+    })
+  );
+  const mounted: Editor[] = [];
+  const containers: HTMLElement[] = [];
+  for (const peer of [peers.alice, peers.bob]) {
+    peer.detach();
+    const editor = createDocxEditor({
+      document: peer.room.document,
+      modules: [collaborationModule({ session: peer.room.session })],
+    });
+    editors.push(editor);
+    const container = document.createElement('div');
+    containers.push(container);
+    editor.attach(container);
+    mounted.push(editor);
+  }
+  const [alice, bob] = mounted as [Editor, Editor];
+  await until(() => alice.surface !== null && bob.surface !== null);
+  const pending = () => containers.map((c) => c.hasAttribute('data-docx-layout-pending'));
+  const sync = () => {
+    peers.alice.room.session.flushPendingJournals();
+    peers.bob.room.session.flushPendingJournals();
+  };
+  const texts = (editor: Editor) =>
+    editor.surface!.session.storyText({ kind: 'body' })!.split('\n');
+  const select = (editor: Editor, index: number, start: number, end = start) => {
+    const paragraphId = editor.surface!.session.paragraphIds()[index]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: start },
+      head: { paragraphId, offset: end },
+    });
+  };
+
+  // Both pages take input before their remaining pages are laid out.
+  expect(alice.snapshot().isOpening).toBe(false);
+  expect(pending()).toEqual([true, true]);
+  // Alice types at the top; Bob deletes text in a paragraph his layout has not reached yet.
+  select(alice, 0, 4);
+  alice.surface!.type(' typed');
+  select(bob, 1400, 0, 5);
+  bob.surface!.deleteSelection();
+  sync();
+  expect(texts(bob)[0]).toBe('Body typed paragraph 0');
+  expect(texts(alice)[1400]).toBe('paragraph 1400');
+
+  // Select All lays out the rest of each opening first, as for a reader selecting everything.
+  // Waiting for the background tasks alone outlasted the timeout on a loaded machine.
+  alice.surface!.selectAll();
+  bob.surface!.selectAll();
+  await until(() => !pending().includes(true), 60_000);
+  sync();
+  const left = alice.surface!.session.currentPackage();
+  const right = bob.surface!.session.currentPackage();
+  expect(packageFingerprint(right)).toBe(packageFingerprint(left));
+  expect(saveReopenDigest(right)).toEqual(saveReopenDigest(left));
+  // Both finish with the pages of the converged document.
+  expect(alice.surface!.layout().pages.length).toBe(bob.surface!.layout().pages.length);
+
+  alice.surface!.undo();
+  sync();
+  expect(texts(bob)[0]).toBe('Body paragraph 0');
+  expect(texts(bob)[1400]).toBe('paragraph 1400');
+}, 240_000);

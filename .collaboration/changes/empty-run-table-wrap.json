@@ -1,0 +1,14 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Later continued columns suppressed authored paragraph spacing. Empty paragraphs ignored full-width table wrapping.",
+  "after": "Continued columns retain authored paragraph spacing. Empty paragraphs follow table wrapping and retain their line height.",
+  "reason": "Only derived layout changes. Canonical nodes, operations, identities, stored fields, and collaboration messages remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/column-region-space-before.test.ts",
+    "packages/core/src/layout/__tests__/empty-line-full-width-table.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-layout-continuation.test.ts"
+  ],
+  "changeset": "empty-run-table-wrap",
+  "migration": null
+}

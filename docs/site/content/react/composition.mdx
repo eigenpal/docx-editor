@@ -419,7 +419,7 @@ With `overlay`, the indicator moves onto the first page once the first pages of 
 </div>
 ```
 
-Children replace the whole first screen, and the first page then shows `indicator`, or the packaged spinner without it. `<DocxEditor loadingIndicator={...} />` passes its value to `indicator`.
+Children replace the whole first screen. While the remaining pages lay out, the space below the laid-out pages shows `indicator`, or the packaged spinner without it. `<DocxEditor loadingIndicator={...} />` passes its value to `indicator`.
 
 Use `DocxEditor.Loading.Spinner` with `className` to style the packaged spinner. If you conditionally mount content, use `snapshot().isLoading`. Do not use `isOpening` for that condition. `DocxEditor.Content` must remain mounted while the scheduled open completes.
 

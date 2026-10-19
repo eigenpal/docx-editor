@@ -20,8 +20,8 @@ export interface LayoutProgress {
   readonly pages: readonly PageRecord[];
   readonly finalize?: (pages: readonly PageRecord[]) => SemanticLayout;
   /**
-   * False when the pass advances state in place (section sessions, the notes search), so a
-   * host that pauses it must finish it before laying out again; it cannot put it back.
+   * False when the pass advances state that `snapshotLayoutSession` does not cover, so a host
+   * that pauses it must finish it before laying out again; it cannot put it back.
    */
   readonly restorable?: boolean;
   /**
@@ -30,6 +30,12 @@ export interface LayoutProgress {
    * next pass continues from there.
    */
   readonly wrapUp?: () => void;
+  /**
+   * The pass has written its end state to the session and only finishes its answer (the
+   * headers and footers off the screen, `surface-furniture-later.ts`): a host that pauses it
+   * drops it for a newer edit without putting anything back, and shows `pages` as they are.
+   */
+  readonly settled?: boolean;
 }
 
 /** Steps that end with a `T`, reporting progress at some pause points. */

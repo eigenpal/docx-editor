@@ -190,6 +190,12 @@ export interface SemanticLayoutOptions {
    * @internal
    */
   readonly pageBottomReservesFromPreviousPass?: boolean;
+  /**
+   * With a seed: each page reads its reserve where its content stood in the previous pass, and
+   * the pass reports what it read (`takeReadReserves`); see `note-first-round.ts`.
+   * @internal
+   */
+  readonly pageBottomReservesFollowFlow?: boolean;
   /** Derived note marks for body/note projection (provisional or final). */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /** Inline drawing projection for typed `w:drawing` / `wp:inline` nodes. */

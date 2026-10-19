@@ -56,9 +56,11 @@ Omitting `document` shows the loading screen and disables every control. Use `un
 The loading screen shows a spinner on a blank page. A large document then opens in two stages:
 
 1. The spinner shows on the blank page while the editor reads the file.
-1. The first pages show, muted, while the editor lays out the remaining pages. The spinner moves onto the first page and scrolls with it.
+1. The first pages show and take input while the editor lays out the remaining pages. The spinner shows below the last laid-out page and moves down as more pages appear.
 
-To replace the spinner in both stages, pass your own indicator. The editor keeps the page and centers your indicator on it. Include text for screen readers, as the packaged spinner does.
+You can type, select, and review in the first pages during the second stage. If you move to a page that the editor has not laid out yet, the editor shows that page as soon as it is laid out.
+
+To replace the spinner in both stages, pass your own indicator. The editor places your indicator on the blank page, and then below the laid-out pages. Include text for screen readers, as the packaged spinner does.
 
 <FrameworkTabs>
 <Framework value="react">

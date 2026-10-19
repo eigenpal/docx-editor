@@ -55,6 +55,7 @@ interface ListResolveChangeEvidence {
 
 const listResolveEvidenceBySession = new WeakMap<LayoutSession, ListResolveChangeEvidence>();
 let listResolveBlockVisits = 0;
+let listResolveBlockScans = 0;
 
 /** @internal Read session-scoped list resolve memo for tests. */
 export function listResolveSessionMemoListItemsForTest(
@@ -66,14 +67,20 @@ export function listResolveSessionMemoListItemsForTest(
 /** @internal Warm-path recorder for list resolve block walks. */
 export function listResolveBlockVisitTestRecorder(): {
   readonly blockVisits: number;
+  /** Blocks whose numbered paragraphs were read again rather than reused. */
+  readonly blockScans: number;
   reset(): void;
 } {
   return {
     get blockVisits() {
       return listResolveBlockVisits;
     },
+    get blockScans() {
+      return listResolveBlockScans;
+    },
     reset() {
       listResolveBlockVisits = 0;
+      listResolveBlockScans = 0;
     },
   };
 }
@@ -834,14 +841,27 @@ function resolveStoryListItemsStable(
     last.styleCascade === styleCascade &&
     last.isFontAvailable === isFontAvailable &&
     last.blocks.length === blocks.length;
+  // A paragraph added or removed shifts every block after it: match the unchanged tail from the
+  // end, so those blocks keep their scans instead of each being read again.
+  const shift = last ? last.blocks.length - blocks.length : 0;
+  let tail = 0;
+  if (last && shift !== 0) {
+    const shorter = Math.min(blocks.length, last.blocks.length);
+    while (
+      tail < shorter &&
+      blocks[blocks.length - 1 - tail] === last.blocks[last.blocks.length - 1 - tail]
+    )
+      tail += 1;
+  }
   for (let index = 0; index < blocks.length; index += 1) {
     listResolveBlockVisits += 1;
     const block = blocks[index]!;
+    const previousIndex = index >= blocks.length - tail ? index + shift : index;
     // A style can number a paragraph, so a block's list holds only under the same cascade.
     const numbered =
-      last && last.blocks[index] === block && last.styleCascade === styleCascade
-        ? last.numberedByBlock[index]!
-        : numberedParagraphsOfBlock(block, styleCascade);
+      last && last.blocks[previousIndex] === block && last.styleCascade === styleCascade
+        ? last.numberedByBlock[previousIndex]!
+        : (listResolveBlockScans++, numberedParagraphsOfBlock(block, styleCascade));
     numberedByBlock[index] = numbered;
     if (
       numberedSequenceUnchanged &&

@@ -76,6 +76,22 @@ function fakeEnvironment(options: { failWhenFamilyMatches?: string } = {}) {
 }
 
 describe('registerEmbeddedFontFaces', () => {
+  test('reads each face once, and keeps the source rather than a copy of its bytes', async () => {
+    const env = fakeEnvironment();
+    let reads = 0;
+    const lazy: FontSource = {
+      ...source('Lazy'),
+      // A source that hands out a fresh copy per read, as the editor's validated fonts do.
+      get bytes() {
+        reads += 1;
+        return new Uint8Array([1, 2, 3]);
+      },
+    };
+    const registration = await registerEmbeddedFontFaces([lazy], env.environment);
+    expect(registration.installed).toBe(1);
+    expect(reads).toBe(1);
+  });
+
   test('a document-declared family NEVER reaches the FontFaceSet', async () => {
     const env = fakeEnvironment();
     const hostile = ['Segoe UI', 'Roboto', 'Material Symbols Outlined', 'Arial'];

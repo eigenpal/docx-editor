@@ -1,6 +1,7 @@
 // A large open lays its body out in slices: a growing prefix per task, each pass resuming
 // from the last, then the normal full layout. The result must be exactly the layout an
-// unsliced mount produces, and nothing may hand out the surface before it is complete.
+// unsliced mount produces. The pages take input from the mount on: an edit lays out the
+// prefix so far, and a reveal of a page still to come waits for it without blocking.
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
@@ -10,7 +11,10 @@ import { strToU8, zipSync } from 'fflate';
 import type { BlockFragmentRecord, SemanticLayout } from '../../layout/semantic-records.ts';
 import { createDocxEditor } from '../docx-editor.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
+import { layoutNodeTokenVisitTestRecorder } from '../../layout/layout-cache.ts';
+import { setDeferredLayoutForTest } from '../surface-deferred-layout.ts';
 import {
+  completeProgressiveOpen,
   continueProgressiveOpen,
   progressiveOpenPending,
   progressiveOpenStepCount,
@@ -157,11 +161,21 @@ describe('a large open laid out in slices', () => {
       if (name === 'data-docx-opening-preview') sawPreview = true;
       setAttribute(name, value);
     };
-    // No surface is handed out while slices remain.
-    await until(() => {
-      if (editor.snapshot().isOpening) expect(editor.surface).toBeNull();
-      return editor.surface !== null && !editor.snapshot().isOpening;
-    });
+    // The surface is handed out at the mount, and the open ends there, while the slices still
+    // run behind pages that take input. Recorded, not asserted, inside the listener: an emit
+    // swallows a throw from its listener.
+    let readyWhilePending = false;
+    const record = () => {
+      const surface = editor.surface;
+      if (!surface || !progressiveOpenPending(surface)) return;
+      if (!editor.snapshot().isOpening && container.hasAttribute('data-docx-layout-pending'))
+        readyWhilePending = true;
+    };
+    const offs = [editor.on('change', record), editor.on('selectionChange', record)];
+    await until(() => editor.surface !== null && !progressiveOpenPending(editor.surface));
+    for (const off of offs) off();
+    expect(readyWhilePending).toBe(true);
+    expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
     expect(sawPreview).toBe(true);
     expect(marked()).toBe(false);
     // The open continued in a task after the mount. How many depends on machine speed and
@@ -178,7 +192,7 @@ describe('a large open laid out in slices', () => {
     const bytes = docx();
     const editor = createDocxEditor({ document: bytes });
     editor.attach(document.createElement('div'));
-    await until(() => editor.snapshot().isOpening && editor.fontMeasurement().resolving);
+    await until(() => editor.snapshot().isOpening);
     const saved = await editor.save();
     expect(saved.byteLength).toBeGreaterThan(0);
     expect(editor.snapshot().isOpening).toBe(false);
@@ -212,8 +226,17 @@ describe('a large open laid out in slices', () => {
     });
   }
 
-  function slicedMount(bytes: Uint8Array) {
+  /** A container inside a host scroller, which a reveal needs. */
+  function scrolledContainer(): HTMLElement {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
     const container = document.createElement('div');
+    scroller.append(container);
+    return container;
+  }
+
+  function slicedMount(bytes: Uint8Array) {
+    const container = scrolledContainer();
     const mounted = mountPaginatedSurface(container, bytes, {
       progressiveOpen: true,
     } as Parameters<typeof mountPaginatedSurface>[2]);
@@ -353,6 +376,296 @@ describe('a large open laid out in slices', () => {
     }
   }, 60_000);
 
+  test('a paragraph a collaborator adds before the last slice is laid out at the end', () => {
+    const bytes = docx();
+    // The slices an untouched open takes; the copy below stops one short of the last.
+    const counting = slicedMount(bytes);
+    let slices = 1;
+    while (!continueProgressiveOpen(counting, 0)) slices += 1;
+    counting.destroy();
+    const surface = slicedMount(bytes);
+    try {
+      for (let slice = 1; slice < slices; slice += 1) continueProgressiveOpen(surface, 0);
+      expect(progressiveOpenPending(surface)).toBe(true);
+      // Committed on the session, as a collaborator's edit arrives: the surface lays it out
+      // later, so the block count the slices read is still the one before it.
+      const ids = surface.session.paragraphIds();
+      surface.session.applyTreeOps([
+        { op: 'splitParagraph', paragraphId: ids[ids.length - 1]!, offset: 1 },
+      ]);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The rest of the opening.
+      }
+      const laidOut = new Set(signature(surface.layout()).map((row) => row.split('|')[1]!));
+      for (const id of surface.session.paragraphIds()) expect(laidOut.has(id)).toBe(true);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  /** One page per paragraph: enough later pages for a final flush to defer them. */
+  function pagePerParagraphDocx(count: number): Uint8Array {
+    const parts: string[] = [];
+    for (let index = 0; index < count; index += 1)
+      parts.push(paragraph(`Paragraph ${index}`, '<w:pageBreakBefore/>'));
+    return zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+  }
+
+  test('a forced finish after an edit leaves nothing pending and shows the edited document', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const surface = mounted.surface;
+    const reference = mountPaginatedSurface(document.createElement('div'), bytes);
+    if (!reference.ok) throw new Error(reference.reason);
+    const restore = setDeferredLayoutForTest(0, 0);
+    try {
+      // Right after the mount: the pages on screen are the first slice's few, so the final
+      // flush has many later pages to leave to a background pass.
+      const split = (target: typeof surface) => {
+        const ids = target.session.paragraphIds();
+        target.session.applyTreeOps([
+          { op: 'splitParagraph', paragraphId: ids[ids.length - 1]!, offset: 1 },
+        ]);
+      };
+      split(surface);
+      split(reference.surface);
+      expect(completeProgressiveOpen(surface)).toBe(true);
+      // Nothing is left to a background pass.
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
+      restore();
+      reference.surface.flushPendingInput();
+      expect(signature(surface.layout())).toEqual(signature(reference.surface.layout()));
+    } finally {
+      restore();
+      surface.destroy();
+      reference.surface.destroy();
+    }
+  }, 60_000);
+
+  test('a surface destroyed while a deferred pass runs leaves no pending marker', () => {
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, docx(), {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const restore = setDeferredLayoutForTest(0, 0);
+    try {
+      const surface = mounted.surface;
+      const first = { paragraphId: surface.session.paragraphIds()[0]!, offset: 1 };
+      surface.setSelection({ anchor: first, head: first });
+      surface.splitParagraph();
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(true);
+      surface.destroy();
+      expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test('Select All during the slices selects the whole body', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      expect(progressiveOpenPending(surface)).toBe(true);
+      surface.selectAll();
+      const ids = surface.session.paragraphIds();
+      expect(surface.state().selection.anchor.paragraphId).toBe(ids[0]);
+      expect(surface.state().selection.head.paragraphId).toBe(ids[ids.length - 1]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a bookmark past the laid-out pages moves the caret at once, and the view follows', () => {
+    const parts: string[] = [];
+    for (let index = 0; index < 299; index += 1)
+      parts.push(paragraph(`Paragraph ${index}`, '<w:pageBreakBefore/>'));
+    parts.push(
+      '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:bookmarkStart w:id="1" w:name="Far"/>' +
+        '<w:r><w:t>Far target</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>'
+    );
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+    const surface = slicedMount(bytes);
+    try {
+      expect(progressiveOpenPending(surface)).toBe(true);
+      expect(surface.bookmarkEditing.goTo('Far')).toBe(true);
+      // Not laid out yet, and the jump did not lay the document out to answer.
+      expect(progressiveOpenPending(surface)).toBe(true);
+      const ids = surface.session.paragraphIds();
+      expect(surface.state().selection.head.paragraphId).toBe(ids[ids.length - 1]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('Delete at the end of the last laid-out paragraph joins the next one', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = signature(surface.layout()).map((row) => row.split('|')[1]!);
+      const last = laidOut[laidOut.length - 1]!;
+      const text = surface.session.storyText({ kind: 'body' })!.split('\n');
+      const index = surface.session.paragraphIds().indexOf(last);
+      const end = { paragraphId: last, offset: text[index]!.length };
+      surface.setSelection({ anchor: end, head: end });
+      surface.deleteForward();
+      expect(surface.session.paragraphIds()).toHaveLength(299);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('Enter at the end of the laid-out pages, then Backspace, joins the paragraphs again', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = signature(surface.layout()).map((row) => row.split('|')[1]!);
+      const last = laidOut[laidOut.length - 1]!;
+      const text = surface.session.storyText({ kind: 'body' })!.split('\n');
+      const end = {
+        paragraphId: last,
+        offset: text[surface.session.paragraphIds().indexOf(last)]!.length,
+      };
+      surface.setSelection({ anchor: end, head: end });
+      surface.splitParagraph();
+      expect(surface.session.paragraphIds()).toHaveLength(301);
+      // The new paragraph is laid out, so the caret in it has a place to stand.
+      surface.deleteBackward();
+      expect(surface.session.paragraphIds()).toHaveLength(300);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('paragraphs typed at the end of the laid-out pages stay laid out edit after edit', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = signature(surface.layout()).map((row) => row.split('|')[1]!);
+      const last = laidOut[laidOut.length - 1]!;
+      const text = surface.session.storyText({ kind: 'body' })!.split('\n');
+      const end = {
+        paragraphId: last,
+        offset: text[surface.session.paragraphIds().indexOf(last)]!.length,
+      };
+      surface.setSelection({ anchor: end, head: end });
+      surface.splitParagraph();
+      surface.type('x');
+      surface.splitParagraph();
+      surface.type('y');
+      expect(progressiveOpenPending(surface)).toBe(true);
+      const rows = signature(surface.layout());
+      expect(rows.some((row) => row.split('|')[2] === 'x')).toBe(true);
+      expect(rows.some((row) => row.split('|')[2] === 'y')).toBe(true);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a collaborator deleting paragraphs past the cut leaves the laid-out pages in place', () => {
+    const bytes = pagePerParagraphDocx(300);
+    const surface = slicedMount(bytes);
+    try {
+      const laidOut = new Set(signature(surface.layout()).map((row) => row.split('|')[1]!));
+      // Forty joins near the end of the body, far past the pages laid out so far.
+      for (let join = 0; join < 40; join += 1) {
+        const ids = surface.session.paragraphIds();
+        surface.session.applyTreeOps([
+          { op: 'joinParagraphs', firstId: ids[250]!, secondId: ids[251]! },
+        ]);
+      }
+      surface.flushPendingInput();
+      const after = new Set(signature(surface.layout()).map((row) => row.split('|')[1]!));
+      for (const id of laidOut) expect(after.has(id)).toBe(true);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a jump to a near bookmark replaces one still waiting for a far page', () => {
+    const parts: string[] = [
+      '<w:p><w:bookmarkStart w:id="1" w:name="Near"/><w:r><w:t>Near target</w:t></w:r>' +
+        '<w:bookmarkEnd w:id="1"/></w:p>',
+    ];
+    for (let index = 0; index < 299; index += 1)
+      parts.push(paragraph(`Paragraph ${index}`, '<w:pageBreakBefore/>'));
+    parts.push(
+      '<w:p><w:pPr><w:pageBreakBefore/></w:pPr><w:bookmarkStart w:id="2" w:name="Far"/>' +
+        '<w:r><w:t>Far target</w:t></w:r><w:bookmarkEnd w:id="2"/></w:p>'
+    );
+    const bytes = zipSync({
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${parts.join('')}<w:sectPr/></w:body></w:document>`
+      ),
+    });
+    const surface = slicedMount(bytes);
+    try {
+      expect(surface.bookmarkEditing.goTo('Far')).toBe(true);
+      expect(surface.bookmarkEditing.goTo('Near')).toBe(true);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The far page is laid out; nobody waits for it any more.
+      }
+      expect(surface.state().selection.head.paragraphId).toBe(surface.session.paragraphIds()[0]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a long table after the first slice is hashed a row at a time', () => {
+    const bytes = longTableDocx();
+    const surface = slicedMount(bytes);
+    const recorder = layoutNodeTokenVisitTestRecorder();
+    try {
+      let most = 0;
+      do recorder.reset();
+      while (
+        !continueProgressiveOpen(surface, 0) &&
+        ((most = Math.max(most, recorder.nodeVisits)), true)
+      );
+      // The table has 600 rows of about a dozen nodes each. Hashed whole, one slice visited
+      // all of them; a row at a time, no slice visits more than a few rows' worth.
+      expect(most).toBeGreaterThan(0);
+      expect(most).toBeLessThan(600);
+      expect(signature(surface.layout())).toEqual(unslicedSignature(bytes));
+    } finally {
+      recorder.dispose();
+      surface.destroy();
+    }
+  }, 60_000);
+
   test('a layout while a slice is paused in a table still ends in the right layout', () => {
     const bytes = longTableDocx();
     const surface = slicedMount(bytes);
@@ -379,4 +692,248 @@ describe('a large open laid out in slices', () => {
       surface.destroy();
     }
   }, 60_000);
+
+  /** The first body paragraph the layout shows. */
+  function firstParagraphId(layout: SemanticLayout): string {
+    for (const page of layout.pages)
+      for (const block of page.fragments) if (block.kind === 'paragraph') return block.paragraphId;
+    throw new Error('no paragraph');
+  }
+
+  test('an edit during the slices lands at once, and the open ends in the edited layout', () => {
+    const bytes = docx();
+    const surface = slicedMount(bytes);
+    const reference = mountPaginatedSurface(document.createElement('div'), bytes);
+    if (!reference.ok) throw new Error(reference.reason);
+    try {
+      continueProgressiveOpen(surface, 0);
+      expect(progressiveOpenPending(surface)).toBe(true);
+      const at = { paragraphId: firstParagraphId(surface.layout()), offset: 0 };
+      surface.setSelection({ anchor: at, head: at });
+      surface.type('Edited ');
+      // The edit is on the page, and the opening goes on after it.
+      expect(signature(surface.layout())[0]).toContain('Edited ');
+      expect(progressiveOpenPending(surface)).toBe(true);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The rest of the opening.
+      }
+      reference.surface.setSelection({ anchor: at, head: at });
+      reference.surface.type('Edited ');
+      expect(signature(surface.layout())).toEqual(signature(reference.surface.layout()));
+    } finally {
+      surface.destroy();
+      reference.surface.destroy();
+    }
+  }, 60_000);
+
+  test('a reveal of a page still to come waits for it instead of blocking', () => {
+    const bytes = docx();
+    const surface = slicedMount(bytes);
+    try {
+      const last = signature(unslicedLayoutOf(bytes)).at(-1)!.split('|')[1]!;
+      const reveals: string[] = [];
+      const revealParagraph = surface.revealParagraph.bind(surface);
+      surface.revealParagraph = (paragraphId, options) => {
+        reveals.push(paragraphId);
+        return revealParagraph(paragraphId, options);
+      };
+      expect(surface.revealParagraph(last)).toBe(true);
+      // Accepted, with the opening still to run: nothing was laid out to answer it.
+      expect(progressiveOpenPending(surface)).toBe(true);
+      expect(reveals).toEqual([last]);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The slices reach the paragraph and reveal it.
+      }
+      expect(reveals).toEqual([last, last]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('a newer reveal that goes at once replaces one still waiting', () => {
+    const bytes = docx();
+    const surface = slicedMount(bytes);
+    try {
+      const last = signature(unslicedLayoutOf(bytes)).at(-1)!.split('|')[1]!;
+      const first = firstParagraphId(surface.layout());
+      const reveals: string[] = [];
+      const revealParagraph = surface.revealParagraph.bind(surface);
+      surface.revealParagraph = (paragraphId, options) => {
+        reveals.push(paragraphId);
+        return revealParagraph(paragraphId, options);
+      };
+      expect(surface.revealParagraph(last)).toBe(true);
+      surface.revealParagraph(first);
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The opening reaches the first target, which nobody waits for any more.
+      }
+      expect(reveals).toEqual([last, first]);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('the slices wait while an IME composition is open', () => {
+    const bytes = docx();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const surface = mounted.surface;
+    try {
+      const pages = container.querySelector('.docx-pages')!;
+      const before = surface.layout();
+      pages.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      // A shown prefix would repaint the text the composition writes into.
+      for (let slice = 0; slice < 5; slice += 1)
+        expect(continueProgressiveOpen(surface, 0)).toBe(false);
+      expect(surface.layout()).toBe(before);
+      pages.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The opening goes on once the composition ends.
+      }
+      expect(signature(surface.layout())).toEqual(unslicedSignature(bytes));
+    } finally {
+      surface.destroy();
+      container.remove();
+    }
+  }, 60_000);
+
+  test('a detach and attach during the slices keep the live document and its edits', async () => {
+    const bytes = docx();
+    const editor = createDocxEditor({ document: bytes });
+    const second = document.createElement('div');
+    let surface: NonNullable<typeof editor.surface> | null = null;
+    let pendingAtMove = false;
+    // Right after the mount task, before any background slice runs.
+    const off = editor.on('change', () => {
+      if (surface || !editor.surface) return;
+      surface = editor.surface;
+      queueMicrotask(() => {
+        const live = surface!;
+        pendingAtMove = progressiveOpenPending(live);
+        const at = { paragraphId: firstParagraphId(live.layout()), offset: 0 };
+        live.setSelection({ anchor: at, head: at });
+        live.type('Kept ');
+        editor.detach();
+        editor.attach(second);
+      });
+    });
+    editor.attach(document.createElement('div'));
+    await until(
+      () => surface !== null && !progressiveOpenPending(surface) && editor.surface !== null
+    );
+    off();
+    expect(pendingAtMove).toBe(true);
+    // The same surface moved; the open did not start again from the original bytes.
+    expect(editor.surface).toBe(surface!);
+    expect(signature(surface!.layout())[0]).toContain('Kept ');
+    expect(second.hasAttribute('data-docx-layout-pending')).toBe(false);
+    editor.destroy();
+  }, 60_000);
+
+  test('a destroyed surface drops its opening state', () => {
+    const bytes = docx();
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    expect(container.querySelector('.docx-opening-indicator')).not.toBeNull();
+    mounted.surface.destroy();
+    expect(progressiveOpenPending(mounted.surface)).toBe(false);
+    expect(container.querySelector('.docx-opening-indicator')).toBeNull();
+    expect(container.hasAttribute('data-docx-layout-pending')).toBe(false);
+    expect(container.hasAttribute('data-docx-opening-preview')).toBe(false);
+  });
+
+  test('a reader of the whole pagination finishes the opening, even during a composition', () => {
+    const bytes = docx();
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    try {
+      container
+        .querySelector('.docx-pages')!
+        .dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      expect(completeProgressiveOpen(mounted.surface)).toBe(true);
+      expect(progressiveOpenPending(mounted.surface)).toBe(false);
+      expect(signature(mounted.surface.layout())).toEqual(unslicedSignature(bytes));
+    } finally {
+      mounted.surface.destroy();
+    }
+  }, 60_000);
+
+  test('a reveal that still waits is dropped once the reader scrolls away', () => {
+    const bytes = docx();
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const surface = mounted.surface;
+    try {
+      const last = signature(unslicedLayoutOf(bytes)).at(-1)!.split('|')[1]!;
+      let reveals = 0;
+      const revealParagraph = surface.revealParagraph.bind(surface);
+      surface.revealParagraph = (paragraphId, options) => {
+        reveals += 1;
+        return revealParagraph(paragraphId, options);
+      };
+      expect(surface.revealParagraph(last)).toBe(true);
+      // The scrollbar, not the pages: no input event reaches the pages layer.
+      container.parentElement!.scrollTop = 400;
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The opening reaches the paragraph; the reader is elsewhere now.
+      }
+      expect(reveals).toBe(1);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
+
+  test('input in the pages cancels a reveal that still waits', () => {
+    const bytes = docx();
+    const container = scrolledContainer();
+    const mounted = mountPaginatedSurface(container, bytes, {
+      progressiveOpen: true,
+    } as Parameters<typeof mountPaginatedSurface>[2]);
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const surface = mounted.surface;
+    try {
+      const last = signature(unslicedLayoutOf(bytes)).at(-1)!.split('|')[1]!;
+      let reveals = 0;
+      const revealParagraph = surface.revealParagraph.bind(surface);
+      surface.revealParagraph = (paragraphId, options) => {
+        reveals += 1;
+        return revealParagraph(paragraphId, options);
+      };
+      // A paragraph that is not in the document is still refused at once.
+      expect(surface.revealParagraph('no-such-paragraph')).toBe(false);
+      expect(surface.revealParagraph(last)).toBe(true);
+      container
+        .querySelector('.docx-pages')!
+        .dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+      while (!continueProgressiveOpen(surface, 0)) {
+        // The reader moved on, so reaching the paragraph reveals nothing.
+      }
+      expect(reveals).toBe(2);
+    } finally {
+      surface.destroy();
+    }
+  }, 60_000);
 });
+
+function unslicedLayoutOf(bytes: Uint8Array): SemanticLayout {
+  const mounted = mountPaginatedSurface(document.createElement('div'), bytes);
+  if (!mounted.ok) throw new Error(mounted.reason);
+  try {
+    return mounted.surface.layout();
+  } finally {
+    mounted.surface.destroy();
+  }
+}

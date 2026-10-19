@@ -7,8 +7,8 @@ import { SHEET_GUTTER_PT } from './section-page-furniture.ts';
 
 /**
  * Re-report a section pass's completed pages as the document's: the sheets before the section,
- * then the section's pages so far, numbered and stacked as the final publish places them. Not
- * restorable: section sessions advance in place, so a paused pass is finished, never undone.
+ * then the section's pages so far, numbered and stacked as the final publish places them. A
+ * host puts a paused pass back with `snapshotLayoutSession`, which covers the section sessions.
  */
 export function* sectionProgress(
   steps: LayoutSteps<SectionLayoutResult>,
@@ -59,7 +59,6 @@ export function* sectionProgress(
     yield {
       pages: [...before, ...published],
       finalize: (pages) => finalizePageFieldProjection({ revision, pages }),
-      restorable: false,
     };
   }
 }

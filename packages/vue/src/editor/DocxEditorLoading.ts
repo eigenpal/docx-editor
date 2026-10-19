@@ -26,8 +26,8 @@ const selectLoadingPageSize = (snapshot: EditorSnapshot) => ({
 
 /**
  * Props for `DocxEditor.Loading`. Two slots replace parts of the packaged screen: `indicator`
- * replaces only the spinner and, with `overlay`, moves onto the document's first page while a
- * large document lays out its remaining pages; `default` replaces the whole first screen.
+ * replaces only the spinner and, with `overlay`, moves below the laid-out pages while a large
+ * document lays out its remaining pages; `default` replaces the whole first screen.
  *
  * ```vue
  * <DocxEditor.Loading overlay>
@@ -62,10 +62,10 @@ export function warnLoadingIndicatorWithoutChrome(): void {
 }
 
 /**
- * The element on the first page that holds the indicator while a large document lays out
- * its remaining pages, or null. Only the overlay registers: the packaged frame has one.
+ * The element below the laid-out pages that holds the indicator while a large document lays
+ * out its remaining pages, or null. Only the overlay registers: the packaged frame has one.
  */
-function useFirstPageIndicator(enabled: () => boolean) {
+function useOpeningIndicator(enabled: () => boolean) {
   const editor = useDocxEditor();
   const element = shallowRef<HTMLElement | null>(null);
   const setElement = (next: HTMLElement | null): void => {
@@ -118,18 +118,19 @@ const DocxEditorLoadingImpl = defineComponent({
   setup(props, { slots }) {
     const showLoading = useEditorState(selectShowLoading);
     const pageSize = useEditorState(selectLoadingPageSize);
-    const firstPage = useFirstPageIndicator(() => props.overlay);
+    const below = useOpeningIndicator(() => props.overlay);
     const { t } = useTranslation();
 
     return () => {
-      if (!props.when && !showLoading.value) return null;
       const status = () =>
         slots.indicator?.() ?? [
           h(DocxEditorLoadingSpinner),
           h('span', { class: 'docx-editor-sr-only' }, t('loading.label')),
         ];
-      // The first pages show: the indicator moves onto the first page, and the overlay steps aside.
-      if (firstPage.value) return h(Teleport, { to: firstPage.value }, status());
+      // The first pages show and take input, so the opening state is over; the indicator moves
+      // below the laid-out pages until the last one is laid out.
+      if (below.value) return h(Teleport, { to: below.value }, status());
+      if (!props.when && !showLoading.value) return null;
       const classes = `docx-editor docx-editor__loading${
         props.overlay ? ' docx-editor__loading--overlay' : ''
       }${props.className ? ` ${props.className}` : ''}`;

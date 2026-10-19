@@ -4,6 +4,7 @@
 // block whose flow key is unchanged lays out the same at the same flow position.
 
 import { contextualFlowInputs } from './contextual-paragraph-spacing.ts';
+import { withFlowKeyIntern, type FlowKeyIntern } from './flow-key-intern.ts';
 import type { ResolvedListItem } from './list-resolve.ts';
 import { listAutoSpacingFlowKeys } from './list-auto-spacing.ts';
 import { markerFlowToken } from './list-marker-reuse.ts';
@@ -29,6 +30,8 @@ export interface SectionFlowKeyInputs {
   readonly tocIds: TocIdSets;
   readonly leadingBreakFlowKeys: (keys: string[], prepared: readonly PreparedBlock[]) => string[];
   readonly keptTables: Pick<TableKeepDecisions, 'endsKept'>;
+  /** The previous pass's extended keys, so unchanged ones come back as the same strings. */
+  readonly flowKeyIntern: FlowKeyIntern | undefined;
 }
 
 /** The flow keys, plus the per-block keep-with-next flags and marker texts they read. */
@@ -36,6 +39,7 @@ export function sectionFlowKeys(input: SectionFlowKeyInputs): {
   readonly flowKeys: string[];
   readonly keepsNext: boolean[];
   readonly markerTexts: (string | undefined)[];
+  readonly flowKeyIntern: FlowKeyIntern;
 } {
   const { prepared, styleCascade, listItems, tocIds } = input;
   const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
@@ -58,26 +62,28 @@ export function sectionFlowKeys(input: SectionFlowKeyInputs): {
         );
 
   const lastBlock = prepared.at(-1);
-  const flowKeys = composeFlowKeys(
-    input.leadingBreakFlowKeys(
-      listAutoSpacingFlowKeys(
-        paragraphFrameFlowKeys(anchorFlowKeys(input.keys, input.positioned), prepared),
+  const { result: flowKeys, intern } = withFlowKeyIntern(input.flowKeyIntern, () =>
+    composeFlowKeys(
+      input.leadingBreakFlowKeys(
+        listAutoSpacingFlowKeys(
+          paragraphFrameFlowKeys(anchorFlowKeys(input.keys, input.positioned), prepared),
+          prepared
+        ),
         prepared
       ),
-      prepared
-    ),
-    {
-      terminalTableGroup: input.terminalTextTables,
-      ...contextualFlowInputs(prepared, styleCascade),
-      borderGroupKeyAt: (index) => borderGroupKeys[index]!,
-      tocVerdicts,
-      markerTextAt: (index) => markerTexts[index],
-      keepsNextAt: (index) => keepsNext[index]! || input.keptTables.endsKept(prepared[index]),
-      tableAt: (index) => prepared[index]?.kind === 'table',
-      endsWithSectionMark:
-        lastBlock?.kind === 'paragraph' && !!paragraphSectionNode(lastBlock.paragraph),
-      skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
-    }
+      {
+        terminalTableGroup: input.terminalTextTables,
+        ...contextualFlowInputs(prepared, styleCascade),
+        borderGroupKeyAt: (index) => borderGroupKeys[index]!,
+        tocVerdicts,
+        markerTextAt: (index) => markerTexts[index],
+        keepsNextAt: (index) => keepsNext[index]! || input.keptTables.endsKept(prepared[index]),
+        tableAt: (index) => prepared[index]?.kind === 'table',
+        endsWithSectionMark:
+          lastBlock?.kind === 'paragraph' && !!paragraphSectionNode(lastBlock.paragraph),
+        skipKeepNextAt: (index) => prepared[index]?.kind === 'paragraph' && !!prepared[index].frame,
+      }
+    )
   );
-  return { flowKeys, keepsNext, markerTexts };
+  return { flowKeys, keepsNext, markerTexts, flowKeyIntern: intern };
 }

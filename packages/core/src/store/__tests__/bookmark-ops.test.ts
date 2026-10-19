@@ -9,6 +9,7 @@ import { bookmarkNameProblem, isHiddenBookmarkName } from '../package/bookmark-n
 import { applyTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
 import { TreeDocumentStore } from '../store/tree-store.ts';
 import { enclosedBookmarkDeletions } from '../store/tree-op-bookmarks.ts';
+import { findNode, nodeIndexTestRecorder } from '../package/ooxml-edit.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const P = '/word/document.xml#0.0.0';
@@ -410,4 +411,20 @@ test('enclosed deletion addresses canonical pairs when file-level ids repeat', (
   const result = apply(part, drops[0]!);
   expect(listBookmarks(result)).toHaveLength(1);
   expect(listBookmarks(result)[0]!.start.paragraphId).toBe(P2);
+});
+
+test('typing and deleting at a bookmark index the part no more than once', () => {
+  // The rules read the paragraph's markers; reading them in the tree the edit replaced, after
+  // the edit moved the index on, walked the whole part again for every keystroke.
+  let part = load(SAMPLE + '<w:p><w:r><w:t>tail</w:t></w:r></w:p>');
+  findNode(part, P);
+  const recorder = nodeIndexTestRecorder();
+  recorder.reset();
+  part = apply(part, { op: 'insertText', paragraphId: P, offset: 4, text: 'x' });
+  // Typed at the bookmark's start, the text joins it.
+  expect(shape(part)).toStartWith('|"AAA "[rng:1"x');
+  part = apply(part, { op: 'deleteText', paragraphId: P, start: 4, end: 9 });
+  // The deletion covered the whole bookmark, so it went with the text.
+  expect(shape(part)).toStartWith('|"AAA ""CCC "');
+  expect(recorder.completeBuilds).toBe(0);
 });

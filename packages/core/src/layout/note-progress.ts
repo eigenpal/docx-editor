@@ -18,8 +18,8 @@ export type NotesBodyOptions = Pick<NotesLayoutInput, 'styleCascade' | 'numberin
 
 /**
  * Passes a body run's progress through with note areas on the pages it completed. The pages
- * after them come from the published layout and already carry theirs. The reserve search
- * advances its memo in place, so the progress is never restorable.
+ * after them come from the published layout and already carry theirs. A host puts a paused
+ * pass back with `snapshotLayoutSession`, which covers the search memo.
  */
 export function* withNoteAreasOnProgress(
   steps: LayoutSteps<SemanticLayout>,
@@ -38,7 +38,6 @@ export function* withNoteAreasOnProgress(
     const count = progress.pages.length;
     yield {
       ...progress,
-      restorable: false,
       wrapUp,
       ...(inner
         ? {
