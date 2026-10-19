@@ -167,8 +167,10 @@ function uniformRowRule(row: SemanticTableRow, columnCount: number): number | nu
     if (
       !first ||
       !last ||
-      first.gridColumn !== 0 ||
-      last.gridColumn + last.gridSpan !== columnCount
+      !(
+        (first.gridColumn === 0 && last.gridColumn + last.gridSpan === columnCount) ||
+        (last.gridColumn === 0 && first.gridColumn + first.gridSpan === columnCount)
+      )
     )
       return null;
     let width: number | undefined;
@@ -287,8 +289,21 @@ function sharedGridLineDecision(
   table: SideRuleTableShape
 ): { legacyMode: boolean; modernGridWidth: boolean; outerRuleOffsetPt?: number } | null {
   const { compatibilityMode: mode } = table;
-  if (table.depth !== 0 || table.bidiVisual || table.floating || table.cellSpacingPt !== 0)
-    return null;
+  if (table.depth !== 0 || table.floating || table.cellSpacingPt !== 0) return null;
+  if (table.bidiVisual) {
+    const rule = uniformSimpleSideRuleWidth(rows, table.columnWidthsPt.length);
+    if (
+      !hasCompatibilityRule(mode, 'modernGridLineSideRules') ||
+      table.widthType !== 'dxa' ||
+      table.alignment !== 'left' ||
+      !table.layoutFixed ||
+      rule === undefined
+    )
+      return null;
+    // Leading-aligned fixed bidi tables share their side rules with cell padding.
+    // Their grid moves by one outer rule toward the visual left.
+    return { legacyMode: false, modernGridWidth: true, outerRuleOffsetPt: -rule };
+  }
   const legacyMode = hasCompatibilityRule(mode, 'legacySharedGridLineSideRules');
   const modernGridWidth =
     hasCompatibilityRule(mode, 'modernGridLineSideRules') &&

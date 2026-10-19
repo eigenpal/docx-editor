@@ -1143,6 +1143,7 @@ function* layoutBlocksPass(
   }
 
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
+  const positionedByTable = new Map(positionedTables.map((anchor) => [anchor.table.id, anchor]));
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
   let regionFragmentStart = 0;
@@ -1774,7 +1775,14 @@ function* layoutBlocksPass(
         shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy),
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
       // taken when the table started would collect its later fragments into a dead array.
-      publishFragment: (fragment) => pageFragments.push(fragment),
+      publishFragment: (fragment) =>
+        pageFragments.push(
+          tableWrap.withImmediateFloatingWrap(
+            fragment,
+            positionedByTable.get(table.id),
+            flowColumnIndex
+          )
+        ),
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
     };

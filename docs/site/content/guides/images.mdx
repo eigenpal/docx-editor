@@ -174,6 +174,8 @@ A line break (`w:br`) with `w:clear` restarts the text after it on the next line
 
 Objects with no text wrapping, in front of text or behind it, are not cleared. If the restart line does not fit above the bottom margin, it starts on the next page or column. The value `none` lays out as an ordinary line break, and the attribute is kept when you save.
 
+A positioned table keeps its text wrap region when nearby pictures require immediate placement. Body text clears that region.
+
 An inline picture flows like a word. If it does not fit before a floating picture, it continues past the floating picture on the same line. Text after an inline picture starts at the picture's edge, and a click past the picture places the caret after it. A click in the space that a floating picture leaves between two pieces of content places the caret between them.
 
 ## Accessibility

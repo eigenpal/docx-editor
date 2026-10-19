@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Layout uses existing table and drawing properties.",
+  "after": "Layout corrects table borders and preserves positioned table wrap regions.",
+  "reason": "The changes affect layout only and preserve shared operations and saved document properties.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-fixed-bidi-borders.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-floating-table-wrap.test.ts"
+  ],
+  "changeset": "fixed-bidi-table-spacing",
+  "migration": null
+}

@@ -218,9 +218,9 @@ test('mode 15 keeps the full-stroke inset and unshifted grid for shapes its cont
   const autofit = source({ fixed: false }).table;
   expect(read(autofit, 15, 147).outerRuleOffsetPt).toBe(1.5);
   expect(read(autofit, 15, 146.9).outerRuleOffsetPt).toBeUndefined();
-  // A right-to-left table keeps the full-stroke inset; it only moves half its mean outer rule
+  // An AutoFit right-to-left table keeps the full-stroke inset and moves half its outer rule
   // toward its visual left (`modernBidiTableRuleShift`).
-  const bidi = read(source({ extra: '<w:bidiVisual/>' }).table, 15);
+  const bidi = read(source({ extra: '<w:bidiVisual/>', fixed: false }).table, 15);
   expect(bidi.outerRuleOffsetPt).toBe(-1.5);
   expect(bidi.rows[0]!.cells[0]!.centeredSideRules).toBeUndefined();
   const { part } = source({ jc: 'right', cols: [6000] });

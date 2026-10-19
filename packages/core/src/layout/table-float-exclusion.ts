@@ -777,3 +777,21 @@ export function hasEarlierCellExclusions(
   }
   return false;
 }
+
+/** Preserve body wrapping when external obstacles require immediate table placement. */
+export function withImmediateFloatingWrap(
+  fragment: BlockFragmentRecord,
+  positioned: PositionedTableAnchor | undefined,
+  columnIndex: number
+): BlockFragmentRecord {
+  if (!positioned || fragment.kind !== 'table' || !isOutOfFlowFragment(fragment)) return fragment;
+  return {
+    ...fragment,
+    floatingWrap: {
+      anchorId: positioned.anchorId,
+      columnIndex,
+      float: positioned.float,
+      sourceOrder: positioned.sourceIndex,
+    },
+  };
+}
