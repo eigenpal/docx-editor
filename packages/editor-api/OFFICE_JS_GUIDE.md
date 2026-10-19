@@ -348,6 +348,21 @@ The range that a tracked `insertText()` returns names your own pending insertion
 
 ### Rewrite a paragraph word by word
 
+To propose a model's rewrite of a paragraph, use `proposeRewrite` from `@docx-editor.dev/editor-api/agent`. It applies the steps in this section for you, keeps fields, equations, note references, and locked controls whole, and rejects only its own changes if a write fails:
+
+```ts
+import { proposeRewrite } from '@docx-editor.dev/editor-api/agent';
+
+await runtime.run(async (context) => {
+  const paragraph = context.document.body.paragraphs.getFirst();
+  await proposeRewrite(context, paragraph, (draft) => callModel(draft.prompt), {
+    instruction: 'Make this clause shorter.',
+  });
+});
+```
+
+For its guarantees and error codes, see [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite). The rest of this section shows the calls it makes.
+
 Split a paragraph into word ranges with `paragraph.getTextRanges([' '])`. Each range keeps its trailing space, so a deleted word takes its space with it, and a replacement for a range ends with a space too. Address a run of words with `first.expandTo(last)`. After tracked edits, `paragraph.text` reads the deleted and the inserted words together. `getReviewedText('Current')` reads the text as if you accepted every change, and `'Original'` reads it as if you rejected every change.
 
 Each word range is a snapshot. An edit before a range in its paragraph makes the range fail with `StaleDocument`, and an edit after it keeps it valid. Read the ranges once, before you edit. Pass the range texts to the model and plan the edits by range index, because a paragraph can repeat a word. Then apply the edits from the last index to the first, one sync per edit:

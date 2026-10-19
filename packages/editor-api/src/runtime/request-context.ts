@@ -33,6 +33,7 @@ import type { ClientObject } from './client-object.ts';
 import { DocxEditorError, fail, isDocxEditorError } from './errors.ts';
 import type { DocumentCapabilities, RevisionTextView } from './runtime.ts';
 import {
+  AUTHOR_HOOK,
   INTERNALS,
   REBIND,
   RELEASE,
@@ -143,6 +144,8 @@ export class RequestContext {
     this.#trackedObjects = new TrackedObjects(this.#internals, (object) =>
       this.#created.has(object)
     );
+    // Not a class member, so it stays out of the public declarations and of enumeration.
+    Object.defineProperty(this, AUTHOR_HOOK, { get: () => session.author });
   }
 
   /**

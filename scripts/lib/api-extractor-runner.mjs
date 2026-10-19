@@ -72,6 +72,7 @@ function entriesFromExports(packageRoot, exportsMap) {
  *         logLevel?: 'none' | 'warning' | 'error',
  *         allowlist?: Record<string, string[]>,
  *         protectedExportFiles?: string[],
+ *         crossEntry?: Record<string, string[]>,
  *       },
  * }} options
  */
@@ -90,11 +91,12 @@ export function runApiExtractor(options) {
 
   const forgottenExportConfig =
     typeof forgottenExports === 'string'
-      ? { logLevel: forgottenExports, allowlist: {}, protectedExportFiles: [] }
+      ? { logLevel: forgottenExports, allowlist: {}, protectedExportFiles: [], crossEntry: {} }
       : {
           logLevel: forgottenExports.logLevel ?? 'none',
           allowlist: forgottenExports.allowlist ?? {},
           protectedExportFiles: forgottenExports.protectedExportFiles ?? [],
+          crossEntry: forgottenExports.crossEntry ?? {},
         };
   const protectedForgottenSymbols = new Set(
     forgottenExportConfig.protectedExportFiles.flatMap((relativePath) => [
@@ -279,6 +281,7 @@ export function runApiExtractor(options) {
       baseline,
       messages: forgotten,
       protectedSymbols: [...protectedForgottenSymbols],
+      crossEntry: forgottenExportConfig.crossEntry,
     });
     if (recordForgottenExports) {
       // The caller writes the baseline once, after every package has run.
@@ -304,7 +307,8 @@ export function runApiExtractor(options) {
       policy.unallowlisted.length > 0 ||
       policy.staleAllowlist.length > 0 ||
       policy.staleBaseline.length > 0 ||
-      policy.forbiddenAllowlist.length > 0
+      policy.forbiddenAllowlist.length > 0 ||
+      policy.crossEntryNotPublic.length > 0
     ) {
       console.error(`\nForgotten export policy failure in ${pkg.name}:`);
       if (policy.unallowlisted.length > 0) {
@@ -334,6 +338,14 @@ export function runApiExtractor(options) {
           `  Allowlist contains package-owned public exports that must be fixed instead:`
         );
         for (const item of policy.forbiddenAllowlist) {
+          console.error(`    - ${item.entry}: ${item.symbol}`);
+        }
+      }
+      if (policy.crossEntryNotPublic.length > 0) {
+        console.error(
+          `  Cross-entry symbols that no protected export file of the package exports:`
+        );
+        for (const item of policy.crossEntryNotPublic) {
           console.error(`    - ${item.entry}: ${item.symbol}`);
         }
       }

@@ -10,6 +10,11 @@
 //   explicit `node scripts/api-extractor.mjs --local --record-forgotten-exports` run rewrites
 //   the file: it drops entries that no longer warn and, after review, records new ones.
 //
+// A third list, CROSS-ENTRY, excuses a type that one entry's declarations import by name from
+// another entry of the same package, such as a helper entry whose signatures take the root
+// entry's `Paragraph`. A consumer can import it from that entry, so it is not forgotten. Each
+// listed symbol must be one of the package's protected public exports; anything else fails.
+//
 // MATCHING IS COUNTED. `Foo$1` is the declaration bundler's rename for a second declaration
 // named `Foo`, and which copy gets the suffix depends on emit order, so `$N` is normalized away.
 // The baseline then lists `Foo` once per declaration, and a run that reports more `Foo`s than
@@ -48,6 +53,7 @@ export function evaluateForgottenExportPolicy({
   messages,
   protectedSymbols = [],
   baseline = {},
+  crossEntry = {},
 }) {
   void packageName;
   void isLocal;
@@ -57,6 +63,18 @@ export function evaluateForgottenExportPolicy({
   // reported as `Foo$1` still fails until it is listed again.
   const allowlisted = new Map(
     Object.entries(allowlist).map(([entry, symbols]) => [entry, counts(symbols)])
+  );
+  const crossEntryNotPublic = [];
+  for (const [entry, symbols] of Object.entries(crossEntry)) {
+    const perEntry = allowlisted.get(entry) ?? new Map();
+    for (const symbol of symbols) {
+      if (!protectedSet.has(symbol)) crossEntryNotPublic.push({ entry, symbol });
+      perEntry.set(symbol, (perEntry.get(symbol) ?? 0) + 1);
+    }
+    allowlisted.set(entry, perEntry);
+  }
+  const crossEntrySymbols = new Map(
+    Object.entries(crossEntry).map(([entry, symbols]) => [entry, new Set(symbols)])
   );
   const baselined = new Map(
     Object.entries(baseline).map(([entry, symbols]) => [entry, counts(symbols)])
@@ -88,7 +106,8 @@ export function evaluateForgottenExportPolicy({
   const forbiddenAllowlist = [];
   for (const [entry, symbols] of allowlisted) {
     for (const [symbol, count] of symbols) {
-      if (protectedSet.has(symbol)) forbiddenAllowlist.push({ entry, symbol });
+      if (protectedSet.has(symbol) && !crossEntrySymbols.get(entry)?.has(symbol))
+        forbiddenAllowlist.push({ entry, symbol });
       const reported = seen.get(entry)?.get(symbol) ?? 0;
       for (let extra = reported; extra < count; extra += 1) staleAllowlist.push({ entry, symbol });
     }
@@ -111,6 +130,7 @@ export function evaluateForgottenExportPolicy({
     staleBaseline: toSortedPairs(staleBaseline),
     unallowlisted: toSortedPairs(unallowlisted),
     forbiddenAllowlist: toSortedPairs(forbiddenAllowlist),
+    crossEntryNotPublic: toSortedPairs(crossEntryNotPublic),
   };
 }
 

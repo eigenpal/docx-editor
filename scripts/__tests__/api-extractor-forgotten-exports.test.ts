@@ -22,7 +22,25 @@ describe('forgotten export policy', () => {
       staleBaseline: [],
       unallowlisted: [],
       forbiddenAllowlist: [],
+      crossEntryNotPublic: [],
     });
+  });
+
+  test('accepts a cross-entry symbol only when the package exports it', () => {
+    const result = policy.evaluateForgottenExportPolicy({
+      packageName: '@docx-editor.dev/editor-api',
+      isLocal: false,
+      allowlist: {},
+      crossEntry: { agent: ['Paragraph', 'RuntimeSession'] },
+      messages: [
+        'agent: The symbol "Paragraph" needs to be exported by the entry point agent.d.ts',
+        'agent: The symbol "RuntimeSession" needs to be exported by the entry point agent.d.ts',
+      ],
+      protectedSymbols: ['DocumentCapabilities', 'Paragraph'],
+    });
+    expect(result.unallowlisted).toEqual([]);
+    expect(result.forbiddenAllowlist).toEqual([]);
+    expect(result.crossEntryNotPublic).toEqual([{ entry: 'agent', symbol: 'RuntimeSession' }]);
   });
 
   test('fails a new forgotten export in both local and CI modes', () => {

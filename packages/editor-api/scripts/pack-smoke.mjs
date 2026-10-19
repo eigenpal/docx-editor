@@ -170,7 +170,8 @@ try {
   };
   walk(root);
 
-  const allowed = /^(?:package\.json|LICENSE\.md|README\.md|OFFICE_JS_GUIDE\.md|dist\/)/;
+  // `docs/` holds the task recipes that coding agents read beside the code.
+  const allowed = /^(?:package\.json|LICENSE\.md|README\.md|OFFICE_JS_GUIDE\.md|dist\/|docs\/)/;
   const strays = shipped.filter((file) => !allowed.test(file));
   check(strays.length === 0, `the tarball ships files it should not: ${strays.join(', ')}`);
   check(
@@ -194,6 +195,9 @@ try {
     'dist/browser.mjs',
     'dist/browser.js',
     'dist/browser.d.ts',
+    'dist/agent.mjs',
+    'dist/agent.js',
+    'dist/agent.d.ts',
   ]) {
     check(shipped.includes(expected), `the tarball is missing ${expected}`);
   }
@@ -232,6 +236,12 @@ try {
     browserBundle.includes('@docx-editor.dev/core/editor'),
     'dist/browser.mjs does not reach the editor lane'
   );
+  // The agent helpers import the object model as types only, so their bundle carries no runtime
+  // and no engine: a second runtime copy would hold its own symbols and classes.
+  for (const name of ['dist/agent.mjs', 'dist/agent.js']) {
+    const source = readFileSync(path.join(root, name), 'utf8');
+    check(bareImports(source).length === 0, `${name} imports a package, so it carries a runtime`);
+  }
 
   // Core is the only bare specifier, declared as a peer. Keeping it external is the one-core invariant:
   // browser adapters and automation must resolve the same engine copy. Any other bare import is an
@@ -296,6 +306,14 @@ if (text !== 'packed and edited') throw new Error('round trip read back ' + JSON
 const saved = await runtime.save();
 if (!(saved instanceof Uint8Array) || saved.byteLength === 0) throw new Error('save produced nothing');
 runtime.dispose();
+// The agent bundle reads the author through a hook on a context that the root bundle built.
+const { proposeRewrite } = await import('./dist/agent.mjs');
+const agentRuntime = await DocxEditor.createServer(saved, { author: 'Smoke agent' });
+const proposed = await agentRuntime.run(async (context) =>
+  proposeRewrite(context, context.document.body.paragraphs.getFirst(), () => 'packed and rewritten')
+);
+if (proposed.proposed !== 'packed and rewritten') throw new Error('rewrite read back ' + JSON.stringify(proposed));
+agentRuntime.dispose();
 process.stdout.write('esm ok\\n');
 `
   );

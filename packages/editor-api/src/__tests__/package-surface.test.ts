@@ -162,9 +162,9 @@ describe('how the package is built and checked', () => {
     expect(entry.slice(0, end)).not.toContain('disconnected');
   });
 
-  test('a committed API snapshot exists for both entries, and none for a removed one', () => {
+  test('a committed API snapshot exists for every entry, and none for a removed one', () => {
     const reports = readdirSync(join(REPO, 'docs', 'api', 'docx-editor-editor-api')).sort();
-    expect(reports).toEqual(['browser.api.md', 'index.api.md']);
+    expect(reports).toEqual(['agent.api.md', 'browser.api.md', 'index.api.md']);
   });
 });
 

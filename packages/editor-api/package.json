@@ -20,12 +20,20 @@
       "import": "./dist/browser.mjs",
       "require": "./dist/browser.js"
     },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.mjs",
+      "require": "./dist/agent.js"
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
       "browser": [
         "./dist/browser.d.ts"
+      ],
+      "agent": [
+        "./dist/agent.d.ts"
       ]
     }
   },

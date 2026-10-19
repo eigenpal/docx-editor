@@ -1,13 +1,15 @@
 import { defineConfig } from 'tsup';
 import { withDeclarations } from '../../scripts/build-declarations.mjs';
 
-// Two entries, one build. `index` is the server-safe one; `browser` is the one that reaches the
-// editor lane. See `src/index.ts` for why that split exists.
+// Three entries, one build. `index` is the server-safe one; `browser` is the one that reaches the
+// editor lane. See `src/index.ts` for why that split exists. `agent` holds helpers over the
+// object model and imports only its types, so it carries no second copy of the runtime.
 export default defineConfig(
   withDeclarations(import.meta.url, {
     entry: {
       index: 'src/index.ts',
       browser: 'src/browser.ts',
+      agent: 'src/agent.ts',
     },
     // The same reason `packages/react` sets it: tsup's default platform is `node`, which resolves
     // bundled dependencies through their `node` export condition, and fflate's node build runs
@@ -46,5 +48,8 @@ export default defineConfig(
     // already created, so this package needs the host adapter and not the text-measurement pass.
     // `scripts/pack-smoke.mjs` allows only the declared core peer to remain bare.
     external: ['harfbuzzjs'],
+    // The agent entry names the object model's types through the package's root entry, so its
+    // declarations import them from there instead of carrying a second declaration of each.
+    declarations: { selfImports: ['@docx-editor.dev/editor-api'] },
   })
 );

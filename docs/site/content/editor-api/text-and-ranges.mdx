@@ -138,6 +138,8 @@ You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units a
 
 ## Rewrite a paragraph and read the result
 
+To propose a model's rewrite as the fewest tracked changes, use `proposeRewrite` from `@docx-editor.dev/editor-api/agent`. It makes the calls in this section for you and rolls back its own changes if a write fails. For more information, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
+
 A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. Plan the edits by range index, because a paragraph can repeat a word. Then apply them from the last index to the first, and sync after each edit.
 
 Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed result with `getReviewedText('Current')` instead.

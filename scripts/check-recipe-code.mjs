@@ -32,6 +32,7 @@ const PLACEHOLDERS = {
   term: 'string',
   from: 'string',
   to: 'string',
+  callModel: '(prompt: string) => Promise<string>',
 };
 
 /**
@@ -46,6 +47,7 @@ const RECIPE_PATHS = {
   '@docx-editor.dev/vue': '../vue/src/index.ts',
   '@docx-editor.dev/editor-api': '../editor-api/src/index.ts',
   '@docx-editor.dev/editor-api/browser': '../editor-api/src/browser.ts',
+  '@docx-editor.dev/editor-api/agent': '../editor-api/src/agent.ts',
   '@docx-editor.dev/i18n': '../i18n/src/index.ts',
 };
 

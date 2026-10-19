@@ -5,7 +5,7 @@ category: 'Editing API'
 order: 64
 ---
 
-Use this directory to find task examples and runtime limits for the public API. The [generated API reference](/docs/2.x/api/editor-api) provides exact declarations, overloads, and enum values. The repository also publishes generated declarations for the [root entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/index.api.md) and [browser entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/browser.api.md).
+Use this directory to find task examples and runtime limits for the public API. The [generated API reference](/docs/2.x/api/editor-api) provides exact declarations, overloads, and enum values. The repository also publishes generated declarations for the [root entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/index.api.md), the [browser entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/browser.api.md), and the [agent entry](https://github.com/eigenpal/docx-editor/blob/main/docs/api/docx-editor-editor-api/agent.api.md).
 
 A declaration or enum value does not guarantee runtime support for every document or argument. Read the linked guide before choosing an operation. Members marked `@internal`, including factories and hydration helpers, are not supported application APIs. Obtain model objects from `context.document`; do not construct them.
 
@@ -27,6 +27,16 @@ A declaration or enum value does not guarantee runtime support for every documen
 | `TrackedObjects` | `add`, `remove`, each accepting one object or an array | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `LoadOption`, `LoadQueryOptions` | Explicit property names and `items/<property>` paths on collections; `select`, `top`, `skip`; reserved `expand` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
 | `DocxEditorError`, `DocxEditorErrorInit`, `DocxEditorErrorCode`, `DocxEditorDebugInfo`, `DocxEditorInnerError`, `isDocxEditorError` | Stable error codes, `target`, resource limit, revision metadata, and `debugInfo` with the engine reason as `innerError` | [Batching, loading, and errors](/docs/2.x/editor-api/batching-and-errors) |
+
+## Agent helpers
+
+The `@docx-editor.dev/editor-api/agent` entry holds helpers next to the object model. They are not Office.js members. They use only the Office.js-shaped calls of the object model on the `context` and `paragraph` that you pass in.
+
+| Public symbol | Members or values | Guide |
+| --- | --- | --- |
+| `proposeRewrite`, `proposeRewrites`, `prepareRewrite` | Propose a model's rewrite of a paragraph as the fewest tracked changes; `ProposeRewriteOptions` and `RewriteOptions` take `instruction`, `keepPlaceholders`, and `retries` | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
+| `RewriteDraft`, `RewriteResult`, `RewriteSettledResult`, `RewriteItem`, `RewriteFunction`, `RewriteFeedback`, `RewritePlaceholder`, `RewritePlaceholderKind` | Plain data: `prompt`, `text`, `placeholders`, `feedback`, and `apply()` on a draft; `original`, `proposed`, `changes`, and `paragraphId` on a result | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
+| `RewriteError`, `RewriteErrorCode` | `code`, `isModelError`, `cause` | [Handle errors](/docs/2.x/recipes/propose-rewrite#handle-errors) |
 
 ## Document and text objects
 

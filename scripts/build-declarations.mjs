@@ -132,7 +132,7 @@ export function publishedDeclaration(specifier, fromDir) {
  * its type. A bare specifier stays external when it is a dependency or peer dependency;
  * any other package's types are inlined from its built declarations.
  */
-function declarationResolver(packageDir, outDir, manifest) {
+function declarationResolver(packageDir, outDir, manifest, selfImports = []) {
   const declared = new Set([
     ...Object.keys(manifest.dependencies ?? {}),
     ...Object.keys(manifest.peerDependencies ?? {}),
@@ -161,8 +161,11 @@ function declarationResolver(packageDir, outDir, manifest) {
       }
       if (!isAbsolute(source)) {
         const name = packageName(source);
-        if (name === manifest.name)
+        if (name === manifest.name) {
+          // An entry that imports another entry's types by name, so both name one declaration.
+          if (selfImports.includes(source)) return { id: source, external: true };
           throw new Error(`The declarations import their own package through ${source}.`);
+        }
         if (declared.has(name) || isBuiltin(source)) return { id: source, external: true };
         // Consumers do not install anything else, so its types are inlined, as tsup did.
         try {
@@ -197,8 +200,11 @@ function declarationResolver(packageDir, outDir, manifest) {
  *   banner?: string,
  *   compilerOptions?: Record<string, unknown>,
  *   ambient?: string[],
+ *   selfImports?: string[],
  * }} options `ambient` lists declaration files no import reaches, such as a
- *   `declare module` for an untyped dependency.
+ *   `declare module` for an untyped dependency. `selfImports` lists the package's own
+ *   specifiers that the declarations may import and keep external, such as a helper entry
+ *   that names the root entry's types.
  */
 export async function buildDeclarations(configUrl, options) {
   const packageDir = dirname(fileURLToPath(configUrl));
@@ -248,7 +254,7 @@ export async function buildDeclarations(configUrl, options) {
       input: Object.fromEntries(
         Object.entries(entries).map(([name, source]) => [name, emitted(source)])
       ),
-      plugins: [declarationResolver(packageDir, outDir, manifest), dts()],
+      plugins: [declarationResolver(packageDir, outDir, manifest, options.selfImports), dts()],
     });
     try {
       // tsup's `clean` (or the package build script) already emptied `dist`.
@@ -281,7 +287,7 @@ export async function buildDeclarations(configUrl, options) {
 
 /**
  * Wrap a tsup config (or array of configs) so TypeScript 7 builds its declarations. Each
- * config may carry `declarations: { banner, compilerOptions, ambient }`. tsup's `--no-dts`
+ * config may carry `declarations: { banner, compilerOptions, ambient, selfImports }`. tsup's `--no-dts`
  * skips them, and `--out-dir` moves them with the JavaScript.
  */
 export function withDeclarations(configUrl, config) {
