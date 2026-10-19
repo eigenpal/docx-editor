@@ -105,6 +105,16 @@ test('a caret inside a locked pill refuses run formats; a caret at its edge does
   editor.destroy();
 });
 
+test('the formatting policy does not arm a format at a caret inside a locked pill', () => {
+  const editor = mount({ allowFormattingInLockedContent: true }, PILL);
+  const inside = at(editor, 0, 3);
+  editor.surface!.setSelection({ anchor: inside, head: inside });
+  expect(editor.can({ type: 'toggleMark', mark: 'bold' })).toMatchObject({ ok: false });
+  editor.surface!.setSelection({ anchor: at(editor, 0, 0), head: at(editor, 0, 7) });
+  expect(editor.can({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
+  editor.destroy();
+});
+
 test('in suggesting mode the formatting policy does not pass a tracked restyle', () => {
   const editor = mount({ allowFormattingInLockedContent: true }, PILL, { author: 'Reviewer' });
   editor.surface!.setEditingMode('suggest');

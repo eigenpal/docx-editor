@@ -113,7 +113,13 @@ export function contentLockFormatRefusal(
     Boolean(surface.author()?.trim()) &&
     !surface.session.trackingSettings().doNotTrackFormatting;
   const runsPass = policy?.allowFormattingInLockedContent === true && !tracked;
-  if (runsPass && !clearing) return null;
+  // A caret only arms a format for text typed next, and no policy lets typing into a lock.
+  const { selection, cellSelection } = surface.state();
+  const atCaret =
+    !cellSelection &&
+    selection.anchor.paragraphId === selection.head.paragraphId &&
+    selection.anchor.offset === selection.head.offset;
+  if (runsPass && !clearing && !atCaret) return null;
   const refusal = { ok: false as const, code: 'locked' as const, reason: LOCKED_FORMAT_REASON };
   for (const span of selectedSpans(surface)) {
     // A pure ancestry read of the story that holds the paragraph.
@@ -122,7 +128,7 @@ export function contentLockFormatRefusal(
     const paragraph = findNode(part, span.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') continue;
     if (effectiveContentLockAt(part, span.paragraphId).content) return refusal;
-    if (runsPass) continue;
+    if (runsPass && !atCaret) continue;
     const inside = contentControlsIn(paragraph);
     if (inside.length === 0) continue;
     const offsets = paragraphOffsetIndex(paragraph);
