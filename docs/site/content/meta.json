@@ -22,7 +22,6 @@
     "recipes/index",
     "recipes/comment-on-found-text",
     "recipes/tracked-replacement",
-    "recipes/propose-rewrite",
     "recipes/custom-review-cards",
     "recipes/highlight-ranges",
     "recipes/accept-reject-without-scrolling",
