@@ -134,6 +134,19 @@ export const MAX_CUSTOM_NODE_PAYLOAD_LENGTH = 256 * 1024;
 /** The longest label a binding may paint. Word renders it as the control's whole content. */
 export const MAX_CUSTOM_NODE_LABEL_LENGTH = 4_096;
 
+/** Whether any wrapper between the node and its paragraph is a pending revision. */
+function insidePendingRevision(store: TreeDocumentStore, nodeId: string): boolean {
+  for (
+    let node = parentNodeOf(store.part, nodeId);
+    node;
+    node = parentNodeOf(store.part, node.id)
+  ) {
+    if (node.kind === 'paragraph') return false;
+    if (node.kind.startsWith('revision')) return true;
+  }
+  return false;
+}
+
 /**
  * Insert one custom node, with its payload, as a single transaction.
  *
@@ -177,7 +190,7 @@ export function insertCustomNodeWrite(
   // the proposal, untracked. Refused until a rewrite can keep the proposal around it.
   if (
     write.replaceControlId !== undefined &&
-    parentNodeOf(store.part, write.replaceControlId)?.kind.startsWith('revision')
+    insidePendingRevision(store, write.replaceControlId)
   ) {
     return { ok: false, reason: 'unsupported', detail: 'custom node inside a pending revision' };
   }
