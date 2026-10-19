@@ -68,14 +68,35 @@ async function until(check: () => boolean, timeoutMs = 5000): Promise<void> {
 }
 
 describe('contentLockPolicy in the editor', () => {
-  test('default: bold over a content-locked control changes nothing', async () => {
+  test('default: bold over a content-locked control is refused and changes nothing', async () => {
     const editor = mount();
     editor.surface!.selectAll();
-    expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).not.toEqual({
-      ok: true,
-      changed: true,
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toMatchObject({
+      ok: false,
+      code: 'locked',
     });
     expect(await savedMainXml(editor)).not.toContain('<w:b/>');
+    editor.destroy();
+  });
+
+  test('default: font size and family over a content-locked control report the refusal', async () => {
+    const editor = mount();
+    editor.surface!.selectAll();
+    for (const command of [
+      { type: 'setMarkAttr', mark: 'fontSize', value: 14 },
+      { type: 'setMarkAttr', mark: 'fontFamily', value: 'Arial' },
+    ] as const) {
+      const result = editor.exec(command);
+      expect(result).toMatchObject({ ok: false, code: 'locked' });
+      expect(result.ok ? '' : result.reason).not.toBe('');
+    }
+    expect(await savedMainXml(editor)).not.toContain('w:sz ');
+    // A later write that lands reports success, so no refusal lingers.
+    editor.surface!.setSelection({
+      anchor: { paragraphId: editor.surface!.session.paragraphIds()[0]!, offset: 0 },
+      head: { paragraphId: editor.surface!.session.paragraphIds()[0]!, offset: 2 },
+    });
+    expect(editor.exec({ type: 'toggleMark', mark: 'bold' })).toEqual({ ok: true, changed: true });
     editor.destroy();
   });
 

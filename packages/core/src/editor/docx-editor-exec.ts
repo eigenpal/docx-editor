@@ -68,7 +68,8 @@ export function execEditorCommand(
   switch (command.type) {
     case 'toggleMark': {
       const mark = MARKS.get(command.mark)!;
-      mounted.toggleRunProperty(mark.localName, mark.attributes);
+      const refused = mounted.toggleRunProperty(mark.localName, mark.attributes);
+      if (refused) return { ok: false, code: 'locked', reason: refused };
       break;
     }
     case 'setMarkAttr': {
@@ -76,7 +77,9 @@ export function execEditorCommand(
       // again here keeps exec's write derived from the command, not from trust.
       const resolved = resolveMarkAttr(command);
       if (!resolved.ok) return { ok: false, code: resolved.code, reason: resolved.reason };
-      mounted.setRunProperty(resolved.localName, resolved.attributes);
+      // The document's own words: a content lock and a read-only file refuse differently.
+      const refused = mounted.setRunProperty(resolved.localName, resolved.attributes);
+      if (refused) return { ok: false, code: 'locked', reason: refused };
       break;
     }
     case 'clearFormatting':

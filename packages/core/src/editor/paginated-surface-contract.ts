@@ -320,16 +320,17 @@ export interface PaginatedSurface {
    * caret-preserving edits (Backspace, Delete, Enter) and IME composition, and is
    * discarded when the caret moves elsewhere or the document is undone. A property the
    * store cannot author is refused at arm time rather than left to poison the keystroke.
+   * Returns the document's refusal reason, or null when the write landed or armed.
    */
-  toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+  toggleRunProperty(localName: string, attributes?: Record<string, string>): string | null;
   /**
    * SET a run property over the selection, rather than toggling it.
    *
    * Font family, size and colour are values, not switches: picking Arial twice must leave
    * the text in Arial, which a toggle would not. Arms at a collapsed caret on the same
-   * terms as `toggleRunProperty`.
+   * terms as `toggleRunProperty`, and returns a refusal the same way.
    */
-  setRunProperty(localName: string, attributes?: Record<string, string>): void;
+  setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
   /**
    * Set a property on every paragraph the selection touches — alignment, style, spacing.
    *

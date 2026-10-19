@@ -2628,7 +2628,7 @@ export interface PaginatedSurface {
     setRevisionMarkup(settings: ResolvedRevisionMarkup): void;
     // (undocumented)
     setRevisionStyles(colors: RevisionStyles | undefined): void;
-    setRunProperty(localName: string, attributes?: Record<string, string>): void;
+    setRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     setSectionProperties(update: {
         readonly anchorParagraphId?: string;
         readonly marginBottomTwips?: number;
@@ -2654,7 +2654,7 @@ export interface PaginatedSurface {
     storyScope(): StoryScope;
     textMeasurer?(): TextMeasurer;
     toggleList(kind: 'bullet' | 'ordered'): boolean;
-    toggleRunProperty(localName: string, attributes?: Record<string, string>): void;
+    toggleRunProperty(localName: string, attributes?: Record<string, string>): string | null;
     // (undocumented)
     type(text: string): void;
     undo(): void;
