@@ -206,9 +206,7 @@ function textRangeSpans(
     const to = position === last ? span.end.offset : model.text.length;
     const paragraph = handles.paragraph(paragraphId, story.story);
     // A model character is shown when the view gives it at least one character of its own.
-    const projected = new Int32Array(to - from + 1);
-    for (let offset = from; offset <= to; offset += 1)
-      projected[offset - from] = shown.projectedOffset(offset);
+    const projected = shown.projectedOffsets(from, to);
     const isShown = (offset: number): boolean =>
       projected[offset + 1 - from]! > projected[offset - from]!;
     for (const [start, end] of textRangeBoundaries(

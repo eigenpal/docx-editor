@@ -116,7 +116,7 @@ See [Search and navigation](/docs/2.x/editor-api/search-and-navigation) for sear
 
 ## Split text into word ranges
 
-`Paragraph.getTextRanges(endingMarks, trimSpacing?)` and `Range.getTextRanges(endingMarks, trimSpacing?)` split text into ranges. Each range ends after one of the ending marks, such as `' '` for words or `'.'` for sentences. A paragraph end always ends a range, and no range contains a paragraph mark. If `trimSpacing` is `true`, each range loses the spaces, tabs, and column breaks at its start and end. A range that contains only spacing is left out.
+`Paragraph.getTextRanges(endingMarks, trimSpacing?)` and `Range.getTextRanges(endingMarks, trimSpacing?)` split text into ranges. Each range ends after one of the ending marks, such as `' '` for words or `'.'` for sentences. A paragraph end always ends a range, and no range contains a paragraph mark. If `trimSpacing` is `false`, the default, each range keeps the spacing after it, so a deleted word takes its space with it. If `trimSpacing` is `true`, each range loses the spaces, tabs, and column breaks at its start and end, and a range that contains only spacing is left out. Use `true` to read words, and the default to plan edits.
 
 Each range is an exact span of the document. You can replace, delete, or insert next to it in a later sync, also with change tracking on. To address a run of words, call `first.expandTo(last)`. It returns the span from the earlier start to the later end. Both ranges must be in the same story; otherwise, the sync fails with `InvalidArgument`.
 
@@ -124,47 +124,51 @@ Some document elements behave differently inside a word range:
 
 | Element | Behavior |
 | --- | --- |
-| Field, equation, picture, or note reference | One character that never splits. It joins the word that it touches. Range text shows its displayed result. |
+| Field | One character that never splits. It joins the word that it touches. Range text shows the field result. |
+| Equation, picture, or note reference | One character that never splits. It joins the word that it touches. Range text shows U+FFFC. A tracked deletion or replacement that covers an equation strikes the whole equation; accept removes it, and reject restores it. |
 | Tab | Ends a range only if you list `'\t'` as a mark. `trimSpacing` removes it from range edges. |
 | Inline content control | Adds no boundary. Its words join the ranges around it. |
+| Content-locked control | A replacement or deletion of part of it fails with `GeneralException`, and `debugInfo.innerError.code` is `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion. |
 | Tracked deletion | Shows in the ranges, like in `text`, unless the runtime's `revisionTextView` is `original`. |
 | Text that `revisionTextView` hides | Holds no ending mark. A range starts and ends at shown characters. Hidden text between two shown characters stays inside the range, so an edit through the range also changes it. |
 
-You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units. Other values fail with `InvalidArgument`.
+You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units and no unpaired surrogate. Other values fail with `InvalidArgument`.
+
+Before you plan edits in a paragraph with content controls, load `paragraph.contentControls` with `cannotEdit`, `tag`, and `text`. Keep each locked control as one unit in the plan.
 
 ## Rewrite a paragraph and read the result
 
-A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. To make several edits with the ranges from one read, edit from the end of the paragraph toward its start, and sync after each edit.
+A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. Plan the edits by range index, because a paragraph can repeat a word. Then apply them from the last index to the first, and sync after each edit.
 
 Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed result with `getReviewedText('Current')` instead.
 
 After tracked edits, `Paragraph.text` contains both the deleted and the inserted words. Call `getReviewedText('Current')` to read the text as if every pending change were accepted. Call `getReviewedText('Original')` to read it as if every change were rejected. `Range.getReviewedText()` and `Paragraph.getReviewedText()` default to `Current`. The method does not change the document. `ChangeTrackingVersion` provides matching enum values.
 
-The following example replaces two words, writes after a word, and deletes a word as tracked changes. Then it reads the proposed paragraph:
+The following example deletes a word, writes after a word, and replaces two words as tracked changes. Each range keeps its trailing space, so the replacement ends with a space too. Then it reads the proposed paragraph:
 
 ```ts
 await runtime.run(async (context) => {
   context.document.changeTrackingMode = 'TrackMineOnly';
   const paragraph = context.document.body.paragraphs.getFirst();
-  const words = paragraph.getTextRanges([' ', '\t'], true);
+  const words = paragraph.getTextRanges([' ']);
   words.load('items/text');
   await context.sync();
 
+  // ['The ', 'fee ', 'is ', 'due ', 'per ', 'unit ', 'and ', 'the ', 'buyer ', ...]
   const texts = words.items.map((range) => range.text);
-  const word = (text: string) => words.items[texts.indexOf(text)]!;
 
-  // Edit from the end of the paragraph toward its start.
-  word('promptly.').delete();
+  // Edits by index, applied from the last index to the first.
+  words.items[7]!.delete();
   await context.sync();
-  word('unit').insertText(' (net)', 'After');
+  words.items[4]!.insertText('net ', 'After');
   await context.sync();
-  word('The').expandTo(word('fee')).insertText('Each charge', 'Replace');
+  words.items[0]!.expandTo(words.items[1]!).insertText('Each charge ', 'Replace');
   await context.sync();
 
   const proposed = paragraph.getReviewedText('Current');
   const original = paragraph.getReviewedText('Original');
   await context.sync();
-  console.log(original.value, proposed.value);
+  console.log(texts.length, original.value, proposed.value);
 });
 ```
 

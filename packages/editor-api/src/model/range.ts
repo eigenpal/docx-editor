@@ -334,13 +334,16 @@ export class Range extends ModelObject implements PromisedItem {
    *
    * Each range is an exact span of the document, so you can use it as an edit target in a later
    * sync: `insertText(text, 'Replace')`, `insertText(text, 'After')`, or `delete()`, also with
-   * change tracking on. Pass `trimSpacing` as `true` to remove spaces, tabs, and column breaks
-   * from the start and end of each range; a range that holds only spacing is then left out.
+   * change tracking on. By default each range keeps the spacing after it, so a deleted word
+   * takes its space with it; plan edits on those ranges by index. Pass `trimSpacing` as `true`
+   * to remove spaces, tabs, and column breaks from the start and end of each range, for reading
+   * words; a range that holds only spacing is then left out.
    *
    * A field, an equation, a picture, or a note reference is one character of the range and is
-   * never split, so it joins the word it touches. Its text reads as its displayed result. A tab
-   * ends a range only when you list `'\t'` as a mark. An inline content control adds no
-   * boundary, so its words join the ranges around it. Pass at most 32 marks of at most 32
+   * never split, so it joins the word it touches. A field reads as its result text; an equation,
+   * a picture, and a note reference read as U+FFFC. A tab ends a range only when you list `'\t'`
+   * as a mark. An inline content control adds no boundary, so its words join the ranges around
+   * it; an edit of part of a content-locked control refuses with `edit.protected-content`. Pass at most 32 marks of at most 32
    * UTF-16 code units each, with no unpaired surrogate; other values refuse with
    * `InvalidArgument`.
    *

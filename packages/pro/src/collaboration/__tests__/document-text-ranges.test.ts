@@ -33,19 +33,22 @@ const BODY =
   '<w:p><w:r><w:t>Second clause.</w:t></w:r></w:p>';
 
 const ORIGINAL = 'The fee is due per unit and the buyer agrees promptly.\tEnd';
-const PROPOSED = 'Each charge is due per unit (net) and the buyer agrees \tEnd';
+const PROPOSED = 'Each charge is due per net unit and buyer agrees promptly.\tEnd';
 
-/** Replace a two-word run, write after a word, and delete a word, from the end backward. */
+/**
+ * Replace a two-word run, write after a word, and delete a word, by token index from the last
+ * index to the first. Each token carries its trailing space.
+ */
 const rewrite: Edit = tracked(async (c) => {
-  const tokens = c.document.body.paragraphs.getFirst().getTextRanges([' ', '\t'], true);
-  tokens.load('items/text');
+  const words = c.document.body.paragraphs.getFirst().getTextRanges([' ']);
+  words.load('items/text');
   await c.sync();
-  const at = (text: string) => tokens.items.find((range) => range.text === text)!;
-  at('promptly.').delete();
+  expect(words.items[7]!.text).toBe('the ');
+  words.items[7]!.delete();
   await c.sync();
-  at('unit').insertText(' (net)', 'After');
+  words.items[4]!.insertText('net ', 'After');
   await c.sync();
-  at('The').expandTo(at('fee')).insertText('Each charge', 'Replace');
+  words.items[0]!.expandTo(words.items[1]!).insertText('Each charge ', 'Replace');
   await c.sync();
 });
 
@@ -91,12 +94,12 @@ test('a rewrite through word ranges converges and reads the same on both peers',
   }
 });
 
-test('a rewrite converges while the other participant deletes a word it does not touch', async () => {
+test('a rewrite converges while the other participant deletes a word the rewrite does not touch', async () => {
   const r = await room('reviewer first', BODY);
   try {
     r.pair.pause();
     await r.peers[0]!.runtime.run(rewrite);
-    await r.peers[1]!.runtime.run(direct('buyer ', (range) => range.delete()));
+    await r.peers[1]!.runtime.run(direct('due ', (range) => range.delete()));
     r.sync();
     r.pair.resume();
     r.sync();
@@ -104,8 +107,8 @@ test('a rewrite converges while the other participant deletes a word it does not
     await expectSamePeers(r);
     const [left, right] = await Promise.all(r.peers.map(({ runtime }) => reviewedOn(runtime)));
     expect(left).toEqual(right!);
-    expect(left!.current).toBe(PROPOSED.replace('buyer ', ''));
-    expect(left!.original).toBe(ORIGINAL.replace('buyer ', ''));
+    expect(left!.current).toBe(PROPOSED.replace('due ', ''));
+    expect(left!.original).toBe(ORIGINAL.replace('due ', ''));
     await expectSameDecisions(r);
   } finally {
     r.close();

@@ -223,24 +223,41 @@ describe('a tracked rewrite through word ranges', () => {
   test('replace, insert after, and delete tokens, then read the result back', async () => {
     const runtime = await open(docx(RICH));
     try {
-      await runtime.run(async (context) => {
+      const tokens = await runtime.run(async (context) => {
         context.document.changeTrackingMode = 'TrackMineOnly';
-        const tokens = context.document.body.paragraphs.getFirst().getTextRanges([' ', '\t'], true);
-        tokens.load('items/text');
+        const words = context.document.body.paragraphs.getFirst().getTextRanges([' ']);
+        words.load('items/text');
         await context.sync();
-        const at = (text: string) => tokens.items.find((range) => range.text === text)!;
-        // Edit from the end of the paragraph toward its start: an edit after a range keeps the
-        // range valid, so every token read before the first edit stays usable.
-        at('promptly.').delete();
+        const texts = words.items.map((range) => range.text);
+        // Plan by token index and apply from the last index to the first: an edit after a range
+        // keeps it valid, so every range read before the first edit stays usable. Each token
+        // carries its trailing space, so a deletion leaves single spaces.
+        words.items[7]!.delete();
         await context.sync();
-        at('unit').insertText(' (net)', 'After');
+        words.items[4]!.insertText('net ', 'After');
         await context.sync();
-        at('The').expandTo(at('fee')).insertText('Each charge', 'Replace');
+        words.items[0]!.expandTo(words.items[1]!).insertText('Each charge ', 'Replace');
         await context.sync();
+        return texts;
       });
+      expect(tokens).toEqual([
+        'The ',
+        'fee ',
+        'is ',
+        '7 ',
+        'per ',
+        'unit\tas ',
+        '\uFFFC ',
+        'shows ',
+        'and ',
+        'Acme ',
+        'Corp ',
+        'agrees ',
+        'promptly.',
+      ]);
 
-      const proposed = 'Each charge is 7 per unit (net)\tas ￼ shows and Acme Corp agrees ';
-      const before = 'The fee is 7 per unit\tas ￼ shows and Acme Corp agrees promptly.';
+      const proposed = 'Each charge is 7 per net unit\tas \uFFFC and Acme Corp agrees promptly.';
+      const before = 'The fee is 7 per unit\tas \uFFFC shows and Acme Corp agrees promptly.';
       const read = await reviewed(runtime);
       expect(read.current).toBe(proposed);
       expect(read.fallback).toBe(proposed);

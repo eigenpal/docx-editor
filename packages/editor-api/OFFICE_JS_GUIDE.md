@@ -348,36 +348,41 @@ The range that a tracked `insertText()` returns names your own pending insertion
 
 ### Rewrite a paragraph word by word
 
-Split a paragraph into word ranges with `paragraph.getTextRanges([' '], true)`. Address a run of words with `first.expandTo(last)`. Read the proposed result with `paragraph.getReviewedText('Current')`. After tracked edits, `paragraph.text` reads the deleted and the inserted words together. `getReviewedText('Current')` reads the text as if you accepted every change, and `'Original'` reads it as if you rejected every change.
+Split a paragraph into word ranges with `paragraph.getTextRanges([' '])`. Each range keeps its trailing space, so a deleted word takes its space with it, and a replacement for a range ends with a space too. Address a run of words with `first.expandTo(last)`. After tracked edits, `paragraph.text` reads the deleted and the inserted words together. `getReviewedText('Current')` reads the text as if you accepted every change, and `'Original'` reads it as if you rejected every change.
 
-Each word range is a snapshot. An edit before a range in its paragraph makes the range fail with `StaleDocument`, and an edit after it keeps it valid. Read the ranges once, before you edit. Then edit from the end of the paragraph toward its start, one sync per edit, so the ranges that you read first stay usable:
+Each word range is a snapshot. An edit before a range in its paragraph makes the range fail with `StaleDocument`, and an edit after it keeps it valid. Read the ranges once, before you edit. Pass the range texts to the model and plan the edits by range index, because a paragraph can repeat a word. Then apply the edits from the last index to the first, one sync per edit:
 
 ```ts
 await runtime.run(async (context) => {
   context.document.changeTrackingMode = 'TrackMineOnly';
   const paragraph = context.document.body.paragraphs.getFirst();
-  const words = paragraph.getTextRanges([' ', '\t'], true);
+  const words = paragraph.getTextRanges([' ']);
   words.load('items/text');
   await context.sync();
 
   // Pass plain text to the model; keep the ranges in this run.
+  // ['The ', 'fee ', 'is ', 'due ', 'per ', 'unit ', 'and ', 'the ', 'buyer ', ...]
   const tokens = words.items.map((range) => range.text);
-  const at = (text: string) => words.items[tokens.indexOf(text)]!;
 
-  at('promptly.').delete();
+  // Edits by index, applied from the last index to the first.
+  words.items[7]!.delete();
   await context.sync();
-  at('unit').insertText(' (net)', 'After');
+  words.items[4]!.insertText('net ', 'After');
   await context.sync();
-  at('The').expandTo(at('fee')).insertText('Each charge', 'Replace');
+  words.items[0]!.expandTo(words.items[1]!).insertText('Each charge ', 'Replace');
   await context.sync();
 
   const proposed = paragraph.getReviewedText('Current');
   await context.sync();
-  console.log(proposed.value);
+  console.log(tokens.length, proposed.value);
 });
 ```
 
-A field, an equation, a picture, or a note reference is one character of a word range and never splits; its text reads as its displayed result. An inline content control adds no boundary, so its words join the ranges around it. A tab ends a range only when you list `'\t'` as a mark. `trimSpacing` removes spaces, tabs, and column breaks from the edges of each range. `Range.getRange('Start')` and `'End'` answer an insertion point; `'After'` fails with `NotSupported`. Ranges in different stories make `expandTo()` fail with `InvalidArgument`.
+A field reads as its result text in a word range. An equation, a picture, and a note reference each read as U+FFFC. Each of them is one character that never splits and joins the word it touches. A tab ends a range only when you list `'\t'` as a mark. `trimSpacing` removes spaces, tabs, and column breaks from the edges of each range; use it to read words, not to plan deletions. `Range.getRange('Start')` and `'End'` answer an insertion point; `'After'` fails with `NotSupported`. Ranges in different stories make `expandTo()` fail with `InvalidArgument`.
+
+A tracked deletion or replacement that covers an equation strikes the whole equation. Accept removes it, and reject restores it.
+
+The words of an inline content control join the ranges around it. Before you plan edits, read `paragraph.contentControls` with `cannotEdit`, `tag`, and `text`, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails with `GeneralException` and `innerError.code` `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
 
 Ranges follow the runtime's `revisionTextView`. Text that the view hides, such as a pending insertion in the `original` view, holds no ending mark, and a range starts and ends at characters that the view shows. Hidden text between two shown characters of one range stays inside the range, so an edit through that range also changes the hidden text.
 

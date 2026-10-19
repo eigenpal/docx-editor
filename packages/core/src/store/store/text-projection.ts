@@ -49,6 +49,11 @@ export interface ProjectedParagraphText {
   readonly text: string;
   /** Map one model boundary into the projected UTF-16 offset space. */
   projectedOffset(rawOffset: number): number;
+  /**
+   * `projectedOffset` for every model boundary from `from` through `to`, in one pass. Index `i`
+   * holds the projected offset of model offset `from + i`.
+   */
+  projectedOffsets(from: number, to: number): Int32Array;
   /** Map a non-empty projected range back to one editable model range. */
   rawRange(
     start: number,
@@ -215,6 +220,20 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
         offset = piece.projectedEnd;
       }
       return offset;
+    },
+    projectedOffsets(from, to) {
+      const out = new Int32Array(Math.max(0, to - from + 1));
+      let index = 0;
+      let tail = 0;
+      for (let raw = from; raw <= to; raw += 1) {
+        while (index < positioned.length && raw > positioned[index]!.rawEnd) {
+          tail = positioned[index]!.projectedEnd;
+          index += 1;
+        }
+        const piece = positioned[index];
+        out[raw - from] = piece ? projectedBoundary(piece, raw) : tail;
+      }
+      return out;
     },
     rawRange(start, end) {
       if (start < 0 || start >= end || end > text.length) return null;

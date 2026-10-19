@@ -5,7 +5,7 @@ import type { OoxmlParagraphNode } from '../../store/package/ooxml-tree.ts';
 import { paragraphTextOf } from '../../store/store/tree-op-apply.ts';
 import { docx } from './support/protocol.ts';
 import { hasUnpairedSurrogate, textRangeBoundaries } from '../plan-text-ranges.ts';
-import { projectReviewedParagraphText } from '../text-projection.ts';
+import { projectParagraphText, projectReviewedParagraphText } from '../text-projection.ts';
 
 const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const AUTHOR = 'w:author="Ada" w:date="2026-01-01T00:00:00Z"';
@@ -83,5 +83,27 @@ describe('textRangeBoundaries', () => {
     expect(hasUnpairedSurrogate('\uD83D')).toBe(true);
     expect(hasUnpairedSurrogate('\uDE00x')).toBe(true);
     expect(hasUnpairedSurrogate('x\uD83D')).toBe(true);
+  });
+});
+
+describe('projectedOffsets', () => {
+  test('matches projectedOffset at every model boundary', () => {
+    const field = `<w:fldSimple w:instr=" PAGE ">${run('12')}</w:fldSimple>`;
+    const { paragraph, rawText } = paragraphOf(
+      run('a ') + field + inserted('new ') + run('b ') + field + deleted('old') + run(' c')
+    );
+    for (const view of ['allMarkup', 'original', 'model'] as const) {
+      const projected = projectParagraphText(paragraph, rawText, view);
+      for (const [from, to] of [
+        [0, rawText.length],
+        [1, rawText.length - 1],
+        [3, 3],
+      ] as const) {
+        const expected = Array.from({ length: to - from + 1 }, (_, i) =>
+          projected.projectedOffset(from + i)
+        );
+        expect(Array.from(projected.projectedOffsets(from, to))).toEqual(expected);
+      }
+    }
   });
 });
