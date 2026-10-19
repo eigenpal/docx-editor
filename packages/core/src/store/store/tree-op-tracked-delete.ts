@@ -118,7 +118,6 @@ export function applyDeleteTracked(
     node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));
 
   let exceedsDepth = false;
-  let strikesEquation = false;
   const strike = (nodes: readonly OoxmlNode[], depth: number): OoxmlNode => {
     // A JOINED deletion is this transaction's strike too, though it minted nothing — a
     // replacement over words abutting a strike from a moment ago belongs after all of them.
@@ -208,16 +207,14 @@ export function applyDeleteTracked(
         continue;
       }
 
-      // An equation has no tracked deletion here: its text is not `w:t`, and the review lane
-      // reads no `w:del` inside OMML. Passing it through left it standing while the words
-      // around it were struck, so the deletion reported success and lost part of the edit.
+      // An equation is struck WHOLE: `m:oMath` and `m:oMathPara` go inside the `w:del`, which
+      // `EG_RunLevelElements` allows, so accepting removes the equation and rejecting restores
+      // it. Passing it through left it standing while the words around it were struck.
       // Inside the author's own pending insertion it goes outright, like their own words do.
       if (struck.has(node.id) && isOmmlEquationAtom(node) && !insideDeletion(stack)) {
-        if (insertionAuthor(stack) === revision.author) {
-          cursor.offset = to;
-          continue;
-        }
-        strikesEquation = true;
+        cursor.offset = to;
+        if (insertionAuthor(stack) !== revision.author) out.push(strike([node], containerDepth));
+        continue;
       }
 
       if (node.kind !== 'run') {
@@ -249,7 +246,6 @@ export function applyDeleteTracked(
 
   const children = mergedRevisions(mint, rebuild(paragraph.children, []));
   if (exceedsDepth) return { ok: false, reason: 'invalid-range' };
-  if (strikesEquation) return { ok: false, reason: 'unsupported', detail: 'tracked-equation' };
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
 }
 
