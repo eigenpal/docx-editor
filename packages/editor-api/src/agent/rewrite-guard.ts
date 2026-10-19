@@ -41,12 +41,15 @@ interface Hold {
 
 const holds = new WeakMap<RequestContext, Hold>();
 
+// During a model call, a sync can come from the rewrite function or from other code that runs
+// meanwhile; nothing tells the two apart, so the message names both.
 const syncDuringCall = () =>
   new RewriteError(
     'context-used',
-    'The rewrite function called context.sync(). It runs outside the batch, so it must not use ' +
-      'the request context or its proxies. Read what the model needs from the draft, and make ' +
-      'other edits before or after the rewrite.'
+    'context.sync() was called while a helper call waits for the model on this request ' +
+      'context. If the rewrite function called it: it runs outside the batch, so it must not use ' +
+      'the request context or its proxies; read what the model needs from the draft. If other ' +
+      'code called it: await the helper call first.'
   );
 
 const syncDuringHelper = () =>
@@ -68,19 +71,32 @@ export async function exclusive<T>(context: RequestContext, work: () => Promise<
   assertNothingQueued(context);
   const hold: Hold = { entering: false, calls: 0, discards: 0 };
   holds.set(context, hold);
-  const original = (Object.getPrototypeOf(context) as { sync: () => Promise<void> }).sync;
-  Object.defineProperty(context, 'sync', {
-    configurable: true,
-    // A function, not an arrow: `this` is the context itself even when a proxy forwards to it.
-    value: function guardedSync(this: RequestContext): Promise<void> {
-      if (hold.entering) return original.call(this);
-      return Promise.reject(hold.calls > 0 ? syncDuringCall() : syncDuringHelper());
-    },
-  });
+  // A host can wrap `sync` with an own property, such as a tracing wrapper. The helper's syncs
+  // go through that wrapper, and the property comes back exactly as it was.
+  const previous = Object.getOwnPropertyDescriptor(context, 'sync');
+  const underlying = (
+    previous
+      ? (previous.value ?? previous.get?.call(context))
+      : (Object.getPrototypeOf(context) as { sync: unknown }).sync
+  ) as (this: RequestContext) => Promise<void>;
+  const guard = !previous || previous.configurable === true;
+  if (guard) {
+    Object.defineProperty(context, 'sync', {
+      configurable: true,
+      // A function, not an arrow: `this` is the context itself even when a proxy forwards to it.
+      value: function guardedSync(this: RequestContext): Promise<void> {
+        if (hold.entering) return underlying.call(this);
+        return Promise.reject(hold.calls > 0 ? syncDuringCall() : syncDuringHelper());
+      },
+    });
+  }
   try {
     return await work();
   } finally {
-    delete (context as unknown as { sync?: unknown }).sync;
+    if (guard) {
+      if (previous) Object.defineProperty(context, 'sync', previous);
+      else delete (context as unknown as { sync?: unknown }).sync;
+    }
     holds.delete(context);
   }
 }

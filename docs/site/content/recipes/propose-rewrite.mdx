@@ -132,7 +132,7 @@ The `retries` option caps all three together. It takes a whole number from `0` t
 | `pending-changes` | The paragraph has tracked changes. | Accept or reject them first. |
 | `tracking-unavailable` | The runtime cannot record tracked changes. | Create the runtime with an `author`. In a page, give the editor the review module. |
 | `draft-used` | The draft already wrote to the paragraph. | Prepare the paragraph again. |
-| `too-long` | The paragraph, or the answer, is too long to compare. A paragraph is refused before the model is asked. | Rewrite a shorter paragraph. |
+| `too-long` | The paragraph or the answer has more than 20,000 words and placeholders, or the answer makes more than 2,000 word edits. The paragraph length is checked before the model is asked; the edit count, after the model answers. | Ask the model for fewer changes, or split the paragraph. |
 | `unsupported-text` | The paragraph contains every bracket pair that placeholders can use. | Rewrite the paragraph another way. |
 | `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
 | `stale` | The paragraph changed while the helper ran, through another participant or your own code. The rewrite was rolled back. | Prepare the paragraph again. |

@@ -105,6 +105,61 @@ describe('the request context stays the helper’s', () => {
   });
 });
 
+describe('a host that wraps context.sync', () => {
+  test('keeps its wrapper: the helper syncs through it, and it is restored', async () => {
+    let calls = 0;
+    const { value } = await withRuntime(docx(p('Pay the fee now.')), async (context) => {
+      const paragraph = await firstParagraph(context);
+      await context.sync();
+      const prototype = Object.getPrototypeOf(context) as { sync: () => Promise<void> };
+      const wrapper = function traced(this: typeof context) {
+        calls += 1;
+        return prototype.sync.call(this);
+      };
+      Object.defineProperty(context, 'sync', {
+        configurable: true,
+        writable: true,
+        value: wrapper,
+      });
+      const result = await proposeRewrite(context, paragraph, () => 'Pay the fee today.');
+      const restored = Object.getOwnPropertyDescriptor(context, 'sync');
+      return { result, restored: restored?.value === wrapper && restored.writable === true };
+    });
+    expect(value.result.proposed).toBe('Pay the fee today.');
+    expect(calls).toBeGreaterThan(5);
+    expect(value.restored).toBe(true);
+  });
+
+  test('a sync from other code while the model answers names both causes', async () => {
+    const { value } = await withRuntime(docx(p('Pay the fee now.')), async (context) => {
+      const paragraph = await firstParagraph(context);
+      await context.sync();
+      let release: () => void = () => undefined;
+      const answered = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let started: () => void = () => undefined;
+      const calling = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const running = proposeRewrite(context, paragraph, async () => {
+        started();
+        await answered;
+        return 'Pay the fee today.';
+      });
+      await calling;
+      const error = await rejection(context.sync());
+      release();
+      await running;
+      return error;
+    });
+    expect(value).toMatchObject({ code: 'context-used' });
+    const message = (value as RewriteError).message;
+    expect(message).toContain('If the rewrite function called it');
+    expect(message).toContain('If other code called it: await the helper call first.');
+  });
+});
+
 describe('aborting a model call', () => {
   test('the caller’s signal aborts with aborted, and nothing is written', async () => {
     const controller = new AbortController();
