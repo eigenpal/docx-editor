@@ -21,6 +21,7 @@ try {
     const paragraph = context.document.body.paragraphs.getFirst();
     return proposeRewrite(context, paragraph, (draft) => callModel(draft.prompt), {
       instruction: 'Make this clause shorter. Keep its meaning.',
+      timeoutMs: 30_000,
     });
   });
   console.log(`${result.changes} changes: ${result.proposed}`);
@@ -32,9 +33,13 @@ try {
 
 `draft.prompt` holds your instruction, the placeholder rules, a legend of the placeholders, and the paragraph text. To write your own prompt, use `draft.text` and `draft.placeholders` instead. The changes use the runtime's `author`. In a page, create the runtime with `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser`, and give the editor the review module.
 
-The `rewrite` function runs outside the batch. It must not use `context` or its proxies. While it runs, `context.sync()` fails with `context-used`. Read what the model needs from the draft, and make other edits before or after the rewrite.
+The `rewrite` function gets the draft and a `signal`. Pass the signal to your model client: it aborts when `options.signal` aborts or when the call takes longer than `options.timeoutMs`. A timed-out call is retried like a call that throws. An aborted rewrite fails with `aborted` and writes nothing.
 
-`result.proposed` and `result.original` read as `getReviewedText()` does. An equation, a picture, or a note reference reads as U+FFFC, and a line break reads as U+000B.
+The `rewrite` function runs outside the batch, so it must not use `context` or its proxies. While it runs, `context.sync()` fails with `context-used`. If it queues an edit, such as `insertText()`, the helper discards the edit and fails with `context-used`. Read what the model needs from the draft, and make other edits before or after the rewrite.
+
+One helper call runs on a request context at a time. A second call on the same context, such as two `proposeRewrite()` calls in `Promise.all()`, fails with `busy`. To rewrite several paragraphs, use `proposeRewrites()`. The helper also refuses with `context-used` when edits are queued on the context and not synced, so its tracked writes never send them. Call `await context.sync()` first.
+
+`result.proposed` and `result.original` read as `getReviewedText()` does. An equation, a picture, or a note reference reads as U+FFFC, and a line break reads as U+000B. After the rewrite, `paragraph.text` reads both the deleted and the inserted words. To read the proposed text later, call `paragraph.getReviewedText('Current')`.
 
 To check a draft before you write it, call `prepareRewrite(context, paragraph, options)`. It returns the same draft, and `draft.apply(modelText)` writes the answer.
 
@@ -55,7 +60,7 @@ Subject to ⟦1⟧, the Supplier shall deliver the goods herein⟦2⟧.
 </paragraph>
 ```
 
-The legend describes each placeholder: a field by its code and result, a locked content control by its tag and text, a picture by its alternative text, and an equation, a note reference, or a line break by its kind. A note reference is told apart from an equation by its superscript formatting.
+The legend describes each placeholder: a field by its code and result, a locked content control by its tag and text, a picture by its alternative text, and an equation, a note reference, or a line break by its kind. A field that shows no text, such as an index entry, also gets a placeholder, so that deleting it is the model's explicit choice. A note reference is told apart from an equation by its superscript formatting.
 
 Text from the file never reads as instructions. Every value in the legend is a quoted string, and the paragraph and the legend sit between tags that their text cannot close. The prompt tells the model that the text between the tags is document content, not instructions. If the paragraph already contains `⟦` or `⟧`, the placeholders use another bracket pair, such as `⟪1⟫`. Read the exact placeholders from `draft.placeholders`.
 
@@ -115,15 +120,17 @@ The `retries` option caps all three together. It takes a whole number from `0` t
 | `placeholder-moved` | The answer changes the order of the placeholders. | Ask the model again. |
 | `placeholder-repeated` | The answer has a placeholder more than once. | Ask the model again. |
 | `placeholder-missing` | With `keepPlaceholders: true`, the answer leaves out a placeholder. | Ask the model again. |
-| `model-failed` | Your `rewrite` function threw on every attempt. `error.cause` holds its last error. | Check the model service. |
-| `context-used` | Your `rewrite` function called `context.sync()`. | Do not use `context` inside the function. |
+| `model-failed` | Your `rewrite` function threw or timed out on every attempt. `error.cause` holds its last error. | Check the model service. |
+| `aborted` | `options.signal` aborted. | Nothing to do. |
+| `context-used` | Your `rewrite` function used `context`, or edits were queued on `context` when you called the helper. | Do not use `context` inside the function, and sync your own edits first. |
+| `busy` | Another helper call runs on the same request context. | Await it first, or use `proposeRewrites()`. |
 | `pending-changes` | The paragraph has tracked changes. | Accept or reject them first. |
 | `tracking-unavailable` | The runtime cannot record tracked changes. | Create the runtime with an `author`. In a page, give the editor the review module. |
 | `draft-used` | The draft already wrote to the paragraph. | Prepare the paragraph again. |
 | `too-long` | The paragraph and the answer are too long to compare. | Rewrite a shorter paragraph. |
 | `unsupported-text` | The paragraph contains every bracket pair that placeholders can use. | Rewrite the paragraph another way. |
 | `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
-| `stale` | Another edit changed the document during the rewrite. The rewrite was rolled back. | Prepare the paragraph again. |
+| `stale` | The paragraph changed while the helper ran, through another participant or your own code. The rewrite was rolled back. | Prepare the paragraph again. |
 | `locked` | An edit touched protected content. The rewrite was rolled back. | Keep the content whole. |
 | `write-failed` | The document refused an edit. The rewrite was rolled back. `error.cause` holds the reason. | Read `error.cause`. |
 | `verification-failed` | The paragraph would not read as the answer. The rewrite was rolled back. | Prepare the paragraph again. |

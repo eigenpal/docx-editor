@@ -34,6 +34,7 @@ import { DocxEditorError, fail, isDocxEditorError } from './errors.ts';
 import type { DocumentCapabilities, RevisionTextView } from './runtime.ts';
 import {
   AUTHOR_HOOK,
+  QUEUE_HOOK,
   INTERNALS,
   REBIND,
   RELEASE,
@@ -146,6 +147,12 @@ export class RequestContext {
     );
     // Not a class member, so it stays out of the public declarations and of enumeration.
     Object.defineProperty(this, AUTHOR_HOOK, { get: () => session.author });
+    Object.defineProperty(this, QUEUE_HOOK, {
+      value: Object.freeze({
+        writes: () => this.#queue.pending.filter((action) => action.sort === 'write').length,
+        discard: () => this.#queue.clear(),
+      }),
+    });
   }
 
   /**

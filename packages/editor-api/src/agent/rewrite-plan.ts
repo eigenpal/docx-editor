@@ -108,7 +108,8 @@ export function syntaxFor(text: string): PlaceholderSyntax {
 const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const patternOf = ({ open, close }: PlaceholderSyntax, flags: string, anchor = '') =>
   new RegExp(`${anchor}${escape(open)}(\\d+)${escape(close)}`, flags);
-const PARAGRAPH_BREAK = /[\r\n\u2028\u2029]/;
+const PARAGRAPH_BREAK = /[\r\n]/;
+const SEPARATORS = /[\u2028\u2029]/g;
 /** The largest word diff table, in cells: 16 MB. A paragraph comes from the file. */
 const MAX_DIFF_CELLS = 4_000_000;
 
@@ -126,9 +127,13 @@ export function draftText(units: readonly PlanUnit[], syntax: PlaceholderSyntax)
 
 /** A tag name that `content` does not contain, so the content cannot close the tag. */
 function tagFor(name: string, content: string): string {
+  // Compared as a model may read it: case-folded and compatibility-normalized, so that
+  // `</PARAGRAPH>` or a full-width `＜/paragraph＞` closes nothing either. Only `<name` and
+  // `</name` collide; the plain word "paragraph" does not.
+  const folded = content.normalize('NFKC').toLowerCase();
   for (let index = 1; ; index += 1) {
     const tag = index === 1 ? name : `${name}-${index}`;
-    if (!content.includes(tag)) return tag;
+    if (!folded.includes(`<${tag}`) && !folded.includes(`</${tag}`)) return tag;
   }
 }
 
@@ -182,12 +187,16 @@ export function checkOutput(
   output: string,
   placeholders: readonly RewritePlaceholder[],
   keepPlaceholders: boolean,
-  syntax: PlaceholderSyntax
+  syntax: PlaceholderSyntax,
+  original: string
 ): void {
   if (output === '') {
     throw new RewriteError('invalid-output', 'The model output is empty. Return the paragraph.');
   }
-  if (PARAGRAPH_BREAK.test(output)) {
+  // U+2028 and U+2029 are text when the paragraph already has them; otherwise they break it.
+  const separators = new Set(original.match(SEPARATORS) ?? []);
+  const foreign = [...(output.match(SEPARATORS) ?? [])].some((char) => !separators.has(char));
+  if (PARAGRAPH_BREAK.test(output) || foreign) {
     throw new RewriteError(
       'invalid-output',
       'The model output contains a line break. Return one paragraph on one line.'

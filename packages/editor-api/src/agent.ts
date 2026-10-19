@@ -45,6 +45,7 @@ export type {
   ProposeRewriteOptions,
   ProposeRewritesOptions,
   RewriteDraft,
+  RewriteCall,
   RewriteFeedback,
   RewriteFunction,
   RewriteItem,

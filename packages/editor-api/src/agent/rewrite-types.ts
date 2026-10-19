@@ -42,6 +42,18 @@ export interface ProposeRewriteOptions extends RewriteOptions {
    * A whole number from `0` to `5`; defaults to `2`. Other values are clamped into that range.
    */
   readonly retries?: number;
+  /**
+   * Aborts the rewrite. A model call that is running gets the abort through its own signal, and
+   * the helper stops with `aborted` before it writes. A write that has started finishes, so the
+   * paragraph never holds half a rewrite.
+   */
+  readonly signal?: AbortSignal;
+  /**
+   * The longest a model call may take, in milliseconds. A call that takes longer is aborted
+   * through its signal and counts as a thrown call: the helper retries it, and then reports
+   * `model-failed`.
+   */
+  readonly timeoutMs?: number;
 }
 
 /**
@@ -128,13 +140,24 @@ export interface RewriteResult {
 /**
  * Your model call: take the draft, return the rewritten paragraph text.
  *
- * It runs outside the batch, so it must not use the request context or its proxies; while it
- * runs, `context.sync()` refuses with `context-used`. If it throws, the helper calls it again,
- * up to `retries` times, and then reports `model-failed` with your error as `cause`.
+ * It runs outside the batch, so it must not use the request context or its proxies. While it
+ * runs, `context.sync()` refuses; commands it queues are discarded, and the call fails with
+ * `context-used`. If it throws or times out, the helper calls it again, up to `retries` times,
+ * and then reports `model-failed` with your error as `cause`.
  *
  * @public
  */
-export type RewriteFunction = (draft: RewriteDraft) => string | Promise<string>;
+export type RewriteFunction = (draft: RewriteDraft, call: RewriteCall) => string | Promise<string>;
+
+/**
+ * What a model call gets besides the draft.
+ *
+ * @public
+ */
+export interface RewriteCall {
+  /** Aborts when `options.signal` aborts or `options.timeoutMs` passes. Pass it to your model client. */
+  readonly signal: AbortSignal;
+}
 
 /**
  * One paragraph for {@link proposeRewrites}.

@@ -142,10 +142,10 @@ describe('a failed write rolls back the writes before it', () => {
     const original = 'Alpha beta gamma delta.';
     const { value } = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      // Syncs 1 to 4 prepare, 5 and 6 turn tracking on, and 7 lists the revisions before the
-      // first write. The last hunk writes at 8 and reads its revisions back at 9 and 10. Sync 11
+      // Syncs 1 to 5 prepare, 6 and 7 turn tracking on, and 8 lists the revisions before the
+      // first write. The last hunk writes at 9 and reads its revisions back at 10 and 11. Sync 12
       // writes the first hunk and then fails, so the helper must find that change too.
-      const draft = await prepareRewrite(failingSync(context, 11), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 12), paragraph);
       const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
       return { error, after: await readBack(context, paragraph) };
     });
@@ -159,7 +159,7 @@ describe('a failed write rolls back the writes before it', () => {
       docx(p(original)),
       async (context) => {
         const paragraph = await firstParagraph(context);
-        const draft = await prepareRewrite(failingSync(context, 11), paragraph);
+        const draft = await prepareRewrite(failingSync(context, 12), paragraph);
         const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
         return { error, after: await readBack(context, paragraph) };
       },
@@ -175,8 +175,8 @@ describe('a failed write rolls back the writes before it', () => {
       const value = await runtime.run(async (context) => {
         const paragraph = await firstParagraph(context);
         // The same author, in another run, proposes text after this rewrite read its own
-        // change back (syncs 9 and 10) and before the final check (sync 11).
-        const paused = pausingSync(context, 11, () =>
+        // change back (syncs 10 and 11) and before the final check (sync 12).
+        const paused = pausingSync(context, 12, () =>
           runtime.run(async (other) => {
             other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
             await other.sync();
@@ -198,9 +198,9 @@ describe('a failed write rolls back the writes before it', () => {
     const original = 'Alpha beta gamma delta.';
     const { value } = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      // The write lands at sync 8; the read of its revisions at sync 9 then fails, so the helper
+      // The write lands at sync 9; the read of its revisions at sync 10 then fails, so the helper
       // never learns which changes it made. The rollback must not report success.
-      const draft = await prepareRewrite(failingSync(context, 9), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 10), paragraph);
       const error = await rejection(draft.apply('Alpha beta gamma DELTA.'));
       return { error, after: await readBack(context, paragraph) };
     });
@@ -211,11 +211,11 @@ describe('a failed write rolls back the writes before it', () => {
 
   test('a failure to turn tracking off again never replaces the result or the error', async () => {
     const original = 'Alpha beta gamma delta.';
-    // Every sync from the twelfth fails: the write and the check succeed (7 to 11), and turning
+    // Every sync from the thirteenth fails: the write and the check succeed (8 to 12), and turning
     // tracking off again fails. The proposal stands.
     const success = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      const draft = await prepareRewrite(failingSync(context, 12, true), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 13, true), paragraph);
       const result = await draft.apply('Alpha beta gamma DELTA.');
       context.document.load('changeTrackingMode');
       await context.sync();
@@ -224,10 +224,10 @@ describe('a failed write rolls back the writes before it', () => {
     expect(success.value.result.proposed).toBe('Alpha beta gamma DELTA.');
     expect(success.value.mode).toBe('TrackMineOnly');
 
-    // A refused second hunk (sync 11), a rollback (12 to 16), then turning tracking off fails.
+    // A refused second hunk (sync 12), a rollback (13 to 17), then turning tracking off fails.
     const failure = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      const draft = await prepareRewrite(failingSync(context, 17, true), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 18, true), paragraph);
       return rejection(draft.apply('Alpha be\u000Eta gamma DELTA.'));
     });
     expect(failure.value).toMatchObject({ code: 'write-failed' });
@@ -340,7 +340,7 @@ describe('retries', () => {
     try {
       let calls = 0;
       const error = await runtime.run(async (context) => {
-        const paused = pausingSync(context, 11, () =>
+        const paused = pausingSync(context, 12, () =>
           runtime.run(async (other) => {
             other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
             await other.sync();

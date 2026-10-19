@@ -13,6 +13,8 @@ export function proposeRewrite(context: RequestContext, paragraph: Paragraph, re
 // @public
 export interface ProposeRewriteOptions extends RewriteOptions {
     readonly retries?: number;
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
 }
 
 // @public
@@ -21,6 +23,11 @@ export function proposeRewrites(context: RequestContext, items: readonly Rewrite
 // @public
 export interface ProposeRewritesOptions extends ProposeRewriteOptions {
     readonly concurrency?: number;
+}
+
+// @public
+export interface RewriteCall {
+    readonly signal: AbortSignal;
 }
 
 // @public
@@ -46,7 +53,7 @@ export class RewriteError extends Error {
 }
 
 // @public
-export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'model-failed' | 'context-used' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
+export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'model-failed' | 'context-used' | 'aborted' | 'busy' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
 
 // @public
 export interface RewriteFeedback {
@@ -55,7 +62,7 @@ export interface RewriteFeedback {
 }
 
 // @public
-export type RewriteFunction = (draft: RewriteDraft) => string | Promise<string>;
+export type RewriteFunction = (draft: RewriteDraft, call: RewriteCall) => string | Promise<string>;
 
 // @public
 export interface RewriteItem {

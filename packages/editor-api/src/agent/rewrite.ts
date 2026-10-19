@@ -32,6 +32,7 @@ import {
   type RewritePlaceholder,
 } from './rewrite-plan.ts';
 import type { RewriteDraft, RewriteOptions, RewriteResult } from './rewrite-types.ts';
+import { assertNothingQueued, exclusive } from './rewrite-guard.ts';
 import { readUnits } from './rewrite-units.ts';
 import {
   rollback,
@@ -43,15 +44,24 @@ import {
 
 const AUTHOR_HOOK = Symbol.for('@docx-editor.dev/editor-api/author');
 
-/** Each prepared draft's check of a model answer, for the helpers that answer before writing. */
-const validators = new WeakMap<RewriteDraft, (modelText: string) => void>();
+/** Each prepared draft's internals, for the helpers that answer before writing. */
+const internals = new WeakMap<
+  RewriteDraft,
+  { readonly validate: (modelText: string) => void; readonly apply: RewriteDraft['apply'] }
+>();
 
 /**
  * Check a model answer against a prepared draft without writing: throws the model error that
  * `apply()` would throw before it writes.
  */
 export function validateAnswer(draft: RewriteDraft, modelText: string): void {
-  validators.get(draft)?.(modelText);
+  internals.get(draft)?.validate(modelText);
+}
+
+/** Apply an answer from inside a helper call that already holds the context. */
+export function applyHeld(draft: RewriteDraft, modelText: string): Promise<RewriteResult> {
+  const held = internals.get(draft);
+  return held ? held.apply(modelText) : draft.apply(modelText);
 }
 
 /** The runtime's author, from the request context's hook. */
@@ -93,6 +103,16 @@ export async function prepareRewrite(
   paragraph: Paragraph,
   options: RewriteOptions = {}
 ): Promise<RewriteDraft> {
+  return exclusive(context, () => prepareHeld(context, paragraph, options));
+}
+
+/** {@link prepareRewrite} from inside a helper call that already holds the context. */
+export async function prepareHeld(
+  context: RequestContext,
+  paragraph: Paragraph,
+  options: RewriteOptions
+): Promise<RewriteDraft> {
+  assertNothingQueued(context);
   const author = authorOf(context);
   if (author === undefined) {
     throw new RewriteError(
@@ -128,7 +148,7 @@ export async function prepareRewrite(
   /** The answer's hunks and the text it should read as, or the model error it breaks. */
   const plan = (modelText: string): { output: string; hunks: Hunk[]; expected: string } => {
     const output = String(modelText).trim();
-    checkOutput(output, placeholders, keepPlaceholders, syntax);
+    checkOutput(output, placeholders, keepPlaceholders, syntax, original);
     const hunks = hunksOf(units, output, syntax);
     const expected = expandedOutput(output, placeholders, syntax);
     // Only spacing an atom keeps can differ without a hunk, and the helper cannot write it.
@@ -166,7 +186,8 @@ export async function prepareRewrite(
     }
   };
 
-  const apply = async (modelText: string): Promise<RewriteResult> => {
+  const applyNow = async (modelText: string): Promise<RewriteResult> => {
+    assertNothingQueued(context);
     if (used) {
       throw new RewriteError(
         'draft-used',
@@ -200,8 +221,8 @@ export async function prepareRewrite(
     text,
     placeholders,
     prompt: promptOf(text, placeholders, options.instruction, syntax),
-    apply,
+    apply: (modelText) => exclusive(context, () => applyNow(modelText)),
   };
-  validators.set(draft, (modelText) => void plan(modelText));
+  internals.set(draft, { validate: (modelText) => void plan(modelText), apply: applyNow });
   return draft;
 }

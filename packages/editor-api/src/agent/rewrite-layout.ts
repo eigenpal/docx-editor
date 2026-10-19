@@ -21,10 +21,19 @@ export const LINE_BREAK = String.fromCharCode(0x0b);
 /** What the layout needs to know about one word range. */
 export interface LayoutWord {
   readonly text: string;
-  /** The texts of the locked content controls the word overlaps, in order. */
-  readonly controls: readonly string[];
+  /**
+   * The locked content controls the word overlaps, in order: each control's text, and where it
+   * starts in the word as its range reads, or null when that is not known.
+   */
+  readonly controls: readonly LayoutControl[];
   /** How many fields the word overlaps. */
   readonly fields: number;
+}
+
+/** A locked content control in a word. */
+export interface LayoutControl {
+  readonly text: string;
+  readonly start: number | null;
 }
 
 /** Where an atom comes from: a word's locked control, or a word's object character. */
@@ -137,8 +146,11 @@ function layoutCluster(words: readonly LayoutWord[], first: number): Cluster {
       }
     }
     for (; control < word.controls.length; control += 1) {
-      const text = word.controls[control]!;
-      const at = word.text.indexOf(text, cursor);
+      const { text, start } = word.controls[control]!;
+      // Where the control's range starts, when the range said so; its text can also occur
+      // earlier in the word, as in `AcmeAcme` before a control that reads `Acme`.
+      const placed = start !== null && start >= cursor && word.text.startsWith(text, start);
+      const at = placed ? start : start === null ? word.text.indexOf(text, cursor) : -1;
       if (at >= 0) {
         atoms.push({
           start: offset + at,
@@ -149,7 +161,10 @@ function layoutCluster(words: readonly LayoutWord[], first: number): Cluster {
         continue;
       }
       // The control goes on past this word: the word ends with the control's first part.
-      const from = spanStart(word.text, text, cursor);
+      const from =
+        start !== null && start >= cursor && text.startsWith(word.text.slice(start))
+          ? start
+          : spanStart(word.text, text, cursor);
       if (from < 0 || control !== word.controls.length - 1) {
         return { kind: 'whole', first, last };
       }

@@ -34,8 +34,8 @@ The `@docx-editor.dev/editor-api/agent` entry holds helpers next to the object m
 
 | Public symbol | Members or values | Guide |
 | --- | --- | --- |
-| `proposeRewrite`, `proposeRewrites`, `prepareRewrite` | Propose a model's rewrite of a paragraph as the fewest tracked changes; `RewriteOptions`, `ProposeRewriteOptions`, and `ProposeRewritesOptions` take `instruction`, `keepPlaceholders`, `retries`, and `concurrency` | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
-| `RewriteDraft`, `RewriteResult`, `RewriteSettledResult`, `RewriteItem`, `RewriteFunction`, `RewriteFeedback`, `RewritePlaceholder`, `RewritePlaceholderKind` | Plain data: `prompt`, `text`, `placeholders`, `feedback`, and `apply()` on a draft; `original`, `proposed`, `changes`, and `paragraphId` on a result | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
+| `proposeRewrite`, `proposeRewrites`, `prepareRewrite` | Propose a model's rewrite of a paragraph as the fewest tracked changes; `RewriteOptions`, `ProposeRewriteOptions`, and `ProposeRewritesOptions` take `instruction`, `keepPlaceholders`, `retries`, `signal`, `timeoutMs`, and `concurrency` | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
+| `RewriteDraft`, `RewriteResult`, `RewriteSettledResult`, `RewriteItem`, `RewriteFunction`, `RewriteCall`, `RewriteFeedback`, `RewritePlaceholder`, `RewritePlaceholderKind` | Plain data: `prompt`, `text`, `placeholders`, `feedback`, and `apply()` on a draft; `original`, `proposed`, `changes`, and `paragraphId` on a result | [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) |
 | `RewriteError`, `RewriteErrorCode` | `code`, `isModelError`, `cause`, `suppressed` | [Handle errors](/docs/2.x/recipes/propose-rewrite#handle-errors) |
 
 ## Document and text objects

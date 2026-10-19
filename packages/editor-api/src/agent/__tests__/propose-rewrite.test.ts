@@ -219,6 +219,7 @@ describe('proposeRewrite', () => {
   test('keeps the tracking mode the caller set', async () => {
     const { value } = await withRuntime(docx(p('Pay the fee now.')), async (context) => {
       context.document.changeTrackingMode = 'TrackMineOnly';
+      await context.sync();
       await proposeRewrite(context, await firstParagraph(context), () => 'Pay the fee today.');
       context.document.load('changeTrackingMode');
       await context.sync();

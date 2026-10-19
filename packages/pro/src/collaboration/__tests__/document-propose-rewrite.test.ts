@@ -86,10 +86,10 @@ for (const [where, edit] of [
       };
       const failure = await alice!.runtime
         .run(async (context) => {
-          // Syncs 1 to 4 prepare, 5 and 6 turn tracking on, and 7 lists the revisions. The last
-          // hunk writes at 8 and reads back at 9 and 10; the participant edits before sync 11,
+          // Syncs 1 to 5 prepare, 6 and 7 turn tracking on, and 8 lists the revisions. The last
+          // hunk writes at 9 and reads back at 10 and 11; the participant edits before sync 12,
           // which writes the first hunk.
-          const paused = interrupted(context, 11, peerEdit);
+          const paused = interrupted(context, 12, peerEdit);
           const draft = await prepareRewrite(paused, paused.document.body.paragraphs.getFirst());
           await draft.apply(MODEL);
         })
@@ -139,7 +139,7 @@ test('a participant with the same author keeps their change when the rewrite rol
     try {
       const failure = await alice!.runtime
         .run(async (context) => {
-          const paused = interrupted(context, 11, async () => {
+          const paused = interrupted(context, 12, async () => {
             await twin.runtime.run(async (other) => {
               other.document.changeTrackingMode = 'TrackMineOnly';
               other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
