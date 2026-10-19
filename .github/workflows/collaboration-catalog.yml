@@ -35,7 +35,7 @@ jobs:
       recorded: ${{ steps.capture.outputs.recorded }}
       version: ${{ steps.capture.outputs.version }}
     steps:
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         id: token
         with:
           app-id: ${{ secrets.RELEASE_PAL_APP_ID }}
@@ -142,7 +142,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/collaboration/catalog-merge.mjs wait
-      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510
         if: steps.checks.outputs.head != ''
         id: token
         with:
