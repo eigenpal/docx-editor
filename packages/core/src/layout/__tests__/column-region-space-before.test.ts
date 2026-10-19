@@ -69,12 +69,12 @@ function inside(layout: Layout): void {
 const rightOpening = (before = 13) =>
   load(paragraph('LEFT', 110) + paragraph('RIGHT', 20, before) + section());
 
-test('a natural right-column opening drops the old thirteen-point region-top gap', () => {
+test('a natural right-column opening retains authored space below the region top', () => {
   const part = rightOpening();
   const current = lay(part);
   const right = at(current, 'RIGHT');
-  expect(right.fragment.spacing.before).toBe(0);
-  expect(right.line.box.y).toBeCloseTo(50, 8);
+  expect(right.fragment.spacing.before).toBe(13);
+  expect(right.line.box.y).toBeCloseTo(63, 8);
   expect(right.line.box.x).toBeGreaterThan(at(current, 'LEFT').line.box.x);
   expect(right.pageIndex).toBe(0);
   expect(current.pages).toHaveLength(1);
@@ -101,7 +101,7 @@ test('a later paragraph in an occupied right column still collapses authored bef
   const current = lay(part);
   const first = at(current, 'RIGHT-FIRST');
   const second = at(current, 'RIGHT-SECOND');
-  expect(first.fragment.spacing.before).toBe(0);
+  expect(first.fragment.spacing.before).toBe(13);
   expect(first.fragment.spacing.after).toBe(5);
   expect(second.fragment.spacing.before).toBe(8);
   expect(second.line.box.y - (first.line.box.y + first.line.box.height)).toBeCloseTo(13, 8);
@@ -110,7 +110,7 @@ test('a later paragraph in an occupied right column still collapses authored bef
   inside(current);
 });
 
-test('both later columns of a three-column continued region suppress only their opening gap', () => {
+test('later columns of a three-column continued region retain their opening space', () => {
   const part = load(
     paragraph('LEFT', 110) + paragraph('MIDDLE', 110, 13) + paragraph('RIGHT', 20, 13) + section(3)
   );
@@ -118,37 +118,49 @@ test('both later columns of a three-column continued region suppress only their 
   const left = at(current, 'LEFT');
   const middle = at(current, 'MIDDLE');
   const right = at(current, 'RIGHT');
-  expect(middle.fragment.spacing.before).toBe(0);
-  expect(right.fragment.spacing.before).toBe(0);
-  expect(middle.line.box.y).toBeCloseTo(50, 8);
-  expect(right.line.box.y).toBeCloseTo(50, 8);
+  expect(middle.fragment.spacing.before).toBe(13);
+  expect(right.fragment.spacing.before).toBe(13);
+  expect(middle.line.box.y).toBeCloseTo(63, 8);
+  expect(right.line.box.y).toBeCloseTo(63, 8);
   expect(middle.line.box.x).toBeGreaterThan(left.line.box.x);
   expect(right.line.box.x).toBeGreaterThan(middle.line.box.x);
   expect(current.pages).toHaveLength(1);
   inside(current);
 });
 
-test('a keep-next head and its opening body fit the fresh right-region band without another page', () => {
-  // Content bottom is 180. The fresh column has 35pt: 20 + 14 fits,
-  // while retaining the 13pt head gap would incorrectly require 47pt.
+test('a keep-next group retains authored opening space in a later column', () => {
   const part = load(
     paragraph('LEFT', 20) +
       paragraph('HEAD', 20, 13, 0, '<w:keepNext/>') +
       paragraph('BODY', 14) +
       section()
   );
-  const current = lay(part, 145);
+  // A fresh continued column has 50pt. The group needs 47pt with its spacing.
+  const current = lay(part, 130);
   const head = at(current, 'HEAD');
   const body = at(current, 'BODY');
-  expect(head.fragment.spacing.before).toBe(0);
-  expect(head.line.box.y).toBeCloseTo(145, 8);
-  expect(head.line.box.x).toBeGreaterThan(at(current, 'LEFT').line.box.x);
-  expect(body.line.box.x).toBeCloseTo(head.line.box.x, 8);
-  expect(body.line.box.y).toBeCloseTo(head.line.box.y + head.line.box.height, 8);
   expect(head.pageIndex).toBe(0);
   expect(body.pageIndex).toBe(0);
+  expect(head.fragment.spacing.before).toBe(13);
+  expect(head.line.box.y).toBe(143);
+  expect(head.line.box.x).toBeGreaterThan(at(current, 'LEFT').line.box.x);
+  expect(body.line.box.y).toBeCloseTo(head.line.box.y + head.line.box.height, 8);
   expect(current.pages).toHaveLength(1);
   inside(current);
+});
+
+test.each([14, 15])(
+  'continued-column spacing remains authored in compatibility mode %i',
+  (mode) => {
+    const current = lay(rightOpening(), 50, { compatibilityMode: mode });
+    expect(at(current, 'RIGHT').fragment.spacing.before).toBe(13);
+    expect(at(current, 'RIGHT').line.box.y).toBeCloseTo(63, 8);
+  }
+);
+
+test('a fresh page still suppresses natural opening space', () => {
+  const current = lay(rightOpening(), 0);
+  expect(at(current, 'LEFT').line.box.y).toBe(0);
 });
 
 test('explicit page-break spacing retains the compatibility rule', () => {
@@ -190,8 +202,8 @@ test('an authored spacing edit agrees between warm and cold layout', () => {
   const warm = lay(edited, 50, { session }, 2);
   const cold = lay(edited, 50, {}, 2);
   expect(warm.pages).toEqual(cold.pages);
-  expect(at(warm, 'RIGHT').fragment.spacing.before).toBe(0);
-  expect(at(warm, 'RIGHT').line.box.y).toBeCloseTo(50, 8);
+  expect(at(warm, 'RIGHT').fragment.spacing.before).toBe(17);
+  expect(at(warm, 'RIGHT').line.box.y).toBeCloseTo(67, 8);
   expect(JSON.stringify(edited)).toBe(source);
   inside(warm);
 });

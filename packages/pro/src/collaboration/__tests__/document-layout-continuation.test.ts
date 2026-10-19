@@ -144,7 +144,11 @@ test.each(fixtures)(
       const paragraphs = a
         .surface!.layout()
         .pages[0]!.fragments.filter((block) => block.kind === 'paragraph');
-      expect(paragraphs[1]!.box.y).toBeCloseTo(paragraphs[0]!.box.y + paragraphs[0]!.box.height, 6);
+      const table = a
+        .surface!.layout()
+        .pages[0]!.fragments.find((block) => block.kind === 'table')!;
+      expect(paragraphs[1]!.box.y).toBeCloseTo(table.box.y + table.box.height, 6);
+      expect(paragraphs[2]!.box.y).toBeCloseTo(paragraphs[1]!.box.y + paragraphs[1]!.box.height, 6);
     }
     if (name === 'column spacing') {
       const blocks = a.surface!.layout().pages[0]!.fragments;
@@ -155,8 +159,8 @@ test.each(fixtures)(
       );
       expect(target?.kind).toBe('paragraph');
       if (target?.kind === 'paragraph') {
-        expect(target.spacing.before).toBe(0);
-        expect(target.box.y).toBeCloseTo(50, 6);
+        expect(target.spacing.before).toBe(13);
+        expect(target.lines[0]!.box.y).toBeCloseTo(63, 6);
         expect(target.box.x).toBeGreaterThan(0);
       }
     }

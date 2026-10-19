@@ -1170,10 +1170,6 @@ function* layoutBlocksPass(
   let cursorY = flowStartY;
   // A continuous section can open its column region below content already on the sheet.
   let columnRegionTop = flowStartY;
-  // Later columns can start below a full-width prefix on the same sheet.
-  // Keep the first column's authored spacing when it resumes prior content.
-  const atParagraphRegionStart = (): boolean =>
-    (cursorY === 0 || (columnIndex > 0 && cursorY === columnRegionTop)) && !regionHasFragments();
   let flowColumnIndex = 0;
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
@@ -1541,7 +1537,7 @@ function* layoutBlocksPass(
       paragraphSpaceBefore = appliedSpaceBefore(
         before,
         previousSpaceAfter,
-        atParagraphRegionStart(),
+        cursorY === 0 && !regionHasFragments(),
         keepsBeforeAtPageStart(entryIndex, entry)
       );
       paragraphStartY +=
@@ -2194,7 +2190,7 @@ function* layoutBlocksPass(
       }
     }
 
-    const atTopOfPage = atParagraphRegionStart();
+    const atTopOfPage = cursorY === 0 && !regionHasFragments();
     // Lines holding only a leading page break take no space before and draw no rule. Both
     // open the text after the breaks, on its own sheet.
     let breakLinesOnly = !frame && leadingBreak();
