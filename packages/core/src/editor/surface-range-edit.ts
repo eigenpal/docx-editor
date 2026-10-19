@@ -205,6 +205,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       direction,
       shown,
       controlBeside: inlineControlBeside,
+      tracked: deps.trackedAuthorOrNone() !== undefined,
     });
   }
 
@@ -255,7 +256,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // every reader below sees either a non-empty author or undefined, never a blank.
     const author = trackedAuthor?.trim() || undefined;
     const plan = withEnclosedBookmarks(
-      rangeDeletionPlan(),
+      rangeDeletionPlan(author !== undefined || deps.trackedAuthorOrNone() !== undefined),
       !author && deps.editingMode() !== 'suggest'
     );
     // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
@@ -288,7 +289,9 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     return drops.length === 0 ? plan : { ...plan, ops: [...drops, ...plan.ops] };
   }
 
-  function rangeDeletionPlan(): RangeDeletionPlan {
+  function rangeDeletionPlan(
+    tracked = deps.trackedAuthorOrNone() !== undefined
+  ): RangeDeletionPlan {
     // Every edit op builds its plan from here first, so this is where queued
     // typing must land: a plan computed against the pre-buffer selection would
     // edit beside text the user has already typed. The plan reads `currentLayout`
@@ -328,7 +331,8 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       from,
       to,
       deps.paragraphOrder(),
-      deps.revisionView()
+      deps.revisionView(),
+      tracked
     );
   }
 

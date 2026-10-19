@@ -257,6 +257,11 @@ export interface TreeOpTarget {
   readonly structural?: boolean;
   /** The node and everything under it goes away, so removal locks apply. */
   readonly removes?: boolean;
+  /**
+   * A tracked deletion: a `contentLocked` control the range wholly covers is proposed for
+   * removal as a whole, so it is asked the removal question, not the edit one.
+   */
+  readonly strikesCovered?: boolean;
 }
 
 /** A point at which content is written: the leading edge of a control belongs to the control. */
@@ -343,7 +348,19 @@ const TREE_OP_REACH: {
           intent: 'value',
           at: { paragraphId: op.paragraphId, offset: op.offset },
         },
-  deleteText: (op) => over(op.paragraphId, op.start, op.end),
+  deleteText: (op) =>
+    op.revision === undefined
+      ? over(op.paragraphId, op.start, op.end)
+      : {
+          kind: 'nodes',
+          targets: [
+            {
+              nodeId: op.paragraphId,
+              range: { start: op.start, end: op.end },
+              strikesCovered: true,
+            },
+          ],
+        },
   insertTab: (op) => writingAt(op.paragraphId, op.offset),
   insertHardBreak: (op) => writingAt(op.paragraphId, op.offset),
   insertPageBreak: (op) => writingAt(op.paragraphId, op.offset),
@@ -801,17 +818,44 @@ export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach
         target.structural === true ||
         (target.range !== undefined && intersects(span, target.range, target.writes === true));
       if (!affected) continue;
+      const locks = [...inherited, ...locksOf([...entry.ancestors, entry.node])];
+      const removed =
+        target.removes === true ||
+        (target.strikesCovered === true &&
+          target.range !== undefined &&
+          strikesWholeControl(span, target.range, resolveContentControlLock(locks)));
       touches.push({
         control: entry.node,
-        locks: [...inherited, ...locksOf([...entry.ancestors, entry.node])],
-        removed: target.removes === true,
+        locks,
+        removed,
         discarded: false,
-        ...(target.removes === true ? { survivingLocks: inherited } : {}),
+        ...(removed ? { survivingLocks: inherited } : {}),
       });
     }
     if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
   }
   return { touches, unprotected };
+}
+
+/**
+ * Whether a tracked deletion over `range` strikes this control WHOLE: the range covers all of
+ * it, and its lock forbids editing what it holds but allows removing it (`contentLocked`).
+ * The tracked-delete applier writes such a control inside one `w:del`; every other control is
+ * struck from inside, as before.
+ */
+export function strikesWholeControl(
+  span: OffsetSpan | null,
+  range: { readonly start: number; readonly end: number },
+  lock: ContentControlLock
+): boolean {
+  return (
+    span !== null &&
+    span.start < span.end &&
+    range.start <= span.start &&
+    span.end <= range.end &&
+    lockForbidsEdit(lock) &&
+    !lockForbidsRemoval(lock)
+  );
 }
 
 /**

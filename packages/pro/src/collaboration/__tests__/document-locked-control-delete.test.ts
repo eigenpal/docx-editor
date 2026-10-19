@@ -164,6 +164,37 @@ test('an sdtContentLocked control is selected, then refused, for both peers', as
   expect(alice.surface!.session.bodyText()).toContain('Bother');
 });
 
+test('a suggested deletion of the control converges and either decision lands everywhere', async () => {
+  for (const decision of ['reject', 'accept'] as const) {
+    const { pair, alice, bob, flush, converge } = await peers();
+    alice.surface!.setEditingMode('suggest');
+    alice.surface!.setAuthor('Alice');
+    pair.pause();
+    const first = alice.surface!.session.paragraphIds()[0]!;
+    alice.surface!.setSelection({
+      anchor: { paragraphId: first, offset: 4 },
+      head: { paragraphId: first, offset: 11 },
+    });
+    alice.surface!.deleteBackward();
+    expect(alice.surface!.state().lastRejection ?? null).toBeNull();
+    caret(bob, 0, 1);
+    bob.surface!.type('B');
+    flush();
+    pair.resume();
+    converge();
+    // Proposed, not gone: the chip stays, its text struck.
+    expect(chipText(bob)).not.toBeNull();
+    expect(
+      bob.surface!.session.applyTreeOps([
+        { op: decision === 'accept' ? 'acceptAllRevisions' : 'rejectAllRevisions' },
+      ]).committed
+    ).toBe(true);
+    converge();
+    expect(chipText(alice)).toBe(decision === 'accept' ? null : 'IGLOO');
+    expect(alice.surface!.session.bodyText()).toContain('Bother');
+  }
+});
+
 test('a range across paragraphs removes the control and converges with a peer edit', async () => {
   const { pair, alice, bob, flush, converge } = await peers();
   pair.pause();

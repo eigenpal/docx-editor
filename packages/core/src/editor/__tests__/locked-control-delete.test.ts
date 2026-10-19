@@ -11,6 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
+import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
 import type { LockedControlNavigation } from '../paginated-surface-options.ts';
 
@@ -218,22 +219,38 @@ for (const mode of MODES) {
 describe('suggesting', () => {
   const suggesting = { editingMode: 'suggest' as const, author: 'Reviewer' };
 
-  test('a selection that covers a contentLocked control is refused, not removed untracked', () => {
+  /** The control wrapped whole in one proposal, struck text and all. */
+  const struckWhole = (m: Mounted): boolean =>
+    /<w:del [^>]*>(?:(?!<\/w:del>).)*<w:sdt>(?:(?!<\/w:del>).)*<w:delText>Token<\/w:delText>/.test(
+      serializeOoxmlPart(m.surface.session.part())
+    );
+
+  test('a selection that covers a contentLocked control proposes deleting it whole', () => {
     const m = mount(line('contentLocked'), null, suggesting);
     caretAt(m, 1, 8);
     m.surface.deleteBackward();
-    expect(rejection(m)).not.toBeNull();
-    expect(bodyText(m)).toBe('aaTokenzz');
+    expect(rejection(m)).toBeNull();
+    // A proposal: the text stays until it is decided.
     expect(controls(m)).toBe(1);
+    expect(struckWhole(m)).toBe(true);
   });
 
-  test('the second Backspace beside a contentLocked control is refused', () => {
+  test('the second Backspace beside a contentLocked control proposes deleting it whole', () => {
     const m = mount(line('contentLocked'), null, suggesting);
     caretAt(m, 7);
     m.surface.deleteBackward();
+    expect(offsets(m)).toEqual([7, 2]);
+    m.surface.deleteBackward();
+    expect(rejection(m)).toBeNull();
+    expect(struckWhole(m)).toBe(true);
+  });
+
+  test('an sdtContentLocked control is still refused', () => {
+    const m = mount(line('sdtContentLocked'), null, suggesting);
+    caretAt(m, 1, 8);
     m.surface.deleteBackward();
     expect(rejection(m)).not.toBeNull();
-    expect(controls(m)).toBe(1);
+    expect(serializeOoxmlPart(m.surface.session.part())).not.toContain('<w:del ');
   });
 });
 

@@ -3,12 +3,19 @@ import {
   LINE_BREAK_TEXT,
   propertiesHoldLineBreaks,
 } from './tree-op-inline-elements.ts';
-import { contentControlPropertiesOf } from '../package/content-control-nodes.ts';
+import {
+  contentControlPropertiesOf,
+  contentControlsIn,
+  resolveContentControlLock,
+} from '../package/content-control-nodes.ts';
+import { paragraphOffsetIndex } from './tree-op-segments.ts';
 import { canTrackContentControl } from './tracked-content-control-insert.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import {
+  enclosingContentControls,
   INSERTABLE_CONTENT_CONTROL_TYPES,
   isWritableContentControlMetadata,
+  strikesWholeControl,
 } from './tree-op-content-controls.ts';
 import { invalidRevisionAttribution, type TreeDocOp } from './tree-op-types.ts';
 import {
@@ -142,7 +149,7 @@ export function rangeTouchesContentRestriction(
   paragraph: OoxmlParagraphNode,
   start: number,
   end: number,
-  { bias, restyle = false }: ContentEditCheck = {}
+  { bias, restyle = false, struckWhole }: ContentEditCheck = {}
 ): TreeOpRejection | null {
   // The landing resolver moved this insert out of where the run rule below would put it, so
   // validate the place it actually lands.
@@ -182,11 +189,19 @@ export function rangeTouchesContentRestriction(
     if (at) overlappingRunIds.add(at.runId);
   }
   for (const runId of overlappingRunIds) {
+    // A run inside a control struck WHOLE is not edited: the control is. The lock check on its
+    // reach asks that control the removal question and its enclosing controls the edit one.
+    if (
+      struckWhole?.size &&
+      contentControlAncestorsOf(part, runId).some((c) => struckWhole.has(c.id))
+    ) {
+      continue;
+    }
     if (isBoundAt(part, runId)) return 'bound';
     if (!restyle && effectiveContentLockAt(part, runId).content) return 'locked';
   }
   const control = contentControlAtCaret(part, paragraph, start, end, bias);
-  if (control) {
+  if (control && !struckWhole?.has(control.id)) {
     if (
       isBoundContentControl(control) ||
       contentControlAncestorsOf(part, control.id).some(isBoundContentControl)
@@ -214,6 +229,31 @@ export function holds(node: OoxmlNode, id: string): boolean {
 export interface ContentEditCheck {
   readonly bias?: 'left' | 'right' | undefined;
   readonly restyle?: boolean;
+  /** Controls a tracked deletion strikes whole; see {@link controlsStruckWhole}. */
+  readonly struckWhole?: ReadonlySet<string>;
+}
+
+/** The controls a tracked deletion of `[start, end)` strikes whole, by node id. */
+export function controlsStruckWhole(
+  part: OoxmlPart,
+  paragraph: OoxmlParagraphNode,
+  start: number,
+  end: number
+): ReadonlySet<string> {
+  const inside = contentControlsIn(paragraph);
+  if (inside.length === 0) return new Set();
+  const offsets = paragraphOffsetIndex(paragraph);
+  const struck = new Set<string>();
+  for (const entry of inside) {
+    const locks = enclosingContentControls(part, entry.node.id).map(
+      (control) => contentControlPropertiesOf(control).lock
+    );
+    const lock = resolveContentControlLock(locks);
+    if (strikesWholeControl(offsets.spanOf(entry.node), { start, end }, lock)) {
+      struck.add(entry.node.id);
+    }
+  }
+  return struck;
 }
 
 /** Refuse a content-bearing edit that would rewrite a locked or bound region. */

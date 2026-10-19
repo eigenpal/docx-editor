@@ -50,6 +50,11 @@ export interface AtomicControlDeletionInput {
     position: SemanticPosition,
     side: 'before' | 'after'
   ) => InlineControlBesideCaret | null;
+  /**
+   * The deletion is tracked. A removal is then a tracked deletion of the control's characters,
+   * which the store writes as one proposal holding the whole control.
+   */
+  readonly tracked?: boolean;
 }
 
 function contentLockedInline(control: ContentControlBoundaryRecord): boolean {
@@ -116,6 +121,8 @@ export function atomicControlDeletion(
   const { anchor, head } = input.selection;
   if (anchor.paragraphId !== head.paragraphId) return null;
   if (anchor.offset !== head.offset) {
+    // A tracked range deletion is planned as text: the store strikes a covered control whole.
+    if (input.tracked) return null;
     const [from, to] = anchor.offset < head.offset ? [anchor, head] : [head, anchor];
     const ops = coveredLockedControlOps(input.layout, from, to);
     return ops ? { kind: 'remove', ops, collapseTo: from } : null;
@@ -134,7 +141,16 @@ export function atomicControlDeletion(
   }
   return {
     kind: 'remove',
-    ops: [{ op: 'removeContentControl', controlId: control.controlId, keepContent: false }],
+    ops: input.tracked
+      ? [
+          {
+            op: 'deleteText',
+            paragraphId: position.paragraphId,
+            start: control.start,
+            end: control.end,
+          },
+        ]
+      : [{ op: 'removeContentControl', controlId: control.controlId, keepContent: false }],
     collapseTo: backward ? start : position,
   };
 }

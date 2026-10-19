@@ -19,6 +19,11 @@ import {
 } from '../package/ooxml-edit.ts';
 import { isFldSimple } from '../package/field-nodes.ts';
 import { isOmmlEquationAtom } from '../package/omml-display.ts';
+import {
+  contentControlPropertiesOf,
+  resolveContentControlLock,
+} from '../package/content-control-nodes.ts';
+import { strikesWholeControl } from './tree-op-content-controls.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
@@ -118,6 +123,8 @@ export function applyDeleteTracked(
     node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));
 
   let exceedsDepth = false;
+  // A wholly struck control that already holds a revision: a `w:del` cannot hold a `w:ins`.
+  let strikesRevisedControl = false;
   const strike = (nodes: readonly OoxmlNode[], depth: number): OoxmlNode => {
     // A JOINED deletion is this transaction's strike too, though it minted nothing — a
     // replacement over words abutting a strike from a moment ago belongs after all of them.
@@ -173,6 +180,27 @@ export function applyDeleteTracked(
         cursor.offset = to;
         out.push(node);
         continue;
+      }
+
+      // A `contentLocked` control the range wholly covers is proposed for removal as a WHOLE:
+      // the `w:sdt` goes inside one `w:del`, so accepting removes the control and rejecting
+      // restores it. Striking its text from inside would edit content the lock protects.
+      if (node.kind === 'contentControl' && !insideDeletion(stack)) {
+        const locks = [...stack, node]
+          .filter((owner) => owner.kind === 'contentControl')
+          .map((owner) => contentControlPropertiesOf(owner).lock);
+        const span = { start: from, end: to };
+        if (strikesWholeControl(span, { start, end }, resolveContentControlLock(locks))) {
+          cursor.offset = to;
+          // The author's own proposal is taken back, not struck.
+          if (insertionAuthor(stack) === revision.author) continue;
+          if (holdsRevision(node)) {
+            strikesRevisedControl = true;
+            continue;
+          }
+          out.push(strike([deletedWhole(mint, node)], containerDepth));
+          continue;
+        }
       }
 
       if (
@@ -246,6 +274,9 @@ export function applyDeleteTracked(
 
   const children = mergedRevisions(mint, rebuild(paragraph.children, []));
   if (exceedsDepth) return { ok: false, reason: 'invalid-range' };
+  if (strikesRevisedControl) {
+    return { ok: false, reason: 'unsupported', detail: 'tracked-control-with-revisions' };
+  }
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
 }
 
@@ -315,6 +346,27 @@ function splitRunThree(
     covered: withProperties(covered),
     after: withProperties(after),
   };
+}
+
+/** Whether a revision wrapper sits anywhere inside the node. */
+function holdsRevision(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.children.some(
+      (child) =>
+        child.kind !== 'textValue' && (child.kind.startsWith('revision') || holdsRevision(child))
+    )
+  );
+}
+
+/** A whole subtree in its deleted form: every run inside it re-labelled by `toDeleted`. */
+function deletedWhole(mint: () => string, node: OoxmlNode): OoxmlNode {
+  if (node.kind === 'textValue') return node;
+  if (node.kind === 'run') return toDeleted(mint, node);
+  return {
+    ...node,
+    children: node.children.map((child) => deletedWhole(mint, child)),
+  } as OoxmlNode;
 }
 
 /** Re-label a run's text as deleted: `w:t` becomes `w:delText`, everything else stays. */

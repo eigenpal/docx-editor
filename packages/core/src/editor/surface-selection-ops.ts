@@ -445,17 +445,21 @@ export function planRangeDeletion(
   from: SemanticPosition,
   to: SemanticPosition,
   order?: readonly string[],
-  view: RevisionView = { displayMode: layout.displayMode ?? 'all-markup', authorFilter: undefined }
+  view: RevisionView = { displayMode: layout.displayMode ?? 'all-markup', authorFilter: undefined },
+  /** A tracked deletion: the store strikes a covered content-locked control whole. */
+  tracked = false
 ): RangeDeletionPlan {
   const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
   // A whole content-locked control in the range goes as a node, and only the text around it
   // as text: deleting its characters as text edits locked content, which the store refuses.
   const trimmed = (paragraphId: string, start: number, end: number): PlannedOp[] =>
-    coveredLockedControlOps(
-      layout,
-      { paragraphId, offset: start },
-      { paragraphId, offset: end }
-    ) ?? [{ op: 'deleteText', paragraphId, start, end }];
+    (tracked
+      ? null
+      : coveredLockedControlOps(
+          layout,
+          { paragraphId, offset: start },
+          { paragraphId, offset: end }
+        )) ?? [{ op: 'deleteText', paragraphId, start, end }];
   if (from.paragraphId === to.paragraphId) {
     if (from.offset === to.offset) return { ops: [], collapseTo: from };
     return { ops: trimmed(from.paragraphId, from.offset, to.offset), collapseTo: from };

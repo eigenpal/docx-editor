@@ -35,6 +35,7 @@ import {
   rejectContentEdit,
   nodeTouchesContentRestriction,
   validateRemoveContentControl,
+  controlsStruckWhole,
   enclosingContentLockRefusal,
   validateSetContentControlValue,
 } from './tree-op-validate-controls.ts';
@@ -832,7 +833,10 @@ export function validateTreeOp(
         const refusal = coveredTextFormDefinitionRefusal(part, paragraph, op.start, op.end);
         if (refusal) return refusal;
       }
-      return rejectContentEdit(part, paragraph, op.start, op.end);
+      const struck = op.revision && controlsStruckWhole(part, paragraph, op.start, op.end);
+      return rejectContentEdit(part, paragraph, op.start, op.end, {
+        struckWhole: struck || undefined,
+      });
     }
     case 'setRunProperties': {
       if (!Number.isInteger(op.start) || !Number.isInteger(op.end)) return 'invalid-range';
