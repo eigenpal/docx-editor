@@ -320,7 +320,7 @@ export interface PaginatedSurface {
    * caret-preserving edits (Backspace, Delete, Enter) and IME composition, and is
    * discarded when the caret moves elsewhere or the document is undone. A property the
    * store cannot author is refused at arm time rather than left to poison the keystroke.
-   * Returns the document's refusal reason, or null when the write landed or armed.
+   * Returns the document's refusal reason, or null when the write landed, armed, or did nothing.
    */
   toggleRunProperty(localName: string, attributes?: Record<string, string>): string | null;
   /**
