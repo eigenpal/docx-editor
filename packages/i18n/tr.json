@@ -952,6 +952,7 @@
     "legacyMerge": "Bu tablo burada değiştirilemeyen eski türde birleştirilmiş hücre kullanıyor",
     "tableGridUnplaceable": "Bu tabloda sütun ızgarasına sığmayan bir hücre var",
     "drawingLocked": "Bu resim kilitli",
+    "contentLocked": "Bu içerik kilitli",
     "editorNotReady": "Düzenleyici hazır değil",
     "imageSuggesting": "Öneri modunda resim değişiklikleri kullanılamaz",
     "equationSourceFormatting": "Doğrusal düzenleme bu denklemin biçimlendirmesini kaybeder",

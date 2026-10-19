@@ -952,6 +952,7 @@
     "legacyMerge": "Tabel ini memakai jenis sel gabungan lama yang tidak dapat diubah di sini",
     "tableGridUnplaceable": "Tabel ini memiliki sel yang tidak sesuai dengan kisi kolomnya",
     "drawingLocked": "Gambar ini dikunci",
+    "contentLocked": "Konten ini dikunci",
     "editorNotReady": "Editor belum siap",
     "imageSuggesting": "Perubahan gambar tidak tersedia dalam mode saran",
     "equationSourceFormatting": "Pengeditan linear akan menghilangkan format persamaan ini",

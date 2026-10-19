@@ -8,6 +8,7 @@
     "dismiss": "Descartar"
   },
   "disabledReason": {
+    "contentLocked": "Este contenido está bloqueado",
     "editorNotReady": "El editor no está listo",
     "notWired": "Este control no está conectado a un comando del editor",
     "viewing": "Este documento está abierto en modo de lectura",

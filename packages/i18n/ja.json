@@ -8,6 +8,7 @@
     "dismiss": "閉じる"
   },
   "disabledReason": {
+    "contentLocked": "このコンテンツはロックされています",
     "editorNotReady": "エディターの準備ができていません",
     "notWired": "このコントロールには編集コマンドが設定されていません",
     "viewing": "この文書は閲覧モードで開かれています",

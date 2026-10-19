@@ -952,6 +952,7 @@
     "legacyMerge": "הטבלה משתמשת בסוג ישן של תא ממוזג שאי אפשר לשנות כאן",
     "tableGridUnplaceable": "בטבלה יש תא שאינו מתאים לרשת העמודות שלה",
     "drawingLocked": "תמונה זו נעולה",
+    "contentLocked": "תוכן זה נעול",
     "editorNotReady": "העורך אינו מוכן",
     "imageSuggesting": "שינויים בתמונות אינם זמינים במצב הצעות",
     "equationSourceFormatting": "עריכה לינארית תאבד את העיצוב של משוואה זו",

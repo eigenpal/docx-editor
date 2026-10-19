@@ -5,6 +5,7 @@
 import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { ContentLockPolicy } from '../store/package/ooxml-edit.ts';
+import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import {
   contentControlPropertiesOf,
   contentControlsIn,
@@ -16,7 +17,7 @@ import { enclosingContentControls } from '../store/store/tree-op-content-control
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { findNode } from '../store/package/ooxml-edit.ts';
 import { paragraphsInCells } from '../layout/semantic-cell-selection.ts';
-import { partOfNodeId } from './surface-scope.ts';
+import { partOfNodeId, storyScopeOfNodeId } from './surface-scope.ts';
 
 export const LOCKED_FORMAT_REASON = 'this content is locked';
 
@@ -33,19 +34,26 @@ interface SelectedSpan {
   readonly end: number;
 }
 
-function selectedSpans(surface: PaginatedSurface): SelectedSpan[] | null {
+const WHOLE = Number.MAX_SAFE_INTEGER;
+
+/** The paragraphs a format write reaches, with the same coverage rule the writer uses. */
+function selectedSpans(surface: PaginatedSurface, caretCounts: boolean): SelectedSpan[] {
   const state = surface.state();
   const cells = state.cellSelection;
   if (cells) {
     return [...paragraphsInCells(surface.layout(), cells.cellIds)].map((paragraphId) => ({
       paragraphId,
       start: 0,
-      end: Number.MAX_SAFE_INTEGER,
+      end: WHOLE,
     }));
   }
   const { anchor, head } = state.selection;
   if (anchor.paragraphId === head.paragraphId) {
-    if (anchor.offset === head.offset) return null;
+    // A collapsed caret ARMS a run format for the next characters typed; only the eraser
+    // writes paragraph properties at a caret.
+    if (anchor.offset === head.offset) {
+      return caretCounts ? [{ paragraphId: head.paragraphId, start: 0, end: 0 }] : [];
+    }
     return [
       {
         paragraphId: anchor.paragraphId,
@@ -54,53 +62,67 @@ function selectedSpans(surface: PaginatedSurface): SelectedSpan[] | null {
       },
     ];
   }
-  const order = surface.session.paragraphIds();
+  const scope = storyScopeOfNodeId(surface.session, anchor.paragraphId, { kind: 'body' });
+  const order = surface.session.paragraphIdsIn(scope);
   const a = order.indexOf(anchor.paragraphId);
   const b = order.indexOf(head.paragraphId);
-  // A story the body order does not list: its endpoints are still asked.
   if (a === -1 || b === -1) {
     return [
-      { paragraphId: anchor.paragraphId, start: 0, end: Number.MAX_SAFE_INTEGER },
-      { paragraphId: head.paragraphId, start: 0, end: Number.MAX_SAFE_INTEGER },
+      { paragraphId: anchor.paragraphId, start: 0, end: WHOLE },
+      { paragraphId: head.paragraphId, start: 0, end: WHOLE },
     ];
   }
   const [from, to] = a < b ? [anchor, head] : [head, anchor];
   const [first, last] = a < b ? [a, b] : [b, a];
-  return order.slice(first, last + 1).map((paragraphId, index, all) => ({
+  const spans = order.slice(first, last + 1).map((paragraphId, index, all) => ({
     paragraphId,
     start: index === 0 ? from.offset : 0,
-    end: index === all.length - 1 ? to.offset : Number.MAX_SAFE_INTEGER,
+    end: index === all.length - 1 ? to.offset : WHOLE,
   }));
+  // A range that ENDS at the start of a paragraph writes nothing there (the writer's rule).
+  const tail = spans[spans.length - 1];
+  return tail && tail.end === 0 ? spans.slice(0, -1) : spans;
+}
+
+/** Whether any control in the story locks its content: most documents have none. */
+function storyHasContentLock(part: OoxmlPart): boolean {
+  return contentControlsIn(part.root).some((entry) =>
+    lockForbidsEdit(contentControlPropertiesOf(entry.node).lock)
+  );
 }
 
 /**
- * The refusal a run-formatting command meets because the selection reaches content a
- * control locks, or null. Null as well when the host's policy lets formatting through.
+ * The refusal a formatting command meets because the selection reaches content a control
+ * locks, or null.
+ *
+ * Run formatting passes a lock when the host's policy allows it. The eraser also clears
+ * PARAGRAPH properties, which no policy lets through a block content lock.
  */
 export function contentLockFormatRefusal(
   command: EditorCommand,
   surface: PaginatedSurface,
   policy: ContentLockPolicy | undefined
 ): Exclude<ExecResult, { ok: true }> | null {
-  if (!RUN_FORMAT_COMMANDS.has(command.type) || policy?.allowFormattingInLockedContent) {
-    return null;
-  }
-  const spans = selectedSpans(surface);
-  if (!spans) return null;
+  if (!RUN_FORMAT_COMMANDS.has(command.type)) return null;
+  const clearing = command.type === 'clearFormatting';
+  const runsPass = policy?.allowFormattingInLockedContent === true;
+  if (runsPass && !clearing) return null;
   const refusal = { ok: false as const, code: 'locked' as const, reason: LOCKED_FORMAT_REASON };
-  for (const span of spans) {
+  for (const span of selectedSpans(surface, clearing)) {
     // A pure ancestry read of the story that holds the paragraph.
-    const source = partOfNodeId(surface.session, span.paragraphId) ?? surface.session.part();
-    const paragraph = findNode(source, span.paragraphId);
+    const part = partOfNodeId(surface.session, span.paragraphId) ?? surface.session.part();
+    if (!storyHasContentLock(part)) continue;
+    const paragraph = findNode(part, span.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') continue;
-    if (effectiveContentLockAt(source, span.paragraphId).content) return refusal;
+    if (effectiveContentLockAt(part, span.paragraphId).content) return refusal;
+    if (runsPass || span.start === span.end) continue;
     const inside = contentControlsIn(paragraph);
     if (inside.length === 0) continue;
     const offsets = paragraphOffsetIndex(paragraph);
     for (const entry of inside) {
       const at = offsets.spanOf(entry.node);
       if (!at || at.end <= span.start || at.start >= span.end) continue;
-      const locks = enclosingContentControls(source, entry.node.id).map(
+      const locks = enclosingContentControls(part, entry.node.id).map(
         (control) => contentControlPropertiesOf(control).lock
       );
       if (lockForbidsEdit(resolveContentControlLock(locks))) return refusal;

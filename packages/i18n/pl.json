@@ -952,6 +952,7 @@
     "legacyMerge": "Ta tabela używa starszego rodzaju scalonych komórek, którego nie można tu zmienić",
     "tableGridUnplaceable": "Ta tabela zawiera komórkę, która nie pasuje do siatki kolumn",
     "drawingLocked": "Ten obraz jest zablokowany",
+    "contentLocked": "Ta zawartość jest zablokowana",
     "editorNotReady": "Edytor nie jest gotowy",
     "imageSuggesting": "Zmiany obrazów są niedostępne w trybie sugerowania",
     "equationSourceFormatting": "Edycja liniowa usunęłaby formatowanie tego równania",

@@ -67,3 +67,8 @@ test.each([
 ])('the equation popover refusal %s is translatable', (reason) => {
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });
+
+test('the content-lock formatting refusal is translatable', () => {
+  const reason = 'this content is locked';
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});

@@ -10,6 +10,8 @@ import type { TFunction, TranslationKey } from './index';
 
 export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Object.freeze({
   'editor is not ready': 'disabledReason.editorNotReady',
+  // Keyed on `LOCKED_FORMAT_REASON` in the engine's content-lock admission.
+  'this content is locked': 'disabledReason.contentLocked',
   'not wired to an editor command': 'disabledReason.notWired',
   'this document was opened for viewing': 'disabledReason.viewing',
   'the document is open for viewing': 'disabledReason.viewing',

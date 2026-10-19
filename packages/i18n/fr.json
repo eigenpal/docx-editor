@@ -952,6 +952,7 @@
     "legacyMerge": "Ce tableau utilise un ancien type de cellule fusionnée qui ne peut pas être modifié ici",
     "tableGridUnplaceable": "Ce tableau contient une cellule qui ne correspond pas à sa grille de colonnes",
     "drawingLocked": "Cette image est verrouillée",
+    "contentLocked": "Ce contenu est verrouillé",
     "editorNotReady": "L’éditeur n’est pas prêt",
     "imageSuggesting": "La modification des images est indisponible en mode suggestion",
     "equationSourceFormatting": "La modification linéaire ferait perdre la mise en forme de cette équation",

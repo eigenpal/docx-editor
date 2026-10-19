@@ -8,6 +8,7 @@
     "dismiss": "Dismiss"
   },
   "disabledReason": {
+    "contentLocked": "This content is locked",
     "editorNotReady": "The editor is not ready",
     "notWired": "This control is not connected to an editor command",
     "viewing": "This document is open for viewing",
