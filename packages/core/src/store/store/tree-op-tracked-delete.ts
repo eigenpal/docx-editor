@@ -18,6 +18,7 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { isFldSimple } from '../package/field-nodes.ts';
+import { isOmmlEquationAtom } from '../package/omml-display.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
@@ -117,6 +118,7 @@ export function applyDeleteTracked(
     node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));
 
   let exceedsDepth = false;
+  let strikesEquation = false;
   const strike = (nodes: readonly OoxmlNode[], depth: number): OoxmlNode => {
     // A JOINED deletion is this transaction's strike too, though it minted nothing — a
     // replacement over words abutting a strike from a moment ago belongs after all of them.
@@ -206,6 +208,13 @@ export function applyDeleteTracked(
         continue;
       }
 
+      // An equation has no tracked deletion here: its text is not `w:t`, and the review lane
+      // reads no `w:del` inside OMML. Passing it through left it standing while the words
+      // around it were struck, so the deletion reported success and lost part of the edit.
+      if (struck.has(node.id) && isOmmlEquationAtom(node) && !insideDeletion(stack)) {
+        strikesEquation = true;
+      }
+
       if (node.kind !== 'run') {
         cursor.offset = to;
         out.push(node);
@@ -235,6 +244,7 @@ export function applyDeleteTracked(
 
   const children = mergedRevisions(mint, rebuild(paragraph.children, []));
   if (exceedsDepth) return { ok: false, reason: 'invalid-range' };
+  if (strikesEquation) return { ok: false, reason: 'unsupported', detail: 'tracked-equation' };
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
 }
 

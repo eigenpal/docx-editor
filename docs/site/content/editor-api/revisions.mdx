@@ -85,7 +85,7 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 
-Tracked ranges refuse table and wrapper boundaries. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
+Tracked ranges refuse table and wrapper boundaries. A tracked deletion or replacement that covers an equation fails with `GeneralException` and `edit.unsupported-content`. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
 Tracked edits can go inside or beside another author's pending text insertion or deletion. If you delete or replace text that another author inserted, your deletion is recorded inside their insertion. New text lands after any deleted text. If new text lands inside their insertion, it splits their insertion into two halves that keep its revision identity. `revisions.items` and the review pane then list two revisions for their insertion, one on each side of your text. To accept or reject all of it, decide both revisions, or pass both to `RevisionCollection.resolve()` in one call. The returned range names the new text where it lands.
 

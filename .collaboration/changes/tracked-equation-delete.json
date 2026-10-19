@@ -1,0 +1,13 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A tracked deletion over an equation committed, struck the text around it, and left the equation live.",
+  "after": "A tracked deletion over an equation refuses before any operation commits.",
+  "reason": "The store refuses the operation locally, so no shared update is produced. Shared nodes, operation shapes, and package serialization remain unchanged.",
+  "tests": [
+    "packages/core/src/store/__tests__/tracked-equation-deletion.test.ts",
+    "packages/editor-api/src/runtime/__tests__/runtime-tracked-equation-delete.test.ts"
+  ],
+  "changeset": "tracked-equation-delete",
+  "migration": null
+}
