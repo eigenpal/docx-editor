@@ -163,3 +163,46 @@ test('an sdtContentLocked control is selected, then refused, for both peers', as
   expect(alice.surface!.session.bodyText()).toContain('head IGLOO tail');
   expect(alice.surface!.session.bodyText()).toContain('Bother');
 });
+
+test('a range across paragraphs removes the control and converges with a peer edit', async () => {
+  const { pair, alice, bob, flush, converge } = await peers();
+  pair.pause();
+  const [first, second] = alice.surface!.session.paragraphIds();
+  alice.surface!.setSelection({
+    anchor: { paragraphId: first!, offset: 3 },
+    head: { paragraphId: second!, offset: 2 },
+  });
+  alice.surface!.deleteBackward();
+  expect(alice.surface!.state().lastRejection ?? null).toBeNull();
+  expect(chipText(alice)).toBeNull();
+  caret(bob, 15);
+  bob.surface!.type('!');
+  flush();
+  pair.resume();
+  converge();
+  expect(chipText(bob)).toBeNull();
+
+  expect(alice.exec({ type: 'undo' }).ok).toBe(true);
+  converge();
+  expect(chipText(bob)).toBe('IGLOO');
+  expect(bob.surface!.session.paragraphIds()).toHaveLength(2);
+
+  const reopened = mount({ document: new Uint8Array(await bob.save()) });
+  expect(reopened.surface!.session.bodyText()).toBe(bob.surface!.session.bodyText());
+});
+
+test('Backspace joins the next paragraph to the control line for both peers', async () => {
+  const { pair, alice, bob, flush, converge } = await peers('sdtContentLocked');
+  pair.pause();
+  caret(alice, 0, 1);
+  alice.surface!.deleteBackward();
+  expect(alice.surface!.state().lastRejection ?? null).toBeNull();
+  caret(bob, 0);
+  bob.surface!.type('>');
+  flush();
+  pair.resume();
+  converge();
+  expect(bob.surface!.session.paragraphIds()).toHaveLength(1);
+  expect(chipText(bob)).toBe('IGLOO');
+  expect(bob.surface!.session.bodyText()).toContain('>head IGLOO tailother');
+});

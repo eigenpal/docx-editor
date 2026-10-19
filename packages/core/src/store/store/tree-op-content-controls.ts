@@ -375,13 +375,12 @@ const TREE_OP_REACH: {
       range: { start: offset, end: offset },
     })),
   }),
-  // A join restructures both paragraphs: whatever either one held ends up somewhere else.
+  // A join moves the second paragraph's content into the first. A control inside either one
+  // moves whole and keeps what it holds, so only the controls ENCLOSING the paragraphs are
+  // edited; naming the paragraphs without a range asks exactly those.
   joinParagraphs: (op) => ({
     kind: 'nodes',
-    targets: [
-      { nodeId: op.firstId, structural: true },
-      { nodeId: op.secondId, structural: true },
-    ],
+    targets: [{ nodeId: op.firstId }, { nodeId: op.secondId }],
   }),
   setParagraphProperties: (op) => whole(op.paragraphId),
   setParagraphMarkProperties: (op) => whole(op.paragraphId),
@@ -610,6 +609,15 @@ interface ControlTouch {
    * thrown away by an op that was about something else.
    */
   readonly discarded: boolean;
+  /**
+   * For a {@link removed} control: the locks of the controls that SURVIVE around it.
+   *
+   * Removing a control edits the content of whatever encloses it, never its own: its own
+   * `contentLocked` protects what it holds and lets the control go, and the controls nested in
+   * it go with it. So the edit half of the lock is asked of the survivors only, and the removal
+   * half of the whole chain.
+   */
+  readonly survivingLocks?: readonly ContentControlLock[];
 }
 
 /** What an op reaches, resolved against the part: the controls, and the nodes it named. */
@@ -798,6 +806,7 @@ export function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach
         locks: [...inherited, ...locksOf([...entry.ancestors, entry.node])],
         removed: target.removes === true,
         discarded: false,
+        ...(target.removes === true ? { survivingLocks: inherited } : {}),
       });
     }
     if (enclosing.length === 0 && !filling) unprotected.push(target.nodeId);
@@ -931,6 +940,7 @@ function resolveRevisionReach(
             locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
             removed: true,
             discarded: false,
+            survivingLocks: locksOf(controls),
           });
         }
         // Nothing below a discarded wrapper survives this decision. Its controls were marked as
@@ -971,6 +981,7 @@ function resolveRevisionReach(
           locks: [...locksOf(controls), ...locksOf([...entry.ancestors, entry.node])],
           removed,
           discarded: false,
+          ...(removed ? { survivingLocks: locksOf(controls) } : {}),
         });
       }
       if (removed) return;
@@ -1039,7 +1050,10 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
   for (const touch of resolveReach(part, reach).touches) {
     if (namedControlAnswersForItself && !touch.discarded) continue;
     const resolved = resolveContentControlLock(touch.locks);
-    if (lockForbidsEdit(resolved)) return 'locked';
+    const edited = touch.survivingLocks
+      ? resolveContentControlLock(touch.survivingLocks)
+      : resolved;
+    if (lockForbidsEdit(edited)) return 'locked';
     if ((touch.removed || touch.discarded) && lockForbidsRemoval(resolved)) return 'locked';
   }
   return null;

@@ -175,7 +175,7 @@ The option applies in the document body, headers, and footers. Footnotes, endnot
 
 ### Deleting content-locked controls
 
-Backspace after, or Delete before, an inline control whose content is locked selects the whole control and deletes nothing. A second Backspace or Delete removes the selected control if its lock is `contentLocked`, and one undo restores it. If the lock is `sdtContentLocked`, the second press is refused with `locked`. A selection in one paragraph that covers the whole control removes the control with the selected text around it. This rule applies with both `lockedControlNavigation` values. Block-level controls keep their paragraph boundary behavior.
+Backspace after, or Delete before, an inline control whose content is locked selects the whole control and deletes nothing. A second Backspace or Delete removes the selected control if its lock is `contentLocked`, and one undo restores it. If the lock is `sdtContentLocked`, the second press is refused with `locked`. A selection that covers the whole control removes the control with the selected text around it, including a selection across paragraphs or one you type over. Deleting a paragraph or table that holds the control also removes it. Joining two paragraphs moves a locked control intact, so Backspace at the start of a paragraph works next to one. This rule applies with both `lockedControlNavigation` values. Block-level controls keep their paragraph boundary behavior.
 
 ## Creating a control in the editor
 
@@ -260,7 +260,7 @@ A new dropdown or combo box has no items. Add its items in Word, or fill a contr
 | Operation | Refusal condition | Reason |
 | --- | --- | --- |
 | Fill or edit | The control or an ancestor locks its content | `locked` |
-| Remove | The control or an ancestor locks its wrapper | `locked` |
+| Remove | The control or an ancestor locks its wrapper, or an enclosing control locks its content | `locked` |
 | Fill | The control declares `w:dataBinding` | `bound` |
 | Fill | The value does not match the control type | `typeMismatch` |
 | Create | The selection crosses paragraphs | Inline controls cannot wrap block content |

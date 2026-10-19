@@ -256,12 +256,13 @@ export function nodeTouchesContentRestriction(
 
 /**
  * Whether deleting `block` would destroy a locked or bound content control: enclosing content
- * locks / bindings on the block itself, or any descendant control whose content lock, wrapper
- * lock, or data binding would be removed with the subtree.
+ * locks / bindings on the block itself, or any descendant control whose wrapper lock or data
+ * binding would be removed with the subtree.
  *
  * Wrapper locks matter on descendants because `deleteBlock` removes the wrapper from the
  * document; they do not matter on ancestors (deleting a paragraph inside an `sdtLocked`
- * control leaves the wrapper in place).
+ * control leaves the wrapper in place). A descendant's CONTENT lock does not matter:
+ * `contentLocked` protects what the control holds and lets the whole control go.
  */
 export function deleteBlockTouchesContentRestriction(
   part: OoxmlPart,
@@ -275,8 +276,7 @@ export function deleteBlockTouchesContentRestriction(
     if (node.kind === 'textValue') return null;
     if (isContentControlNode(node)) {
       if (isBoundContentControl(node)) return 'bound';
-      const lock = declaredLockOf(node);
-      if (lock.content || lock.wrapper) return 'locked';
+      if (declaredLockOf(node).wrapper) return 'locked';
     }
     for (const child of node.children) {
       const rejection = walk(child);

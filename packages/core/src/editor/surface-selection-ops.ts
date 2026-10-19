@@ -9,6 +9,7 @@ import { selectionMarkRects } from '../layout/selection-rects.ts';
 import type { TextMeasurer } from '../layout/semantic-records.ts';
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { hiddenMarkRemovedIds, type RevisionView } from './hidden-mark-joins.ts';
+import { coveredLockedControlOps } from './surface-locked-control-delete.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import { fieldResultSpeller } from '../layout/field-copy-text.ts';
 import { cellSelectionText, type CellSelection } from '../layout/semantic-cell-selection.ts';
@@ -447,14 +448,17 @@ export function planRangeDeletion(
   view: RevisionView = { displayMode: layout.displayMode ?? 'all-markup', authorFilter: undefined }
 ): RangeDeletionPlan {
   const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
+  // A whole content-locked control in the range goes as a node, and only the text around it
+  // as text: deleting its characters as text edits locked content, which the store refuses.
+  const trimmed = (paragraphId: string, start: number, end: number): PlannedOp[] =>
+    coveredLockedControlOps(
+      layout,
+      { paragraphId, offset: start },
+      { paragraphId, offset: end }
+    ) ?? [{ op: 'deleteText', paragraphId, start, end }];
   if (from.paragraphId === to.paragraphId) {
     if (from.offset === to.offset) return { ops: [], collapseTo: from };
-    return {
-      ops: [
-        { op: 'deleteText', paragraphId: from.paragraphId, start: from.offset, end: to.offset },
-      ],
-      collapseTo: from,
-    };
+    return { ops: trimmed(from.paragraphId, from.offset, to.offset), collapseTo: from };
   }
 
   const effectiveOrder = order ?? documentOrder(layout);
@@ -511,7 +515,7 @@ export function planRangeDeletion(
     const length = textOf(id).length;
     const start = index === firstIndex ? from.offset : 0;
     const end = index === lastIndex ? to.offset : length;
-    if (start < end) ops.push({ op: 'deleteText', paragraphId: id, start, end });
+    if (start < end) ops.push(...trimmed(id, start, end));
   }
   // Then the blocks the range fully contains. Nothing in the paragraph vocabulary can do
   // this: a body paragraph and a cell paragraph have different parents, so collapsing

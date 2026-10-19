@@ -249,3 +249,55 @@ test('Ctrl+Backspace and deleteSelection remove a selected contentLocked control
   expect(n.surface.deleteSelection()).toBe(true);
   expect(bodyText(n)).toBe('az');
 });
+
+describe('ranges and joins across paragraphs', () => {
+  const two = (lock: string) => line(lock) + `<w:p>${run('next')}</w:p>`;
+  const select = (m: Mounted, from: number, to: number) => {
+    const second = m.surface.session.paragraphIds()[1]!;
+    m.surface.setSelection({
+      anchor: { paragraphId: m.paragraphId, offset: from },
+      head: { paragraphId: second, offset: to },
+    });
+  };
+
+  test('a selection across paragraphs that covers a contentLocked control removes it', () => {
+    const m = mount(two('contentLocked'), null);
+    select(m, 1, 2);
+    m.surface.deleteBackward();
+    expect(rejection(m)).toBeNull();
+    expect(bodyText(m)).toBe('axt');
+    expect(controls(m)).toBe(0);
+  });
+
+  test('a selection across paragraphs that covers an sdtContentLocked control is refused', () => {
+    const m = mount(two('sdtContentLocked'), null);
+    select(m, 1, 2);
+    m.surface.deleteBackward();
+    expect(rejection(m)).not.toBeNull();
+    expect(controls(m)).toBe(1);
+  });
+
+  test('typing over a selection that covers a contentLocked control replaces it', () => {
+    const m = mount(line('contentLocked'), null);
+    caretAt(m, 1, 8);
+    m.surface.type('Q');
+    expect(rejection(m)).toBeNull();
+    expect(bodyText(m)).toBe('aQz');
+    expect(controls(m)).toBe(0);
+  });
+
+  test('Backspace at the start of the next paragraph joins it to a locked control line', () => {
+    for (const lock of ['contentLocked', 'sdtContentLocked']) {
+      const m = mount(two(lock), null);
+      const second = m.surface.session.paragraphIds()[1]!;
+      m.surface.setSelection({
+        anchor: { paragraphId: second, offset: 0 },
+        head: { paragraphId: second, offset: 0 },
+      });
+      m.surface.deleteBackward();
+      expect(rejection(m)).toBeNull();
+      expect(m.surface.session.paragraphIds()).toHaveLength(1);
+      expect(controls(m)).toBe(1);
+    }
+  });
+});

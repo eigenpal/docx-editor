@@ -492,16 +492,16 @@ describe('ST_Lock content edits', () => {
 });
 
 describe('deleteBlock refuses protected descendant content controls', () => {
-  test('table with nested contentLocked inline SDT refuses deleteBlock', () => {
+  test('table with nested contentLocked inline SDT may be deleted', () => {
     const part = load(
       TABLE_WITH(
         '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
           '<w:sdtContent><w:r><w:t>L</w:t></w:r></w:sdtContent></w:sdt>'
       ) + '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    const tableId = firstOfKind(part, 'table');
-    expect(reject(part, { op: 'deleteBlock', blockId: tableId })).toBe('locked');
-    expect(firstOfKind(part, 'table')).toBe(tableId);
+    // `contentLocked` protects what the control holds and lets the whole control go.
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') });
+    expect(() => firstOfKind(next, 'table')).toThrow();
   });
 
   test('table with nested sdtLocked inline SDT refuses deleteBlock (wrapper removal)', () => {
@@ -545,7 +545,7 @@ describe('deleteBlock refuses protected descendant content controls', () => {
     expect(paragraphTextOf(next, firstOfKind(next, 'paragraph'))).toBe('keep');
   });
 
-  test('block-level SDT nested inside a table cell refuses when contentLocked', () => {
+  test('block-level contentLocked SDT nested inside a table cell may be deleted', () => {
     const part = load(
       '<w:tbl><w:tr><w:tc>' +
         '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
@@ -553,10 +553,11 @@ describe('deleteBlock refuses protected descendant content controls', () => {
         '<w:p/></w:tc></w:tr></w:tbl>' +
         '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    expect(reject(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') })).toBe('locked');
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') });
+    expect(() => firstOfKind(next, 'table')).toThrow();
   });
 
-  test('deeply nested locked SDT under unlocked outer inside a table refuses', () => {
+  test('deeply nested contentLocked SDT under unlocked outer inside a table may be deleted', () => {
     const part = load(
       TABLE_WITH(
         '<w:sdt><w:sdtPr/><w:sdtContent>' +
@@ -565,18 +566,19 @@ describe('deleteBlock refuses protected descendant content controls', () => {
           '</w:sdtContent></w:sdt>'
       ) + '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    expect(reject(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') })).toBe('locked');
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'table') });
+    expect(() => firstOfKind(next, 'table')).toThrow();
   });
 
-  test('paragraph with inline contentLocked SDT refuses deleteBlock', () => {
+  test('paragraph with inline contentLocked SDT may be deleted', () => {
     const part = load(
       '<w:p><w:r><w:t>a</w:t></w:r>' +
         '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr>' +
         '<w:sdtContent><w:r><w:t>L</w:t></w:r></w:sdtContent></w:sdt></w:p>' +
         '<w:p><w:r><w:t>keep</w:t></w:r></w:p>'
     );
-    const paragraphId = firstOfKind(part, 'paragraph');
-    expect(reject(part, { op: 'deleteBlock', blockId: paragraphId })).toBe('locked');
+    const next = apply(part, { op: 'deleteBlock', blockId: firstOfKind(part, 'paragraph') });
+    expect(paragraphTextOf(next, firstOfKind(next, 'paragraph'))).toBe('keep');
   });
 
   test('paragraph with inline sdtLocked SDT refuses deleteBlock', () => {
@@ -601,7 +603,7 @@ describe('deleteBlock refuses protected descendant content controls', () => {
     );
   });
 
-  test('table row containing locked SDT refuses deleteBlock', () => {
+  test('table row containing a contentLocked SDT may be deleted', () => {
     const part = load(
       '<w:tbl>' +
         '<w:tr><w:tc><w:p><w:r><w:t>a</w:t></w:r></w:p></w:tc></w:tr>' +
@@ -627,9 +629,7 @@ describe('deleteBlock refuses protected descendant content controls', () => {
     })();
     const rows = table.children.filter((child) => child.kind === 'tableRow');
     expect(rows.length).toBe(2);
-    expect(reject(part, { op: 'deleteBlock', blockId: rows[1]!.id })).toBe('locked');
-    // First row without a protected control may still be removed.
-    const after = apply(part, { op: 'deleteBlock', blockId: rows[0]!.id });
+    const after = apply(part, { op: 'deleteBlock', blockId: rows[1]!.id });
     expect(firstOfKind(after, 'table')).toBeTruthy();
   });
 

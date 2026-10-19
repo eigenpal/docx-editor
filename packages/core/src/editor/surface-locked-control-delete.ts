@@ -67,7 +67,7 @@ function contentLockedInline(control: ContentControlBoundaryRecord): boolean {
  * them goes as text. Ops run from the end of the range back, so no op shifts the offsets of
  * the ops after it. Null when the range covers no such control.
  */
-function coveredLockedControlOps(
+export function coveredLockedControlOps(
   layout: SemanticLayout,
   from: SemanticPosition,
   to: SemanticPosition
