@@ -506,7 +506,7 @@ describe('removing a control nested in another', () => {
       const part = parseDoc(
         `<w:p>${text('pre')}${sdt('outer', 'contentLocked', text('a') + sdt('inner', lock, text('b')))}</w:p>`
       );
-      for (const keepContent of [false, true]) {
+      for (const keepContent of [false, true, undefined]) {
         expect(
           refusal(part, {
             op: 'removeContentControl',

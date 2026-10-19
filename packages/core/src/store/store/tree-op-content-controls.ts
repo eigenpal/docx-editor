@@ -1697,14 +1697,7 @@ export function applyRemoveContentControl(
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
   if (lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
-  // Removing a control edits the content of the control that ENCLOSES it, so a content lock
-  // there refuses, whatever the removed control's own lock says.
-  const enclosing = enclosingContentControls(part, control.id).filter(
-    (node) => node.id !== control.id
-  );
-  if (lockForbidsEdit(resolveContentControlLock(locksOf(enclosing)))) {
-    return { ok: false, reason: 'locked' };
-  }
+  // An enclosing content lock is refused in `validateRemoveContentControl`, for every form.
   // Deleting the WHOLE control is an existence operation, governed by the wrapper axis
   // alone — Word deletes a contentLocked control whole (only sdtLocked forbids deletion),
   // and Backspace over a content-locked chip relies on it. The content lock guards the

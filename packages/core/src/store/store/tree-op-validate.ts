@@ -35,6 +35,7 @@ import {
   rejectContentEdit,
   nodeTouchesContentRestriction,
   validateRemoveContentControl,
+  enclosingContentLockRefusal,
   validateSetContentControlValue,
 } from './tree-op-validate-controls.ts';
 import {
@@ -329,6 +330,7 @@ export function validateTreeOp(
       }
       if (op.lock !== undefined && !CONTENT_CONTROL_LOCKS.has(op.lock)) return 'invalidArgs';
     }
+    if (op.op === 'removeContentControl') return enclosingContentLockRefusal(part, control.id);
     return null;
   }
   if (op.op === 'insertContentControl') return validateInsertContentControl(part, op);

@@ -372,7 +372,19 @@ export function validateRemoveContentControl(
   const control = findContentControl(part, controlId);
   if (!control) return 'unknown-control';
   if (effectiveLockOf(part, control).wrapper) return 'locked';
-  return null;
+  return enclosingContentLockRefusal(part, control.id);
+}
+
+/**
+ * Removing or unwrapping a control edits the content of the control that ENCLOSES it, so a
+ * content lock there refuses, whatever the removed control's own lock says.
+ */
+export function enclosingContentLockRefusal(
+  part: OoxmlPart,
+  controlId: string
+): TreeOpRejection | null {
+  const ancestors = contentControlAncestorsOf(part, controlId);
+  return ancestors.some((ancestor) => declaredLockOf(ancestor).content) ? 'locked' : null;
 }
 
 export const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
