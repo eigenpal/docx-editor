@@ -24,7 +24,7 @@ function load(body: string) {
 }
 const line = '<w:pPr><w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="exact"/></w:pPr>';
 const p = (text = '') => `<w:p>${line}${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p>`;
-function input(pageBreak = false, floating = true) {
+function input(pageBreak = false, floating = true, emptyContent = '') {
   const table =
     '<w:tbl><w:tblPr>' +
     (floating
@@ -36,7 +36,7 @@ function input(pageBreak = false, floating = true) {
   return load(
     p('Lead') +
       table +
-      p() +
+      `<w:p>${line}${emptyContent}</w:p>` +
       '<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="700" w:lineRule="exact"/>' +
       (pageBreak ? '<w:pageBreakBefore/>' : '') +
       '</w:pPr></w:p>' +
@@ -165,7 +165,6 @@ test('list markers and paragraph decorations retain table bands', () => {
 });
 test('text runs fields drawings and hard breaks retain table bands', () => {
   for (const content of [
-    '<w:r/>',
     '<w:r><w:t>X</w:t></w:r>',
     '<w:r><w:fldChar w:fldCharType="end"/></w:r>',
     '<w:r><w:br w:type="page"/></w:r>',
@@ -181,4 +180,27 @@ test('warm and cold empty-paragraph table wrapping produce the same layout', () 
   expect(layoutSemanticDocument(part, 2, { measurer, session }).pages).toEqual(
     layoutSemanticDocument(part, 2, { measurer }).pages
   );
+});
+
+const emptyForms = [
+  '<w:r/>',
+  '<w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:r>',
+  '<w:r><w:t/></w:r>',
+  '<w:bookmarkStart w:id="1" w:name="empty"/><w:r/><w:bookmarkEnd w:id="1"/>',
+];
+test.each(emptyForms)('empty content retains table-adjacent placement: %s', (content) => {
+  const layout = layoutSemanticDocument(input(false, true, content), 1, { measurer });
+  const [lead, empty] = paragraphs(layout);
+  expect(empty!.box.y).toBeCloseTo(lead!.box.y + lead!.box.height, 6);
+  for (const zones of selected(`<w:p>${content}</w:p>`))
+    expect(zones.map((zone) => zone.drawingNodeId)).toEqual(['picture']);
+});
+test.each([
+  '<w:r><w:t xml:space="preserve"> </w:t></w:r>',
+  '<w:r><w:tab/></w:r>',
+  '<w:r><w:instrText> PAGE </w:instrText></w:r>',
+  '<w:fldSimple w:instr="PAGE"/>',
+  '<w:r><w:br/></w:r>',
+])('visible or field content retains table bands: %s', (content) => {
+  for (const zones of selected(`<w:p>${content}</w:p>`)) expect(zones).toHaveLength(3);
 });

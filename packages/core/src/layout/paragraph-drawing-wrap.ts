@@ -122,7 +122,18 @@ export function createParagraphDrawingWrap(options: {
         entry.listItem === undefined &&
         entry.shading === undefined &&
         !Object.values(entry.borders ?? {}).some(Boolean) &&
-        entry.paragraph.children.every((child) => child.kind === 'paragraphProperties');
+        entry.paragraph.children.every(
+          (child) =>
+            child.kind === 'paragraphProperties' ||
+            child.kind === 'bookmarkStart' ||
+            child.kind === 'bookmarkEnd' ||
+            (child.kind === 'run' &&
+              child.children.every(
+                (atom) =>
+                  atom.kind === 'runProperties' ||
+                  (atom.kind === 'text' && atom.children.every((text) => text.value === ''))
+              ))
+        );
       return zones
         .filter((zone) => {
           if (zone.anchorParagraphId === omittedAnchor) return false;
