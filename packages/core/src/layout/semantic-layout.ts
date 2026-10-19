@@ -1736,6 +1736,7 @@ function* layoutBlocksPass(
     positionShiftX = 0
   ): LayoutSteps<boolean> {
     const savedCursorY = cursorY;
+    const positioned = positionedByTable.get(table.id);
     // The paginator owns the cursor. The adapter syncs it around each story-flow advance.
     const flow: TableFlowCursor = {
       positionTextTable,
@@ -1776,13 +1777,7 @@ function* layoutBlocksPass(
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
       // taken when the table started would collect its later fragments into a dead array.
       publishFragment: (fragment) =>
-        pageFragments.push(
-          tableWrap.withImmediateFloatingWrap(
-            fragment,
-            positionedByTable.get(table.id),
-            flowColumnIndex
-          )
-        ),
+        pageFragments.push(tableWrap.withFloatingWrap(fragment, positioned, flowColumnIndex)),
       followingKeepOpening: (room) =>
         next === undefined ? undefined : keepChains.opening(next, room),
     };

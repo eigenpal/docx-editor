@@ -779,7 +779,7 @@ export function hasEarlierCellExclusions(
 }
 
 /** Preserve body wrapping when external obstacles require immediate table placement. */
-export function withImmediateFloatingWrap(
+export function withFloatingWrap(
   fragment: BlockFragmentRecord,
   positioned: PositionedTableAnchor | undefined,
   columnIndex: number
