@@ -346,6 +346,34 @@ describe('insertCustomNode', () => {
     expect(customItems()).toHaveLength(1);
   });
 
+  test('typing inside a block-level node updates its review card', () => {
+    const block = defineCustomNode({
+      name: 'block',
+      tagPrefix: 'acme',
+      reviewCard: ({ text }) => ({ title: text }),
+    });
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(
+        '<w:sdt><w:sdtPr><w:tag w:val="acme:block"/></w:sdtPr><w:sdtContent>' +
+          '<w:p><w:r><w:t>first</w:t></w:r></w:p><w:p><w:r><w:t>abc</w:t></w:r></w:p>' +
+          '</w:sdtContent></w:sdt><w:p><w:r><w:t>after</w:t></w:r></w:p>'
+      ),
+      author: 'Demo Reviewer',
+      modules: [customNodesModule({ nodes: [block] }), reviewModule()],
+    });
+    const cardText = () =>
+      JSON.stringify(editor.getReviewItems().filter((item) => item.kind === 'custom'));
+    expect(cardText()).toContain('abc');
+    const second = editor.surface!.session.paragraphIds()[1]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId: second, offset: 1 },
+      head: { paragraphId: second, offset: 1 },
+    });
+    editor.surface!.type('Z');
+    expect(cardText()).toContain('aZbc');
+  });
+
   test('typing that changes a node so its card appears updates the review list', () => {
     const flagged = defineCustomNode({
       name: 'flagged',
