@@ -14,13 +14,13 @@ import {
   type RewriteDraft,
   type RewriteErrorCode,
 } from '../../agent.ts';
-import type { RequestContext } from '../../index.ts';
+import { DocxEditor, type RequestContext } from '../../index.ts';
 import { docx, p } from '../../runtime/__tests__/support/docx.ts';
 import {
+  AUTHOR,
   firstParagraph,
   PILL,
   readBack,
-  REF,
   rejection,
   RICH,
   RICH_ORIGINAL,
@@ -56,8 +56,6 @@ describe('model output that breaks a rule writes nothing', () => {
     ['placeholder-moved', '⟦3⟧ Under ⟦1⟧ the fee ⟦2⟧ applies', 'moves ⟦3⟧'],
     ['placeholder-unknown', 'Under ⟦1⟧ the fee ⟦9⟧ applies', 'contains ⟦9⟧'],
     ['placeholder-repeated', 'Under ⟦1⟧ the fee ⟦1⟧ applies', '⟦1⟧ more than once'],
-    ['text-attached', 'Under ⟦1⟧ the fee ⟦2⟧ applies\tto ⟦3⟧; promptly.', 'attaches text'],
-    ['text-attached', 'Under ⟦1⟧ the fee ⟦2⟧ applies\tto "⟦3⟧" promptly.', 'attaches text'],
     ['invalid-output', 'Under ⟦1⟧ the fee\n⟦2⟧ applies', 'line break'],
     ['invalid-output', '   ', 'empty'],
   ];
@@ -70,15 +68,16 @@ describe('model output that breaks a rule writes nothing', () => {
     });
   }
 
-  test('punctuation-repeated, also across a space', async () => {
-    const bytes = docx(`<w:p>${t('Under ')}${REF}${t(', the fee applies.')}</w:p>`);
-    for (const output of ['Under ⟦1⟧, the charge applies.', 'Under ⟦1⟧ , the charge applies.']) {
-      const outcome = await refused(bytes, output);
-      expectUntouched(outcome, 'punctuation-repeated', 'Under Section 4.2, the fee applies.');
-      expect((outcome.error as RewriteError).message).toBe(
-        'The model output repeats "," after ⟦1⟧, which already ends with it.'
-      );
-    }
+  test('text beside a placeholder is not refused', async () => {
+    const bytes = docx(`<w:p>${t('Pay ')}${PILL}<w:r><w:tab/></w:r>${t('promptly.')}</w:p>`);
+    const { value } = await withRuntime(bytes, async (context) => {
+      const paragraph = await firstParagraph(context);
+      const draft = await prepareRewrite(context, paragraph);
+      expect(draft.text).toBe('Pay ⟦1⟧\tpromptly.');
+      await draft.apply('Pay "⟦1⟧"; promptly.');
+      return readBack(context, paragraph);
+    });
+    expect(value.current).toBe('Pay "Acme Corp"; promptly.');
   });
 
   test('placeholder-missing with keepPlaceholders', async () => {
@@ -139,41 +138,87 @@ describe('a failed write rolls back the writes before it', () => {
     expect((outcome.error as RewriteError).cause).toMatchObject({ name: 'DocxEditorError' });
   });
 
-  test('verification-failed: an atom keeps its own tab', async () => {
-    const bytes = docx(`<w:p>${t('Pay ')}${PILL}<w:r><w:tab/></w:r>${t('promptly.')}</w:p>`);
-    const { value } = await withRuntime(bytes, async (context) => {
-      const paragraph = await firstParagraph(context);
-      const draft = await prepareRewrite(context, paragraph);
-      expect(draft.text).toBe('Pay ⟦1⟧\tpromptly.');
-      // The space the model writes after the placeholder cannot land: the atom ends in a tab.
-      // Without another change, nothing is written; with one, the change is rolled back.
-      const errors = [
-        await rejection(draft.apply('Pay ⟦1⟧ promptly.')),
-        await rejection(draft.apply('Pay ⟦1⟧ promptly today.')),
-      ];
-      return { errors, after: await readBack(context, paragraph) };
-    });
-    for (const error of value.errors) {
-      expectUntouched(
-        { error, after: value.after },
-        'verification-failed',
-        'Pay Acme Corp\tpromptly.'
-      );
-    }
-  });
-
   test('a sync that fails mid-apply leaves no change behind', async () => {
     const original = 'Alpha beta gamma delta.';
     const { value } = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      // Two syncs prepare, two turn tracking on, the fifth writes the last hunk, and the sixth,
-      // for the first hunk, fails.
-      const draft = await prepareRewrite(failingSync(context, 6), paragraph);
+      // Syncs 1 to 4 prepare, 5 and 6 turn tracking on, and 7 lists the revisions before the
+      // first write. The last hunk writes at 8 and reads its revisions back at 9 and 10. Sync 11
+      // writes the first hunk and then fails, so the helper must find that change too.
+      const draft = await prepareRewrite(failingSync(context, 11), paragraph);
       const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
       return { error, after: await readBack(context, paragraph) };
     });
     expectUntouched(value, 'write-failed', original);
     expect((value.error as RewriteError).message).toContain('The connection dropped.');
+  });
+
+  test('the rollback finds the changes of an author name with spaces around it', async () => {
+    const original = 'Alpha beta gamma delta.';
+    const { value } = await withRuntime(
+      docx(p(original)),
+      async (context) => {
+        const paragraph = await firstParagraph(context);
+        const draft = await prepareRewrite(failingSync(context, 11), paragraph);
+        const error = await rejection(draft.apply('Alpha BETA gamma DELTA.'));
+        return { error, after: await readBack(context, paragraph) };
+      },
+      '  Rewrite agent  '
+    );
+    expectUntouched(value, 'write-failed', original);
+  });
+
+  test('verification-failed rejects only its own change, not one by the same author', async () => {
+    const original = 'Alpha beta gamma delta.';
+    const runtime = await DocxEditor.createServer(docx(p(original)), { author: AUTHOR });
+    try {
+      const value = await runtime.run(async (context) => {
+        const paragraph = await firstParagraph(context);
+        // The same author, in another run, proposes text after this rewrite read its own
+        // change back (syncs 9 and 10) and before the final check (sync 11).
+        const paused = pausingSync(context, 11, () =>
+          runtime.run(async (other) => {
+            other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
+            await other.sync();
+          })
+        );
+        const draft = await prepareRewrite(paused, paragraph);
+        const error = await rejection(draft.apply('Alpha beta gamma DELTA.'));
+        return { error, after: await readBack(context, paragraph) };
+      });
+      expect(value.error).toMatchObject({ code: 'verification-failed' });
+      expect(value.after.current).toBe(`Note: ${original}`);
+      expect(value.after.authors).toEqual([AUTHOR]);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a failure to turn tracking off again never replaces the result or the error', async () => {
+    const original = 'Alpha beta gamma delta.';
+    // Every sync from the twelfth fails: the write and the check succeed (7 to 11), and turning
+    // tracking off again fails. The proposal stands.
+    const success = await withRuntime(docx(p(original)), async (context) => {
+      const paragraph = await firstParagraph(context);
+      const draft = await prepareRewrite(failingSync(context, 12, true), paragraph);
+      const result = await draft.apply('Alpha beta gamma DELTA.');
+      context.document.load('changeTrackingMode');
+      await context.sync();
+      return { result, mode: context.document.changeTrackingMode };
+    });
+    expect(success.value.result.proposed).toBe('Alpha beta gamma DELTA.');
+    expect(success.value.mode).toBe('TrackMineOnly');
+
+    // A refused second hunk (sync 11), a rollback (12 to 15), then turning tracking off fails.
+    const failure = await withRuntime(docx(p(original)), async (context) => {
+      const paragraph = await firstParagraph(context);
+      const draft = await prepareRewrite(failingSync(context, 16, true), paragraph);
+      return rejection(draft.apply('Alpha be\u000Eta gamma DELTA.'));
+    });
+    expect(failure.value).toMatchObject({ code: 'write-failed' });
+    expect((failure.value as RewriteError).suppressed).toMatchObject({
+      message: 'The connection dropped.',
+    });
   });
 });
 
@@ -196,6 +241,74 @@ describe('retries', () => {
     expect(drafts[1]!.prompt).toContain('Previous answer:\nUnder ⟦1⟧ the fee ⟦9⟧ applies');
   });
 
+  test('retries is clamped to a whole number from 0 to 5', async () => {
+    for (const [retries, calls] of [
+      [-1, 1],
+      [Number.NaN, 3],
+      [Number.POSITIVE_INFINITY, 3],
+      [2.7, 3],
+      [99, 6],
+    ] as const) {
+      let count = 0;
+      const { value } = await withRuntime(RICH, async (context) =>
+        rejection(
+          proposeRewrite(
+            context,
+            await firstParagraph(context),
+            () => {
+              count += 1;
+              return 'Under ⟦1⟧ ⟦9⟧';
+            },
+            { retries }
+          )
+        )
+      );
+      expect(value).toMatchObject({ code: 'placeholder-unknown' });
+      expect([retries, count]).toEqual([retries, calls]);
+    }
+  });
+
+  test('model-failed: the rewrite function throws', async () => {
+    const cause = new Error('rate limited');
+    const { value } = await withRuntime(RICH, async (context) =>
+      rejection(
+        proposeRewrite(context, await firstParagraph(context), () => {
+          throw cause;
+        })
+      )
+    );
+    expect(value).toBeInstanceOf(RewriteError);
+    expect(value).toMatchObject({ code: 'model-failed', cause, isModelError: false });
+  });
+
+  test('verification-failed prepares the paragraph again, like stale', async () => {
+    const runtime = await DocxEditor.createServer(docx(p('Alpha beta gamma delta.')), {
+      author: AUTHOR,
+    });
+    try {
+      let calls = 0;
+      const error = await runtime.run(async (context) => {
+        const paused = pausingSync(context, 11, () =>
+          runtime.run(async (other) => {
+            other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
+            await other.sync();
+          })
+        );
+        return rejection(
+          proposeRewrite(paused, paused.document.body.paragraphs.getFirst(), () => {
+            calls += 1;
+            return 'Alpha beta gamma DELTA.';
+          })
+        );
+      });
+      // The second preparation finds the other run's pending insertion.
+      expect(error).toMatchObject({ code: 'pending-changes' });
+      expect(calls).toBe(1);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('retries: 0 throws the first model error', async () => {
     const { value } = await withRuntime(RICH, async (context) =>
       rejection(
@@ -208,15 +321,41 @@ describe('retries', () => {
   });
 });
 
-/** A context whose sync number `at` throws once instead of syncing: a dropped connection. */
-function failingSync(context: RequestContext, at: number): RequestContext {
+/**
+ * A context whose sync number `at` syncs and then throws, as a connection that drops before the
+ * answer arrives does: the batch lands, but the caller cannot know it. Once, or with `from`, on
+ * every sync from then on.
+ */
+function failingSync(context: RequestContext, at: number, from = false): RequestContext {
   let count = 0;
   return new Proxy(context, {
     get(target, key) {
       if (key === 'sync') {
         return async () => {
           count += 1;
-          if (count === at) throw new Error('The connection dropped.');
+          await target.sync();
+          if (count === at || (from && count > at)) throw new Error('The connection dropped.');
+        };
+      }
+      const value = Reflect.get(target, key) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+/** A context whose sync number `at` runs `between` first. */
+function pausingSync(
+  context: RequestContext,
+  at: number,
+  between: () => Promise<unknown>
+): RequestContext {
+  let count = 0;
+  return new Proxy(context, {
+    get(target, key) {
+      if (key === 'sync') {
+        return async () => {
+          count += 1;
+          if (count === at) await between();
           await target.sync();
         };
       }

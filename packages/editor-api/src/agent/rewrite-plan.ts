@@ -6,23 +6,28 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The pure half of the rewrite helper: the prompt, the checks on the model output, and the word
 // diff that turns the output into the fewest edits. Nothing here touches a document.
 //
-// A paragraph is a list of UNITS: one word with its trailing space or tab, as
-// `getTextRanges([' ', '\t'])` splits it, or one ATOM that must change whole or not at all (a
-// field, a picture, an equation, a note reference, or the words of one content-locked control).
-// The model sees each atom as a numbered placeholder, `⟦n⟧`.
+// A paragraph is a list of UNITS. A text unit is a word with its trailing space or tab, or the
+// text that touches an atom inside a word, such as the comma after a field. An ATOM unit is
+// content that changes whole or not at all: a field, a picture, an equation, a note reference,
+// or one content-locked control. The model sees each atom as a numbered placeholder, `⟦n⟧`, and
+// the text around it as ordinary text, so `Subject to ⟦1⟧, the` reads naturally.
 
 import { RewriteError } from './rewrite-error.ts';
 
 /**
- * What a placeholder stands for. An equation and a note reference both read as U+FFFC, so they
- * share one kind.
+ * What a placeholder stands for.
  *
  * @public
  */
-export type RewritePlaceholderKind = 'field' | 'content-control' | 'picture' | 'equation-or-note';
+export type RewritePlaceholderKind =
+  | 'field'
+  | 'content-control'
+  | 'picture'
+  | 'equation'
+  | 'note-reference';
 
 /**
- * One placeholder in the draft text, and the text it stands for.
+ * One placeholder in the draft text, and what it stands for.
  *
  * @public
  */
@@ -31,15 +36,20 @@ export interface RewritePlaceholder {
   readonly placeholder: string;
   /** What the placeholder stands for. */
   readonly kind: RewritePlaceholderKind;
-  /** The text the paragraph reads for it, with any punctuation attached to it. */
+  /** The text the paragraph reads for it: a field result, a control's text, or U+FFFC. */
   readonly text: string;
+  /**
+   * A description for the model, such as `field REF _Ref1 \h, reads "Section 4.2"`,
+   * `equation`, or `locked content control "party", reads "Acme Corp"`.
+   */
+  readonly description: string;
 }
 
-/** One word or atom, by its text and its placeholder number. */
+/** One word, text beside an atom, or an atom. */
 export interface PlanUnit {
-  /** The text the paragraph reads for this unit, with its trailing space or tab. */
+  /** The text the paragraph reads for this unit. A word keeps its trailing space or tab. */
   readonly text: string;
-  /** The placeholder number of an atom, or null for a word. */
+  /** The placeholder number of an atom, or null for text. */
   readonly atom: number | null;
 }
 
@@ -62,19 +72,12 @@ type Step =
   | { readonly kind: 'delete'; readonly unit: number }
   | { readonly kind: 'insert'; readonly token: ModelToken };
 
-const KIND_LABEL: Record<RewritePlaceholderKind, string> = {
-  field: 'field',
-  'content-control': 'locked content control',
-  picture: 'picture',
-  'equation-or-note': 'equation or note reference',
-};
 const TRAILING_SPACING = /[ \t]+$/;
 const PLACEHOLDER = /⟦\d+⟧/g;
-const PUNCTUATION = /^\p{P}$/u;
-const SPACING = new Set(['', ' ', '\t']);
+const PLACEHOLDER_AT = /^⟦(\d+)⟧/;
+const PARAGRAPH_BREAK = /[\r\n\u2028\u2029]/;
 /** The largest word diff table, in cells: 16 MB. A paragraph comes from the file. */
 const MAX_DIFF_CELLS = 4_000_000;
-const PARAGRAPH_BREAK = /[\r\n\u2028\u2029]/;
 
 export const coreOf = (text: string): string => text.replace(TRAILING_SPACING, '');
 export const spacingOf = (text: string): string => TRAILING_SPACING.exec(text)?.[0] ?? '';
@@ -82,11 +85,7 @@ export const placeholderOf = (atom: number): string => `⟦${atom}⟧`;
 
 /** The paragraph text for the model, with each atom shown as its placeholder. */
 export function draftText(units: readonly PlanUnit[]): string {
-  return units
-    .map((unit) =>
-      unit.atom === null ? unit.text : `${placeholderOf(unit.atom)}${spacingOf(unit.text)}`
-    )
-    .join('');
+  return units.map((unit) => (unit.atom === null ? unit.text : placeholderOf(unit.atom))).join('');
 }
 
 /** The prompt: the caller's instruction, the placeholder rules, the legend, and the text. */
@@ -96,19 +95,16 @@ export function promptOf(
   instruction: string | undefined
 ): string {
   const legend = placeholders
-    .map(
-      (entry) => `${entry.placeholder} (${KIND_LABEL[entry.kind]}) = ${JSON.stringify(entry.text)}`
-    )
+    .map((entry) => `${entry.placeholder} = ${entry.description}`)
     .join('\n');
   const rules =
-    'Return only the rewritten paragraph, as one paragraph of plain text.' +
+    'Return only the rewritten paragraph, as one line of plain text.' +
     (placeholders.length === 0
       ? ''
-      : ' Keep each placeholder, such as ⟦1⟧, exactly as written, with a space or the ' +
-        'paragraph edge on each side, or leave it out to delete what it stands for. Do not ' +
-        'move a placeholder before or after another placeholder, and do not repeat one. Each ' +
-        'placeholder already contains the text listed for it, including its punctuation. Do ' +
-        'not repeat that text or attach other text to it.');
+      : ' Each placeholder, such as ⟦1⟧, stands for content that you cannot edit, such as a ' +
+        'field or an equation. Copy each placeholder that you keep exactly as written, and write ' +
+        'the text around it as usual. Leave a placeholder out to delete what it stands for. Do ' +
+        'not change the order of the placeholders, and do not repeat one.');
   return [
     instruction?.trim() ?? '',
     rules,
@@ -120,9 +116,8 @@ export function promptOf(
 }
 
 /**
- * Refuse model output that cannot be applied, before anything is written: a paragraph break, an
- * empty result, an unknown, repeated, or (with `keepPlaceholders`) missing placeholder, repeated
- * punctuation, and text attached to a placeholder.
+ * Refuse model output that cannot be applied, before anything is written: an empty result, a
+ * line break, an unknown or repeated placeholder, and, with `keepPlaceholders`, a missing one.
  */
 export function checkOutput(
   output: string,
@@ -138,12 +133,10 @@ export function checkOutput(
       'The model output contains a line break. Return one paragraph on one line.'
     );
   }
-  const known = new Map(placeholders.map((entry) => [entry.placeholder, entry.text]));
+  const known = new Set(placeholders.map((entry) => entry.placeholder));
   const seen = new Set<string>();
-  for (const match of output.matchAll(PLACEHOLDER)) {
-    const placeholder = match[0];
-    const text = known.get(placeholder);
-    if (text === undefined) {
+  for (const [placeholder] of output.matchAll(PLACEHOLDER)) {
+    if (!known.has(placeholder)) {
       throw new RewriteError(
         'placeholder-unknown',
         `The model output contains ${placeholder}, which is not in the paragraph. ` +
@@ -157,31 +150,6 @@ export function checkOutput(
       );
     }
     seen.add(placeholder);
-    const start = match.index;
-    const end = start + placeholder.length;
-    // The punctuation check looks past spaces, so `⟦1⟧ ,` repeats a comma too.
-    const nextMark = output.slice(end).trimStart()[0] ?? '';
-    const previousMark = output.slice(0, start).trimEnd().slice(-1);
-    const first = text[0] ?? '';
-    const last = text[text.length - 1] ?? '';
-    if (PUNCTUATION.test(last) && nextMark === last) {
-      throw new RewriteError(
-        'punctuation-repeated',
-        `The model output repeats "${last}" after ${placeholder}, which already ends with it.`
-      );
-    }
-    if (PUNCTUATION.test(first) && previousMark === first) {
-      throw new RewriteError(
-        'punctuation-repeated',
-        `The model output repeats "${first}" before ${placeholder}, which already starts with it.`
-      );
-    }
-    if (!SPACING.has(output[start - 1] ?? '') || !SPACING.has(output[end] ?? '')) {
-      throw new RewriteError(
-        'text-attached',
-        `The model output attaches text to ${placeholder}. Put a space on each side of it.`
-      );
-    }
   }
   if (keepPlaceholders) {
     const missing = placeholders.find((entry) => !seen.has(entry.placeholder));
@@ -203,13 +171,31 @@ export function expandedOutput(
   return output.replace(PLACEHOLDER, (placeholder) => known.get(placeholder) ?? placeholder);
 }
 
-/** Split the model output the way `getTextRanges([' ', '\t'])` splits text. */
-function tokensOf(output: string): ModelToken[] {
+/**
+ * Split text the way the units split a paragraph: each placeholder alone, and other text into
+ * pieces that end after a space or a tab, or where a placeholder starts.
+ */
+export function tokensOf(text: string): ModelToken[] {
   const tokens: ModelToken[] = [];
-  for (const piece of output.match(/[^ \t]*[ \t]|[^ \t]+$/g) ?? []) {
-    const placeholder = /^⟦(\d+)⟧[ \t]?$/.exec(piece);
-    tokens.push({ text: piece, atom: placeholder ? Number(placeholder[1]) : null });
+  let piece = '';
+  const flush = () => {
+    if (piece !== '') tokens.push({ text: piece, atom: null });
+    piece = '';
+  };
+  for (let index = 0; index < text.length; ) {
+    const placeholder = text[index] === '⟦' ? PLACEHOLDER_AT.exec(text.slice(index)) : null;
+    if (placeholder) {
+      flush();
+      tokens.push({ text: placeholder[0], atom: Number(placeholder[1]) });
+      index += placeholder[0].length;
+      continue;
+    }
+    const char = text[index]!;
+    piece += char;
+    index += 1;
+    if (char === ' ' || char === '\t') flush();
   }
+  flush();
   return tokens;
 }
 
@@ -275,15 +261,16 @@ export function hunksOf(units: readonly PlanUnit[], output: string): Hunk[] {
       open = null;
       const unit = units[step.unit]!;
       // Text after the last word needs the space the model wrote after it.
-      if (spacingOf(unit.text) === '' && unit.atom === null) carry = spacingOf(step.token.text);
+      if (step.unit === units.length - 1 && unit.atom === null && spacingOf(unit.text) === '')
+        carry = spacingOf(step.token.text);
       next = step.unit + 1;
       continue;
     }
     if (step.kind === 'insert' && step.token.atom !== null) {
       throw new RewriteError(
         'placeholder-moved',
-        `The model output moves ${placeholderOf(step.token.atom)}. Keep each placeholder in ` +
-          'its order among the other placeholders.'
+        `The model output moves ${placeholderOf(step.token.atom)}. Keep the placeholders in ` +
+          'their order.'
       );
     }
     if (!open) {

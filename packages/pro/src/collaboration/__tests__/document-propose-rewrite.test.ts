@@ -86,9 +86,10 @@ for (const [where, edit] of [
       };
       const failure = await alice!.runtime
         .run(async (context) => {
-          // Two syncs prepare, two turn tracking on, the fifth writes the last hunk; the
-          // participant edits before the sixth, which writes the first hunk.
-          const paused = interrupted(context, 6, peerEdit);
+          // Syncs 1 to 4 prepare, 5 and 6 turn tracking on, and 7 lists the revisions. The last
+          // hunk writes at 8 and reads back at 9 and 10; the participant edits before sync 11,
+          // which writes the first hunk.
+          const paused = interrupted(context, 11, peerEdit);
           const draft = await prepareRewrite(paused, paused.document.body.paragraphs.getFirst());
           await draft.apply(MODEL);
         })
@@ -128,6 +129,47 @@ for (const [where, edit] of [
     }
   });
 }
+
+test('a participant with the same author keeps their change when the rewrite rolls back', async () => {
+  const r = await room('reviewer first', BODY);
+  try {
+    const [alice] = r.peers;
+    // A second worker that writes under the same author name.
+    const twin = r.mount(r.pair.bob, REVIEWER);
+    try {
+      const failure = await alice!.runtime
+        .run(async (context) => {
+          const paused = interrupted(context, 11, async () => {
+            await twin.runtime.run(async (other) => {
+              other.document.changeTrackingMode = 'TrackMineOnly';
+              other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
+              await other.sync();
+            });
+            r.sync();
+          });
+          const draft = await prepareRewrite(paused, paused.document.body.paragraphs.getFirst());
+          await draft.apply(MODEL);
+        })
+        .then(
+          () => null,
+          (error: unknown) => error
+        );
+      expect(failure).toMatchObject({ code: 'stale' });
+      r.sync();
+      const seen = [await state(alice!.runtime), await state(twin.runtime)];
+      for (const view of seen) {
+        expect(view).toMatchObject({
+          first: `Note: ${ORIGINAL}`,
+          revisions: [`${REVIEWER}:Insert`],
+        });
+      }
+    } finally {
+      twin.close();
+    }
+  } finally {
+    r.close();
+  }
+});
 
 test('an edit while the model answers makes proposeRewrite prepare and ask again', async () => {
   const r = await room('reviewer first', BODY);

@@ -33,6 +33,7 @@ const PLACEHOLDERS = {
   from: 'string',
   to: 'string',
   callModel: '(prompt: string) => Promise<string>',
+  runtime: "import('@docx-editor.dev/editor-api').DocxEditorRuntime",
 };
 
 /**

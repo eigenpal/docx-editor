@@ -32,20 +32,69 @@ try {
 
 `draft.prompt` holds your instruction, the placeholder rules, a legend of the placeholders, and the paragraph text. To write your own prompt, use `draft.text` and `draft.placeholders` instead. The changes use the runtime's `author`. In a page, create the runtime with `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser`, and give the editor the review module.
 
-To rewrite several paragraphs, call `proposeRewrites(context, items)` with a list of `{ paragraph, rewrite }` items. It rewrites them one after another and returns one result for each item, shaped like a `Promise.allSettled` result. A refused paragraph does not stop the others.
-
 To check a draft before you write it, call `prepareRewrite(context, paragraph, options)`. It returns the same draft, and `draft.apply(modelText)` writes the answer.
+
+## What the model sees
+
+Each field, picture, equation, note reference, and content-locked control reaches the model as a numbered placeholder. A placeholder stands for the content only, so the text beside it stays ordinary text that the model can change:
+
+```text
+Subject to ⟦1⟧, the Supplier shall deliver the goods herein⟦2⟧.
+
+Placeholders:
+⟦1⟧ = field REF _Ref1 \h, reads "Section 4.2"
+⟦2⟧ = footnote or endnote reference mark
+```
+
+The legend describes each placeholder: a field by its code and result, a locked content control by its tag and text, a picture by its alternative text, and an equation or a note reference by its kind. A note reference is told apart from an equation by its superscript formatting.
+
+A placeholder that the model keeps never changes. A placeholder that the model leaves out deletes what it stands for as one tracked deletion. A deletion of a whole equation strikes the whole equation, and a deletion of a whole content-locked control proposes removing the control. To refuse a left-out placeholder instead, pass `keepPlaceholders: true`.
+
+## Rewrite several paragraphs
+
+`proposeRewrites(context, items, options)` rewrites a list of `{ paragraph, rewrite }` items. It prepares every paragraph first, calls the model for up to `concurrency` paragraphs at a time, and then writes the answers one paragraph after another. The default `concurrency` is `4`.
+
+`context.document.body.paragraphs` lists every paragraph, including empty paragraphs and the paragraphs in table cells. Load the properties that you filter on, and pass only the paragraphs to rewrite. The following example skips empty paragraphs and headings:
+
+```ts
+import { proposeRewrites } from '@docx-editor.dev/editor-api/agent';
+
+await runtime.run(async (context) => {
+  const paragraphs = context.document.body.paragraphs;
+  paragraphs.load('items/text,items/style');
+  await context.sync();
+
+  const body = paragraphs.items.filter(
+    (paragraph) => paragraph.text.trim() !== '' && !paragraph.style.startsWith('Heading')
+  );
+  const results = await proposeRewrites(
+    context,
+    body.map((paragraph) => ({ paragraph, rewrite: (draft) => callModel(draft.prompt) })),
+    { instruction: 'Use plain language.', concurrency: 4 }
+  );
+  for (const result of results) {
+    if (result.status === 'rejected') console.warn(result.reason.code, result.reason.message);
+  }
+});
+```
+
+Every item settles. The results have the shape of `Promise.allSettled` results, in the order of the items. A paragraph that fails has `status: 'rejected'` and a `RewriteError` as `reason`. The other paragraphs are not affected. Pass each paragraph once.
 
 ## Guarantees
 
-- Either every change lands and the paragraph reads as the model's answer, or the paragraph stays as it was. A failed write rejects only the changes that this rewrite made, also in a collaboration session. Other participants' changes stay.
+- Either every change lands and the paragraph reads as the model's answer, or the paragraph stays as it was.
+- A failed write rejects only the changes that this rewrite made, also in a collaboration session. The helper records each change it makes by its type, author, date, and text. Changes by other participants stay, including changes by a worker or a person who uses the same author name.
 - The helper checks the answer before it writes anything. An answer that breaks a placeholder rule writes nothing.
-- If tracking is off, the helper turns on `TrackMineOnly` for its writes and turns it off again. It never turns tracking off.
-- Fields, pictures, equations, note references, and content-locked controls reach the model as numbered placeholders, such as `⟦1⟧`. They change whole or not at all.
+- If tracking is off, the helper turns on `TrackMineOnly` for its writes and turns it off again. It never turns tracking off. If turning it off again fails, the proposal stands and `document.changeTrackingMode` reads `TrackMineOnly`.
 
 ## Handle errors
 
-The helper throws a `RewriteError`. When `error.isModelError` is `true`, nothing was written, and `error.message` explains the broken rule in words that you can send back to the model. `proposeRewrite` does this on its own: it calls your function again with `draft.feedback` set and the reason in `draft.prompt`. It also prepares the paragraph again after a `stale` error. The `retries` option caps both and defaults to `2`.
+The helper throws a `RewriteError`. When `error.isModelError` is `true`, nothing was written, and `error.message` explains the broken rule in words that you can send back to the model. `proposeRewrite` and `proposeRewrites` retry on their own:
+
+- After a model error, they call your function again with `draft.feedback` set and the reason in `draft.prompt`.
+- After a `stale` or a `verification-failed` error, they prepare the paragraph again and call your function again.
+
+The `retries` option caps both. It takes a whole number from `0` to `5`, and the default is `2`. A paragraph that still fails is reported with the last error.
 
 | `code` | Meaning | What to do |
 | --- | --- | --- |
@@ -54,27 +103,27 @@ The helper throws a `RewriteError`. When `error.isModelError` is `true`, nothing
 | `placeholder-moved` | The answer changes the order of the placeholders. | Ask the model again. |
 | `placeholder-repeated` | The answer has a placeholder more than once. | Ask the model again. |
 | `placeholder-missing` | With `keepPlaceholders: true`, the answer leaves out a placeholder. | Ask the model again. |
-| `text-attached` | The answer attaches text to a placeholder, such as `⟦1⟧;`. | Ask the model again. |
-| `punctuation-repeated` | The answer repeats the punctuation that a placeholder already holds. | Ask the model again. |
+| `model-failed` | Your `rewrite` function threw. `error.cause` holds its error. | Retry the call or report it. |
 | `pending-changes` | The paragraph has tracked changes. | Accept or reject them first. |
 | `tracking-unavailable` | The runtime cannot record tracked changes. | Create the runtime with an `author`. In a page, give the editor the review module. |
 | `draft-used` | The draft already wrote to the paragraph. | Prepare the paragraph again. |
 | `too-long` | The paragraph and the answer are too long to compare. | Rewrite a shorter paragraph. |
+| `read-failed` | The document refused a read of the paragraph. `error.cause` holds the reason. | Read `error.cause`. |
 | `stale` | Another edit changed the document during the rewrite. The rewrite was rolled back. | Prepare the paragraph again. |
 | `locked` | An edit touched protected content. The rewrite was rolled back. | Keep the content whole. |
 | `write-failed` | The document refused an edit. The rewrite was rolled back. `error.cause` holds the reason. | Read `error.cause`. |
-| `verification-failed` | The paragraph would not read as the answer. The rewrite was rolled back. | Keep the spacing around each placeholder. |
+| `verification-failed` | The paragraph would not read as the answer. The rewrite was rolled back. | Prepare the paragraph again. |
 | `rollback-failed` | A write failed, and rejecting the rewrite's changes failed too. | Review the paragraph. `error.cause` holds both errors. |
+
+If a cleanup step fails after an error, such as turning tracking off again, `error.suppressed` holds that second error. It never replaces the first one.
 
 ## How it works
 
-1. The helper splits the paragraph into word ranges with `getTextRanges([' ', '\t'])`. It reads the `fields`, `inlinePictures`, and `contentControls` of every range in one sync.
-1. It shows each atom to the model as a placeholder, with a legend of the exact text that the atom holds.
+1. The helper splits the paragraph into word ranges with `getTextRanges([' ', '\t'])`, and reads the `fields`, `inlinePictures`, and `contentControls` of every range.
+1. In a word that holds an atom, it finds the atom with `ContentControl.getRange()`, `search('￼')`, or a search for the punctuation beside a field. It addresses the text before and after the atom with `getRange('Start')`, `getRange('End')`, and `expandTo()`, and reads each part back to check it.
 1. It compares the answer with the original words by longest common subsequence. Each run of differences becomes one call: `insertText(text, 'Replace')`, `delete()`, or `insertText(text, 'Before')` or `'After'`.
-1. It writes the calls from the last one to the first, one sync each, so the earlier ranges stay valid.
+1. It writes the calls from the last one to the first, one sync each, so the earlier ranges stay valid. After each write, it reads the paragraph's revisions and records the new ones.
 1. It reads the result with `getReviewedText('Current')` and compares it with the answer.
-1. If a step fails, it finds the paragraph again by its `uniqueLocalId` and rejects the revisions by the runtime's author. The paragraph had none before the rewrite, so those revisions are the rewrite's own.
-
-A left-out placeholder deletes what it stands for as one tracked deletion. This works for fields and note references. A deletion of a whole equation fails with `verification-failed`, and a deletion of a whole content-locked control fails with `locked`. In both cases the rewrite rolls back. To refuse a left-out placeholder before anything is written, pass `keepPlaceholders: true`.
+1. If a step fails, it finds the paragraph again by its `uniqueLocalId` and rejects the revisions that it recorded.
 
 For the word-range rules, see [Text and ranges](/docs/2.x/editor-api/text-and-ranges#split-text-into-word-ranges). For tracked edit limits, see [Tracked changes](/docs/2.x/editor-api/revisions).

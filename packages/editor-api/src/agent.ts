@@ -12,8 +12,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * and the paragraph reads as the answer, or the paragraph stays as it was and the helper throws a
  * `RewriteError` with a stable `code`.
  *
- * The helpers sit next to the object model, not on it: they use only the Office.js-shaped calls
- * of `@docx-editor.dev/editor-api`, on the `context` and `paragraph` that you pass in.
+ * The helpers sit next to the object model, not on it, and are outside its Office.js
+ * compatibility scope. They use only the Office.js-shaped calls of
+ * `@docx-editor.dev/editor-api`, on the `context` and `paragraph` that you pass in.
  *
  * @example Rewrite the first paragraph on a server
  * ```ts
@@ -38,18 +39,17 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @public
  */
 
-export {
-  prepareRewrite,
-  proposeRewrite,
-  proposeRewrites,
-  type ProposeRewriteOptions,
-  type RewriteDraft,
-  type RewriteFeedback,
-  type RewriteFunction,
-  type RewriteItem,
-  type RewriteOptions,
-  type RewriteResult,
-  type RewriteSettledResult,
-} from './agent/rewrite.ts';
+export { prepareRewrite, proposeRewrite, proposeRewrites } from './agent/rewrite.ts';
+export type {
+  ProposeRewriteOptions,
+  ProposeRewritesOptions,
+  RewriteDraft,
+  RewriteFeedback,
+  RewriteFunction,
+  RewriteItem,
+  RewriteOptions,
+  RewriteResult,
+  RewriteSettledResult,
+} from './agent/rewrite-types.ts';
 export { RewriteError, type RewriteErrorCode } from './agent/rewrite-error.ts';
 export type { RewritePlaceholder, RewritePlaceholderKind } from './agent/rewrite-plan.ts';

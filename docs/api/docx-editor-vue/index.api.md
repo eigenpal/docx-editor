@@ -179,7 +179,6 @@ import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { VNode } from 'vue';
-import { VNodeChild } from 'vue';
 import { VNodeProps } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';

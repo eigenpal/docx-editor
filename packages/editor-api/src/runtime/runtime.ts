@@ -360,9 +360,11 @@ export function createRuntime(options: CreateRuntimeOptions): DocxEditorServerRu
     save: options.save && host.capabilities.save,
     preview: options.preview !== undefined,
   });
+  // Trimmed once here, as the engine trims it before it writes `w:author`, so every reader of
+  // the runtime's author, such as the agent entry's author hook, sees the name the file records.
   const author =
     typeof options.author === 'string' && options.author.trim().length > 0
-      ? options.author
+      ? options.author.trim()
       : undefined;
   const revisionTextView = options.revisionTextView ?? 'allMarkup';
   if (revisionTextView !== 'allMarkup' && revisionTextView !== 'original') {

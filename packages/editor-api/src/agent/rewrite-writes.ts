@@ -6,22 +6,23 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // The writes of the rewrite helper: one hunk per sync, the tracking mode around them, and the
 // rollback that rejects only the helper's own changes. Every call is an Office.js-shaped public
 // call; refusals are read by shape, because this entry is its own bundle.
+//
+// OWN CHANGES BY SIGNATURE. The helper reads the paragraph's revisions before its first write and
+// after each write. The revisions that are new after a write and carry the runtime's author are
+// the ones the write made; their signatures (type, author, date, and text) are recorded. A
+// rollback rejects exactly those, so a worker or a person who shares the author name keeps the
+// changes they make before the rewrite, during the model call, or after a failed write.
 
-import type { Paragraph, Range, RequestContext } from '@docx-editor.dev/editor-api';
-import { RewriteError } from './rewrite-error.ts';
+import type { Paragraph, Revision, RequestContext } from '@docx-editor.dev/editor-api';
+import { messageOf, RewriteError } from './rewrite-error.ts';
 import type { Hunk } from './rewrite-plan.ts';
+import type { Unit } from './rewrite-units.ts';
 
 /** How many times a write tries again after another participant's edit. */
 const MAX_STALE_ATTEMPTS = 3;
 
-/** A run of word ranges that the helper edits as one unit. */
-export interface UnitRanges {
-  readonly first: Range;
-  readonly last: Range;
-}
-
 /** The error code and rule of a refused sync, or null for any other error. */
-function refusalOf(error: unknown): { code: string; rule: string | undefined } | null {
+export function refusalOf(error: unknown): { code: string; rule: string | undefined } | null {
   if (typeof error !== 'object' || error === null) return null;
   const { name, code, debugInfo } = error as {
     name?: unknown;
@@ -56,8 +57,8 @@ export function writeFailure(error: unknown): RewriteError {
   }
   const reason = refusal
     ? `${refusal.code}${refusal.rule === undefined ? '' : ` (${refusal.rule})`}`
-    : String(error);
-  return new RewriteError('write-failed', `The document refused an edit: ${reason}.`, {
+    : messageOf(error);
+  return new RewriteError('write-failed', `The document refused an edit: ${reason}`, {
     cause: error,
   });
 }
@@ -65,7 +66,7 @@ export function writeFailure(error: unknown): RewriteError {
 /**
  * Queue a write and sync, after a read that brings the context up to date. A read-only sync
  * never fails on another participant's edit, so only an edit between the read and the write
- * makes this try again.
+ * makes this try again. `queue` answers false when there is nothing to write.
  */
 async function writeFresh(context: RequestContext, queue: () => boolean): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
@@ -81,12 +82,14 @@ async function writeFresh(context: RequestContext, queue: () => boolean): Promis
   }
 }
 
-/** Turn on `TrackMineOnly` for the writes. Answers whether the helper changed the mode. */
-export async function startTracking(context: RequestContext, mode: string): Promise<boolean> {
-  if (mode === 'TrackMineOnly') return false;
+/** Turn on `TrackMineOnly` if it is off. Answers whether the helper changed the mode. */
+export async function startTracking(context: RequestContext): Promise<boolean> {
+  let changed = false;
   try {
     await writeFresh(context, () => {
+      if (context.document.changeTrackingMode === 'TrackMineOnly') return false;
       context.document.changeTrackingMode = 'TrackMineOnly';
+      changed = true;
       return true;
     });
   } catch (error) {
@@ -97,31 +100,113 @@ export async function startTracking(context: RequestContext, mode: string): Prom
       { cause: error }
     );
   }
-  return true;
+  return changed;
 }
 
-/** Put the tracking mode back as the caller had it. */
-export async function stopTracking(context: RequestContext, mode: string): Promise<void> {
+/** Turn tracking off again, after {@link startTracking} turned it on. */
+export async function stopTracking(context: RequestContext): Promise<void> {
   await writeFresh(context, () => {
-    context.document.changeTrackingMode = mode === 'TrackMineOnly' ? 'TrackMineOnly' : 'Off';
+    context.document.changeTrackingMode = 'Off';
     return true;
   });
 }
 
 /** Queue one hunk as one tracked edit. */
-export function queueHunk(paragraph: Paragraph, units: readonly UnitRanges[], hunk: Hunk): void {
+function queueHunk(paragraph: Paragraph, units: readonly Unit[], hunk: Hunk): void {
   if (hunk.to > hunk.from) {
-    const first = units[hunk.from]!.first;
-    const last = units[hunk.to - 1]!.last;
+    const first = units[hunk.from]!.range;
+    const last = units[hunk.to - 1]!.range;
     const target = first === last ? first : first.expandTo(last);
     if (hunk.text === '') target.delete();
     else target.insertText(hunk.text, 'Replace');
-  } else if (units.length === 0) {
+    return;
+  }
+  if (units.length === 0) {
     paragraph.insertText(hunk.text, 'Start');
-  } else if (hunk.from === 0) {
-    units[0]!.first.insertText(hunk.text, 'Before');
+    return;
+  }
+  // Insert beside text rather than beside an atom, so the new text never lands inside a field
+  // result or a content control.
+  const next = units[hunk.from];
+  const previous = units[hunk.from - 1];
+  if (next && (next.atom === null || !previous || previous.atom !== null)) {
+    next.range.insertText(hunk.text, 'Before');
   } else {
-    units[hunk.from - 1]!.last.insertText(hunk.text, 'After');
+    previous!.range.insertText(hunk.text, 'After');
+  }
+}
+
+/**
+ * A revision's signature: its type, author, date, and text. Every field is part of the file, so
+ * a signature survives another participant's edits, which can renumber the change itself.
+ */
+function signatureOf(revision: Revision, text: string): string {
+  return [revision.type, revision.author, revision.date?.toISOString() ?? '', text].join('\u0000');
+}
+
+/** The paragraph's revisions, each with its signature. Two syncs. */
+async function revisionsOf(
+  context: RequestContext,
+  paragraph: Paragraph
+): Promise<{ revision: Revision; signature: string; author: string }[]> {
+  const revisions = paragraph.getRange('Whole').revisions;
+  revisions.load('items/author,items/type,items/date');
+  await context.sync();
+  const ranges = revisions.items.map((revision) => {
+    const range = revision.range;
+    range.load('text');
+    return range;
+  });
+  if (ranges.length > 0) await context.sync();
+  return revisions.items.map((revision, index) => ({
+    revision,
+    signature: signatureOf(revision, ranges[index]!.text),
+    author: revision.author,
+  }));
+}
+
+/** Signatures as counts, so two equal changes stay two. */
+function counted(signatures: Iterable<string>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const signature of signatures) counts.set(signature, (counts.get(signature) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * Write the hunks from the last to the first, so the ranges before each edit stay valid. Each
+ * write is framed by reads of the paragraph's revisions; the ones that are new after the write
+ * and carry the runtime's author are the write's own, and their signatures go into `own`.
+ * Throws what the write threw.
+ */
+export async function writeHunks(
+  context: RequestContext,
+  paragraph: Paragraph,
+  units: readonly Unit[],
+  hunks: readonly Hunk[],
+  author: string,
+  own: Map<string, number>
+): Promise<void> {
+  let known = counted((await revisionsOf(context, paragraph)).map((item) => item.signature));
+  const collect = async () => {
+    const after = await revisionsOf(context, paragraph);
+    const left = new Map(known);
+    for (const { signature, author: by } of after) {
+      const count = left.get(signature) ?? 0;
+      if (count > 0) left.set(signature, count - 1);
+      else if (by === author) own.set(signature, (own.get(signature) ?? 0) + 1);
+    }
+    known = counted(after.map((item) => item.signature));
+  };
+  for (const hunk of [...hunks].reverse()) {
+    queueHunk(paragraph, units, hunk);
+    try {
+      await context.sync();
+    } catch (error) {
+      // A refused sync wrote nothing. Any other failure may have written, so read what is new.
+      if (refusalOf(error) === null) await collect().catch(() => undefined);
+      throw error;
+    }
+    await collect();
   }
 }
 
@@ -145,25 +230,28 @@ async function reacquire(
 }
 
 /**
- * Reject the tracked changes that this author made in the paragraph. The paragraph had none when
- * the draft was prepared, so they are the ones the draft wrote; other participants' changes stay.
- * Each attempt reads the paragraph again first, so it rejects on the current revision.
+ * Reject the revisions whose signatures are in `own`, and only those. Each attempt reads the
+ * paragraph again first, so it rejects on the current revision.
  */
 export async function rollback(
   context: RequestContext,
   paragraph: Paragraph,
   paragraphId: string,
-  author: string
+  own: ReadonlyMap<string, number>
 ): Promise<void> {
+  if (own.size === 0) return;
   for (let attempt = 1; ; attempt += 1) {
     const target = await reacquire(context, paragraph, paragraphId);
     if (!target) return;
-    const revisions = target.getRange('Whole').revisions;
-    revisions.load('items/author');
-    await context.sync();
-    const own = revisions.items.filter((revision) => revision.author === author);
-    if (own.length === 0) return;
-    for (const revision of own) revision.reject();
+    const left = new Map(own);
+    const mine = (await revisionsOf(context, target)).filter(({ signature }) => {
+      const count = left.get(signature) ?? 0;
+      if (count === 0) return false;
+      left.set(signature, count - 1);
+      return true;
+    });
+    if (mine.length === 0) return;
+    for (const { revision } of mine) revision.reject();
     try {
       await context.sync();
       return;

@@ -4,17 +4,6 @@
 
 ```ts
 
-import { AutomationCapabilities } from '@docx-editor.dev/core/automation';
-import { AutomationHandle } from '@docx-editor.dev/core/automation';
-import { AutomationHost } from '@docx-editor.dev/core/automation';
-import { AutomationOperation } from '@docx-editor.dev/core/automation';
-import { AutomationSpan } from '@docx-editor.dev/core/automation';
-import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
-import { AutomationValue } from '@docx-editor.dev/core/automation';
-import { DiagnosticCode } from '@docx-editor.dev/core/automation';
-import { RevisionAuthorResult } from '@docx-editor.dev/core/automation';
-import { RevisionBatchResult } from '@docx-editor.dev/core/automation';
-
 // @public
 export function prepareRewrite(context: RequestContext, paragraph: Paragraph, options?: RewriteOptions): Promise<RewriteDraft>;
 
@@ -27,7 +16,12 @@ export interface ProposeRewriteOptions extends RewriteOptions {
 }
 
 // @public
-export function proposeRewrites(context: RequestContext, items: readonly RewriteItem[], options?: ProposeRewriteOptions): Promise<RewriteSettledResult[]>;
+export function proposeRewrites(context: RequestContext, items: readonly RewriteItem[], options?: ProposeRewritesOptions): Promise<RewriteSettledResult[]>;
+
+// @public
+export interface ProposeRewritesOptions extends ProposeRewriteOptions {
+    readonly concurrency?: number;
+}
 
 // @public
 export interface RewriteDraft {
@@ -48,10 +42,11 @@ export class RewriteError extends Error {
     readonly code: RewriteErrorCode;
     readonly isModelError: boolean;
     readonly name = "RewriteError";
+    suppressed?: unknown;
 }
 
 // @public
-export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'text-attached' | 'punctuation-repeated' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
+export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'model-failed' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
 
 // @public
 export interface RewriteFeedback {
@@ -76,13 +71,14 @@ export interface RewriteOptions {
 
 // @public
 export interface RewritePlaceholder {
+    readonly description: string;
     readonly kind: RewritePlaceholderKind;
     readonly placeholder: string;
     readonly text: string;
 }
 
 // @public
-export type RewritePlaceholderKind = 'field' | 'content-control' | 'picture' | 'equation-or-note';
+export type RewritePlaceholderKind = 'field' | 'content-control' | 'picture' | 'equation' | 'note-reference';
 
 // @public
 export interface RewriteResult {

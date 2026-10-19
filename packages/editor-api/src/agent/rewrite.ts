@@ -6,172 +6,57 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // Propose a model's rewrite of a paragraph as the fewest tracked changes.
 //
 // A helper NEXT TO the object model, not a member of it: every document call here is an
-// Office.js-shaped public call (`getTextRanges`, `expandTo`, `insertText`, `delete`,
-// `getReviewedText`, `Revision.reject`). The one exception is the author, which the helper reads
-// through a non-enumerable hook on the request context, so a caller never passes it twice.
+// Office.js-shaped public call (`getTextRanges`, `search`, `getRange`, `expandTo`, `insertText`,
+// `delete`, `getReviewedText`, `Revision.reject`). Two non-enumerable hooks are the exception: the
+// request context answers the runtime's author, so a caller never passes it twice, and a revision
+// answers an identity key, so a rollback rejects exactly the changes this rewrite made.
 //
-// ALL OR NOTHING. The paragraph must hold no tracked change when the draft is prepared, so every
-// change by the runtime's author in it afterwards is one this helper wrote. When a write or the
-// final check fails, the helper rejects exactly those changes and throws. In collaboration, a
-// participant's edit between two writes makes the next write fail with `StaleDocument`; the
-// rollback re-reads the document first, so it rejects on the current revision.
+// ALL OR NOTHING. The paragraph must hold no tracked change when the draft is prepared. Each
+// write records the identity of the revisions it made; when a write or the final check fails,
+// the helper rejects exactly those and throws. In collaboration, a participant's edit between
+// two writes makes the next write fail with `StaleDocument`; the rollback re-reads the document
+// first, so it rejects on the current revision.
 //
 // Type imports only, through the package's root entry. This entry is its own bundle, and a value
 // import would carry a second copy of the runtime into it. Naming the root entry's types keeps
-// one declaration of each, so a `Paragraph` from either entry fits these signatures.
+// one declaration of each, so a `Paragraph` from the root or the browser entry fits.
 
-import type { Paragraph, Range, RequestContext } from '@docx-editor.dev/editor-api';
-import { RewriteError } from './rewrite-error.ts';
+import type { Paragraph, RequestContext } from '@docx-editor.dev/editor-api';
+import { messageOf, RewriteError } from './rewrite-error.ts';
 import {
   checkOutput,
-  coreOf,
   draftText,
   expandedOutput,
   hunksOf,
   placeholderOf,
   promptOf,
   type RewritePlaceholder,
-  type RewritePlaceholderKind,
 } from './rewrite-plan.ts';
+import type {
+  ProposeRewriteOptions,
+  ProposeRewritesOptions,
+  RewriteDraft,
+  RewriteFeedback,
+  RewriteFunction,
+  RewriteItem,
+  RewriteOptions,
+  RewriteResult,
+  RewriteSettledResult,
+} from './rewrite-types.ts';
+import { readUnits } from './rewrite-units.ts';
 import {
-  queueHunk,
   rollback,
   startTracking,
   stopTracking,
   writeFailure,
+  writeHunks,
 } from './rewrite-writes.ts';
-
-/**
- * How to build the prompt and check the model output.
- *
- * @public
- */
-export interface RewriteOptions {
-  /**
-   * Your instruction for the model, such as `'Make it shorter.'`. It goes first in
-   * `draft.prompt`. Without it, the prompt holds only the placeholder rules and the paragraph,
-   * and you add your own instruction around it.
-   */
-  readonly instruction?: string;
-  /**
-   * Refuse output that leaves out a placeholder, with `placeholder-missing`. By default, a
-   * left-out placeholder deletes what it stands for as one tracked deletion.
-   */
-  readonly keepPlaceholders?: boolean;
-}
-
-/**
- * Options of {@link proposeRewrite} and {@link proposeRewrites}.
- *
- * @public
- */
-export interface ProposeRewriteOptions extends RewriteOptions {
-  /**
-   * How many more times to ask the model after a model error, or to prepare the paragraph again
-   * after a `stale` failure. Each retry calls your `rewrite` function again. Defaults to `2`;
-   * `0` turns retries off.
-   */
-  readonly retries?: number;
-}
-
-/**
- * A refused model answer, given to the next attempt.
- *
- * @public
- */
-export interface RewriteFeedback {
-  /** The model output that the helper refused. */
-  readonly output: string;
-  /** Why the helper refused it. `error.isModelError` is always true here. */
-  readonly error: RewriteError;
-}
-
-/**
- * A paragraph ready to send to a model: plain data, plus `apply()` for the answer.
- *
- * @public
- */
-export interface RewriteDraft {
-  /** The paragraph's `uniqueLocalId`. */
-  readonly paragraphId: string;
-  /** The paragraph text as it reads now. */
-  readonly original: string;
-  /** The paragraph text with each field, picture, equation, note reference, and locked control as `⟦n⟧`. */
-  readonly text: string;
-  /** Each placeholder in `text`, in order, and the text it stands for. */
-  readonly placeholders: readonly RewritePlaceholder[];
-  /**
-   * The prompt to send to the model: your instruction, the placeholder rules and legend, and
-   * `text`. On a retry, it also says why the previous answer was refused.
-   */
-  readonly prompt: string;
-  /** Set on a retry after a model error: the refused answer and the reason. */
-  readonly feedback?: RewriteFeedback;
-  /**
-   * Propose the model's answer as tracked changes. Either every change lands and the paragraph
-   * reads as the answer, or the paragraph stays as it was and this throws a
-   * {@link RewriteError}. After a model error, you can call it again with a new answer.
-   */
-  apply(modelText: string): Promise<RewriteResult>;
-}
-
-/**
- * What a proposed rewrite changed. Plain data.
- *
- * @public
- */
-export interface RewriteResult {
-  /** The paragraph's `uniqueLocalId`. */
-  readonly paragraphId: string;
-  /** The text before the rewrite: what rejecting every proposed change gives. */
-  readonly original: string;
-  /** The text after the rewrite: what accepting every proposed change gives. */
-  readonly proposed: string;
-  /** How many tracked edits the helper wrote. `0` when the model changed nothing. */
-  readonly changes: number;
-}
-
-/**
- * Your model call: take the draft, return the rewritten paragraph text.
- *
- * @public
- */
-export type RewriteFunction = (draft: RewriteDraft) => string | Promise<string>;
-
-/**
- * One paragraph for {@link proposeRewrites}.
- *
- * @public
- */
-export interface RewriteItem {
-  /** The paragraph to rewrite. */
-  readonly paragraph: Paragraph;
-  /** Your model call for this paragraph. */
-  readonly rewrite: RewriteFunction;
-}
-
-/**
- * The outcome of one {@link RewriteItem}, shaped like a `Promise.allSettled` result.
- *
- * @public
- */
-export type RewriteSettledResult =
-  | { readonly status: 'fulfilled'; readonly value: RewriteResult }
-  | { readonly status: 'rejected'; readonly reason: RewriteError };
-
-/** One word, or one atom that the model must keep whole, as a run of word ranges. */
-interface Unit {
-  readonly first: Range;
-  readonly last: Range;
-  /** The text the paragraph reads for this unit, with its trailing space or tab. */
-  readonly text: string;
-  /** The placeholder number of an atom, or null for a word. */
-  readonly atom: number | null;
-  readonly kind: RewritePlaceholderKind | null;
-}
 
 const AUTHOR_HOOK = Symbol.for('@docx-editor.dev/editor-api/author');
 const DEFAULT_RETRIES = 2;
+const MAX_RETRIES = 5;
+const DEFAULT_CONCURRENCY = 4;
+const MAX_CONCURRENCY = 16;
 
 /** The runtime's author, from the request context's hook. */
 function authorOf(context: RequestContext): string | undefined {
@@ -179,73 +64,10 @@ function authorOf(context: RequestContext): string | undefined {
   return typeof author === 'string' ? author : undefined;
 }
 
-/** The kind of atom a word range is, or null for a plain word. */
-function kindOf(
-  word: Range,
-  fields: number,
-  pictures: number,
-  locked: boolean
-): RewritePlaceholderKind | null {
-  if (locked) return 'content-control';
-  if (fields > 0) return 'field';
-  if (pictures > 0) return 'picture';
-  return word.text.includes('\uFFFC') ? 'equation-or-note' : null;
-}
-
-/** Read the paragraph as units: words, and atoms that change whole. Two syncs. */
-async function readUnits(
-  context: RequestContext,
-  paragraph: Paragraph
-): Promise<{ units: Unit[]; paragraphId: string; tracking: string }> {
-  const words = paragraph.getTextRanges([' ', '\t']);
-  const revisions = paragraph.getRange('Whole').revisions;
-  words.load('items/text');
-  revisions.load('items');
-  paragraph.load('uniqueLocalId');
-  context.document.load('changeTrackingMode');
-  await context.sync();
-  // The rollback rejects the author's changes in the paragraph, so it must start with none.
-  if (revisions.items.length > 0) {
-    throw new RewriteError(
-      'pending-changes',
-      'The paragraph has tracked changes. Accept or reject them before you rewrite it.'
-    );
-  }
-
-  // One sync reads the fields, pictures, and content controls of every word.
-  const reads = words.items.map((word) => {
-    const fields = word.fields;
-    const pictures = word.inlinePictures;
-    const controls = word.contentControls;
-    fields.load('items');
-    pictures.load('items');
-    controls.load('items/tag,items/cannotEdit,items/text');
-    return { word, fields, pictures, controls };
-  });
-  await context.sync();
-
-  const units: Unit[] = [];
-  let atoms = 0;
-  let lockedKey: string | null = null;
-  for (const { word, fields, pictures, controls } of reads) {
-    const locked = controls.items.find((control) => control.cannotEdit);
-    const key = locked ? `${locked.tag}\u0000${locked.text}` : null;
-    const previous = units[units.length - 1];
-    if (key !== null && key === lockedKey && previous) {
-      // The words of one locked control form one atom.
-      units[units.length - 1] = { ...previous, last: word, text: previous.text + word.text };
-      continue;
-    }
-    lockedKey = key;
-    const kind = kindOf(word, fields.items.length, pictures.items.length, locked !== undefined);
-    const atom = kind === null ? null : ++atoms;
-    units.push({ first: word, last: word, text: word.text, atom, kind });
-  }
-  return {
-    units,
-    paragraphId: paragraph.uniqueLocalId,
-    tracking: context.document.changeTrackingMode,
-  };
+/** A whole number in `[min, max]`, or `fallback` for anything that is not a finite number. */
+function clamp(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(value)));
 }
 
 const concurrentEdit = () =>
@@ -257,8 +79,7 @@ const concurrentEdit = () =>
 const notProposed = () =>
   new RewriteError(
     'verification-failed',
-    'The proposed paragraph would not read as the model output. Keep the spacing around each ' +
-      'placeholder as the paragraph has it.'
+    'The proposed paragraph would not read as the model output.'
   );
 
 /** The prompt of a retry: the first prompt, and why the previous answer was refused. */
@@ -269,12 +90,24 @@ function feedbackPrompt(prompt: string, feedback: RewriteFeedback): string {
   );
 }
 
+/** Call the model, and report its failure as `model-failed`. */
+async function callModel(rewrite: RewriteFunction, draft: RewriteDraft): Promise<string> {
+  try {
+    return String(await rewrite(draft));
+  } catch (error) {
+    throw new RewriteError('model-failed', `The rewrite function failed: ${messageOf(error)}`, {
+      cause: error,
+    });
+  }
+}
+
 /**
  * Read a paragraph for a model. The draft is plain data: send `draft.prompt` to the model, then
  * pass its answer to `draft.apply()` in the same `run()`.
  *
- * Throws a {@link RewriteError}: `pending-changes` when the paragraph has tracked changes, and
- * `tracking-unavailable` when the runtime has no author.
+ * Throws a {@link RewriteError}: `pending-changes` when the paragraph has tracked changes,
+ * `tracking-unavailable` when the runtime has no author, and `read-failed` when the document
+ * refuses a read.
  *
  * @example
  * ```ts
@@ -297,45 +130,39 @@ export async function prepareRewrite(
         'create the runtime.'
     );
   }
-  const { units, paragraphId, tracking } = await readUnits(context, paragraph);
+  const { units, paragraphId } = await readUnits(context, paragraph).catch((error: unknown) => {
+    if (error instanceof RewriteError) throw error;
+    throw new RewriteError('read-failed', `The document refused a read: ${messageOf(error)}`, {
+      cause: error,
+    });
+  });
   const placeholders: RewritePlaceholder[] = units.flatMap((unit) =>
     unit.atom === null || unit.kind === null
       ? []
-      : [{ placeholder: placeholderOf(unit.atom), kind: unit.kind, text: coreOf(unit.text) }]
+      : [
+          {
+            placeholder: placeholderOf(unit.atom),
+            kind: unit.kind,
+            text: unit.text,
+            description: unit.description,
+          },
+        ]
   );
   const original = units.map((unit) => unit.text).join('');
   const text = draftText(units);
   const keepPlaceholders = options.keepPlaceholders === true;
   let used = false;
 
-  const apply = async (modelText: string): Promise<RewriteResult> => {
-    if (used) {
-      throw new RewriteError(
-        'draft-used',
-        'This draft already wrote to the paragraph. Prepare the paragraph again.'
-      );
-    }
-    const output = String(modelText).trim();
-    checkOutput(output, placeholders, keepPlaceholders);
+  const write = async (output: string, expected: string): Promise<RewriteResult> => {
     const hunks = hunksOf(units, output);
-    const expected = expandedOutput(output, placeholders);
     if (hunks.length === 0) {
-      // Only spacing that an atom keeps can differ here, and the helper cannot write it.
       if (expected !== original.trim()) throw notProposed();
       return { paragraphId, original, proposed: original, changes: 0 };
     }
     used = true;
-
-    const restore = await startTracking(context, tracking);
-    let wrote = false;
+    const own = new Map<string, number>();
     try {
-      // From the last hunk to the first, so the ranges before each edit stay valid.
-      for (const hunk of [...hunks].reverse()) {
-        queueHunk(paragraph, units, hunk);
-        // Set before the sync: a sync that fails after it commits still leaves a change.
-        wrote = true;
-        await context.sync();
-      }
+      await writeHunks(context, paragraph, units, hunks, author, own);
       const proposed = paragraph.getReviewedText('Current');
       const before = paragraph.getReviewedText('Original');
       await context.sync();
@@ -346,22 +173,47 @@ export async function prepareRewrite(
       return { paragraphId, original, proposed: proposed.value, changes: hunks.length };
     } catch (error) {
       const failure = writeFailure(error);
-      if (wrote) {
-        try {
-          await rollback(context, paragraph, paragraphId, author);
-        } catch (rollbackError) {
-          throw new RewriteError(
-            'rollback-failed',
-            `${failure.message} Rejecting the rewrite's changes failed too, so the paragraph can ` +
-              `hold some of the changes by ${author}.`,
-            { cause: new AggregateError([failure, rollbackError]) }
-          );
-        }
+      try {
+        await rollback(context, paragraph, paragraphId, own);
+      } catch (rollbackError) {
+        throw new RewriteError(
+          'rollback-failed',
+          `${failure.message} Rejecting the rewrite's changes failed too, so the paragraph can ` +
+            'hold some of them.',
+          { cause: new AggregateError([failure, rollbackError]) }
+        );
       }
       throw failure;
-    } finally {
-      if (restore) await stopTracking(context, tracking);
     }
+  };
+
+  const apply = async (modelText: string): Promise<RewriteResult> => {
+    if (used) {
+      throw new RewriteError(
+        'draft-used',
+        'This draft already wrote to the paragraph. Prepare the paragraph again.'
+      );
+    }
+    const output = String(modelText).trim();
+    checkOutput(output, placeholders, keepPlaceholders);
+    const expected = expandedOutput(output, placeholders);
+    const restore = await startTracking(context);
+    let result: RewriteResult;
+    try {
+      result = await write(output, expected);
+    } catch (error) {
+      if (restore) {
+        // Never let the cleanup replace the real error.
+        await stopTracking(context).catch((stopError: unknown) => {
+          if (error instanceof RewriteError) error.suppressed = stopError;
+        });
+      }
+      throw error;
+    }
+    // The proposal stands even if turning tracking off again fails. The runtime then keeps
+    // `TrackMineOnly`, which `document.changeTrackingMode` reads.
+    if (restore) await stopTracking(context).catch(() => undefined);
+    return result;
   };
 
   return {
@@ -375,13 +227,50 @@ export async function prepareRewrite(
 }
 
 /**
+ * Apply answers to one paragraph until one lands or retries run out. `first` is a draft and a
+ * model answer that are already on their way.
+ */
+async function settle(
+  context: RequestContext,
+  paragraph: Paragraph,
+  rewrite: RewriteFunction,
+  options: ProposeRewriteOptions,
+  first?: { readonly draft: RewriteDraft; readonly output: Promise<string> }
+): Promise<RewriteResult> {
+  let retries = clamp(options.retries, DEFAULT_RETRIES, 0, MAX_RETRIES);
+  let prepared = first?.draft ?? (await prepareRewrite(context, paragraph, options));
+  let draft = prepared;
+  let pending = first?.output;
+  for (;;) {
+    const output = await (pending ?? callModel(rewrite, draft));
+    pending = undefined;
+    try {
+      return await draft.apply(output);
+    } catch (error) {
+      if (!(error instanceof RewriteError) || retries === 0) throw error;
+      if (error.code === 'stale' || error.code === 'verification-failed') {
+        retries -= 1;
+        prepared = await prepareRewrite(context, paragraph, options);
+        draft = prepared;
+        continue;
+      }
+      if (!error.isModelError) throw error;
+      retries -= 1;
+      const feedback = { output, error };
+      // The reason for the latest refusal only, on the prompt of the prepared draft.
+      draft = { ...prepared, feedback, prompt: feedbackPrompt(prepared.prompt, feedback) };
+    }
+  }
+}
+
+/**
  * Ask a model to rewrite a paragraph, and propose its answer as the fewest tracked changes.
  *
  * Either every change lands and the paragraph reads as the answer, or the paragraph stays as it
  * was and this throws a {@link RewriteError}. After a model error, the helper calls `rewrite`
- * again with `draft.feedback` set and the reason in `draft.prompt`. After a `stale` failure, it
- * prepares the paragraph again and calls `rewrite` again. `options.retries` caps both, and
- * defaults to `2`.
+ * again with `draft.feedback` set and the reason in `draft.prompt`. After a `stale` or a
+ * `verification-failed` failure, it prepares the paragraph again and calls `rewrite` again.
+ * `options.retries` caps both, and defaults to `2`.
  *
  * If tracking is off, the helper turns on `TrackMineOnly` for its writes and turns it off again.
  *
@@ -406,53 +295,106 @@ export async function proposeRewrite(
   rewrite: RewriteFunction,
   options: ProposeRewriteOptions = {}
 ): Promise<RewriteResult> {
-  let retries = Math.max(0, Math.floor(options.retries ?? DEFAULT_RETRIES));
-  for (;;) {
-    const prepared = await prepareRewrite(context, paragraph, options);
-    let draft = prepared;
-    for (;;) {
-      const output = await rewrite(draft);
-      try {
-        return await draft.apply(output);
-      } catch (error) {
-        if (!(error instanceof RewriteError) || retries === 0) throw error;
-        if (error.code === 'stale') {
-          retries -= 1;
-          break;
-        }
-        if (!error.isModelError) throw error;
-        retries -= 1;
-        const feedback = { output: String(output), error };
-        // The reason for the latest refusal only, on the prompt of the prepared draft.
-        draft = { ...prepared, feedback, prompt: feedbackPrompt(prepared.prompt, feedback) };
-      }
-    }
+  return settle(context, paragraph, rewrite, options);
+}
+
+/** Start `task` for every index, at most `limit` at a time. Each promise settles on its own. */
+function pooled<T>(count: number, limit: number, task: (index: number) => Promise<T>) {
+  const results: Promise<T>[] = [];
+  const starts: (() => void)[] = [];
+  let running = 0;
+  const pump = () => {
+    while (running < limit && starts.length > 0) starts.shift()!();
+  };
+  for (let index = 0; index < count; index += 1) {
+    results.push(
+      new Promise<T>((resolve, reject) => {
+        starts.push(() => {
+          running += 1;
+          task(index)
+            .then(resolve, reject)
+            .finally(() => {
+              running -= 1;
+              pump();
+            });
+        });
+      })
+    );
   }
+  pump();
+  return results;
+}
+
+/** Any failure as a {@link RewriteError}, so every item settles. */
+function asRewriteError(error: unknown): RewriteError {
+  return error instanceof RewriteError ? error : writeFailure(error);
 }
 
 /**
- * Rewrite several paragraphs, one after another. Each paragraph gets the guarantee of
- * {@link proposeRewrite}: all of its changes, or none. A refused paragraph does not stop the
- * others; its result has `status: 'rejected'`. An error that is not a {@link RewriteError}, such
- * as one your `rewrite` function throws, stops the batch and propagates. The paragraphs before
- * it keep their proposals.
+ * Rewrite several paragraphs, and settle every one. Each paragraph gets the guarantee of
+ * {@link proposeRewrite}: all of its changes, or none.
+ *
+ * The helper prepares every paragraph first, calls the model for up to `options.concurrency`
+ * paragraphs at a time, and writes the answers one paragraph after another, in order. Model
+ * errors are retried per paragraph, as in {@link proposeRewrite}. A paragraph that still fails
+ * has `status: 'rejected'` and a {@link RewriteError} as `reason`, including `model-failed` when
+ * your `rewrite` function throws. The other paragraphs are not affected. Pass each paragraph
+ * once.
+ *
+ * @example
+ * ```ts
+ * const results = await proposeRewrites(
+ *   context,
+ *   paragraphs.map((paragraph) => ({ paragraph, rewrite: (draft) => callModel(draft.prompt) })),
+ *   { instruction: 'Use plain language.', concurrency: 4 }
+ * );
+ * ```
  *
  * @public
  */
 export async function proposeRewrites(
   context: RequestContext,
   items: readonly RewriteItem[],
-  options: ProposeRewriteOptions = {}
+  options: ProposeRewritesOptions = {}
 ): Promise<RewriteSettledResult[]> {
+  const drafts: (RewriteDraft | RewriteError)[] = [];
+  for (const { paragraph } of items) {
+    drafts.push(await prepareRewrite(context, paragraph, options).catch(asRewriteError));
+  }
+  const limit = clamp(options.concurrency, DEFAULT_CONCURRENCY, 1, MAX_CONCURRENCY);
+  const ready = drafts.flatMap((draft, index) => (draft instanceof RewriteError ? [] : [index]));
+  const answers = new Map<number, Promise<string>>();
+  pooled(ready.length, limit, (at) => {
+    const index = ready[at]!;
+    return callModel(items[index]!.rewrite, drafts[index] as RewriteDraft);
+  }).forEach((answer, at) => {
+    // Observed now, so a failed call is never an unhandled rejection; awaited in order below.
+    answer.catch(() => undefined);
+    answers.set(ready[at]!, answer);
+  });
+
+  // Turn tracking on once for every paragraph, rather than once per paragraph.
+  const restore = ready.length > 0 ? await startTracking(context).catch(() => false) : false;
   const results: RewriteSettledResult[] = [];
-  for (const { paragraph, rewrite } of items) {
-    try {
-      const value = await proposeRewrite(context, paragraph, rewrite, options);
-      results.push({ status: 'fulfilled', value });
-    } catch (error) {
-      if (!(error instanceof RewriteError)) throw error;
-      results.push({ status: 'rejected', reason: error });
+  try {
+    for (const [index, item] of items.entries()) {
+      const draft = drafts[index]!;
+      if (draft instanceof RewriteError) {
+        results.push({ status: 'rejected', reason: draft });
+        continue;
+      }
+      try {
+        const value = await settle(context, item.paragraph, item.rewrite, options, {
+          draft,
+          output: answers.get(index)!,
+        });
+        results.push({ status: 'fulfilled', value });
+      } catch (error) {
+        results.push({ status: 'rejected', reason: asRewriteError(error) });
+      }
     }
+  } finally {
+    if (restore) await stopTracking(context).catch(() => undefined);
   }
   return results;
 }

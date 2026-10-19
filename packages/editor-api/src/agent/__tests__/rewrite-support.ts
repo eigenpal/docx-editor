@@ -26,7 +26,7 @@ export const REF =
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
   t('Section 4.2') +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-const EQUATION = `<m:oMath xmlns:m="${MATH}"><m:r><m:t>x</m:t></m:r></m:oMath>`;
+export const EQUATION = `<m:oMath xmlns:m="${MATH}"><m:r><m:t>x</m:t></m:r></m:oMath>`;
 export const PILL =
   '<w:sdt><w:sdtPr><w:tag w:val="party"/><w:lock w:val="contentLocked"/></w:sdtPr>' +
   `<w:sdtContent>${t('Acme Corp')}</w:sdtContent></w:sdt>`;
@@ -43,7 +43,8 @@ export function footnoted(): Uint8Array {
   const FOOTNOTES_CT =
     'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml';
   return zipDocument(
-    `<w:p>${t('The buyer pays ')}<w:r><w:footnoteReference w:id="1"/></w:r>` +
+    `<w:p>${t('The buyer pays')}` +
+      '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r>' +
       `${t(' within thirty days.')}</w:p>`,
     {
       overrides: `<Override PartName="/word/footnotes.xml" ContentType="${FOOTNOTES_CT}"/>`,
@@ -57,6 +58,22 @@ export function footnoted(): Uint8Array {
       },
     }
   );
+}
+
+const PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+/** A paragraph with an inline picture after a word, with alternative text. */
+export async function pictured(): Promise<Uint8Array> {
+  const { saved } = await withRuntime(docx(`<w:p>${t('See the logo above.')}</w:p>`), async (c) => {
+    const found = c.document.body.search('logo').getFirst();
+    await c.sync();
+    const picture = found.insertInlinePictureFromBase64(PNG, 'After');
+    await c.sync();
+    picture.altTextDescription = 'Company logo';
+    await c.sync();
+  });
+  return saved;
 }
 
 export type Pick = (context: RequestContext) => Promise<Paragraph>;

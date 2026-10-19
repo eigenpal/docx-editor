@@ -19,6 +19,9 @@ import {
   REF,
   RICH,
   RICH_ORIGINAL,
+  EQUATION,
+  PILL,
+  pictured,
   t,
   withRuntime,
   type Pick,
@@ -68,9 +71,9 @@ describe('proposeRewrite', () => {
     const prompt = outcome.prompts[0]!;
     expect(prompt).toStartWith('Return only the rewritten paragraph');
     expect(prompt).toContain(
-      'Placeholders:\n⟦1⟧ (field) = "Section 4.2"\n' +
-        '⟦2⟧ (equation or note reference) = "￼"\n' +
-        '⟦3⟧ (locked content control) = "Acme Corp"'
+      'Placeholders:\n⟦1⟧ = field REF _Ref1 \\h, reads "Section 4.2"\n' +
+        '⟦2⟧ = equation\n' +
+        '⟦3⟧ = locked content control "party", reads "Acme Corp"'
     );
     expect(prompt).toEndWith('Paragraph:\nUnder ⟦1⟧ the fee ⟦2⟧ applies\tto ⟦3⟧ promptly.');
 
@@ -89,11 +92,11 @@ describe('proposeRewrite', () => {
 
   test('keeps a footnote reference whole', async () => {
     const outcome = await rewrite(footnoted(), (text) => {
-      expect(text).toBe('The buyer pays ⟦1⟧ within thirty days.');
+      expect(text).toBe('The buyer pays⟦1⟧ within thirty days.');
       return text.replace('thirty', 'forty-five');
     });
-    expect(outcome.current).toBe('The buyer pays ￼ within forty-five days.');
-    expect(outcome.original).toBe('The buyer pays ￼ within thirty days.');
+    expect(outcome.current).toBe('The buyer pays\uFFFC within forty-five days.');
+    expect(outcome.original).toBe('The buyer pays\uFFFC within thirty days.');
     expect((await decided(outcome.saved, 'acceptAll')).text).toBe(outcome.current);
     expect((await decided(outcome.saved, 'rejectAll')).text).toBe(outcome.original);
   });
@@ -221,22 +224,86 @@ describe('proposeRewrite', () => {
     expect(value).toBe('TrackMineOnly');
   });
 
-  test('the draft lists each placeholder with its kind and its attached punctuation', async () => {
-    const bytes = docx(`<w:p>${t('Under ')}${REF}${t(', the fee applies.')}</w:p>`);
-    await withRuntime(bytes, async (context) => {
-      const draft = await prepareRewrite(context, await firstParagraph(context));
-      expect(draft.text).toBe('Under ⟦1⟧ the fee applies.');
-      expect(draft.original).toBe('Under Section 4.2, the fee applies.');
-      expect(draft.placeholders).toEqual([
-        { placeholder: '⟦1⟧', kind: 'field', text: 'Section 4.2,' },
-      ]);
+  test('a placeholder covers only its atom, and the text beside it stays editable', async () => {
+    const bytes = docx(
+      `<w:p>${t('Subject to ')}${REF}${t(', the fee herein')}${EQUATION}${t('. applies to (')}` +
+        `${PILL}${t('); see "')}${REF}${t('".')}</w:p>`
+    );
+    const original =
+      'Subject to Section 4.2, the fee herein\uFFFC. applies to (Acme Corp); see "Section 4.2".';
+    let draftText = '';
+    const outcome = await rewrite(bytes, (text) => {
+      draftText = text;
+      // The model rewrites the text beside every atom and keeps each atom.
+      return text
+        .replace('⟦1⟧,', '⟦1⟧;')
+        .replace('herein⟦2⟧.', 'hereinafter⟦2⟧:')
+        .replace('(⟦3⟧);', '⟦3⟧,')
+        .replace('"⟦4⟧".', '⟦4⟧.');
     });
+    expect(draftText).toBe('Subject to ⟦1⟧, the fee herein⟦2⟧. applies to (⟦3⟧); see "⟦4⟧".');
+    const proposed =
+      'Subject to Section 4.2; the fee hereinafter\uFFFC: applies to Acme Corp, see Section 4.2.';
+    expect(outcome.current).toBe(proposed);
+    expect(outcome.original).toBe(original);
+    expect(await decided(outcome.saved, 'acceptAll')).toEqual({
+      text: proposed,
+      fields: 2,
+      controls: ['Acme Corp:true'],
+    });
+    expect((await decided(outcome.saved, 'rejectAll')).text).toBe(original);
+  });
+
+  test('the model can put punctuation back beside a placeholder', async () => {
+    const bytes = docx(`<w:p>${t('Under ')}${REF}${t(', the fee applies.')}</w:p>`);
+    const outcome = await rewrite(bytes, (text) => {
+      expect(text).toBe('Under ⟦1⟧, the fee applies.');
+      return 'Under ⟦1⟧, the charge applies.';
+    });
+    expect(outcome.current).toBe('Under Section 4.2, the charge applies.');
+    expect(outcome.result.changes).toBe(1);
+  });
+
+  test('the legend describes each atom by what it is', async () => {
     await withRuntime(RICH, async (context) => {
       const draft = await prepareRewrite(context, await firstParagraph(context));
-      expect(draft.placeholders.map((entry) => entry.kind)).toEqual([
-        'field',
-        'equation-or-note',
-        'content-control',
+      expect(draft.placeholders).toEqual([
+        {
+          placeholder: '⟦1⟧',
+          kind: 'field',
+          text: 'Section 4.2',
+          description: 'field REF _Ref1 \\h, reads "Section 4.2"',
+        },
+        { placeholder: '⟦2⟧', kind: 'equation', text: '\uFFFC', description: 'equation' },
+        {
+          placeholder: '⟦3⟧',
+          kind: 'content-control',
+          text: 'Acme Corp',
+          description: 'locked content control "party", reads "Acme Corp"',
+        },
+      ]);
+    });
+    await withRuntime(footnoted(), async (context) => {
+      const draft = await prepareRewrite(context, await firstParagraph(context));
+      expect(draft.placeholders).toEqual([
+        {
+          placeholder: '⟦1⟧',
+          kind: 'note-reference',
+          text: '\uFFFC',
+          description: 'footnote or endnote reference mark',
+        },
+      ]);
+    });
+    await withRuntime(await pictured(), async (context) => {
+      const draft = await prepareRewrite(context, await firstParagraph(context));
+      expect(draft.text).toBe('See the logo⟦1⟧ above.');
+      expect(draft.placeholders).toEqual([
+        {
+          placeholder: '⟦1⟧',
+          kind: 'picture',
+          text: '\uFFFC',
+          description: 'picture, described as "Company logo"',
+        },
       ]);
     });
   });
@@ -277,5 +344,62 @@ describe('proposeRewrite', () => {
       return paragraphs.items.map((paragraph) => paragraph.text);
     });
     expect(rejected.value).toEqual(['First clause applies.', 'Pay fee.', 'Third clause applies.']);
+  });
+
+  test('proposeRewrites settles a paragraph whose model call throws, and keeps the others', async () => {
+    const bytes = docx(p('One applies.') + p('Two applies.') + p('Three applies.'));
+    const { value } = await withRuntime(bytes, async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items');
+      await context.sync();
+      return proposeRewrites(
+        context,
+        paragraphs.items.map((paragraph, index) => ({
+          paragraph,
+          rewrite: (draft) => {
+            if (index === 1) throw new Error('rate limited');
+            return draft.text.replace('applies', 'governs');
+          },
+        }))
+      );
+    });
+    expect(value.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'fulfilled']);
+    expect(value[1]).toMatchObject({
+      status: 'rejected',
+      reason: { code: 'model-failed', cause: { message: 'rate limited' } },
+    });
+    expect(value[2]).toMatchObject({ value: { proposed: 'Three governs.' } });
+  });
+
+  test('proposeRewrites prepares every paragraph, then calls the model concurrently', async () => {
+    const bytes = docx(['A', 'B', 'C', 'D', 'E'].map((name) => p(`${name} applies.`)).join(''));
+    const events: string[] = [];
+    let running = 0;
+    let peak = 0;
+    const { value } = await withRuntime(bytes, async (context) => {
+      const paragraphs = context.document.body.paragraphs;
+      paragraphs.load('items');
+      await context.sync();
+      return proposeRewrites(
+        context,
+        paragraphs.items.map((paragraph) => ({
+          paragraph,
+          rewrite: async (draft) => {
+            events.push(`model ${draft.original}`);
+            running += 1;
+            peak = Math.max(peak, running);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            running -= 1;
+            return draft.text.replace('applies', 'governs');
+          },
+        })),
+        { concurrency: 2 }
+      );
+    });
+    expect(value.every((result) => result.status === 'fulfilled')).toBe(true);
+    expect(peak).toBe(2);
+    expect(events).toHaveLength(5);
+    const proposed = value.map((result) => result.status === 'fulfilled' && result.value.proposed);
+    expect(proposed).toEqual(['A', 'B', 'C', 'D', 'E'].map((name) => `${name} governs.`));
   });
 });

@@ -12,6 +12,8 @@ The report checks only document editing methods and property writes selected in 
 
 The upstream member identifier (UID) list defines scope independently from the implemented subset. Unsupported editing calls stay in the denominator. Review this list when adopting a new upstream pin or changing the intended editing scope. A missing UID is an error; it never silently reduces the denominator. The full pinned inventory remains reference input so scope changes do not require a network fetch.
 
+The `@docx-editor.dev/editor-api/agent` entry is outside this scope. Its helpers, such as `proposeRewrite`, have no Office.js equivalent. They call only the Office.js-shaped members of the root entry, so their behavior follows the notes of those members.
+
 The checker reads actual `src/index.ts` exports, following re-exports and inheritance. Methods compare all overloads, parameters, and return signatures. Property writes compare setter types only. For example, a nullable `font.bold` getter does not reduce write compatibility if the setter accepts `boolean`. Read differences can still appear in runtime notes.
 
 Read `packages/editor-api/compat/reports/report.md` for editing endpoints and runtime notes. `report.json` includes the comparison shapes under `expected` and `actual`, along with upstream metadata. `summary.md` contains the overall editing percentage and separate method/property-write percentages shown in CI. Use `--output <directory>` with the package command to change the output directory.

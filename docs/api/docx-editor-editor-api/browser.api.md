@@ -4,12 +4,9 @@
 
 ```ts
 
-import { AutomationCapabilities } from '@docx-editor.dev/core/automation';
 import { AutomationHandle } from '@docx-editor.dev/core/automation';
-import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
 import { AutomationPaginationOptions } from '@docx-editor.dev/core/automation';
-import { AutomationSpan } from '@docx-editor.dev/core/automation';
 import { AutomationSpanRef } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
 import { ByteSizeBucket } from '@docx-editor.dev/core/automation';
