@@ -1705,11 +1705,9 @@ function applyInsertInlineContentControl(
   );
   // A proposed control is one tracked insertion: the whole `w:sdt` inside a `w:ins`, so a
   // reject takes the control with its text and an accept keeps it.
-  const revisionId = (): string => options?.trackedRevisionIds?.mint() ?? nextRevisionId(part)();
+  const revisionId = op.revision ? nextRevisionId(part)() : '';
   const control = op.revision
-    ? build(nextId(), 'revisionInsert', 'ins', revisionAttributes(revisionId(), op.revision), [
-        built,
-      ])
+    ? build(nextId(), 'revisionInsert', 'ins', revisionAttributes(revisionId, op.revision), [built])
     : built;
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const children = [...(pPr ? [pPr] : []), ...before, control, ...after];

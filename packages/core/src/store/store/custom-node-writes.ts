@@ -36,6 +36,7 @@ import {
   withCustomXmlDataPart,
 } from '../package/custom-xml-part.ts';
 import { contentControlsIn } from '../package/content-control-nodes.ts';
+import { parentNodeOf } from '../package/ooxml-edit.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
 import type { RevisionAttributionInput, TreeOpRejection } from './tree-op-types.ts';
@@ -172,6 +173,14 @@ export function insertCustomNodeWrite(
     return { ok: false, reason: 'unsupported', detail: 'tracked custom node wrap or rewrite' };
   }
   const revision = write.revision ? { revision: write.revision } : {};
+  // A rewrite of a node that is itself a pending proposal would land the new control outside
+  // the proposal, untracked. Refused until a rewrite can keep the proposal around it.
+  if (
+    write.replaceControlId !== undefined &&
+    parentNodeOf(store.part, write.replaceControlId)?.kind.startsWith('revision')
+  ) {
+    return { ok: false, reason: 'unsupported', detail: 'custom node inside a pending revision' };
+  }
 
   // Ids, not nodes: the transaction rebuilds the tree, so nothing else carries across it.
   const controlsBefore = new Set(contentControlsIn(store.part.root).map((entry) => entry.node.id));

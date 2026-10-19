@@ -1758,6 +1758,21 @@ export function applyRemoveContentControl(
   const content = contentControlContentNodeOf(control);
   const kept = op.keepContent && content ? [...content.children] : [];
   const children = owner.children.flatMap((child) => (child.id === control.id ? kept : [child]));
+  // A control proposed as a tracked insertion goes with its `w:ins` when nothing else is in it:
+  // an empty wrapper would stay behind as a review item with nothing to accept or reject.
+  const outer =
+    children.length === 0 && owner.kind === 'revisionInsert' && parentOf(part, owner.id);
+  if (outer) {
+    return fromEdit(
+      replaceChildren(
+        part,
+        outer.id,
+        outer.children.filter((child) => child.id !== owner.id),
+        options
+      ),
+      contentControlEffect(outer.id, 'flow-structural')
+    );
+  }
   return fromEdit(
     replaceChildren(part, owner.id, children, options),
     contentControlEffect(owner.id, 'flow-structural')
