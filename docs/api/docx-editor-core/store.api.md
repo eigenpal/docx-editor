@@ -3514,7 +3514,9 @@ export interface PersistencePort {
 export function planRevisionAuthorChange(part: OoxmlPart, revision: RevisionAttributionInput, keys?: readonly string[], scopeRoot?: OoxmlNode, authors?: readonly string[]): RevisionAuthorPlan;
 
 // @internal
-export function planRevisionBatch(part: OoxmlPart, action: 'accept' | 'reject', keys?: readonly string[], scopeRoot?: OoxmlNode): {
+export function planRevisionBatch(part: OoxmlPart, action: 'accept' | 'reject', keys?: readonly string[], scopeRoot?: OoxmlNode, options?: {
+    readonly countRemaining?: boolean;
+}): {
     ops: readonly TreeDocOp[];
     result: RevisionBatchResult;
 };
