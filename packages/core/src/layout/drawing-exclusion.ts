@@ -691,10 +691,17 @@ function pageFramedBandY(
     readonly contentLeft: number;
     readonly contentRight: number;
     readonly anchorCellBox?: LayoutBox | null;
+    readonly cellAnchorScope?: CellAnchorScope;
   }
 ): number | null {
   const vertical = projection.position?.vertical;
-  if (!options.frameBase || options.anchorCellBox != null || !vertical) return null;
+  if (!options.frameBase || !vertical) return null;
+  // Header paragraphs use cell flow, but their top-margin bands use the sheet origin.
+  const headerTopMargin =
+    options.frameBase.storyKind === 'header' &&
+    options.cellAnchorScope?.inTableCell === false &&
+    vertical.relativeFrom === 'topMargin';
+  if (options.anchorCellBox != null && !headerTopMargin) return null;
   if (!pageFramedVertically(vertical.relativeFrom) || projection.anchor?.simplePos) return null;
   const box = Object.freeze({
     x: options.contentLeft,

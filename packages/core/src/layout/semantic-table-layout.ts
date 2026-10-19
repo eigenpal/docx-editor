@@ -462,6 +462,7 @@ function placeCellParagraph(
       ? directionalListFirstLineShift(listItem, indent, deps.measurer, tabStops, available, rtl)
       : 0;
   const anchorScope = cellAnchorScope(options?.inTableCell, deps, paragraphId);
+  const storyFrame = !anchorScope.inTableCell ? deps.anchorFrameBase?.() : undefined;
   const rawZones = (anchorScope.anchorsWrapText && deps.pageExclusionZones?.()) || [];
   // The cell's own content box: tabs measure against it, and cell anchors resolve in it.
   const cellBoxWidth = indent.left + available + indent.right;
@@ -541,6 +542,7 @@ function placeCellParagraph(
           contentRight: cellBoxWidth,
           paragraphStartY: top,
           ...cellAnchorFlow(cellBoxWidth, available, anchorScope),
+          ...(storyFrame?.storyKind === 'header' ? { anchorFrameBase: storyFrame } : {}),
           ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
         },
       }),

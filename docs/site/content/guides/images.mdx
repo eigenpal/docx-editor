@@ -37,6 +37,10 @@ TIFF, EMF, and WMF paint when conversion to a validated raster succeeds. The ori
 
 SVG is painted through an `<img>`, which puts the browser in secure static mode: scripts in the file never run and external references in it are never fetched. Its intrinsic size is read from `width`/`height`/`viewBox` for reset-to-natural-size; layout always uses the authored `wp:extent`. An SVG whose root element cannot be read renders as a placeholder rather than inferring missing dimensions.
 
+Inline pictures rotated by 90 or 270 degrees reserve their rotated width and height before effect margins. Text wrapping, pagination, and caret positions use these dimensions. Saving preserves the authored extent and rotation.
+
+Header drawings positioned relative to the top margin use the physical sheet top as their origin. For these drawings outside table cells, top-and-bottom wrapping clears header text from the same origin.
+
 ## Reading selection state
 
 Use the canonical read model shared by snapshot and imperative API:

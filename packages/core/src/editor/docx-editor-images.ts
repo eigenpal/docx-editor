@@ -7,6 +7,7 @@ import {
 import { drawingAtomProjection } from '../store/package/drawing-atom-projection.ts';
 import { commandProtectionRefusal } from './command-protection.ts';
 import { inlineToFloatingPosition } from './inline-wrap-placement.ts';
+import { preserveWrapExtentOps, type WrapExtentOverrides } from './image-wrap-extent.ts';
 import { reportCommandResult } from './command-reporting.ts';
 // Selected-image derivation and image command dispatch for `createDocxEditor` (task 13).
 //
@@ -442,6 +443,18 @@ function keepPlaceWhenFloated(
   return position ? [{ op: 'positionDrawing', drawingNodeId, position }] : [];
 }
 
+function preserveWrapExtent(
+  surface: PaginatedSurface,
+  wrap: ImageWrapTarget,
+  ops: DrawingTreeDocOp[],
+  overrides?: WrapExtentOverrides
+): void {
+  const record = resolveSelectedDrawingRecord(surface);
+  const projection = record && projectDrawingForRecord(surface, record);
+  if (!projection) return;
+  preserveWrapExtentOps(projection, wrap, ops, overrides, record!.drawingNodeId);
+}
+
 function applyDrawingOps(
   surface: PaginatedSurface,
   ops: readonly DrawingTreeDocOp[]
@@ -635,6 +648,17 @@ export function gateImageCommand(
   const image = selectedImageStateOf(surface);
   if (!image) {
     return { ok: false, code: 'notFound', reason: 'no drawing is selected' };
+  }
+  const wrapTarget =
+    command.type === 'setImageWrapType'
+      ? command.target
+      : command.type === 'setImageProperties'
+        ? command.wrap
+        : undefined;
+  if (wrapTarget !== undefined && image.locks.resize) {
+    const resizing: DrawingTreeDocOp[] = [];
+    preserveWrapExtent(surface, wrapTarget, resizing);
+    if (resizing.length) return { ok: false, code: 'locked', reason: 'the drawing size is locked' };
   }
   // Suggesting supports exactly one image command: proposing the deletion. Every other
   // image edit (resize, wrap, position, replace) still refuses — a tracked form of those
@@ -842,7 +866,10 @@ export function execImageCommand(
     case 'setImageWrapType': {
       const resolved = selectedOrRequestedId(surface, command);
       if ('ok' in resolved) return resolved;
+      const ops: DrawingTreeDocOp[] = [];
+      preserveWrapExtent(surface, command.target, ops);
       return applyDrawingOps(surface, [
+        ...ops,
         { op: 'setDrawingWrap', drawingNodeId: resolved.id, wrap: command.target },
         ...keepPlaceWhenFloated(surface, resolved.id, command.target),
       ]);
@@ -907,6 +934,7 @@ export function execImageCommand(
         });
       }
       if (command.wrap !== undefined) {
+        preserveWrapExtent(surface, command.wrap, ops, command);
         ops.push({ op: 'setDrawingWrap', drawingNodeId: resolved.id, wrap: command.wrap });
         ops.push(...keepPlaceWhenFloated(surface, resolved.id, command.wrap));
       }

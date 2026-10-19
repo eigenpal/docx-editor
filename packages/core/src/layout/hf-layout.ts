@@ -5,6 +5,7 @@ import {
 import { withFieldResultsProducer } from './field-results-producer.ts';
 import { characterStyleValuesToken } from './character-style-tokens.ts';
 import { characterHeaderPageToken } from './character-header-pages.ts';
+import { headerTopMarginOrigin } from './header-footer-drawing-origin.ts';
 // Header/footer story layout (phase 2 of the legacy-lane retirement).
 //
 // A header or footer is a STORY laid out at the section's content width with no pagination:
@@ -16,12 +17,10 @@ import { characterHeaderPageToken } from './character-header-pages.ts';
 // because digit widths affect right-tab alignment. Callers obtain those via
 // {@link HeaderFooterStoryLayout.withPageContext}:
 //
-//   - no dynamic fields → identity reuse of the baseline
 //   - NUMPAGES only → one cached layout per page count
 //   - SECTIONPAGES only → one cached layout per section page count
 //   - PAGE (alone or combined) → bounded LRU over the distinct evaluated values
 //
-// Scope stays furniture-only; body field projection remains deferred.
 
 import { hasCompatibilityRule } from './compatibility/compatibility-rules.ts';
 import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
@@ -339,6 +338,7 @@ export function layoutHeaderFooterStory(
         ? ctx
         : undefined;
     const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
+    const topMarginOrigin = headerTopMarginOrigin(part, effectiveCtx, hfPageContext);
     const anchorPageToken =
       inlineDrawingLayout &&
       effectiveCtx?.contentInsetTop !== undefined &&
@@ -351,7 +351,7 @@ export function layoutHeaderFooterStory(
         ? `|frames:${effectiveCtx?.storyTop ?? hfPageContext?.storyDistance ?? ''}`
         : '') +
       fieldPageContextToken(effectiveCtx, needs) +
-      (inlineDrawingLayout ? `|pn:${pageNumber}` : '') +
+      (inlineDrawingLayout ? `|pn:${pageNumber}|tm:${topMarginOrigin ?? ''}` : '') +
       anchorPageToken +
       (effectiveCtx?.characterStyleValues
         ? `|cs:${characterStyleValuesToken(effectiveCtx.characterStyleValues)}`
@@ -410,13 +410,14 @@ export function layoutHeaderFooterStory(
         marginLeft,
         marginRight,
         marginBottom,
-        // ON PURPOSE, unlike the body story: the established page/topMargin/bottomMargin
+        // ON PURPOSE, unlike the body story: the established page/bottomMargin
         // frames keep the AUTHORED margin here. `hfAnchorOnPageSheet` re-bases page-frame
         // axes by subtracting `verticalFrameOrigin`, so this value cancels exactly. The
         // vertical margin frame above carries the effective content-box geometry separately.
         contentInsetTop: marginTop,
         contentInsetBottom: marginBottom,
         contentWidth,
+        topMarginFrameOrigin: topMarginOrigin,
         ...(verticalMarginFrame ? { verticalMarginFrame } : {}),
         contentHeight: hfContentHeight,
         contentBandHeight: hfContentHeight,

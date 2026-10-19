@@ -1,0 +1,13 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "Layout uses existing drawing properties.",
+  "after": "Layout uses rotated inline picture dimensions and header top-margin origins and text clearance.",
+  "reason": "Layout changes preserve shared operations and saved document properties.",
+  "tests": [
+    "packages/pro/src/collaboration/__tests__/document-inline-picture-rotation.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-header-top-margin.test.ts"
+  ],
+  "changeset": null,
+  "migration": null
+}

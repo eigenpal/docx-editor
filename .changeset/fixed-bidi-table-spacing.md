@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Correct border spacing in fixed-width right-to-left tables and preserve text wrapping around positioned tables.
+Correct table border spacing, floating-table wrapping, rotated inline picture dimensions, and header drawing positions and text clearance.

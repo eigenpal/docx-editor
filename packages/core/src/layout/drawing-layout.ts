@@ -1,8 +1,6 @@
+import { inlinePictureExtent } from './inline-picture-extent.ts';
 import { revisionMarkupHidesDrawing } from './revision-markup-projection.ts';
-// Inline drawing measurement and placement (typed-drawings-and-images task 6).
-//
-// DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
-// dimensions never resize layout. Paint and hit testing consume the published records only.
+// Drawing extents convert from EMUs to points here; intrinsic image dimensions do not resize layout.
 
 import { layoutTextArt, rotatedBounds, type DrawingTextArtRecord } from './drawing-text-art.ts';
 import { clipBoxToRegion } from './drawing-clip-box.ts';
@@ -153,8 +151,9 @@ export function measureInlineDrawing(projection: DrawingProjection): InlineDrawi
   const effectR = emuToPoints(projection.effectExtentEmu.right);
   const effectT = emuToPoints(projection.effectExtentEmu.top);
   const effectB = emuToPoints(projection.effectExtentEmu.bottom);
-  const width = emuToPoints(projection.extentEmu.cx);
-  const height = emuToPoints(projection.extentEmu.cy);
+  const extent = inlinePictureExtent(projection);
+  const width = emuToPoints(extent.cx),
+    height = emuToPoints(extent.cy);
   return Object.freeze({
     distL,
     distR,
@@ -529,6 +528,8 @@ export interface DrawingAnchorFrameContext {
   readonly contentInsetBottom: number;
   readonly contentWidth: number;
   readonly verticalMarginFrame?: { readonly top: number; readonly height: number };
+  /** Sheet top in header story coordinates. Body stories use their content inset. */
+  readonly topMarginFrameOrigin?: number;
   /** Body flow height on the current page (may shrink for notes/HF reserves). */
   readonly contentHeight: number;
   /** Content band between the insets: pageHeight − contentInsetTop − contentInsetBottom. */
@@ -740,7 +741,7 @@ function verticalEdges(
   const contentBottom = ctx.contentHeight;
   const marginTop = ctx.verticalMarginFrame?.top ?? contentTop;
   const marginBottom = marginTop + (ctx.verticalMarginFrame?.height ?? ctx.contentHeight);
-
+  const topMarginTop = ctx.topMarginFrameOrigin ?? pageTop;
   switch (frame) {
     case 'page':
       return { top: pageTop, bottom: pageBottomSheet, center: (pageTop + pageBottomSheet) / 2 };
@@ -759,7 +760,7 @@ function verticalEdges(
         center: ctx.anchorLineBox.y + ctx.anchorLineBox.height / 2,
       };
     case 'topMargin':
-      return { top: pageTop, bottom: pageTop, center: pageTop };
+      return { top: topMarginTop, bottom: topMarginTop, center: topMarginTop };
     case 'bottomMargin':
       return { top: pageBottomInner, bottom: pageBottomInner, center: pageBottomInner };
     case 'insideMargin':

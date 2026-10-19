@@ -224,8 +224,20 @@ export function computeImageResizeResult(options: {
   const widthScale = widthPt / startWidthPt;
   const heightScale = heightPt / startHeightPt;
 
-  const previewWidth = Math.max(1, options.startBounds.width * widthScale);
-  const previewHeight = Math.max(1, options.startBounds.height * heightScale);
+  const axesSwapped =
+    options.kind === 'inline' && Math.abs(options.transform.rotationDegrees % 180) === 90;
+  const previewWidth = Math.max(
+    1,
+    axesSwapped
+      ? options.startBounds.width + heightPt - startHeightPt
+      : options.startBounds.width * widthScale
+  );
+  const previewHeight = Math.max(
+    1,
+    axesSwapped
+      ? options.startBounds.height + widthPt - startWidthPt
+      : options.startBounds.height * heightScale
+  );
   let previewX = options.startBounds.x;
   let previewY = options.startBounds.y;
   const screenHandle = options.handle;

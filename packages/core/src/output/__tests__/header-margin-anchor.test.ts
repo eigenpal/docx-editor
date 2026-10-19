@@ -12,6 +12,7 @@ import {
   type SemanticLayout,
 } from '../../layout/index.ts';
 import { layoutHeaderFooterStory, type HeaderFooterStoryLayout } from '../../layout/hf-layout.ts';
+import { furnitureDrawingExclusionsForPage } from '../../layout/furniture-drawing-exclusion.ts';
 import type { InlineDrawingLayoutContext } from '../../layout/drawing-layout.ts';
 import {
   readOoxmlPackage,
@@ -24,6 +25,11 @@ import {
   indexInlineDrawingProjectionsInPart,
   projectDrawing,
 } from '../../store/package/drawing-projection.ts';
+import {
+  load,
+  layoutContext,
+  squareAnchorAtLeft,
+} from '../../layout/__tests__/anchored-drawing-test-fixtures.ts';
 import { mockReadyImageResource } from '../../store/__tests__/drawing-ready-fixture.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 
@@ -51,6 +57,9 @@ interface AnchorOptions {
   readonly verticalOffsetEmu?: number;
   readonly verticalAlign?: 'bottom' | 'center';
   readonly storyLineCount?: number;
+  readonly topAndBottom?: boolean;
+  readonly storyDistance?: number;
+  readonly inTable?: boolean;
 }
 
 function logoDrawing(options: AnchorOptions = {}): string {
@@ -68,7 +77,8 @@ function logoDrawing(options: AnchorOptions = {}): string {
     `<wp:positionH relativeFrom="${horizontalFrame}"><wp:posOffset>${horizontalOffsetEmu}</wp:posOffset></wp:positionH>` +
     `<wp:positionV relativeFrom="${verticalFrame}">${verticalPosition}</wp:positionV>` +
     `<wp:extent cx="${SIZE_EMU}" cy="${SIZE_EMU}"/>` +
-    '<wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare wrapText="bothSides"/>' +
+    '<wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    (options.topAndBottom ? '<wp:wrapTopAndBottom/>' : '<wp:wrapSquare wrapText="bothSides"/>') +
     '<wp:docPr id="1" name="logo"/>' +
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
     `<wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${SIZE_EMU}" cy="${SIZE_EMU}"/></a:xfrm>` +
@@ -89,10 +99,13 @@ function storyDoc(kind: 'header' | 'footer', options: AnchorOptions = {}): Uint8
           { length: Math.max(0, lineCount - 1) },
           (_, index) => `<w:p><w:r><w:t>Story line ${index + 2}</w:t></w:r></w:p>`
         ).join('');
-  const storyParagraph =
+  const paragraphs =
     '<w:p><w:r><w:t>Company Name Co., Ltd.</w:t></w:r>' +
     `<w:r>${logoDrawing(options)}</w:r></w:p>` +
     trailingParagraphs;
+  const storyParagraph = options.inTable
+    ? `<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="6000"/></w:tblGrid><w:tr><w:tc>${paragraphs}</w:tc></w:tr></w:tbl>`
+    : paragraphs;
   const partName = `${kind}1.xml`;
   return zipSync({
     '[Content_Types].xml': strToU8(
@@ -147,7 +160,8 @@ function drawingLayoutFor(part: OoxmlPart): InlineDrawingLayoutContext {
 
 function furnitureWithDrawings(
   pkg: OoxmlPackage,
-  part: OoxmlPart
+  part: OoxmlPart,
+  storyDistance?: number
 ): readonly (PageFurniture | undefined)[] {
   const sections = enumerateDocumentSections(part);
   const bySection = resolveHeaderFooterPartsBySection(pkg);
@@ -158,6 +172,7 @@ function furnitureWithDrawings(
     const width = geometry.width - geometry.margin.left - geometry.margin.right;
     const pageContext = {
       pageNumber: 1,
+      ...(storyDistance === undefined ? {} : { storyDistance }),
       pageWidth: geometry.width,
       pageHeight: geometry.height,
       marginLeft: geometry.margin.left,
@@ -219,7 +234,7 @@ function layoutStoryDoc(kind: 'header' | 'footer', options: AnchorOptions = {}):
   return layoutSemanticDocument(part, 1, {
     measurer,
     producer: 'test',
-    sectionFurniture: furnitureWithDrawings(pkg, part),
+    sectionFurniture: furnitureWithDrawings(pkg, part, options.storyDistance),
   });
 }
 
@@ -346,7 +361,7 @@ describe('margin alignment uses the effective content-box extent', () => {
 describe('header non-margin frames', () => {
   test.each([
     ['page', -78],
-    ['topMargin', -78],
+    ['topMargin', -42.55],
     ['bottomMargin', 629.2],
     ['paragraph', 0],
     ['line', 0],
@@ -361,7 +376,7 @@ describe('header non-margin frames', () => {
     }
   );
 
-  test('keeps a page-frame axis painted from the sheet while topMargin stays story-based', () => {
+  test('places page and top-margin offsets from the sheet top', () => {
     const pageFrame = layoutHeaderDoc({ verticalFrame: 'page', verticalOffsetEmu: 127_000 });
     expect(paintedPosition(pageFrame).y).toBeCloseTo(10, 2);
 
@@ -369,7 +384,39 @@ describe('header non-margin frames', () => {
       verticalFrame: 'topMargin',
       verticalOffsetEmu: 127_000,
     });
-    expect(paintedPosition(topMargin).y).toBeCloseTo(42.55 - 78 + 10, 2);
+    expect(paintedPosition(topMargin).y).toBeCloseTo(10, 2);
+  });
+
+  test.each(['header'] as const)(
+    '%s top-margin anchors retain their full on-page bounds',
+    (kind) => {
+      const layout = layoutStoryDoc(kind, {
+        verticalFrame: 'topMargin',
+        verticalOffsetEmu: 127_000,
+      });
+      const story = layout.pages[0]![kind]!;
+      const drawing = story.anchoredDrawings![0]!;
+      expect(story.box.y + drawing.y).toBeCloseTo(10, 5);
+      expect(story.box.y + drawing.paintBounds.y).toBeCloseTo(10, 5);
+      expect(drawing.paintBounds.height).toBeCloseTo(drawing.height, 5);
+      expect(paintedPosition(layout).y).toBeCloseTo(10, 2);
+      expect(paintedPosition(layout).height).toBeCloseTo(drawing.height, 2);
+    }
+  );
+
+  test('top-margin body exclusion uses the same sheet position as painting', () => {
+    const layout = layoutHeaderDoc({
+      horizontalOffsetEmu: 0,
+      verticalFrame: 'topMargin',
+      verticalOffsetEmu: 1_016_000,
+    });
+    const page = layout.pages[0]!;
+    const drawing = page.header!.anchoredDrawings![0]!;
+    const zone = furnitureDrawingExclusionsForPage(page)[0]!;
+    expect(zone).toBeDefined();
+    expect(zone.verticalBand.y + page.contentBox.y).toBeCloseTo(80, 5);
+    expect(zone.verticalBand.height).toBeCloseTo(drawing.height, 5);
+    expect(paintedPosition(layout).y).toBeCloseTo(80, 2);
   });
 
   test('preserves the authored negative offset for the character horizontal frame', () => {
@@ -389,4 +436,127 @@ describe('footer anchor relativeFrom="margin"', () => {
     expect(story.box.y + drawing.paintBounds.y).toBeCloseTo(page.contentBox.y - 77.95, 2);
     expect(paintedPosition(layout).y).toBeCloseTo(page.contentBox.y - 77.95, 2);
   });
+});
+
+test('top-margin anchors cache partial story-origin contexts separately', () => {
+  const pkg = openPackage(
+    storyDoc('header', {
+      verticalFrame: 'topMargin',
+      verticalOffsetEmu: 127_000,
+    })
+  );
+  const main = pkg.parts.get(pkg.mainDocumentPart)!;
+  const story = furnitureWithDrawings(pkg, main)[0]!.headers.get('default')!;
+  const context = { pageNumber: 1, pageCount: 1, sectionPageCount: 1, storyTop: 40 };
+  const first = story.withPageContext(context);
+  const second = story.withPageContext({ ...context, storyTop: 50 });
+  expect(first.anchoredDrawings![0]!.y).toBeCloseTo(-30, 5);
+  expect(second.anchoredDrawings![0]!.y).toBeCloseTo(-40, 5);
+  expect(second).not.toBe(first);
+  expect(story.withPageContext(context).anchoredDrawings).toBe(first.anchoredDrawings);
+});
+
+for (const fullContext of [false, true]) {
+  test(`header top-margin bands reserve their story-local height with ${fullContext ? 'full' : 'partial'} retained contexts`, () => {
+    const pkg = openPackage(
+      storyDoc('header', {
+        verticalFrame: 'topMargin',
+        verticalOffsetEmu: 127_000,
+        storyLineCount: 1,
+        topAndBottom: true,
+      })
+    );
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const story = furnitureWithDrawings(pkg, main)[0]!.headers.get('default')!;
+    const context = {
+      pageNumber: 1,
+      pageCount: 1,
+      sectionPageCount: 1,
+      storyTop: 20,
+      ...(fullContext ? { contentInsetTop: 90, contentInsetBottom: 72 } : {}),
+    };
+    const first = story.withPageContext(context);
+    const second = story.withPageContext({ ...context, storyTop: 30 });
+    expect(
+      first.fragments.flatMap((fragment) =>
+        fragment.kind === 'paragraph' ? fragment.lines : []
+      )[0]!.box.y
+    ).toBeCloseTo(53.75, 5);
+    expect(
+      second.fragments.flatMap((fragment) =>
+        fragment.kind === 'paragraph' ? fragment.lines : []
+      )[0]!.box.y
+    ).toBeCloseTo(43.75, 5);
+    expect(first.flowHeight - second.flowHeight).toBeCloseTo(10, 5);
+    expect(story.withPageContext(context).flowHeight).toBe(first.flowHeight);
+    expect(story.withPageContext(context).fragments).toBe(first.fragments);
+  });
+}
+
+for (const control of ['paragraph', 'footer', 'cell'] as const) {
+  test(`top-margin flow correction leaves ${control} coordinates unchanged`, () => {
+    const kind = control === 'footer' ? 'footer' : 'header';
+    const pkg = openPackage(
+      storyDoc(kind, {
+        verticalFrame: control === 'paragraph' ? 'paragraph' : 'topMargin',
+        verticalOffsetEmu: 127_000,
+        storyLineCount: 1,
+        topAndBottom: true,
+        inTable: control === 'cell',
+      })
+    );
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const furniture = furnitureWithDrawings(pkg, main)[0]!;
+    const story = (kind === 'footer' ? furniture.footers : furniture.headers).get('default')!;
+    const context = { pageNumber: 1, pageCount: 1, sectionPageCount: 1, storyTop: 20 };
+    const first = story.withPageContext(context);
+    const second = story.withPageContext({ ...context, storyTop: 30 });
+    expect(second.flowHeight).toBeCloseTo(first.flowHeight, 5);
+    if (control === 'paragraph')
+      expect(
+        first.fragments.flatMap((fragment) =>
+          fragment.kind === 'paragraph' ? fragment.lines : []
+        )[0]!.box.y
+      ).toBeCloseTo(73.75, 5);
+  });
+}
+
+test('header top-margin flow places the body below the sheet-relative band and header line', () => {
+  const page = layoutHeaderDoc({
+    verticalFrame: 'topMargin',
+    verticalOffsetEmu: 127_000,
+    storyLineCount: 1,
+    topAndBottom: true,
+    storyDistance: 42.55,
+  }).pages[0]!;
+  const header = page.header!;
+  const line = header.fragments.flatMap((fragment) =>
+    fragment.kind === 'paragraph' ? fragment.lines : []
+  )[0]!;
+  expect(header.box.y + line.box.y).toBeCloseTo(73.75, 5);
+  expect(page.contentBox.y).toBeCloseTo(73.75 + line.box.height, 5);
+  const body = page.fragments.flatMap((fragment) =>
+    fragment.kind === 'paragraph' ? fragment.lines : []
+  )[0]!;
+  expect(page.contentBox.y + body.box.y).toBeCloseTo(73.75 + line.box.height, 5);
+});
+
+test('body top-margin bands keep their page-content coordinates', () => {
+  const xml = squareAnchorAtLeft({ text: 'Body text' })
+    .replace(/<wp:wrapSquare[^>]*\/>/, '<wp:wrapTopAndBottom/>')
+    .replace(
+      'relativeFrom="paragraph"><wp:posOffset>0',
+      'relativeFrom="topMargin"><wp:posOffset>1016000'
+    );
+  const part = load(xml);
+  const page = layoutSemanticDocument(part, 1, {
+    measurer,
+    inlineDrawingLayout: layoutContext(part),
+  }).pages[0]!;
+  const drawing = page.anchoredDrawings![0]!;
+  const line = page.fragments.flatMap((fragment) =>
+    fragment.kind === 'paragraph' ? fragment.lines : []
+  )[0]!;
+  expect(page.contentBox.y + drawing.y).toBeCloseTo(80, 5);
+  expect(line.box.y).toBeCloseTo(drawing.y + drawing.height, 5);
 });
