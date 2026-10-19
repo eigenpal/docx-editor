@@ -211,7 +211,12 @@ export function applyDeleteTracked(
       // An equation has no tracked deletion here: its text is not `w:t`, and the review lane
       // reads no `w:del` inside OMML. Passing it through left it standing while the words
       // around it were struck, so the deletion reported success and lost part of the edit.
+      // Inside the author's own pending insertion it goes outright, like their own words do.
       if (struck.has(node.id) && isOmmlEquationAtom(node) && !insideDeletion(stack)) {
+        if (insertionAuthor(stack) === revision.author) {
+          cursor.offset = to;
+          continue;
+        }
         strikesEquation = true;
       }
 

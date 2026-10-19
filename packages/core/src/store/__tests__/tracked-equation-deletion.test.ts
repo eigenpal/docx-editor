@@ -39,6 +39,35 @@ test('a tracked deletion beside an equation still strikes its text', () => {
   expect(saved).toContain('<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>');
 });
 
+test("an equation inside the author's own pending insertion is removed outright", () => {
+  const insertion = `<w:ins w:id="7" w:author="${ADA.author}" w:date="${ADA.date}">${run('b')}${equation}</w:ins>`;
+  const before = part(`<w:p ${MATH_NS}>${run('a')}${insertion}${run('c')}</w:p>`);
+  const id = paragraphId(before);
+  const store = new TreeDocumentStore(before);
+  const outcome = store.transact((tx) => {
+    tx.apply({ op: 'deleteText', paragraphId: id, start: 1, end: 3, revision: ADA });
+  });
+  expect(outcome.ok).toBe(true);
+  const saved = xml(store.part);
+  expect(saved).not.toContain('oMath');
+  expect(saved).not.toContain('<w:del ');
+});
+
+test('a tracked deletion over an equation that is already deleted commits', () => {
+  const deletion = `<w:del w:id="7" w:author="Grace Hopper" w:date="${ADA.date}">${equation}</w:del>`;
+  const before = part(`<w:p ${MATH_NS}>${run('a')}${deletion}${run('b')}</w:p>`);
+  const id = paragraphId(before);
+  const store = new TreeDocumentStore(before);
+  const outcome = store.transact((tx) => {
+    tx.apply({ op: 'deleteText', paragraphId: id, start: 0, end: 3, revision: ADA });
+  });
+  expect(outcome.ok).toBe(true);
+  const saved = xml(store.part);
+  expect(saved).toContain('<w:delText>a</w:delText>');
+  expect(saved).toContain('<w:delText>b</w:delText>');
+  expect(saved).toContain(`w:id="7">${equation}</w:del>`);
+});
+
 test('an untracked deletion over an equation still removes it', () => {
   const before = part(`<w:p ${MATH_NS}>${run('a')}${equation}${run('b')}</w:p>`);
   const id = paragraphId(before);
