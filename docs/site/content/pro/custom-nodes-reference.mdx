@@ -92,6 +92,8 @@ Each is one transaction and one undo step, payload included.
 
 `updateCustomNode` keeps the payload you do not mention. Pass `data: null` to remove one.
 
+In suggesting mode, `insertCustomNode` proposes the node as a tracked insertion by the editor's author. Accepting it keeps the node, and rejecting it removes the node. `updateCustomNode` and `removeCustomNode` are not tracked.
+
 `contentLocked` prevents inline text editing while leaving the node deletable as a unit. The first Backspace or Delete next to the node selects it, and a second press removes it. In suggesting mode, the keyboard proposes removing it as one tracked deletion. `removeCustomNode` removes it in every editing mode, and the removal is not a tracked change. A node carrying a payload is uneditable regardless of `lock`: the engine refuses content edits inside a bound control, and so does Word.
 
 ### Returns

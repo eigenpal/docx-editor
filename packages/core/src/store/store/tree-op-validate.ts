@@ -879,6 +879,9 @@ export function validateTreeOp(
       if (op.dataBinding !== undefined && !isAuthorableDataBinding(op.dataBinding)) {
         return 'invalid-property-value';
       }
+      if (op.revision !== undefined && invalidRevisionAttribution(op.revision)) {
+        return 'invalid-property-value';
+      }
       return null;
     }
     case 'insertHyperlink': {

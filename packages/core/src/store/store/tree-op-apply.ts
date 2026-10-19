@@ -76,6 +76,7 @@ import {
   withPropertyChangeRecord,
 } from './tree-op-tracked-properties.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
+import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
 import {
   isValidParaId,
   mintParaId,
@@ -1641,6 +1642,7 @@ function applyInsertInlineContentControl(
       readonly xpath: string;
       readonly storeItemId: string;
     };
+    readonly revision?: RevisionAttributionInput;
   },
   options?: EditOptions
 ): TreeOpResult {
@@ -1696,11 +1698,19 @@ function applyInsertInlineContentControl(
   const inheritedProperties =
     anchorRun && anchorRun.kind === 'run' ? runPropertiesNodeOf(anchorRun) : null;
 
-  const control = inlineContentControlElement(
+  const built = inlineContentControlElement(
     nextId,
     op,
     inheritedProperties ? remintClone(inheritedProperties, nextId) : null
   );
+  // A proposed control is one tracked insertion: the whole `w:sdt` inside a `w:ins`, so a
+  // reject takes the control with its text and an accept keeps it.
+  const revisionId = (): string => options?.trackedRevisionIds?.mint() ?? nextRevisionId(part)();
+  const control = op.revision
+    ? build(nextId(), 'revisionInsert', 'ins', revisionAttributes(revisionId(), op.revision), [
+        built,
+      ])
+    : built;
   const pPr = paragraphPropertiesNodeOf(paragraph);
   const children = [...(pPr ? [pPr] : []), ...before, control, ...after];
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);

@@ -279,6 +279,19 @@ export function storyScopeOfId(editor: Editor, id: string | undefined): StorySco
 }
 
 /**
+ * The tracked insertion a write proposes in suggesting mode, on the surface's own terms: no
+ * author means the edit lands untracked, as typing does. The date is UTC to the second, the
+ * precision every editor revision uses.
+ */
+function suggestedRevisionOf(
+  surface: PaginatedSurface
+): { readonly author: string; readonly date: string } | null {
+  const author = surface.author()?.trim();
+  if (surface.editingMode() !== 'suggest' || !author) return null;
+  return { author, date: `${new Date().toISOString().slice(0, 19)}Z` };
+}
+
+/**
  * Insert one custom node. Returns the engine's typed result: refusals carry the engine's own
  * reason (tag overflow, offset out of range, viewing mode, …), and a payload the schema refused
  * carries the failing fields in `issues`.
@@ -329,6 +342,7 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
   // `updateCustomNode` already resolve theirs: a caller may pass an `at` in a story it is not
   // standing in, and the id says which one that is.
   const scope = storyScopeOfId(editor, at.paragraphId);
+  const revision = suggestedRevisionOf(surface);
   const written = surface.session.insertCustomNode(
     {
       paragraphId: at.paragraphId,
@@ -340,6 +354,7 @@ export function insertCustomNode<Schema extends StandardSchemaV1 | undefined = u
       ...(payload
         ? { payload: payloadWriteOf(surface, definition, payload.serialized, projected.text) }
         : {}),
+      ...(revision ? { revision } : {}),
     },
     scope
   );

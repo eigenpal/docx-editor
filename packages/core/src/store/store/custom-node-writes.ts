@@ -38,7 +38,7 @@ import {
 import { contentControlsIn } from '../package/content-control-nodes.ts';
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import type { TreeDocumentStore, TreeModelChange } from './tree-store.ts';
-import type { TreeOpRejection } from './tree-op-types.ts';
+import type { RevisionAttributionInput, TreeOpRejection } from './tree-op-types.ts';
 
 /**
  * The payload half of an insert: which store, which node, and what it holds.
@@ -87,6 +87,11 @@ export interface InsertCustomNodeWrite {
   readonly lock?: 'sdtLocked' | 'sdtContentLocked' | 'contentLocked';
   /** Omitted authors an ordinary tagged control with no store — the pre-payload behaviour. */
   readonly payload?: CustomNodePayloadWrite;
+  /**
+   * Propose the node as a tracked insertion. A wrap (`replaceUntil`) or a rewrite
+   * (`replaceControlId`) has no tracked form yet, and refuses with a revision.
+   */
+  readonly revision?: RevisionAttributionInput;
 }
 
 /**
@@ -160,6 +165,14 @@ export function insertCustomNodeWrite(
     }
   }
 
+  if (
+    write.revision &&
+    (write.replaceControlId !== undefined || write.replaceUntil !== undefined)
+  ) {
+    return { ok: false, reason: 'unsupported', detail: 'tracked custom node wrap or rewrite' };
+  }
+  const revision = write.revision ? { revision: write.revision } : {};
+
   // Ids, not nodes: the transaction rebuilds the tree, so nothing else carries across it.
   const controlsBefore = new Set(contentControlsIn(store.part.root).map((entry) => entry.node.id));
 
@@ -216,6 +229,7 @@ export function insertCustomNodeWrite(
         text: write.text,
         ...(write.alias === undefined ? {} : { alias: write.alias }),
         ...(write.lock === undefined ? {} : { lock: write.lock }),
+        ...revision,
       });
       return;
     }
@@ -280,6 +294,7 @@ export function insertCustomNodeWrite(
       ...(write.alias === undefined ? {} : { alias: write.alias }),
       ...(write.lock === undefined ? {} : { lock: write.lock }),
       dataBinding: binding,
+      ...revision,
     });
   });
 

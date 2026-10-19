@@ -615,6 +615,8 @@ export type TreeDocOp =
         readonly xpath: string;
         readonly storeItemId: string;
       };
+      /** Propose the control as a tracked `w:ins`; rejecting removes it with its text. */
+      readonly revision?: RevisionAttributionInput;
     }
   | {
       /** Repeating-section item insert — unsupported at this layer (out of scope). */

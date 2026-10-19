@@ -2101,6 +2101,7 @@ export interface InsertCustomNodeWrite {
     readonly payload?: CustomNodePayloadWrite;
     readonly replaceControlId?: string;
     readonly replaceUntil?: number;
+    readonly revision?: RevisionAttributionInput;
     // (undocumented)
     readonly tag: string;
     // (undocumented)
@@ -4757,6 +4758,7 @@ export type TreeDocOp = SetFieldCodeOp | {
     readonly offset: number;
     readonly op: 'insertInlineContentControl';
     readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
     readonly tag: string;
     readonly text: string;
 } | {
