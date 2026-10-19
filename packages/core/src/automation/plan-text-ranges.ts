@@ -1,14 +1,20 @@
 // Planning the range reads an agent uses to address and re-read words: `Range.getTextRanges`,
 // `Paragraph.getTextRanges`, `Range.expandTo`, and `getReviewedText` on a range or a paragraph.
 //
-// TOKENS COME FROM THE MODEL TEXT. A field, an equation, a picture, and a note reference each
-// occupy one model offset, so a token can never end inside one: an atom counts as an ordinary
-// non-spacing character and stays in the token it touches. A tab is a spacing character, so
-// `trimSpacing` removes it from the edges of a token, but it ends a token only when the caller
-// lists it as an ending mark. An inline content control's boundaries occupy no offset, so its
-// text joins the tokens around it. A paragraph end always ends a token, and no token holds a
-// paragraph mark. Each answered span is an exact model range, so a later edit through it touches
-// exactly the characters the token read.
+// TOKENS COME FROM THE MODEL TEXT THE VIEW SHOWS. A field, an equation, a picture, and a note
+// reference each occupy one model offset, so a token can never end inside one: an atom counts as
+// an ordinary non-spacing character and stays in the token it touches. A tab is a spacing
+// character, so `trimSpacing` removes it from the edges of a token, but it ends a token only when
+// the caller lists it as an ending mark. An inline content control's boundaries occupy no offset,
+// so its text joins the tokens around it. A paragraph end always ends a token, and no token holds
+// a paragraph mark.
+//
+// THE VIEW DECIDES WHAT A TOKEN IS. Text the view hides (a pending insertion in the `original`
+// view, a floating drawing in any view) holds no ending mark, and a token's span starts at its
+// first shown character and ends after its last one, so an edit through it never reaches hidden
+// text at its edges. Hidden text strictly between two shown characters of one token stays inside
+// the span: an edit through that token also edits the hidden text, which the documentation
+// states.
 //
 // REVIEWED TEXT IS A READ ONLY. `current` drops pending deletions and the paragraph marks they
 // delete, `original` drops pending insertions and inserted marks, as if every revision were
@@ -100,36 +106,70 @@ function validMarks(value: unknown): readonly string[] | null {
     return null;
   const marks: string[] = [];
   for (const mark of value as unknown[]) {
-    if (typeof mark !== 'string' || mark.length === 0 || mark.length > MAX_TEXT_RANGE_MARK_LENGTH)
+    if (
+      typeof mark !== 'string' ||
+      mark.length === 0 ||
+      mark.length > MAX_TEXT_RANGE_MARK_LENGTH ||
+      hasUnpairedSurrogate(mark)
+    )
       return null;
     marks.push(mark);
   }
   return marks.sort((left, right) => right.length - left.length);
 }
 
-/** One paragraph's token boundaries between `from` and `to`, in model offsets. */
+/**
+ * Whether a string holds a surrogate half without its partner. A mark like that would match half
+ * of a character and cut it in two.
+ */
+export function hasUnpairedSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) return true;
+  }
+  return false;
+}
+
+/**
+ * One paragraph's token boundaries between `from` and `to`, in model offsets.
+ *
+ * `shown(offset)` says whether the view shows the model character at `offset`. A hidden character
+ * is never part of a mark, and no token starts or ends on one.
+ */
 export function textRangeBoundaries(
   text: string,
   from: number,
   to: number,
   marks: readonly string[],
-  trimSpacing: boolean
+  trimSpacing: boolean,
+  shown: (offset: number) => boolean = () => true
 ): readonly (readonly [number, number])[] {
   const found: (readonly [number, number])[] = [];
+  const trimmed = (offset: number): boolean =>
+    !shown(offset) || (trimSpacing && SPACING.has(text[offset]!));
   const push = (start: number, end: number): void => {
     let first = start;
     let last = end;
-    if (trimSpacing) {
-      while (first < last && SPACING.has(text[first]!)) first += 1;
-      while (last > first && SPACING.has(text[last - 1]!)) last -= 1;
-    }
+    while (first < last && trimmed(first)) first += 1;
+    while (last > first && trimmed(last - 1)) last -= 1;
     if (first < last) found.push([first, last]);
+  };
+  const allShown = (start: number, length: number): boolean => {
+    for (let offset = start; offset < start + length; offset += 1) if (!shown(offset)) return false;
+    return true;
   };
   let start = from;
   let at = from;
   while (at < to) {
     const mark = marks.find(
-      (candidate) => at + candidate.length <= to && text.startsWith(candidate, at)
+      (candidate) =>
+        at + candidate.length <= to &&
+        text.startsWith(candidate, at) &&
+        allShown(at, candidate.length)
     );
     if (mark) {
       at += mark.length;
@@ -165,10 +205,20 @@ function textRangeSpans(
     const from = position === 0 ? span.start.offset : 0;
     const to = position === last ? span.end.offset : model.text.length;
     const paragraph = handles.paragraph(paragraphId, story.story);
-    for (const [start, end] of textRangeBoundaries(model.text, from, to, marks, trimSpacing)) {
-      // A token this view shows no character of (text only a hidden revision holds, or a
-      // floating drawing alone) is not a range the reader can see.
-      if (shown.projectedOffset(start) === shown.projectedOffset(end)) continue;
+    // A model character is shown when the view gives it at least one character of its own.
+    const projected = new Int32Array(to - from + 1);
+    for (let offset = from; offset <= to; offset += 1)
+      projected[offset - from] = shown.projectedOffset(offset);
+    const isShown = (offset: number): boolean =>
+      projected[offset + 1 - from]! > projected[offset - from]!;
+    for (const [start, end] of textRangeBoundaries(
+      model.text,
+      from,
+      to,
+      marks,
+      trimSpacing,
+      isShown
+    )) {
       spans.push({ start: { paragraph, offset: start }, end: { paragraph, offset: end } });
     }
   }

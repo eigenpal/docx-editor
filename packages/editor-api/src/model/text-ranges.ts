@@ -24,10 +24,28 @@ export function textRangeMarks(value: unknown, target: string): readonly string[
     fail({ code: 'InvalidArgument', target });
   }
   for (const mark of value as unknown[]) {
-    if (typeof mark !== 'string' || mark.length === 0 || mark.length > MAX_TEXT_RANGE_MARK_LENGTH)
+    if (
+      typeof mark !== 'string' ||
+      mark.length === 0 ||
+      mark.length > MAX_TEXT_RANGE_MARK_LENGTH ||
+      hasUnpairedSurrogate(mark)
+    )
       fail({ code: 'InvalidArgument', target });
   }
   return [...(value as string[])];
+}
+
+/** Whether a mark holds a surrogate half without its partner, which would cut a character. */
+function hasUnpairedSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      index += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) return true;
+  }
+  return false;
 }
 
 /** An optional boolean argument, or `InvalidArgument`. */

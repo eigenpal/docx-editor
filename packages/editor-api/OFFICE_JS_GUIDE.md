@@ -350,7 +350,7 @@ The range that a tracked `insertText()` returns names your own pending insertion
 
 Split a paragraph into word ranges with `paragraph.getTextRanges([' '], true)`. Address a run of words with `first.expandTo(last)`. Read the proposed result with `paragraph.getReviewedText('Current')`. After tracked edits, `paragraph.text` reads the deleted and the inserted words together. `getReviewedText('Current')` reads the text as if you accepted every change, and `'Original'` reads it as if you rejected every change.
 
-Each word range is a snapshot. An edit before a range in its paragraph makes the range fail with `StaleDocument`, and an edit after it keeps it valid. Edit from the end of the paragraph toward its start, one sync per edit, so the ranges that you read first stay usable:
+Each word range is a snapshot. An edit before a range in its paragraph makes the range fail with `StaleDocument`, and an edit after it keeps it valid. Read the ranges once, before you edit. Then edit from the end of the paragraph toward its start, one sync per edit, so the ranges that you read first stay usable:
 
 ```ts
 await runtime.run(async (context) => {
@@ -378,6 +378,10 @@ await runtime.run(async (context) => {
 ```
 
 A field, an equation, a picture, or a note reference is one character of a word range and never splits; its text reads as its displayed result. An inline content control adds no boundary, so its words join the ranges around it. A tab ends a range only when you list `'\t'` as a mark. `trimSpacing` removes spaces, tabs, and column breaks from the edges of each range. `Range.getRange('Start')` and `'End'` answer an insertion point; `'After'` fails with `NotSupported`. Ranges in different stories make `expandTo()` fail with `InvalidArgument`.
+
+Ranges follow the runtime's `revisionTextView`. Text that the view hides, such as a pending insertion in the `original` view, holds no ending mark, and a range starts and ends at characters that the view shows. Hidden text between two shown characters of one range stays inside the range, so an edit through that range also changes the hidden text.
+
+Do not split the paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented` and `innerError.code` `edit.tracked-own-pending-change`. To read the proposed result, call `getReviewedText('Current')`.
 
 ## Review changes in a range
 

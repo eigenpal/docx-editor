@@ -334,4 +334,76 @@ describe('a tracked rewrite through word ranges', () => {
       runtime.dispose();
     }
   });
+
+  test('a range never reaches hidden text at its edges', async () => {
+    const bytes = docx(
+      '<w:p>' +
+        t('The quick') +
+        '<w:ins w:id="1" w:author="Other" w:date="2026-01-01T00:00:00Z">' +
+        t('slow') +
+        '</w:ins>' +
+        t(' fox') +
+        '</w:p>'
+    );
+    const runtime = await DocxEditor.createServer(bytes, {
+      author: 'Agent',
+      revisionTextView: 'original',
+    });
+    try {
+      const read = await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const paragraph = context.document.body.paragraphs.getFirst();
+        const tokens = paragraph.getTextRanges([' '], true);
+        tokens.load('items/text');
+        await context.sync();
+        const texts = tokens.items.map((range) => range.text);
+        tokens.items[1]!.insertText('fast', 'Replace');
+        await context.sync();
+        const current = paragraph.getReviewedText('Current');
+        const original = paragraph.getReviewedText('Original');
+        await context.sync();
+        return { texts, current: current.value, original: original.value };
+      });
+      expect(read.texts).toEqual(['The', 'quick', 'fox']);
+      // The other author's pending insertion stays: the edit replaced only what the range read.
+      expect(read.current).toBe('The fastslow fox');
+      expect(read.original).toBe('The quick fox');
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a mark inside hidden text does not split a shown word', async () => {
+    const bytes = docx(
+      '<w:p>' +
+        t('foo') +
+        '<w:ins w:id="1" w:author="Other" w:date="2026-01-01T00:00:00Z">' +
+        t(' ') +
+        '</w:ins>' +
+        t('bar baz') +
+        '</w:p>'
+    );
+    const runtime = await DocxEditor.createServer(bytes, { revisionTextView: 'original' });
+    try {
+      expect(await words(runtime, [' '], true)).toEqual(['foobar', 'baz']);
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('refuses a mark with an unpaired surrogate', async () => {
+    const runtime = await open(docx(p('a \u{1F600} b')));
+    try {
+      await runtime.run(async (context) => {
+        const paragraph = context.document.body.paragraphs.getFirst();
+        for (const mark of ['\uD83D', '\uDE00', 'a\uD83D'])
+          expect(() => paragraph.getTextRanges([mark])).toThrow(
+            expect.objectContaining({ code: 'InvalidArgument' })
+          );
+      });
+      expect(await words(runtime, ['\u{1F600}'], true)).toEqual(['a \u{1F600}', 'b']);
+    } finally {
+      runtime.dispose();
+    }
+  });
 });

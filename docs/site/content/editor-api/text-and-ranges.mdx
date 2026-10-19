@@ -128,12 +128,15 @@ Some document elements behave differently inside a word range:
 | Tab | Ends a range only if you list `'\t'` as a mark. `trimSpacing` removes it from range edges. |
 | Inline content control | Adds no boundary. Its words join the ranges around it. |
 | Tracked deletion | Shows in the ranges, like in `text`, unless the runtime's `revisionTextView` is `original`. |
+| Text that `revisionTextView` hides | Holds no ending mark. A range starts and ends at shown characters. Hidden text between two shown characters stays inside the range, so an edit through the range also changes it. |
 
 You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units. Other values fail with `InvalidArgument`.
 
 ## Rewrite a paragraph and read the result
 
-A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. To make several edits with the ranges from one read, edit from the end of the paragraph toward its start, and sync after each edit.
+A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. To make several edits with the ranges from one read, edit from the end of the paragraph toward its start, and sync after each edit.
+
+Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed result with `getReviewedText('Current')` instead.
 
 After tracked edits, `Paragraph.text` contains both the deleted and the inserted words. Call `getReviewedText('Current')` to read the text as if every pending change were accepted. Call `getReviewedText('Original')` to read it as if every change were rejected. `Range.getReviewedText()` and `Paragraph.getReviewedText()` default to `Current`. The method does not change the document. `ChangeTrackingVersion` provides matching enum values.
 

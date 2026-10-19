@@ -340,9 +340,16 @@ export class Range extends ModelObject implements PromisedItem {
    * A field, an equation, a picture, or a note reference is one character of the range and is
    * never split, so it joins the word it touches. Its text reads as its displayed result. A tab
    * ends a range only when you list `'\t'` as a mark. An inline content control adds no
-   * boundary, so its words join the ranges around it. Ranges follow the runtime's
-   * `revisionTextView`: a range that view shows no character of is left out. Pass at most 32
-   * marks of at most 32 UTF-16 code units each; other values refuse with `InvalidArgument`.
+   * boundary, so its words join the ranges around it. Pass at most 32 marks of at most 32
+   * UTF-16 code units each, with no unpaired surrogate; other values refuse with
+   * `InvalidArgument`.
+   *
+   * Ranges follow the runtime's `revisionTextView`. Hidden text, such as a pending insertion in
+   * the `original` view, holds no mark, and each range starts and ends at shown characters.
+   * Hidden text between two shown characters stays inside the range, so an edit through it
+   * also changes that text. Read ranges once, before you edit: after tracked edits, a range can
+   * join deleted and inserted text, and an edit that touches your own pending change refuses
+   * with `edit.tracked-own-pending-change`. Read the result with `getReviewedText('Current')`.
    *
    * @example
    * ```ts

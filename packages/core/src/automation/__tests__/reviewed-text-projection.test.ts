@@ -4,7 +4,7 @@ import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import type { OoxmlParagraphNode } from '../../store/package/ooxml-tree.ts';
 import { paragraphTextOf } from '../../store/store/tree-op-apply.ts';
 import { docx } from './support/protocol.ts';
-import { textRangeBoundaries } from '../plan-text-ranges.ts';
+import { hasUnpairedSurrogate, textRangeBoundaries } from '../plan-text-ranges.ts';
 import { projectReviewedParagraphText } from '../text-projection.ts';
 
 const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
@@ -68,5 +68,20 @@ describe('textRangeBoundaries', () => {
       text.slice(start, end)
     );
     expect(found).toEqual(['\u{1F600}y', 'z']);
+  });
+
+  test('hidden characters hold no mark and never start or end a range', () => {
+    // "ab[ ]cd ef[gh]": the bracketed characters are hidden.
+    const text = 'ab cd efgh';
+    const hidden = new Set([2, 8, 9]);
+    const found = textRangeBoundaries(text, 0, text.length, [' '], false, (at) => !hidden.has(at));
+    expect(found.map(([start, end]) => text.slice(start, end))).toEqual(['ab cd ', 'ef']);
+  });
+
+  test('finds unpaired surrogates', () => {
+    expect(hasUnpairedSurrogate('\u{1F600}')).toBe(false);
+    expect(hasUnpairedSurrogate('\uD83D')).toBe(true);
+    expect(hasUnpairedSurrogate('\uDE00x')).toBe(true);
+    expect(hasUnpairedSurrogate('x\uD83D')).toBe(true);
   });
 });
