@@ -24,6 +24,30 @@ const bytes = () =>
       '<w:p><w:r><w:t>Other</w:t></w:r></w:p>'
   );
 
+test('a peer typing beside the struck equation in the same paragraph converges', async () => {
+  const { alice, bob, pause, resume } = await peers.pair(bytes());
+  pause();
+  peers.apply(alice, [
+    {
+      op: 'deleteText',
+      paragraphId: peers.paragraphIdAt(alice, 0),
+      start: 3,
+      end: 6,
+      revision: REVISION,
+    },
+  ]);
+  peers.apply(bob, [
+    { op: 'insertText', paragraphId: peers.paragraphIdAt(bob, 0), offset: 0, text: 'Now ' },
+  ]);
+  resume();
+  alice.port.flushPendingJournals();
+  bob.port.flushPendingJournals();
+  peers.expectConverged(alice, bob);
+  const xml = serializeOoxmlPart(bob.store.bodyStore().part);
+  expect(xml).toContain('Now ');
+  expect(xml).toMatch(/<w:del [^>]*>.*<m:oMath>.*<\/w:del>/);
+});
+
 for (const [decision, kept] of [
   ['rejectAllRevisions', true],
   ['acceptAllRevisions', false],

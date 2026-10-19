@@ -57,8 +57,9 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // Keyed on the equation lane's `can` refusals, which the equation popover shows.
   'compact linear editing cannot preserve this equation source formatting':
     'disabledReason.equationSourceFormatting',
-  'equation replacement and removal are not supported in suggesting mode':
-    'disabledReason.equationSuggesting',
+  'equation replacement is not supported in suggesting mode': 'disabledReason.equationSuggesting',
+  'in suggesting mode, remove the whole equation block rather than one equation':
+    'disabledReason.equationSuggestingDisplay',
   // Keyed on `PICTURE_SELECTED_INSERT_REASON` in the engine's image lane.
   'a picture is selected; place the caret in text to insert a picture':
     'disabledReason.pictureSelected',

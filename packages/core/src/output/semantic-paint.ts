@@ -96,7 +96,7 @@ import {
   type DrawingPaintStrings,
   type PaintImageUrlPort,
 } from './semantic-paint-drawings.ts';
-import { mountEquationGeometry } from './semantic-paint-equation.ts';
+import { applyEquationRevision, mountEquationGeometry } from './semantic-paint-equation.ts';
 import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
 import { applyTextOutline } from './semantic-paint-text-outline.ts';
 
@@ -832,7 +832,7 @@ function paintSpan(
     mountEquationGeometry(document, element, span.equation, ctx.scale, (run, style) =>
       applyRunFaceStyle(run, style, ctx)
     );
-    applyRevisionPresentation(element, span, ctx);
+    applyEquationRevision(document, element, span, ctx);
     return element;
   }
   element.className = 'layout-run layout-run-text';

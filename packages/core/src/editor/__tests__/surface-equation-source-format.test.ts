@@ -121,6 +121,7 @@ for (const [name, body, protectedSource] of cases) {
         writeRefusals++;
         return null;
       },
+      trackedOps: (ops) => [...ops],
       selection: () => ({ anchor: position, head: position }),
       selectionMark: () => null,
       commit: (execute) => {
@@ -146,7 +147,8 @@ for (const [name, body, protectedSource] of cases) {
     expect(ops.can(equation.id, 'remove').ok).toBe(true);
     mode = 'suggest';
     expect(ops.can(equation.id, 'replace').ok).toBe(false);
-    expect(ops.can(equation.id, 'remove').ok).toBe(false);
+    // A removal is a tracked deletion of the equation in suggesting mode.
+    expect(ops.can(equation.id, 'remove').ok).toBe(true);
     expect(serializeOoxmlPart(parsed.part)).toEqual(before);
   });
 }

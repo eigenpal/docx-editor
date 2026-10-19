@@ -956,6 +956,7 @@
     "imageSuggesting": "La modification des images est indisponible en mode suggestion",
     "equationSourceFormatting": "La modification linéaire ferait perdre la mise en forme de cette équation",
     "equationSuggesting": "La modification des équations est indisponible en mode suggestion",
+    "equationSuggestingDisplay": "En mode suggestion, supprimez le bloc d'équations entier plutôt qu'une seule équation",
     "invalidValue": "Cette valeur n’est pas valide pour la commande",
     "noContentControl": "Aucun contrôle de contenu n’est sélectionné",
     "noDocument": "Aucun document n’est chargé",

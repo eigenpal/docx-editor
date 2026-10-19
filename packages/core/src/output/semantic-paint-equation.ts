@@ -4,7 +4,10 @@ import type {
   EquationGeometry,
   EquationSpanRecord,
   ResolvedRunStyle,
+  StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
+import { applyRevisionPresentation } from './semantic-paint-revisions.ts';
+import type { PaintContext } from './semantic-paint.ts';
 
 function place(
   element: HTMLElement,
@@ -168,4 +171,33 @@ export function mountEquationGeometry(
   const fragment = document.createDocumentFragment();
   paintNode(document, fragment, geometry, scale, 0, 0, [], applyFace);
   host.append(fragment);
+}
+
+/**
+ * The revision mark of an equation: its presentation, plus an explicit bar. The glyphs are
+ * absolutely positioned, and CSS never carries a text decoration to out-of-flow children, so
+ * a struck or underlined equation would otherwise show no line at all, and under a host's
+ * revision markup a deleted equation would look the same as an inserted one.
+ */
+export function applyEquationRevision(
+  document: Document,
+  host: HTMLElement,
+  span: StyleSpanRecord,
+  ctx: PaintContext
+): void {
+  applyRevisionPresentation(host, span, ctx);
+  const kind = host.dataset.revisionKind;
+  const deleted = kind === 'delete' || kind === 'moveFrom';
+  if (!deleted && kind !== 'insert' && kind !== 'moveTo') return;
+  const box = span.equation?.geometry.box;
+  if (!box) return;
+  const thickness = 0.75;
+  const y = deleted ? box.height / 2 - thickness / 2 : box.height - thickness;
+  const bar = rule(
+    document,
+    deleted ? 'docx-equation-revision-strike' : 'docx-equation-revision-underline',
+    { x: 0, y, width: box.width, height: thickness },
+    ctx.scale
+  );
+  host.append(bar);
 }

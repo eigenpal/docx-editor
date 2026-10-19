@@ -63,7 +63,8 @@ test('the picture-selected insert refusal is translatable', () => {
 
 test.each([
   'compact linear editing cannot preserve this equation source formatting',
-  'equation replacement and removal are not supported in suggesting mode',
+  'equation replacement is not supported in suggesting mode',
+  'in suggesting mode, remove the whole equation block rather than one equation',
 ])('the equation popover refusal %s is translatable', (reason) => {
   expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
 });

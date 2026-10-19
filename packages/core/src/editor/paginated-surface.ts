@@ -1318,6 +1318,7 @@ export function mountPaginatedSurface(
     storyScope,
     editingMode: () => editingMode,
     writeRefusal: (op) => writeRefusal(true, [op]),
+    trackedOps,
     selection: () => selection,
     selectionMark: () => selectionMark(),
     commit: (run, selectionAfter) => commit(run, selectionAfter),
