@@ -382,7 +382,7 @@ A field, an equation, a picture, or a note reference reads as one unit that neve
 
 A tracked deletion or replacement that covers an equation strikes the whole equation. Accept removes it, and reject restores it.
 
-The words of an inline content control join the ranges around it. `paragraph.contentControls` and `range.contentControls` list the controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load them with `cannotEdit`, `tag`, and `text`, for each word range in one sync, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails with `GeneralException` and `innerError.code` `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
+The words of an inline content control join the ranges around it. `paragraph.contentControls` and `range.contentControls` list the controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load them with `cannotEdit`, `tag`, and `text`, for each word range in one sync, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails with `GeneralException`, and `error.debugInfo.innerError.code` is `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
 
 Map each difference between the old and the new words to one call. The last range of a paragraph has no space after it:
 
@@ -394,11 +394,30 @@ Map each difference between the old and the new words to one call. The last rang
 | Insert after a word | `word.insertText(text, 'After')` |
 | Insert after the last word | `last.insertText(' ' + text, 'After')`, because the last word has no space after it |
 
-The [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) recipe implements this mapping with a word diff, and keeps fields, equations, and locked controls whole.
+The [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) recipe implements this mapping with a word diff. It keeps fields, equations, and locked controls whole, shows the model a legend of what each placeholder contains, and rejects its own changes if any write or the final check fails.
 
 Ranges follow the runtime's `revisionTextView`. Text that the view hides, such as a pending insertion in the `original` view, holds no ending mark, and a range starts and ends at characters that the view shows. Hidden text between two shown characters of one range stays inside the range, so an edit through that range also changes the hidden text.
 
-Do not split the paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented` and `innerError.code` `edit.tracked-own-pending-change`. To read the proposed result, call `getReviewedText('Current')`.
+Do not split the paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `error.debugInfo.innerError.code` is `edit.tracked-own-pending-change`. To read the proposed result, call `getReviewedText('Current')`.
+
+Catch a refused word-range edit and read its rule from `debugInfo`:
+
+```ts
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const words = context.document.body.paragraphs.getFirst().getTextRanges([' ']);
+  words.load('items');
+  await context.sync();
+  try {
+    words.items[0]!.insertText('Each ', 'Replace');
+    await context.sync();
+  } catch (error) {
+    if (!isDocxEditorError(error)) throw error;
+    // For example, 'edit.protected-content' inside a content-locked control.
+    console.log(error.code, error.debugInfo.innerError?.code);
+  }
+});
+```
 
 ## Review changes in a range
 

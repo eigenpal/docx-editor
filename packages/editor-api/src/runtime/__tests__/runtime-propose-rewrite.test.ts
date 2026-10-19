@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DocxEditor, type Paragraph, type RequestContext } from '../../index.ts';
 import { docx, p } from './support/docx.ts';
-import { apply, prepare, proposeRewrite } from './support/propose-rewrite.ts';
+import { apply, prepare, promptFor, proposeRewrite } from './support/propose-rewrite.ts';
 
 const MATH = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
 const t = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
@@ -184,6 +184,89 @@ describe('propose an AI rewrite as tracked changes', () => {
     }
   });
 
+  test('an unknown placeholder refuses with its own message', async () => {
+    const runtime = await DocxEditor.createServer(RICH, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const prepared = await prepare(context, await firstParagraph(context));
+        await expect(apply(context, prepared, 'Under ⟦1⟧ the fee ⟦9⟧ applies')).rejects.toThrow(
+          'The model output contains ⟦9⟧, which prepare() did not create.'
+        );
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('the legend shows what each placeholder holds, and repeated punctuation refuses', async () => {
+    const bytes = docx(`<w:p>${t('Under ')}${REF}${t(', the fee applies.')}</w:p>`);
+    const runtime = await DocxEditor.createServer(bytes, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const paragraph = await firstParagraph(context);
+        const prepared = await prepare(context, paragraph);
+        expect(prepared.promptText).toBe('Under ⟦1⟧ the fee applies.');
+        expect(prepared.legend).toEqual([{ placeholder: '⟦1⟧', text: 'Section 4.2,' }]);
+        expect(promptFor(prepared, 'Shorten it.')).toContain('Placeholders:\n⟦1⟧ = "Section 4.2,"');
+        await expect(apply(context, prepared, 'Under ⟦1⟧, the charge applies.')).rejects.toThrow(
+          'The model output repeats "," after ⟦1⟧, which ends with it.'
+        );
+        const revisions = paragraph.getRange('Whole').revisions;
+        revisions.load('items');
+        await context.sync();
+        expect(revisions.items).toHaveLength(0);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('prepare refuses a paragraph with a tracked insertion', async () => {
+    const bytes = docx(
+      `<w:p>${t('Pay ')}<w:ins w:id="1" w:author="Other" w:date="2026-01-01T00:00:00Z">` +
+        `${t('the full ')}</w:ins>${t('fee.')}</w:p>`
+    );
+    const runtime = await DocxEditor.createServer(bytes, { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        await expect(prepare(context, await firstParagraph(context))).rejects.toThrow(
+          'Decide the tracked changes in this paragraph'
+        );
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('a failed hunk rolls back the hunks already written', async () => {
+    const original = 'Alpha beta gamma delta.';
+    const runtime = await DocxEditor.createServer(docx(p(original)), { author: 'Agent' });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const paragraph = await firstParagraph(context);
+        const prepared = await prepare(context, paragraph);
+        // The last hunk applies first and succeeds; the first one carries a paragraph
+        // separator, which a text write refuses.
+        await expect(apply(context, prepared, 'Alpha be\nta gamma DELTA.')).rejects.toMatchObject({
+          code: 'InvalidArgument',
+        });
+        const revisions = paragraph.getRange('Whole').revisions;
+        const current = paragraph.getReviewedText('Current');
+        revisions.load('items');
+        paragraph.load('text');
+        await context.sync();
+        expect(revisions.items).toHaveLength(0);
+        expect(paragraph.text).toBe(original);
+        expect(current.value).toBe(original);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
   test('repeated words change only the occurrence the model changed', async () => {
     const original = 'the cat saw the cat and the dog';
     const outcome = await rewrite(docx(p(original)), () => 'the cat saw a cat and the dog');
@@ -231,9 +314,21 @@ describe('propose an AI rewrite as tracked changes', () => {
   });
 
   test('proposeRewrite saves the proposal as tracked changes', async () => {
-    const result = await proposeRewrite(docx(p('Pay the fee now.')), async (prompt) =>
-      prompt.replace('now', 'today')
+    const prompts: string[] = [];
+    const result = await proposeRewrite(
+      docx(p('Pay the fee now.')),
+      'Say today instead of now.',
+      async (prompt) => {
+        prompts.push(prompt);
+        return prompt
+          .slice(prompt.indexOf('Paragraph:\n') + 'Paragraph:\n'.length)
+          .replace('now', 'today');
+      }
     );
+    expect(prompts[0]).toStartWith(
+      'Say today instead of now.\n\nReturn only the rewritten paragraph.'
+    );
+    expect(prompts[0]).toEndWith('Paragraph:\nPay the fee now.');
     expect(result.proposed).toBe('Pay the fee today.');
     expect((await decided(result.saved, 'rejectAll')).text).toBe('Pay the fee now.');
     expect((await decided(result.saved, 'acceptAll')).text).toBe('Pay the fee today.');
@@ -247,6 +342,12 @@ describe('propose an AI rewrite as tracked changes', () => {
     const body = source
       .slice(source.indexOf('import {'))
       .replace("from '../../../index.ts'", "from '@docx-editor.dev/editor-api'");
-    expect(block).toBe(body.trimEnd());
+    // The formatter wraps the import by the length of its path, so compare the import without
+    // its line breaks, and everything after it exactly.
+    const flat = (code: string | undefined) => {
+      const end = (code ?? '').indexOf(';') + 1;
+      return `${(code ?? '').slice(0, end).replace(/,?\s+/g, ' ')}${(code ?? '').slice(end)}`;
+    };
+    expect(flat(block)).toBe(flat(body.trimEnd()));
   });
 });

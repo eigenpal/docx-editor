@@ -4,10 +4,13 @@
 
 An agent that rewrites a paragraph should propose the smallest set of tracked changes, not one replacement of the whole paragraph. This recipe splits the paragraph into word ranges, sends plain text to a model, compares the model output with the original words, and applies each difference as a tracked change. It uses only Office.js-shaped calls from `@docx-editor.dev/editor-api`.
 
-The recipe has two steps:
+The recipe has three steps:
 
-1. `prepare(context, paragraph)` splits the paragraph with `getTextRanges([' ', '\t'])`, and then reads the `fields` and `contentControls` of every word range in one sync. It returns `promptText` for the model and the word list.
+1. `prepare(context, paragraph)` splits the paragraph with `getTextRanges([' ', '\t'])`, and then reads the `fields` and `contentControls` of every word range in one sync. It returns `promptText`, a `legend` of the placeholders, and the word list.
+1. `promptFor(prepared, instruction)` builds the prompt: your instruction, the rules for placeholders, the legend, and the paragraph.
 1. `apply(context, prepared, modelOutput)` compares the model output with the original words, applies each difference from the last one to the first, and then checks the result with `getReviewedText('Current')`.
+
+`apply()` either lands the whole proposal or leaves the paragraph as it was. If any write or the final check fails, it rejects the tracked changes in the paragraph, and then throws the original error. This is safe because `prepare()` refuses a paragraph that already has tracked changes, so every change in the paragraph comes from `apply()`.
 
 ## Keep atoms whole
 
@@ -19,7 +22,9 @@ Some content must change as one unit or not at all. The recipe calls each of the
 | Equation or picture | U+FFFC | One character that has no words to edit. |
 | Content-locked control | Its text, split into the words around it | Edits inside it fail with `edit.protected-content`. |
 
-A placeholder that the model keeps is never changed. A placeholder that the model leaves out deletes that whole atom as one tracked deletion. A tracked deletion over an equation strikes the whole equation, and a tracked deletion or replacement that covers a whole content-locked control proposes removing the control. If the model moves or repeats a placeholder, `apply()` throws before it writes anything.
+The legend lists the exact text of each placeholder, including punctuation attached to the atom. For example, a field followed by a comma is `⟦1⟧ = "Section 4.2,"`, so the model knows that the comma is already there. `apply()` refuses output that repeats an atom's first or last punctuation mark next to its placeholder, such as `⟦1⟧,`, before it writes anything.
+
+A placeholder that the model keeps is never changed. A placeholder that the model leaves out deletes that whole atom as one tracked deletion. A tracked deletion over an equation strikes the whole equation, and a tracked deletion or replacement that covers a whole content-locked control proposes removing the control. If the model moves or repeats a placeholder, or writes a placeholder that `prepare()` did not create, `apply()` throws before it writes anything.
 
 A word directly attached to an atom, with no space between them, belongs to the atom's range, so the model cannot change that word.
 
@@ -61,11 +66,19 @@ export interface RewriteUnit {
   readonly atom: number | null;
 }
 
+/** What one placeholder stands for: the exact text, with any punctuation attached to it. */
+export interface LegendEntry {
+  readonly placeholder: string;
+  readonly text: string;
+}
+
 export interface PreparedRewrite {
   readonly paragraph: Paragraph;
   readonly units: readonly RewriteUnit[];
   /** The paragraph text for the model, with each atom shown as ⟦n⟧. */
   readonly promptText: string;
+  /** Each placeholder in `promptText`, and the text it stands for. */
+  readonly legend: readonly LegendEntry[];
 }
 
 interface ModelToken {
@@ -89,6 +102,7 @@ interface Hunk {
 const TRAILING_SPACING = /[ \t]+$/;
 const coreOf = (text: string) => text.replace(TRAILING_SPACING, '');
 const spacingOf = (text: string) => TRAILING_SPACING.exec(text)?.[0] ?? '';
+const PUNCTUATION = /^\p{P}$/u;
 
 /** Split a paragraph into words and atoms, and build the text for the model. */
 export async function prepare(
@@ -96,12 +110,13 @@ export async function prepare(
   paragraph: Paragraph
 ): Promise<PreparedRewrite> {
   const words = paragraph.getTextRanges([' ', '\t']);
+  const revisions = paragraph.getRange('Whole').revisions;
   words.load('items/text');
-  paragraph.load('text');
-  const current = paragraph.getReviewedText('Current');
+  revisions.load('items/type,items/author');
   await context.sync();
-  if (current.value !== paragraph.text) {
-    throw new Error('Decide the pending changes in this paragraph before you rewrite it.');
+  // apply() rolls back by rejecting every change in the paragraph, so it must start with none.
+  if (revisions.items.length > 0) {
+    throw new Error('Decide the tracked changes in this paragraph before you rewrite it.');
   }
 
   // One sync reads the fields and content controls of every word.
@@ -133,7 +148,53 @@ export async function prepare(
   const promptText = units
     .map((unit) => (unit.atom === null ? unit.text : `⟦${unit.atom}⟧${spacingOf(unit.text)}`))
     .join('');
-  return { paragraph, units, promptText };
+  const legend = units.flatMap((unit) =>
+    unit.atom === null ? [] : [{ placeholder: `⟦${unit.atom}⟧`, text: coreOf(unit.text) }]
+  );
+  return { paragraph, units, promptText, legend };
+}
+
+/** A prompt that shows the model what each placeholder already contains. */
+export function promptFor(prepared: PreparedRewrite, instruction: string): string {
+  const legend = prepared.legend
+    .map((entry) => `${entry.placeholder} = ${JSON.stringify(entry.text)}`)
+    .join('\n');
+  return [
+    instruction,
+    'Return only the rewritten paragraph. Keep each placeholder, such as ⟦1⟧, exactly as ' +
+      'written, or leave it out to delete what it stands for. Each placeholder already ' +
+      'contains the text listed for it, including its punctuation. Do not repeat that text.',
+    legend === '' ? '' : `Placeholders:\n${legend}`,
+    `Paragraph:\n${prepared.promptText}`,
+  ]
+    .filter((part) => part !== '')
+    .join('\n\n');
+}
+
+/** Refuse placeholders that prepare() did not create, and punctuation the atom already has. */
+function checkPlaceholders(output: string, legend: readonly LegendEntry[]): void {
+  const known = new Map(legend.map((entry) => [entry.placeholder, entry.text]));
+  for (const match of output.matchAll(/⟦\d+⟧/g)) {
+    const placeholder = match[0];
+    const text = known.get(placeholder);
+    if (text === undefined) {
+      throw new Error(`The model output contains ${placeholder}, which prepare() did not create.`);
+    }
+    const before = output[match.index - 1] ?? '';
+    const after = output[match.index + placeholder.length] ?? '';
+    const first = text[0] ?? '';
+    const last = text[text.length - 1] ?? '';
+    if (PUNCTUATION.test(last) && after === last) {
+      throw new Error(
+        `The model output repeats "${last}" after ${placeholder}, which ends with it.`
+      );
+    }
+    if (PUNCTUATION.test(first) && before === first) {
+      throw new Error(
+        `The model output repeats "${first}" before ${placeholder}, which starts with it.`
+      );
+    }
+  }
 }
 
 /** Split the model output the way `getTextRanges([' ', '\t'])` splits text. */
@@ -205,7 +266,9 @@ export async function apply(
   modelOutput: string
 ): Promise<string> {
   const { paragraph, units } = prepared;
-  const tokens = tokensOf(modelOutput.replace(/\s+$/, ''));
+  const output = modelOutput.replace(/\s+$/, '');
+  checkPlaceholders(output, prepared.legend);
+  const tokens = tokensOf(output);
   const hunks: Hunk[] = [];
   let open: Hunk | null = null;
   let expected = '';
@@ -239,36 +302,49 @@ export async function apply(
     }
   }
 
-  // Apply from the last hunk to the first, so the ranges before each edit stay valid.
-  for (const hunk of [...hunks].reverse()) {
-    if (hunk.to > hunk.from) {
-      const first = units[hunk.from]!.first;
-      const last = units[hunk.to - 1]!.last;
-      const target = first === last ? first : first.expandTo(last);
-      if (hunk.text === '') target.delete();
-      else target.insertText(hunk.text, 'Replace');
-    } else if (units.length === 0) {
-      paragraph.insertText(hunk.text, 'Start');
-    } else if (hunk.from === 0) {
-      units[0]!.first.insertText(hunk.text, 'Before');
-    } else {
-      units[hunk.from - 1]!.last.insertText(hunk.text, 'After');
+  try {
+    // Apply from the last hunk to the first, so the ranges before each edit stay valid.
+    for (const hunk of [...hunks].reverse()) {
+      if (hunk.to > hunk.from) {
+        const first = units[hunk.from]!.first;
+        const last = units[hunk.to - 1]!.last;
+        const target = first === last ? first : first.expandTo(last);
+        if (hunk.text === '') target.delete();
+        else target.insertText(hunk.text, 'Replace');
+      } else if (units.length === 0) {
+        paragraph.insertText(hunk.text, 'Start');
+      } else if (hunk.from === 0) {
+        units[0]!.first.insertText(hunk.text, 'Before');
+      } else {
+        units[hunk.from - 1]!.last.insertText(hunk.text, 'After');
+      }
+      await context.sync();
     }
-    await context.sync();
-  }
 
-  const proposed = paragraph.getReviewedText('Current');
-  await context.sync();
-  if (proposed.value !== expected) {
-    throw new Error('The proposed paragraph differs from the model output.');
+    const proposed = paragraph.getReviewedText('Current');
+    await context.sync();
+    if (proposed.value !== expected) {
+      throw new Error('The proposed paragraph differs from the model output.');
+    }
+    return proposed.value;
+  } catch (error) {
+    // prepare() accepted the paragraph only without tracked changes, so every change in it now
+    // came from this call. Rejecting them leaves the paragraph as it was.
+    paragraph.getRange('Whole').revisions.rejectAll();
+    try {
+      await context.sync();
+    } catch (rollback) {
+      throw new AggregateError([error, rollback], 'The rewrite failed, and so did its rollback.');
+    }
+    throw error;
   }
-  return proposed.value;
 }
 
 /** Rewrite the first paragraph of a document as tracked changes, and save the result. */
 export async function proposeRewrite(
   bytes: Uint8Array,
-  rewriteText: (promptText: string) => Promise<string>
+  instruction: string,
+  rewriteText: (prompt: string) => Promise<string>
 ): Promise<{ readonly proposed: string; readonly saved: Uint8Array }> {
   const runtime = await DocxEditor.createServer(bytes, { author: 'Rewrite agent' });
   try {
@@ -277,7 +353,7 @@ export async function proposeRewrite(
       const paragraph = context.document.body.paragraphs.getFirst();
       const prepared = await prepare(context, paragraph);
       // Send only plain text to the model. The ranges stay in this run.
-      return apply(context, prepared, await rewriteText(prepared.promptText));
+      return apply(context, prepared, await rewriteText(promptFor(prepared, instruction)));
     });
     return { proposed, saved: await runtime.save() };
   } finally {
@@ -286,7 +362,19 @@ export async function proposeRewrite(
 }
 ```
 
-`prepare()` refuses a paragraph that already has pending changes, because its word ranges would join deleted and inserted text. Decide those changes first, or rewrite another paragraph.
+`prepare()` refuses a paragraph when `paragraph.getRange('Whole').revisions` lists any tracked change, such as an insertion, a deletion, or a formatting change. Its word ranges would join deleted and inserted text, and the rollback would reject changes that it did not make. Decide those changes first, or rewrite another paragraph.
+
+When the engine refuses a write, the error is a `DocxEditorError`. Its `code` is the error code, and `debugInfo.innerError?.code` names the rule, such as `edit.protected-content`:
+
+```ts
+import { isDocxEditorError } from '@docx-editor.dev/editor-api';
+
+export function describeRefusal(error: unknown): string {
+  if (!isDocxEditorError(error)) return String(error);
+  const rule = error.debugInfo.innerError?.code;
+  return rule === undefined ? error.code : `${error.code}: ${rule}`;
+}
+```
 
 `apply()` compares `getReviewedText('Current')` with the text that it expects. If they differ, it throws. Never turn tracking off to make a refused edit succeed.
 
