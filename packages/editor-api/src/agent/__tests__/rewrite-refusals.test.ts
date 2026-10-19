@@ -194,6 +194,21 @@ describe('a failed write rolls back the writes before it', () => {
     }
   });
 
+  test('a rollback that finds nothing to reject reports rollback-failed', async () => {
+    const original = 'Alpha beta gamma delta.';
+    const { value } = await withRuntime(docx(p(original)), async (context) => {
+      const paragraph = await firstParagraph(context);
+      // The write lands at sync 8; the read of its revisions at sync 9 then fails, so the helper
+      // never learns which changes it made. The rollback must not report success.
+      const draft = await prepareRewrite(failingSync(context, 9), paragraph);
+      const error = await rejection(draft.apply('Alpha beta gamma DELTA.'));
+      return { error, after: await readBack(context, paragraph) };
+    });
+    expect(value.error).toMatchObject({ code: 'rollback-failed' });
+    expect((value.error as RewriteError).message).toContain('after the rollback');
+    expect(value.after.current).toBe('Alpha beta gamma DELTA.');
+  });
+
   test('a failure to turn tracking off again never replaces the result or the error', async () => {
     const original = 'Alpha beta gamma delta.';
     // Every sync from the twelfth fails: the write and the check succeed (7 to 11), and turning
@@ -209,10 +224,10 @@ describe('a failed write rolls back the writes before it', () => {
     expect(success.value.result.proposed).toBe('Alpha beta gamma DELTA.');
     expect(success.value.mode).toBe('TrackMineOnly');
 
-    // A refused second hunk (sync 11), a rollback (12 to 15), then turning tracking off fails.
+    // A refused second hunk (sync 11), a rollback (12 to 16), then turning tracking off fails.
     const failure = await withRuntime(docx(p(original)), async (context) => {
       const paragraph = await firstParagraph(context);
-      const draft = await prepareRewrite(failingSync(context, 16, true), paragraph);
+      const draft = await prepareRewrite(failingSync(context, 17, true), paragraph);
       return rejection(draft.apply('Alpha be\u000Eta gamma DELTA.'));
     });
     expect(failure.value).toMatchObject({ code: 'write-failed' });
@@ -268,17 +283,54 @@ describe('retries', () => {
     }
   });
 
-  test('model-failed: the rewrite function throws', async () => {
+  test('model-failed: a thrown model call is retried, then reported', async () => {
     const cause = new Error('rate limited');
+    let calls = 0;
     const { value } = await withRuntime(RICH, async (context) =>
       rejection(
         proposeRewrite(context, await firstParagraph(context), () => {
+          calls += 1;
           throw cause;
         })
       )
     );
     expect(value).toBeInstanceOf(RewriteError);
     expect(value).toMatchObject({ code: 'model-failed', cause, isModelError: false });
+    expect(calls).toBe(3);
+
+    let tries = 0;
+    const recovered = await withRuntime(docx(p('Pay the fee now.')), async (context) =>
+      proposeRewrite(context, await firstParagraph(context), () => {
+        tries += 1;
+        if (tries === 1) throw cause;
+        return 'Pay the fee today.';
+      })
+    );
+    expect(recovered.value.proposed).toBe('Pay the fee today.');
+    expect(tries).toBe(2);
+  });
+
+  test('context-used: the rewrite function must not sync the context', async () => {
+    let calls = 0;
+    const { value } = await withRuntime(docx(p('Pay the fee now.')), async (context) => {
+      const paragraph = await firstParagraph(context);
+      const error = await rejection(
+        proposeRewrite(context, paragraph, async () => {
+          calls += 1;
+          paragraph.load('text');
+          await context.sync();
+          return 'Pay the fee today.';
+        })
+      );
+      // The guard comes off after the model call: the context syncs again.
+      paragraph.load('text');
+      await context.sync();
+      return { error, text: paragraph.text };
+    });
+    expect(value.error).toMatchObject({ code: 'context-used' });
+    expect((value.error as RewriteError).message).toContain('must not use the request context');
+    expect(calls).toBe(1);
+    expect(value.text).toBe('Pay the fee now.');
   });
 
   test('verification-failed prepares the paragraph again, like stale', async () => {

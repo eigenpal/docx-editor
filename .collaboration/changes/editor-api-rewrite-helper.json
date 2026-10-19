@@ -7,6 +7,7 @@
   "tests": [
     "packages/editor-api/src/agent/__tests__/propose-rewrite.test.ts",
     "packages/editor-api/src/agent/__tests__/rewrite-refusals.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-atoms.test.ts",
     "packages/pro/src/collaboration/__tests__/document-propose-rewrite.test.ts"
   ],
   "changeset": "editor-api-rewrite-helper",

@@ -39,7 +39,8 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @public
  */
 
-export { prepareRewrite, proposeRewrite, proposeRewrites } from './agent/rewrite.ts';
+export { prepareRewrite } from './agent/rewrite.ts';
+export { proposeRewrite, proposeRewrites } from './agent/rewrite-run.ts';
 export type {
   ProposeRewriteOptions,
   ProposeRewritesOptions,

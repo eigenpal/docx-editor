@@ -184,7 +184,8 @@ export async function writeHunks(
   units: readonly Unit[],
   hunks: readonly Hunk[],
   author: string,
-  own: Map<string, number>
+  own: Map<string, number>,
+  progress: { wrote: boolean }
 ): Promise<void> {
   let known = counted((await revisionsOf(context, paragraph)).map((item) => item.signature));
   const collect = async () => {
@@ -199,6 +200,7 @@ export async function writeHunks(
   };
   for (const hunk of [...hunks].reverse()) {
     queueHunk(paragraph, units, hunk);
+    progress.wrote = true;
     try {
       await context.sync();
     } catch (error) {
@@ -230,18 +232,26 @@ async function reacquire(
 }
 
 /**
- * Reject the revisions whose signatures are in `own`, and only those. Each attempt reads the
- * paragraph again first, so it rejects on the current revision.
+ * Reject the revisions whose signatures are in `own`, and only those, then check the result.
+ * Each attempt reads the paragraph again first, so it rejects on the current revision.
+ *
+ * Throws when a recorded change is not found, or when the helper wrote and the paragraph still
+ * does not read as `original` although no other edit moved its original text. Either means the
+ * paragraph can still hold part of the rewrite.
  */
 export async function rollback(
   context: RequestContext,
   paragraph: Paragraph,
   paragraphId: string,
-  own: ReadonlyMap<string, number>
+  own: ReadonlyMap<string, number>,
+  original: string,
+  wrote: boolean
 ): Promise<void> {
-  if (own.size === 0) return;
-  for (let attempt = 1; ; attempt += 1) {
-    const target = await reacquire(context, paragraph, paragraphId);
+  const expected = [...own.values()].reduce((sum, count) => sum + count, 0);
+  let target: Paragraph | null = paragraph;
+  let found = 0;
+  for (let attempt = 1; expected > 0; attempt += 1) {
+    target = await reacquire(context, paragraph, paragraphId);
     if (!target) return;
     const left = new Map(own);
     const mine = (await revisionsOf(context, target)).filter(({ signature }) => {
@@ -250,14 +260,35 @@ export async function rollback(
       left.set(signature, count - 1);
       return true;
     });
-    if (mine.length === 0) return;
+    found = mine.length;
     for (const { revision } of mine) revision.reject();
     try {
       await context.sync();
-      return;
+      break;
     } catch (error) {
       // Another participant edited again between the read and the reject. Read again.
       if (attempt === MAX_STALE_ATTEMPTS || !isStale(error)) throw error;
+    }
+  }
+  if (!wrote || !target) return;
+  const current = target.getReviewedText('Current');
+  const before = target.getReviewedText('Original');
+  await context.sync();
+  if (found < expected) {
+    throw new Error(
+      `The rollback found ${found} of the ${expected} changes the rewrite made. The paragraph ` +
+        `reads ${JSON.stringify(current.value)}.`
+    );
+  }
+  if (before.value === original && current.value !== original) {
+    // Only a tracked change can make the two views differ. If it is not another participant's,
+    // it is one the rollback did not find.
+    const left = (await revisionsOf(context, target)).length;
+    if (left === 0 || expected === 0) {
+      throw new Error(
+        `The paragraph reads ${JSON.stringify(current.value)} after the rollback, not ` +
+          `${JSON.stringify(original)}.`
+      );
     }
   }
 }

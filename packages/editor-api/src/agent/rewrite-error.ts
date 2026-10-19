@@ -12,9 +12,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * - The model output broke a rule, and nothing was written. Send `error.message` back to the
  *   model and ask again: `invalid-output`, `placeholder-missing`, `placeholder-unknown`,
  *   `placeholder-moved`, `placeholder-repeated`.
- * - Your `rewrite` function threw, and nothing was written: `model-failed`.
+ * - Your `rewrite` function failed, and nothing was written: `model-failed` when it threw on
+ *   every attempt, and `context-used` when it called `context.sync()`, which it must not do.
  * - The paragraph cannot take a rewrite now, and nothing was written: `pending-changes`,
- *   `tracking-unavailable`, `draft-used`, `too-long`, `read-failed`.
+ *   `tracking-unavailable`, `draft-used`, `too-long`, `unsupported-text`, `read-failed`.
  * - A write or the final check failed, and the helper rejected the changes it had written:
  *   `stale`, `locked`, `write-failed`, `verification-failed`.
  * - The rollback failed too, so the paragraph can hold some of the proposal: `rollback-failed`.
@@ -28,10 +29,12 @@ export type RewriteErrorCode =
   | 'placeholder-moved'
   | 'placeholder-repeated'
   | 'model-failed'
+  | 'context-used'
   | 'pending-changes'
   | 'tracking-unavailable'
   | 'draft-used'
   | 'too-long'
+  | 'unsupported-text'
   | 'read-failed'
   | 'stale'
   | 'locked'

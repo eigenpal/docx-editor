@@ -36,10 +36,10 @@ export interface RewriteOptions {
  */
 export interface ProposeRewriteOptions extends RewriteOptions {
   /**
-   * How many more attempts to make after a model error, a `stale` failure, or a
-   * `verification-failed` failure. A model error asks the model again with the reason; the
-   * others prepare the paragraph again first. Each retry calls your `rewrite` function again.
-   * An integer from `0` to `5`; defaults to `2`. Other values are clamped into that range.
+   * How many more attempts to make, in all, after a refused answer, a thrown model call, a
+   * `stale` failure, or a `verification-failed` failure. A refused answer asks the model again
+   * with the reason; a thrown call calls again; the others prepare the paragraph again first.
+   * A whole number from `0` to `5`; defaults to `2`. Other values are clamped into that range.
    */
   readonly retries?: number;
 }
@@ -51,9 +51,10 @@ export interface ProposeRewriteOptions extends RewriteOptions {
  */
 export interface ProposeRewritesOptions extends ProposeRewriteOptions {
   /**
-   * How many model calls run at once. The helper prepares every paragraph first, calls the model
-   * for up to this many at a time, and writes the answers one paragraph after another. An
-   * integer from `1` to `16`; defaults to `4`.
+   * How many paragraphs ask the model at once. The helper prepares every paragraph first, then
+   * asks the model, with each paragraph's retries, for up to this many at a time, and then
+   * writes the answers one paragraph after another. A whole number from `1` to `16`; defaults
+   * to `4`.
    */
   readonly concurrency?: number;
 }
@@ -81,8 +82,10 @@ export interface RewriteDraft {
   /** The paragraph text as it reads now. */
   readonly original: string;
   /**
-   * The paragraph text with each field, picture, equation, note reference, and locked control as
-   * a placeholder, such as `Subject to ⟦1⟧, the fee applies`.
+   * The paragraph text with each field, picture, equation, note reference, line break, and
+   * locked control as a placeholder, such as `Subject to ⟦1⟧, the fee applies`. A paragraph that
+   * already contains `⟦` or `⟧` gets another bracket pair, such as `⟪1⟫`; read the exact
+   * placeholders from `placeholders`.
    */
   readonly text: string;
   /** Each placeholder in `text`, in order, and what it stands for. */
@@ -112,15 +115,22 @@ export interface RewriteResult {
   readonly paragraphId: string;
   /** The text before the rewrite: what rejecting every proposed change gives. */
   readonly original: string;
-  /** The text after the rewrite: what accepting every proposed change gives. */
+  /**
+   * The text after the rewrite: what accepting every proposed change gives. As in
+   * `getReviewedText`, an equation, a picture, or a note reference reads as U+FFFC, and a line
+   * break as U+000B.
+   */
   readonly proposed: string;
   /** How many tracked edits the helper wrote. `0` when the model changed nothing. */
   readonly changes: number;
 }
 
 /**
- * Your model call: take the draft, return the rewritten paragraph text. If it throws, the
- * helper reports a {@link RewriteError} with the code `model-failed` and your error as `cause`.
+ * Your model call: take the draft, return the rewritten paragraph text.
+ *
+ * It runs outside the batch, so it must not use the request context or its proxies; while it
+ * runs, `context.sync()` refuses with `context-used`. If it throws, the helper calls it again,
+ * up to `retries` times, and then reports `model-failed` with your error as `cause`.
  *
  * @public
  */
