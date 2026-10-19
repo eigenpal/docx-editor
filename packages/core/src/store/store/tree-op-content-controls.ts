@@ -1047,9 +1047,15 @@ export function contentControlLockRefusal(part: OoxmlPart, op: TreeDocOp): TreeO
   // What NO applier resolves either way is a control the op was not addressed at and would
   // destroy anyway, so those are asked here whatever the intent was.
   const namedControlAnswersForItself = reach.kind === 'control' && reach.intent !== 'value';
+  // A control nested in one being removed goes with it, so only its removal half is asked.
+  const removingNamedControl = reach.kind === 'control' && reach.intent === 'removal';
   for (const touch of resolveReach(part, reach).touches) {
     if (namedControlAnswersForItself && !touch.discarded) continue;
     const resolved = resolveContentControlLock(touch.locks);
+    if (touch.discarded && removingNamedControl) {
+      if (lockForbidsRemoval(resolved)) return 'locked';
+      continue;
+    }
     const edited = touch.survivingLocks
       ? resolveContentControlLock(touch.survivingLocks)
       : resolved;
@@ -1691,6 +1697,14 @@ export function applyRemoveContentControl(
   if (typeof resolved === 'string') return { ok: false, reason: resolved };
   const { control, lock } = resolved;
   if (lockForbidsRemoval(lock)) return { ok: false, reason: 'locked' };
+  // Removing a control edits the content of the control that ENCLOSES it, so a content lock
+  // there refuses, whatever the removed control's own lock says.
+  const enclosing = enclosingContentControls(part, control.id).filter(
+    (node) => node.id !== control.id
+  );
+  if (lockForbidsEdit(resolveContentControlLock(locksOf(enclosing)))) {
+    return { ok: false, reason: 'locked' };
+  }
   // Deleting the WHOLE control is an existence operation, governed by the wrapper axis
   // alone — Word deletes a contentLocked control whole (only sdtLocked forbids deletion),
   // and Backspace over a content-locked chip relies on it. The content lock guards the

@@ -9,6 +9,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import {
+  contentControlPropertiesOf,
   contentControlTextOf,
   contentControlsIn,
   paragraphOffsetIndex,
@@ -483,6 +484,75 @@ describe('the paragraph an inline control sits in is still structural', () => {
     const found = body ? storyParagraphs(body) : [];
     expect(
       refusal(part, { op: 'joinParagraphs', firstId: found[0]!.id, secondId: found[1]!.id })
+    ).toBe('locked');
+  });
+});
+
+describe('removing a control nested in another', () => {
+  const sdt = (tag: string, lock: string, inner: string) =>
+    `<w:sdt><w:sdtPr><w:tag w:val="${tag}"/>${lock === 'none' ? '' : `<w:lock w:val="${lock}"/>`}</w:sdtPr>` +
+    `<w:sdtContent>${inner}</w:sdtContent></w:sdt>`;
+  const text = (value: string) => `<w:r><w:t>${value}</w:t></w:r>`;
+  const controlId = (part: OoxmlPart, tag: string) =>
+    contentControlsIn(part.root).find(
+      (entry) => contentControlPropertiesOf(entry.node).tag === tag
+    )!.node.id;
+
+  for (const [name, lock] of [
+    ['an unlocked', 'none'],
+    ['a contentLocked', 'contentLocked'],
+  ] as const) {
+    test(`${name} control inside an inline contentLocked control is refused`, () => {
+      const part = parseDoc(
+        `<w:p>${text('pre')}${sdt('outer', 'contentLocked', text('a') + sdt('inner', lock, text('b')))}</w:p>`
+      );
+      for (const keepContent of [false, true]) {
+        expect(
+          refusal(part, {
+            op: 'removeContentControl',
+            controlId: controlId(part, 'inner'),
+            keepContent,
+          })
+        ).toBe('locked');
+      }
+    });
+
+    test(`${name} control inside a block contentLocked control is refused`, () => {
+      const part = parseDoc(
+        sdt('outer', 'contentLocked', `<w:p>${text('a')}${sdt('inner', lock, text('b'))}</w:p>`)
+      );
+      expect(
+        refusal(part, {
+          op: 'removeContentControl',
+          controlId: controlId(part, 'inner'),
+          keepContent: false,
+        })
+      ).toBe('locked');
+    });
+  }
+
+  test('a contentLocked control that holds another contentLocked control can be removed', () => {
+    const part = parseDoc(
+      `<w:p>${text('pre')}${sdt('outer', 'contentLocked', text('a') + sdt('inner', 'contentLocked', text('b')))}</w:p>`
+    );
+    const after = applied(part, {
+      op: 'removeContentControl',
+      controlId: controlId(part, 'outer'),
+      keepContent: false,
+    });
+    expect(contentControlsIn(after.root)).toHaveLength(0);
+  });
+
+  test('a contentLocked control that holds an sdtLocked control is refused', () => {
+    const part = parseDoc(
+      `<w:p>${sdt('outer', 'contentLocked', sdt('inner', 'sdtLocked', text('b')))}</w:p>`
+    );
+    expect(
+      refusal(part, {
+        op: 'removeContentControl',
+        controlId: controlId(part, 'outer'),
+        keepContent: false,
+      })
     ).toBe('locked');
   });
 });
