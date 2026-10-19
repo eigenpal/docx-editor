@@ -36,6 +36,7 @@ import {
   hydratedText,
   type AutomationContentControlRangeLocation,
   type AutomationHandle,
+  type AutomationSpanRef,
   type AutomationOperation,
   type ObjectAddress,
   type RequestContext,
@@ -480,9 +481,13 @@ export class ContentControl extends ModelObject implements PromisedItem {
 }
 
 /** Where a collection of controls looks: a story, or inside one control. */
-type ContentControlScope =
+type ScopeValue =
   | { readonly body: AutomationHandle }
-  | { readonly contentControl: AutomationHandle };
+  | { readonly contentControl: AutomationHandle }
+  | { readonly span: AutomationSpanRef };
+
+/** A scope now, or one a range or paragraph names when the batch is planned. */
+type ContentControlScope = ScopeValue | (() => ScopeValue);
 
 /**
  * The content controls of a document, story or range, as of the batch that loaded them.
@@ -493,7 +498,7 @@ type ContentControlScope =
  * @public
  */
 export class ContentControlCollection extends HandleCollection<ContentControl> {
-  readonly #scope: ContentControlScope;
+  readonly #scope: () => ScopeValue;
   readonly #plan: () => AutomationOperation;
 
   /** @internal The controls of a scope, in document order. */
@@ -503,16 +508,17 @@ export class ContentControlCollection extends HandleCollection<ContentControl> {
     owner: ObjectPath,
     scope: ContentControlScope
   ): ContentControlCollection {
-    return new ContentControlCollection(context, ObjectPath.derived(label, owner), scope, () => ({
+    const resolve = typeof scope === 'function' ? scope : () => scope;
+    return new ContentControlCollection(context, ObjectPath.derived(label, owner), resolve, () => ({
       op: 'getContentControls',
-      scope,
+      scope: resolve(),
     }));
   }
 
   private constructor(
     context: RequestContext,
     path: ObjectPath,
-    scope: ContentControlScope,
+    scope: () => ScopeValue,
     plan: () => AutomationOperation
   ) {
     super(context, path);
@@ -545,7 +551,7 @@ export class ContentControlCollection extends HandleCollection<ContentControl> {
     this.enqueue({
       sort: 'read',
       label: target,
-      plan: () => ({ op: 'getContentControlById', scope, id }),
+      plan: () => ({ op: 'getContentControlById', scope: scope(), id }),
       settle: (value) => {
         found.hydrateAddress({ kind: 'handle', handle: hydratedHandle(value, target) });
       },
@@ -562,7 +568,7 @@ export class ContentControlCollection extends HandleCollection<ContentControl> {
       this.context,
       ObjectPath.derived(target, this.path),
       scope,
-      () => ({ op: 'getContentControlsByTag', scope, tag: wanted })
+      () => ({ op: 'getContentControlsByTag', scope: scope(), tag: wanted })
     );
   }
 
@@ -575,7 +581,7 @@ export class ContentControlCollection extends HandleCollection<ContentControl> {
       this.context,
       ObjectPath.derived(target, this.path),
       scope,
-      () => ({ op: 'getContentControlsByTitle', scope, title: wanted })
+      () => ({ op: 'getContentControlsByTitle', scope: scope(), title: wanted })
     );
   }
 

@@ -40,15 +40,18 @@ export type AutomationSpanRef =
   | { readonly body: AutomationHandle };
 
 /**
- * Where to look for content controls: a whole story, or inside one control.
+ * Where to look for content controls: a whole story, inside one control, or across a span.
  *
  * A control's own scope is how nesting is expressed. Listing every control of a story flat
  * would answer a form field and the group wrapping it as siblings, which is not what either of
- * them is.
+ * them is. A SPAN scope is the exception on purpose: it answers every control the span
+ * overlaps, at any depth, including a control that holds the whole span, because a caller asks
+ * a range for its controls to learn what an edit through it would touch.
  */
 export type AutomationContentControlScope =
   | { readonly body: AutomationHandle }
-  | { readonly contentControl: AutomationHandle };
+  | { readonly contentControl: AutomationHandle }
+  | { readonly span: AutomationSpanRef };
 
 /** The value a control accepts, by what kind of control it is. */
 export type AutomationContentControlValue =

@@ -378,11 +378,23 @@ await runtime.run(async (context) => {
 });
 ```
 
-A field reads as its result text in a word range. An equation, a picture, and a note reference each read as U+FFFC. Each of them is one character that never splits and joins the word it touches. A tab ends a range only when you list `'\t'` as a mark. `trimSpacing` removes spaces, tabs, and column breaks from the edges of each range; use it to read words, not to plan deletions. `Range.getRange('Start')` and `'End'` answer an insertion point; `'After'` fails with `NotSupported`. Ranges in different stories make `expandTo()` fail with `InvalidArgument`.
+A field, an equation, a picture, or a note reference reads as one unit that never splits and joins the word it touches. A field reads as its result, which can contain spaces, such as `Section 4.2`. An equation, a picture, and a note reference read as U+FFFC. A tab ends a range only when you list `'\t'` as a mark. `trimSpacing` removes spaces, tabs, and column breaks from the edges of each range; use it to read words, not to plan deletions. `Range.getRange('Start')` and `'End'` answer an insertion point; `'After'` fails with `NotSupported`. Ranges in different stories make `expandTo()` fail with `InvalidArgument`.
 
 A tracked deletion or replacement that covers an equation strikes the whole equation. Accept removes it, and reject restores it.
 
-The words of an inline content control join the ranges around it. Before you plan edits, read `paragraph.contentControls` with `cannotEdit`, `tag`, and `text`, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails with `GeneralException` and `innerError.code` `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
+The words of an inline content control join the ranges around it. `paragraph.contentControls` and `range.contentControls` list the controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load them with `cannotEdit`, `tag`, and `text`, for each word range in one sync, and keep each locked control as one unit. A replacement or deletion of part of a content-locked control fails with `GeneralException` and `innerError.code` `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion.
+
+Map each difference between the old and the new words to one call. The last range of a paragraph has no space after it:
+
+| Difference | Call |
+| --- | --- |
+| Replace one or more words | `first.expandTo(last).insertText(text, 'Replace')` |
+| Delete one or more words | `first.expandTo(last).delete()` |
+| Insert before the first word | `words[0].insertText(text, 'Before')` |
+| Insert after a word | `word.insertText(text, 'After')` |
+| Insert after the last word | `last.insertText(' ' + text, 'After')`, because the last word has no space after it |
+
+The [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite) recipe implements this mapping with a word diff, and keeps fields, equations, and locked controls whole.
 
 Ranges follow the runtime's `revisionTextView`. Text that the view hides, such as a pending insertion in the `original` view, holds no ending mark, and a range starts and ends at characters that the view shows. Hidden text between two shown characters of one range stays inside the range, so an edit through that range also changes the hidden text.
 

@@ -202,7 +202,8 @@ function readOf(reads: AutomationStoryReads, node: OoxmlNode): AutomationContent
 }
 
 /** The paragraphs inside a control's content, flattening nested controls and tables. */
-function paragraphsHeldBy(node: OoxmlNode): readonly string[] {
+/** The paragraphs a block control holds, in reading order. Empty for an inline control. */
+export function paragraphsHeldBy(node: OoxmlNode): readonly string[] {
   const content = contentControlContentNodeOf(node);
   if (!content) return [];
   const found: OoxmlNode[] = [];

@@ -14,6 +14,7 @@ The library has two ways to change a document. Each one fits a different host. C
 | [Comment on found text](./comment-on-found-text.md) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
 | Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
 | [Record a tracked replacement](./tracked-replacement.md) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
+| [Propose an AI rewrite as tracked changes](./propose-rewrite.md) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `Paragraph.getTextRanges`, `Range.expandTo`, `Range.insertText`, then `getReviewedText('Current')` |
 | [Accept or reject a change](./accept-reject-without-scrolling.md) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
 | [Open or reveal a change without scrolling](./accept-reject-without-scrolling.md) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](./highlight-ranges.md) | `useHighlights(name, source, options)` | Not applicable |
@@ -27,6 +28,7 @@ The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor
 
 - [Comment on found text](./comment-on-found-text.md)
 - [Replace as a tracked change](./tracked-replacement.md)
+- [Propose an AI rewrite as tracked changes](./propose-rewrite.md)
 - [Custom cards in the review rail](./custom-review-cards.md)
 - [Highlight ranges](./highlight-ranges.md)
 - [Accept or reject without scrolling](./accept-reject-without-scrolling.md)

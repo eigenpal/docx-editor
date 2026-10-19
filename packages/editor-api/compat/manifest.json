@@ -441,6 +441,10 @@
   ],
   "divergences": [
     {
+      "uid": "Word.Range#contentControls / Word.Paragraph#contentControls",
+      "note": "Lists every control the range or paragraph overlaps, at any nesting depth, including a control that holds the whole range and a block control that holds the paragraph, so a word range reports the locked control it sits in. Body.contentControls and ContentControl.contentControls keep listing only their direct controls."
+    },
+    {
       "uid": "Word.Range#getTextRanges / Word.Paragraph#getTextRanges",
       "note": "Boundaries come from the model text: a field, equation, picture, or note reference is one character that never splits and joins the word it touches; a field reads as its result text, and the others read as U+FFFC, and an inline content control adds no boundary. A paragraph end always ends a range, and no range holds a paragraph mark. trimSpacing trims spaces, tabs, and column breaks. Ranges follow revisionTextView: hidden text holds no ending mark, ranges start and end at shown characters, and hidden text between shown characters stays inside a range. At most 32 ending marks of at most 32 UTF-16 code units each, with no unpaired surrogate."
     },

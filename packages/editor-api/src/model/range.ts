@@ -50,7 +50,7 @@ import { ParagraphCollection, RangeCollection, type PromisedItem } from './colle
 import { BookmarkCollection } from './bookmarks.ts';
 import { requireStyleName, spanRefOf } from './addressing.ts';
 import { Font } from './font.ts';
-import { ContentControl } from './content-controls.ts';
+import { ContentControl, ContentControlCollection } from './content-controls.ts';
 import {
   insertableText,
   rangeTextLocation,
@@ -96,6 +96,7 @@ export class Range extends ModelObject implements PromisedItem {
   #font: Font | undefined;
   #bookmarks: BookmarkCollection | undefined;
   #revisions: RevisionCollection | undefined;
+  #contentControls: ContentControlCollection | undefined;
 
   /** @internal A range a read already found. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Range {
@@ -189,6 +190,33 @@ export class Range extends ModelObject implements PromisedItem {
     if (typeof value !== 'string' || value.length > 2048) fail({ code: 'InvalidArgument', target });
     this.requireUsablePath();
     this.command('hyperlink', () => ({ op: 'setHyperlink', span: this.#span(), target: value }));
+  }
+
+  /**
+   * The content controls this range overlaps, in document order, at any nesting depth.
+   *
+   * A control counts when it shares at least one character with the range, and a control that
+   * holds the whole range counts too, so a word range inside a locked control reports that
+   * control. A block control counts when it holds one of the range's paragraphs. Load
+   * `items/cannotEdit`, `items/tag`, and `items/text` to learn what an edit through the range
+   * would touch.
+   *
+   * @example
+   * ```ts
+   * const controls = range.contentControls;
+   * controls.load('items/cannotEdit,items/tag');
+   * await context.sync();
+   * ```
+   */
+  get contentControls(): ContentControlCollection {
+    this.requireUsablePath();
+    this.#contentControls ??= ContentControlCollection.of(
+      this.context,
+      `${this.path.label}.contentControls`,
+      this.path,
+      () => ({ span: this.#span() })
+    );
+    return this.#contentControls;
   }
 
   /** The bookmarks whose text this range overlaps, in document order. */

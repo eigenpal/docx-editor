@@ -5,7 +5,7 @@ category: 'Editing API'
 order: 61
 ---
 
-Content controls mark template content for structured reading and editing. Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope. `ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs.
+Content controls mark template content for structured reading and editing. Use `Document.contentControls` for the main-story collection, or `Body.contentControls` for a body scope. `ContentControl.contentControls` provides nested controls; `paragraphs` provides the control's paragraphs. `Paragraph.contentControls` and `Range.contentControls` list every control that the paragraph or range overlaps, at any depth, including a control that holds the whole range.
 
 Create a `runtime` with [Runtime and setup](/docs/2.x/editor-api/runtime). Use `context` and document proxies inside `runtime.run()`.
 

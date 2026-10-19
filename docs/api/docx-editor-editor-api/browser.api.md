@@ -1127,6 +1127,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
     static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph;
     attachToList(listId: number, level: number): List;
     clear(): void;
+    get contentControls(): ContentControlCollection;
     delete(): void;
     detachFromList(): void;
     get firstLineIndent(): number;
@@ -1210,6 +1211,7 @@ class Range_2 extends ModelObject implements PromisedItem {
     static at(context: RequestContext, label: string, address: ObjectAddress): Range_2;
     get bookmarks(): BookmarkCollection;
     clear(): void;
+    get contentControls(): ContentControlCollection;
     delete(): void;
     expandTo(range: Range_2): Range_2;
     get fields(): FieldCollection;

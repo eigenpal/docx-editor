@@ -19,6 +19,7 @@ The library has two ways to change a document. Each one fits a different host. C
 | [Comment on found text](/docs/2.x/recipes/comment-on-found-text) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
 | Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
 | [Record a tracked replacement](/docs/2.x/recipes/tracked-replacement) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
+| [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `Paragraph.getTextRanges`, `Range.expandTo`, `Range.insertText`, then `getReviewedText('Current')` |
 | [Accept or reject a change](/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
 | [Open or reveal a change without scrolling](/docs/2.x/recipes/accept-reject-without-scrolling) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](/docs/2.x/recipes/highlight-ranges) | `useHighlights(name, source, options)` | Not applicable |
@@ -32,6 +33,7 @@ The review hooks need `reviewModule()` from `@docx-editor.dev/pro` in the editor
 
 - [Comment on found text](/docs/2.x/recipes/comment-on-found-text)
 - [Replace as a tracked change](/docs/2.x/recipes/tracked-replacement)
+- [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite)
 - [Custom cards in the review rail](/docs/2.x/recipes/custom-review-cards)
 - [Highlight ranges](/docs/2.x/recipes/highlight-ranges)
 - [Accept or reject without scrolling](/docs/2.x/recipes/accept-reject-without-scrolling)

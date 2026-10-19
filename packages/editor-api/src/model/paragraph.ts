@@ -22,6 +22,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // stopped describing it. Two syncs get both edits, each exactly as asked.
 
 import { ShapeCollection } from './shapes.ts';
+import { ContentControlCollection } from './content-controls.ts';
 import { InsertLocation, Alignment, ChangeTrackingVersion } from './editing-enums.ts';
 import {
   ObjectPath,
@@ -91,6 +92,7 @@ export class Paragraph extends ModelObject implements PromisedItem {
   #list: List | undefined;
   #listItem: ListItem | undefined;
   #format: Record<string, unknown> | undefined;
+  #contentControls: ContentControlCollection | undefined;
 
   /** @internal A paragraph a read has already named. */
   static at(context: RequestContext, label: string, address: ObjectAddress): Paragraph {
@@ -121,6 +123,24 @@ export class Paragraph extends ModelObject implements PromisedItem {
   /** This paragraph's text. Readable after `load('text')` and a `sync()`. */
   get text(): string {
     return this.loadedProperty<string>('text');
+  }
+
+  /**
+   * The content controls in this paragraph, in document order, at any nesting depth.
+   *
+   * Includes every inline control in the paragraph and a block control that holds it. Load
+   * `items/cannotEdit`, `items/tag`, and `items/text` before you plan edits, and keep each locked
+   * control as one unit.
+   */
+  get contentControls(): ContentControlCollection {
+    this.requireUsablePath();
+    this.#contentControls ??= ContentControlCollection.of(
+      this.context,
+      `${this.path.label}.contentControls`,
+      this.path,
+      () => ({ span: { paragraph: this.#handle() } })
+    );
+    return this.#contentControls;
   }
 
   /**

@@ -124,8 +124,8 @@ Some document elements behave differently inside a word range:
 
 | Element | Behavior |
 | --- | --- |
-| Field | One character that never splits. It joins the word that it touches. Range text shows the field result. |
-| Equation, picture, or note reference | One character that never splits. It joins the word that it touches. Range text shows U+FFFC. A tracked deletion or replacement that covers an equation strikes the whole equation; accept removes it, and reject restores it. |
+| Field | Reads as one unit that never splits. It joins the word that it touches. Range text shows the field result, which can contain spaces, such as `Section 4.2`. |
+| Equation, picture, or note reference | Reads as one unit that never splits, shown as U+FFFC. It joins the word that it touches. A tracked deletion or replacement that covers an equation strikes the whole equation; accept removes it, and reject restores it. |
 | Tab | Ends a range only if you list `'\t'` as a mark. `trimSpacing` removes it from range edges. |
 | Inline content control | Adds no boundary. Its words join the ranges around it. |
 | Content-locked control | A replacement or deletion of part of it fails with `GeneralException`, and `debugInfo.innerError.code` is `edit.protected-content`. With tracking on, a deletion or replacement that covers the whole control proposes removing the control as one deletion. |
@@ -134,7 +134,7 @@ Some document elements behave differently inside a word range:
 
 You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units and no unpaired surrogate. Other values fail with `InvalidArgument`.
 
-Before you plan edits in a paragraph with content controls, load `paragraph.contentControls` with `cannotEdit`, `tag`, and `text`. Keep each locked control as one unit in the plan.
+`Paragraph.contentControls` and `Range.contentControls` list the content controls that the paragraph or range overlaps, including a control that holds the whole range. Before you plan edits, load `contentControls` with `cannotEdit`, `tag`, and `text` for the paragraph, or for each word range in one sync. Keep each locked control as one unit in the plan.
 
 ## Rewrite a paragraph and read the result
 
@@ -143,6 +143,18 @@ A word range is a snapshot. An edit before the range in its paragraph makes the 
 Do not split a paragraph again after tracked edits to plan more edits. A range over pending revisions can join deleted and inserted text, such as `two2` after you replace `two` with `2`. An edit that touches your own pending change fails with `NotImplemented`, and `debugInfo.innerError.code` is `edit.tracked-own-pending-change`. Read the proposed result with `getReviewedText('Current')` instead.
 
 After tracked edits, `Paragraph.text` contains both the deleted and the inserted words. Call `getReviewedText('Current')` to read the text as if every pending change were accepted. Call `getReviewedText('Original')` to read it as if every change were rejected. `Range.getReviewedText()` and `Paragraph.getReviewedText()` default to `Current`. The method does not change the document. `ChangeTrackingVersion` provides matching enum values.
+
+Each range keeps the space or tab after it, except the last range of the paragraph. Map each difference between the old and the new words to one call:
+
+| Difference | Call |
+| --- | --- |
+| Replace one or more words | `first.expandTo(last).insertText(text, 'Replace')` |
+| Delete one or more words | `first.expandTo(last).delete()` |
+| Insert before the first word | `words[0].insertText(text, 'Before')` |
+| Insert after a word | `word.insertText(text, 'After')` |
+| Insert after the last word | `last.insertText(' ' + text, 'After')`, because the last word has no space after it |
+
+For a complete, tested implementation that keeps fields, equations, and locked controls whole, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
 
 The following example deletes a word, writes after a word, and replaces two words as tracked changes. Each range keeps its trailing space, so the replacement ends with a space too. Then it reads the proposed paragraph:
 
@@ -195,7 +207,7 @@ Structural edits sharing a paragraph can conflict within one sync. Separate depe
 
 ## Reach other document objects
 
-`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `shapes`, `fields`, `contentControls`, `bookmarks`, and `revisions`. `Body.getComments()` returns story comments. `Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, and `bookmarks`. A range can create a table, picture, field, content control, comment, or break through its insertion methods. `Paragraph` exposes `font`, `style`, `list`, `listItem`, and `shapes`. Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
+`Body` exposes `font`, `style`, `lists`, `tables`, `inlinePictures`, `shapes`, `fields`, `contentControls`, `bookmarks`, and `revisions`. `Body.getComments()` returns story comments. `Range` exposes `font`, `style`, `hyperlink`, `tables`, `inlinePictures`, `fields`, `contentControls`, and `bookmarks`. A range can create a table, picture, field, content control, comment, or break through its insertion methods. `Paragraph` exposes `font`, `style`, `list`, `listItem`, `contentControls`, and `shapes`. Use the [API member directory](/docs/2.x/editor-api/reference) to find each dedicated guide and exact signatures.
 
 For shape enumeration and text-box editing, see [Page layout and stories](/docs/2.x/editor-api/page-layout-and-stories#read-and-edit-text-boxes). `Range.shapes` is not available.
 

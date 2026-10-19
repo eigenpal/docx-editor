@@ -198,6 +198,8 @@ export type AutomationContentControlScope = {
     readonly body: AutomationHandle;
 } | {
     readonly contentControl: AutomationHandle;
+} | {
+    readonly span: AutomationSpanRef;
 };
 
 // @public
