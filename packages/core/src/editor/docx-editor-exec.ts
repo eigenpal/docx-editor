@@ -5,6 +5,7 @@ import { fragmentContainsClipboardObject } from './clipboard-object-selection.ts
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { FIELD_CODE_INPUT_REFUSAL } from './surface-field-code-input.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
+import { isCollaborationFailureCode } from '../collaboration/index.ts';
 import { execReplaceMatch } from './docx-editor-replace-match.ts';
 // Command dispatch for `createDocxEditor` (editor seam).
 //
@@ -57,9 +58,11 @@ import { lineSpacingAttributes, spacingSideAttributes } from './paragraph-format
  */
 /**
  * A refused run format as a command result. A missing author or the generated table of
- * contents is the caller's to fix, as `insertText` reports it; anything else is a lock.
+ * contents is the caller's to fix, as `insertText` reports it; a collaboration session that
+ * is not ready is a retry, as the contract documents; anything else is a lock.
  */
 function runFormatRefusal(reason: string): ExecResult {
+  if (isCollaborationFailureCode(reason)) return { ok: false, code: 'unsupported', reason };
   const callerFixable =
     isMissingAuthorRefusal(reason) ||
     reason === 'the table of contents is generated and read-only' ||
