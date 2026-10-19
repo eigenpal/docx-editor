@@ -45,3 +45,23 @@ test('an equation outside any revision draws no revision bar', () => {
   expect(plain).not.toBeNull();
   expect(plain?.querySelector('[class^="docx-equation-revision"]')).toBeNull();
 });
+
+test('a host revision markup with no line mark draws no equation bar', () => {
+  const parsed = readOoxmlPart(
+    `<w:document xmlns:w="${W}" xmlns:m="${M}"><w:body>${wrapped('del')}${wrapped('ins')}</w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const revisionMarkup = resolveRevisionMarkup({
+    insertions: { mark: 'none' },
+    deletions: { mark: 'colorOnly' },
+  });
+  const layout = layoutSemanticDocument(parsed.part, 1, {
+    displayMode: 'all-markup',
+    measurer: createFixedMeasurer(6, 14),
+  });
+  const root = document.createElement('div');
+  paintSemanticLayout(root, layout, { scale: 1, revisionMarkup });
+  expect(root.querySelectorAll('.docx-equation')).toHaveLength(2);
+  expect(root.querySelector('[class^="docx-equation-revision"]')).toBeNull();
+});

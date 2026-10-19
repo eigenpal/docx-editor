@@ -7,6 +7,7 @@ import type {
   StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
 import { applyRevisionPresentation } from './semantic-paint-revisions.ts';
+import { revisionMarkupStyle } from '../contracts/revision-markup.ts';
 import type { PaintContext } from './semantic-paint.ts';
 
 function place(
@@ -187,17 +188,30 @@ export function applyEquationRevision(
 ): void {
   applyRevisionPresentation(host, span, ctx);
   const kind = host.dataset.revisionKind;
-  const deleted = kind === 'delete' || kind === 'moveFrom';
-  if (!deleted && kind !== 'insert' && kind !== 'moveTo') return;
+  if (kind !== 'delete' && kind !== 'moveFrom' && kind !== 'insert' && kind !== 'moveTo') return;
   const box = span.equation?.geometry.box;
   if (!box) return;
+  // A host's revision markup decides the mark, as it does for the text beside the equation.
+  const mark = ctx.revisionMarkup
+    ? revisionMarkupStyle(ctx.revisionMarkup, kind).mark
+    : kind === 'delete' || kind === 'moveFrom'
+      ? 'strikethrough'
+      : 'underline';
+  const strike = mark === 'strikethrough' || mark === 'doubleStrikethrough';
+  if (!strike && mark !== 'underline' && mark !== 'doubleUnderline') return;
   const thickness = 0.75;
-  const y = deleted ? box.height / 2 - thickness / 2 : box.height - thickness;
-  const bar = rule(
-    document,
-    deleted ? 'docx-equation-revision-strike' : 'docx-equation-revision-underline',
-    { x: 0, y, width: box.width, height: thickness },
-    ctx.scale
-  );
-  host.append(bar);
+  const doubled = mark === 'doubleStrikethrough' || mark === 'doubleUnderline';
+  const ys = strike
+    ? doubled
+      ? [box.height / 2 - 2 * thickness, box.height / 2 + thickness]
+      : [box.height / 2 - thickness / 2]
+    : doubled
+      ? [box.height - 3 * thickness, box.height - thickness]
+      : [box.height - thickness];
+  const className = strike ? 'docx-equation-revision-strike' : 'docx-equation-revision-underline';
+  for (const y of ys) {
+    host.append(
+      rule(document, className, { x: 0, y, width: box.width, height: thickness }, ctx.scale)
+    );
+  }
 }
