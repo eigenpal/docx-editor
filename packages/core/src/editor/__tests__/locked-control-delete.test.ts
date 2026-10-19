@@ -257,6 +257,21 @@ describe('suggesting', () => {
     expect(serializeOoxmlPart(m.surface.session.part())).toContain('<w:delText>z</w:delText>');
   });
 
+  test('forward Delete beside a checkbox strikes it and moves on', () => {
+    const W14 = 'http://schemas.microsoft.com/office/word/2010/wordml';
+    const checkbox =
+      `<w:sdt><w:sdtPr><w:tag w:val="box"/><w14:checkbox xmlns:w14="${W14}">` +
+      `<w14:checked w14:val="0"/></w14:checkbox></w:sdtPr>` +
+      `<w:sdtContent>${run('☐')}</w:sdtContent></w:sdt>`;
+    const m = mount(`<w:p>${run('aa')}${checkbox}${run('zz')}</w:p>`, null, suggesting);
+    caretAt(m, 2);
+    m.surface.deleteForward();
+    m.surface.deleteForward();
+    const xml = serializeOoxmlPart(m.surface.session.part());
+    expect(xml).toContain('<w:delText>☐</w:delText>');
+    expect(xml).toContain('<w:delText>z</w:delText>');
+  });
+
   test('an sdtContentLocked control is still refused', () => {
     const m = mount(line('sdtContentLocked'), null, suggesting);
     caretAt(m, 1, 8);

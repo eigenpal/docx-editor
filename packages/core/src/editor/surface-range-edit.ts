@@ -192,8 +192,14 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     if (!atom || !control) return null;
     // A control already proposed for deletion is struck text the key steps over, not a unit
     // to select again: selecting it would leave the caret where it was, press after press.
+    // Only while tracking: an untracked press removes struck content outright, as it does text.
     let struck = false;
-    for (let node = parentNodeOf(part, control.id); node; node = parentNodeOf(part, node.id)) {
+    const tracked = deps.trackedAuthorOrNone() !== undefined;
+    for (
+      let node = tracked ? parentNodeOf(part, control.id) : null;
+      node;
+      node = parentNodeOf(part, node.id)
+    ) {
       if (node.kind === 'revisionDelete') struck = true;
       if (struck || node.kind === 'paragraph') break;
     }

@@ -157,6 +157,8 @@ export function atomicControlDeletion(
           },
         ]
       : [{ op: 'removeContentControl', controlId: control.controlId, keepContent: false }],
-    collapseTo: backward ? start : position,
+    // A tracked removal leaves the control in place, struck: a forward press moves past it,
+    // or the next press would find the same control and strike nothing new.
+    collapseTo: backward ? start : input.tracked ? end : position,
   };
 }
