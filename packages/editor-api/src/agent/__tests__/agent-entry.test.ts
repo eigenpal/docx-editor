@@ -44,13 +44,8 @@ function valueReach(entry: string): string[] {
 }
 
 describe('the agent entry', () => {
-  test('exports the rewrite helpers and their error', () => {
-    expect(Object.keys(agent).sort()).toEqual([
-      'RewriteError',
-      'prepareRewrite',
-      'proposeRewrite',
-      'proposeRewrites',
-    ]);
+  test('exports the rewrite helper and its error, and no model call', () => {
+    expect(Object.keys(agent).sort()).toEqual(['RewriteError', 'prepareRewrite']);
   });
 
   test('carries no runtime: its value imports stay in src/agent', () => {

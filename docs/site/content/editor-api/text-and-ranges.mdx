@@ -138,7 +138,7 @@ You can pass at most 32 marks. Each mark can have at most 32 UTF-16 code units a
 
 ## Rewrite a paragraph and read the result
 
-To propose a model's rewrite as the fewest tracked changes, use `proposeRewrite` from `@docx-editor.dev/editor-api/agent`. It makes the calls in this section for you and rolls back its own changes if a write fails. For more information, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
+To propose a model's rewrite as the fewest tracked changes, use `prepareRewrite` from `@docx-editor.dev/editor-api/agent`. It reads the paragraph for your model, and `draft.apply()` makes the calls in this section for you and rolls back its own changes if a write fails. For more information, see [Propose an AI rewrite as tracked changes](/docs/2.x/recipes/propose-rewrite).
 
 A word range is a snapshot. An edit before the range in its paragraph makes the range fail with `StaleDocument`. An edit after the range keeps it valid. Read the ranges once, before you edit. Plan the edits by range index, because a paragraph can repeat a word. Then apply them from the last index to the first, and sync after each edit.
 

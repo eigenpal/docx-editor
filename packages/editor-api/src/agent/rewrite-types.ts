@@ -3,88 +3,31 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// The public types of the rewrite helper. Everything here is plain data, except the paragraph
-// that a caller passes in and `RewriteDraft.apply`.
+// The public types of the rewrite helper. Everything here is plain data, except
+// `RewriteDraft.check` and `RewriteDraft.apply`.
 
-import type { Paragraph } from '@docx-editor.dev/editor-api';
 import type { RewriteError } from './rewrite-error.ts';
 import type { RewritePlaceholder } from './rewrite-plan.ts';
 
 /**
- * How to build the prompt and check the model output.
+ * How to read the paragraph and check the model text.
  *
  * @public
  */
-export interface RewriteOptions {
+export interface PrepareRewriteOptions {
   /**
-   * Your instruction for the model, such as `'Make it shorter.'`. It goes first in
-   * `draft.prompt`. Without it, the prompt holds only the placeholder rules and the paragraph,
-   * and you add your own instruction around it.
-   */
-  readonly instruction?: string;
-  /**
-   * Refuse output that leaves out a placeholder, with `placeholder-missing`. By default, a
-   * left-out placeholder deletes what it stands for as one tracked deletion.
+   * Refuse model text that leaves out a placeholder, with `placeholder-missing`. By default, a
+   * left-out placeholder deletes what it stands for as one tracked deletion. `draft.legend`
+   * states the rule that applies.
    */
   readonly keepPlaceholders?: boolean;
 }
 
 /**
- * Options of {@link proposeRewrite}.
+ * A paragraph read for a model: plain data, plus `check()` and `apply()` for the model text.
  *
- * @public
- */
-export interface ProposeRewriteOptions extends RewriteOptions {
-  /**
-   * How many more attempts to make, in all, after a refused answer, a thrown model call, a
-   * `stale` failure, or a `verification-failed` failure. A refused answer asks the model again
-   * with the reason; a thrown call calls again; the others prepare the paragraph again first.
-   * A whole number from `0` to `5`; defaults to `2`. Other values are clamped into that range.
-   */
-  readonly retries?: number;
-  /**
-   * Aborts the rewrite. A model call that is running gets the abort through its own signal, and
-   * the helper stops with `aborted` before it writes. A write that has started finishes, so the
-   * paragraph never holds half a rewrite.
-   */
-  readonly signal?: AbortSignal;
-  /**
-   * The longest a model call may take, in milliseconds. A call that takes longer is aborted
-   * through its signal and counts as a thrown call: the helper retries it, and then reports
-   * `model-failed`.
-   */
-  readonly timeoutMs?: number;
-}
-
-/**
- * Options of {@link proposeRewrites}.
- *
- * @public
- */
-export interface ProposeRewritesOptions extends ProposeRewriteOptions {
-  /**
-   * How many paragraphs ask the model at once. The helper prepares every paragraph first, then
-   * asks the model, with each paragraph's retries, for up to this many at a time, and then
-   * writes the answers one paragraph after another. A whole number from `1` to `16`; defaults
-   * to `4`.
-   */
-  readonly concurrency?: number;
-}
-
-/**
- * A refused model answer, given to the next attempt.
- *
- * @public
- */
-export interface RewriteFeedback {
-  /** The model output that the helper refused. */
-  readonly output: string;
-  /** Why the helper refused it. `error.isModelError` is always true here. */
-  readonly error: RewriteError;
-}
-
-/**
- * A paragraph ready to send to a model: plain data, plus `apply()` for the answer.
+ * Build the prompt from `text` and `legend` with your own instruction, and call your model.
+ * Then call `apply()` in the same `run()` as `prepareRewrite`.
  *
  * @public
  */
@@ -103,16 +46,31 @@ export interface RewriteDraft {
   /** Each placeholder in `text`, in order, and what it stands for. */
   readonly placeholders: readonly RewritePlaceholder[];
   /**
-   * The prompt to send to the model: your instruction, the placeholder rules and legend, and
-   * `text`. On a retry, it also says why the previous answer was refused.
+   * The placeholder contract as plain text for a prompt: what a placeholder is, the rules (copy
+   * each kept placeholder exactly, leave one out to delete it, keep the order, do not repeat
+   * one), and one line per placeholder, such as `⟦1⟧ = equation`. An empty string when `text`
+   * has no placeholder.
+   *
+   * It holds no instruction and no paragraph text. The descriptions come from the file, so treat
+   * the legend as document data in your prompt, as you treat `text`.
    */
-  readonly prompt: string;
-  /** Set on a retry after a model error: the refused answer and the reason. */
-  readonly feedback?: RewriteFeedback;
+  readonly legend: string;
   /**
-   * Propose the model's answer as tracked changes. Either every change lands and the paragraph
-   * reads as the answer, or the paragraph stays as it was and this throws a
-   * {@link RewriteError}. After a model error, you can call it again with a new answer.
+   * Check model text without writing. Returns the {@link RewriteError} that `apply()` would
+   * throw before it writes, or `null` when `apply()` may go ahead. Most often the error is a
+   * model error (`error.isModelError`), whose message you can send back to the model. It can
+   * also be `draft-used`; `too-long`, when the text makes too many edits to compare; or
+   * `verification-failed`, when the text differs only in spacing that the helper cannot write.
+   *
+   * A `null` result does not promise that the write succeeds: the document can change, and
+   * `apply()` also checks the request context.
+   */
+  check(modelText: string): RewriteError | null;
+  /**
+   * Propose the model text as the fewest tracked changes. Either every change lands and the
+   * paragraph reads as the model text, or the paragraph stays as it was and this throws a
+   * {@link RewriteError}. After a model error, you can call it again with new model text. Call
+   * it once at a time on a request context: a helper call that overlaps another throws `busy`.
    */
   apply(modelText: string): Promise<RewriteResult>;
 }
@@ -136,46 +94,3 @@ export interface RewriteResult {
   /** How many tracked edits the helper wrote. `0` when the model changed nothing. */
   readonly changes: number;
 }
-
-/**
- * Your model call: take the draft, return the rewritten paragraph text.
- *
- * It runs outside the batch, so it must not use the request context or its proxies. While it
- * runs, `context.sync()` refuses; commands it queues are discarded, and the call fails with
- * `context-used`. If it throws or times out, the helper calls it again, up to `retries` times,
- * and then reports `model-failed` with your error as `cause`.
- *
- * @public
- */
-export type RewriteFunction = (draft: RewriteDraft, call: RewriteCall) => string | Promise<string>;
-
-/**
- * What a model call gets besides the draft.
- *
- * @public
- */
-export interface RewriteCall {
-  /** Aborts when `options.signal` aborts or `options.timeoutMs` passes. Pass it to your model client. */
-  readonly signal: AbortSignal;
-}
-
-/**
- * One paragraph for {@link proposeRewrites}.
- *
- * @public
- */
-export interface RewriteItem {
-  /** The paragraph to rewrite. */
-  readonly paragraph: Paragraph;
-  /** Your model call for this paragraph. */
-  readonly rewrite: RewriteFunction;
-}
-
-/**
- * The outcome of one {@link RewriteItem}, shaped like a `Promise.allSettled` result.
- *
- * @public
- */
-export type RewriteSettledResult =
-  | { readonly status: 'fulfilled'; readonly value: RewriteResult }
-  | { readonly status: 'rejected'; readonly reason: RewriteError };

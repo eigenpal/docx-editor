@@ -307,11 +307,12 @@ const saved = await runtime.save();
 if (!(saved instanceof Uint8Array) || saved.byteLength === 0) throw new Error('save produced nothing');
 runtime.dispose();
 // The agent bundle reads the author through a hook on a context that the root bundle built.
-const { proposeRewrite } = await import('./dist/agent.mjs');
+const { prepareRewrite } = await import('./dist/agent.mjs');
 const agentRuntime = await DocxEditor.createServer(saved, { author: 'Smoke agent' });
-const proposed = await agentRuntime.run(async (context) =>
-  proposeRewrite(context, context.document.body.paragraphs.getFirst(), () => 'packed and rewritten')
-);
+const proposed = await agentRuntime.run(async (context) => {
+  const draft = await prepareRewrite(context, context.document.body.paragraphs.getFirst());
+  return draft.apply('packed and rewritten');
+});
 if (proposed.proposed !== 'packed and rewritten') throw new Error('rewrite read back ' + JSON.stringify(proposed));
 agentRuntime.dispose();
 process.stdout.write('esm ok\\n');

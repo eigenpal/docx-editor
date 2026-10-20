@@ -14,7 +14,7 @@ The library has two ways to change a document. Each one fits a different host. C
 | [Comment on found text](./comment-on-found-text.md) | `editor.findMatches`, `editor.selectMatch`, then `useReview().comment` | `body.search`, then `Range.insertComment` |
 | Reply to a thread | `useReview().reply(item, text)` | `Comment.reply(text)` |
 | [Record a tracked replacement](./tracked-replacement.md) | Suggesting mode, then `editor.exec({ type: 'replaceMatch', match, text })` | `document.changeTrackingMode = 'TrackMineOnly'`, then `Range.insertText(text, 'Replace')` |
-| [Propose an AI rewrite as tracked changes](./propose-rewrite.md) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `proposeRewrite` from `@docx-editor.dev/editor-api/agent` |
+| [Propose an AI rewrite as tracked changes](./propose-rewrite.md) | The same code through `DocxEditor.createBrowser` from `@docx-editor.dev/editor-api/browser` | `prepareRewrite` from `@docx-editor.dev/editor-api/agent` |
 | [Accept or reject a change](./accept-reject-without-scrolling.md) | `useReview().accept(item)` or `useReview().reject(item)` | `Revision.accept()` or `Revision.reject()` |
 | [Open or reveal a change without scrolling](./accept-reject-without-scrolling.md) | `useReview().setActive(key, { reveal: false })` | Not applicable: no viewport |
 | [Highlight ranges](./highlight-ranges.md) | `useHighlights(name, source, options)` | Not applicable |

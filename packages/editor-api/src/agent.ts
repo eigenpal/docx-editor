@@ -6,11 +6,14 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 /**
  * Helpers for AI agents that edit documents through the editing API.
  *
- * `proposeRewrite` sends a paragraph to your model and proposes the answer as the fewest tracked
- * changes. Fields, pictures, equations, note references, and locked content controls reach the
- * model as numbered placeholders, so they change whole or not at all. Either every change lands
- * and the paragraph reads as the answer, or the paragraph stays as it was and the helper throws a
- * `RewriteError` with a stable `code`.
+ * `prepareRewrite` reads a paragraph into text for a model, and `draft.apply()` proposes the
+ * model's new text as the fewest tracked changes. Fields, pictures, equations, note references,
+ * and locked content controls reach the model as numbered placeholders, so they change whole or
+ * not at all. Either every change lands and the paragraph reads as the model text, or the
+ * paragraph stays as it was and `apply()` throws a `RewriteError` with a stable `code`.
+ *
+ * You own the model call: the prompt, the instruction, retries, timeouts, and concurrency. The
+ * helpers own only the document side, which is deterministic.
  *
  * The helpers sit next to the object model, not on it, and are outside its Office.js
  * compatibility scope. They use only the Office.js-shaped calls of
@@ -19,15 +22,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @example Rewrite the first paragraph on a server
  * ```ts
  * import { DocxEditor } from '@docx-editor.dev/editor-api';
- * import { proposeRewrite } from '@docx-editor.dev/editor-api/agent';
+ * import { prepareRewrite } from '@docx-editor.dev/editor-api/agent';
  *
  * const runtime = await DocxEditor.createServer(bytes, { author: 'Rewrite agent' });
  * try {
  *   await runtime.run(async (context) => {
  *     const paragraph = context.document.body.paragraphs.getFirst();
- *     await proposeRewrite(context, paragraph, (draft) => callModel(draft.prompt), {
- *       instruction: 'Make it shorter.',
- *     });
+ *     const draft = await prepareRewrite(context, paragraph);
+ *     const prompt = `Make the paragraph shorter.\n\n${draft.legend}\n\n${draft.text}`;
+ *     await draft.apply(await callModel(prompt));
  *   });
  *   const saved = await runtime.save();
  * } finally {
@@ -40,18 +43,6 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 export { prepareRewrite } from './agent/rewrite.ts';
-export { proposeRewrite, proposeRewrites } from './agent/rewrite-run.ts';
-export type {
-  ProposeRewriteOptions,
-  ProposeRewritesOptions,
-  RewriteDraft,
-  RewriteCall,
-  RewriteFeedback,
-  RewriteFunction,
-  RewriteItem,
-  RewriteOptions,
-  RewriteResult,
-  RewriteSettledResult,
-} from './agent/rewrite-types.ts';
+export type { PrepareRewriteOptions, RewriteDraft, RewriteResult } from './agent/rewrite-types.ts';
 export { RewriteError, type RewriteErrorCode } from './agent/rewrite-error.ts';
 export type { RewritePlaceholder, RewritePlaceholderKind } from './agent/rewrite-plan.ts';

@@ -7,13 +7,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // changes it wrote, so the paragraph reads exactly as it did, with no pending revision.
 
 import { describe, expect, test } from 'bun:test';
-import {
-  prepareRewrite,
-  proposeRewrite,
-  RewriteError,
-  type RewriteDraft,
-  type RewriteErrorCode,
-} from '../../agent.ts';
+import { prepareRewrite, RewriteError, type RewriteErrorCode } from '../../agent.ts';
 import { DocxEditor, RequestContext } from '../../index.ts';
 import { docx, p } from '../../runtime/__tests__/support/docx.ts';
 import {
@@ -80,6 +74,19 @@ describe('model output that breaks a rule writes nothing', () => {
     expect(value.current).toBe('Pay "Acme Corp"; promptly.');
   });
 
+  test('after a model error, the same draft applies new model text', async () => {
+    const { value } = await withRuntime(RICH, async (context) => {
+      const paragraph = await firstParagraph(context);
+      const draft = await prepareRewrite(context, paragraph);
+      const error = await rejection(draft.apply('Under ⟦1⟧ the fee ⟦9⟧ applies'));
+      const result = await draft.apply(draft.text.replace('fee', 'charge'));
+      return { error, result, after: await readBack(context, paragraph) };
+    });
+    expect(value.error).toMatchObject({ code: 'placeholder-unknown', isModelError: true });
+    expect(value.result.proposed).toContain('the charge');
+    expect(value.after.original).toBe(RICH_ORIGINAL);
+  });
+
   test('placeholder-missing with keepPlaceholders', async () => {
     const outcome = await refused(RICH, 'Under ⟦1⟧ the fee applies\tto ⟦3⟧ promptly.', {
       keepPlaceholders: true,
@@ -96,7 +103,7 @@ describe('a paragraph that cannot take a rewrite', () => {
         `${t('the full ')}</w:ins>${t('fee.')}</w:p>`
     );
     const { value } = await withRuntime(bytes, async (context) =>
-      rejection(proposeRewrite(context, await firstParagraph(context), () => 'Pay a fee.'))
+      rejection(prepareRewrite(context, await firstParagraph(context)))
     );
     expect(value).toMatchObject({ code: 'pending-changes', isModelError: false });
   });
@@ -234,142 +241,6 @@ describe('a failed write rolls back the writes before it', () => {
     expect((failure.value as RewriteError).suppressed).toMatchObject({
       message: 'The connection dropped.',
     });
-  });
-});
-
-describe('retries', () => {
-  test('a model error asks the model again with the reason', async () => {
-    const drafts: RewriteDraft[] = [];
-    const { value } = await withRuntime(RICH, async (context) =>
-      proposeRewrite(context, await firstParagraph(context), (draft) => {
-        drafts.push(draft);
-        return drafts.length === 1
-          ? 'Under ⟦1⟧ the fee ⟦9⟧ applies'
-          : draft.text.replace('fee', 'charge');
-      })
-    );
-    expect(value.proposed).toContain('the charge');
-    expect(drafts).toHaveLength(2);
-    expect(drafts[0]!.feedback).toBeUndefined();
-    expect(drafts[1]!.feedback?.error.code).toBe('placeholder-unknown');
-    expect(drafts[1]!.prompt).toContain('Your previous answer was refused: The model output');
-    expect(drafts[1]!.prompt).toContain('Previous answer:\nUnder ⟦1⟧ the fee ⟦9⟧ applies');
-  });
-
-  test('retries is clamped to a whole number from 0 to 5', async () => {
-    for (const [retries, calls] of [
-      [-1, 1],
-      [Number.NaN, 3],
-      [Number.POSITIVE_INFINITY, 3],
-      [2.7, 3],
-      [99, 6],
-    ] as const) {
-      let count = 0;
-      const { value } = await withRuntime(RICH, async (context) =>
-        rejection(
-          proposeRewrite(
-            context,
-            await firstParagraph(context),
-            () => {
-              count += 1;
-              return 'Under ⟦1⟧ ⟦9⟧';
-            },
-            { retries }
-          )
-        )
-      );
-      expect(value).toMatchObject({ code: 'placeholder-unknown' });
-      expect([retries, count]).toEqual([retries, calls]);
-    }
-  });
-
-  test('model-failed: a thrown model call is retried, then reported', async () => {
-    const cause = new Error('rate limited');
-    let calls = 0;
-    const { value } = await withRuntime(RICH, async (context) =>
-      rejection(
-        proposeRewrite(context, await firstParagraph(context), () => {
-          calls += 1;
-          throw cause;
-        })
-      )
-    );
-    expect(value).toBeInstanceOf(RewriteError);
-    expect(value).toMatchObject({ code: 'model-failed', cause, isModelError: false });
-    expect(calls).toBe(3);
-
-    let tries = 0;
-    const recovered = await withRuntime(docx(p('Pay the fee now.')), async (context) =>
-      proposeRewrite(context, await firstParagraph(context), () => {
-        tries += 1;
-        if (tries === 1) throw cause;
-        return 'Pay the fee today.';
-      })
-    );
-    expect(recovered.value.proposed).toBe('Pay the fee today.');
-    expect(tries).toBe(2);
-  });
-
-  test('context-used: the rewrite function must not sync the context', async () => {
-    let calls = 0;
-    const { value } = await withRuntime(docx(p('Pay the fee now.')), async (context) => {
-      const paragraph = await firstParagraph(context);
-      const error = await rejection(
-        proposeRewrite(context, paragraph, async () => {
-          calls += 1;
-          paragraph.load('text');
-          await context.sync();
-          return 'Pay the fee today.';
-        })
-      );
-      // The guard comes off after the model call: the context syncs again.
-      paragraph.load('text');
-      await context.sync();
-      return { error, text: paragraph.text };
-    });
-    expect(value.error).toMatchObject({ code: 'context-used' });
-    expect((value.error as RewriteError).message).toContain('must not use the request context');
-    expect(calls).toBe(1);
-    expect(value.text).toBe('Pay the fee now.');
-  });
-
-  test('verification-failed prepares the paragraph again, like stale', async () => {
-    const runtime = await DocxEditor.createServer(docx(p('Alpha beta gamma delta.')), {
-      author: AUTHOR,
-    });
-    try {
-      let calls = 0;
-      const error = await runtime.run(async (context) => {
-        const paused = pausingSync(context, 13, () =>
-          runtime.run(async (other) => {
-            other.document.body.paragraphs.getFirst().insertText('Note: ', 'Start');
-            await other.sync();
-          })
-        );
-        return rejection(
-          proposeRewrite(paused, paused.document.body.paragraphs.getFirst(), () => {
-            calls += 1;
-            return 'Alpha beta gamma DELTA.';
-          })
-        );
-      });
-      // The second preparation finds the other run's pending insertion.
-      expect(error).toMatchObject({ code: 'pending-changes' });
-      expect(calls).toBe(1);
-    } finally {
-      runtime.dispose();
-    }
-  });
-
-  test('retries: 0 throws the first model error', async () => {
-    const { value } = await withRuntime(RICH, async (context) =>
-      rejection(
-        proposeRewrite(context, await firstParagraph(context), () => 'Under ⟦1⟧ ⟦1⟧', {
-          retries: 0,
-        })
-      )
-    );
-    expect(value).toMatchObject({ code: 'placeholder-repeated' });
   });
 });
 

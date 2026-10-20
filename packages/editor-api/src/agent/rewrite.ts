@@ -3,7 +3,9 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-api/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
-// Prepare a paragraph for a model, and propose the model's answer as the fewest tracked changes.
+// Read a paragraph for a model, and propose the model's text as the fewest tracked changes. The
+// caller owns the prompt and the model call; the helper owns the reading, the checks, and the
+// writes.
 //
 // A helper NEXT TO the object model, not a member of it: every document call here is an
 // Office.js-shaped public call (`getTextRanges`, `search`, `getRange`, `expandTo`, `insertText`,
@@ -26,13 +28,13 @@ import {
   draftText,
   expandedOutput,
   hunksOf,
+  legendOf,
   placeholderOf,
-  promptOf,
   syntaxFor,
   type Hunk,
   type RewritePlaceholder,
 } from './rewrite-plan.ts';
-import type { RewriteDraft, RewriteOptions, RewriteResult } from './rewrite-types.ts';
+import type { PrepareRewriteOptions, RewriteDraft, RewriteResult } from './rewrite-types.ts';
 import { assertNothingQueued, exclusive, helperSync } from './rewrite-guard.ts';
 import { readUnits } from './rewrite-units.ts';
 import {
@@ -44,26 +46,6 @@ import {
 } from './rewrite-writes.ts';
 
 const AUTHOR_HOOK = Symbol.for('@docx-editor.dev/editor-api/author');
-
-/** Each prepared draft's internals, for the helpers that answer before writing. */
-const internals = new WeakMap<
-  RewriteDraft,
-  { readonly validate: (modelText: string) => void; readonly apply: RewriteDraft['apply'] }
->();
-
-/**
- * Check a model answer against a prepared draft without writing: throws the model error that
- * `apply()` would throw before it writes.
- */
-export function validateAnswer(draft: RewriteDraft, modelText: string): void {
-  internals.get(draft)?.validate(modelText);
-}
-
-/** Apply an answer from inside a helper call that already holds the context. */
-export function applyHeld(draft: RewriteDraft, modelText: string): Promise<RewriteResult> {
-  const held = internals.get(draft);
-  return held ? held.apply(modelText) : draft.apply(modelText);
-}
 
 /** The runtime's author, from the request context's hook. */
 function authorOf(context: RequestContext): string | undefined {
@@ -84,17 +66,23 @@ const notProposed = () =>
   );
 
 /**
- * Read a paragraph for a model. The draft is plain data: send `draft.prompt` to the model, then
- * pass its answer to `draft.apply()` in the same `run()`.
+ * Read a paragraph for a model. The draft is plain data: build a prompt from `draft.text` and
+ * `draft.legend` with your own instruction, call your model, and pass its text to
+ * `draft.apply()` in the same `run()`. `draft.check()` tests model text without writing.
+ *
+ * The helper never calls a model and never retries. It reads the paragraph, checks model text,
+ * and writes the fewest tracked changes, all or nothing.
  *
  * Throws a {@link RewriteError}: `pending-changes` when the paragraph has tracked changes,
- * `tracking-unavailable` when the runtime has no author, and `read-failed` when the document
- * refuses a read.
+ * `tracking-unavailable` when the runtime has no author, `too-long` or `unsupported-text` when
+ * the paragraph cannot be compared, `read-failed` when the document refuses a read, `busy` when
+ * another helper call runs on the context, and `context-used` when edits are queued on it.
  *
  * @example
  * ```ts
- * const draft = await prepareRewrite(context, paragraph, { instruction: 'Make it formal.' });
- * const result = await draft.apply(await callModel(draft.prompt));
+ * const draft = await prepareRewrite(context, paragraph);
+ * const prompt = `Make this paragraph formal.\n\n${draft.legend}\n\n${draft.text}`;
+ * const result = await draft.apply(await callModel(prompt));
  * ```
  *
  * @public
@@ -102,18 +90,16 @@ const notProposed = () =>
 export async function prepareRewrite(
   context: RequestContext,
   paragraph: Paragraph,
-  options: RewriteOptions = {}
+  options: PrepareRewriteOptions = {}
 ): Promise<RewriteDraft> {
-  return exclusive(context, () => prepareHeld(context, paragraph, options));
+  return exclusive(context, () => prepare(context, paragraph, options));
 }
 
-/** {@link prepareRewrite} from inside a helper call that already holds the context. */
-export async function prepareHeld(
+async function prepare(
   context: RequestContext,
   paragraph: Paragraph,
-  options: RewriteOptions
+  options: PrepareRewriteOptions
 ): Promise<RewriteDraft> {
-  assertNothingQueued(context);
   const author = authorOf(context);
   if (author === undefined) {
     throw new RewriteError(
@@ -128,7 +114,7 @@ export async function prepareHeld(
       cause: error,
     });
   });
-  // Refused now, before any model call, when no answer could be compared with the paragraph.
+  // Refused now, before the caller asks a model, when no answer could be compared with it.
   checkLength(units);
   const original = units.map((unit) => unit.text).join('');
   const syntax = syntaxFor(original);
@@ -211,14 +197,18 @@ export async function prepareHeld(
     }
   };
 
-  const applyNow = async (modelText: string): Promise<RewriteResult> => {
-    assertNothingQueued(context);
+  const assertUnused = () => {
     if (used) {
       throw new RewriteError(
         'draft-used',
         'This draft already wrote to the paragraph. Prepare the paragraph again.'
       );
     }
+  };
+
+  const applyNow = async (modelText: string): Promise<RewriteResult> => {
+    assertNothingQueued(context);
+    assertUnused();
     const { hunks, expected } = plan(modelText);
     if (hunks.length === 0) return { paragraphId, original, proposed: original, changes: 0 };
     const restore = await startTracking(context);
@@ -240,14 +230,22 @@ export async function prepareHeld(
     return result;
   };
 
-  const draft: RewriteDraft = {
+  return {
     paragraphId,
     original,
     text,
     placeholders,
-    prompt: promptOf(text, placeholders, options.instruction, syntax),
+    legend: legendOf(placeholders, keepPlaceholders, syntax),
+    check: (modelText) => {
+      try {
+        assertUnused();
+        plan(modelText);
+        return null;
+      } catch (error) {
+        if (error instanceof RewriteError) return error;
+        throw error;
+      }
+    },
     apply: (modelText) => exclusive(context, () => applyNow(modelText)),
   };
-  internals.set(draft, { validate: (modelText) => void plan(modelText), apply: applyNow });
-  return draft;
 }

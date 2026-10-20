@@ -1,0 +1,27 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "proposeRewrite in @docx-editor.dev/editor-api/agent called the caller's model, retried, and prepared the paragraph again after another participant's edit.",
+  "after": "prepareRewrite reads a paragraph for the caller's model, and draft.apply writes the model text. A participant's edit after the draft was prepared makes apply refuse with stale before anything lands, and a new draft proposes against the new text.",
+  "reason": "The writes, the rollback of only the helper's own revisions, and the reads are unchanged, and they use only existing editing API operations. The model call and the retries moved to the caller. No shared field, operation, node identity, snapshot, or awareness payload changes.",
+  "tests": [
+    "packages/editor-api/src/agent/__tests__/rewrite-proposals.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-draft.test.ts",
+    "packages/editor-api/src/agent/__tests__/rewrite-refusals.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-prepare-rewrite.test.ts"
+  ],
+  "supersedesTests": [
+    {
+      "path": "packages/editor-api/src/agent/__tests__/propose-rewrite.test.ts",
+      "by": "packages/editor-api/src/agent/__tests__/rewrite-proposals.test.ts",
+      "reason": "Renamed with proposeRewrite removed; the same document cases run through prepareRewrite and draft.apply."
+    },
+    {
+      "path": "packages/pro/src/collaboration/__tests__/document-propose-rewrite.test.ts",
+      "by": "packages/pro/src/collaboration/__tests__/document-prepare-rewrite.test.ts",
+      "reason": "Renamed with proposeRewrite removed; the same collaboration cases run through prepareRewrite and draft.apply."
+    }
+  ],
+  "changeset": "editor-api-rewrite-helper",
+  "migration": null
+}

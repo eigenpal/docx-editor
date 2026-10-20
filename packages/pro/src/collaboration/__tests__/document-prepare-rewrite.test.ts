@@ -8,12 +8,12 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // A participant edits between two of the helper's writes: the next write fails with
 // `StaleDocument`, the helper rejects only its own changes on both peers, keeps the
 // participant's edit, and the rewrite succeeds when it runs again. A participant who edits while
-// the model is thinking makes the first write fail before anything lands, and `proposeRewrite`
-// prepares the paragraph again and asks the model again on its own.
+// the model is thinking makes the first write fail with `stale` before anything lands, and a
+// draft prepared again proposes against the new text.
 import { afterAll, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { RequestContext, type DocxEditorRuntime } from '@docx-editor.dev/editor-api/browser';
-import { prepareRewrite, proposeRewrite, RewriteError } from '@docx-editor.dev/editor-api/agent';
+import { prepareRewrite, RewriteError } from '@docx-editor.dev/editor-api/agent';
 import { converged, COUNTERPARTY, REVIEWER, room } from './tracked-foreign-revisions-support';
 
 const registered = !GlobalRegistrator.isRegistered;
@@ -115,11 +115,14 @@ for (const [where, edit] of [
 
       // A new rewrite reads the new document. The participant's pending insertion in the same
       // paragraph refuses it until someone decides that change.
-      const again = await alice!.runtime.run(async (context) =>
-        proposeRewrite(context, context.document.body.paragraphs.getFirst(), (draft) =>
-          draft.text.replace('beta', 'BETA')
-        ).catch((error: unknown) => error)
-      );
+      const again = await alice!.runtime.run(async (context) => {
+        try {
+          const draft = await prepareRewrite(context, context.document.body.paragraphs.getFirst());
+          return await draft.apply(draft.text.replace('beta', 'BETA'));
+        } catch (error) {
+          return error;
+        }
+      });
       if (edit === 'other') expect(again).toMatchObject({ proposed: 'Alpha BETA gamma delta.' });
       else expect(again).toMatchObject({ code: 'pending-changes' });
       r.sync();
@@ -171,27 +174,32 @@ test('a participant with the same author keeps their change when the rewrite rol
   }
 });
 
-test('an edit while the model answers makes proposeRewrite prepare and ask again', async () => {
+test('an edit while the model answers makes apply() refuse; a new draft proposes', async () => {
   const r = await room('reviewer first', BODY);
   try {
     const [alice, bob] = r.peers;
-    const texts: string[] = [];
-    const result = await alice!.runtime.run(async (context) =>
-      proposeRewrite(context, context.document.body.paragraphs.getFirst(), async (draft) => {
-        texts.push(draft.text);
-        if (texts.length === 1) {
-          // The participant edits the paragraph directly while the model answers.
-          await bob!.runtime.run(async (peer) => {
-            peer.document.body.paragraphs.getFirst().insertText(' Agreed.', 'End');
-            await peer.sync();
-          });
-          r.sync();
-        }
-        return draft.text.replace('gamma', 'GAMMA');
-      })
-    );
-    expect(texts).toEqual([ORIGINAL, `${ORIGINAL} Agreed.`]);
-    expect(result).toMatchObject({
+    const outcome = await alice!.runtime.run(async (context) => {
+      const paragraph = context.document.body.paragraphs.getFirst();
+      const first = await prepareRewrite(context, paragraph);
+      // The participant edits the paragraph directly while the model answers.
+      await bob!.runtime.run(async (peer) => {
+        peer.document.body.paragraphs.getFirst().insertText(' Agreed.', 'End');
+        await peer.sync();
+      });
+      r.sync();
+      const error = await first.apply(first.text.replace('gamma', 'GAMMA')).then(
+        () => null,
+        (failure: unknown) => failure
+      );
+      const second = await prepareRewrite(context, paragraph);
+      const result = await second.apply(second.text.replace('gamma', 'GAMMA'));
+      return { firstText: first.text, error, secondText: second.text, result };
+    });
+    expect(outcome.firstText).toBe(ORIGINAL);
+    expect(outcome.error).toBeInstanceOf(RewriteError);
+    expect(outcome.error).toMatchObject({ code: 'stale' });
+    expect(outcome.secondText).toBe(`${ORIGINAL} Agreed.`);
+    expect(outcome.result).toMatchObject({
       original: `${ORIGINAL} Agreed.`,
       proposed: 'Alpha beta GAMMA delta. Agreed.',
       changes: 1,

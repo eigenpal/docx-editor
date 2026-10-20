@@ -150,7 +150,6 @@ export class RequestContext {
     Object.defineProperty(this, QUEUE_HOOK, {
       value: Object.freeze({
         writes: () => this.#queue.pending.filter((action) => action.sort === 'write').length,
-        discard: () => this.#queue.clear(),
       }),
     });
   }

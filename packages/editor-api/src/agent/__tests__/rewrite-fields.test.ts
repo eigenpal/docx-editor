@@ -4,14 +4,20 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-a
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // Fields that show no text at the edges of a paragraph, inside a word, and side by side; a
-// paragraph too long to compare; the cost of preparing a long paragraph; an abort between the
-// paragraphs of a batch; and a caller's own sync during a helper call.
+// paragraph too long to compare; and the cost of preparing a long paragraph.
 
 import { describe, expect, test } from 'bun:test';
-import { prepareRewrite, proposeRewrite, proposeRewrites, RewriteError } from '../../agent.ts';
+import { prepareRewrite, RewriteError } from '../../agent.ts';
 import { RequestContext } from '../../index.ts';
 import { docx, p } from '../../runtime/__tests__/support/docx.ts';
-import { decided, firstParagraph, rejection, t, withRuntime } from './rewrite-support.ts';
+import {
+  decided,
+  firstParagraph,
+  rejection,
+  rewriteParagraph,
+  t,
+  withRuntime,
+} from './rewrite-support.ts';
 
 /** A field with no result: the kind an index or a table of contents entry is. */
 const bare = (code: string) =>
@@ -84,7 +90,7 @@ describe('fields that show no text', () => {
       expect((error as RewriteError).message).toContain('keep all of ⟦1⟧, ⟦2⟧, ⟦3⟧');
     });
     const dropped = await withRuntime(bytes, async (context) =>
-      proposeRewrite(context, await firstParagraph(context), () => 'One two three.')
+      rewriteParagraph(context, await firstParagraph(context), () => 'One two three.')
     );
     expect(await decided(dropped.saved, 'acceptAll')).toMatchObject({ fields: 0 });
     expect(await decided(dropped.saved, 'rejectAll')).toMatchObject({ fields: 3 });
@@ -92,19 +98,12 @@ describe('fields that show no text', () => {
 });
 
 describe('long paragraphs', () => {
-  test('a paragraph too long to compare is refused before the model is asked', async () => {
+  test('a paragraph too long to compare is refused when it is prepared', async () => {
     const bytes = docx(p('word '.repeat(20_001).trim()));
-    let calls = 0;
     const { value } = await withRuntime(bytes, async (context) =>
-      rejection(
-        proposeRewrite(context, await firstParagraph(context), (draft) => {
-          calls += 1;
-          return draft.text;
-        })
-      )
+      rejection(prepareRewrite(context, await firstParagraph(context)))
     );
-    expect(value).toMatchObject({ code: 'too-long' });
-    expect(calls).toBe(0);
+    expect(value).toMatchObject({ code: 'too-long', isModelError: false });
   });
 
   test('preparing 2,000 plain words reads nothing per word and takes six syncs', async () => {
@@ -157,44 +156,5 @@ describe('long paragraphs', () => {
     expect(value.draft.placeholders).toHaveLength(50);
     expect(value.draft.placeholders.every((entry) => entry.kind === 'field')).toBe(true);
     expect(value.elapsed).toBeLessThan(3_000);
-  });
-});
-
-describe('the batch write phase', () => {
-  test('an abort between paragraphs stops the rest; written ones keep their result', async () => {
-    const bytes = docx(p('One applies.') + p('Two applies.') + p('Three applies.'));
-    const controller = new AbortController();
-    const { value } = await withRuntime(bytes, async (context) => {
-      const paragraphs = context.document.body.paragraphs;
-      paragraphs.load('items');
-      await context.sync();
-      return proposeRewrites(
-        context,
-        paragraphs.items.map((paragraph, index) => ({
-          paragraph,
-          rewrite: (draft) => {
-            // Fires on the first macrotask of the write phase, after the first paragraph.
-            if (index === 2) setTimeout(() => controller.abort(new Error('stop')), 0);
-            return draft.text.replace('applies', 'governs');
-          },
-        })),
-        { signal: controller.signal }
-      );
-    });
-    expect(value.map((result) => result.status)).toEqual(['fulfilled', 'rejected', 'rejected']);
-    expect(value[1]).toMatchObject({ reason: { code: 'aborted' } });
-  });
-
-  test('a caller’s own sync during a helper call says a helper call is in progress', async () => {
-    const { value } = await withRuntime(docx(p('Pay the fee now.')), async (context) => {
-      const paragraph = await firstParagraph(context);
-      await context.sync();
-      const running = proposeRewrite(context, paragraph, () => 'Pay the fee today.');
-      const error = await rejection(context.sync());
-      await running;
-      return error;
-    });
-    expect(value).toMatchObject({ code: 'busy' });
-    expect((value as RewriteError).message).toContain('A helper call is in progress');
   });
 });

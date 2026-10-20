@@ -4,23 +4,25 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/editor-a
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 // The one error type the rewrite helper throws. Its `code` says what to do next: send the
-// message back to the model, decide changes first, or prepare the paragraph again.
+// message back to the model, decide changes first, or prepare the paragraph again. The helper
+// never calls a model, so a failed model call is the caller's own error, never a code here.
 
 /**
  * Why a rewrite was refused or failed.
  *
- * - The model output broke a rule, and nothing was written. Send `error.message` back to the
- *   model and ask again: `invalid-output`, `placeholder-missing`, `placeholder-unknown`,
- *   `placeholder-moved`, `placeholder-repeated`, `placeholder-grouped`.
- * - Your `rewrite` function failed, and nothing was written: `model-failed` when it threw or
- *   timed out on every attempt, `context-used` when it used the request context, and `aborted`
- *   when `options.signal` aborted.
+ * - The model text broke a rule, and nothing was written. `draft.check()` returns these too.
+ *   Send `error.message` back to the model and ask again with the same draft:
+ *   `invalid-output`, `placeholder-missing`, `placeholder-unknown`, `placeholder-moved`,
+ *   `placeholder-repeated`, `placeholder-grouped`.
  * - The request context is in use, and nothing was written: `busy` when another helper call
- *   runs on it, and `context-used` when commands are queued on it that are not synced.
+ *   runs on it, such as two `apply()` calls at once, and `context-used` when commands are
+ *   queued on it that are not synced.
  * - The paragraph cannot take a rewrite now, and nothing was written: `pending-changes`,
  *   `tracking-unavailable`, `draft-used`, `too-long`, `unsupported-text`, `read-failed`.
  * - A write or the final check failed, and the helper rejected the changes it had written:
- *   `stale`, `locked`, `write-failed`, `verification-failed`.
+ *   `stale`, `locked`, `write-failed`, `verification-failed`. After `stale` or
+ *   `verification-failed`, another edit moved the paragraph: prepare it again, and ask the model
+ *   again with the new draft.
  * - The rollback failed too, so the paragraph can hold some of the proposal: `rollback-failed`.
  *
  * @public
@@ -32,9 +34,7 @@ export type RewriteErrorCode =
   | 'placeholder-moved'
   | 'placeholder-repeated'
   | 'placeholder-grouped'
-  | 'model-failed'
   | 'context-used'
-  | 'aborted'
   | 'busy'
   | 'pending-changes'
   | 'tracking-unavailable'
@@ -64,7 +64,8 @@ const MODEL_OUTPUT_CODES: ReadonlySet<RewriteErrorCode> = new Set([
  * @example
  * ```ts
  * try {
- *   await proposeRewrite(context, paragraph, rewrite);
+ *   const draft = await prepareRewrite(context, paragraph);
+ *   await draft.apply(await callModel(`${draft.legend}\n\n${draft.text}`));
  * } catch (error) {
  *   if (error instanceof RewriteError && error.code === 'pending-changes') {
  *     // Decide the tracked changes in the paragraph first.

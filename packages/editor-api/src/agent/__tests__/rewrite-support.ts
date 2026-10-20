@@ -8,6 +8,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // saved bytes after every change is accepted or rejected.
 
 import { DocxEditor, type Paragraph, type RequestContext } from '../../index.ts';
+import { prepareRewrite, type PrepareRewriteOptions, type RewriteDraft } from '../../agent.ts';
 import { docx } from '../../runtime/__tests__/support/docx.ts';
 import {
   R,
@@ -147,4 +148,15 @@ export async function rejection(promise: Promise<unknown>): Promise<unknown> {
     },
     (error: unknown) => error
   );
+}
+
+/** Prepare `paragraph`, and apply the text that `model` writes for its draft. */
+export async function rewriteParagraph(
+  context: RequestContext,
+  paragraph: Paragraph,
+  model: (text: string, draft: RewriteDraft) => string,
+  options?: PrepareRewriteOptions
+) {
+  const draft = await prepareRewrite(context, paragraph, options);
+  return draft.apply(model(draft.text, draft));
 }

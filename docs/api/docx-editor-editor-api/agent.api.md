@@ -5,39 +5,21 @@
 ```ts
 
 // @public
-export function prepareRewrite(context: RequestContext, paragraph: Paragraph, options?: RewriteOptions): Promise<RewriteDraft>;
+export function prepareRewrite(context: RequestContext, paragraph: Paragraph, options?: PrepareRewriteOptions): Promise<RewriteDraft>;
 
 // @public
-export function proposeRewrite(context: RequestContext, paragraph: Paragraph, rewrite: RewriteFunction, options?: ProposeRewriteOptions): Promise<RewriteResult>;
-
-// @public
-export interface ProposeRewriteOptions extends RewriteOptions {
-    readonly retries?: number;
-    readonly signal?: AbortSignal;
-    readonly timeoutMs?: number;
-}
-
-// @public
-export function proposeRewrites(context: RequestContext, items: readonly RewriteItem[], options?: ProposeRewritesOptions): Promise<RewriteSettledResult[]>;
-
-// @public
-export interface ProposeRewritesOptions extends ProposeRewriteOptions {
-    readonly concurrency?: number;
-}
-
-// @public
-export interface RewriteCall {
-    readonly signal: AbortSignal;
+export interface PrepareRewriteOptions {
+    readonly keepPlaceholders?: boolean;
 }
 
 // @public
 export interface RewriteDraft {
     apply(modelText: string): Promise<RewriteResult>;
-    readonly feedback?: RewriteFeedback;
+    check(modelText: string): RewriteError | null;
+    readonly legend: string;
     readonly original: string;
     readonly paragraphId: string;
     readonly placeholders: readonly RewritePlaceholder[];
-    readonly prompt: string;
     readonly text: string;
 }
 
@@ -53,28 +35,7 @@ export class RewriteError extends Error {
 }
 
 // @public
-export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'placeholder-grouped' | 'model-failed' | 'context-used' | 'aborted' | 'busy' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
-
-// @public
-export interface RewriteFeedback {
-    readonly error: RewriteError;
-    readonly output: string;
-}
-
-// @public
-export type RewriteFunction = (draft: RewriteDraft, call: RewriteCall) => string | Promise<string>;
-
-// @public
-export interface RewriteItem {
-    readonly paragraph: Paragraph;
-    readonly rewrite: RewriteFunction;
-}
-
-// @public
-export interface RewriteOptions {
-    readonly instruction?: string;
-    readonly keepPlaceholders?: boolean;
-}
+export type RewriteErrorCode = 'invalid-output' | 'placeholder-missing' | 'placeholder-unknown' | 'placeholder-moved' | 'placeholder-repeated' | 'placeholder-grouped' | 'context-used' | 'busy' | 'pending-changes' | 'tracking-unavailable' | 'draft-used' | 'too-long' | 'unsupported-text' | 'read-failed' | 'stale' | 'locked' | 'write-failed' | 'verification-failed' | 'rollback-failed';
 
 // @public
 export interface RewritePlaceholder {
@@ -94,14 +55,5 @@ export interface RewriteResult {
     readonly paragraphId: string;
     readonly proposed: string;
 }
-
-// @public
-export type RewriteSettledResult = {
-    readonly status: 'fulfilled';
-    readonly value: RewriteResult;
-} | {
-    readonly reason: RewriteError;
-    readonly status: 'rejected';
-};
 
 ```

@@ -348,20 +348,20 @@ The range that a tracked `insertText()` returns names your own pending insertion
 
 ### Rewrite a paragraph word by word
 
-To propose a model's rewrite of a paragraph, use `proposeRewrite` from `@docx-editor.dev/editor-api/agent`. It applies the steps in this section for you, keeps fields, equations, note references, and locked controls whole, and rejects only its own changes if a write fails:
+To propose a model's rewrite of a paragraph, use `prepareRewrite` from `@docx-editor.dev/editor-api/agent`. It reads the paragraph into text for your model. `draft.apply()` then applies the steps in this section for you, keeps fields, equations, note references, and locked controls whole, and rejects only its own changes if a write fails. You own the prompt and the model call:
 
 ```ts
-import { proposeRewrite } from '@docx-editor.dev/editor-api/agent';
+import { prepareRewrite } from '@docx-editor.dev/editor-api/agent';
 
 await runtime.run(async (context) => {
   const paragraph = context.document.body.paragraphs.getFirst();
-  await proposeRewrite(context, paragraph, (draft) => callModel(draft.prompt), {
-    instruction: 'Make this clause shorter.',
-  });
+  const draft = await prepareRewrite(context, paragraph);
+  const prompt = ['Make this clause shorter.', draft.legend, draft.text].join('\n\n');
+  await draft.apply(await callModel(prompt));
 });
 ```
 
-For its guarantees and error codes, see [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite). The rest of this section shows the calls it makes.
+`draft.text` holds the paragraph with numbered placeholders, and `draft.legend` states the placeholder rules. To check model text without writing, call `draft.check(modelText)`. For several paragraphs, prepare them all, call the model for every draft at once, and then apply the drafts one after another. For its guarantees and error codes, see [Propose an AI rewrite as tracked changes](https://www.docx-editor.dev/docs/2.x/recipes/propose-rewrite). The rest of this section shows the calls it makes.
 
 Split a paragraph into word ranges with `paragraph.getTextRanges([' '])`. Each range keeps its trailing space, so a deleted word takes its space with it, and a replacement for a range ends with a space too. Address a run of words with `first.expandTo(last)`. After tracked edits, `paragraph.text` reads the deleted and the inserted words together. `getReviewedText('Current')` reads the text as if you accepted every change, and `'Original'` reads it as if you rejected every change.
 
