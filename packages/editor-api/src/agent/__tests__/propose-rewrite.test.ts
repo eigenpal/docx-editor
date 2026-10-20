@@ -41,21 +41,6 @@ async function rewrite(bytes: Uint8Array, model: (text: string) => string, pick 
   return { ...value, prompts, saved };
 }
 
-/**
- * Whether the engine proposes deleting a whole equation, and a whole content-locked control, as
- * one tracked deletion. The two tests that drop those placeholders need it; until the engine
- * does, they report as skipped rather than passing on a different behavior.
- */
-async function deletesWholeAtoms(): Promise<boolean> {
-  try {
-    await rewrite(RICH, (text) => text.replace('⟦2⟧ ', '').replace('⟦3⟧ ', ''));
-    return true;
-  } catch {
-    return false;
-  }
-}
-const WHOLE_ATOM_DELETION = await deletesWholeAtoms();
-
 describe('proposeRewrite', () => {
   test('rewrites words around a field, an equation, a tab, and a locked control', async () => {
     const outcome = await rewrite(RICH, (text) =>
@@ -115,32 +100,26 @@ describe('proposeRewrite', () => {
     });
   });
 
-  test.skipIf(!WHOLE_ATOM_DELETION)(
-    'a dropped equation placeholder deletes the whole equation',
-    async () => {
-      const outcome = await rewrite(RICH, (text) => text.replace('⟦2⟧ ', ''));
-      const proposed = 'Under Section 4.2 the fee applies\tto Acme Corp promptly.';
-      expect(outcome.current).toBe(proposed);
-      expect(outcome.original).toBe(RICH_ORIGINAL);
-      expect((await decided(outcome.saved, 'acceptAll')).text).toBe(proposed);
-      expect((await decided(outcome.saved, 'rejectAll')).text).toBe(RICH_ORIGINAL);
-    }
-  );
+  test('a dropped equation placeholder deletes the whole equation', async () => {
+    const outcome = await rewrite(RICH, (text) => text.replace('⟦2⟧ ', ''));
+    const proposed = 'Under Section 4.2 the fee applies\tto Acme Corp promptly.';
+    expect(outcome.current).toBe(proposed);
+    expect(outcome.original).toBe(RICH_ORIGINAL);
+    expect((await decided(outcome.saved, 'acceptAll')).text).toBe(proposed);
+    expect((await decided(outcome.saved, 'rejectAll')).text).toBe(RICH_ORIGINAL);
+  });
 
-  test.skipIf(!WHOLE_ATOM_DELETION)(
-    'a dropped locked-control placeholder proposes removing the whole control',
-    async () => {
-      const outcome = await rewrite(RICH, (text) =>
-        text.replace('to ⟦3⟧ promptly.', 'to the buyer promptly.')
-      );
-      const proposed = 'Under Section 4.2 the fee ￼ applies\tto the buyer promptly.';
-      expect(outcome.current).toBe(proposed);
-      expect(outcome.original).toBe(RICH_ORIGINAL);
-      const accepted = await decided(outcome.saved, 'acceptAll');
-      expect(accepted).toEqual({ text: proposed, fields: 1, controls: [] });
-      expect((await decided(outcome.saved, 'rejectAll')).text).toBe(RICH_ORIGINAL);
-    }
-  );
+  test('a dropped locked-control placeholder proposes removing the whole control', async () => {
+    const outcome = await rewrite(RICH, (text) =>
+      text.replace('to ⟦3⟧ promptly.', 'to the buyer promptly.')
+    );
+    const proposed = 'Under Section 4.2 the fee ￼ applies\tto the buyer promptly.';
+    expect(outcome.current).toBe(proposed);
+    expect(outcome.original).toBe(RICH_ORIGINAL);
+    const accepted = await decided(outcome.saved, 'acceptAll');
+    expect(accepted).toEqual({ text: proposed, fields: 1, controls: [] });
+    expect((await decided(outcome.saved, 'rejectAll')).text).toBe(RICH_ORIGINAL);
+  });
 
   test('repeated words change only the occurrence the model changed', async () => {
     const original = 'the cat saw the cat and the dog';
