@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The adapters imported the unsupported-element API from @docx-editor.dev/core/output.",
+  "after": "@docx-editor.dev/core/editor re-exports the same API, and the adapters import it from there.",
+  "reason": "Only an export path changes. No shared document field, operation, or runtime behavior changes.",
+  "tests": ["packages/core/src/store/__tests__/adapter-authority.test.ts"],
+  "changeset": "unsupported-element-editor-entry",
+  "migration": null
+}
