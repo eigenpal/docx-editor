@@ -1,0 +1,14 @@
+{
+  "impact": "compatible",
+  "fields": [],
+  "before": "A continuous successor can move to an extra page after unbalanced final columns.",
+  "after": "The final page balances its columns before the continuous successor starts.",
+  "reason": "Only layout changes. Shared document data and operation formats remain unchanged.",
+  "tests": [
+    "packages/core/src/layout/__tests__/multipage-column-continuation.test.ts",
+    "packages/pro/src/collaboration/__tests__/document-layout-continuation.test.ts",
+    "packages/core/src/layout/__tests__/column-region-space-before.test.ts"
+  ],
+  "changeset": "final-page-column-balance",
+  "migration": null
+}

@@ -71,6 +71,9 @@ export function bidiPieces(
   sourceBoundaries?: ReadonlySet<number>,
   pageBreaksIgnored = false
 ): readonly FieldAwarePiece[] {
+  // Cached picture slices share an atomic field range, like projected field text.
+  // Preserve those slices for line alignment instead of indexing them by a shared offset.
+  if (pieces.some((piece) => piece.inlineDrawing && piece.fieldAtom)) return pieces;
   // An inline picture is its U+FFFC in the text, and it gets its own piece back afterwards with
   // the level it resolved to. Its run's own `w:rtl` does not place it; the nearest text with
   // letters or digits on each side does (spaces and other neutral runs are passed over). Between

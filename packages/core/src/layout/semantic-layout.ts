@@ -577,6 +577,7 @@ function* layoutBlocksPass(
   const leadingBreakGroups = createLeadingBreakGroups(options, bodyPageFieldContext);
 
   const columnRegionBottom = options.columnRegionBottom;
+  const columnRegionPage = options.columnRegionPage ?? 0;
   const continuedInsets = options.continuedPageInsets;
   // Local page 0 of a continued section IS the host sheet: its text wraps around the host's
   // header and footer drawings (never this section's) and the floats earlier sections left.
@@ -602,6 +603,7 @@ function* layoutBlocksPass(
     furnitureContext,
     columns,
     columnRegionBottom,
+    columnRegionPage,
     sectionPageBorders: options.sectionPageBorders,
     sectionMarkCollapses: options.sectionMarkCollapses,
   });
@@ -683,13 +685,13 @@ function* layoutBlocksPass(
   /**
    * Available body height on the page currently being filled (`pages.length`).
    *
-   * A balance-search limit binds the FIRST page only: content pushed past it lands on a
+   * A balance-search limit binds the selected page only: content pushed past it lands on a
    * full-height overflow page, so a block taller than the limit still terminates, and the
-   * search reads "produced a second page" as "does not fit".
+   * search reads an increased page count as "does not fit".
    */
   const contentHeightOf = (reservedPt: number, index = pages.length): number => {
     const base = Math.max(1, insetsFor(index).height - reservedPt);
-    return columnRegionBottom !== undefined && index === 0
+    return columnRegionBottom !== undefined && index === columnRegionPage
       ? Math.max(1, Math.min(base, columnRegionBottom))
       : base;
   };
@@ -2099,7 +2101,9 @@ function* layoutBlocksPass(
     const collapsedMark = sectionMark && !frame && collapsesSectionMark(index, lines);
     const holdsSheet = (): boolean =>
       collapsedMark ||
-      (marksSectionBreak && columnRegionBottom === undefined && columnIndex + 1 >= columns.count);
+      (marksSectionBreak &&
+        (columnRegionBottom === undefined || pages.length !== columnRegionPage) &&
+        columnIndex + 1 >= columns.count);
     // Floating tables and text frames anchor at the paragraph start, which would stay behind.
     const leadingBreak = (): boolean =>
       leadingBreakGroups.admits(previousEntry, entry) &&
@@ -2599,7 +2603,7 @@ function* layoutBlocksPass(
           cursorY -= removedPending.height + removedSkip;
           lineCounter -= 1;
         }
-        // Moving WHOLE means it now OPENS a page: space-before drops, the top rule travels.
+        // Moving WHOLE preserves the next column's origin; space-before drops, the top rule travels.
         const movesWhole = retreated && pending.length === 0 && fragmentIndex === 0;
         const nextOffset = lines[breakAt]!.start;
         const priorColumnWidth = columnWidth();
@@ -2607,7 +2611,7 @@ function* layoutBlocksPass(
         flushFragment(false);
         advanceColumn();
         fragmentBefore = 0;
-        if (movesWhole) cursorY = fragmentTopExtent;
+        if (movesWhole) cursorY += fragmentTopExtent;
         else fragmentTopExtent = 0;
         if (
           columnWidth() !== priorColumnWidth ||

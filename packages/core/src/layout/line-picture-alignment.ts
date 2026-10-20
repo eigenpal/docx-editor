@@ -67,7 +67,7 @@ export function alignLineWithPictures(
   });
   // Spans and pictures in model order: the order bidi reordering reads them in.
   const sorted = [...placedSpans, ...standIns].sort(
-    (left, right) => left.range.start - right.range.start
+    (left, right) => left.range.start - right.range.start || left.box.x - right.box.x
   );
   // A float's jump before a picture splits the line into passages, which reorder apart. Spans
   // already carry theirs; a stand-in carries the room left after the content before it.
@@ -79,25 +79,21 @@ export function alignLineWithPictures(
     return jump > 0.001 ? { ...span, wrapAdvanceBefore: jump } : span;
   });
   const aligned = align(merged);
-  // A note or field atom is U+FFFC too, so a stand-in is known by its picture's paragraph and
-  // offset; alignment may rebuild the span object itself.
-  const key = (paragraphId: string, start: number) => `${paragraphId}:${start}`;
-  const pictureKeys = new Set(
-    placedDrawings.map((drawing) => key(drawing.paragraphId, drawing.start))
+  // Alignment preserves each span's properties array while rebuilding its geometry.
+  // Use that private identity: several cached pictures can share one field offset.
+  const owners = new Map(
+    standIns.map((span, index) => [span.props, placedDrawings[index]!] as const)
   );
-  const isStandIn = (span: StyleSpanRecord) =>
-    span.text === PICTURE_CHAR &&
-    span.range.end - span.range.start === 1 &&
-    pictureKeys.has(key(span.range.paragraphId, span.range.start));
-  const landed = new Map<string, number>();
-  for (const span of aligned)
-    if (isStandIn(span)) landed.set(key(span.range.paragraphId, span.range.start), span.box.x);
-  const spans = aligned.filter((span) => !isStandIn(span));
+  const landed = new Map<InlineDrawingRecord, number>();
+  for (const span of aligned) {
+    const owner = owners.get(span.props);
+    if (owner) landed.set(owner, span.box.x);
+  }
+  const spans = aligned.filter((span) => !owners.has(span.props));
   const drawings = placedDrawings.map((drawing) =>
     shiftInlineDrawingRecord(
       drawing,
-      (landed.get(key(drawing.paragraphId, drawing.start)) ?? drawing.advanceStart) -
-        drawing.advanceStart,
+      (landed.get(drawing) ?? drawing.advanceStart) - drawing.advanceStart,
       0
     )
   );

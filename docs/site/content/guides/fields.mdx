@@ -39,6 +39,10 @@ Wrapping does not split an atomic field into separately editable characters, unl
 
 Breaking long unbroken results excludes page-number placeholders, `PAGEREF` results, form controls, note marks, and positional tabs. These items retain their existing layout limits. Text form fields have separate editing rules described later in this guide.
 
+### Cached pictures
+
+Complex fields display embedded pictures from their saved results, including nested complex results. Text and pictures keep their saved order. The field retains its existing model range. Hidden pictures stay hidden, and pictures inside field instructions do not display. External image links and include instructions never fetch new content.
+
 ### Nested fields
 
 Saved results inside another field's instruction do not add text, line breaks, or links. Find and text reads skip them too. This applies to complex fields and simple fields (`w:fldSimple`). The outer field keeps its normal display behavior. Fields inside a saved result still display.

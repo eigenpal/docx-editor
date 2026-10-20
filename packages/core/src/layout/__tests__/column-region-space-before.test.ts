@@ -207,3 +207,26 @@ test('an authored spacing edit agrees between warm and cold layout', () => {
   expect(JSON.stringify(edited)).toBe(source);
   inside(warm);
 });
+
+test.each([0, 50])('widow retreat preserves the column origin at %i points', (origin) => {
+  const part = load(
+    paragraph('LEFT', origin === 0 ? 160 : 110) +
+      paragraph('FIRST', 20, 0, 0, '<w:widowControl/>').replace(
+        '</w:t>',
+        '</w:t><w:br/><w:t>SECOND</w:t>'
+      ) +
+      section()
+  );
+  const current = lay(part, origin);
+  const moved = current.pages[0]!.fragments.find(
+    (f) => f.kind === 'paragraph' && f.lines.some((l) => l.spans.some((s) => s.text === 'FIRST'))
+  );
+  expect(moved).toBeDefined();
+  expect(moved!.box.x).toBeGreaterThan(0);
+  expect(moved!.box.y).toBe(origin);
+  expect(current.pages).toHaveLength(1);
+  const session = createLayoutSession();
+  lay(part, origin, { session });
+  expect(lay(part, origin, { session }, 2).pages).toEqual(current.pages);
+  inside(current);
+});

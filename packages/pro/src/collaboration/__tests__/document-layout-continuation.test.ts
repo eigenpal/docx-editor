@@ -4,9 +4,10 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import { afterEach, expect, test } from 'bun:test';
+import { unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '@docx-editor.dev/core/editor';
 import { caretAt, type BlockFragmentRecord } from '@docx-editor.dev/core/layout';
-import { writeOoxmlPackage } from '@docx-editor.dev/core/store';
+import { paragraphTextOf, writeOoxmlPackage } from '@docx-editor.dev/core/store';
 import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import { collaborationModule } from '../collaboration-module.ts';
 import { createPeerHarness, zipDocument } from './document-peer-support.ts';
@@ -23,7 +24,35 @@ const p = (text: string, h = 14, extra = '', before = 0) =>
   `<w:p><w:pPr><w:spacing w:before="${before * 20}" w:after="0" w:line="${h * 20}" w:lineRule="exact"/>${extra}</w:pPr>${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p>`;
 const sect = (c = 1) =>
   `<w:sectPr><w:type w:val="continuous"/><w:pgSz w:w="6000" w:h="4000"/><w:pgMar w:top="200" w:bottom="200" w:left="200" w:right="200"/><w:cols w:num="${c}" w:space="200"/></w:sectPr>`;
+function cachedPictureDocument() {
+  const field = (result: string) =>
+    '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+    '<w:r><w:instrText> INCLUDEPICTURE "https://example.invalid/image.png" </w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    result +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+  const picture =
+    '<w:r><w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape type="#_x0000_t75" style="width:48pt;height:36pt"><v:imagedata r:id="image" r:href="externalSource"/></v:shape></w:pict></w:r>';
+  const bytes = zipDocument(
+    '<w:p>' + field(field(picture)) + '<w:r><w:t>TARGET</w:t></w:r></w:p>' + sect(),
+    {
+      overrides: '<Default Extension="png" ContentType="image/png"/>',
+      documentRels:
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="image" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image.png"/><Relationship Id="externalSource" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.invalid/image.png" TargetMode="External"/></Relationships>',
+    }
+  );
+  return zipSync({
+    ...unzipSync(bytes),
+    'word/media/image.png': Uint8Array.from(
+      atob(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+      ),
+      (c) => c.charCodeAt(0)
+    ),
+  });
+}
 const fixtures = [
+  { name: 'cached field picture', bytes: cachedPictureDocument() },
   {
     name: 'footer frame',
     bytes: zipDocument(
@@ -46,7 +75,7 @@ const fixtures = [
     bytes: zipDocument(
       Array.from({ length: 14 }, (_, i) => p('B' + i, 30)).join('') +
         p('', 1, sect(2)) +
-        p('TARGET', 8) +
+        p('TARGET', 70) +
         sect()
     ),
   },
@@ -54,6 +83,15 @@ const fixtures = [
     name: 'column spacing',
     bytes: zipDocument(
       p('PREFIX', 50, sect()) + p('LEFT', 110) + p('TARGET', 20, '', 13) + sect(2)
+    ),
+  },
+  {
+    name: 'column widow retreat',
+    bytes: zipDocument(
+      p('PREFIX', 50, sect()) +
+        p('LEFT', 110) +
+        p('TARGET', 20, '<w:widowControl/>').replace('</w:t>', '</w:t><w:br/><w:t>SECOND</w:t>') +
+        sect(2)
     ),
   },
   {
@@ -79,6 +117,14 @@ function geometry(editor: MountedEditor) {
           box: line.box,
           baseline: line.baseline,
           text: line.spans.map((span) => span.text).join(''),
+          drawings: line.drawings?.map((drawing) => ({
+            x: drawing.x,
+            y: drawing.y,
+            width: drawing.width,
+            height: drawing.height,
+            start: drawing.start,
+            resource: drawing.resource.kind,
+          })),
         })),
       };
     return {
@@ -133,6 +179,23 @@ test.each(fixtures)(
       return id;
     };
     check();
+    const pictureCount = (e: MountedEditor) =>
+      e
+        .surface!.layout()
+        .pages.reduce(
+          (n, page) =>
+            n +
+            page.fragments.reduce(
+              (m, f) =>
+                m +
+                (f.kind === 'paragraph'
+                  ? f.lines.reduce((k, l) => k + (l.drawings?.length ?? 0), 0)
+                  : 0),
+              0
+            ),
+          0
+        );
+    if (name === 'cached field picture') expect(pictureCount(a)).toBe(1);
     if (name === 'footer frame') {
       const page = a.surface!.layout().pages[0]!;
       const frame = page.footer!.fragments[0]!;
@@ -150,7 +213,7 @@ test.each(fixtures)(
       expect(paragraphs[1]!.box.y).toBeCloseTo(table.box.y + table.box.height, 6);
       expect(paragraphs[2]!.box.y).toBeCloseTo(paragraphs[1]!.box.y + paragraphs[1]!.box.height, 6);
     }
-    if (name === 'column spacing') {
+    if (name === 'column spacing' || name === 'column widow retreat') {
       const blocks = a.surface!.layout().pages[0]!.fragments;
       const target = blocks.find(
         (block) =>
@@ -159,14 +222,14 @@ test.each(fixtures)(
       );
       expect(target?.kind).toBe('paragraph');
       if (target?.kind === 'paragraph') {
-        expect(target.spacing.before).toBe(13);
-        expect(target.lines[0]!.box.y).toBeCloseTo(63, 6);
+        expect(target.spacing.before).toBe(name === 'column spacing' ? 13 : 0);
+        expect(target.lines[0]!.box.y).toBeCloseTo(name === 'column spacing' ? 63 : 50, 6);
         expect(target.box.x).toBeGreaterThan(0);
       }
     }
     if (name === 'column continuation') {
       const pages = a.surface!.layout().pages;
-      expect(pages.length).toBeGreaterThan(1);
+      expect(pages).toHaveLength(2);
       const blocks = pages.at(-1)!.fragments;
       const target = blocks.find(
         (block) =>
@@ -216,6 +279,25 @@ test.each(fixtures)(
     expect(saveReopenDigest(late.store.currentPackage())).toEqual(
       saveReopenDigest(a.surface!.session.currentPackage())
     );
+    if (name === 'cached field picture') {
+      const part = a.surface!.session.currentPackage().parts.get('/word/document.xml')!;
+      const text = paragraphTextOf(part, aid);
+      if (text === null) throw new Error('Missing picture paragraph');
+      const offset = text.indexOf('\uFFFC');
+      expect(offset).toBeGreaterThanOrEqual(0);
+      peers.pause();
+      select(a, offset + 1);
+      a.surface!.deleteBackward();
+      select(b, offset + 1);
+      b.surface!.type('After');
+      sync();
+      peers.resume();
+      check();
+      expect(pictureCount(a)).toBe(0);
+      expect(a.exec({ type: 'undo' }).ok).toBe(true);
+      check();
+      expect(pictureCount(a)).toBe(1);
+    }
     const cold = createDocxEditor({
       container: document.createElement('div'),
       document: writeOoxmlPackage(a.surface!.session.currentPackage()),

@@ -27,7 +27,10 @@ export interface BlockLayoutResult {
 }
 
 /** Session state the balance search reads and publishes. */
-type ColumnBalanceSession = Pick<LayoutSession, 'balanceLimit' | 'endCursorY' | 'stats'>;
+type ColumnBalanceSession = Pick<
+  LayoutSession,
+  'balanceLimit' | 'previous' | 'endCursorY' | 'stats'
+>;
 
 /** Internal section-flow inputs layered over a host's semantic options. @internal */
 export type BlockLayoutOptions<HostOptions extends object = object> = HostOptions & {
@@ -51,8 +54,10 @@ export type BlockLayoutOptions<HostOptions extends object = object> = HostOption
    * the sheet the break closed.
    */
   readonly markJoinsBreakSheet?: boolean;
-  /** First-page column bottom used internally by the bounded balance search. */
+  /** Column bottom on the selected page, used by the bounded balance search. */
   readonly columnRegionBottom?: number;
+  /** Section-local page selected for column balancing; defaults to the first page. */
+  readonly columnRegionPage?: number;
   /** Section page-number format used to measure body page-field placeholders. */
   readonly bodyPageNumberFormat?: string;
   /** Story REF inputs built by the document composition root. */
@@ -104,9 +109,9 @@ const MAX_BALANCE_STEPS = 20;
 /**
  * Lay a block run out under its section geometry, balancing columns when asked.
  *
- * Word balances the columns of a multi-column section that ends in a continuous section
- * break. The flow already advances columns, so balancing finds the shortest first-page
- * column height that still keeps the section on one sheet. Trial passes are session-less;
+ * A multi-column section balances its final page before a continuous section follows.
+ * The search finds the shortest column height that preserves the natural page count.
+ * Trial passes are session-less;
  * only the final pass publishes incremental state.
  */
 export function layoutBlocksWithColumnBalance<HostOptions extends object>(
@@ -139,10 +144,11 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   }
 
   const session = options.session;
-  const regionTop = options.flowStartY ?? 0;
+  let balancePage = 0;
+  let regionTop = options.flowStartY ?? 0;
   const trialOptions: BlockLayoutOptions<HostOptions> = { ...options, session: undefined };
   const balancedResult = (final: BlockLayoutResult): BlockLayoutResult => {
-    const page = final.pages[0];
+    const page = final.pages[balancePage];
     // The next continuous section resumes below the whole balanced region, not below the
     // last column's own cursor.
     const endCursorY = page
@@ -156,9 +162,12 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   // the bounded search below then refreshes it.
   if (session && session.balanceLimit !== null) {
     const remembered = session.balanceLimit;
+    balancePage = Math.max(0, (session.previous?.pages.length ?? 1) - 1);
+    regionTop = balancePage === 0 ? (options.flowStartY ?? 0) : 0;
     const attempt = yield* layoutPass(bodies, revision, {
       ...options,
       columnRegionBottom: remembered,
+      columnRegionPage: balancePage,
     });
     if (session.stats.placed === 0 && session.stats.reusedPages === attempt.pages.length) {
       session.balanceLimit = remembered;
@@ -167,36 +176,40 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   }
 
   const natural = yield* layoutPass(bodies, revision, trialOptions);
-  if (natural.pages.length !== 1 || !natural.endsOpenPage) {
+  if (!natural.pages.length || !natural.endsOpenPage) {
     if (session) session.balanceLimit = null;
-    const final = yield* layoutPass(bodies, revision, options);
-    if (!final.endsOpenPage || final.pages.length < 2) return final;
-    // A multi-page section keeps its natural columns, but its successor resumes
-    // below every in-flow column on the last sheet, not just the last column's cursor.
-    const endCursorY = Math.max(
-      final.endCursorY,
-      ...columnBottomsOf(final.pages.at(-1)!, columns, 0)
-    );
-    if (session) session.endCursorY = endCursorY;
-    return { ...final, endCursorY };
+    return yield* layoutPass(bodies, revision, options);
   }
-
-  const naturalBottoms = columnBottomsOf(natural.pages[0]!, columns, regionTop);
+  balancePage = natural.pages.length - 1;
+  regionTop = balancePage === 0 ? (options.flowStartY ?? 0) : 0;
+  const naturalBottoms = columnBottomsOf(natural.pages[balancePage]!, columns, regionTop);
   const total = naturalBottoms.reduce((sum, bottom) => sum + Math.max(0, bottom - regionTop), 0);
   if (total <= 0) {
     if (session) session.balanceLimit = null;
     return yield* layoutPass(bodies, revision, options);
   }
 
-  let low = regionTop + total / columns.count;
+  // An authored column break owns a line in the column it closes. A shorter band can
+  // overflow that line before applying the break and incorrectly remove its flow height.
+  let breakBottom = regionTop;
+  for (const fragment of natural.pages[balancePage]!.fragments) {
+    if (fragment.kind !== 'paragraph' || isOutOfFlowFragment(fragment)) continue;
+    for (const line of fragment.lines) {
+      if (line.breakAfter === 'column') {
+        breakBottom = Math.max(breakBottom, line.box.y + line.box.height);
+      }
+    }
+  }
+  let low = Math.max(regionTop + total / columns.count, breakBottom);
   let high = Math.max(...naturalBottoms) + 0.01;
   function* fits(limit: number): LayoutSteps<boolean> {
     try {
       const trial = yield* layoutPass(bodies, revision, {
         ...trialOptions,
         columnRegionBottom: limit,
+        columnRegionPage: balancePage,
       });
-      return trial.pages.length === 1 && trial.endsOpenPage;
+      return trial.pages.length === natural.pages.length && trial.endsOpenPage;
     } catch {
       // Keep rules or atomic rows can refuse a short band; that is simply "does not fit".
       return false;
@@ -215,10 +228,18 @@ export function* layoutBlocksWithColumnBalanceSteps<HostOptions extends object>(
   }
   if (!proven && !(yield* fits(high))) {
     if (session) session.balanceLimit = null;
-    return yield* layoutPass(bodies, revision, options);
+    const final = yield* layoutPass(bodies, revision, options);
+    // A refused balance still clears every natural column before the next section.
+    const endCursorY = Math.max(final.endCursorY, ...naturalBottoms);
+    if (session) session.endCursorY = endCursorY;
+    return { ...final, endCursorY };
   }
 
-  const final = yield* layoutPass(bodies, revision, { ...options, columnRegionBottom: high });
+  const final = yield* layoutPass(bodies, revision, {
+    ...options,
+    columnRegionBottom: high,
+    columnRegionPage: balancePage,
+  });
   if (session) session.balanceLimit = high;
   return balancedResult(final);
 }

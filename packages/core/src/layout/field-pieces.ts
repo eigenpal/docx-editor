@@ -492,10 +492,12 @@ export interface PendingFieldProjection {
   capturedResultStyleIsDirectional?: boolean;
   /** Cached result text (for inert display or demotion flush). */
   cachedText: string;
+  /** Drawing placeholders in the cached display, without additional atomic model units. */
+  cachedDrawings?: import('./field-result-drawings.ts').CachedFieldDrawing[];
   /**
    * True once result-phase content the current display mode KEEPS was seen — visible or
-   * vanish-hidden. Only content with model text sets it (result text, tab / break, `w:sym`);
-   * drawings, `w:ptab` and note references never do.
+   * vanish-hidden. Result text, tab / break, `w:sym`, and drawings set it;
+   * `w:ptab` and note references never do.
    *
    * `cachedText` alone cannot tell "the file cached no result" from "the file cached one and
    * hid it": both leave it empty. Synthesis (MACROBUTTON / GOTOBUTTON display text, the

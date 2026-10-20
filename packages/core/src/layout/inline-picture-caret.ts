@@ -1,6 +1,17 @@
 import type { InlineDrawingRecord } from './drawing-layout.ts';
 import type { LineRecord, StyleSpanRecord } from './semantic-records.ts';
 
+/** The last picture ending at a model offset, including slices of one cached field. */
+export function endingPicture(
+  drawings: readonly InlineDrawingRecord[],
+  offset: number
+): InlineDrawingRecord | null {
+  for (let index = drawings.length - 1; index >= 0; index--) {
+    if (drawings[index]!.start + 1 === offset) return drawings[index]!;
+  }
+  return null;
+}
+
 /**
  * The inline picture that owns the caret at `offset`, or null when text owns it.
  *
@@ -18,16 +29,24 @@ export function drawingAtOffset(
 ): InlineDrawingRecord | null {
   const drawings = segment?.drawings ?? line.drawings ?? [];
   if (drawings.length === 0) return null;
-  const starting = drawings.find((drawing) => drawing.start === offset);
-  if (starting) return starting;
   const spans = segment?.spans ?? line.spans;
-  const ending = drawings.find((drawing) => drawing.start + 1 === offset);
+  const starting = drawings.find((drawing) => drawing.start === offset);
+  if (starting) {
+    // Cached text and pictures can share one atomic field range.
+    const leadingText = spans.some(
+      (span) => span.projected && span.range.start === offset && span.box.x < starting.advanceStart
+    );
+    return leadingText ? null : starting;
+  }
+  const ending = endingPicture(drawings, offset);
   if (!ending) return null;
   const owned = spans.some(
     (span) =>
       span.range.paragraphId === ending.paragraphId &&
-      span.range.start === offset &&
-      span.range.end > offset
+      ((span.range.start === offset && span.range.end > offset) ||
+        (span.projected &&
+          span.range.end === offset &&
+          span.box.x + span.box.width > ending.advanceEnd))
   );
   return owned ? null : ending;
 }

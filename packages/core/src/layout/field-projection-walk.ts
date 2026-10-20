@@ -68,6 +68,7 @@ import {
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
+import { captureFieldResultDrawing, emitAtomicFieldResult } from './field-result-drawings.ts';
 import { legacyCheckboxAccessibleName } from '../store/package/legacy-checkbox-accessibility.ts';
 import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
 import { plainRefSpec } from './field-ref-parse.ts';
@@ -301,7 +302,7 @@ export function unmergedPiecesOfParagraphForDisplay(
               },
             }
           : extras;
-      push(synthesis.text, synthesis.props, synthesis.style, true, start, end, withPageField);
+      emitAtomicFieldResult(pending, synthesis, withPageField, push);
     }
     pending = null;
     openAtomicBeginId = null;
@@ -627,6 +628,27 @@ export function unmergedPiecesOfParagraphForDisplay(
       }
 
       if (pending && isInsideFieldResult(field)) {
+        if (isRunDrawingAtom(grand)) {
+          if (pending.atomic && nestedPage.active) {
+            nestedPage.noteResult(!style.hidden);
+            continue;
+          }
+          offset = captureFieldResultDrawing(pending, {
+            node: grand,
+            layout: inlineDrawingLayout,
+            props,
+            style,
+            offset,
+            revisions,
+            displayMode,
+            authorFilter,
+            link: currentLink,
+            formatSite: runFormatSite,
+            deletedRanges,
+            removed: recordRemoved,
+          });
+          continue;
+        }
         // A cached result is one plain string and cannot carry a per-glyph font switch, so
         // only a `w:sym` with a real Unicode equivalent joins it; the rest are skipped.
         if (isSymbolRunChild(grand)) {
@@ -794,29 +816,9 @@ export function unmergedPiecesOfParagraphForDisplay(
     }
   };
 
-  /**
-   * Walk content in document order, descending through every RUN CONTAINER.
-   *
-   * Typed runs contribute measurable / selectable text. Generic siblings stay structurally
-   * preserved but layout-inert for page-field evaluation; typed/generic `w:fldSimple` advances
-   * one model unit and paints through {@link projectSimpleField}. The exceptions are the
-   * containers that are not content themselves but hold runs that are:
-   *
-   *   - `w:hyperlink`. Skipping it is what made every link's words vanish from the painted
-   *     page while still occupying model offsets.
-   *   - the revision wrappers. Skipping them dropped tracked content entirely, so the reader
-   *     saw a third text belonging to neither the original nor the proposal.
-   *   - inline content controls (`w:sdt`). Skipping them made their words vanish while still
-   *     occupying model offsets (or, for generic SDTs, occupy none at all).
-   *
-   * Any can hold the others, and a link inside a tracked insertion is ordinary, so the walk
-   * is one recursion rather than separate passes.
-   *
-   * The complex-field machine spans runs in document order within the paragraph, so descending
-   * must not restart it — the walk visits runs in the same order a reader sees them, whatever
-   * their nesting. Every transparent wrapper shares {@link MAX_INLINE_CONTAINER_DEPTH} with
-   * paragraph offsets; field-scan depth stays separate.
-   */
+  // Inline containers share one field machine across runs, hyperlinks, revisions, and SDTs.
+  // Descending must not reset the instruction/result phase or the model offset.
+  // Container depth matches paragraph offsets; field-scan depth has its own bound.
   const finishOptions = {
     showFieldCodes,
     inheritedRunProperties,

@@ -54,6 +54,11 @@ function fieldFragmentAt(
     if (!projected || range.paragraphId !== paragraphId || range.start >= range.end) continue;
     if ((edge === 'end' ? range.end : range.start) === offset) return range;
   }
+  for (const drawing of line.drawings ?? []) {
+    if (drawing.paragraphId !== paragraphId) continue;
+    const range = { start: drawing.start, end: drawing.start + 1 };
+    if ((edge === 'end' ? range.end : range.start) === offset) return range;
+  }
   return null;
 }
 

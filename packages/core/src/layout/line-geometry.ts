@@ -6,7 +6,7 @@
 
 import { segmentGraphemes, type GraphemeSegment } from './grapheme.ts';
 import { MAX_CARET_ADVANCE_UTF16 } from './shaped-caret-advances.ts';
-import { drawingAtOffset, pictureEdgeX } from './inline-picture-caret.ts';
+import { drawingAtOffset, endingPicture, pictureEdgeX } from './inline-picture-caret.ts';
 import { spanOffsetX } from './semantic-hit-test.ts';
 import type { LineSegment } from './line-segments.ts';
 import type { LineRecord, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
@@ -139,10 +139,17 @@ function upstreamX(
   measurer: TextMeasurer | undefined,
   segment: LineSegment | undefined
 ): number | null {
-  const picture = (segment?.drawings ?? line.drawings ?? []).find(
-    (drawing) => drawing.start + 1 === offset
-  );
-  if (picture) return pictureEdgeX(picture, true);
+  const picture = endingPicture(segment?.drawings ?? line.drawings ?? [], offset);
+  if (picture) {
+    // A cached field can end with text after its last picture.
+    let edge = pictureEdgeX(picture, true);
+    for (const span of spans) {
+      if (span.projected && span.range.end === offset) {
+        edge = Math.max(edge, span.box.x + span.box.width);
+      }
+    }
+    return edge;
+  }
   const ending = spans.find((span) => span.range.end === offset && span.range.start < offset);
   if (!ending) return null;
   const next = spans.find((span) => span.range.start === offset && span.range.end > offset);

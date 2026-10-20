@@ -180,6 +180,23 @@ describe('a picture with an embedded object beside it', () => {
     expect(projectDrawingsInPart(part)[0]).toMatchObject({ kind: 'inline', wrap: 'inline' });
   });
 
+  test('a saved source link keeps embedded pixels without becoming a resource target', () => {
+    const xml = picture({ ole: '', style: 'width:150pt;height:80pt', wrap: '' }).replace(
+      'r:id="rPreview"',
+      'r:id="rPreview" r:href="rExternal"'
+    );
+    const part = parse(xml);
+    const projection = projectDrawingsInPart(part)[0]!;
+    expect(projection.picture).toMatchObject({
+      embeddedRelationshipId: 'rPreview',
+      linkedRelationshipId: null,
+    });
+    expect(projection.relationshipId).toBe('rPreview');
+    expect(JSON.stringify(projection)).not.toContain('rExternal');
+    expect(serializeOoxmlPart(part)).toContain('r:href="rExternal"');
+    expect(projectDrawingsInPart(parse(xml.replace('r:id="rPreview"', '')))).toHaveLength(0);
+  });
+
   test('never resolves the embedded part, and save keeps the object unchanged', () => {
     const pkg = packageOf(picture());
     expect(projectDrawingsInPackage(pkg)).toHaveLength(1);

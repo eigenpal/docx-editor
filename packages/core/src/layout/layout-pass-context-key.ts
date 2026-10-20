@@ -23,6 +23,7 @@ export interface LayoutPassContextInputs {
   readonly columns: ResolvedSectionColumns;
   /** Set while a column-balance probe caps the flow at a page-local bottom. */
   readonly columnRegionBottom: number | undefined;
+  readonly columnRegionPage?: number;
   readonly sectionPageBorders: SectionPageBorders | undefined;
   /** Set when a continuous section follows, so an empty section mark takes no flow height. */
   readonly sectionMarkCollapses?: boolean;
@@ -46,7 +47,7 @@ export function layoutPassContextKey(
   inputs: LayoutPassContextInputs
 ): (notesReserveKey: string) => string {
   const { geometry, columns, columnRegionBottom, continuedInsets } = inputs;
-  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.lefts.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${columnRegionBottom}` : ''}`;
+  const columnsContext = `|cols:${columns.widths.join(',')};${columns.gaps.join(',')};${columns.lefts.join(',')};${columns.separator ? 1 : 0}${columnRegionBottom !== undefined ? `;bal:${inputs.columnRegionPage ?? 0}:${columnRegionBottom}` : ''}`;
   // The host sheet's box is an INPUT to this section's flow, so a host whose own variant moved
   // must not let this section resume a flow measured against the box it used to have. The
   // host's furniture wrap zones are an input too. Their token embeds part names from the file,
