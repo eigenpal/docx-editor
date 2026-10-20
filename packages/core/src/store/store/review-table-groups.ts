@@ -16,11 +16,11 @@ import type { RevisionSite } from './tree-op-revisions.ts';
 import { textUnder } from './review-text.ts';
 import { groupTableFormatting } from './review-table-format-groups.ts';
 import { groupAdjacentRunFormatting } from './review-run-format-groups.ts';
-import { joinRowCellRecords } from './review-row-cell-records.ts';
 import { keepsSubtreeMemo } from '../package/subtree-memo-policy.ts';
 import { ancestorIdsOf } from './node-ancestors.ts';
 
 type Direction = 'ins' | 'del';
+const CELL_RECORD: Readonly<Record<Direction, string>> = { ins: 'cellIns', del: 'cellDel' };
 interface RowGroup {
   markerIds: Set<string>;
   rows: OoxmlElement[];
@@ -126,7 +126,7 @@ function groupRowRevisions(
   const nestedRows = new Map<string, OoxmlElement>();
   const completeNestedRows = new Set<string>();
   const ownerBySite = new Map<string, RowGroup>();
-  const collect = (node: OoxmlNode, group: RowGroup): void => {
+  const collect = (node: OoxmlNode, group: RowGroup, marker?: OoxmlElement): void => {
     if (node.kind === 'textValue' || isW(node, 'tbl')) return;
     const site = sitesById.get(node.id);
     const rowMarker = rowSites.has(node.id);
@@ -141,8 +141,23 @@ function groupRowRevisions(
     ) {
       ownerBySite.set(node.id, group);
       if (rowMarker) group.markerIds.add(node.id);
+    } else if (
+      site &&
+      !site.refused &&
+      site.parent?.localName === 'tcPr' &&
+      marker !== undefined &&
+      node.localName === CELL_RECORD[group.direction] &&
+      attribute(node, 'author') === group.author &&
+      attribute(marker, 'date') !== undefined &&
+      attribute(node, 'date') === attribute(marker, 'date')
+    ) {
+      // A cell record of the same direction, author and date in a tracked row is part of the
+      // row decision: recording a row writes one per cell at the row's date, and resolving one
+      // alone would take a cell out of the row. In the open document it shares the row's id;
+      // a saved file gives it its own.
+      ownerBySite.set(node.id, group);
     }
-    for (const child of node.children) collect(child, group);
+    for (const child of node.children) collect(child, group, marker);
   };
   // Only a table holding a row marker forms a group; the walk keeps to the markers' ancestors.
   const reached = ancestorIdsOf(part, rowSites.keys());
@@ -194,7 +209,7 @@ function groupRowRevisions(
         }
         current.rows.push(child);
         current.markerIds.add(marker.id);
-        collect(child, current);
+        collect(child, current, marker);
       }
     }
     for (const child of node.children) walk(child, tableDepth + (isW(node, 'tbl') ? 1 : 0));
@@ -341,9 +356,11 @@ function groupRowRevisions(
       }
     }
     preview.push(...group.followingText);
+    const structuralChanges = [...new Set(ordered.flatMap((item) => item.structuralChanges ?? []))];
     const grouped = registerRevisionSiteNodeIds(
       {
         ...primary,
+        ...(structuralChanges.length ? { structuralChanges } : {}),
         addresses: [
           ...new Map(
             addresses.map((address) => [
@@ -371,9 +388,8 @@ export function groupTableRevisions(
   locations: ReadonlyMap<string, SiteLocation>,
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
-  const rows = joinRowCellRecords(part, items, sites);
   const grouped = groupAdjacentRunFormatting(
-    groupTableFormatting(part, groupRowRevisions(part, rows, sites, locations), sites),
+    groupTableFormatting(part, groupRowRevisions(part, items, sites, locations), sites),
     sites
   );
   // Row markers start in property XML but nested decisions belong at row ends.

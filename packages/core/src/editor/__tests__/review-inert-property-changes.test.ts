@@ -367,11 +367,13 @@ describe('property changes that change nothing', () => {
   }
 
   for (const [from, to, beforeBars, afterBars] of [
-    ['Normal', 'Strong', 0, 2],
-    ['Strong', 'Normal', 2, 0],
+    ['Normal', 'Strong', 0, 1],
+    ['Strong', 'Normal', 1, 0],
   ] as const) {
     test(`Simple Markup follows a record split over paragraphs when one changes (${from} to ${to})`, () => {
-      // One record in two paragraphs: listed only while the second paragraph's site changes.
+      // One id in two paragraphs is one decision per paragraph, as a saved file reads it, where
+      // each record has its own id. Only the second paragraph's record changes anything, so only
+      // that paragraph is listed and marked.
       const shared = `w:id="${id++}" ${STAMP}`;
       const run = (on: string, text: string) =>
         `<w:r><w:rPr>${on}<w:rPrChange ${shared}><w:rPr/></w:rPrChange></w:rPr><w:t>${text}</w:t></w:r>`;
@@ -398,7 +400,9 @@ describe('property changes that change nothing', () => {
     });
   }
 
-  test('an edit that lists a record split over paragraphs marks every paragraph', () => {
+  test('an edit that lists one paragraph of a record split over paragraphs marks that paragraph', () => {
+    // Run-property records are one decision per paragraph, so the edit lists the record in the
+    // paragraph it changed, and the record in the other paragraph stays unlisted.
     const shared = `w:id="${id++}" ${STAMP}`;
     const run = (text: string) =>
       `<w:r><w:rPr><w:b w:val="0"/><w:rPrChange ${shared}><w:rPr/></w:rPrChange></w:rPr><w:t>${text}</w:t></w:r>`;
@@ -418,7 +422,7 @@ describe('property changes that change nothing', () => {
     });
     expect(view.editor.exec({ type: 'toggleMark', mark: 'bold' }).ok).toBe(true);
     expect(view.count()).toBe(1);
-    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(2);
+    expect(view.container.querySelectorAll('.docx-change-bar')).toHaveLength(1);
   });
 
   test('typing in an unlisted paragraph-property group keeps the fast patch', () => {

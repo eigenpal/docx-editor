@@ -12,7 +12,6 @@ import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
 import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
 import { mergeParagraphBreakEdits } from './review-paragraph-breaks.ts';
 import { mergeConsecutiveParagraphPropertyChanges } from './review-paragraph-property-groups.ts';
-import { mergeContiguousRunFormatting } from './review-run-format-groups.ts';
 import {
   changedLanguages,
   changedFormatting,
@@ -57,6 +56,18 @@ const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' 
   moveFrom: 'moveFrom',
   moveTo: 'moveTo',
 };
+
+/**
+ * Whether another group already holds this source key in another paragraph scope, so the new
+ * group needs its own card id. The first scope keeps the id the source attributes give it.
+ */
+function byAddressHasScopedTwin(keys: Iterable<string>, key: string, scope: string): boolean {
+  const base = key.slice(0, key.length - scope.length);
+  for (const existing of keys) {
+    if (existing !== key && existing.startsWith(`${base}\u0000para-`)) return true;
+  }
+  return false;
+}
 
 function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
   for (const attribute of node.attributes) {
@@ -266,7 +277,14 @@ function computeRevisionItemsOf(
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
     // whose Accept deleted the half the card claimed to be inserting.
-    const sourceKey = sourceKeyOf(site.node, kind, address);
+    // Run-property changes never join across a paragraph boundary, or between a paragraph mark
+    // and the text: one edit that shares an id across them reads as one decision per paragraph,
+    // and per mark, the same decisions a saved file reads, where each record has its own id.
+    const formatScope =
+      kind === 'format' && site.node.localName === 'rPrChange' && start
+        ? `\u0000para-${start.paragraphId}${site.paragraphMark ? '-mark' : ''}`
+        : '';
+    const sourceKey = sourceKeyOf(site.node, kind, address) + formatScope;
     // Same attributes do not join text across an unchanged character.
     let key = currentInlineGroup.get(sourceKey) ?? sourceKey;
     const previous = byAddress.get(key);
@@ -331,7 +349,9 @@ function computeRevisionItemsOf(
       localName: site.node.localName,
       ...(kind === 'insert' || kind === 'delete'
         ? { identitySuffix: `\u0000site-${site.node.id}` }
-        : {}),
+        : formatScope && byAddressHasScopedTwin(byAddress.keys(), key, formatScope)
+          ? { identitySuffix: `\u0000site-${site.node.id}` }
+          : {}),
       ...(structuralChange ? { structuralChanges: [structuralChange] } : {}),
       ...(site.propertyChange
         ? {
@@ -402,12 +422,7 @@ function computeRevisionItemsOf(
     order,
     previewByNode
   );
-  return mergeContiguousRunFormatting(
-    mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order),
-    part,
-    sites,
-    order
-  );
+  return mergeConsecutiveParagraphPropertyChanges(textItems, part, sites, order);
 }
 
 /**

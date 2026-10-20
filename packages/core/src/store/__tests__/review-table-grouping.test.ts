@@ -35,8 +35,11 @@ const wordCounts: Record<string, number> = {
   'different-text-date-del': 1,
   'cell-markers-ins': 4,
   'cell-markers-del': 4,
-  'row-and-cell-markers-ins': 3,
-  'row-and-cell-markers-del': 3,
+  // The row decision holds the cell records of its author and date, which recording a row
+  // writes in every cell. Separate cell cards let one cell leave an inserted row, and they
+  // depended on the records sharing the row's id, which a saved file does not keep.
+  'row-and-cell-markers-ins': 1,
+  'row-and-cell-markers-del': 1,
   'untracked-row-inserted-text': 2,
   'row-insert-with-deletion': 2,
   'row-insert-with-format': 2,

@@ -1087,10 +1087,12 @@ Without the module, the editor renders revisions in their final state. It keeps 
 
 When you save, each revision gets its own `w:id` across the main document, headers, footers, footnotes, endnotes, and comments. Each ID is an integer from 0 to 2147483647. The first revision that uses an ID keeps it. Later revisions with the same ID, and revisions with an ID outside that range, get new IDs. A move range or custom XML range keeps one ID for its start and end markers. Comment and bookmark IDs do not change.
 
-The open editor and collaboration sessions keep their IDs, so saving does not change the review list. When you reopen the saved file, the review list shows the same items as before, and accepting or rejecting an item has the same result. The editor reads these changes as one item without a shared ID:
+The open editor and collaboration sessions keep their IDs, so saving does not change the review list. When you reopen the saved file, the review list shows the same items as before, and accepting or rejecting an item has the same result. Two rules keep the items the same without a shared ID:
 
-- An inserted or deleted table row and the cell records in that row, when they have the same author and date.
-- Formatting changes with the same author, date, and formatting that cover adjacent text, including paragraph marks and the start of the next paragraph.
+- An inserted or deleted table row is one item with the text it holds and the cell records in that row that have its author and date. Consecutive rows by one author are one item.
+- A text formatting change is one item per paragraph. The formatting of a paragraph mark is a separate item. One edit that formats several paragraphs lists one item for each paragraph and each paragraph mark.
+
+Adjacent formatting changes with the same author and formatting join after you reopen the file, as they do in files from other sources. If you format two touching ranges in separate edits, and the first edit covers more than one run, the reopened file can list them as one item.
 
 If you edit inside another author's tracked change, the change splits into pieces. Each piece is a separate review item before and after you save.
 

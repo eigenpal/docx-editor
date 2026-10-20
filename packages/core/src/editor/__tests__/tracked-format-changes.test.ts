@@ -452,11 +452,12 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
-  test('one press is one card, however many runs it covers', () => {
+  test('one press is one card for the text, however many runs it covers', () => {
     // Cards group on the element name plus the address, so a fresh id per record turned a
     // Bold over three runs into four decisions the reviewer had to answer one at a time. A
     // revision spanning many elements that share an id is the shape this engine is built
-    // around, and it is what Word writes.
+    // around. The paragraph mark's record is its own card, as it is in a saved file, where
+    // each record has its own id.
     const runs = [
       textRun('one ', '<w:rPr><w:color w:val="FF0000"/></w:rPr>'),
       textRun('two ', '<w:rPr><w:color w:val="00FF00"/></w:rPr>'),
@@ -471,7 +472,7 @@ describe('tracked format changes in suggesting mode', () => {
       const cards = revisionItemsOf(surface.session.part()).filter(
         (item) => item.revisionKind === 'format'
       );
-      expect(cards).toHaveLength(1);
+      expect(cards.map((card) => card.ranges.length)).toEqual([1, 3]);
       // Each record still holds its OWN run's colour, not the first run's.
       expect(runRPrChanges(surface).map((change) => recorded(change))).toEqual([
         ['color'],
@@ -481,7 +482,7 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
-  test('a run record and a paragraph record are two cards with two addresses', () => {
+  test('a run record and a paragraph record are separate cards with their own addresses', () => {
     // Both wrappers are `format` revisions, so two cards built from ONE address carry the same
     // key: one is unreachable in the rail, both match the active item, and React sees two
     // children under one key. Worse, a resolve op names no element, so answering the run's
@@ -496,8 +497,9 @@ describe('tracked format changes in suggesting mode', () => {
       const cards = revisionItemsOf(surface.session.part()).filter(
         (item) => item.revisionKind === 'format'
       );
-      expect(cards).toHaveLength(2);
-      expect(new Set(cards.map((card) => card.id)).size).toBe(2);
+      // The run, the paragraph mark and the paragraph properties: three decisions.
+      expect(cards).toHaveLength(3);
+      expect(new Set(cards.map((card) => card.id)).size).toBe(3);
       // Answering one leaves the other standing.
       const runCard = rPrChanges(surface)[0]!;
       resolve(surface, 'accept', runCard);

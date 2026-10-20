@@ -166,6 +166,17 @@ async function decide(
   };
 }
 
+async function decideAll(
+  runtime: DocxEditorServerRuntime,
+  action: 'acceptAll' | 'rejectAll'
+): Promise<string> {
+  await runtime.run(async (context) => {
+    context.document.body.revisions[action]();
+    await context.sync();
+  });
+  return savedBody(runtime);
+}
+
 /** The review cards the editor shows for the saved file's main document. */
 function cards(bytes: Uint8Array): string[] {
   const read = readOoxmlPackage(bytes);
@@ -187,13 +198,24 @@ describe('tracked changes read back as the same decisions after save and reopen'
       const reopened = await createServer(saved);
       const after = await listing(reopened);
       reopened.dispose();
-      expect(before.length).toBeGreaterThan(0);
+      // A complete tracked row is not listed (its subtype has no Office name), so the row
+      // scenarios compare the collection decisions below and the cards in their own test.
+      if (!name.includes('row')) expect(before.length).toBeGreaterThan(0);
       expect(after).toEqual(before);
       // A second save of the reopened file lists the same review cards again.
       const again = await createServer(saved);
       expect(cards(await again.save())).toEqual(cards(saved));
       again.dispose();
 
+      for (const action of ['acceptAll', 'rejectAll'] as const) {
+        const fresh = await build();
+        const expected = await decideAll(fresh, action);
+        fresh.dispose();
+        const copy = await createServer(saved);
+        const actual = await decideAll(copy, action);
+        copy.dispose();
+        expect(actual).toEqual(expected);
+      }
       for (let index = 0; index < before.length; index += 1) {
         for (const action of ['accept', 'reject'] as const) {
           const fresh = await build();
@@ -219,15 +241,13 @@ describe('tracked changes read back as the same decisions after save and reopen'
     const read = readOoxmlPackage(saved);
     if (!read.ok) throw new Error(read.reason);
     const main = read.package.parts.get(read.package.mainDocumentPart)!;
-    const rows = revisionItemsOf(main).filter((item) => item.revisionKind === 'structural');
-    expect(rows.map((item) => item.structuralChanges)).toEqual([['rowInsert', 'cellInsert']]);
-    // The row decision alone refuses, as in the open editor, because the text in the row is
-    // its own decision. It never takes a cell out of the row.
-    const alone = planRevisionBatch(main, 'reject', [reviewItemKey(rows[0]!)]);
-    expect(alone.ops).toHaveLength(0);
-    expect(alone.result.skipped.map((entry) => entry.reason)).toEqual(['incomplete-group']);
-    // With the text, rejecting removes the whole row.
-    const plan = planRevisionBatch(main, 'reject');
+    const rows = revisionItemsOf(main);
+    // One decision: the row record, its cell records, and the text the row holds.
+    expect(rows.map((item) => [item.structuralChanges, item.text])).toEqual([
+      [['rowInsert', 'cellInsert'], 'C\nD'],
+    ]);
+    // Rejecting it removes the whole row; no cell is left behind.
+    const plan = planRevisionBatch(main, 'reject', [reviewItemKey(rows[0]!)]);
     let rejected = main;
     for (const op of plan.ops) {
       const applied = applyTreeOp(rejected, op);
