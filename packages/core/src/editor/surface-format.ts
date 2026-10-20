@@ -132,17 +132,27 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const authorFilter = (): FormattingRevisionAuthorFilter | undefined => deps.authorFilter();
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   // A caret beside a control that typing cannot enter reads the run that typing will copy,
-  // outside the control, rather than the control's own run.
-  const formattingSelection = (selection: SemanticSelection): SemanticSelection => {
+  // outside the control, rather than the control's own run; or no run, when typing copies none.
+  const formattingSelection = (
+    selection: SemanticSelection
+  ): { readonly selection: SemanticSelection; readonly caretSpan: boolean } => {
     const { anchor, head } = selection;
-    if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return selection;
+    if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) {
+      return { selection, caretSpan: true };
+    }
     const paragraph = findNode(storyPart(), head.paragraphId);
-    const run = paragraph && formattingRangeBesideRestrictedControl(paragraph, head.offset);
-    if (!run) return selection;
+    const run = paragraph
+      ? formattingRangeBesideRestrictedControl(paragraph, head.offset)
+      : undefined;
+    if (run === undefined) return { selection, caretSpan: true };
+    if (run === null) return { selection, caretSpan: false };
     const start = run.end <= head.offset ? run.end - 1 : run.start;
     return {
-      anchor: { paragraphId: head.paragraphId, offset: start },
-      head: { paragraphId: head.paragraphId, offset: start + 1 },
+      selection: {
+        anchor: { paragraphId: head.paragraphId, offset: start },
+        head: { paragraphId: head.paragraphId, offset: start + 1 },
+      },
+      caretSpan: true,
     };
   };
   const applyOps = (
@@ -458,13 +468,14 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
 
     setParagraphProperties: writeParagraphProperties,
 
-    formatting: () =>
+    formatting: () => {
+      const read = formattingSelection(selectionNow.value);
       // Pending caret formatting overlays the document's answer, so the toolbar shows what
       // the next character typed will look like while a stored format is armed.
-      withPendingFormatting(
+      return withPendingFormatting(
         formattingAt(
           currentLayout.value,
-          formattingSelection(selectionNow.value),
+          read.selection,
           (paragraphId: string, runProperties) => {
             const resolved = session.effectiveRunDefaults(paragraphId, runProperties);
             // A run whose chain authored NOTHING is still measured in the surface's
@@ -480,10 +491,12 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           selectionNow.value.anchor.paragraphId === selectionNow.value.head.paragraphId
             ? [selectionNow.value.head.paragraphId]
             : deps.paragraphOrder(),
-          deps.defaultFontFamily?.() ?? null
+          deps.defaultFontFamily?.() ?? null,
+          read.caretSpan
         ),
         deps.pendingFormats()
-      ),
+      );
+    },
 
     toggleRunProperty(localName, attributes) {
       const refused = refuseRunFormat();

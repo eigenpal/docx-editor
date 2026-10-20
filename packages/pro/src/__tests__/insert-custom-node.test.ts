@@ -461,4 +461,21 @@ describe('insertCustomNode', () => {
       expect(xml.includes('<w:ins ')).toBe(suggesting);
     }
   });
+
+  test('the toolbar beside a node at a paragraph start, or alone, shows what typing writes', async () => {
+    const node =
+      '<w:sdt><w:sdtPr><w:tag w:val="acme:citation"/><w:lock w:val="contentLocked"/></w:sdtPr>' +
+      '<w:sdtContent><w:r><w:rPr><w:b/></w:rPr><w:t>[1]</w:t></w:r></w:sdtContent></w:sdt>';
+    const start = mount(`<w:p>${node}<w:r><w:rPr><w:i/></w:rPr><w:t>more</w:t></w:r></w:p>`);
+    const atStart = { paragraphId: firstParagraphId(start), offset: 0 };
+    start.surface!.setSelection({ anchor: atStart, head: atStart });
+    expect(start.snapshot().formatting).toMatchObject({ bold: false, italic: true });
+    const alone = mount(`<w:p>${node}</w:p>`);
+    const after = { paragraphId: firstParagraphId(alone), offset: 3 };
+    alone.surface!.setSelection({ anchor: after, head: after });
+    expect(alone.snapshot().formatting?.bold).not.toBe(true);
+    alone.surface!.type('X');
+    const xml = strFromU8(unzipSync(new Uint8Array(await alone.save()))['word/document.xml']!);
+    expect(xml).toContain('</w:sdt><w:r><w:t>X</w:t></w:r>');
+  });
 });

@@ -1,6 +1,9 @@
 import { revisionMarkupStyleForEditing } from '../layout/revision-markup-style.ts';
 import { layoutDerivedSpacingStyleForEditing } from '../layout/layout-derived-spacing.ts';
-import { formattingRunAt } from '../store/store/direct-properties.ts';
+import {
+  formattingRangeBesideRestrictedControl,
+  formattingRunAt,
+} from '../store/store/direct-properties.ts';
 // Formatting queries over the published layout (paginated-surface seam).
 //
 // This module owns what a toolbar reads and what a formatting command merges against:
@@ -212,6 +215,8 @@ export function authoredRunPropertiesAt(
 ): readonly SurfaceProperty[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
+  // Beside a control that typing cannot enter, with no text run to copy, typing writes none.
+  if (formattingRangeBesideRestrictedControl(paragraph, offset) === null) return [];
   // Share the revision-filtered caret owner with complex-script lane selection.
   const owner = formattingRunAt(paragraph, offset, displayMode, authorFilter);
   if (owner) {
@@ -467,9 +472,11 @@ export function formattingAt(
    * one's alignment as if the pair agreed — and the following press changed both.
    */
   paragraphOrder?: readonly string[],
-  fallbackFontFamily?: string | null
+  fallbackFontFamily?: string | null,
+  /** `false` reads a collapsed caret beside no span: text typed there gets no direct formatting. */
+  caretSpan = true
 ): SurfaceFormatting {
-  const spans = selectionSpans(layout, selection, cells, paragraphOrder);
+  const spans = caretSpan ? selectionSpans(layout, selection, cells, paragraphOrder) : [];
   const emptyStyles =
     spans.length === 0
       ? paragraphsTouched(layout, selection, cells, paragraphOrder)

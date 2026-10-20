@@ -82,9 +82,33 @@ test('typing beside two adjacent locked controls skips both', () => {
   expect(caretFormatting(between, 10)).toBe('italic');
 });
 
+test('struck text and atoms beside a locked control are never the source', () => {
+  const struck =
+    '<w:del w:id="9" w:author="Bo" w:date="2026-01-01T00:00:00Z"><w:r><w:rPr><w:b/></w:rPr>' +
+    '<w:delText>old</w:delText></w:r></w:del>';
+  const note =
+    '<w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r>';
+  for (const tracked of [false, true]) {
+    // "see " [0,4) "old" [4,7) pill [7,10)
+    expect(typedRun(typed(italic('see ') + struck + pill(), 10, tracked))).toEqual({
+      properties: '<w:i/>',
+      inControl: false,
+    });
+    // "see " [0,4) note [4,5) pill [5,8)
+    expect(typedRun(typed(italic('see ') + note + pill(), 8, tracked))).toEqual({
+      properties: '<w:i/>',
+      inControl: false,
+    });
+  }
+  const shown = part(`<w:p>${italic('see ')}${struck}${pill()}</w:p>`);
+  expect(caretFormatting(shown, 10)).toBe('italic');
+});
+
 test('typing beside a locked control that is the only text takes no control formatting', () => {
-  const run = typedRun(typed(pill(), 3));
-  expect(run).toEqual({ properties: '', inControl: false });
+  for (const tracked of [false, true]) {
+    expect(typedRun(typed(pill(), 3, tracked))).toEqual({ properties: '', inControl: false });
+    expect(typedRun(typed(pill(), 0, tracked))).toEqual({ properties: '', inControl: false });
+  }
 });
 
 test('typing beside an unlocked control keeps the ordinary rule', () => {

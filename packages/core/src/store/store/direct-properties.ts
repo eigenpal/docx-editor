@@ -28,10 +28,7 @@ import {
   type FormattingRevisionAuthorFilter,
 } from './formattable-runs.ts';
 import { paragraphOffsetIndex, segmentsOf } from './tree-op-segments.ts';
-import {
-  formattingRunBesideRestrictedControl,
-  holdsContentControl,
-} from './tree-op-restricted-edge.ts';
+import { formattingRunBesideRestrictedControl } from './tree-op-restricted-edge.ts';
 import {
   containerIsComplexScript,
   withComplexScriptCompanions,
@@ -378,60 +375,40 @@ export function formattingRunAt(
   authorFilter?: FormattingRevisionAuthorFilter
 ): OoxmlNode | null {
   if (paragraph.kind !== 'paragraph') return null;
+  // Beside a control that typing cannot enter, the run the store will copy, whatever the view.
+  const beside = formattingRunBesideRestrictedControl(
+    paragraph,
+    offset,
+    paragraphOffsetIndex(paragraph)
+  );
+  if (beside !== undefined) return beside;
   const ranges = runAddressRanges(paragraph);
-  const runs = formattableRunsOfParagraph(paragraph, displayMode, authorFilter);
   let left: OoxmlNode | null = null;
   let right: OoxmlNode | null = null;
-  for (const run of runs) {
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
     const range = ranges.get(run.id);
     if (!range || range.end <= range.start) continue;
     if (range.start < offset && offset <= range.end) left = run;
     if (!right && range.start <= offset && offset < range.end) right = run;
   }
-  const beside = runBesideRestrictedControl(paragraph, offset, runs, ranges);
-  if (beside !== undefined) return beside;
   return left ?? right;
 }
 
 /**
- * The run whose formatting text typed at `offset` takes, when the caret is at the outer edge
- * of a control that typing cannot enter; `undefined` when the ordinary rule applies. See
- * `formattingRunBesideRestrictedControl`.
- */
-function runBesideRestrictedControl(
-  paragraph: Extract<OoxmlNode, { kind: 'paragraph' }>,
-  offset: number,
-  runs: readonly OoxmlNode[],
-  ranges: ReadonlyMap<string, { start: number; end: number }>
-): OoxmlNode | null | undefined {
-  if (!holdsContentControl(paragraph)) return undefined;
-  const spans = runs.flatMap((run) => {
-    const range = ranges.get(run.id);
-    return range ? [{ runId: run.id, start: range.start, end: range.end }] : [];
-  });
-  const id = formattingRunBesideRestrictedControl(
-    paragraph,
-    offset,
-    paragraphOffsetIndex(paragraph),
-    spans
-  );
-  return id == null ? id : (runs.find((run) => run.id === id) ?? null);
-}
-
-/**
- * The offsets of the run whose formatting text typed at `offset` takes beside a control that
- * typing cannot enter, for a reader that resolves formatting by offset, such as the toolbar;
- * `undefined` when the ordinary rule applies or no run outside the control holds text.
+ * Where text typed at `offset` beside a control that typing cannot enter takes its formatting
+ * from, for a reader that resolves formatting by offset, such as the toolbar: the offsets of
+ * the source run, `null` when the text gets no direct formatting, or `undefined` when the
+ * ordinary rule applies. See `formattingRunBesideRestrictedControl`.
  */
 export function formattingRangeBesideRestrictedControl(
   paragraph: OoxmlNode,
   offset: number
-): { readonly start: number; readonly end: number } | undefined {
-  if (paragraph.kind !== 'paragraph' || !holdsContentControl(paragraph)) return undefined;
-  const ranges = runAddressRanges(paragraph);
-  const runs = formattableRunsOfParagraph(paragraph);
-  const run = runBesideRestrictedControl(paragraph, offset, runs, ranges);
-  return run ? ranges.get(run.id) : undefined;
+): { readonly start: number; readonly end: number } | null | undefined {
+  if (paragraph.kind !== 'paragraph') return undefined;
+  const offsets = paragraphOffsetIndex(paragraph);
+  const run = formattingRunBesideRestrictedControl(paragraph, offset, offsets);
+  if (!run) return run;
+  return offsets.spanOf(run) ?? undefined;
 }
 
 function withMultiSettingsKept(

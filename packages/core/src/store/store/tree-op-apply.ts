@@ -828,18 +828,15 @@ function applyInsertContent(
     const besideControl = formattingRunBesideRestrictedControl(
       paragraph,
       offset,
-      paragraphOffsetIndex(paragraph),
-      segments
+      paragraphOffsetIndex(paragraph)
     );
     const leftSegment = findLast(segments, (segment) => segment.end === offset);
     const leftRun =
-      besideControl === undefined
-        ? leftSegment
+      besideControl !== undefined
+        ? besideControl
+        : leftSegment
           ? findNode(part, leftSegment.runId)
-          : null
-        : besideControl === null
-          ? null
-          : findNode(part, besideControl);
+          : null;
     const inheritedProperties =
       leftRun && leftRun.kind === 'run'
         ? fieldInsertionEndAt(paragraph, offset)

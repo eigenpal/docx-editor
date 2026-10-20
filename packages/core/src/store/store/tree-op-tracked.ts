@@ -406,10 +406,11 @@ function applyTrackedInsertion(
   const fieldLeftRun = fieldLeftRunId ? findNode(part, fieldLeftRunId) : null;
   const fieldProperties = () => (fieldLeftRun ? insertedRunProperties(mint, fieldLeftRun) : []);
   // Beside a control that typing cannot enter, the words take the text's formatting outside it.
-  const besideControl = replacesThisEdit
-    ? undefined
-    : formattingRunBesideRestrictedControl(paragraph, offset, offsets, offsets.segments);
-  const besideRun = besideControl ? findNode(part, besideControl) : null;
+  const besideProperties = (): readonly OoxmlNode[] | null => {
+    if (replacesThisEdit) return null;
+    const run = formattingRunBesideRestrictedControl(paragraph, offset, offsets);
+    return run === undefined ? null : run ? insertedRunProperties(mint, run) : [];
+  };
   const rightBiasedDestination =
     bias === 'right' ? insertionDestination(paragraph, offset, null, bias) : null;
   // Minted LAZILY, on the first wrapper actually built: `nextRevisionId` walks the whole
@@ -493,12 +494,7 @@ function applyTrackedInsertion(
             runOf(mint, [
               ...(replacementRun
                 ? insertedRunProperties(mint, replacementRun)
-                : (markStyled() ??
-                  (besideControl === undefined
-                    ? properties
-                    : besideRun
-                      ? insertedRunProperties(mint, besideRun)
-                      : []))),
+                : (markStyled() ?? besideProperties() ?? properties)),
               ...payload.nodes(mint),
             ]),
           ]
