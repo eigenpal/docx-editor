@@ -1,0 +1,10 @@
+{
+  "impact": "no-impact",
+  "fields": [],
+  "before": "The agent helpers in @docx-editor.dev/editor-api/agent carried the @public release tag.",
+  "after": "The same helpers carry the @beta release tag, and the docs describe their stability.",
+  "reason": "Only documentation comments and docs change. No shared document field, operation, or runtime behavior changes.",
+  "tests": ["packages/editor-api/src/agent/__tests__/propose-rewrite.test.ts"],
+  "changeset": "editor-api-rewrite-helper",
+  "migration": null
+}
