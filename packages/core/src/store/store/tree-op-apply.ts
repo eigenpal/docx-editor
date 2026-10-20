@@ -141,6 +141,7 @@ import {
 import { pageFieldContentBuilders, pageFieldModelLength } from './tree-op-fields.ts';
 import { applyInsertComplexField } from './tree-op-field-insert.ts';
 import { applySetFieldResult } from './tree-op-field-result-write.ts';
+import { applyInsertEquation } from './tree-op-equation-insert.ts';
 import { applyTrackedContentControl } from './tracked-content-control-insert.ts';
 import { applyInsertContentControl as applyAutomationInsertContentControl } from './tree-op-content-control-insert.ts';
 import {
@@ -323,6 +324,7 @@ function applyValidatedTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOpti
   if (isFieldResultOp(op)) return applyFieldResultOp(part, op, options);
   if (op.op === 'setFieldCode') return applySetFieldCode(part, op, options);
   if (op.op === 'setFieldResult') return applySetFieldResult(part, op, options);
+  if (op.op === 'insertEquation') return applyInsertEquation(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if ((op.op === 'setHyperlinkTarget' || op.op === 'removeHyperlink') && op.range) {
     return applyPartialHyperlink(part, op, options);

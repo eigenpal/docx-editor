@@ -1,5 +1,6 @@
 import { planFieldInsert } from './plan-field-insert.ts';
 import { planFieldResultWrite } from './plan-field-result.ts';
+import { planOoxmlInsert } from './plan-ooxml-insert.ts';
 import { TARGET_REMOVED } from './target-removed.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { effectiveContentLockAt, isBoundAt } from '../store/store/tree-op-nodes.ts';
@@ -38,7 +39,7 @@ const refuse = (
   error: { code, message, ...(detail === undefined ? {} : { detail }) },
 });
 
-type InlineAtomOperation = FieldOperation;
+type InlineAtomOperation = FieldOperation | Extract<AutomationOperation, { op: 'insertOoxml' }>;
 
 const INLINE_ATOM_OPERATIONS: ReadonlySet<string> = new Set<InlineAtomOperation['op']>([
   'getFields',
@@ -49,16 +50,17 @@ const INLINE_ATOM_OPERATIONS: ReadonlySet<string> = new Set<InlineAtomOperation[
   'getFieldResult',
   'setFieldResult',
   'insertField',
+  'insertOoxml',
 ]);
 
-/** Field reads and writes: the operations planned here. */
+/** Field reads and writes, and the equation insertion: the operations planned here. */
 export function isInlineAtomOperation(
   operation: AutomationOperation
 ): operation is InlineAtomOperation {
   return INLINE_ATOM_OPERATIONS.has(operation.op);
 }
 
-/** Plan one field operation. */
+/** Plan one field operation, or the insertion of one equation from OOXML. */
 export function planInlineAtoms(
   operation: InlineAtomOperation,
   handles: AutomationHandleTable,
@@ -75,6 +77,14 @@ export function planInlineAtoms(
   ) => AutomationFieldPageContext | null,
   trackingAuthor?: string
 ): PlannedOperation {
+  if (operation.op === 'insertOoxml')
+    return planOoxmlInsert(
+      operation,
+      handles,
+      reads,
+      (story, paragraphId) => claim(story, paragraphId),
+      trackingAuthor
+    );
   return planFields(operation, handles, reads, claim, fieldPageContext, trackingAuthor);
 }
 

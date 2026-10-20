@@ -120,6 +120,8 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
     'The field type or instruction is not one the editing API writes. Fields that fetch, embed, link, run, or prompt always refuse. Use Page, NumPages, Ref, PageRef, NoteRef, Seq, StyleRef, Date, Time, or TOC with supported arguments. The instruction is written as text and never run.',
   'edit.field-result-unsupported':
     "The operation is not one a field result supports. A field result reads its text and takes insertText(text, 'Replace') with plain text; its other range members refuse. A result write also refuses when the result holds content other than plain runs. Read or write the result with those members only.",
+  'edit.ooxml-unsupported':
+    'The OOXML is not the one shape insertOoxml inserts: a Flat OPC package (pkg:package) whose document part holds one paragraph with exactly one inline m:oMath and, around it, plain runs. Other parts, relationships, images, fields, paragraph properties, display equations, and unknown elements refuse. Send only that shape.',
   'edit.section-mark':
     'The edit would remove a section break that holds page layout settings. Remove the section break on its own.',
   'edit.table-structure-unsupported':

@@ -26,6 +26,8 @@ import {
   type JournalCoverageFixture,
 } from './canonical-primitive-journal-coverage-support.ts';
 import { readOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
+import { readEquationSnippet } from '../store/equation-snippet.ts';
+import { equationPackage, X_SQUARED } from './equation-snippet-fixtures.ts';
 
 const TWO_P =
   '<w:p><w:r><w:t>Hello</w:t></w:r></w:p><w:p><w:r><w:t>World</w:t></w:r></w:p><w:sectPr/>';
@@ -774,6 +776,18 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         paragraphId: paragraphIds(store)[1]!,
         fieldNodeId: beginId,
         text: 'written',
+      };
+    }),
+    story('insertEquation', plainDoc(), (store) => {
+      const read = readEquationSnippet(equationPackage(`<w:r><w:t>a</w:t></w:r>${X_SQUARED}`));
+      if (!read.ok) throw new Error(read.reason);
+      return {
+        op: 'insertEquation',
+        paragraphId: firstParagraphId(store),
+        offset: 2,
+        nodes: read.snippet.nodes,
+        length: read.snippet.length,
+        revision: { author: 'Ada', date: '2026-01-01T00:00:00Z' },
       };
     }),
     story(

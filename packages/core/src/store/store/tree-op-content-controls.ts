@@ -367,6 +367,7 @@ const TREE_OP_REACH: {
   insertPageBreak: (op) => writingAt(op.paragraphId, op.offset),
   insertPageField: (op) => writingAt(op.paragraphId, op.offset),
   insertComplexField: (op) => writingAt(op.paragraphId, op.offset),
+  insertEquation: (op) => writingAt(op.paragraphId, op.offset),
   // Plain anchors sit beside text. A tracked note uses the tracked run-content applier.
   insertCommentMarker: (op) => beside(op.paragraphId, op.offset),
   insertNote: (op) =>

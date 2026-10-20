@@ -45,7 +45,7 @@ Hyphen elements can survive a text read and write through these characters. This
 
 Search never matches a symbol. A search for `(` does not find it, and search does not join the text on either side. For hyphen matching rules, see [Search and navigation](/docs/2.x/editor-api/search-and-navigation).
 
-The API does not expose HTML, OOXML strings, or document-wide `start` and `end` offsets. `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
+The API does not expose HTML or document-wide `start` and `end` offsets, and it reads no OOXML strings. It accepts OOXML only for one equation through `Range.insertOoxml()`; see [Insert an equation](#insert-an-equation). `Paragraph.uniqueLocalId` identifies a paragraph within the runtime; load it before reading. Do not use it as a permanent identifier across separately opened files.
 
 ## Upgrade text processing
 
@@ -112,6 +112,31 @@ await runtime.run(async (context) => {
 ```
 
 To propose the split as a tracked change, set `TrackMineOnly` first. For an example, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+
+## Insert an equation
+
+`Range.insertOoxml(ooxml, location)` inserts one equation and returns the range it occupies. It accepts `Before`, `After`, `Start`, `End`, and `Replace`, with the same endpoints as `insertText()`. `Replace` requires a range in one paragraph. The equation reads as U+FFFC, as other equations do, and the editor paints it as math.
+
+The runtime accepts only this OOXML shape:
+
+- A Flat OPC package, `pkg:package`.
+- An optional `/_rels/.rels` part with exactly one internal `officeDocument` relationship to `word/document.xml`.
+- A `/word/document.xml` part whose body holds exactly one paragraph.
+- In that paragraph, exactly one inline `m:oMath` element, and optional plain runs before or after it. A plain run holds only `w:rPr`, `w:t`, and `w:tab`.
+- Inside the equation, OMML structure and property elements. A math run can carry character formatting in `w:rPr`.
+
+The runtime ignores `w:rsid*` attributes and paragraph identities. The plain runs keep the formatting the package gives them. With `TrackMineOnly`, the equation and its runs are one tracked insertion. For an example, see [Propose an equation](/docs/2.x/editor-api/revisions#propose-an-equation).
+
+The runtime reads the OOXML with a bounded parser and never fetches or evaluates anything in it. Other input refuses, and the document does not change:
+
+| Input | Error | `innerError.code` |
+| --- | --- | --- |
+| Other parts, relationships, external targets, or binary data such as images | `NotSupported` | `edit.ooxml-unsupported` |
+| Two paragraphs, two equations, no equation, a display equation (`m:oMathPara`), paragraph properties, or a section break | `NotSupported` | `edit.ooxml-unsupported` |
+| Fields, pictures, hyperlinks, revisions, or any other element or attribute outside the allowlist | `NotSupported` | `edit.ooxml-unsupported` |
+| A document part without a package, such as a bare `w:document` | `NotSupported` | `edit.ooxml-unsupported` |
+| Malformed XML, a DTD, or an entity declaration or reference | `InvalidArgument` | `edit.ooxml-unsupported` |
+| More than 256 KiB, more than 8,192 elements, or math nested more than 64 levels deep | `InvalidArgument` | `edit.resource-limit` |
 
 ## Address existing content
 

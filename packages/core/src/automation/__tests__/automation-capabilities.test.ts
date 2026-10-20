@@ -205,6 +205,7 @@ describe('the operation vocabulary declares which operations write', () => {
       'setInlinePicture',
       'deleteInlinePicture',
       'insertField',
+      'insertOoxml',
       'setFieldCode',
       'setFieldResult',
       'deleteField',

@@ -97,6 +97,7 @@ export const AUTOMATION_COMMAND_OPERATIONS = [
   'setInlinePicture',
   'deleteInlinePicture',
   'insertField',
+  'insertOoxml',
   'setFieldCode',
   'setFieldResult',
   'deleteField',

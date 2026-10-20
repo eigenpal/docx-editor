@@ -108,5 +108,6 @@ describe('the checked-in compat/ fixtures', () => {
       true
     );
     expect(manifest.divergences.some((entry) => entry.uid === 'Word.Field#result')).toBe(true);
+    expect(manifest.divergences.some((entry) => entry.uid === 'Word.Range#insertOoxml')).toBe(true);
   });
 });

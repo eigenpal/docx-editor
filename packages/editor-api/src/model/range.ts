@@ -752,6 +752,30 @@ export class Range extends ModelObject implements PromisedItem {
     return field;
   }
 
+  /**
+   * Insert one equation from OOXML: a Flat OPC package (`pkg:package`) whose document part holds
+   * one paragraph with exactly one inline `m:oMath` and, around it, plain runs. Other OOXML
+   * refuses with `NotSupported` or `InvalidArgument` and `edit.ooxml-unsupported`, and nothing is
+   * inserted. With `TrackMineOnly`, the equation is one tracked insertion. Returns the range the
+   * inserted content occupies.
+   */
+  insertOoxml(
+    ooxml: string,
+    insertLocation: InsertLocation | 'Replace' | 'Start' | 'End' | 'Before' | 'After'
+  ): Range {
+    const target = `${this.path.label}.insertOoxml`;
+    if (typeof ooxml !== 'string') fail({ code: 'InvalidArgument', target });
+    const location = rangeTextLocation(insertLocation, target);
+    this.requireUsablePath();
+    const created = Range.promised(this.context, target, false);
+    this.commandAnswering(
+      target,
+      () => ({ op: 'insertOoxml', span: this.#span(), location, ooxml }),
+      (value) => created.hydrateAddress({ kind: 'span', span: hydratedSpan(value, target) })
+    );
+    return created;
+  }
+
   /** Inline pictures fully contained within this snapshot range. */
   get inlinePictures(): InlinePictureCollection {
     this.requireUsablePath();

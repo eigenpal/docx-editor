@@ -17,6 +17,7 @@ type RevisionCapableOp = Extract<
       | 'insertPageBreak'
       | 'insertPageField'
       | 'insertComplexField'
+      | 'insertEquation'
       | 'setFieldResult'
       | 'insertInlineContentControl'
       | 'insertNote'
@@ -36,6 +37,7 @@ const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapab
   'insertPageBreak',
   'insertPageField',
   'insertComplexField',
+  'insertEquation',
   'setFieldResult',
   'insertInlineContentControl',
   'insertNote',

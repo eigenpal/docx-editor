@@ -104,6 +104,7 @@ The live editor can also refuse the commit, for example if permissions change. I
 | Tables | Track complete insertion, cell values, row additions, and partial row deletions |
 | Content controls | Wrap nonempty ordinary text in `PlainText`, `RichText`, or `DatePicker` controls outside collaboration |
 | Fields | Insert an inert field as one complex field in one tracked insertion, and write the cached result of your own pending field into that insertion; reject removes the whole field |
+| Equations | Insert one inline equation from a Flat OPC package with `insertOoxml()` in one tracked insertion; reject removes the whole equation |
 
 Tracked ranges refuse table and wrapper boundaries. A tracked deletion or replacement that covers an equation strikes the whole equation: accepting removes it, and rejecting restores it. In collaboration, a tracked replacement must remain within one paragraph. Insertions can continue the runtime author's text, paragraph, and formatting proposals.
 
@@ -163,6 +164,50 @@ await runtime.run(async (context) => {
 The saved field carries `w:dirty="true"`, so an application that evaluates fields recomputes the result when it opens the file. With `TrackMineOnly`, a result write to a field that is not your own pending insertion refuses with `NotSupported` and `edit.tracked-operation-unsupported`.
 
 Field types that fetch, embed, link, run, or prompt refuse with `edit.field-unsupported`, tracked or not. Tracked `TOC` creation refuses. For the supported types and their limits, see [Fields and pagination](/docs/2.x/editor-api/fields#propose-a-field-as-a-tracked-change). For the result members, see [Read and write the cached result](/docs/2.x/editor-api/fields#read-and-write-the-cached-result).
+
+## Propose an equation
+
+To propose an equation, enable `TrackMineOnly` and call `Range.insertOoxml()` with a Flat OPC package (`pkg:package`). Its document part holds one paragraph with exactly one inline `m:oMath` element. The following example proposes x² after a search hit:
+
+```ts
+const ooxml =
+  '<pkg:package xmlns:pkg="http://schemas.microsoft.com/office/2006/xmlPackage">' +
+  '<pkg:part pkg:name="/word/document.xml" pkg:contentType="application/' +
+  'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml">' +
+  '<pkg:xmlData><w:document xmlns:w="http://schemas.openxmlformats.org/' +
+  'wordprocessingml/2006/main" xmlns:m="http://schemas.openxmlformats.org/' +
+  'officeDocument/2006/math"><w:body><w:p><m:oMath><m:sSup><m:e><m:r>' +
+  '<m:t>x</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>' +
+  '</m:oMath></w:p></w:body></w:document></pkg:xmlData></pkg:part>' +
+  '</pkg:package>';
+
+await runtime.run(async (context) => {
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const hit = context.document.body.search('the area is').getFirst();
+  const equation = hit.insertOoxml(ooxml, 'After');
+  await context.sync();
+  equation.load('text');
+  await context.sync();
+  console.log(equation.text); // '\uFFFC'
+});
+```
+
+The equation and any plain runs beside it sit in one `w:ins` element by the runtime author, the same shape a tracked deletion uses to strike an equation:
+
+```xml
+<w:ins w:author="Agent" w:date="2026-10-20T09:00:00Z" w:id="1">
+  <m:oMath>
+    <m:sSup>
+      <m:e><m:r><m:t>x</m:t></m:r></m:e>
+      <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+    </m:sSup>
+  </m:oMath>
+</w:ins>
+```
+
+**Accept** keeps the equation, and **Reject** removes it whole. The equation reads as U+FFFC in text reads and in `getReviewedText()`, like any other equation, and the editor paints it as math. A `Replace` location strikes the range and proposes the equation after it.
+
+Every other OOXML shape refuses, and nothing is inserted. For the accepted shape and its refusals, see [Insert an equation](/docs/2.x/editor-api/text-and-ranges#insert-an-equation).
 
 ## Propose removing paragraphs
 

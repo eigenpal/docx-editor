@@ -24,6 +24,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertPageBreak',
   'insertPageField',
   'insertComplexField',
+  'insertEquation',
   'setFieldCode',
   'setListLevel',
   'setListNumbering',

@@ -167,9 +167,13 @@ await runtime.run(async (context) => {
 
 Each paragraph gets its own guarantee: all of its changes, or none. A paragraph that fails does not affect the others. To limit how many model calls run at once, wrap `callModel` in your own limiter.
 
-## Split a paragraph
+## Propose structural edits
 
-A rewrite stays inside one paragraph. To propose a paragraph split, set `document.changeTrackingMode` to `TrackMineOnly` and call `insertText()` with `\n` in the text. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+A rewrite stays inside one paragraph and keeps its fields and equations. To propose a structural edit, set `document.changeTrackingMode` to `TrackMineOnly` and call the Office.js member for it:
+
+- To split a paragraph, call `insertText()` with `\n` in the text. For more information, see [Propose a paragraph split](/docs/2.x/editor-api/revisions#propose-a-paragraph-split).
+- To add a field, call `insertField()`, and write its result with `field.result.insertText()`. For more information, see [Propose a field](/docs/2.x/editor-api/revisions#propose-a-field).
+- To add an equation, call `insertOoxml()`. For more information, see [Propose an equation](/docs/2.x/editor-api/revisions#propose-an-equation).
 
 ## Guarantees
 

@@ -237,6 +237,7 @@ describe('Field.result refusals', () => {
         (c) => c.document.body.fields.getFirst().result.insertText('x', 'After'),
         (c) => c.document.body.fields.getFirst().result.insertText('x', 'Start'),
         (c) => c.document.body.fields.getFirst().result.insertField('After', 'Page'),
+        (c) => c.document.body.fields.getFirst().result.insertOoxml('<x/>', 'Replace'),
         (c) => c.document.body.fields.getFirst().result.insertParagraph('x', 'After'),
         (c) => c.document.body.fields.getFirst().result.revisions.load('items'),
       ];

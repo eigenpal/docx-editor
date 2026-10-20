@@ -123,7 +123,7 @@ Code that uses these APIs fails during TypeScript compilation.
 | Repeating-section and picture content-control objects | Use common `ContentControl` members for other control kinds. |
 | `ContentControl.xmlMapping` | Use `ContentControl.isBound` to detect a binding. Writes to bound controls still fail. |
 | `Hyperlink`, `HyperlinkCollection` | Use `Range.hyperlink` for one range. |
-| `Body.getHtml()`, `Body.getOoxml()`, `Paragraph.getText()` | Load `Body.text` or `Paragraph.text`. No OOXML or HTML result exists. |
+| `Body.getHtml()`, `Body.getOoxml()`, `Paragraph.getText()` | Load `Body.text` or `Paragraph.text`. No OOXML or HTML result exists. `Range.insertOoxml()` accepts only one equation. |
 | `BookmarkCollection.exists()` | Load the collection and inspect its items. |
 | `Range.start`, `Range.end`, `Bookmark.start`, `Bookmark.end` | Use ranges and paragraph text. |
 

@@ -2,6 +2,7 @@ import type { SetLegacyDropdownOp } from './legacy-dropdown-fields.ts';
 import type { SetFieldCodeOp } from './tree-op-field-code.ts';
 import type { InsertComplexFieldOp, InsertPageFieldOp } from './tree-op-field-insert.ts';
 import type { SetFieldResultOp } from './tree-op-field-result-write.ts';
+import type { InsertEquationOp } from './tree-op-equation-insert.ts';
 import type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
 import type { SetTextFormFieldDefaultOp, CommitTextFormFieldOp } from './text-form-fields.ts';
 import type { SetLegacyCheckboxOp } from './legacy-checkbox-fields.ts';
@@ -305,6 +306,7 @@ export type TreeDocOp =
   | InsertPageFieldOp
   | InsertComplexFieldOp
   | SetFieldResultOp
+  | InsertEquationOp
   | {
       /**
        * Move a numbered paragraph to another `w:numPr/w:ilvl`.

@@ -315,14 +315,15 @@ export function applyInsertTrackedRun(
   offset: number,
   run: (mint: () => string) => OoxmlNode | readonly OoxmlNode[],
   revision: RevisionAttributionInput,
-  options?: EditOptions
+  options?: EditOptions,
+  length = 1
 ): TreeOpResult {
   const runs = (mint: () => string) => [run(mint)].flat();
   return applyTrackedInsertion(
     part,
     paragraph,
     offset,
-    { length: 1, nodes: null, runs },
+    { length, nodes: null, runs },
     revision,
     options
   );

@@ -5,6 +5,7 @@ import { validateHyperlinkRange } from './tree-op-hyperlink-range.ts';
 import { validateSetFieldCode } from './tree-op-field-code.ts';
 import { validateFieldInsertion } from './tree-op-field-insert.ts';
 import { validateSetFieldResult } from './tree-op-field-result-write.ts';
+import { validateInsertEquation } from './tree-op-equation-insert.ts';
 import { validateTableAuthoring } from './tree-op-table-batch.ts';
 import { validateTableProperties } from './tree-op-table-authoring.ts';
 import { validateCommitTextFormField } from './tree-op-field-results.ts';
@@ -417,6 +418,7 @@ export function validateTreeOp(
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
   if (op.op === 'setFieldCode') return validateSetFieldCode(part, op);
   if (op.op === 'setFieldResult') return validateSetFieldResult(part, op);
+  if (op.op === 'insertEquation') return validateInsertEquation(part, op);
   if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
   if (op.op === 'setLegacyDropdown') return validateSetLegacyDropdown(part, op);
   if (op.op === 'setLegacyCheckbox') return validateSetLegacyCheckbox(part, op);

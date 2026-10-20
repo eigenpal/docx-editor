@@ -80,9 +80,9 @@ export function supportsTrackedAutomationOperation(operation: AutomationOperatio
       !(operation.location === 'Replace' && 'body' in operation.span)
     );
   if (operation.op === 'insertTable' || operation.op === 'insertTableRows') return true;
-  // A complex field in one `w:ins`; a field result joins its own pending insertion. Each
-  // planner refuses the forms it has no tracked shape for.
-  if (['insertField', 'setFieldResult'].includes(operation.op)) return true;
+  // A complex field, or one equation, in one `w:ins`; a field result joins its own pending
+  // insertion. Each planner refuses the forms it has no tracked shape for.
+  if (['insertField', 'insertOoxml', 'setFieldResult'].includes(operation.op)) return true;
   if (operation.op === 'updateTable' || operation.op === 'updateTableCell') return true;
   if (operation.op === 'replaceSpan' && !('body' in operation.span)) return true;
   // Strikes the paragraph's text and mark; the planner refuses a paragraph with no next one.

@@ -17,6 +17,13 @@ export type AutomationAuthoringOperation =
     }
   /** Replace a field's cached result with plain text. The instruction never changes. */
   | { readonly op: 'setFieldResult'; readonly field: AutomationHandle; readonly text: string }
+  /** Insert the one equation a Flat OPC package holds. See `equation-snippet.ts`. */
+  | {
+      readonly op: 'insertOoxml';
+      readonly span: AutomationSpanRef;
+      readonly location: 'Before' | 'After' | 'Start' | 'End' | 'Replace';
+      readonly ooxml: string;
+    }
   | {
       readonly op: 'insertField';
       readonly span: AutomationSpanRef;
