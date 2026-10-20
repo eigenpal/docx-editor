@@ -52,14 +52,23 @@ export type DocxEditorErrorCode =
   | 'ResourceLimitExceeded'
   /** The collection has no such item — `getFirst()` on an empty one. */
   | 'ItemNotFound'
-  /** The host cannot do this at all — a capability it reports false. */
+  /**
+   * The call is outside the supported subset for this host, mode, or content, and nothing
+   * changed. Examples: a server has no selection to move; `TrackMineOnly` has no tracked form
+   * for the operation; the OOXML or the field result holds content the subset does not take.
+   *
+   * Never retry the same call. Read `debugInfo.innerError.code` for the rule, then choose a
+   * supported call, another mode, or other content.
+   */
   | 'NotSupported'
   /**
-   * The member exists in this API's shape but this version does not implement it.
+   * The member or rule is one this API does not implement for the target, and nothing changed.
+   * Examples: a range member that a field result does not support; a tracked edit that touches
+   * your own pending change or another author's pending structural change.
    *
-   * Distinct from `NotSupported`, which is about the HOST: a headless document really has no
-   * caret, and no version of this library will give it one. This code means the library, not the
-   * document, is the limit — so a consumer knows to check the release notes rather than the host.
+   * Never retry the same call. Read `debugInfo.innerError.code` for the rule, then read the
+   * target again and edit a different range, decide the pending change first, or use another
+   * member.
    */
   | 'NotImplemented'
   /**
@@ -113,8 +122,8 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
   ResourceLimitExceeded: 'the document exceeds a supported resource limit.',
   ItemNotFound: 'the collection has no such item.',
   NotSupported:
-    'the operation or argument is outside this document or host’s supported capabilities.',
-  NotImplemented: 'this version does not implement that yet.',
+    'the operation or argument is outside the supported subset for this host, mode, or content.',
+  NotImplemented: 'this API does not implement that operation for this target.',
   ConflictingChanges:
     'these operations cannot share one atomic batch. Split them across separate ' +
     'context.sync() calls.',

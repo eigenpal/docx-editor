@@ -55,8 +55,19 @@ const REVISION_TYPES = {
   moveTo: 'MovedTo',
   /** `w:rPrChange` / `w:pPrChange`: the words are unchanged, their formatting is not. */
   format: 'Property',
-  /** `w:pPr/w:rPr/w:ins|w:del` — a paragraph mark proposed or struck. */
-  paragraphMark: 'ParagraphProperty',
+} as const;
+
+/**
+ * A paragraph mark proposed or struck (`w:pPr/w:rPr/w:ins|w:del|w:moveFrom|w:moveTo`) is a
+ * change to the text: the mark is a character. Word reports it by direction, so a split reads
+ * as `Insert` and a merge as `Delete`, never as `ParagraphProperty`, which names a formatting
+ * change of the paragraph (`w:pPrChange`).
+ */
+const MARK_TYPES = {
+  insert: 'Insert',
+  delete: 'Delete',
+  moveFrom: 'MovedFrom',
+  moveTo: 'MovedTo',
 } as const;
 
 export type AutomationRevisionType = (typeof REVISION_TYPES)[keyof typeof REVISION_TYPES];
@@ -150,7 +161,9 @@ export function revisionReads(
           : rowChange === 'rowDelete'
             ? 'Delete'
             : undefined
-        : REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];
+        : item.revisionKind === 'paragraphMark'
+          ? item.markDirection && MARK_TYPES[item.markDirection]
+          : REVISION_TYPES[item.revisionKind as keyof typeof REVISION_TYPES];
     if (type === undefined) continue;
     found.push(
       Object.freeze({

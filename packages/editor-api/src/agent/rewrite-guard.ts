@@ -19,7 +19,10 @@ import { RewriteError } from './rewrite-error.ts';
 const QUEUE_HOOK = Symbol.for('@docx-editor.dev/editor-api/queue');
 
 interface QueueHook {
-  /** How many queued commands write. Queued reads cannot change the document. */
+  /**
+   * How many queued commands edit the document. Queued reads cannot change it, and a queued
+   * `changeTrackingMode` assignment is a runtime setting, so neither counts.
+   */
   writes(): number;
 }
 
@@ -106,7 +109,10 @@ export function assertNothingQueued(context: RequestContext): void {
   if (size === 0) return;
   throw new RewriteError(
     'context-used',
-    `${size} edit${size === 1 ? ' is' : 's are'} queued on the request context. Sync them ` +
-      'before you call the helper, so that its tracked writes never send them.'
+    size === 1
+      ? '1 edit is queued on the request context. Sync it before you call the helper, so ' +
+          'that its tracked writes never send it.'
+      : `${size} edits are queued on the request context. Sync them before you call the ` +
+          'helper, so that its tracked writes never send them.'
   );
 }

@@ -331,7 +331,10 @@ describe('Field.result refusals', () => {
       await expect(write(2, 'a\u000bb')).rejects.toMatchObject(
         refused('InvalidArgument', 'edit.invalid-argument')
       );
-      await expect(write(2, 'a\nb')).rejects.toMatchObject({ code: 'InvalidArgument' });
+      for (const text of ['a\nb', 'a\rb'])
+        await expect(write(2, text)).rejects.toMatchObject(
+          refused('InvalidArgument', 'edit.invalid-argument')
+        );
       await expect(write(2, 'x'.repeat(2049))).rejects.toMatchObject({ code: 'InvalidArgument' });
       expect(await documentXml(runtime)).toBe(before);
       // A read works whatever the result holds.

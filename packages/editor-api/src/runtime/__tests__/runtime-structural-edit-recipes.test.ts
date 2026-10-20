@@ -236,7 +236,10 @@ describe('taking back your own pending field', () => {
         })
       ).rejects.toMatchObject({
         code: 'NotSupported',
-        debugInfo: { innerError: { code: 'edit.tracked-operation-unsupported' } },
+        debugInfo: {
+          errorLocation: 'document.body.fields.getFirst().delete',
+          innerError: { code: 'edit.tracked-operation-unsupported' },
+        },
       });
       expect(await documentXml(runtime)).toBe(before);
     } finally {
@@ -304,3 +307,158 @@ type _BrowserContextAccepted = Parameters<typeof prepareRewrite>[0] extends Brow
   : never;
 const _accepted: _BrowserContextAccepted = true;
 void _accepted;
+
+describe('how a tracked split lists in revisions', () => {
+  test('the inserted paragraph mark is an Insert, and the replaced gap a Delete', async () => {
+    const runtime = await DocxEditor.createServer(docx(CLAUSES), { author: AUTHOR });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const first = context.document.body.search('the goods.').getFirst();
+        const second = context.document.body.search('The buyer').getFirst();
+        first.getRange('End').expandTo(second.getRange('Start')).insertText('\n', 'Replace');
+        await context.sync();
+        const revisions = context.document.body.revisions;
+        revisions.load('items/type');
+        await context.sync();
+        expect(revisions.items.map((revision) => revision.type).sort()).toEqual([
+          'Delete',
+          'Insert',
+        ]);
+        // Accepting only the mark splits the paragraph and keeps the struck space pending.
+        revisions.items.find((revision) => revision.type === 'Insert')!.accept();
+        await context.sync();
+        expect(await texts(context)).toEqual([
+          'The supplier delivers the goods. ',
+          'The buyer pays on receipt.',
+          'Signed',
+        ]);
+        const left = context.document.body.revisions;
+        left.load('items/type');
+        await context.sync();
+        expect(left.items.map((revision) => revision.type)).toEqual(['Delete']);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+
+  test('text with a line feed lists as insertions; rejecting the mark joins the paragraphs', async () => {
+    const runtime = await DocxEditor.createServer(docx(p('Hello world')), { author: AUTHOR });
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        context.document.body.search('world').getFirst().insertText('x\ny', 'Before');
+        await context.sync();
+        const revisions = context.document.body.revisions;
+        revisions.load('items/type');
+        await context.sync();
+        expect(new Set(revisions.items.map((revision) => revision.type))).toEqual(
+          new Set(['Insert'])
+        );
+        revisions.rejectAll();
+        await context.sync();
+        expect(await texts(context)).toEqual(['Hello world']);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+});
+
+describe('finding a sentence gap without a read sync', () => {
+  test('the trimmed and untrimmed first sentence give the gap, in one sync', async () => {
+    const runtime = await DocxEditor.createServer(docx(CLAUSES), { author: AUTHOR });
+    let syncs = 0;
+    try {
+      await runtime.run(async (context) => {
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        const paragraph = context.document.body.paragraphs.getFirst();
+        const words = paragraph.getTextRanges(['. '], true).getFirst();
+        const sentence = paragraph.getTextRanges(['. ']).getFirst();
+        words.getRange('End').expandTo(sentence.getRange('End')).insertText('\n', 'Replace');
+        await context.sync();
+        syncs += 1;
+      });
+      expect(syncs).toBe(1);
+      const xml = await documentXml(runtime);
+      expect(xml.match(/<w:delText[^>]*>([^<]*)<\/w:delText>/g)).toEqual([
+        '<w:delText xml:space="preserve"> </w:delText>',
+      ]);
+      await runtime.run(async (context) => {
+        context.document.body.revisions.acceptAll();
+        await context.sync();
+        expect(await texts(context)).toEqual([
+          'The supplier delivers the goods.',
+          'The buyer pays on receipt.',
+          'Signed',
+        ]);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+});
+
+describe('the E = mc² example in the equation guide', () => {
+  test('inserts the equation and its trailing plain run with its space', async () => {
+    const runtime = await DocxEditor.createServer(
+      docx(p('Einstein gave the relation for energy.')),
+      {
+        author: AUTHOR,
+      }
+    );
+    try {
+      const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+      const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+      const PKG = 'http://schemas.microsoft.com/office/2006/xmlPackage';
+      const TYPE =
+        'application/vnd.openxmlformats-officedocument.' + 'wordprocessingml.document.main+xml';
+      const equation =
+        '<m:oMath><m:r><m:t>E=m</m:t></m:r><m:sSup><m:e><m:r><m:t>c</m:t></m:r>' +
+        '</m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>';
+      const after = '<w:r><w:t xml:space="preserve"> holds.</w:t></w:r>';
+      const ooxml =
+        `<pkg:package xmlns:pkg="${PKG}">` +
+        `<pkg:part pkg:name="/word/document.xml" pkg:contentType="${TYPE}">` +
+        `<pkg:xmlData><w:document xmlns:w="${W}" xmlns:m="${M}">` +
+        `<w:body><w:p>${equation}${after}</w:p></w:body></w:document>` +
+        '</pkg:xmlData></pkg:part></pkg:package>';
+
+      await runtime.run(async (context) => {
+        const hit = context.document.body.search('the relation ').getFirst();
+        const inserted = hit.insertOoxml(ooxml, 'After');
+        await context.sync();
+        inserted.load('text');
+        await context.sync();
+        expect(inserted.text).toBe('\uFFFC holds.');
+      });
+      const xml = await documentXml(runtime);
+      expect(xml).toContain('<w:t xml:space="preserve"> holds.</w:t>');
+      expect(xml).toContain('<m:sSup>');
+    } finally {
+      runtime.dispose();
+    }
+  });
+});
+
+describe('the page field sample in the fields guide', () => {
+  test('inserts at a read-derived range in the first sync and updates in the second', async () => {
+    const { createFixedMeasurer } = await import('../../../../core/src/layout/semantic-layout.ts');
+    const runtime = await DocxEditor.createServer(docx(p('Pages: ')), {
+      pagination: { measurer: createFixedMeasurer(6, 14) },
+    });
+    try {
+      await runtime.run(async (context) => {
+        const anchor = context.document.paragraphs.getLast().getRange('End');
+        const field = anchor.insertField('After', 'NumPages');
+        await context.sync();
+        field.updateResult();
+        await context.sync();
+        expect(await texts(context)).toEqual(['Pages: 1']);
+      });
+    } finally {
+      runtime.dispose();
+    }
+  });
+});

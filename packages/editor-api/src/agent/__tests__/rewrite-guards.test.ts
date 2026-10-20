@@ -73,8 +73,25 @@ describe('the request context stays the helper’s', () => {
     });
     for (const error of [value.prepared, value.applied]) {
       expect(error).toMatchObject({ code: 'context-used' });
-      expect((error as RewriteError).message).toContain('Sync them before you call the helper');
+      expect((error as RewriteError).message).toContain(
+        '1 edit is queued on the request context. Sync it before you call the helper'
+      );
     }
+  });
+
+  test('a tracking-mode assignment queued before the helper is not an edit: it rides along', async () => {
+    const { value, saved } = await withRuntime(docx(p('Gamma clause three.')), async (context) => {
+      context.document.changeTrackingMode = 'TrackMineOnly';
+      const paragraph = context.document.body.paragraphs.getFirst();
+      const draft = await prepareRewrite(context, paragraph);
+      const result = await draft.apply('Gamma clause 3.');
+      context.document.load('changeTrackingMode');
+      await context.sync();
+      return { result, mode: context.document.changeTrackingMode };
+    });
+    expect(value.result.proposed).toBe('Gamma clause 3.');
+    expect(value.mode).toBe('TrackMineOnly');
+    expect(await decided(saved, 'rejectAll')).toMatchObject({ text: 'Gamma clause three.' });
   });
 });
 

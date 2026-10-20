@@ -107,7 +107,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.tracked-foreign-revision-unsupported':
     'The tracked edit touches a pending change of another author in a way this editor cannot record: their paragraph mark, formatting, move, or structural change, or a link or content control inside their insertion. Nothing was applied. Edit outside that change, or leave it for a person to review first. A formatting change that leaves the formatting unchanged has no review card but still counts; Accept All or Reject All over the story clears it.',
   'edit.tracked-own-pending-change':
-    'The tracked edit covers or borders your own pending change and would merge with that decision, so nothing was applied. Edit outside your pending change, or reject it and edit again.',
+    "The tracked edit covers or borders your own pending change and would merge with that decision, so nothing was applied. Read the proposed text with getReviewedText('Current'), then edit a range outside your pending change. To change your proposal itself, reject it and propose again.",
   'edit.picture-selected':
     'A picture is selected, so the new picture has no place to go and nothing was inserted. Place the caret in text next to the picture, then insert again.',
   'edit.cross-structure-join':
@@ -145,7 +145,7 @@ const HINTS: Readonly<Record<Exclude<DiagnosticCode, CollaborationDiagnosticCode
   'edit.stale-target':
     'The operation addresses content that no longer exists, usually after a remote or undone change. Read the document again and retry.',
   'edit.invalid-argument':
-    'The command arguments are not valid for this target. Check the command type and its fields.',
+    'The arguments are not valid for this target, such as text with a character the call does not take, a value out of range, or a range that spans more than the call allows. Check each argument against the method or editor command you called.',
   'edit.resource-limit':
     'The edit would exceed a size or nesting limit. Split the change into smaller edits.',
   'edit.refresh-in-progress':

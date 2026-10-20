@@ -18,7 +18,7 @@ import {
   type AutomationOperation,
   type ObjectPath,
 } from '../runtime/model-support.ts';
-import { insertableText, rangeTextLocation } from './locations.ts';
+import { rangeTextLocation } from './locations.ts';
 
 /** The field a result path names, read when the batch is planned. */
 function fieldOf(path: ObjectPath): AutomationHandle {
@@ -46,6 +46,10 @@ export function fieldResultWrite(
   target: string
 ): () => AutomationOperation {
   if (rangeTextLocation(insertLocation, target) !== 'Replace') refuseFieldResultMember(target);
-  const written = insertableText(text, target);
+  // A result is one line of plain text: a break of any kind refuses here, with the same rule
+  // the host gives other control characters.
+  if (typeof text !== 'string' || /[\r\n\f\u2028\u2029]/.test(text))
+    fail({ code: 'InvalidArgument', target, diagnostic: 'edit.invalid-argument' });
+  const written = text;
   return () => ({ op: 'setFieldResult', field: fieldOf(path), text: written });
 }

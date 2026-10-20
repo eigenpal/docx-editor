@@ -103,8 +103,10 @@ export class Field extends ModelObject implements PromisedItem {
   }
   #command(op: 'deleteField' | 'updateFieldResult'): void {
     this.requireUsablePath();
+    // The label names the call, so a refusal's `errorLocation` ends in `.delete` or
+    // `.updateResult`, like every other method's.
     this.commandAnswering(
-      this.path.label,
+      `${this.path.label}.${op === 'deleteField' ? 'delete' : 'updateResult'}`,
       () => ({ op, field: this.#handle() }),
       (value) => hydratedApplied(value, this.path.label)
     );

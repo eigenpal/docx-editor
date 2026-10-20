@@ -149,7 +149,12 @@ export class RequestContext {
     Object.defineProperty(this, AUTHOR_HOOK, { get: () => session.author });
     Object.defineProperty(this, QUEUE_HOOK, {
       value: Object.freeze({
-        writes: () => this.#queue.pending.filter((action) => action.sort === 'write').length,
+        // A tracking-mode assignment is a runtime setting, not a document edit: a helper's own
+        // first sync may carry it, as it would carry the caller's next sync.
+        writes: () =>
+          this.#queue.pending.filter(
+            (action) => action.sort === 'write' && action.label !== 'document.changeTrackingMode'
+          ).length,
       }),
     });
   }

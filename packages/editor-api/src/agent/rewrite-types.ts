@@ -91,6 +91,10 @@ export interface RewriteResult {
    * break as U+000B.
    */
   readonly proposed: string;
-  /** How many tracked edits the helper wrote. `0` when the model changed nothing. */
+  /**
+   * How many word edits the helper wrote: each run of changed words counts once. A replacement
+   * counts once, though `revisions.items` lists it as a `Delete` and an `Insert`. `0` when the
+   * model changed nothing.
+   */
   readonly changes: number;
 }
